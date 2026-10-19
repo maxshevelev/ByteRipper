@@ -29,11 +29,21 @@ final class WorkspaceRestoreTests: XCTestCase {
         return controller
     }
 
+    /// Restores `tabs` the way a launch does: every tab's files first, then
+    /// the parts, wherever each one's parent is.
+    private func restore(_ tabs: [(TabState, MainViewController)],
+                         keeper: UntitledKeeper? = nil) async -> [RestoreIssue] {
+        let restorer = WorkspaceRestorer(keeper: keeper)
+        for (tab, controller) in tabs { restorer.openFiles(of: tab, in: controller) }
+        await restorer.openParts()
+        return restorer.issues
+    }
+
     private func dump(_ size: Int, _ fill: UInt8) throws -> URL {
         try tempFile([UInt8](repeating: fill, count: size), "\(fill)")
     }
 
-    func testAComparisonComesBackAsItWas() throws {
+    func testAComparisonComesBackAsItWas() async throws {
         let a = try dump(0x10000, 0xAA)
         let b = try dump(0x10000, 0xBB)
         let source = shownWindow().mainViewController
@@ -54,7 +64,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertEqual(savedB.topOffset, 0x4000)
 
         let target = shownWindow().mainViewController
-        let issues = target.restoreWorkspaceTab(tab).issues
+        let issues = await restore([(tab, target)])
 
         XCTAssertEqual(issues, [])
         XCTAssertEqual(target.mode, .comparison)
@@ -71,7 +81,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertEqual(target.filePaneView(for: restoredB)?.firstVisibleOffset, 0x4000)
     }
 
-    func testAMissingFileIsReportedAndTheOtherOpensAlone() throws {
+    func testAMissingFileIsReportedAndTheOtherOpensAlone() async throws {
         let a = try dump(0x100, 0xAA)
         let b = try dump(0x100, 0xBB)
         let source = shownWindow().mainViewController
@@ -81,7 +91,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         try FileManager.default.removeItem(at: a)
 
         let target = shownWindow().mainViewController
-        let issues = target.restoreWorkspaceTab(tab).issues
+        let issues = await restore([(tab, target)])
 
         XCTAssertEqual(issues, [.missing(path: a.standardizedFileURL.path)])
         XCTAssertEqual(target.mode, .singleFile)
@@ -89,7 +99,7 @@ final class WorkspaceRestoreTests: XCTestCase {
                        "a file alone is File A")
     }
 
-    func testAShorterFileIsReportedAndTheCaretMovesToItsEnd() throws {
+    func testAShorterFileIsReportedAndTheCaretMovesToItsEnd() async throws {
         let a = try dump(0x1000, 0xAA)
         let source = shownWindow().mainViewController
         source.openFiles([a])
@@ -99,7 +109,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         try Data(repeating: 0x11, count: 0x800).write(to: a)
 
         let target = shownWindow().mainViewController
-        let issues = target.restoreWorkspaceTab(tab).issues
+        let issues = await restore([(tab, target)])
 
         XCTAssertEqual(issues, [.changed(path: a.standardizedFileURL.path)])
         XCTAssertEqual(target.windowModel.pane1.document?.selection.start, 0x7FF)
@@ -107,7 +117,7 @@ final class WorkspaceRestoreTests: XCTestCase {
 
     // MARK: - Around the panes
 
-    func testBookmarksSegmentsMinimapAndFindBarComeBack() throws {
+    func testBookmarksSegmentsMinimapAndFindBarComeBack() async throws {
         let a = try dump(0x2000, 0xAA)
         let chip = try dump(0x1000, 0xCC)
         let source = shownWindow().mainViewController
@@ -133,7 +143,8 @@ final class WorkspaceRestoreTests: XCTestCase {
         source.windowModel.pane1.close()
 
         let target = shownWindow().mainViewController
-        XCTAssertEqual(target.restoreWorkspaceTab(tab).issues, [])
+        let restoreIssues = await restore([(tab, target)])
+        XCTAssertEqual(restoreIssues, [])
 
         XCTAssertEqual(target.windowModel.bookmarkStore.bookmarks.map(\.name), ["boot block", ""])
         let restored = target.windowModel.pane1
@@ -148,7 +159,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertEqual(target.openFindPattern?.encoding, .hex)
     }
 
-    func testAChangedFileLosesItsSegmentsAndTheBookmarksPastItsEnd() throws {
+    func testAChangedFileLosesItsSegmentsAndTheBookmarksPastItsEnd() async throws {
         let a = try dump(0x2000, 0xAA)
         let source = shownWindow().mainViewController
         source.openFiles([a])
@@ -160,7 +171,8 @@ final class WorkspaceRestoreTests: XCTestCase {
         try Data(repeating: 0, count: 0x1000).write(to: a)
 
         let target = shownWindow().mainViewController
-        XCTAssertEqual(target.restoreWorkspaceTab(tab).issues, [.changed(path: a.standardizedFileURL.path)])
+        let restoreIssues = await restore([(tab, target)])
+        XCTAssertEqual(restoreIssues, [.changed(path: a.standardizedFileURL.path)])
 
         XCTAssertEqual(target.windowModel.bookmarkStore.bookmarks.map(\.name), ["kept"])
         XCTAssertEqual(target.windowModel.pane1.segmentStore.current.pieces.count, 1,
@@ -169,7 +181,7 @@ final class WorkspaceRestoreTests: XCTestCase {
 
     // MARK: - Panels
 
-    func testPartsComeBackDecodedFromTheirParentsAndTheFrontOneInFront() throws {
+    func testPartsComeBackDecodedFromTheirParentsAndTheFrontOneInFront() async throws {
         let bytes: [UInt8] = (0..<0x1000).map { UInt8(($0 * 7) & 0xFF) }
         let a = try tempFile(bytes, "parts")
         let source = shownWindow().mainViewController
@@ -188,18 +200,16 @@ final class WorkspaceRestoreTests: XCTestCase {
         addTeardownBlock { try? FileManager.default.removeItem(at: keeperFolder) }
         let keeper = UntitledKeeper(folder: WorkspaceFolder(url: keeperFolder))
         let tab = source.workspaceTab(keeper: keeper)
-        XCTAssertEqual(tab.fragments.map(\.parent), [.pane(0), .fragment(0), nil])
+        func parent(_ index: Int) -> String? {
+            if case let .part(origin) = tab.fragments[index].pane.document { origin.parent } else { nil }
+        }
+        XCTAssertEqual(parent(0), tab.panes[0]?.id)
+        XCTAssertEqual(parent(1), tab.fragments[0].pane.id)
+        XCTAssertNil(parent(2))
         XCTAssertEqual(tab.expandedFragment, 0)
 
         let target = shownWindow().mainViewController
-        let restored = target.restoreWorkspaceTab(tab, keeper: keeper)
-        let expectation = expectation(description: "panels")
-        var issues: [RestoreIssue] = []
-        Task { @MainActor in
-            issues = await target.restoreWorkspaceFragments(tab, over: restored, keeper: keeper)
-            expectation.fulfill()
-        }
-        wait(for: [expectation], timeout: 5)
+        let issues = await restore([(tab, target)], keeper: keeper)
 
         XCTAssertEqual(issues, [])
         let panes = target.fragments.dock.panels.compactMap { target.fragments.pane($0) }
@@ -213,9 +223,78 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertEqual(target.fragments.expanded, target.fragments.panel(holding: panes[0]))
     }
 
+    // MARK: - Parts torn off into tabs
+
+    /// A part torn off into a tab, in a window of its own, whose parent is a
+    /// file in another window — written before that window, so the restore
+    /// meets the part before its parent.
+    private func tornOffPart() throws -> (parent: MainViewController, part: MainViewController,
+                                          bytes: [UInt8], tabs: [TabState]) {
+        let bytes: [UInt8] = (0..<0x1000).map { UInt8(($0 * 13) & 0xFF) }
+        let a = try tempFile(bytes, "torn")
+        let parent = shownWindow().mainViewController
+        parent.openFiles([a])
+        let part = shownWindow().mainViewController
+        let content = Array(bytes[0x200..<0x400])
+        let origin = try XCTUnwrap(DocumentOrigin(parent: parent.windowModel.pane1, source: 0x200..<0x400,
+                                                  partName: "zone", layout: .image, codec: CopyPartCodec(),
+                                                  content: content))
+        part.windowModel.pane1.openBytes(content, named: "zone", origin: origin)
+        part.refreshMode()
+        part.windowModel.pane1.select(range: 0x30..<0x30)
+        let ids = WorkspacePaneIDs()
+        let tabs = [part.workspaceTab(ids: ids), parent.workspaceTab(ids: ids)]
+        return (parent, part, bytes, tabs)
+    }
+
+    func testATornOffPartComesBackLinkedToItsParentInAnotherWindow() async throws {
+        let (_, _, bytes, tabs) = try tornOffPart()
+        guard case let .part(origin)? = tabs[0].panes[0]?.document else { return XCTFail("written as a part") }
+        XCTAssertEqual(origin.parent, tabs[1].panes[0]?.id)
+
+        let partTab = shownWindow().mainViewController
+        let parentTab = shownWindow().mainViewController
+        let issues = await restore([(tabs[0], partTab), (tabs[1], parentTab)])
+
+        XCTAssertEqual(issues, [])
+        let restored = partTab.windowModel.pane1
+        XCTAssertEqual(partTab.mode, .singleFile)
+        XCTAssertEqual(try restored.document?.read(at: 0, length: 0x200), Array(bytes[0x200..<0x400]))
+        XCTAssertIdentical(restored.origin?.parent, parentTab.windowModel.pane1,
+                           "Update in Parent still knows where to go")
+        XCTAssertEqual(restored.status.fileName, "zone")
+        XCTAssertEqual(restored.document?.selection.start, 0x30)
+    }
+
+    func testATornOffPartIsKeptAtQuit() throws {
+        let (parent, part, _, _) = try tornOffPart()
+        let folderURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WorkspaceRecorderTests-\(UUID().uuidString)")
+        addTeardownBlock { try? FileManager.default.removeItem(at: folderURL) }
+        WorkspaceSettings.set(restoresWorkspace: true)
+        let controllers = [part, parent].compactMap { $0.view.window?.windowController as? MainWindowController }
+        XCTAssertEqual(controllers.count, 2)
+        let recorder = WorkspaceRecorder(folder: WorkspaceFolder(url: folderURL), controllers: { controllers })
+
+        recorder.record(final: true)
+        let saved = try XCTUnwrap(recorder.savedWorkspace())
+        XCTAssertEqual(saved.windows.count, 2, "a part is taken out again, not discarded like untitled bytes")
+    }
+
+    func testAPartWhoseParentIsGoneIsReported() async throws {
+        let (_, _, _, tabs) = try tornOffPart()
+        let partTab = shownWindow().mainViewController
+        let restorer = WorkspaceRestorer(keeper: nil)
+        restorer.openFiles(of: tabs[0], in: partTab)
+        await restorer.openParts()
+
+        XCTAssertEqual(restorer.issues, [.missing(path: "zone")])
+        XCTAssertTrue(restorer.emptyTabs.contains { $0 === partTab }, "its window is closed, not left empty")
+    }
+
     // MARK: - Tools
 
-    func testTheToolPanelComesBackOnItsPaneWithoutMovingTheWindow() throws {
+    func testTheToolPanelComesBackOnItsPaneWithoutMovingTheWindow() async throws {
         let a = try dump(0x1000, 0xFF)
         let b = try dump(0x1000, 0xEE)
         let source = shownWindow().mainViewController
@@ -234,7 +313,8 @@ final class WorkspaceRestoreTests: XCTestCase {
         let window = shownWindow()
         let target = window.mainViewController
         let frame = try XCTUnwrap(window.window?.frame)
-        XCTAssertEqual(target.restoreWorkspaceTab(tab).issues, [])
+        let restoreIssues = await restore([(tab, target)])
+        XCTAssertEqual(restoreIssues, [])
 
         XCTAssertEqual(target.surface.tools.activeIdentifier, UEFIToolModule.identifier)
         XCTAssertIdentical(target.surface.tools.boundPane, target.windowModel.pane2)
@@ -251,7 +331,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         return (WorkspaceRecorder(folder: WorkspaceFolder(url: folderURL), controllers: { controllers }), folderURL)
     }
 
-    func testAnUntitledDocumentComesBackWithItsBytesAndStillUnsaved() throws {
+    func testAnUntitledDocumentComesBackWithItsBytesAndStillUnsaved() async throws {
         WorkspaceSettings.set(restoresWorkspace: true)
         let window = shownWindow()
         let pane = window.mainViewController.windowModel.pane1
@@ -270,7 +350,8 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertTrue(stamp.dirty)
 
         let target = shownWindow().mainViewController
-        XCTAssertEqual(target.restoreWorkspaceTab(tab, keeper: recorder.keeper).issues, [])
+        let restoreIssues = await restore([(tab, target)], keeper: recorder.keeper)
+        XCTAssertEqual(restoreIssues, [])
         let restored = target.windowModel.pane1
         XCTAssertTrue(restored.isUntitled)
         XCTAssertEqual(restored.status.fileName, "joined.bin")
@@ -279,7 +360,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertEqual(restored.document?.selection.start, 0x120)
     }
 
-    func testTheSnapshotAtQuitLeavesOutUntitledDocumentsAndTheirBytes() throws {
+    func testTheSnapshotAtQuitLeavesOutUntitledDocumentsAndTheirBytes() async throws {
         WorkspaceSettings.set(restoresWorkspace: true)
         let a = try dump(0x100, 0xAA)
         let files = shownWindow()
@@ -300,7 +381,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: kept.path), [])
     }
 
-    func testUnchangedUntitledBytesAreNotWrittenAgain() throws {
+    func testUnchangedUntitledBytesAreNotWrittenAgain() async throws {
         WorkspaceSettings.set(restoresWorkspace: true)
         let window = shownWindow()
         let pane = window.mainViewController.windowModel.pane1
@@ -323,7 +404,7 @@ final class WorkspaceRestoreTests: XCTestCase {
 
     // MARK: - The recorder
 
-    func testTheRecorderWritesTabsWithFilesAndOnlyWhileSwitchedOn() throws {
+    func testTheRecorderWritesTabsWithFilesAndOnlyWhileSwitchedOn() async throws {
         let a = try dump(0x100, 0xAA)
         let withFile = shownWindow()
         withFile.mainViewController.openFiles([a])

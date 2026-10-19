@@ -97,6 +97,9 @@ public struct TabState: Codable, Equatable, Sendable {
 
 /// One pane: the document in it, and where the reader was in it.
 public struct PaneState: Codable, Equatable, Sendable {
+    /// What the parts taken out of this pane name it by (`PartOrigin.parent`).
+    /// Unique within one workspace, meaningless outside it.
+    public var id: String?
     public var document: DocumentSource
     /// The selection, half-open; an empty one is the caret.
     public var selectionStart: UInt64
@@ -112,10 +115,11 @@ public struct PaneState: Codable, Equatable, Sendable {
     /// The rows the UEFI panel had open, each a node's path in the tree.
     public var uefiOpenRows: [[Int]]?
 
-    public init(document: DocumentSource,
+    public init(id: String? = nil, document: DocumentSource,
                 selectionStart: UInt64, selectionEnd: UInt64,
                 inputRegion: InputRegion = .hex, insertMode: Bool = false,
                 topOffset: UInt64, segments: SegmentationState? = nil, uefiOpenRows: [[Int]]? = nil) {
+        self.id = id
         self.document = document
         self.selectionStart = selectionStart
         self.selectionEnd = selectionEnd
@@ -140,44 +144,49 @@ public enum DocumentSource: Codable, Equatable, Sendable {
     /// workspace keeps beside itself (`WorkspaceFolder.untitledURL`).
     case untitled(UntitledStamp)
     /// A part of another document, decoded from it again at restore
-    /// (`FragmentState`). The size is what it decoded to, so a part that
-    /// decodes to something else is known to be other bytes.
-    case part(size: UInt64)
+    /// (`PartOrigin`) — in a panel over a tab, or torn off into a tab of its
+    /// own.
+    case part(PartOrigin)
 }
 
-/// A panel over a tab: a part of one of its documents — a zone, a
-/// decompressed body, a decoded block — or bytes with no parent at all.
-public struct FragmentState: Codable, Equatable, Sendable {
-    /// What a part was taken out of.
-    public enum Parent: Codable, Equatable, Sendable {
-        /// File A (0) or File B (1), as `TabState.panes` lists them.
-        case pane(Int)
-        /// An earlier panel, as an index into `TabState.fragments`.
-        case fragment(Int)
-    }
-
-    /// Nil for bytes with no parent: their pane is an untitled document.
-    public var parent: Parent?
-    /// The stretch of the parent the part stands for.
+/// Where a part came from: the pane it was taken out of, the stretch of it,
+/// and how it was read — enough to take it out again.
+public struct PartOrigin: Codable, Equatable, Sendable {
+    /// The parent pane's `PaneState.id`, wherever in the workspace it is: in
+    /// the same tab, in another, in another window.
+    public var parent: String
     public var sourceStart: UInt64
     public var sourceEnd: UInt64
+    /// What the part is called in its parent.
     public var name: String
     /// How the part is read, and how it goes back into its parent — the app's
     /// own encoding of its layout and codec, as JSON text. The package does
     /// not read it.
     public var layout: String?
     public var codec: String?
-    public var pane: PaneState
-    public var surface: SurfaceState
+    /// What it decoded to, so a part that decodes to another length is known
+    /// to be other bytes.
+    public var size: UInt64
 
-    public init(parent: Parent?, sourceStart: UInt64, sourceEnd: UInt64, name: String,
-                layout: String?, codec: String?, pane: PaneState, surface: SurfaceState) {
+    public init(parent: String, sourceStart: UInt64, sourceEnd: UInt64, name: String,
+                layout: String?, codec: String?, size: UInt64) {
         self.parent = parent
         self.sourceStart = sourceStart
         self.sourceEnd = sourceEnd
         self.name = name
         self.layout = layout
         self.codec = codec
+        self.size = size
+    }
+}
+
+/// A panel over a tab: a part of a document (`DocumentSource.part`), or bytes
+/// with no parent at all (`DocumentSource.untitled`).
+public struct FragmentState: Codable, Equatable, Sendable {
+    public var pane: PaneState
+    public var surface: SurfaceState
+
+    public init(pane: PaneState, surface: SurfaceState) {
         self.pane = pane
         self.surface = surface
     }

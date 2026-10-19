@@ -1,4 +1,4 @@
-@source-sha 0c386bb992077400e08f1de45ddb7ffb4b0ce6a674eba9744a51a11e29aabea9
+@source-sha 266eb46674d2c459f6500d1dcd444d413db3105514df5ab7d501189f893a8d82
 # Der Arbeitsbereich
 
 > Bei eingeschalteter Einstellung öffnet ByteRipper beim Start, was beim Beenden geöffnet war.
@@ -11,7 +11,7 @@ Die Einstellung heißt **Arbeitsbereich beim Start wiederherstellen** und befind
 - In jedem Tab File A und File B, der aktive Bereich und die Lage der Trennlinie zwischen ihnen.
 - In jedem Bereich die Adresse in der obersten Bildschirmzeile, Cursor und Auswahl, die Hex- oder Textspalte und der Einfügemodus.
 - Die [[topic:bookmarks|Lesezeichen]] und die [[topic:segments|Segmente]]: Schnitte, Namen und die Verknüpfungen der Segmente mit den Dateien, aus denen sie zusammengefügt wurden.
-- Die [[topic:fragments|Fragment-Bereiche]] samt dem, der vorn lag. Ein Teil wird nicht als Bytes gespeichert, sondern erneut aus seiner Datei entnommen; er zeigt daher deren aktuellen Inhalt und lässt sich weiterhin zurückschreiben.
+- Die [[topic:fragments|Fragment-Bereiche]] samt dem, der vorn lag, sowie Teile, die in eigene Tabs verschoben wurden. Ein Teil wird nicht als Bytes gespeichert, sondern erneut aus seiner Datei entnommen; er zeigt daher deren aktuellen Inhalt und lässt sich weiterhin zurückschreiben, gleich in welchem Tab oder Fenster diese Datei liegt.
 - Die [[topic:minimap|Minimap]], die Suchleiste mit ihrem Muster sowie der Werkzeugbereich mit dem darin gewählten Knoten oder der gewählten Zeile und den geöffneten Zweigen des UEFI-Baums.
 
 ## Was nicht wiederhergestellt wird

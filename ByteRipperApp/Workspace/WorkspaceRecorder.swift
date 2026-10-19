@@ -111,6 +111,9 @@ final class WorkspaceRecorder {
         let selected = frozenOrder?.selected
         var seen = Set<ObjectIdentifier>()
         var windows: [WindowState] = []
+        // One naming for the whole snapshot: a part torn off into one tab
+        // names its parent in another by it.
+        let ids = WorkspacePaneIDs()
         // On-screen windows first, front to back; a tab not in front is not
         // on screen, and its group is found through the tab that is.
         for window in front + all where !seen.contains(ObjectIdentifier(window)) {
@@ -122,7 +125,7 @@ final class WorkspaceRecorder {
             var selectedTab = 0
             for tabWindow in group {
                 guard let tab = controller(of: tabWindow)?.mainViewController
-                        .workspaceTab(keeper: keepingUntitled ? keeper : nil),
+                        .workspaceTab(keeper: keepingUntitled ? keeper : nil, ids: ids),
                       !tab.isEmpty else { continue }
                 if tabWindow === shown { selectedTab = tabs.count }
                 tabs.append(tab)

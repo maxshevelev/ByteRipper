@@ -196,58 +196,75 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private func restoreWorkspace() -> Bool {
         guard let recorder = workspaceRecorder, let workspace = recorder.savedWorkspace(),
               !workspace.isEmpty else { return false }
-        var issues: [RestoreIssue] = []
-        var pending: [(controller: MainViewController, tab: TabState, restored: TabRestore)] = []
         // Nothing is written while the workspace is being rebuilt: a window
-        // closed on the way would otherwise write a workspace of what had been
-        // rebuilt so far.
+        // closed on the way, or a snapshot between the two passes, would
+        // otherwise write a workspace of what had been rebuilt so far.
         recorder.isPaused = true
+        let restorer = WorkspaceRestorer(keeper: recorder.keeper)
+        var windows: [(saved: WindowState, group: [MainWindowController], selected: MainWindowController?)] = []
         // Back to front, so the window made last — the front one — is key.
         for saved in workspace.windows.reversed() {
             var group: [MainWindowController] = []
             var selected: MainWindowController?
+            let frame = NSRect(x: saved.frame.x, y: saved.frame.y,
+                               width: saved.frame.width, height: saved.frame.height)
             for (index, tab) in saved.tabs.enumerated() {
                 let controller = makeWindow(tabbedWith: group.first?.window)
-                let restored = controller.mainViewController.restoreWorkspaceTab(tab, keeper: recorder.keeper)
-                issues += restored.issues
-                // A tab with nothing left to show — every file in it gone — is
-                // not kept as an empty window; the warning says what it held.
-                guard !restored.slots.isEmpty else {
+                // Where it was from the start, so it does not appear at a
+                // cascaded place and jump; set again once its tabs are in.
+                if group.isEmpty, let window = controller.window {
+                    window.setFrame(window.constrainFrameRect(frame, to: window.screen), display: true)
+                }
+                restorer.openFiles(of: tab, in: controller.mainViewController)
+                // A tab with nothing to show, and no part still to come into
+                // it, is not kept as an empty window; the warning says what
+                // it held.
+                guard restorer.mayShowAnything(controller.mainViewController) else {
                     controller.window?.close()
                     continue
                 }
                 group.append(controller)
                 if index == saved.selectedTab { selected = controller }
-                if !tab.fragments.isEmpty {
-                    pending.append((controller.mainViewController, tab, restored))
+            }
+            windows.append((saved, group, selected))
+        }
+        restoringParts = Task { @MainActor [weak self] in
+            // The parts, parents first, wherever in the workspace each parent
+            // is: the windows are on screen meanwhile.
+            await restorer.openParts()
+            for controller in restorer.emptyTabs {
+                controller.view.window?.close()
+            }
+            for (saved, group, selected) in windows {
+                let open = group.filter { controller in
+                    self?.windowControllers.contains { $0 === controller } == true
+                }
+                guard let first = open.first?.window else { continue }
+                // The frame last: a tab joining the window and a comparison
+                // opening in it both fit the window to their content, and
+                // the window is to stand where it was left.
+                let frame = NSRect(x: saved.frame.x, y: saved.frame.y,
+                                   width: saved.frame.width, height: saved.frame.height)
+                first.setFrame(first.constrainFrameRect(frame, to: first.screen), display: true)
+                if let window = (selected.flatMap { open.contains($0) ? $0 : nil } ?? open.first)?.window {
+                    window.tabGroup?.selectedWindow = window
+                    window.makeKeyAndOrderFront(nil)
                 }
             }
-            guard let first = group.first?.window else { continue }
-            // The frame last: a tab joining the window and a comparison
-            // opening in it both fit the window to their content, and the
-            // window is to stand where it was left.
-            let frame = NSRect(x: saved.frame.x, y: saved.frame.y,
-                               width: saved.frame.width, height: saved.frame.height)
-            first.setFrame(first.constrainFrameRect(frame, to: first.screen), display: true)
-            if let window = (selected ?? group.first)?.window {
-                window.tabGroup?.selectedWindow = window
-                window.makeKeyAndOrderFront(nil)
-            }
-        }
-        // The panels last: a part may have to be decompressed again, and the
-        // windows are on screen meanwhile. The recorder waits for them, or a
-        // snapshot taken halfway would write a workspace with panels missing.
-        restoringFragments = Task { @MainActor [weak self] in
-            for entry in pending {
-                issues += await entry.controller.restoreWorkspaceFragments(
-                    entry.tab, over: entry.restored, keeper: recorder.keeper)
-            }
+            if self?.windowControllers.isEmpty == true { self?.makeWindow() }
             recorder.isPaused = false
-            self?.lastRestoreIssues = issues
-            self?.reportRestoreIssues(issues)
+            self?.lastRestoreIssues = restorer.issues
+            self?.reportRestoreIssues(restorer.issues)
         }
         return !windowControllers.isEmpty
     }
+
+    /// The parts still being put back after a restore, and the windows being
+    /// settled after them.
+    private(set) var restoringParts: Task<Void, Never>?
+
+    /// What the last restore could not bring back as it was.
+    private(set) var lastRestoreIssues: [RestoreIssue] = []
 
     /// Files handed to a launch that restored a workspace: one already open in
     /// it is brought forward, the rest open in a tab of their own — never into
@@ -294,12 +311,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             alert.runModal()
         }
     }
-
-    /// The panels still being put back after a restore.
-    private(set) var restoringFragments: Task<Void, Never>?
-
-    /// What the last restore could not bring back as it was.
-    private(set) var lastRestoreIssues: [RestoreIssue] = []
 
     /// File ▸ New Window (⇧⌘N).
     @objc func newWindow(_ sender: Any?) {

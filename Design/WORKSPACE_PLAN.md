@@ -211,8 +211,18 @@ writes a tab with its panels half restored.
 - A panel with no parent — bytes handed over by a tool, or a part whose
   parent was closed — is kept as untitled bytes, like an untitled document,
   and comes back without a way home.
-- A part torn off into a tab of its own is an untitled document there, and
-  comes back as one: its link to the parent does not survive a restart.
+- A part torn off into a tab of its own is a part all the same, and comes
+  back linked. Its parent may be in another tab or another window, so a part
+  names its parent by the pane's id in the snapshot (`PaneState.id`,
+  `PartOrigin.parent`), not by a place in its own tab.
+- The restore is two passes over all tabs together (`WorkspaceRestorer`):
+  first every tab opens its files and untitled documents, then the parts —
+  panels and torn-off tabs alike — are taken out of their parents, each once
+  its parent is open, until none is left that can be. A tab is laid out once
+  its own panes are in; its panels open after that. What still waits at the
+  end had no parent to come out of, and is reported.
+- At quit a torn-off part is kept, like a panel: Save / Don't Save has been
+  answered for it, so what is left is what its parent holds.
 
 ## Phases
 
