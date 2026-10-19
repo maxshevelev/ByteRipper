@@ -1582,7 +1582,37 @@ final class MinimapView: NSView {
     /// and the strip (the rightmost element) by `contentPadding` on the right.
     /// The content's right edge is pulled in past the strip to make that room,
     /// leaving the strip its `segmentStripGap` of paper on the content side.
+    ///
+    /// In a comparison the two maps' byte areas are the same width, whatever
+    /// the zone gutters and the strips take beside them: a byte column is then
+    /// the same column on both maps, so the eye compares like with like and a
+    /// stretch both files hold the same draws as the same picture twice
+    /// (§19.4). The narrower map sets the width. Side by side, the wider map
+    /// gives up its outer side, so the dumps still meet at the panel's gutter;
+    /// stacked, the maps share one horizontal span, so their columns line up.
+    /// The gutter and the strip follow the content, as they always do.
     private func contentArea(within area: NSRect, forMapAt index: Int) -> NSRect {
+        let own = ownContentArea(within: area, forMapAt: index)
+        guard maps.count == 2, maps.indices.contains(index) else { return own }
+        let otherIndex = 1 - index
+        let other = ownContentArea(within: self.area(forMapAt: otherIndex), forMapAt: otherIndex)
+        switch mapLayout {
+        case .single:
+            return own
+        case .stacked:
+            let minX = max(own.minX, other.minX)
+            let maxX = min(own.maxX, other.maxX)
+            return NSRect(x: minX, y: own.minY, width: max(0, maxX - minX), height: own.height)
+        case .sideBySide:
+            let width = min(own.width, other.width)
+            let x = index == 0 ? own.maxX - width : own.minX
+            return NSRect(x: x, y: own.minY, width: width, height: own.height)
+        }
+    }
+
+    /// A map's content area as its own margins leave it, before a comparison
+    /// evens the two maps' widths (`contentArea`).
+    private func ownContentArea(within area: NSRect, forMapAt index: Int) -> NSRect {
         let pad = Self.contentPadding
         // The strip's full claim on the right margin: its gap of paper plus its
         // own width. Added to the padding, it is how far the content's right

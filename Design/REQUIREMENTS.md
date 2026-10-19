@@ -2296,6 +2296,13 @@ The panel is divided into maps that mirror the pane arrangement:
 - comparison, stacked panes: two maps, split by a horizontal line that
   mirrors the panes' divider and moves with it.
 
+In a comparison the two maps' byte areas are the same width, whatever the zone
+gutter (§19.4.5) and the segment strip (§19.4.4) take beside either of them, so
+a byte column is the same column on both maps. The narrower map sets the width.
+Side by side, the wider map gives up its outer side, so the dumps still meet at
+the panel's gutter; stacked, the two maps share one horizontal span and their
+columns line up. The gutter and the strip keep their place beside the content.
+
 19.4 Rendering: two modes
 
 A map draws its file one of two ways, switched from the View menu or the panel's
