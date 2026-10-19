@@ -261,6 +261,9 @@ thing.
   into Application Support (`WorkspaceRecorder.switchTo(project:)`), always,
   whatever the restore switch says. Leaving a project — another project,
   **Close Project**, quitting — asks nothing: everything it holds is written.
+  Closing the project's last window (its close button, ⌘W, ⇧⌘W — the
+  Annotations window too, when it is the last) is a quit, answered as ⌘Q is,
+  so the project keeps its windows rather than recording none.
 - **The session without a project** behaves as before. Opening a project
   from it, when it holds anything, asks whether to save it as a project
   (Save… / Don't Save / Cancel); Don't Save closes it the ordinary way.

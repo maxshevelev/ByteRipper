@@ -135,6 +135,11 @@ final class MainViewController: NSViewController {
     /// which owns the windows a project replaces.
     var openProject: ((URL) -> Void)?
 
+    /// Quits the app instead of closing this window, when closing it would
+    /// close the app anyway; returns whether it did. Set by the app delegate;
+    /// nil reads as "no".
+    var quitsInsteadOfClosing: (() -> Bool)?
+
     /// File ▸ New Tab (⌘T): an empty tab beside this window.
     ///
     /// It lands on the key window's controller, which is the window the tab
@@ -7641,6 +7646,12 @@ extension MainViewController: NSWindowDelegate {
     /// the files here and they are not answered by one Save. Closing the
     /// window used to take them without a word.
     func windowShouldClose(_ sender: NSWindow) -> Bool {
+        // The last window of a project closing is the app quitting, and is
+        // answered the way ⌘Q is: the project keeps its windows and asks
+        // nothing about what it holds (`Design/WORKSPACE_PLAN.md`, "Projects").
+        if quitsInsteadOfClosing?() == true {
+            return false
+        }
         // True while this call is still on the stack: a tab that can answer
         // everything on the spot is answered here, rather than by closing the
         // window from inside its own delegate callback.

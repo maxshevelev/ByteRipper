@@ -388,6 +388,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             DispatchQueue.main.async { self?.openProject(at: url) }
         }
         controller.mainViewController.projectName = currentProjectName
+        controller.mainViewController.quitsInsteadOfClosing = { [weak self] in
+            guard let self, self.currentProject != nil, !self.isSwitchingProjects,
+                  self.windowControllers.count == 1, !NotesWindowController.isOpen else { return false }
+            NSApp.terminate(nil)
+            return true
+        }
         windowControllers.append(controller)
         // A tab takes its place from the window it joins, so it is added before
         // being shown; a window on its own is placed by `NSWindowController`,

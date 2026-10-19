@@ -112,4 +112,20 @@ final class ProjectTests: XCTestCase {
         XCTAssertTrue(URL(fileURLWithPath: "/jobs/Job.BRP").isByteRipperProject)
         XCTAssertFalse(URL(fileURLWithPath: "/jobs/bios.bin").isByteRipperProject)
     }
+
+    /// The last window of a project closing is a quit, not a close: the
+    /// window stays for the quit to record, and nothing is asked here.
+    func testClosingTheLastWindowOfAProjectQuitsInstead() throws {
+        let window = shownWindow()
+        let controller = window.mainViewController
+        var quits = 0
+        controller.quitsInsteadOfClosing = { quits += 1; return true }
+        let nsWindow = try XCTUnwrap(window.window)
+        XCTAssertFalse(controller.windowShouldClose(nsWindow))
+        XCTAssertEqual(quits, 1)
+        XCTAssertTrue(nsWindow.isVisible)
+
+        controller.quitsInsteadOfClosing = { false }
+        XCTAssertTrue(controller.windowShouldClose(nsWindow), "any other window closes as before")
+    }
 }

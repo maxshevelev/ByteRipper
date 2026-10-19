@@ -1,4 +1,4 @@
-@source-sha 6941eef8608e48444c62fe3e64250356f28c811bedadf3c85822b3311e356c39
+@source-sha e11fa9d039e21e9ae5cedc0b43f2f15384e6cd34d856eceb13df986188667717
 # Projekte
 
 > Ein Projekt ist ein Arbeitsbereich in einer eigenen Datei: alles, was für einen Auftrag geöffnet ist, wird als Ganzes wieder geöffnet, und zwischen Projekten lässt sich wechseln.
@@ -18,6 +18,7 @@ Die Dateien selbst bleiben, wo sie sind; das Projekt verweist auf sie. Es merkt 
 - Das Öffnen eines Projekts ersetzt alles Geöffnete. Das verlassene Projekt bleibt erhalten, wie es ist, ungesicherte Änderungen eingeschlossen, und es wird nichts gefragt.
 - Ist kein Projekt geöffnet, aber etwas anderes, bietet das Programm vor dem Öffnen eines Projekts an, die aktuelle Sitzung als Projekt zu sichern. **Nicht sichern** schließt sie auf dem üblichen Weg, mit den Fragen zu ungesicherten Änderungen.
 - **Ablage ▸ Projekt schließen** lässt das Projekt, wie es ist, und kehrt zu einem leeren Fenster zurück.
+- Das Schließen des letzten Fensters eines Projekts — mit dem Schließknopf oder **Ablage ▸ Fenster schließen** — beendet ByteRipper genau wie **⌘Q**: Das Projekt behält seine Fenster, und es wird nichts gefragt.
 
 Ist [[topic:workspace|Arbeitsbereich beim Start wiederherstellen]] eingeschaltet, wird das Projekt, das beim Beenden von ByteRipper geöffnet war, beim nächsten Start wieder geöffnet.
 

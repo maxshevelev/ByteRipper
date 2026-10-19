@@ -153,6 +153,15 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
         syncAgentItem()
     }
 
+    /// The Annotations window alone in a project, closing, is the app
+    /// quitting — answered as ⌘Q is, so the project keeps it open.
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard let app = NSApp.delegate as? AppDelegate, app.currentProject != nil,
+              !app.isSwitchingProjects, app.windowControllers.isEmpty else { return true }
+        NSApp.terminate(nil)
+        return false
+    }
+
     /// Puts the window back where a restored workspace had it — at its place
     /// among `tabs`, or on its own when `tabs` is empty — with the cards that
     /// were selected selected again (`Design/WORKSPACE_PLAN.md`).

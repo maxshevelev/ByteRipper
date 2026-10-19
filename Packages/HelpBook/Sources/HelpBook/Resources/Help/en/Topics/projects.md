@@ -21,6 +21,7 @@ The files themselves stay where they are; the project refers to them. It records
 - Opening a project replaces everything open. The project being left is kept as it is, unsaved changes included, and nothing is asked.
 - When no project is open and something is, opening a project first offers to save the current session as a project. **Don't Save** closes it the ordinary way, asking about unsaved changes.
 - **File ▸ Close Project** leaves the project as it is and returns to an empty window.
+- Closing the last window of a project — its close button, **File ▸ Close Window** — quits ByteRipper exactly as **⌘Q** does: the project keeps its windows and nothing is asked.
 
 With [[topic:workspace|Reopen the workspace at launch]] on, the project open when ByteRipper was quit is opened again at the next launch.
 
