@@ -164,6 +164,7 @@
 "Field" = "Feld";
 "FIT component" = "FIT-Komponente";
 "Format" = "Format";
+"General" = "Allgemein";
 "Go to Original" = "Zum Original";
 "Go to Top Swap Copy" = "Zur Top-Swap-Kopie";
 "Major version" = "Hauptversion";
@@ -179,6 +180,7 @@
 "Put this tab's changes back into the document it was opened from, as one undo step there. Nothing is written to disk." = "Die Änderungen dieses Tabs zurück in das Dokument schreiben, aus dem er geöffnet wurde, als ein Widerrufsschritt dort. Auf den Datenträger wird nichts geschrieben.";
 "Reading the file…" = "Datei wird gelesen …";
 "Removing a microcode" = "Microcode wird entfernt";
+"Reopen the workspace at launch" = "Arbeitsbereich beim Start wiederherstellen";
 "Replacing a microcode" = "Microcode wird ersetzt";
 "Rules" = "Regeln";
 "Save Body of “%1$@” as…" = "Rumpf von „%1$@“ sichern unter…";
@@ -186,6 +188,7 @@
 "Save Node as…" = "Knoten sichern unter…";
 "Save “%1$@” as…" = "„%1$@“ sichern unter…";
 "Saved %1$@ bytes." = "%1$@ Bytes gesichert.";
+"The tabs and the files in them come back as they were at quit: addresses on screen, cursor and selection, bookmarks, segments and tool panels. Unsaved changes are not kept — quitting asks about them first." = "Die Tabs und die darin geöffneten Dateien kehren so zurück, wie sie beim Beenden waren: die angezeigte Adresse, Cursor und Auswahl, Lesezeichen, Segmente und Werkzeugbereiche. Ungesicherte Änderungen werden nicht übernommen — nach ihnen fragt das Programm beim Beenden.";
 "The variable does not decompress." = "Die Variable lässt sich nicht entpacken.";
 "There is nothing to save here." = "Hier gibt es nichts zu sichern.";
 "Top Swap" = "Top Swap";
@@ -329,7 +332,6 @@
 "Edit Bookmark…" = "Lesezeichen bearbeiten…";
 "Edit Segment %1$@" = "Segment %1$@ bearbeiten";
 "Editing Constraints" = "Einschränkungen beim Bearbeiten";
-"Editing" = "Bearbeiten";
 "Edit…" = "Bearbeiten…";
 "Empty" = "Leer";
 "Empty (%1$@ Bookmarks)" = "Leer (%1$@ Lesezeichen)";

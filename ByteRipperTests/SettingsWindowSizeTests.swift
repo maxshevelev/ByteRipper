@@ -33,8 +33,8 @@ final class SettingsWindowSizeTests: XCTestCase {
         // width or its own larger preference.
         let base = SettingsMetrics.width()
         let expectedWidth: [(String, CGFloat)] = [
-            ("View", base), ("Comparison", base),
-            ("Editing", base), ("TextDecoding", SettingsMetrics.width(preferring: 620)),
+            ("General", base), ("View", base),
+            ("TextDecoding", SettingsMetrics.width(preferring: 620)),
         ]
         for (id, width) in expectedWidth {
             try switchTo(settings, id)
@@ -52,7 +52,7 @@ final class SettingsWindowSizeTests: XCTestCase {
 
         try switchTo(settings, "TextDecoding")   // the tallest tab
         let tallHeight = window.frame.height
-        try switchTo(settings, "Comparison")     // a short tab
+        try switchTo(settings, "General")        // a shorter tab
         let shortHeight = window.frame.height
         XCTAssertLessThan(shortHeight, tallHeight,
                           "a short tab must be shorter than the tall one")
@@ -69,11 +69,11 @@ final class SettingsWindowSizeTests: XCTestCase {
         window.makeKeyAndOrderFront(nil)
         defer { window.close() }
 
+        XCTAssertEqual(window.toolbar?.selectedItemIdentifier?.rawValue, "General")
+        XCTAssertEqual(window.title, "General")
+        try switchTo(settings, "View")
         XCTAssertEqual(window.toolbar?.selectedItemIdentifier?.rawValue, "View")
         XCTAssertEqual(window.title, SettingsWindowController.label(for: NSToolbarItem.Identifier("View")))
-        try switchTo(settings, "Comparison")
-        XCTAssertEqual(window.toolbar?.selectedItemIdentifier?.rawValue, "Comparison")
-        XCTAssertEqual(window.title, "Comparison")
         settings.showFavorites(nil)
         XCTAssertEqual(window.toolbar?.selectedItemIdentifier?.rawValue, "Favorites")
         XCTAssertEqual(window.title, "Search Patterns")

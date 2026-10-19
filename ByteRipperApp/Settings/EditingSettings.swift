@@ -37,7 +37,7 @@ enum EditingSettings {
     }
 }
 
-/// The Editing tab of the Settings window: whether the shifting-edit
+/// The Editing section of the General tab: whether the shifting-edit
 /// confirmations appear. The same switch the alerts' "Do not ask again"
 /// checkbox flips, which is why it reads its value on every appearance —
 /// dismissing an alert with that box ticked must be reflected here.
@@ -47,6 +47,7 @@ final class EditingSettingsViewController: NSViewController {
     override func loadView() {
         let root = NSView()
 
+        // help: settings.editing
         warnCheckbox.title = L("Ask before edits that shift the file")
         warnCheckbox.target = self
         warnCheckbox.action = #selector(warnChanged(_:))
@@ -57,7 +58,7 @@ final class EditingSettingsViewController: NSViewController {
         caption.textColor = .secondaryLabelColor
         caption.maximumNumberOfLines = 3
 
-        // A `?` of its own beside the window's: this tab's switch turns off the
+        // A `?` of its own beside the window's: this section's switch turns off the
         // dialogs that stand between a flash dump and an edit that shifts every
         // byte after it, and the page on editing says how the modes differ and
         // why those edits are the dangerous ones (the Agent tab keeps one for

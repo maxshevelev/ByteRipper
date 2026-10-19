@@ -81,19 +81,22 @@ final class ComparisonSettingsTests: XCTestCase {
         XCTAssertEqual(ComparisonSettings.groupingGap, 256)
     }
 
-    /// The Settings window offers the tab and switches to it.
-    func testTheSettingsWindowHasAComparisonTab() throws {
+    /// The Settings window opens on General, which holds the Comparison section.
+    func testTheComparisonSectionIsInTheGeneralTab() throws {
         let settings = SettingsWindowController()
         let toolbar = try XCTUnwrap(settings.window?.toolbar)
-        let identifier = NSToolbarItem.Identifier("Comparison")
-        XCTAssertTrue(settings.toolbarDefaultItemIdentifiers(toolbar).contains(identifier))
+        let identifier = NSToolbarItem.Identifier("General")
+        XCTAssertEqual(settings.toolbarDefaultItemIdentifiers(toolbar).first, identifier,
+                       "General is the first tab")
 
         let item = try XCTUnwrap(settings.toolbar(toolbar, itemForItemIdentifier: identifier,
                                                   willBeInsertedIntoToolbar: true))
-        XCTAssertEqual(item.label, "Comparison")
+        XCTAssertEqual(item.label, "General")
         let target = try XCTUnwrap(item.target as? NSObject)
         target.perform(try XCTUnwrap(item.action), with: item)
-        XCTAssertTrue(settings.window?.contentViewController is ComparisonSettingsViewController)
+        let general = try XCTUnwrap(settings.window?.contentViewController as? GeneralSettingsViewController)
+        XCTAssertTrue(general.children.contains { $0 === general.comparison })
+        XCTAssertTrue(general.children.contains { $0 === general.editing })
     }
 
 }

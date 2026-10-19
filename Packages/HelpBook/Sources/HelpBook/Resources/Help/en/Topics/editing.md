@@ -42,7 +42,7 @@ Three operations do change it, and each asks for confirmation before acting:
 - **Edit ▸ Delete Bytes…** — a real deletion, shifting everything after it.
 - **Edit ▸ Insert Mode** (⌥⌘I) — a typing mode in which keys insert and delete rather than overwrite. It asks once per file rather than per keystroke, reports itself in the status bar, and changes the shape of the caret. Clicking the **OVR** / **INS** readout in the status bar flips the same mode ([[topic:hex-view|Reading the Hex View]]).
 
-The confirmations can be switched off in [[topic:settings|Settings ▸ Editing]], or with the "do not ask again" box in the dialog itself. They are enabled by default because these operations change every address after the point at which they act.
+The confirmations can be switched off in [[topic:settings|Settings ▸ General]], or with the "do not ask again" box in the dialog itself. They are enabled by default because these operations change every address after the point at which they act.
 
 ! The length of an SPI dump must not change, the capacity of the chip being fixed. See [[topic:bench-safety|Constraints on Editing an Image]].
 

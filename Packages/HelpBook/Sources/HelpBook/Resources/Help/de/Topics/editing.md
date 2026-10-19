@@ -1,4 +1,4 @@
-@source-sha 24e87c062c97d062b6d4e122718c7ca81626119a9f69226e1d614a85e87b1df1
+@source-sha 8a27c718caa186c967098e3026a16ae759d4a8afc9226d60a0c4d0be132e5e37
 # Bytes bearbeiten
 
 > Tippen überschreibt die vorhandenen Bytes. Jeder Vorgang, der die Länge der Datei ändert, fragt vorher nach.
@@ -32,7 +32,7 @@ Drei Vorgänge ändern sie doch, und jeder fragt vor der Ausführung nach:
 - **Bearbeiten ▸ Bytes löschen…** — wirklich löschen und alles dahinter verschieben.
 - **Bearbeiten ▸ Einfügemodus** (⌥⌘I) — ein Tippmodus, in dem Tasten einfügen und löschen statt zu überschreiben. Er fragt einmal je Datei statt bei jedem Anschlag, sagt es in der Statuszeile und ändert die Form der Einfügemarke. Ein Klick auf die Anzeige **OVR** / **INS** in der Statuszeile schaltet denselben Modus um ([[topic:hex-view|Die Hex-Ansicht lesen]]).
 
-Die Rückfragen lassen sich in den [[topic:settings|Einstellungen ▸ Bearbeiten]] abschalten oder über das Kästchen „Nicht mehr fragen“ im Dialog selbst. Sie sind voreingestellt, weil diese Vorgänge jede Adresse hinter der Stelle ändern, an der sie wirken.
+Die Rückfragen lassen sich in den [[topic:settings|Einstellungen ▸ Allgemein]] abschalten oder über das Kästchen „Nicht mehr fragen“ im Dialog selbst. Sie sind voreingestellt, weil diese Vorgänge jede Adresse hinter der Stelle ändern, an der sie wirken.
 
 ! Die Länge eines SPI-Dumps darf sich nicht ändern, da die Kapazität des Bausteins fest ist. Siehe [[topic:bench-safety|Einschränkungen beim Bearbeiten eines Images]].
 

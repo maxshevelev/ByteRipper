@@ -3,7 +3,7 @@ import XCTest
 @testable import ByteRipper
 
 /// §7.2 / §7.6: the confirmations that guard the edits which shift a file can be
-/// switched off — from Settings ▸ Editing, or from the "Do not ask again"
+/// switched off — from Settings ▸ General, or from the "Do not ask again"
 /// checkbox on the alerts themselves, which is the same switch.
 ///
 /// The commands are driven for real here. Under XCTest an alert answers Cancel

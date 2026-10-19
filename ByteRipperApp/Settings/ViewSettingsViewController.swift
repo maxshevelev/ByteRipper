@@ -7,12 +7,8 @@ import Localization
 /// They were three tabs of their own, each with two or three controls, and
 /// eight tabs were more than a toolbar of translated labels holds comfortably.
 /// All three are about how the app looks rather than what it does, so they
-/// share a page. Each section is still its own view controller — it keeps its
-/// own syncing, its own observers and its own tests — and this one only stacks
-/// them, with a rule between. No headings, as in Finder's and Safari's
-/// settings: the window's title already names the tab, and a heading over
-/// two controls is more words than the controls.
-final class ViewSettingsViewController: NSViewController {
+/// share a page.
+final class ViewSettingsViewController: SectionedSettingsViewController {
     private let appearanceController = AppearanceSettingsViewController()
     private let layoutController = LayoutSettingsViewController()
     private let languageController = LanguageSettingsViewController()
@@ -20,8 +16,22 @@ final class ViewSettingsViewController: NSViewController {
     /// The Language section, for the tests that drive the choice.
     var language: LanguageSettingsViewController { languageController }
 
+    override var sections: [NSViewController] { [appearanceController, layoutController, languageController] }
+}
+
+/// A Settings tab made of sections stacked one above the other, with a rule
+/// between. Each section is its own view controller — it keeps its own
+/// syncing, its own observers and its own tests — and this one only stacks
+/// them. No headings, as in Finder's and Safari's settings: the window's title
+/// already names the tab, and a heading over two controls is more words than
+/// the controls.
+class SectionedSettingsViewController: NSViewController {
+    /// The sections, top to bottom. A subclass returns the same instances on
+    /// every read.
+    var sections: [NSViewController] { [] }
+
     override func loadView() {
-        let sections: [NSViewController] = [appearanceController, layoutController, languageController]
+        let sections = self.sections
         var views: [NSView] = []
         for (index, section) in sections.enumerated() {
             addChild(section)

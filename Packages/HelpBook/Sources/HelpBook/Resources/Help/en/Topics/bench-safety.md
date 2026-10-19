@@ -12,7 +12,7 @@ The program's default editing behaviour follows from this:
 
 - Typing overwrites, and ⌘V overwrites. Neither moves any following byte.
 - Delete and Backspace fill with `0x00` rather than shortening the file, and **Edit ▸ Fill Selection with…** fills a selection with a chosen byte.
-- The three operations that do change the length — **Edit ▸ Paste Insert…**, **Edit ▸ Delete Bytes…** and **Edit ▸ Insert Mode** — each raise a confirmation before acting. The confirmations can be turned off in [[topic:settings|Settings ▸ Editing]].
+- The three operations that do change the length — **Edit ▸ Paste Insert…**, **Edit ▸ Delete Bytes…** and **Edit ▸ Insert Mode** — each raise a confirmation before acting. The confirmations can be turned off in [[topic:settings|Settings ▸ General]].
 
 The size of the file is reported in the status line under each pane. See [[topic:editing|Editing Bytes]].
 

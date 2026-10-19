@@ -41,7 +41,7 @@ final class SettingsWindowTests: XCTestCase {
         defer { AppearanceSettings.resetToDefaults() }
         let settings = SettingsWindowController()
         let window = try XCTUnwrap(settings.window)
-        settings.showWindow(nil)
+        settings.showViewTab(nil)
         defer { window.close() }
         let content = try XCTUnwrap(window.contentViewController as? ViewSettingsViewController)
         XCTAssertEqual(content.children.count, 3, "the View tab holds three sections")
@@ -65,7 +65,7 @@ final class SettingsWindowTests: XCTestCase {
     func testTheRelaunchNoticeGrowsTheWindow() throws {
         let settings = SettingsWindowController()
         let window = try XCTUnwrap(settings.window)
-        settings.showWindow(nil)
+        settings.showViewTab(nil)
         defer { window.close() }
         let before = window.frame.height
 
@@ -98,7 +98,7 @@ final class SettingsWindowTests: XCTestCase {
     func testTheViewTabsLabelsLineUp() throws {
         let settings = SettingsWindowController()
         let window = try XCTUnwrap(settings.window)
-        settings.showWindow(nil)
+        settings.showViewTab(nil)
         defer { window.close() }
         window.layoutIfNeeded()
         let content = try XCTUnwrap(window.contentViewController as? ViewSettingsViewController)

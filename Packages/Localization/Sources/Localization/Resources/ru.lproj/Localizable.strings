@@ -164,6 +164,7 @@
 "Field" = "Поле";
 "FIT component" = "Компонент FIT";
 "Format" = "Формат";
+"General" = "Основные";
 "Go to Original" = "Перейти к оригиналу";
 "Go to Top Swap Copy" = "Перейти к копии Top Swap";
 "Major version" = "Старшая версия";
@@ -179,6 +180,7 @@
 "Put this tab's changes back into the document it was opened from, as one undo step there. Nothing is written to disk." = "Записать изменения этой вкладки обратно в документ, из которого она открыта, одним шагом отмены в нём. На диск ничего не пишется.";
 "Reading the file…" = "Чтение файла…";
 "Removing a microcode" = "Удаление микрокода";
+"Reopen the workspace at launch" = "Восстанавливать рабочее пространство при запуске";
 "Replacing a microcode" = "Замена микрокода";
 "Rules" = "Правила";
 "Save Body of “%1$@” as…" = "Сохранить тело «%1$@» как…";
@@ -186,6 +188,7 @@
 "Save Node as…" = "Сохранить узел как…";
 "Save “%1$@” as…" = "Сохранить «%1$@» как…";
 "Saved %1$@ bytes." = "Сохранено байт: %1$@.";
+"The tabs and the files in them come back as they were at quit: addresses on screen, cursor and selection, bookmarks, segments and tool panels. Unsaved changes are not kept — quitting asks about them first." = "Вкладки и открытые в них файлы возвращаются такими, какими были при выходе: адрес на экране, курсор и выделение, закладки, сегменты и панели инструментов. Несохранённые правки не переносятся — о них программа спрашивает при выходе.";
 "The variable does not decompress." = "Переменная не распаковывается.";
 "There is nothing to save here." = "Здесь нечего сохранять.";
 "Top Swap" = "Top Swap";
@@ -329,7 +332,6 @@
 "Edit Bookmark…" = "Изменить закладку…";
 "Edit Segment %1$@" = "Параметры сегмента %1$@";
 "Editing Constraints" = "Ограничения при правке";
-"Editing" = "Редактирование";
 "Edit…" = "Изменить…";
 "Empty" = "Пусто";
 "Empty (%1$@ Bookmarks)" = "Пусто (закладок: %1$@)";

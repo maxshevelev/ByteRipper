@@ -1,4 +1,4 @@
-@source-sha f46e68687460630c3be5a7e30f0db25f48506ac431c528cd2f7a86ada5da7490
+@source-sha 02972849a4928303e13b9eebeb4d583dc0cf1a4e368d306f13a4a941423a8292
 # Einschränkungen beim Bearbeiten eines Images
 
 > Die Eigenschaften eines Firmware-Images, die zulässige Änderungen begrenzen, und die Rückfragen, die das Programm deshalb stellt.
@@ -13,7 +13,7 @@ Daraus folgt das voreingestellte Verhalten beim Bearbeiten:
 
 - Tippen und Einsetzen mit ⌘V überschreiben und verschieben kein nachfolgendes Byte.
 - Entf und Rückschritt füllen mit `0x00`, statt die Datei zu kürzen; **Bearbeiten ▸ Auswahl füllen mit…** füllt die Auswahl mit einem gewählten Byte.
-- Die drei Vorgänge, die die Länge doch ändern — **Bearbeiten ▸ Einsetzen mit Verschieben…**, **Bearbeiten ▸ Bytes löschen…** und **Bearbeiten ▸ Einfügemodus** — fragen vor der Ausführung nach. Die Rückfragen lassen sich in den [[topic:settings|Einstellungen ▸ Bearbeiten]] abschalten.
+- Die drei Vorgänge, die die Länge doch ändern — **Bearbeiten ▸ Einsetzen mit Verschieben…**, **Bearbeiten ▸ Bytes löschen…** und **Bearbeiten ▸ Einfügemodus** — fragen vor der Ausführung nach. Die Rückfragen lassen sich in den [[topic:settings|Einstellungen ▸ Allgemein]] abschalten.
 
 Die Größe der Datei steht in der Statuszeile unter jedem Bereich. Siehe [[topic:editing|Bytes bearbeiten]].
 

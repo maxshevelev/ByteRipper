@@ -214,22 +214,20 @@ final class SettingsWindow: NSWindow {
 }
 
 /// The app's Settings window — a standard toolbar-tabbed preference dialog,
-/// with a View tab (Appearance §3.2, Layout §6 and Language), a Comparison tab
-/// (§10.3.1), an Editing tab, a Text Decoding tab (§3.4), a Favorites tab (§11)
-/// and a File Types tab (§25). Owned by `MainWindowController`; the App menu's
+/// with a General tab (the workspace, Comparison §10.3.1 and Editing), a View
+/// tab (Appearance §3.2, Layout §6 and Language), a Text Decoding tab (§3.4),
+/// a Favorites tab (§11), a File Types tab (§25) and an Agent tab. Owned by `MainWindowController`; the App menu's
 /// "Settings…" item shows it.
 final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
+    private let generalController = GeneralSettingsViewController()
     private let viewController = ViewSettingsViewController()
-    private let comparisonController = ComparisonSettingsViewController()
-    private let editingController = EditingSettingsViewController()
     private let textDecodingController = TextDecodingSettingsViewController()
     private let fileTypesController = FileTypesSettingsViewController()
     private let favoritesController = FavoritePatternsSettingsViewController()
     private let agentController = AgentSettingsViewController()
 
+    private static let generalItemID = NSToolbarItem.Identifier("General")
     private static let viewItemID = NSToolbarItem.Identifier("View")
-    private static let comparisonItemID = NSToolbarItem.Identifier("Comparison")
-    private static let editingItemID = NSToolbarItem.Identifier("Editing")
     private static let textDecodingItemID = NSToolbarItem.Identifier("TextDecoding")
     private static let fileTypesItemID = NSToolbarItem.Identifier("FileTypes")
     private static let favoritesItemID = NSToolbarItem.Identifier("Favorites")
@@ -256,7 +254,7 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         window.toolbar = toolbar
 
         installHelpButton()
-        select(Self.viewItemID, animate: false)
+        select(Self.generalItemID, animate: false)
     }
 
     /// The `?` for the whole window: at the trailing end of the title bar,
@@ -266,9 +264,9 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
     /// whole window, and a `?` that appears on some tabs and not on others
     /// reads as though only those tabs have help. It lives in the window's
     /// chrome so that it stays put while the tabs below it change size. Two
-    /// tabs add a `?` of their own beside their first control, because a page
-    /// other than Settings explains them: Editing (the editing modes, and why
-    /// the shifting edits ask first) and Agent.
+    /// sections add a `?` of their own beside their first control, because a
+    /// page other than Settings explains them: Editing in the General tab (the
+    /// editing modes, and why the shifting edits ask first) and Agent.
     ///
     /// Not a titlebar accessory: with a preference-style toolbar, AppKit puts
     /// a trailing accessory in the toolbar's row, beside the last tab. The
@@ -335,9 +333,8 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
     /// second copy would be the one deciding how wide the window is.
     static func label(for identifier: NSToolbarItem.Identifier) -> String {
         switch identifier {
+        case generalItemID: return L("General")
         case viewItemID: return L("View", context: "settings")
-        case comparisonItemID: return L("Comparison")
-        case editingItemID: return L("Editing")
         case textDecodingItemID: return L("Text Decoding")
         case favoritesItemID: return L("Search Patterns")
         case fileTypesItemID: return L("File Types")
@@ -358,7 +355,7 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
     static let toolbarLabels: [String] = tabIdentifiers.map(label(for:))
 
     static let tabIdentifiers: [NSToolbarItem.Identifier] = [
-        viewItemID, comparisonItemID, editingItemID,
+        generalItemID, viewItemID,
         textDecodingItemID, favoritesItemID, fileTypesItemID, agentItemID,
     ]
 
@@ -366,27 +363,18 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
                  willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
         let item = NSToolbarItem(itemIdentifier: itemIdentifier)
         switch itemIdentifier {
+        // help: settings.general
+        case Self.generalItemID:
+            item.label = Self.label(for: itemIdentifier)
+            item.paletteLabel = item.label
+            item.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: item.label)
+            item.target = self
+            item.action = #selector(tabTapped(_:))
         // help: settings.view
         case Self.viewItemID:
             item.label = Self.label(for: itemIdentifier)
             item.paletteLabel = item.label
             item.image = NSImage(systemSymbolName: "paintbrush", accessibilityDescription: item.label)
-            item.target = self
-            item.action = #selector(tabTapped(_:))
-        // help: settings.comparison
-        case Self.comparisonItemID:
-            item.label = Self.label(for: itemIdentifier)
-            item.paletteLabel = item.label
-            item.image = NSImage(systemSymbolName: "arrow.left.arrow.right",
-                                 accessibilityDescription: L("Comparison"))
-            item.target = self
-            item.action = #selector(tabTapped(_:))
-        // help: settings.editing
-        case Self.editingItemID:
-            item.label = Self.label(for: itemIdentifier)
-            item.paletteLabel = item.label
-            item.image = NSImage(systemSymbolName: "square.and.pencil",
-                                 accessibilityDescription: L("Editing"))
             item.target = self
             item.action = #selector(tabTapped(_:))
         // help: settings.patterns
@@ -450,9 +438,8 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
     /// The controller each tab shows.
     private func controller(for identifier: NSToolbarItem.Identifier) -> NSViewController? {
         switch identifier {
+        case Self.generalItemID: return generalController
         case Self.viewItemID: return viewController
-        case Self.comparisonItemID: return comparisonController
-        case Self.editingItemID: return editingController
         case Self.textDecodingItemID: return textDecodingController
         case Self.favoritesItemID: return favoritesController
         case Self.fileTypesItemID: return fileTypesController
@@ -489,6 +476,15 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
 
     /// The Language section, for the tests that drive the choice.
     var language: LanguageSettingsViewController { viewController.language }
+
+    /// The General tab, for the tests that drive it.
+    var general: GeneralSettingsViewController { generalController }
+
+    /// Opens the window on the View tab, for the tests of its sections.
+    func showViewTab(_ sender: Any?) {
+        select(Self.viewItemID, animate: false)
+        showWindow(sender)
+    }
 
     /// Opens the window on the Favorites tab — where **Manage Favorites…** in
     /// the Find bar's menu leads (§11). A named destination rather than "open

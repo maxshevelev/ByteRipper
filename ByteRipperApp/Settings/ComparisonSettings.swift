@@ -43,15 +43,16 @@ enum ComparisonSettings {
     }
 }
 
-/// The Comparison tab of the Settings window (§10.3.1): the grouping distance
+/// The Comparison section of the General tab (§10.3.1): the grouping distance
 /// diff navigation steps by. The change persists immediately and applies to an
-/// open comparison live, matching the other tabs.
+/// open comparison live, matching the other sections.
 final class ComparisonSettingsViewController: NSViewController {
     private let groupingPopup = NSPopUpButton()
 
     override func loadView() {
         let root = NSView()
 
+        // help: settings.comparison
         let groupingLabel = NSTextField(labelWithString: L("Group Differences Within:"))
         groupingPopup.target = self
         groupingPopup.action = #selector(groupingChanged(_:))
