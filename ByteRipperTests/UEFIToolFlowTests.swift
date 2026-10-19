@@ -995,6 +995,44 @@ final class UEFIToolFlowTests: XCTestCase {
                        "the file under the caret is the row shown")
     }
 
+    /// A reveal of the row that is the selection already still brings it on
+    /// screen: the reader scrolled the table away from it and pressed the
+    /// button to be shown it. Only the panel's own shows of its focus — after
+    /// a branch opens, a checksum pass — leave the table where it is.
+    func testRevealingTheSelectedRowScrollsItBackIntoView() throws {
+        let controller = try open(UEFITestImage.make())
+        let tree = try outline()
+        controller.windowModel.pane1.moveCaret(to: 0x4A)
+        try session().revealNodeAtCaret()
+        XCTAssertTrue(pumpUntil(5) { tree.selectedRow >= 0 }, "the reveal selected a row")
+        let selected = tree.selectedRow
+        XCTAssertGreaterThan(tree.numberOfRows, 2, "the premise: rows to scroll past")
+
+        let panel = try XCTUnwrap(controller.tools.panel)
+        let splitter = try XCTUnwrap(descendants(of: panel, ALSplitView.self).first)
+        let clip = try XCTUnwrap(tree.enclosingScrollView)
+        let rowHeight = tree.rect(ofRow: 0).height
+        let header = try XCTUnwrap(tree.headerView).frame.height
+        // Room for one row under the column header.
+        splitter.setDividerPosition(splitter.dividerPosition(at: 0)
+                                    - clip.contentView.bounds.height + header + rowHeight + 2, at: 0)
+        window?.layoutIfNeeded()
+        func seen() -> NSRange {
+            var rect = clip.documentVisibleRect
+            rect.origin.y += header
+            rect.size.height -= header
+            return tree.rows(in: rect)
+        }
+        let away = selected == 0 ? tree.numberOfRows - 1 : 0
+        tree.scrollRowToVisible(away)
+        XCTAssertFalse(NSLocationInRange(selected, seen()), "the premise: scrolled away: \(seen())")
+
+        try session().revealNodeAtCaret()
+        XCTAssertTrue(pumpUntil(5) { NSLocationInRange(selected, seen()) },
+                      "the selected row is on screen again: \(seen())")
+        XCTAssertEqual(tree.selectedRow, selected)
+    }
+
     /// The same reveal into a branch that has already been read.
     ///
     /// Nothing is left to read there, so nothing else will redraw the table

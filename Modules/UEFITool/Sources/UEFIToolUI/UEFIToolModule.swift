@@ -1106,12 +1106,14 @@ private struct ChecksumPass: Sendable {
     private func openMERegionForReveal(_ id: NodeID, at offset: UInt64) {
         runMEAnalysis(id) { [weak self] in
             guard let self else { return }
+            self.controller.scrollToFocusOnNextShow()
             self.controller.openMERegion(id, settlingOn: self.mePath(covering: offset))
         } onFailure: { [weak self] in
             // The sub-tree is not coming, so the region node is the nearest
             // thing above the caret the panel can still show. It covers the
             // caret — that is how the reveal got here — so landing on it is the
             // same answer one level up. Why it failed has already been said.
+            self?.controller.scrollToFocusOnNextShow()
             self?.showUEFIFocus(id)
         }
     }
@@ -1488,6 +1490,7 @@ private struct ChecksumPass: Sendable {
         // two halves route by the same rule `zoneSelected` uses.
         if let path = mePath(covering: offset) {
             host.noteNavigationStep()
+            controller.scrollToFocusOnNextShow()
             showMEFocus(path)
             return
         }
@@ -1520,10 +1523,12 @@ private struct ChecksumPass: Sendable {
             // rows, rather than answer with nothing.
             if UEFITreeDisplay.isEmptyPadding(node), !self.controller.showsEmptyPadding {
                 self.controller.askToShowEmptyPadding { [weak self] in
+                    self?.controller.scrollToFocusOnNextShow()
                     self?.showUEFIFocus(node.id)
                 }
                 return
             }
+            self.controller.scrollToFocusOnNextShow()
             self.showUEFIFocus(node.id)
         }
     }
@@ -1645,6 +1650,7 @@ private struct ChecksumPass: Sendable {
             self.controller.endBusy()
             guard let node = chain.last(where: { $0.kind == store.kind && $0.range == store.range }) else { return }
             self.host.noteNavigationStep()
+            self.controller.scrollToFocusOnNextShow()
             // A whole show, not a selection's: the row may sit in branches
             // the outline has not opened, and the show is what opens them.
             // Published, so the dump comes to the store's bytes.

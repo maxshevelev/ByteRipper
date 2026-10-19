@@ -872,11 +872,13 @@ import UEFITool
         // to select, and the title already stands for it in accent colour, so
         // there is nothing to do to the tree.
         if presented.title != nil, focus == presented.title?.id {
+            scrollsToFocusOnNextShow = false
             outline.deselectAll(nil)
             return
         }
 
         guard let focus, let tree, tree.node(focus) != nil else {
+            scrollsToFocusOnNextShow = false
             outline.deselectAll(nil)
             return
         }
@@ -909,8 +911,13 @@ import UEFITool
             return
         }
         // The same rule the UEFI half's `selectAndScroll` keeps: a show that
-        // finds the row where it already was does not move the table.
-        guard outline.selectedRow != row else { return }
+        // finds the row where it already was does not move the table — unless
+        // the reader asked to be shown it.
+        let scrollsAnyway = takeScrollToFocus()
+        guard outline.selectedRow != row else {
+            if scrollsAnyway { outline.scrollRowToVisible(row) }
+            return
+        }
         outline.scrollRowToVisible(row)
         // The selection is the panel's own doing, not the reader's, so it must
         // not read back as a click — the same reason `reveal` sets this around
@@ -1031,6 +1038,23 @@ import UEFITool
         }
     }
 
+    /// Set by `scrollToFocusOnNextShow`: the next reveal brings its row on
+    /// screen even when the row is the selection already.
+    private var scrollsToFocusOnNextShow = false
+
+    /// The reader asked to be shown a row — the reveal button, **Show in
+    /// Tree**, the DMI button — rather than the panel showing its focus again
+    /// after a change. The reveal that follows scrolls to the row even when it
+    /// finds it already selected, which a passive show must not do.
+    func scrollToFocusOnNextShow() {
+        scrollsToFocusOnNextShow = true
+    }
+
+    private func takeScrollToFocus() -> Bool {
+        defer { scrollsToFocusOnNextShow = false }
+        return scrollsToFocusOnNextShow
+    }
+
     private func selectAndScroll(to nodeID: NodeID) {
         var row = outline.row(forItem: row(nodeID))
         // A copy the tree leaves out is shown by the row of the copy it stands
@@ -1040,13 +1064,19 @@ import UEFITool
            let standing = supersededCopies(in: store)[nodeID] {
             row = outline.row(forItem: self.row(standing))
         }
+        let scrollsAnyway = takeScrollToFocus()
         guard row >= 0 else { return }
         // A show that finds the focus where it already was — a branch opening,
         // the checksum pass that follows it, an edit — is not a reason to move
         // the table. The reader may have scrolled somewhere else to look at
         // something, and the row this would scroll to is already the selection,
-        // so there is nothing to move to and nothing to select.
-        guard outline.selectedRow != row else { return }
+        // so there is nothing to select. A reveal or the DMI button is the
+        // reader asking to see the row, though, and that one brings it back on
+        // screen even when it is the selection already.
+        guard outline.selectedRow != row else {
+            if scrollsAnyway { outline.scrollRowToVisible(row) }
+            return
+        }
         outline.scrollRowToVisible(row)
         outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
     }
