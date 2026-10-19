@@ -698,7 +698,7 @@ final class PaneViewModel: HexViewDataSource {
         notifyCompanionContentFullyChanged()
     }
 
-    /// The unsaved changes of a file this pane holds, as a project keeps them;
+    /// The unsaved changes of a file this pane holds, as the workspace keeps them;
     /// nil for an untitled document, a clean file, or a storage that cannot
     /// say.
     func exportKeptEdits() -> OverlayEdits? {

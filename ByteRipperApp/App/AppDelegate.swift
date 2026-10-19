@@ -326,7 +326,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             sections.append(L("No longer found, not opened:") + "\n" + list(missing))
         }
         if !changed.isEmpty {
-            sections.append(L("Changed on disk since the last session. Opened without their segments, parts and tool state:")
+            sections.append(L("Changed on disk since the last session. Opened without their unsaved changes, segments, parts and tool state:")
                             + "\n" + list(changed))
         }
         let alert = NSAlert()
@@ -661,14 +661,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     /// What quitting does not ask about: with the workspace on, an untitled
-    /// document or a part whose bytes the workspace holds as they are now
-    /// comes back at the next launch, still unsaved — only changes to files on
-    /// disk are asked about (`Design/WORKSPACE_PLAN.md`, "Untitled documents").
-    /// A snapshot is taken first, so "as they are now" is true; a document
-    /// whose bytes could not be written is asked about as before.
+    /// document, a part or a file's unsaved changes the workspace holds as
+    /// they are now come back at the next launch, still unsaved
+    /// (`Design/WORKSPACE_PLAN.md`, "Untitled documents"). A snapshot is taken
+    /// first, so "as they are now" is true; a document whose bytes could not
+    /// be written is asked about as before.
     private func keptAtQuit() -> (PaneViewModel) -> Bool {
         // A project keeps everything, the switch or not: it is a file the
-        // person made to keep. The session keeps what never had a file.
+        // person made to keep. The session keeps the same while the switch is
+        // on.
         guard let recorder = workspaceRecorder,
               recorder.project != nil || WorkspaceSettings.restoresWorkspace else { return { _ in false } }
         recorder.record()

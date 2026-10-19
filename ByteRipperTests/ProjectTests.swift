@@ -40,7 +40,7 @@ final class ProjectTests: XCTestCase {
     private func reopen(_ project: URL) async -> (MainViewController, [RestoreIssue]) {
         let folder = WorkspaceFolder.project(at: project)
         let workspace = folder.read()
-        let keeper = UntitledKeeper(folder: folder, keepsFileEdits: true)
+        let keeper = UntitledKeeper(folder: folder, isProject: true)
         let target = shownWindow().mainViewController
         let restorer = WorkspaceRestorer(keeper: keeper)
         if let tab = workspace?.windows.first?.tabs.first { restorer.openFiles(of: tab, in: target) }

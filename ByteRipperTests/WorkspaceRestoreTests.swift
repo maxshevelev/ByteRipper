@@ -415,8 +415,8 @@ final class WorkspaceRestoreTests: XCTestCase {
                        "a closed document takes its bytes with it")
     }
 
-    /// Quitting with the workspace on asks about changes to files on disk,
-    /// and not about an untitled document the workspace holds.
+    /// Quitting with the workspace on does not ask about an untitled
+    /// document the workspace holds.
     func testQuittingDoesNotAskAboutAKeptUntitledDocument() async throws {
         WorkspaceSettings.set(restoresWorkspace: true)
         let window = shownWindow()
@@ -440,6 +440,45 @@ final class WorkspaceRestoreTests: XCTestCase {
         pane.select(range: 0..<0)
         try pane.pasteWrite([9])
         XCTAssertFalse(kept(pane), "a change since the snapshot is not held")
+    }
+
+    /// The session keeps a file's unsaved changes as a project does: they
+    /// come back red and unsaved, and quitting asks nothing about them.
+    func testAFileOnDiskComesBackWithItsUnsavedChanges() async throws {
+        WorkspaceSettings.set(restoresWorkspace: true)
+        let file = try dump(0x400, 0x5A)
+        let window = shownWindow()
+        let controller = window.mainViewController
+        let pane = controller.windowModel.pane1
+        controller.openFiles([file])
+        pane.select(range: 0x10..<0x10)
+        try pane.pasteWrite([0xDE, 0xAD])
+        try pane.pasteInsert([0x01])
+        let expected = try pane.document?.read(at: 0, length: 0x401)
+        let (recorder, folderURL) = recorder([window])
+        recorder.record()
+
+        let tab = try XCTUnwrap(recorder.savedWorkspace()?.windows.first?.tabs.first)
+        XCTAssertNotNil(tab.panes[0]?.edits, "the changes are kept")
+        guard case let .file(stamp)? = tab.panes[0]?.document else { return XCTFail("a file") }
+        XCTAssertNil(stamp.relativePath, "the session finds its files by path alone")
+        let kept: (PaneViewModel) -> Bool = { recorder.keeper.holdsCurrentBytes(of: $0) }
+        XCTAssertEqual(controller.unsavedDocumentCount(keeping: kept), 0, "quitting asks nothing")
+
+        let target = shownWindow().mainViewController
+        let issues = await restore([(tab, target)], keeper: UntitledKeeper(folder: WorkspaceFolder(url: folderURL)))
+        XCTAssertEqual(issues, [])
+        let restored = target.windowModel.pane1
+        XCTAssertEqual(try restored.document?.read(at: 0, length: 0x401), expected)
+        XCTAssertTrue(restored.status.isDirty, "still unsaved")
+        XCTAssertEqual(try Data(contentsOf: file).count, 0x400, "the file on disk is untouched")
+
+        let edits = folderURL.appendingPathComponent("Edits").path
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: edits).count, 1)
+        pane.close()
+        recorder.record()
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: edits), [],
+                       "a closed file takes its changes with it")
     }
 
     func testUnchangedUntitledBytesAreNotWrittenAgain() async throws {

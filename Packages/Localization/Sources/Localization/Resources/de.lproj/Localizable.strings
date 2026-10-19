@@ -148,7 +148,7 @@
 "BIOS ID" = "BIOS-ID";
 "Board" = "Platine";
 "Build date" = "Build-Datum";
-"Changed on disk since the last session. Opened without their segments, parts and tool state:" = "Seit der letzten Sitzung auf dem Datenträger geändert. Ohne Segmente, Teile und Werkzeugzustand geöffnet:";
+"Changed on disk since the last session. Opened without their unsaved changes, segments, parts and tool state:" = "Seit der letzten Sitzung auf dem Datenträger geändert. Ohne ungesicherte Änderungen, Segmente, Teile und Werkzeugzustand geöffnet:";
 "Click to change the background" = "Klicken, um den Hintergrund zu wechseln";
 "Close Project" = "Projekt schließen";
 "Copied at %1$@–%2$@; %3$@" = "Kopie bei %1$@–%2$@; %3$@";

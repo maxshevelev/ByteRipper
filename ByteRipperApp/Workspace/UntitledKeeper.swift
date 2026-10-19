@@ -11,17 +11,17 @@ import Workspace
 /// moved since the last write, so an untitled document nobody is editing costs
 /// nothing after the first snapshot.
 ///
-/// Inside a project it also keeps the unsaved changes of files on disk
-/// (`keepsFileEdits`), as runs over each file (`OverlayEdits`), by the same
-/// rule: written again only when the content moved.
+/// It also keeps the unsaved changes of files on disk, as runs over each file
+/// (`OverlayEdits`), by the same rule: written again only when the content
+/// moved. The session keeps them as a project does, so quitting asks about
+/// them in neither.
 @MainActor
 final class UntitledKeeper {
     private let folder: WorkspaceFolder
-    /// True for a project: its files' unsaved changes are part of it. The
-    /// session the app keeps by itself asks about them at quit instead.
-    let keepsFileEdits: Bool
+    /// True for a project, whose files are also found relative to it.
+    let isProject: Bool
     /// The folder a project's files are found relative to; nil outside one.
-    var relativeBase: URL? { keepsFileEdits ? folder.enclosingFolder : nil }
+    var relativeBase: URL? { isProject ? folder.enclosingFolder : nil }
 
     private struct Entry {
         weak var document: BinaryDocument?
@@ -36,9 +36,9 @@ final class UntitledKeeper {
     private var named: Set<String> = []
     private var namedEdits: Set<String> = []
 
-    init(folder: WorkspaceFolder, keepsFileEdits: Bool = false) {
+    init(folder: WorkspaceFolder, isProject: Bool = false) {
         self.folder = folder
-        self.keepsFileEdits = keepsFileEdits
+        self.isProject = isProject
     }
 
     private static let editsEncoder: PropertyListEncoder = {
@@ -49,10 +49,10 @@ final class UntitledKeeper {
     }()
 
     /// The name the unsaved changes of `pane`'s file are kept under, written
-    /// first if they moved. Nil for a clean file, outside a project, or when
-    /// they could not be written.
+    /// first if they moved. Nil for a clean file, or when they could not be
+    /// written.
     func editsStamp(for pane: PaneViewModel) -> String? {
-        guard keepsFileEdits, !pane.isUntitled, let document = pane.document, document.isDirty else { return nil }
+        guard !pane.isUntitled, let document = pane.document, document.isDirty else { return nil }
         let key = ObjectIdentifier(document)
         var entry = editEntries[key].flatMap { $0.document === document ? $0 : nil }
             ?? Entry(document: document, id: UUID().uuidString, written: nil)

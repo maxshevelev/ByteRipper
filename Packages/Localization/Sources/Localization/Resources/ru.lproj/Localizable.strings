@@ -148,7 +148,7 @@
 "BIOS ID" = "BIOS ID";
 "Board" = "Плата";
 "Build date" = "Дата сборки";
-"Changed on disk since the last session. Opened without their segments, parts and tool state:" = "Изменились на диске после прошлой сессии. Открыты без сегментов, частей и состояния инструментов:";
+"Changed on disk since the last session. Opened without their unsaved changes, segments, parts and tool state:" = "Изменились на диске после прошлой сессии. Открыты без несохранённых правок, сегментов, частей и состояния инструментов:";
 "Click to change the background" = "Кликните, чтобы сменить фон";
 "Close Project" = "Закрыть проект";
 "Copied at %1$@–%2$@; %3$@" = "Копия расположена по адресу %1$@–%2$@; %3$@";

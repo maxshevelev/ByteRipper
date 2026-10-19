@@ -32,10 +32,6 @@ and not an app-wide preference:
 **Not kept**, deliberately:
 
 - **Undo history.** It belongs to the session that made it.
-- **Unsaved changes to a file on disk.** Quitting asks Save / Discard first, as
-  it does today — the one question it still asks — so at a normal quit there
-  are none. After a crash they are lost. The tab, the file and its position
-  still come back.
 - **Search All results.** They are recomputed from the pattern on demand.
 - **Navigation history (Back / Forward).** Its places hold live pane
   references. It starts empty.
@@ -60,8 +56,8 @@ to date as the session changes, not only at quit.
     tabs, it costs microseconds, and the compare keeps the disk quiet. An
     observer per mutation would be a hundred hooks that each can be forgotten.
 - **Closing the last window is a quit**, answered exactly as ⌘Q is: the
-  windows are kept for the next launch, and only unsaved changes to files on
-  disk are asked about. (It used to empty the workspace, as Safari and Xcode
+  windows are kept for the next launch, and nothing is asked about what the
+  workspace holds. (It used to empty the workspace, as Safari and Xcode
   do; a closed last window lost the session for good, which is not what a
   person closing the app means.)
 - With the setting off nothing is recorded, and switching it off deletes the
@@ -82,8 +78,19 @@ restore.
 **Quitting does not ask about them** with the switch on: they come back at
 the next launch, still unsaved. Before its questions, quitting takes a
 snapshot, and asks only about what the workspace does not hold as it is now
-— changes to files on disk, and anything whose bytes could not be written.
-A document closed in the session takes its copy with it.
+— anything whose bytes could not be written. A document closed in the
+session takes its copy with it.
+
+### Unsaved changes to files on disk
+
+Kept as a project keeps them (below, "Projects"): runs over the file
+(`OverlayEdits`) in `Edits/<uuid>.plist` beside the workspace, written again
+only when the content moved, laid over the file at restore only when it is
+the file they were made on. A file changed outside the app opens without
+them, and the warning says so. Quitting does not ask about them either; the
+session differs from a project only in finding its files by path alone, with
+no `relativePath`. (They used to be the one question quitting still asked,
+and were lost in a crash.)
 
 A part whose parent did not come back still brings its changes, as an
 untitled document with no way home.

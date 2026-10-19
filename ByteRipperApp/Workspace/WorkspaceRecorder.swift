@@ -30,8 +30,8 @@ final class WorkspaceRecorder {
 
     static let interval: TimeInterval = 2
 
-    /// The untitled documents' bytes, beside the workspace — and inside a
-    /// project, the files' unsaved changes too.
+    /// The untitled documents' bytes and the files' unsaved changes, beside
+    /// the workspace.
     private(set) var keeper: UntitledKeeper
 
     /// The Annotations window, if it has been made.
@@ -58,7 +58,7 @@ final class WorkspaceRecorder {
     /// written is in the folder it leaves.
     func switchTo(project: WorkspaceFolder?) {
         self.project = project
-        keeper = project.map { UntitledKeeper(folder: $0, keepsFileEdits: true) }
+        keeper = project.map { UntitledKeeper(folder: $0, isProject: true) }
             ?? UntitledKeeper(folder: folder)
         removedWhileOff = false
     }
@@ -97,8 +97,9 @@ final class WorkspaceRecorder {
     var isPaused = false
 
     /// Writes the workspace as it stands, if the switch is on — untitled
-    /// documents and the parts' changes included, at quit as at every other
-    /// time: quitting does not ask about them, they come back.
+    /// documents, the parts' changes and the files' unsaved changes included,
+    /// at quit as at every other time: quitting does not ask about them, they
+    /// come back.
     func record() {
         if let project {
             guard !isPaused else { return }
