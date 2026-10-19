@@ -474,7 +474,11 @@ import ToolModuleKit
     /// Makes `identifier` the tab's tool-module, or closes the current one when
     /// it is nil. Picking the one already active is not a toggle: the menu is a
     /// radio group, and choosing the checked row means "yes, this one".
-    func activate(_ identifier: String?, animated: Bool = true) {
+    ///
+    /// `movesWindow` false keeps the window where it is while the panel opens
+    /// inside it: a restored workspace's window already has the frame it had
+    /// with the panel open.
+    func activate(_ identifier: String?, animated: Bool = true, movesWindow: Bool = true) {
         let resolved = identifier.flatMap { ToolRegistry.module(identified: $0) == nil ? nil : $0 }
         guard resolved != activeIdentifier else { return }
         activeIdentifier = resolved
@@ -487,7 +491,14 @@ import ToolModuleKit
         }
         startSession(module, on: pane)
         isPanelVisible = true
-        setPanelWidth(preferredWidth(for: module), animated: animated)
+        setPanelWidth(preferredWidth(for: module), animated: animated, movesWindow: movesWindow)
+    }
+
+    /// Hands the session that will next start `identifier` on `pane` the state
+    /// a workspace kept for it (`Design/WORKSPACE_PLAN.md`, "Tools") — the
+    /// same box a session parks into, filled from disk instead.
+    func park(_ state: any ToolSessionState, for identifier: String, on pane: PaneViewModel) {
+        parked[identifier] = ParkedSession(state: state, pane: pane)
     }
 
     /// Opens or closes the panel, moving the window's leading edge with it so
@@ -506,14 +517,14 @@ import ToolModuleKit
     /// switching to a tool-module that wants a different width — so the dump
     /// keeps the width it had in every one of them rather than in the case
     /// somebody remembered to write.
-    private func setPanelWidth(_ width: CGFloat, animated: Bool) {
+    private func setPanelWidth(_ width: CGFloat, animated: Bool, movesWindow: Bool = true) {
         guard let surface else { return }
         let current = surface.toolPanelWidth()
         // Only the tab's own surface takes the window's width with it: a
         // fragment panel opens inside the area it was given, and a window that
         // grew because a panel over it opened a tool would be the window moving
         // for something that is not the window's.
-        let resize = surface.pinnedPane == nil
+        let resize = surface.pinnedPane == nil && movesWindow
             ? owner?.toolPanelWindowResize(delta: width - current)
             : nil
         surface.setToolPanelWidth(width, animated: animated, windowResize: resize)

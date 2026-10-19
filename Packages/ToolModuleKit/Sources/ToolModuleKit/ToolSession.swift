@@ -134,6 +134,26 @@ public extension ToolSession {
 /// session is what just ended.
 public protocol ToolSessionState: Sendable {}
 
+/// A parked state that can outlive the app: written into the workspace at quit
+/// and handed back to a session started at the next launch
+/// (`Design/WORKSPACE_PLAN.md`, "Tools").
+///
+/// Opt-in, and still opaque to the host: it encodes what a session parks and
+/// asks the tool-module to decode it again (`ToolModule.restoredState`). What
+/// belongs here is a choice — a node, a row, a tab — never what the file holds:
+/// the session reads the file again when it starts.
+public protocol PersistableToolSessionState: ToolSessionState, Codable {}
+
+extension PersistableToolSessionState {
+    /// The state as the workspace keeps it.
+    public var encoded: Data? { try? JSONEncoder().encode(self) }
+
+    /// A state of this type written by `encoded`, or nil for anything else.
+    public static func decoded(from data: Data) -> Self? {
+        try? JSONDecoder().decode(Self.self, from: data)
+    }
+}
+
 /// Why what the session read is no longer what the file holds.
 public enum ToolContentChange: Equatable, Sendable {
     /// An edit landed: what it covered afterwards, and how the file's length

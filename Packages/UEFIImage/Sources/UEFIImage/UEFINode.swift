@@ -356,7 +356,7 @@ public enum UEFINodeKind: String, Equatable, Sendable, CaseIterable, Codable {
 /// Not an offset: two parses of the same image give the same paths, a path
 /// survives being written down in a zone id, and it reads back as a route —
 /// which is what a diagnostic about a node three levels down needs to say.
-public struct NodeID: Hashable, Sendable, CustomStringConvertible {
+public struct NodeID: Hashable, Sendable, Codable, CustomStringConvertible {
     public var path: [Int]
 
     public init(_ path: [Int] = []) {

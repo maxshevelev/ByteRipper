@@ -38,6 +38,12 @@ public enum UEFIToolModule: ToolModule {
     /// slow path on demand.
     @MainActor public static var loadingRowDelay: TimeInterval = 0.2
 
+    /// The choice a session parked into the workspace, for one starting at
+    /// the next launch.
+    public static func restoredState(from data: Data) -> (any ToolSessionState)? {
+        UEFIParkedState.decoded(from: data)
+    }
+
     @MainActor public static func makeSession(host: any ToolHost) -> any ToolSession {
         UEFIToolSession(host: host)
     }
@@ -123,7 +129,7 @@ enum UEFINavigationMark: Hashable {
 /// nothing else. The tree itself is the pane's, not the session's — parking
 /// costs it nothing and reactivating finds it exactly as it was left
 /// (`ToolSession.parkedState`).
-struct UEFIParkedState: ToolSessionState {
+struct UEFIParkedState: PersistableToolSessionState {
     var focus: NodeID?
     /// The ME row the user was looking at, as its path under the ME region
     /// node. Kept apart from `focus` (a UEFI `NodeID`) because the two resolve

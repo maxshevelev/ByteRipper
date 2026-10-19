@@ -167,15 +167,25 @@ outlive the process, so the only addition is a way to encode it:
 ```swift
 public protocol PersistableToolSessionState: ToolSessionState, Codable {}
 
-extension ToolModule {
-    /// Decodes what `PersistableToolSessionState` encoded. Nil by default:
-    /// a tool that does not opt in comes back closed-over-open, with no focus.
-    static func decodeState(_ data: Data) -> (any ToolSessionState)?
+protocol ToolModule {
+    /// Nil by default: a tool that does not opt in comes back open, with
+    /// nothing chosen.
+    static func restoredState(from data: Data) -> (any ToolSessionState)?
 }
 ```
 
 `UEFIParkedState`, `MEAParkedState` and `FITParkedState` conform (`NodeID`
-becomes `Codable`). The open UEFI rows live on the pane and are saved with it.
+is `Codable`). The open UEFI rows live on the pane and are saved with it.
+
+- The restored state goes into the same box a session parks into
+  (`ToolController.park`), so the session that starts finds it exactly as it
+  would after a switch between tools.
+- On a tab's own panes the tool goes back to the pane it read, which need
+  not be the active one.
+- The panel opens **without moving the window** (`activate(movesWindow:)`):
+  the window's frame was written with the panel open.
+- What a tool had chosen, and the open rows, come back only for a document
+  that has not changed since.
 
 ## Parts
 
@@ -210,6 +220,6 @@ Each phase is a commit, and each leaves the app working with the setting on.
 3. **The rest of a pane** — bookmarks, segments and links, minimap, find bar. *(done)*
 4. **Untitled documents** — their bytes. *(done)*
 5. **Fragments and parts.** *(done)*
-6. **Tools.**
+6. **Tools.** *(done)*
 7. **Changes on disk, and launch with a file** — the warning sheet, Finder
    launch, and the help page `workspace.md` in three languages.

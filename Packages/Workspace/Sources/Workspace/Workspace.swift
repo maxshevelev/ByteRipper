@@ -109,11 +109,13 @@ public struct PaneState: Codable, Equatable, Sendable {
     /// The pieces the file was cut into, when it was cut. Nil for a file that
     /// is one piece of itself.
     public var segments: SegmentationState?
+    /// The rows the UEFI panel had open, each a node's path in the tree.
+    public var uefiOpenRows: [[Int]]?
 
     public init(document: DocumentSource,
                 selectionStart: UInt64, selectionEnd: UInt64,
                 inputRegion: InputRegion = .hex, insertMode: Bool = false,
-                topOffset: UInt64, segments: SegmentationState? = nil) {
+                topOffset: UInt64, segments: SegmentationState? = nil, uefiOpenRows: [[Int]]? = nil) {
         self.document = document
         self.selectionStart = selectionStart
         self.selectionEnd = selectionEnd
@@ -121,6 +123,7 @@ public struct PaneState: Codable, Equatable, Sendable {
         self.insertMode = insertMode
         self.topOffset = topOffset
         self.segments = segments
+        self.uefiOpenRows = uefiOpenRows
     }
 }
 
@@ -300,12 +303,32 @@ public struct SurfaceState: Codable, Equatable, Sendable {
     public var minimapMode: String?
     /// The Find bar's pattern while the bar is open; nil while it is closed.
     public var findPattern: FindPatternState?
+    /// The tool panel, while one is open.
+    public var tool: ToolState?
 
     public init(minimapVisible: Bool = false, minimapMode: String? = nil,
-                findPattern: FindPatternState? = nil) {
+                findPattern: FindPatternState? = nil, tool: ToolState? = nil) {
         self.minimapVisible = minimapVisible
         self.minimapMode = minimapMode
         self.findPattern = findPattern
+        self.tool = tool
+    }
+}
+
+/// The tool panel: which tool-module, what it had chosen, and — on a tab's
+/// own panes — which of them it read.
+public struct ToolState: Codable, Equatable, Sendable {
+    public var identifier: String
+    /// What the session parked, as the tool-module encoded it; nil for one
+    /// that keeps nothing.
+    public var state: Data?
+    /// File A (0) or File B (1); nil on a panel, which has one pane.
+    public var pane: Int?
+
+    public init(identifier: String, state: Data?, pane: Int?) {
+        self.identifier = identifier
+        self.state = state
+        self.pane = pane
     }
 }
 

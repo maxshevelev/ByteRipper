@@ -2,6 +2,7 @@ import ByteRipperCore
 import Cocoa
 import Localization
 import PartCodec
+import ToolModuleKit
 import UEFIImage
 import Workspace
 
@@ -43,7 +44,16 @@ extension MainViewController {
     private func workspaceSurface(_ surface: DocumentSurface) -> SurfaceState {
         let minimap = surface.minimap
         return SurfaceState(minimapVisible: minimap.isPanelVisible,
-                            minimapMode: minimap.isPanelVisible ? minimap.view.renderMode.rawValue : nil)
+                            minimapMode: minimap.isPanelVisible ? minimap.view.renderMode.rawValue : nil,
+                            tool: workspaceTool(surface.tools))
+    }
+
+    /// The open tool-module, what it has chosen, and the pane it reads.
+    private func workspaceTool(_ tools: ToolController) -> ToolState? {
+        guard let identifier = tools.activeIdentifier, let bound = tools.boundPane else { return nil }
+        let slot: Int? = bound === windowModel.pane1 ? 0 : bound === windowModel.pane2 ? 1 : nil
+        let state = (tools.session?.parkedState as? any PersistableToolSessionState)?.encoded
+        return ToolState(identifier: identifier, state: state, pane: slot)
     }
 
     /// One pane, or nil when there is nothing in it that could be opened
@@ -69,7 +79,9 @@ extension MainViewController {
             inputRegion: pane.inputRegion == .ascii ? .text : .hex,
             insertMode: pane.isInsertMode,
             topOffset: filePaneView(for: pane)?.firstVisibleOffset ?? 0,
-            segments: pane.workspaceSegments())
+            segments: pane.workspaceSegments(),
+            uefiOpenRows: pane.uefiState.openUEFIRows.isEmpty
+                ? nil : pane.uefiState.openUEFIRows.map(\.path).sorted { $0.lexicographicallyPrecedes($1) })
     }
 
     /// The panels, in the order they were opened, and the one in front.
@@ -164,6 +176,17 @@ extension MainViewController {
         for entry in opened {
             scroll(entry.pane, to: entry.state, unchanged: entry.unchanged)
         }
+        if let tool = tab.surface.tool {
+            // The tool binds to the active pane as it starts; the one it read
+            // is made active for that moment.
+            let slot = tool.pane.flatMap { result.slots[$0] } ?? result.slots.values.first
+            if let target = slot {
+                let index = target.pane === windowModel.pane2 ? 1 : 0
+                windowModel.setActivePane(index)
+                restoreTool(tool, on: surface.tools, pane: target)
+                windowModel.setActivePane(active)
+            }
+        }
         if mode == .comparison { activatePane(at: active) }
         if let find = tab.surface.findPattern {
             reopenFindBar(text: find.text, encoding: SearchEncoding(rawValue: find.encoding) ?? .hex)
@@ -237,7 +260,12 @@ extension MainViewController {
         }
         guard let id, let pane = fragments.pane(id) else { return nil }
         apply(state.pane, to: pane, unchanged: unchanged)
-        if let surface = fragments.surface(id) { apply(state.surface, to: surface) }
+        if let surface = fragments.surface(id) {
+            apply(state.surface, to: surface)
+            if let tool = state.surface.tool {
+                restoreTool(tool, on: surface.tools, pane: RestoredPane(pane: pane, unchanged: unchanged))
+            }
+        }
         view.layoutSubtreeIfNeeded()
         scroll(pane, to: state.pane, unchanged: unchanged)
         return RestoredPane(pane: pane, unchanged: unchanged)
@@ -300,6 +328,19 @@ extension MainViewController {
         if let segments = state.segments, segments.applies(toSize: pane.fileSize, unchanged: unchanged) {
             pane.restoreSegments(segments)
         }
+        if unchanged, let rows = state.uefiOpenRows {
+            pane.uefiState.openUEFIRows = Set(rows.map(NodeID.init))
+        }
+    }
+
+    /// Opens the tool panel on `pane` as it was. What the tool had chosen is
+    /// handed back only for a document that is the one it was chosen in.
+    private func restoreTool(_ tool: ToolState, on tools: ToolController, pane: RestoredPane) {
+        guard let module = ToolRegistry.module(identified: tool.identifier) else { return }
+        if pane.unchanged, let data = tool.state, let state = module.restoredState(from: data) {
+            tools.park(state, for: tool.identifier, on: pane.pane)
+        }
+        tools.activate(tool.identifier, animated: false, movesWindow: false)
     }
 
     private func scroll(_ pane: PaneViewModel, to state: PaneState, unchanged: Bool) {

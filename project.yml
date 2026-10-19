@@ -375,6 +375,8 @@ targets:
       # A compressed section built in a test, for the agent's search inside one.
       - package: FirmwareCompression
       - package: LenovoDMI
+      # The workspace's value and folder, which the restore tests build.
+      - package: Workspace
       - package: PartCodec
       - package: UEFIContentSource
     settings:

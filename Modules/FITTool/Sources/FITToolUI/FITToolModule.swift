@@ -23,6 +23,12 @@ public enum FITToolModule: ToolModule {
     /// is not (`Design/TOOL_MODULES_PLAN.md`).
     public static let preferredPanelWidth: CGFloat = 480
 
+    /// The choice a session parked into the workspace, for one starting at
+    /// the next launch.
+    public static func restoredState(from data: Data) -> (any ToolSessionState)? {
+        FITParkedState.decoded(from: data)
+    }
+
     @MainActor public static func makeSession(host: any ToolHost) -> any ToolSession {
         FITToolSession(host: host)
     }
@@ -48,7 +54,7 @@ struct FITNavigationMark: Hashable {
 /// over the pane's own tree — and a tree of thousands of nodes per parked
 /// tool-module is how an app comes to hold four copies of an image it is not
 /// showing (`ToolSession.parkedState`).
-struct FITParkedState: ToolSessionState {
+struct FITParkedState: PersistableToolSessionState {
     var focus: Int?
     var focusZone: String?
 }

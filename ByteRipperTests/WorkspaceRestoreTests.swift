@@ -1,4 +1,6 @@
 import PartCodec
+import ToolModuleKit
+import UEFIToolUI
 import Workspace
 import XCTest
 @testable import ByteRipper
@@ -209,6 +211,35 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertNil(panes[2].origin)
         XCTAssertEqual(panes[0].document?.selection.start, 0x10)
         XCTAssertEqual(target.fragments.expanded, target.fragments.panel(holding: panes[0]))
+    }
+
+    // MARK: - Tools
+
+    func testTheToolPanelComesBackOnItsPaneWithoutMovingTheWindow() throws {
+        let a = try dump(0x1000, 0xFF)
+        let b = try dump(0x1000, 0xEE)
+        let source = shownWindow().mainViewController
+        source.openFiles([a, b])
+        source.activatePane(at: 1)
+        source.surface.tools.activate(UEFIToolModule.identifier, animated: false)
+        source.activatePane(at: 0)
+
+        let tab = source.workspaceTab()
+        let tool = try XCTUnwrap(tab.surface.tool)
+        XCTAssertEqual(tool.identifier, UEFIToolModule.identifier)
+        XCTAssertEqual(tool.pane, 1, "the tool read File B")
+        let state = try XCTUnwrap(tool.state, "the UEFI panel's choice is persistable")
+        XCTAssertNotNil(UEFIToolModule.restoredState(from: state))
+
+        let window = shownWindow()
+        let target = window.mainViewController
+        let frame = try XCTUnwrap(window.window?.frame)
+        XCTAssertEqual(target.restoreWorkspaceTab(tab).issues, [])
+
+        XCTAssertEqual(target.surface.tools.activeIdentifier, UEFIToolModule.identifier)
+        XCTAssertIdentical(target.surface.tools.boundPane, target.windowModel.pane2)
+        XCTAssertEqual(target.windowModel.activePaneIndex, 0, "the active pane is still the one that was")
+        XCTAssertEqual(window.window?.frame, frame, "a restored window already has its frame")
     }
 
     // MARK: - Untitled documents

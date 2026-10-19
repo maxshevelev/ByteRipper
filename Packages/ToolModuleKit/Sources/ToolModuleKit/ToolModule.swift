@@ -40,6 +40,11 @@ public protocol ToolModule {
     /// Called on activation; the host lives at least as long as the session.
     @MainActor static func makeSession(host: any ToolHost) -> any ToolSession
 
+    /// A parked state this tool-module's session wrote into the workspace
+    /// (`PersistableToolSessionState`), read back for a session about to
+    /// start. Default: nil — the tool comes back open, with nothing chosen.
+    static func restoredState(from data: Data) -> (any ToolSessionState)?
+
     /// What this tool-module answers an agent from the bytes alone, with its
     /// panel open or not (`ToolAgentQuery`). Default: nothing.
     static var agentQueries: [ToolAgentQuery] { get }
@@ -66,4 +71,6 @@ extension ToolModule {
     /// Defaulted so a new instrument compiles before anything has been written
     /// about it.
     public static var helpTopic: HelpTopicID? { nil }
+
+    public static func restoredState(from data: Data) -> (any ToolSessionState)? { nil }
 }

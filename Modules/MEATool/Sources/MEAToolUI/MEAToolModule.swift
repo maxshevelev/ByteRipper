@@ -27,6 +27,12 @@ public enum MEAToolModule: ToolModule {
     /// detail list below: the same room the UEFI tree takes.
     public static let preferredPanelWidth: CGFloat = 480
 
+    /// The choice a session parked into the workspace, for one starting at
+    /// the next launch.
+    public static func restoredState(from data: Data) -> (any ToolSessionState)? {
+        MEAParkedState.decoded(from: data)
+    }
+
     @MainActor public static func makeSession(host: any ToolHost) -> any ToolSession {
         MEAToolSession(host: host)
     }
@@ -48,7 +54,7 @@ public enum MEAToolModule: ToolModule {
 /// they were looking at. The analysis is worth doing again — it is the module's
 /// whole job, and it is automatic — so only the two choices are kept
 /// (`ToolSession.parkedState`).
-struct MEAParkedState: ToolSessionState {
+struct MEAParkedState: PersistableToolSessionState {
     var tabIndex: Int
     var focusPath: [Int]?
 }
