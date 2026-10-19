@@ -1603,3 +1603,4 @@
 "“%1$@” would move, and it is code that runs in place from flash: moving it needs a rebase this editor does not do." = "„%1$@“ müsste verschoben werden, ist aber Code, der direkt aus dem Flash ausgeführt wird: Das Verschieben erfordert ein Rebase, das dieser Editor nicht durchführt.";
 "“%1$@” would move, and it is fixed at its address — the Volume Top File, a FIT target or a file marked fixed." = "„%1$@“ müsste verschoben werden, ist aber an seine Adresse gebunden — das Volume Top File, ein FIT-Ziel oder eine als fixed markierte Datei.";
 "“%1$@” would need more blocks than its block map can count." = "„%1$@“ bräuchte mehr Blöcke, als seine Block-Map zählen kann.";
+"The agent is at work" = "Der Agent arbeitet";

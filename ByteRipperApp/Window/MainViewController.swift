@@ -5501,8 +5501,9 @@ final class MainViewController: NSViewController {
     /// Adds the toolbar's Agent button while the agent service is switched on
     /// and takes it away while it is off: a door to a window about a service
     /// that is not there would open onto "Switched off." and nothing else.
-    /// The button's points are filled while an agent is connected, as the
-    /// menu bar's are: on a MacBook with a notch the menu bar's mark is often
+    /// A red dot blinks on its corner while an agent is at work
+    /// (`AgentActivityBadge`). The button's points are filled while an agent
+    /// is connected, as the menu bar's are: on a MacBook with a notch the menu bar's mark is often
     /// hidden behind it, and the window is then the one place that shows it.
     /// Between the help book and the pane arrangement, each with a space of
     /// its own on either side, as the right-hand group's items have.
@@ -5525,6 +5526,12 @@ final class MainViewController: NSViewController {
         for item in toolbar.items where item.itemIdentifier == .agentWindow {
             item.image = NSImage(systemSymbolName: AgentService.symbolName(connected: connected),
                                  accessibilityDescription: L("Agent"))
+        }
+        // On the button the toolbar draws for the item, once it has drawn it.
+        DispatchQueue.main.async { [weak self] in
+            guard let window = self?.viewIfLoaded?.window,
+                  let controller = window.windowController as? MainWindowController else { return }
+            controller.agentBadge.sync(in: window, active: wanted && AgentService.shared?.isActive == true)
         }
     }
 

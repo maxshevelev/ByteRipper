@@ -344,6 +344,14 @@ final class AgentService {
     /// The agents connected: the connections whose client has spoken.
     var connectionCount: Int { clients.count }
 
+    /// Whether an agent is at work: a call is running, or one ended less than
+    /// `activityHold` ago. A call often takes a few milliseconds, and a mark
+    /// that showed only the running ones would never be seen; held a moment
+    /// after each, a run of calls reads as one stretch of work.
+    private(set) var isActive = false
+    static let activityHold: Duration = .seconds(2)
+    private var activityEnd: Task<Void, Never>?
+
     /// The service's picture: a plug, hollow while no agent is connected and
     /// filled while one is. One name for every place that shows the service —
     /// the menu bar, the window's toolbar, the Settings tab — so they cannot
@@ -384,6 +392,9 @@ final class AgentService {
         for socket in connections.values { socket.close() }
         connections.removeAll()
         clients.removeAll()
+        activityEnd?.cancel()
+        activityEnd = nil
+        isActive = false
         // Nobody is left to ask about them, and each holds a parsed image.
         desk.background.closeAll()
         failure = nil
@@ -451,7 +462,23 @@ final class AgentService {
             toolStats[record.tool, default: AgentToolStats()].add(record)
         }
         if log.count > Self.logLimit { log.removeFirst(log.count - Self.logLimit) }
+        noteActivity()
         changed()
+    }
+
+    /// Active from now, and until `activityHold` after the last running call
+    /// has ended.
+    private func noteActivity() {
+        activityEnd?.cancel()
+        activityEnd = nil
+        isActive = true
+        guard !log.contains(where: \.isRunning) else { return }
+        activityEnd = Task { [weak self] in
+            try? await Task.sleep(for: Self.activityHold)
+            guard !Task.isCancelled, let self else { return }
+            self.isActive = false
+            self.changed()
+        }
     }
 
     /// A record handed straight to the log, for tests that need a call in a

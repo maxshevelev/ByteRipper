@@ -281,6 +281,47 @@ final class AgentUITests: XCTestCase {
         _ = connection
     }
 
+    /// The service is active while a call runs, and for `activityHold` after
+    /// the last one ends: the toolbar's red dot blinks over that stretch.
+    func testTheServiceIsActiveWhileACallRunsAndAMomentAfter() async throws {
+        XCTAssertFalse(service.isActive)
+        let running = AgentCallRecord(client: "test", tool: "read", arguments: [:],
+                                      started: Date(), duration: .zero, finished: Date(),
+                                      answerBytes: 0, outcome: .running)
+        service.recordForTesting(running)
+        XCTAssertTrue(service.isActive)
+        try await Task.sleep(for: AgentService.activityHold + .milliseconds(300))
+        XCTAssertTrue(service.isActive, "a running call keeps it active however long it takes")
+
+        let done = AgentCallRecord(id: running.id, client: "test", tool: "read", arguments: [:],
+                                   started: running.started, duration: .milliseconds(12), finished: Date(),
+                                   answerBytes: 10, outcome: .answered)
+        service.recordForTesting(done)
+        XCTAssertTrue(service.isActive, "still active just after the answer")
+        try await Task.sleep(for: AgentService.activityHold + .milliseconds(300))
+        XCTAssertFalse(service.isActive)
+    }
+
+    /// The dot sits on the Agent button and blinks while active, and is gone
+    /// otherwise.
+    func testTheActivityBadgeBlinksOnTheAgentButton() throws {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 100),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        let button = NSButton(frame: NSRect(x: 10, y: 10, width: 30, height: 24))
+        button.action = #selector(AppDelegate.showAgentWindow(_:))
+        window.contentView?.addSubview(button)
+        let badge = AgentActivityBadge()
+
+        badge.sync(in: window, active: true)
+        XCTAssertTrue(badge.superview === button)
+        XCTAssertFalse(badge.isHidden)
+        XCTAssertEqual(badge.isBlinking, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+
+        badge.sync(in: window, active: false)
+        XCTAssertTrue(badge.isHidden)
+        XCTAssertFalse(badge.isBlinking)
+    }
+
     /// The window opens tall the first time and keeps the frame it was left in.
     func testTheWindowOpensTallAndKeepsItsFrame() throws {
         let key = "NSWindow Frame " + AgentWindowController.frameAutosaveName

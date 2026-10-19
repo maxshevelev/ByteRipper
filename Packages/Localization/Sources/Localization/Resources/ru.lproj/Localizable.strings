@@ -1603,3 +1603,4 @@
 "“%1$@” would move, and it is code that runs in place from flash: moving it needs a rebase this editor does not do." = "«%1$@» пришлось бы сдвинуть, а это код, который выполняется прямо из флеш-памяти: для переноса нужен rebase, которого этот редактор не делает.";
 "“%1$@” would move, and it is fixed at its address — the Volume Top File, a FIT target or a file marked fixed." = "«%1$@» пришлось бы сдвинуть, а он закреплён по своему адресу — это Volume Top File, цель записи FIT или файл с признаком fixed.";
 "“%1$@” would need more blocks than its block map can count." = "«%1$@» понадобилось бы больше блоков, чем может указать его карта блоков.";
+"The agent is at work" = "Агент работает";

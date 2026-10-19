@@ -72,6 +72,8 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
     private(set) var backStops: [Stop] = []
     private(set) var forwardStops: [Stop] = []
     private var agentObserver: NSObjectProtocol?
+    /// The red dot on the Agent button while an agent is at work.
+    private let agentBadge = AgentActivityBadge()
     /// The zoom, so the cards re-measure and re-draw while the window is open
     /// rather than on the next open.
     private var zoomObserver: NSObjectProtocol?
@@ -255,7 +257,8 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
     var canNavigateForward: Bool { forwardStops.contains { $0.controller?.view.window != nil } }
 
     /// The Agent button there while the agent service is on, and filled
-    /// while an agent is connected — as on the dumps' toolbars.
+    /// while an agent is connected, with the red dot blinking on it while one
+    /// is at work — as on the dumps' toolbars.
     func syncAgentItem(enabled: Bool? = nil, connected: Bool? = nil) {
         guard let toolbar = window?.toolbar else { return }
         let wanted = enabled ?? (AgentService.shared?.isEnabled == true)
@@ -271,6 +274,9 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
         for item in toolbar.items where item.itemIdentifier == .agentWindow {
             item.image = NSImage(systemSymbolName: AgentService.symbolName(connected: isConnected),
                                  accessibilityDescription: L("Agent"))
+        }
+        DispatchQueue.main.async { [weak self] in
+            self?.agentBadge.sync(in: self?.window, active: wanted && AgentService.shared?.isActive == true)
         }
     }
 

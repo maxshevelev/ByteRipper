@@ -1,4 +1,4 @@
-@source-sha b3fc2266e17649ad2e74c7c32cba70c82c5691fb7ef0a0fb88fcd712d53465d9
+@source-sha 65f1dcdefe47085bc73b92956d11c35378b84722ba41bce4b48cd03214dbbfd5
 # Mit einem Agenten arbeiten
 
 > An ByteRipper lässt sich ein Agent anbinden: Claude Code, Claude Desktop oder ein anderes Programm, das das Protokoll MCP unterstützt. Der angebundene Agent hat Zugriff auf die in ByteRipper geöffneten Dateien, liest deren Inhalt und zeigt die betreffenden Stellen im Dump an. Die Unterhaltung mit dem Agenten selbst findet im Fenster seines eigenen Programms statt.
@@ -7,7 +7,7 @@ Agent und Benutzer arbeiten mit denselben Fenstern. Fragen Sie den Agenten nach 
 
 ## Dienst einschalten
 
-Im Auslieferungszustand ist der Agentendienst ausgeschaltet. Eingeschaltet wird er unter **Einstellungen ▸ Agent** mit der Option **Agenten die Verbindung mit ByteRipper erlauben**. Solange der Dienst läuft, zeigt die Menüleiste von macOS ein Symbol dafür an: drei durch eine gepunktete Linie verbundene Punkte. Wartet der Dienst auf einen Agenten, ist das Symbol abgeblendet; ist ein Agent verbunden, sind die Punkte ausgefüllt. Die Taste für das Agentenfenster in der Symbolleiste zeigt den Zustand auf dieselbe Weise. Das ist bei einem Mac mit Kameraaussparung von Bedeutung: Ist die Menüleiste voll belegt, verschwindet ihr rechter Teil hinter der Aussparung.
+Im Auslieferungszustand ist der Agentendienst ausgeschaltet. Eingeschaltet wird er unter **Einstellungen ▸ Agent** mit der Option **Agenten die Verbindung mit ByteRipper erlauben**. Solange der Dienst läuft, zeigt die Menüleiste von macOS ein Symbol dafür an: drei durch eine gepunktete Linie verbundene Punkte. Wartet der Dienst auf einen Agenten, ist das Symbol abgeblendet; ist ein Agent verbunden, sind die Punkte ausgefüllt. Die Taste für das Agentenfenster in der Symbolleiste zeigt den Zustand auf dieselbe Weise. Das ist bei einem Mac mit Kameraaussparung von Bedeutung: Ist die Menüleiste voll belegt, verschwindet ihr rechter Teil hinter der Aussparung. Solange der Agent arbeitet — eine Anfrage wird beantwortet, oder die letzte Antwort liegt weniger als zwei Sekunden zurück —, blinkt an der Ecke dieser Taste ein roter Punkt. Ist in den Bedienungshilfen von macOS „Bewegung reduzieren“ eingeschaltet, leuchtet der Punkt dauerhaft, ohne zu blinken.
 
 Die Verbindung ist ausschließlich lokal; ein Netzwerkport wird nicht geöffnet. ByteRipper legt dazu im Ordner „Library“ des Benutzers eine Datei an, die nur Programmen desselben Benutzerkontos zugänglich ist.
 

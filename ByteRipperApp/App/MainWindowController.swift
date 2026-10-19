@@ -48,6 +48,8 @@ final class MainWindowController: NSWindowController {
     /// The Agent button: in the toolbar only while the agent service is on
     /// (`MainViewController.syncAgentToolbarItem`).
     private(set) var agentWindowItem: NSToolbarItem?
+    /// The red dot that blinks on it while an agent is at work.
+    let agentBadge = AgentActivityBadge()
     /// The Tools pull-down (Design/TOOL_MODULES_PLAN.md): the wrench, and the
     /// name of the tool-module the tab is on.
     private(set) var toolsItem: NSToolbarItem?
