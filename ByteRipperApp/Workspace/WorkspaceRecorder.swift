@@ -64,6 +64,10 @@ final class WorkspaceRecorder {
     /// a switch left off is not a deletion every tick.
     private var removedWhileOff = false
 
+    /// True while a restore is still putting panels back: a snapshot then
+    /// would write the workspace with them missing.
+    var isPaused = false
+
     /// Writes the workspace as it stands, if the switch is on.
     ///
     /// `final` is the snapshot at quit, after every Save / Discard was
@@ -77,6 +81,7 @@ final class WorkspaceRecorder {
             return
         }
         removedWhileOff = false
+        guard !isPaused else { return }
         keeper.beginSnapshot()
         let workspace = snapshot(keepingUntitled: !final)
         guard (try? folder.write(workspace)) != nil else { return }

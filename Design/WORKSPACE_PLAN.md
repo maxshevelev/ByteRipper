@@ -180,10 +180,24 @@ becomes `Codable`). The open UEFI rows live on the pane and are saved with it.
 ## Parts
 
 A fragment panel's identity is its origin: the parent, the source range, the
-part name and the codec. Codecs are values today, not names, so each gets a
-stable identifier (`"copy"`, `"read-only"`, `"uefi"`, `"lenovo-dmi"`) and a
-factory that rebuilds it from the identifier and the parent's bytes. A part
-whose codec cannot be rebuilt is skipped and reported.
+part name, the root layout and the codec. A part is written down as that, not
+as its bytes, and **decoded again from its parent at restore** — parents
+first, off the main actor when the codec says decoding is slow, as `openPart`
+does. The recorder pauses until every panel is back, so a snapshot never
+writes a tab with its panels half restored.
+
+- The codec is written by the app (`PartCodecState`: copy, read-only, UEFI
+  structure, Lenovo `LENV` block), as JSON text the package does not read; the
+  root layout and the UEFI rebuild target are `Codable` in `UEFIImage`.
+- A part whose parent did not come back, or changed on disk, is not opened:
+  its stretch of the parent may hold something else.
+- A part's unsaved edits are not kept: quitting asks to put them back or
+  discard them; after a crash the part comes back as its parent holds it.
+- A panel with no parent — bytes handed over by a tool, or a part whose
+  parent was closed — is kept as untitled bytes, like an untitled document,
+  and comes back without a way home.
+- A part torn off into a tab of its own is an untitled document there, and
+  comes back as one: its link to the parent does not survive a restart.
 
 ## Phases
 
@@ -195,7 +209,7 @@ Each phase is a commit, and each leaves the app working with the setting on.
    scroll, insert mode. *(done)*
 3. **The rest of a pane** — bookmarks, segments and links, minimap, find bar. *(done)*
 4. **Untitled documents** — their bytes. *(done)*
-5. **Fragments and parts.**
+5. **Fragments and parts.** *(done)*
 6. **Tools.**
 7. **Changes on disk, and launch with a file** — the warning sheet, Finder
    launch, and the help page `workspace.md` in three languages.

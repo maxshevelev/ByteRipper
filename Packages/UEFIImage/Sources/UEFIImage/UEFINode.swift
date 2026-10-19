@@ -215,7 +215,7 @@ public struct SectionCompression: Hashable, Sendable {
 /// in the image, where a consumer that wants `Attributes` can read them through
 /// the reader it already has. What the tree carries is the structure — which is
 /// the part that costs a parse to work out.
-public enum UEFINodeKind: String, Equatable, Sendable, CaseIterable {
+public enum UEFINodeKind: String, Equatable, Sendable, CaseIterable, Codable {
     case capsule
     /// The whole of an Intel flash image: a descriptor and the regions it maps,
     /// under one root the way UEFITool shows it (§2.2). Its body is the whole

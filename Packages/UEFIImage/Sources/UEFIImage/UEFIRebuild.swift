@@ -21,7 +21,7 @@ import FirmwareCompression
 public enum UEFIRebuild {
     /// The part being put back: a node's bytes in a space, or — with no range —
     /// the whole of what a compressed section decompressed to.
-    public struct Target: Hashable, Sendable {
+    public struct Target: Hashable, Sendable, Codable {
         public var space: ByteSpace
         public var range: Range<UInt64>?
 

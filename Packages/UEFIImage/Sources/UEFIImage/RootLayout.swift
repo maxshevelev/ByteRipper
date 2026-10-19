@@ -8,7 +8,7 @@ import Foundation
 /// volumes a scan finds. A part cut out of one does not always: the body of a
 /// Tiano or LZMA section is a run of sections, and a signature scan reads it as
 /// padding. The tree that parsed the whole knew what the part was, so it says.
-public enum UEFIRootLayout: Hashable, Sendable {
+public enum UEFIRootLayout: Hashable, Sendable, Codable {
     /// Whatever the bytes announce — the default, and the answer for a whole
     /// image or for a part that is none of the others.
     case image
@@ -34,7 +34,7 @@ public enum UEFIRootLayout: Hashable, Sendable {
 
     /// What the parent's tree knew of a node: enough to stand it up again as
     /// a root over the same bytes.
-    public struct Node: Hashable, Sendable {
+    public struct Node: Hashable, Sendable, Codable {
         public var kind: UEFINodeKind
         public var subtype: UInt8?
         public var name: String

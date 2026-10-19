@@ -12,7 +12,7 @@ import Foundation
 /// three fields are little-endian numbers, the last eight bytes are printed in
 /// the order they are stored. That asymmetry is not ours to fix — a GUID copied
 /// out of a specification has to match a GUID read out of an image.
-public struct EFIGUID: Hashable, Sendable, CustomStringConvertible {
+public struct EFIGUID: Hashable, Sendable, Codable, CustomStringConvertible {
     /// Bytes 0..<8, read as a little-endian number.
     public let low: UInt64
     /// Bytes 8..<16, read as a little-endian number.

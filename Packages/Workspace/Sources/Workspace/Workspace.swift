@@ -71,14 +71,23 @@ public struct TabState: Codable, Equatable, Sendable {
     public var bookmarks: [BookmarkState]
     /// The minimap and the Find bar.
     public var surface: SurfaceState
+    /// The panels over the tab, in the order they were opened — a parent
+    /// always before the parts taken out of it.
+    public var fragments: [FragmentState]
+    /// The panel in front, as an index into `fragments`; nil when the tab's
+    /// own panes are.
+    public var expandedFragment: Int?
 
     public init(panes: [PaneState?], activePane: Int, dividerFraction: Double? = nil,
-                bookmarks: [BookmarkState] = [], surface: SurfaceState = SurfaceState()) {
+                bookmarks: [BookmarkState] = [], surface: SurfaceState = SurfaceState(),
+                fragments: [FragmentState] = [], expandedFragment: Int? = nil) {
         self.panes = panes
         self.activePane = activePane
         self.dividerFraction = dividerFraction
         self.bookmarks = bookmarks
         self.surface = surface
+        self.fragments = fragments
+        self.expandedFragment = expandedFragment
     }
 
     /// A tab with no file in it: an empty window, worth a tab only if it was
@@ -127,6 +136,48 @@ public enum DocumentSource: Codable, Equatable, Sendable {
     /// A document with no file — New, a join, a duplicate — whose bytes the
     /// workspace keeps beside itself (`WorkspaceFolder.untitledURL`).
     case untitled(UntitledStamp)
+    /// A part of another document, decoded from it again at restore
+    /// (`FragmentState`). The size is what it decoded to, so a part that
+    /// decodes to something else is known to be other bytes.
+    case part(size: UInt64)
+}
+
+/// A panel over a tab: a part of one of its documents — a zone, a
+/// decompressed body, a decoded block — or bytes with no parent at all.
+public struct FragmentState: Codable, Equatable, Sendable {
+    /// What a part was taken out of.
+    public enum Parent: Codable, Equatable, Sendable {
+        /// File A (0) or File B (1), as `TabState.panes` lists them.
+        case pane(Int)
+        /// An earlier panel, as an index into `TabState.fragments`.
+        case fragment(Int)
+    }
+
+    /// Nil for bytes with no parent: their pane is an untitled document.
+    public var parent: Parent?
+    /// The stretch of the parent the part stands for.
+    public var sourceStart: UInt64
+    public var sourceEnd: UInt64
+    public var name: String
+    /// How the part is read, and how it goes back into its parent — the app's
+    /// own encoding of its layout and codec, as JSON text. The package does
+    /// not read it.
+    public var layout: String?
+    public var codec: String?
+    public var pane: PaneState
+    public var surface: SurfaceState
+
+    public init(parent: Parent?, sourceStart: UInt64, sourceEnd: UInt64, name: String,
+                layout: String?, codec: String?, pane: PaneState, surface: SurfaceState) {
+        self.parent = parent
+        self.sourceStart = sourceStart
+        self.sourceEnd = sourceEnd
+        self.name = name
+        self.layout = layout
+        self.codec = codec
+        self.pane = pane
+        self.surface = surface
+    }
 }
 
 /// An untitled document: the name of its bytes in the workspace folder, the

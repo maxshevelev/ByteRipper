@@ -189,8 +189,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// Returns false when nothing was opened, and the launch makes its one
     /// empty window as it always has.
     private func restoreWorkspace() -> Bool {
-        guard let workspace = workspaceRecorder?.savedWorkspace(), !workspace.isEmpty else { return false }
+        guard let recorder = workspaceRecorder, let workspace = recorder.savedWorkspace(),
+              !workspace.isEmpty else { return false }
         var issues: [RestoreIssue] = []
+        var pending: [(controller: MainViewController, tab: TabState, restored: TabRestore)] = []
         // Back to front, so the window made last — the front one — is key.
         for saved in workspace.windows.reversed() {
             var group: [MainWindowController] = []
@@ -202,8 +204,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                     window.setFrame(window.constrainFrameRect(frame, to: window.screen), display: true)
                 }
                 group.append(controller)
-                issues += controller.mainViewController.restoreWorkspaceTab(
-                    tab, keeper: workspaceRecorder?.keeper)
+                let restored = controller.mainViewController.restoreWorkspaceTab(tab, keeper: recorder.keeper)
+                issues += restored.issues
+                if !tab.fragments.isEmpty {
+                    pending.append((controller.mainViewController, tab, restored))
+                }
             }
             if saved.tabs.indices.contains(saved.selectedTab),
                let window = group[saved.selectedTab].window {
@@ -211,9 +216,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 window.makeKeyAndOrderFront(nil)
             }
         }
-        lastRestoreIssues = issues
+        // The panels last: a part may have to be decompressed again, and the
+        // windows are on screen meanwhile. The recorder waits for them, or a
+        // snapshot taken halfway would write a workspace with panels missing.
+        recorder.isPaused = !pending.isEmpty
+        restoringFragments = Task { @MainActor [weak self] in
+            for entry in pending {
+                issues += await entry.controller.restoreWorkspaceFragments(
+                    entry.tab, over: entry.restored, keeper: recorder.keeper)
+            }
+            recorder.isPaused = false
+            self?.lastRestoreIssues = issues
+        }
         return !windowControllers.isEmpty
     }
+
+    /// The panels still being put back after a restore.
+    private(set) var restoringFragments: Task<Void, Never>?
 
     /// What the last restore could not bring back as it was.
     private(set) var lastRestoreIssues: [RestoreIssue] = []

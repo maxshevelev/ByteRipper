@@ -237,6 +237,12 @@ public struct LenovoDMIBlockCodec: PartCodec {
         key = block.xorKey
     }
 
+    /// The codec as it was written down — a restored workspace's part.
+    public init(encodes: Bool, key: UInt8) {
+        self.encodes = encodes
+        self.key = key
+    }
+
     public func decode(_ parent: PartParent) throws -> [UInt8] {
         let stored = try parent.sourceBytes()
         guard stored.count == Int(LenovoDMIFormat.lenvSize) else {

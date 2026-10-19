@@ -1,3 +1,4 @@
+import PartCodec
 import Workspace
 import XCTest
 @testable import ByteRipper
@@ -51,7 +52,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertEqual(savedB.topOffset, 0x4000)
 
         let target = shownWindow().mainViewController
-        let issues = target.restoreWorkspaceTab(tab)
+        let issues = target.restoreWorkspaceTab(tab).issues
 
         XCTAssertEqual(issues, [])
         XCTAssertEqual(target.mode, .comparison)
@@ -78,7 +79,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         try FileManager.default.removeItem(at: a)
 
         let target = shownWindow().mainViewController
-        let issues = target.restoreWorkspaceTab(tab)
+        let issues = target.restoreWorkspaceTab(tab).issues
 
         XCTAssertEqual(issues, [.missing(path: a.standardizedFileURL.path)])
         XCTAssertEqual(target.mode, .singleFile)
@@ -96,7 +97,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         try Data(repeating: 0x11, count: 0x800).write(to: a)
 
         let target = shownWindow().mainViewController
-        let issues = target.restoreWorkspaceTab(tab)
+        let issues = target.restoreWorkspaceTab(tab).issues
 
         XCTAssertEqual(issues, [.changed(path: a.standardizedFileURL.path)])
         XCTAssertEqual(target.windowModel.pane1.document?.selection.start, 0x7FF)
@@ -130,7 +131,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         source.windowModel.pane1.close()
 
         let target = shownWindow().mainViewController
-        XCTAssertEqual(target.restoreWorkspaceTab(tab), [])
+        XCTAssertEqual(target.restoreWorkspaceTab(tab).issues, [])
 
         XCTAssertEqual(target.windowModel.bookmarkStore.bookmarks.map(\.name), ["boot block", ""])
         let restored = target.windowModel.pane1
@@ -157,11 +158,57 @@ final class WorkspaceRestoreTests: XCTestCase {
         try Data(repeating: 0, count: 0x1000).write(to: a)
 
         let target = shownWindow().mainViewController
-        XCTAssertEqual(target.restoreWorkspaceTab(tab), [.changed(path: a.standardizedFileURL.path)])
+        XCTAssertEqual(target.restoreWorkspaceTab(tab).issues, [.changed(path: a.standardizedFileURL.path)])
 
         XCTAssertEqual(target.windowModel.bookmarkStore.bookmarks.map(\.name), ["kept"])
         XCTAssertEqual(target.windowModel.pane1.segmentStore.current.pieces.count, 1,
                        "cuts made on other bytes are not put on these")
+    }
+
+    // MARK: - Panels
+
+    func testPartsComeBackDecodedFromTheirParentsAndTheFrontOneInFront() throws {
+        let bytes: [UInt8] = (0..<0x1000).map { UInt8(($0 * 7) & 0xFF) }
+        let a = try tempFile(bytes, "parts")
+        let source = shownWindow().mainViewController
+        source.openFiles([a])
+        source.openPart(named: "zone", from: source.windowModel.pane1, source: 0x100..<0x300,
+                        codec: CopyPartCodec())
+        let zoneID = try XCTUnwrap(source.fragments.dock.panels.first)
+        let zone = try XCTUnwrap(source.fragments.pane(zoneID))
+        zone.select(range: 0x10..<0x18)
+        source.openPart(named: "inner", from: zone, source: 0x40..<0x80, codec: CopyPartCodec())
+        source.openFragment([9, 9, 9], named: "loose")
+        source.fragments.expand(zoneID, animated: false)
+
+        let keeperFolder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WorkspaceRecorderTests-\(UUID().uuidString)")
+        addTeardownBlock { try? FileManager.default.removeItem(at: keeperFolder) }
+        let keeper = UntitledKeeper(folder: WorkspaceFolder(url: keeperFolder))
+        let tab = source.workspaceTab(keeper: keeper)
+        XCTAssertEqual(tab.fragments.map(\.parent), [.pane(0), .fragment(0), nil])
+        XCTAssertEqual(tab.expandedFragment, 0)
+
+        let target = shownWindow().mainViewController
+        let restored = target.restoreWorkspaceTab(tab, keeper: keeper)
+        let expectation = expectation(description: "panels")
+        var issues: [RestoreIssue] = []
+        Task { @MainActor in
+            issues = await target.restoreWorkspaceFragments(tab, over: restored, keeper: keeper)
+            expectation.fulfill()
+        }
+        wait(for: [expectation], timeout: 5)
+
+        XCTAssertEqual(issues, [])
+        let panes = target.fragments.dock.panels.compactMap { target.fragments.pane($0) }
+        XCTAssertEqual(panes.map(\.status.fileName), ["zone", "inner", "loose"])
+        XCTAssertEqual(try panes[0].document?.read(at: 0, length: 0x200), Array(bytes[0x100..<0x300]))
+        XCTAssertEqual(try panes[1].document?.read(at: 0, length: 0x40), Array(bytes[0x140..<0x180]))
+        XCTAssertIdentical(panes[0].origin?.parent, target.windowModel.pane1, "the part knows its way home")
+        XCTAssertIdentical(panes[1].origin?.parent, panes[0])
+        XCTAssertNil(panes[2].origin)
+        XCTAssertEqual(panes[0].document?.selection.start, 0x10)
+        XCTAssertEqual(target.fragments.expanded, target.fragments.panel(holding: panes[0]))
     }
 
     // MARK: - Untitled documents
@@ -192,7 +239,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertTrue(stamp.dirty)
 
         let target = shownWindow().mainViewController
-        XCTAssertEqual(target.restoreWorkspaceTab(tab, keeper: recorder.keeper), [])
+        XCTAssertEqual(target.restoreWorkspaceTab(tab, keeper: recorder.keeper).issues, [])
         let restored = target.windowModel.pane1
         XCTAssertTrue(restored.isUntitled)
         XCTAssertEqual(restored.status.fileName, "joined.bin")
