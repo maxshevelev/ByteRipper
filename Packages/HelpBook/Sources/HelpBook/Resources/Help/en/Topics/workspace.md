@@ -28,7 +28,7 @@ The switch is **Reopen the workspace at launch** in [[topic:settings|Settings â–
 
 ## When the workspace is written
 
-Continuously: every few seconds while the program is in front, when it goes to the background, when a window is closed, and at quit after the questions about unsaved changes to files on disk have been answered. If the last window is closed by hand, the workspace is empty, and the next launch opens one empty window. Switching the setting off deletes the stored workspace.
+Continuously: every few seconds while the program is in front, when it goes to the background, when a window is closed, and at quit after the questions about unsaved changes to files on disk have been answered. Closing the last window quits ByteRipper exactly as **âŒ˜Q** does, and the workspace keeps that window. Switching the setting off deletes the stored workspace.
 
 The workspace is stored in `~/Library/Application Support/ByteRipper/Workspace` and does not leave this Mac.
 

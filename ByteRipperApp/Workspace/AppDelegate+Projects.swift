@@ -15,6 +15,13 @@ extension AppDelegate {
     /// The open project's package, or nil for the session without one.
     var currentProject: URL? { workspaceRecorder?.project?.url }
 
+    /// Whether quitting keeps the windows for the next launch — a project
+    /// always, the session when it is restored — and closing the last window
+    /// is therefore a quit rather than an emptying.
+    var keepsWindowsAtQuit: Bool {
+        workspaceRecorder != nil && (currentProject != nil || WorkspaceSettings.restoresWorkspace)
+    }
+
     /// The project's name as windows show it.
     var currentProjectName: String? {
         currentProject.map { ($0.lastPathComponent as NSString).deletingPathExtension }

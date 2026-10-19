@@ -7646,9 +7646,10 @@ extension MainViewController: NSWindowDelegate {
     /// the files here and they are not answered by one Save. Closing the
     /// window used to take them without a word.
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        // The last window of a project closing is the app quitting, and is
-        // answered the way ⌘Q is: the project keeps its windows and asks
-        // nothing about what it holds (`Design/WORKSPACE_PLAN.md`, "Projects").
+        // The last window closing is the app quitting, and — in a project, or
+        // with the workspace restored — is answered the way ⌘Q is: the windows
+        // are kept for the next launch, and what they hold is asked about as
+        // ⌘Q asks (`Design/WORKSPACE_PLAN.md`).
         if quitsInsteadOfClosing?() == true {
             return false
         }

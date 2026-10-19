@@ -1,4 +1,4 @@
-@source-sha e525380aba9627ee9563981885ff4fa288d5b29320c52f6586f0cd8d8488c4c7
+@source-sha 298473760e1883d45d7e50939ecd921a1bf8c26c20a5f428c09d4a525472324e
 # Der Arbeitsbereich
 
 > Bei eingeschalteter Einstellung öffnet ByteRipper beim Start, was beim Beenden geöffnet war.
@@ -26,7 +26,7 @@ Die Einstellung heißt **Arbeitsbereich beim Start wiederherstellen** und befind
 
 ## Wann der Arbeitsbereich geschrieben wird
 
-Fortlaufend: alle paar Sekunden, solange das Programm im Vordergrund ist, beim Wechsel in den Hintergrund, beim Schließen eines Fensters und beim Beenden, nachdem die Fragen zu ungesicherten Änderungen an Dateien auf dem Datenträger beantwortet sind. Wird das letzte Fenster von Hand geschlossen, ist der Arbeitsbereich leer, und der nächste Start öffnet ein leeres Fenster. Das Ausschalten der Einstellung löscht den gespeicherten Arbeitsbereich.
+Fortlaufend: alle paar Sekunden, solange das Programm im Vordergrund ist, beim Wechsel in den Hintergrund, beim Schließen eines Fensters und beim Beenden, nachdem die Fragen zu ungesicherten Änderungen an Dateien auf dem Datenträger beantwortet sind. Das Schließen des letzten Fensters beendet ByteRipper genau wie **⌘Q**, und der Arbeitsbereich behält dieses Fenster. Das Ausschalten der Einstellung löscht den gespeicherten Arbeitsbereich.
 
 Der Arbeitsbereich liegt in `~/Library/Application Support/ByteRipper/Workspace` und verlässt diesen Mac nicht.
 

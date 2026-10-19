@@ -59,8 +59,11 @@ to date as the session changes, not only at quit.
     tools change in a hundred places. A snapshot is a walk over a handful of
     tabs, it costs microseconds, and the compare keeps the disk quiet. An
     observer per mutation would be a hundred hooks that each can be forgotten.
-- **Closing the last window by hand empties the workspace**, as in Safari and
-  Xcode: the person closed it deliberately. ⌘Q with tabs open keeps them.
+- **Closing the last window is a quit**, answered exactly as ⌘Q is: the
+  windows are kept for the next launch, and only unsaved changes to files on
+  disk are asked about. (It used to empty the workspace, as Safari and Xcode
+  do; a closed last window lost the session for good, which is not what a
+  person closing the app means.)
 - With the setting off nothing is recorded, and switching it off deletes the
   file, so a workspace from months ago never comes back when it is switched on
   again.

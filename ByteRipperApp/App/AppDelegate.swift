@@ -389,7 +389,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
         controller.mainViewController.projectName = currentProjectName
         controller.mainViewController.quitsInsteadOfClosing = { [weak self] in
-            guard let self, self.currentProject != nil, !self.isSwitchingProjects,
+            guard let self, self.keepsWindowsAtQuit, !self.isSwitchingProjects,
                   self.windowControllers.count == 1, !NotesWindowController.isOpen else { return false }
             NSApp.terminate(nil)
             return true

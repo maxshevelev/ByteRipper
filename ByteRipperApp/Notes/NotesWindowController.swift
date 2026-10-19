@@ -153,10 +153,10 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
         syncAgentItem()
     }
 
-    /// The Annotations window alone in a project, closing, is the app
-    /// quitting — answered as ⌘Q is, so the project keeps it open.
+    /// The Annotations window alone, closing, is the app quitting — answered
+    /// as ⌘Q is, so a project or a restored session keeps it open.
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        guard let app = NSApp.delegate as? AppDelegate, app.currentProject != nil,
+        guard let app = NSApp.delegate as? AppDelegate, app.keepsWindowsAtQuit,
               !app.isSwitchingProjects, app.windowControllers.isEmpty else { return true }
         NSApp.terminate(nil)
         return false
