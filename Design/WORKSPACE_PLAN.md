@@ -193,7 +193,7 @@ Each phase is a commit, and each leaves the app working with the setting on.
 2. **Tabs and files** — the package and the model, the recorder and the file,
    windows, tabs, File A / File B, active pane, divider, caret, selection,
    scroll, insert mode. *(done)*
-3. **The rest of a pane** — bookmarks, segments and links, minimap, find bar.
+3. **The rest of a pane** — bookmarks, segments and links, minimap, find bar. *(done)*
 4. **Untitled documents** — their bytes.
 5. **Fragments and parts.**
 6. **Tools.**

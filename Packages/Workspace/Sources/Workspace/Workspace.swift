@@ -67,11 +67,18 @@ public struct TabState: Codable, Equatable, Sendable {
     /// The share of the split the first pane takes in a comparison (0...1).
     /// Nil outside a comparison.
     public var dividerFraction: Double?
+    /// The tab's bookmarks: one list for both panes, by row (§20).
+    public var bookmarks: [BookmarkState]
+    /// The minimap and the Find bar.
+    public var surface: SurfaceState
 
-    public init(panes: [PaneState?], activePane: Int, dividerFraction: Double? = nil) {
+    public init(panes: [PaneState?], activePane: Int, dividerFraction: Double? = nil,
+                bookmarks: [BookmarkState] = [], surface: SurfaceState = SurfaceState()) {
         self.panes = panes
         self.activePane = activePane
         self.dividerFraction = dividerFraction
+        self.bookmarks = bookmarks
+        self.surface = surface
     }
 
     /// A tab with no file in it: an empty window, worth a tab only if it was
@@ -90,17 +97,21 @@ public struct PaneState: Codable, Equatable, Sendable {
     public var insertMode: Bool
     /// The first byte on screen.
     public var topOffset: UInt64
+    /// The pieces the file was cut into, when it was cut. Nil for a file that
+    /// is one piece of itself.
+    public var segments: SegmentationState?
 
     public init(document: DocumentSource,
                 selectionStart: UInt64, selectionEnd: UInt64,
                 inputRegion: InputRegion = .hex, insertMode: Bool = false,
-                topOffset: UInt64) {
+                topOffset: UInt64, segments: SegmentationState? = nil) {
         self.document = document
         self.selectionStart = selectionStart
         self.selectionEnd = selectionEnd
         self.inputRegion = inputRegion
         self.insertMode = insertMode
         self.topOffset = topOffset
+        self.segments = segments
     }
 }
 
@@ -154,5 +165,84 @@ public struct FileStamp: Codable, Equatable, Sendable {
         case (nil, nil): return true
         default: return false
         }
+    }
+}
+
+/// A bookmark: the row it marks and its name (§20).
+public struct BookmarkState: Codable, Equatable, Sendable {
+    /// The row's first offset.
+    public var row: UInt64
+    public var name: String
+
+    public init(row: UInt64, name: String) {
+        self.row = row
+        self.name = name
+    }
+}
+
+/// A file cut into pieces (§21): its size when it was cut, and every piece in
+/// file order.
+public struct SegmentationState: Codable, Equatable, Sendable {
+    public var contentSize: UInt64
+    public var pieces: [PieceState]
+
+    public init(contentSize: UInt64, pieces: [PieceState]) {
+        self.contentSize = contentSize
+        self.pieces = pieces
+    }
+}
+
+/// One piece: where it opens, its name, and the file its bytes came from.
+public struct PieceState: Codable, Equatable, Sendable {
+    public var start: UInt64
+    public var name: String
+    public var link: PieceLinkState?
+
+    public init(start: UInt64, name: String, link: PieceLinkState? = nil) {
+        self.start = start
+        self.name = name
+        self.link = link
+    }
+}
+
+/// A piece's link to its source file (§21.7): the file by path, and the
+/// stretch of it the piece stands for.
+public struct PieceLinkState: Codable, Equatable, Sendable {
+    public var path: String
+    public var sourceStart: UInt64
+    public var sourceEnd: UInt64
+
+    public init(path: String, sourceStart: UInt64, sourceEnd: UInt64) {
+        self.path = path
+        self.sourceStart = sourceStart
+        self.sourceEnd = sourceEnd
+    }
+}
+
+/// What sits around a tab's panes: the minimap and the Find bar.
+public struct SurfaceState: Codable, Equatable, Sendable {
+    public var minimapVisible: Bool
+    /// "detail" or "overview" (§19.4); nil leaves the mode the file picks.
+    public var minimapMode: String?
+    /// The Find bar's pattern while the bar is open; nil while it is closed.
+    public var findPattern: FindPatternState?
+
+    public init(minimapVisible: Bool = false, minimapMode: String? = nil,
+                findPattern: FindPatternState? = nil) {
+        self.minimapVisible = minimapVisible
+        self.minimapMode = minimapMode
+        self.findPattern = findPattern
+    }
+}
+
+/// The text in the Find bar and the encoding it is read in.
+public struct FindPatternState: Codable, Equatable, Sendable {
+    public var text: String
+    /// A `SearchEncoding` raw value.
+    public var encoding: String
+
+    public init(text: String, encoding: String) {
+        self.text = text
+        self.encoding = encoding
     }
 }

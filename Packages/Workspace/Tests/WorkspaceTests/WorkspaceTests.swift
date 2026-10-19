@@ -135,3 +135,22 @@ private extension JSONEncoder {
 private extension JSONDecoder {
     static var iso8601: JSONDecoder { let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601; return d }
 }
+
+extension WorkspaceTests {
+    func testBookmarksPastEveryFileAreDropped() {
+        let marks = [BookmarkState(row: 0x10, name: "a"), BookmarkState(row: 0x900, name: "b")]
+        XCTAssertEqual(marks.restorable(withinLargest: 0x800), [marks[0]])
+        XCTAssertEqual(marks.restorable(withinLargest: nil), marks, "no file open, nothing to measure against")
+    }
+
+    func testSegmentsApplyOnlyToTheBytesTheyWereCutOn() {
+        let cut = SegmentationState(contentSize: 0x1000, pieces: [PieceState(start: 0, name: "a"),
+                                                                  PieceState(start: 0x800, name: "b")])
+        XCTAssertTrue(cut.applies(toSize: 0x1000, unchanged: true))
+        XCTAssertFalse(cut.applies(toSize: 0x1000, unchanged: false))
+        XCTAssertFalse(cut.applies(toSize: 0x2000, unchanged: true))
+        let unsorted = SegmentationState(contentSize: 0x1000, pieces: [PieceState(start: 0, name: "a"),
+                                                                       PieceState(start: 0, name: "b")])
+        XCTAssertFalse(unsorted.applies(toSize: 0x1000, unchanged: true))
+    }
+}

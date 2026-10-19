@@ -6608,6 +6608,21 @@ final class MainViewController: NSViewController {
         }
     }
 
+    /// The Find bar's pattern while the bar is open, for the workspace.
+    var openFindPattern: (text: String, encoding: SearchEncoding)? {
+        findBar.isHidden ? nil : (findBar.query.text, findBar.query.currentEncoding())
+    }
+
+    /// Opens the Find bar on `text`, read as `encoding` — a restored
+    /// workspace's bar. Runs no search: the highlights come back when the
+    /// person searches again.
+    func reopenFindBar(text: String, encoding: SearchEncoding) {
+        guard activePane.isOpen else { return }
+        showFindBar()
+        findBar.query.select(encoding)
+        findBar.query.text = text
+    }
+
     private func hideFindBar() {
         // A plate reporting a search outlives the bar it was about by four
         // seconds otherwise (§11).

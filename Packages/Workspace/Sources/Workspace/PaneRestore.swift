@@ -41,6 +41,26 @@ public struct PaneRestore: Equatable, Sendable {
     }
 }
 
+extension Array where Element == BookmarkState {
+    /// The bookmarks that still mark a row of some file in the tab: one past
+    /// the end of every file marks nothing, and a list of them collapsing
+    /// onto the last row would point at the wrong place.
+    public func restorable(withinLargest size: UInt64?) -> [BookmarkState] {
+        guard let size else { return self }
+        return filter { $0.row < size }
+    }
+}
+
+extension SegmentationState {
+    /// Whether these pieces still describe a document of `size` whose bytes
+    /// are unchanged: the cuts were made on these bytes and no others.
+    public func applies(toSize size: UInt64, unchanged: Bool) -> Bool {
+        unchanged && contentSize == size && pieces.first?.start == 0
+            && zip(pieces, pieces.dropFirst()).allSatisfy { $0.start < $1.start }
+            && (pieces.last.map { $0.start < size || size == 0 } ?? false)
+    }
+}
+
 /// Something a restore could not bring back as it was, for the one warning
 /// shown once everything is open.
 public enum RestoreIssue: Equatable, Sendable {

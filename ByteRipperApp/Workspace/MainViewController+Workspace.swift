@@ -1,14 +1,23 @@
+import ByteRipperCore
 import Cocoa
 import Workspace
 
 /// A tab's half of the workspace (`Design/WORKSPACE_PLAN.md`): what it writes
 /// down about itself, and how it puts that back into a fresh tab.
 extension MainViewController {
-    /// The tab as it stands: File A and File B, the active pane, the split.
+    /// The tab as it stands: File A and File B, the active pane, the split,
+    /// the bookmarks, the minimap and the Find bar.
     func workspaceTab() -> TabState {
         let panes = [windowModel.pane1, windowModel.pane2].map(workspacePane(of:))
         let fraction = mode == .comparison ? comparisonView.map { Double($0.currentFraction) } : nil
-        return TabState(panes: panes, activePane: windowModel.activePaneIndex, dividerFraction: fraction)
+        let minimap = surface.minimap
+        return TabState(
+            panes: panes, activePane: windowModel.activePaneIndex, dividerFraction: fraction,
+            bookmarks: windowModel.bookmarkStore.bookmarks.map { BookmarkState(row: $0.row, name: $0.name) },
+            surface: SurfaceState(
+                minimapVisible: minimap.isPanelVisible,
+                minimapMode: minimap.isPanelVisible ? minimap.view.renderMode.rawValue : nil,
+                findPattern: openFindPattern.map { FindPatternState(text: $0.text, encoding: $0.encoding.rawValue) }))
     }
 
     /// One pane, or nil when there is nothing in it that could be opened
@@ -23,7 +32,8 @@ extension MainViewController {
             selectionStart: selection.start, selectionEnd: selection.end,
             inputRegion: pane.inputRegion == .ascii ? .text : .hex,
             insertMode: pane.isInsertMode,
-            topOffset: filePaneView(for: pane)?.firstVisibleOffset ?? 0)
+            topOffset: filePaneView(for: pane)?.firstVisibleOffset ?? 0,
+            segments: pane.workspaceSegments())
     }
 
     /// Opens what `tab` had open and puts every pane back where it was.
@@ -54,6 +64,13 @@ extension MainViewController {
         }
         guard !opened.isEmpty else { return issues }
 
+        // Before the panes are built, so they draw the marks from the start:
+        // a seeded store reports nothing (`BookmarkStore.seed`).
+        let largest = opened.map(\.pane.fileSize).max()
+        windowModel.bookmarkStore.seed(tab.bookmarks.restorable(withinLargest: largest).map {
+            Bookmark(row: BookmarkStore.row(containing: $0.row), name: $0.name)
+        })
+
         let active = saved.count == opened.count ? min(tab.activePane, opened.count - 1) : 0
         windowModel.setActivePane(active)
         refreshToolPanelHeader()
@@ -64,6 +81,16 @@ extension MainViewController {
             entry.pane.select(range: restore.selection)
             entry.pane.setInputRegion(restore.inputRegion == .text ? .ascii : .hex)
             if restore.insertMode != entry.pane.isInsertMode { flipInsertMode(of: entry.pane) }
+            if let segments = entry.state.segments,
+               segments.applies(toSize: entry.pane.fileSize, unchanged: entry.unchanged) {
+                entry.pane.restoreSegments(segments)
+            }
+        }
+        if tab.surface.minimapVisible {
+            surface.minimap.setPanelVisible(true, animated: false)
+            if let mode = tab.surface.minimapMode.flatMap(MinimapView.RenderMode.init(rawValue:)) {
+                surface.minimap.setRenderMode(mode)
+            }
         }
         if let fraction = tab.dividerFraction, mode == .comparison {
             comparisonView?.setFraction(CGFloat(fraction))
@@ -76,6 +103,9 @@ extension MainViewController {
             filePaneView(for: entry.pane)?.scrollRowToTop(containing: restore.topOffset)
         }
         if mode == .comparison { activatePane(at: active) }
+        if let find = tab.surface.findPattern {
+            reopenFindBar(text: find.text, encoding: SearchEncoding(rawValue: find.encoding) ?? .hex)
+        }
         return issues
     }
 }

@@ -102,6 +102,68 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertEqual(target.windowModel.pane1.document?.selection.start, 0x7FF)
     }
 
+    // MARK: - Around the panes
+
+    func testBookmarksSegmentsMinimapAndFindBarComeBack() throws {
+        let a = try dump(0x2000, 0xAA)
+        let chip = try dump(0x1000, 0xCC)
+        let source = shownWindow().mainViewController
+        source.openFiles([a])
+        let pane = source.windowModel.pane1
+        _ = source.windowModel.bookmarkStore.add(rowContaining: 0x110, name: "boot block")
+        _ = source.windowModel.bookmarkStore.add(rowContaining: 0x1F00, name: "")
+        XCTAssertTrue(pane.segmentStore.addCut(at: 0x1000))
+        pane.segmentStore.rename(1, to: "chip 2")
+        pane.restoreSegments(SegmentationState(contentSize: 0x2000, pieces: [
+            PieceState(start: 0, name: "chip 1",
+                       link: PieceLinkState(path: chip.standardizedFileURL.path, sourceStart: 0, sourceEnd: 0x1000)),
+            PieceState(start: 0x1000, name: "chip 2"),
+        ]))
+        source.surface.minimap.setPanelVisible(true, animated: false)
+        source.surface.minimap.setRenderMode(.overview)
+        source.reopenFindBar(text: "AA BB", encoding: .hex)
+
+        let tab = source.workspaceTab()
+        XCTAssertEqual(tab.bookmarks, [BookmarkState(row: 0x110, name: "boot block"),
+                                       BookmarkState(row: 0x1F00, name: "")])
+        XCTAssertEqual(tab.panes[0]?.segments?.pieces.count, 2)
+        source.windowModel.pane1.close()
+
+        let target = shownWindow().mainViewController
+        XCTAssertEqual(target.restoreWorkspaceTab(tab), [])
+
+        XCTAssertEqual(target.windowModel.bookmarkStore.bookmarks.map(\.name), ["boot block", ""])
+        let restored = target.windowModel.pane1
+        XCTAssertEqual(restored.segmentStore.current.pieces.map(\.name), ["chip 1", "chip 2"])
+        let link = try XCTUnwrap(restored.segmentStore.current.pieces[0].link)
+        XCTAssertEqual(restored.segmentSources.source(link.source)?.url.standardizedFileURL,
+                       chip.standardizedFileURL, "the link finds its file by path")
+        XCTAssertEqual(link.sourceRange, 0..<0x1000)
+        XCTAssertTrue(target.surface.minimap.isPanelVisible)
+        XCTAssertEqual(target.surface.minimap.view.renderMode, .overview)
+        XCTAssertEqual(target.openFindPattern?.text, "AA BB")
+        XCTAssertEqual(target.openFindPattern?.encoding, .hex)
+    }
+
+    func testAChangedFileLosesItsSegmentsAndTheBookmarksPastItsEnd() throws {
+        let a = try dump(0x2000, 0xAA)
+        let source = shownWindow().mainViewController
+        source.openFiles([a])
+        _ = source.windowModel.bookmarkStore.add(rowContaining: 0x10, name: "kept")
+        _ = source.windowModel.bookmarkStore.add(rowContaining: 0x1800, name: "gone")
+        XCTAssertTrue(source.windowModel.pane1.segmentStore.addCut(at: 0x400))
+        let tab = source.workspaceTab()
+        source.windowModel.pane1.close()
+        try Data(repeating: 0, count: 0x1000).write(to: a)
+
+        let target = shownWindow().mainViewController
+        XCTAssertEqual(target.restoreWorkspaceTab(tab), [.changed(path: a.standardizedFileURL.path)])
+
+        XCTAssertEqual(target.windowModel.bookmarkStore.bookmarks.map(\.name), ["kept"])
+        XCTAssertEqual(target.windowModel.pane1.segmentStore.current.pieces.count, 1,
+                       "cuts made on other bytes are not put on these")
+    }
+
     // MARK: - The recorder
 
     func testTheRecorderWritesTabsWithFilesAndOnlyWhileSwitchedOn() throws {
