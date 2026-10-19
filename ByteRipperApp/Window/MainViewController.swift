@@ -693,7 +693,7 @@ final class MainViewController: NSViewController {
             .map { (self, $0) }
     }
     private weak var activeFilePane: FilePaneView?
-    private weak var comparisonView: ComparisonView?
+    private(set) weak var comparisonView: ComparisonView?
 
     /// The pane views, keyed by the model they display. A view is created once
     /// and reused for its model's whole life — across mode changes, file
@@ -2874,7 +2874,7 @@ final class MainViewController: NSViewController {
     /// Makes pane `index` the active one: the window model, the active-pane
     /// pointer, the comparison view's chrome, and the focus all follow (§3.3).
     /// Driven by a header click and by a click on that pane's minimap.
-    private func activatePane(at index: Int) {
+    func activatePane(at index: Int) {
         // The window model's pointer moves first, and the panel's header is
         // re-read beside it, at a point where the comparison view is not needed
         // — a pane can be activated while that view is down, a file opening
@@ -3371,7 +3371,7 @@ final class MainViewController: NSViewController {
         activeFilePane?.focusHexView()
     }
 
-    private func refreshMode() {
+    func refreshMode() {
         let mode: WindowMode = windowModel.openPaneCount == 0 ? .empty : (windowModel.openPaneCount == 1 ? .singleFile : .comparison)
         // A drop that joins into the current pane (append / insert at start)
         // does not change the mode, and the join has already refreshed the pane

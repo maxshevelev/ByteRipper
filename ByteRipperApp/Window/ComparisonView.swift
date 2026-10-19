@@ -185,6 +185,15 @@ final class ComparisonView: NSView {
         LayoutSettings.set(isVertical: vertical)
     }
 
+    /// Puts the divider at `fraction` of the split axis for the current
+    /// arrangement — a restored workspace's split (`Design/WORKSPACE_PLAN.md`).
+    /// The clamp still applies, so a pane is never squeezed out of existence.
+    func setFraction(_ fraction: CGFloat) {
+        self.fraction = min(max(fraction, 0), 1)
+        splitView.setPaneLayout(.proportional(self.fraction), at: 0)
+        onFractionChanged?()
+    }
+
     /// Toggles the pane arrangement (§3.3: left/right ⇄ top/bottom).
     func toggleLayout() {
         setLayout(vertical: !splitView.isVertical)

@@ -70,6 +70,11 @@ packages:
   # release; only the app links it directly.
   FreshData:
     path: Packages/FreshData
+  # The session written down and brought back at launch: the value, the rule
+  # for a file that changed on disk, and the folder (`Design/WORKSPACE_PLAN.md`).
+  # Only the app links it.
+  Workspace:
+    path: Packages/Workspace
   # The introduction between the seam's reader and the parser's `ByteSource`,
   # and the codec a UEFI part goes back into its image through — which the app
   # uses for a zone that is a structure of the image.
@@ -149,6 +154,8 @@ targets:
       # the tool-modules' live sources hold theirs: fetched once, re-checked
       # once a day, and silent when it cannot be made.
       - package: FreshData
+      # The workspace the app writes down and restores at launch.
+      - package: Workspace
       # The language the app speaks, and every word it says in it.
       - package: Localization
       # The help window and the `?` buttons that open it at a page.

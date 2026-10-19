@@ -3,6 +3,7 @@ import HelpBook
 import HelpUI
 import Localization
 import ToolModuleKit
+import Workspace
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
@@ -26,6 +27,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// Observes theme changes so a Settings change re-themes the running app
     /// without a relaunch (§3.2).
     private var themeObserver: NSObjectProtocol?
+
+    /// Keeps the workspace on disk while the app runs, and hands back the one
+    /// written last (`Design/WORKSPACE_PLAN.md`). Nil under test, where the
+    /// Application Support folder is the user's own.
+    private(set) lazy var workspaceRecorder: WorkspaceRecorder? = WorkspaceRecorder.defaultFolder().map { folder in
+        WorkspaceRecorder(folder: folder, controllers: { [weak self] in self?.windowControllers ?? [] })
+    }
 
     /// The Settings window, owned by the app rather than by a window: there is
     /// one of it however many windows are open. Lazy, so it is not built until
@@ -149,10 +157,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         ) { [weak self] notification in
             MainActor.assumeIsolated {
                 guard let window = notification.object as? NSWindow else { return }
-                self?.windowControllers.removeAll { $0.window === window }
+                guard let self, self.windowControllers.contains(where: { $0.window === window }) else { return }
+                self.windowControllers.removeAll { $0.window === window }
+                // A closed tab leaves the workspace now, not at the next tick:
+                // closing the last window quits, and the quit records what is
+                // left — nothing.
+                self.workspaceRecorder?.record()
             }
         }
-        makeWindow()
+        if !restoreWorkspace() {
+            makeWindow()
+        }
+        workspaceRecorder?.start()
         NSApp.activate(ignoringOtherApps: true)
         // The window is up; drain any files Launch Services handed us first.
         isReady = true
@@ -167,6 +183,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             openNodeLinks(links)
         }
     }
+
+    /// Rebuilds the windows and tabs of the workspace written last, if the
+    /// switch is on and there is one (`Design/WORKSPACE_PLAN.md`, "Restoring").
+    /// Returns false when nothing was opened, and the launch makes its one
+    /// empty window as it always has.
+    private func restoreWorkspace() -> Bool {
+        guard let workspace = workspaceRecorder?.savedWorkspace(), !workspace.isEmpty else { return false }
+        var issues: [RestoreIssue] = []
+        // Back to front, so the window made last — the front one — is key.
+        for saved in workspace.windows.reversed() {
+            var group: [MainWindowController] = []
+            for tab in saved.tabs {
+                let controller = makeWindow(tabbedWith: group.first?.window)
+                if group.isEmpty, let window = controller.window {
+                    let frame = NSRect(x: saved.frame.x, y: saved.frame.y,
+                                       width: saved.frame.width, height: saved.frame.height)
+                    window.setFrame(window.constrainFrameRect(frame, to: window.screen), display: true)
+                }
+                group.append(controller)
+                issues += controller.mainViewController.restoreWorkspaceTab(tab)
+            }
+            if saved.tabs.indices.contains(saved.selectedTab),
+               let window = group[saved.selectedTab].window {
+                window.tabGroup?.selectedWindow = window
+                window.makeKeyAndOrderFront(nil)
+            }
+        }
+        lastRestoreIssues = issues
+        return !windowControllers.isEmpty
+    }
+
+    /// What the last restore could not bring back as it was.
+    private(set) var lastRestoreIssues: [RestoreIssue] = []
 
     /// File ▸ New Window (⇧⌘N).
     @objc func newWindow(_ sender: Any?) {
@@ -274,8 +323,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// nothing while it sleeps, and a file watcher cannot report what it did
     /// not see (§11).
     func applicationDidBecomeActive(_ notification: Notification) {
+        workspaceRecorder?.start()
         guard !MainViewController.isRunningTests else { return }
         FavoritePatternStore.start()
+    }
+
+    /// Going to the background is a moment to write the workspace down: the
+    /// timer stops until the app comes back, and nothing changes meanwhile.
+    func applicationDidResignActive(_ notification: Notification) {
+        workspaceRecorder?.record()
+        workspaceRecorder?.stop()
     }
 
     @objc func showSettings(_ sender: Any?) {
@@ -391,6 +448,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // A change made a moment ago is written now, not on a turn of the run
         // loop that will not come.
         agentService.annotationTools.saveNow()
+        // The last snapshot, after every Save / Discard was answered: a file
+        // saved under a new name in the quit's questions is in it by that name.
+        workspaceRecorder?.stop()
+        workspaceRecorder?.record()
         if let themeObserver {
             NotificationCenter.default.removeObserver(themeObserver)
         }
@@ -423,11 +484,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // say how many — the way every document-based app on the system does.
         // One is not a queue: it is asked directly, with no preamble.
         let unsaved = windowControllers.reduce(0) { $0 + $1.mainViewController.unsavedDocumentCount }
+        // The questions below bring each window to the front in turn; the
+        // workspace keeps the order the person left.
+        workspaceRecorder?.freezeOrder()
         if unsaved > 1 {
             switch confirmReviewingChanges(unsaved) {
             case .alertSecondButtonReturn:  // Discard Changes
                 return .terminateNow
             case .alertThirdButtonReturn:  // Cancel
+                workspaceRecorder?.thawOrder()
                 return .terminateCancel
             default:  // Review Changes…
                 break
@@ -435,8 +500,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
         var inThisCall = true
         var answer: NSApplication.TerminateReply?
-        askToClose(windowControllers) { [weak sender] agreed in
+        askToClose(windowControllers) { [weak sender, weak self] agreed in
             answer = agreed ? .terminateNow : .terminateCancel
+            if !agreed { self?.workspaceRecorder?.thawOrder() }
             if !inThisCall { sender?.reply(toApplicationShouldTerminate: agreed) }
         }
         inThisCall = false

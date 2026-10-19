@@ -16,8 +16,8 @@ and not an app-wide preference:
 | | kept | how it comes back |
 |---|---|---|
 | windows and tabs | frame of each window, tab order, the selected tab, the key window | rebuilt with `makeWindow(tabbedWith:)` in order |
-| File A / File B | path + `FileIdentity` + size of each slot | `openIntoPane`, silently |
-| active pane, comparison layout, divider fraction | per tab | `setActivePane`, `ComparisonView.setLayout`, a new divider setter |
+| File A / File B | path, size and modification date of each slot (`FileStamp`) | `PaneViewModel.open`, silently |
+| active pane, divider fraction | per tab | `activatePane(at:)`, `ComparisonView.setFraction` |
 | caret, selection, input region (hex/ASCII), insert mode | per pane | `setSelection`, `setInputRegion`, `isInsertMode` |
 | scroll | the first visible row, per pane | `FilePaneView.scrollRowToTop(containing:)`, after layout |
 | bookmarks | per tab (they are tab-wide, §20.1) | `BookmarkStore.seed` |
@@ -37,7 +37,8 @@ and not an app-wide preference:
 - **Search All results.** They are recomputed from the pattern on demand.
 - **Navigation history (Back / Forward).** Its places hold live pane
   references. It starts empty.
-- **App-wide settings** (font, word size, theme, panel widths). They are
+- **App-wide settings** (font, word size, theme, panel widths, side-by-side
+  or stacked panes — that last one is `LayoutSettings`, one for the app). They are
   already persisted, and a workspace that restored them would fight the
   Settings window.
 
@@ -136,8 +137,8 @@ At launch, before the first empty window would be made:
 2. Per tab, open File A and File B **silently**: `openIntoPane` grows a mode in
    which it raises no alerts and does not touch Recent Files. A file that is
    missing is skipped and reported.
-3. **A file that changed on disk** — its `FileIdentity` or size differs from the
-   snapshot — still opens, but only the position comes back:
+3. **A file that changed on disk** — its size or modification date differs
+   from the snapshot (`FileStamp.isUnchanged`) — still opens, but only the position comes back:
    - caret, selection and scroll that fall past the end move to the last
      address;
    - bookmarks past the end are dropped;
@@ -190,8 +191,8 @@ Each phase is a commit, and each leaves the app working with the setting on.
 
 1. **Settings ▸ General** — the tab and the switch. *(done)*
 2. **Tabs and files** — the package and the model, the recorder and the file,
-   windows, tabs, File A / File B, active pane, layout, caret, selection,
-   scroll, insert mode.
+   windows, tabs, File A / File B, active pane, divider, caret, selection,
+   scroll, insert mode. *(done)*
 3. **The rest of a pane** — bookmarks, segments and links, minimap, find bar.
 4. **Untitled documents** — their bytes.
 5. **Fragments and parts.**
