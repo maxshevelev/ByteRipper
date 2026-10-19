@@ -1344,7 +1344,7 @@ import UEFITool
         detail.content.setCustomSpacing(8, after: heading)
 
         guard let disclosure else {
-            install(makeGrid(table), after: heading)
+            install(makeTableBody(table), after: heading)
             return
         }
         let fold = TableFold(button: disclosure, heading: heading, table: table)
@@ -1366,6 +1366,25 @@ import UEFITool
         // Inside the list, never past it: a table wider than the panel is
         // clipped at the edge rather than drawn over the dump.
         grid.trailingAnchor.constraint(lessThanOrEqualTo: list.trailingAnchor).isActive = true
+    }
+
+    /// The table and, where it has one, the line that sums it up under it —
+    /// one view, so a folding table shows and hides both together. The line
+    /// wraps inside the list and is not selectable: it is a reading of the
+    /// rows, not a value to copy.
+    private func makeTableBody(_ table: UEFIDetailTable) -> NSView {
+        let grid = makeGrid(table)
+        guard let note = table.note, !note.isEmpty else { return grid }
+        let label = ToolWrappingLabel(string: note)
+        label.font = ToolPanelFont.body()
+        label.textColor = .secondaryLabelColor
+        let body = NSStackView(views: [grid, label])
+        body.orientation = .vertical
+        body.alignment = .leading
+        body.spacing = 4
+        body.translatesAutoresizingMaskIntoConstraints = false
+        label.widthAnchor.constraint(lessThanOrEqualTo: detail.content.widthAnchor).isActive = true
+        return body
     }
 
     /// The table's header line and rows, one view per row
@@ -1400,7 +1419,7 @@ import UEFITool
         guard let fold = tableFolds[title] else { return }
         fold.button.state = unfolded ? .on : .off
         if unfolded, fold.grid == nil {
-            let grid = makeGrid(fold.table)
+            let grid = makeTableBody(fold.table)
             fold.grid = grid
             install(grid, after: fold.heading)
         }
