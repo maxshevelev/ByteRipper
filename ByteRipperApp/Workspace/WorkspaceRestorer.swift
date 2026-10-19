@@ -84,7 +84,9 @@ import Workspace
                     tab.pendingSlots.removeAll { $0 == slot }
                     progress = true
                     let pane = tab.controller.workspaceSlot(slot)
-                    guard let opened = await tab.controller.openWorkspacePart(origin, from: parent, into: pane) else {
+                    guard let opened = await tab.controller.openWorkspacePart(origin, from: parent, into: pane,
+                                                                              keeper: keeper)
+                            ?? tab.controller.openWorkspaceOrphan(origin, into: pane, keeper: keeper) else {
                         issues.append(.missing(path: origin.name))
                         continue
                     }
@@ -99,7 +101,9 @@ import Workspace
                         guard let parent = panes[origin.parent] else { continue }
                         tab.pendingFragments.removeAll { $0 == index }
                         progress = true
-                        guard let opened = await tab.controller.openWorkspacePart(origin, from: parent, into: nil)
+                        guard let opened = await tab.controller.openWorkspacePart(origin, from: parent, into: nil,
+                                                                                  keeper: keeper)
+                                ?? tab.controller.openWorkspaceOrphan(origin, into: nil, keeper: keeper)
                         else {
                             issues.append(.missing(path: origin.name))
                             continue
@@ -121,20 +125,30 @@ import Workspace
         }
         // Whatever still waits has no parent to come out of: its parent's
         // file is gone or changed, or its parent was itself left out.
+        // A part that held changes of its own still comes back with them, as
+        // untitled bytes.
         for tab in tabs {
             for slot in tab.pendingSlots {
-                if case let .part(origin)? = tab.state.panes[slot]?.document {
-                    issues.append(.missing(path: origin.name))
-                }
-            }
-            for index in tab.pendingFragments {
-                if case let .part(origin) = tab.state.fragments[index].pane.document {
+                guard let saved = tab.state.panes[slot], case let .part(origin) = saved.document else { continue }
+                if let opened = tab.controller.openWorkspaceOrphan(
+                    origin, into: tab.controller.workspaceSlot(slot), keeper: keeper) {
+                    register(saved, opened, in: tab, slot: slot)
+                } else {
                     issues.append(.missing(path: origin.name))
                 }
             }
             tab.pendingSlots = []
-            tab.pendingFragments = []
             if !tab.isLaidOut { layOut(tab) }
+            for index in tab.pendingFragments {
+                let saved = tab.state.fragments[index]
+                guard case let .part(origin) = saved.pane.document else { continue }
+                if let opened = tab.controller.openWorkspaceOrphan(origin, into: nil, keeper: keeper) {
+                    openedFragment(saved, opened, index: index, in: tab)
+                } else {
+                    issues.append(.missing(path: origin.name))
+                }
+            }
+            tab.pendingFragments = []
             let front = tab.state.expandedFragment.flatMap { tab.fragments[$0]?.pane }
             tab.controller.settleWorkspaceFragments(expanded: front)
         }

@@ -86,7 +86,7 @@ extension MainViewController {
         if !pane.isUntitled {
             source = .file(FileStamp(url: document.url)
                 ?? FileStamp(path: document.url.standardizedFileURL.path, size: pane.fileSize, modified: nil))
-        } else if let origin = partOrigin(of: pane, ids: ids) {
+        } else if let origin = partOrigin(of: pane, keeper: keeper, ids: ids) {
             source = .part(origin)
         } else {
             guard let stamp = keeper?.stamp(for: pane) else { return nil }
@@ -105,13 +105,19 @@ extension MainViewController {
                 ? nil : pane.uefiState.openUEFIRows.map(\.path).sorted { $0.lexicographicallyPrecedes($1) })
     }
 
-    private func partOrigin(of pane: PaneViewModel, ids: WorkspacePaneIDs) -> PartOrigin? {
+    /// A part whose parent is still open. Changes its parent has not got are
+    /// kept as bytes beside it; without a keeper to keep them the part is
+    /// still written, and comes back as its parent holds it.
+    private func partOrigin(of pane: PaneViewModel, keeper: UntitledKeeper?,
+                            ids: WorkspacePaneIDs) -> PartOrigin? {
         guard let origin = pane.origin, origin.state != .parentClosed, let parent = origin.parent,
               let codec = PartCodecState(origin.codec).flatMap(PartCodecState.text) else { return nil }
         let range = origin.sourceRange
+        let edits = origin.hasChanges(in: pane) ? keeper?.stamp(for: pane) : nil
         return PartOrigin(parent: ids.id(for: parent), sourceStart: range.lowerBound,
                           sourceEnd: range.upperBound, name: origin.partName,
-                          layout: PartCodecState.text(origin.layout), codec: codec, size: pane.fileSize)
+                          layout: PartCodecState.text(origin.layout), codec: codec, size: pane.fileSize,
+                          edits: edits)
     }
 
     // MARK: - Putting back
@@ -159,11 +165,13 @@ extension MainViewController {
     }
 
     /// Takes a part out of `parent` again and opens it — into `pane`, a slot
-    /// of the tab, or as a panel when `pane` is nil. Nil when it could not be
-    /// taken out: the parent no longer has room for it, or the codec refused.
-    func openWorkspacePart(_ origin: PartOrigin, from parent: RestoredPane,
-                           into pane: PaneViewModel?) async -> RestoredPane? {
-        guard let codec = PartCodecState.value(PartCodecState.self, from: origin.codec)?.codec,
+    /// of the tab, or as a panel when `pane` is nil — with the changes it held
+    /// laid over it. Nil when it could not be taken out: the parent changed on
+    /// disk, no longer has room for it, or the codec refused.
+    func openWorkspacePart(_ origin: PartOrigin, from parent: RestoredPane, into pane: PaneViewModel?,
+                           keeper: UntitledKeeper?) async -> RestoredPane? {
+        guard parent.unchanged,
+              let codec = PartCodecState.value(PartCodecState.self, from: origin.codec)?.codec,
               let layout = PartCodecState.value(UEFIRootLayout.self, from: origin.layout),
               origin.sourceStart <= origin.sourceEnd else { return nil }
         let source = origin.sourceStart..<origin.sourceEnd
@@ -171,16 +179,42 @@ extension MainViewController {
               let link = DocumentOrigin(parent: parent.pane, source: source, partName: origin.name,
                                         layout: layout, codec: codec, content: bytes)
         else { return nil }
+        // What the parent gives is the part's baseline — what it is measured
+        // against, and what Update in Parent compares with; the bytes shown
+        // are the part's own, changes included.
+        let edited = origin.edits.flatMap { keeper?.bytes(for: $0) }.map { [UInt8]($0) }
+        let shown = edited ?? bytes
         let opened: PaneViewModel
         if let pane {
-            pane.openBytes(bytes, named: origin.name, origin: link)
+            pane.openBytes(shown, named: origin.name, origin: link)
             opened = pane
         } else {
-            guard let id = openFragment(bytes, named: origin.name, origin: link, animated: false),
+            guard let id = openFragment(shown, named: origin.name, origin: link, animated: false),
                   let panel = fragments.pane(id) else { return nil }
             opened = panel
         }
-        return RestoredPane(pane: opened, unchanged: parent.unchanged && UInt64(bytes.count) == origin.size)
+        if let stamp = origin.edits, edited != nil {
+            if stamp.dirty { opened.document?.undoHistory.clearKeepingDirty() }
+            keeper?.adopt(opened, as: stamp)
+        }
+        return RestoredPane(pane: opened, unchanged: UInt64(shown.count) == origin.size)
+    }
+
+    /// A part's own bytes when its parent did not come back: kept work is not
+    /// thrown away for want of a way home, so it opens as untitled bytes —
+    /// into `pane`, or as a panel when `pane` is nil.
+    func openWorkspaceOrphan(_ origin: PartOrigin, into pane: PaneViewModel?,
+                             keeper: UntitledKeeper?) -> RestoredPane? {
+        guard var stamp = origin.edits else { return nil }
+        if stamp.name == nil { stamp.name = origin.name }
+        if let pane {
+            guard let bytes = keeper?.bytes(for: stamp) else { return nil }
+            pane.openBytes([UInt8](bytes), named: stamp.name)
+            if stamp.dirty { pane.document?.undoHistory.clearKeepingDirty() }
+            keeper?.adopt(pane, as: stamp)
+            return RestoredPane(pane: pane, unchanged: UInt64(bytes.count) == stamp.size)
+        }
+        return openWorkspaceLooseFragment(stamp, keeper: keeper)
     }
 
     /// Opens a panel of untitled bytes — one with no parent.

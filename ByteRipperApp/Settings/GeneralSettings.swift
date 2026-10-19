@@ -61,10 +61,10 @@ final class WorkspaceSettingsViewController: NSViewController {
         restoreCheckbox.action = #selector(restoreChanged(_:))
 
         let caption = NSTextField(wrappingLabelWithString:
-            L("The tabs and the files in them come back as they were at quit: addresses on screen, cursor and selection, bookmarks, segments and tool panels. Unsaved changes are not kept — quitting asks about them first."))
+            L("The tabs and the files in them come back as they were at quit: addresses on screen, cursor and selection, bookmarks, segments and tool panels. Documents never saved come back unsaved, and quitting does not ask about them; changes to files on disk are asked about as before."))
         caption.font = .systemFont(ofSize: 11)
         caption.textColor = .secondaryLabelColor
-        caption.maximumNumberOfLines = 4
+        caption.maximumNumberOfLines = 5
 
         for subview in [restoreCheckbox, caption] {
             subview.translatesAutoresizingMaskIntoConstraints = false

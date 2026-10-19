@@ -554,7 +554,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // The last snapshot, after every Save / Discard was answered: a file
         // saved under a new name in the quit's questions is in it by that name.
         workspaceRecorder?.stop()
-        workspaceRecorder?.record(final: true)
+        workspaceRecorder?.record()
         if let themeObserver {
             NotificationCenter.default.removeObserver(themeObserver)
         }
@@ -586,7 +586,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // dialogs the reader is about to be walked through. Say so first, and
         // say how many — the way every document-based app on the system does.
         // One is not a queue: it is asked directly, with no preamble.
-        let unsaved = windowControllers.reduce(0) { $0 + $1.mainViewController.unsavedDocumentCount }
+        let kept = keptAtQuit()
+        let unsaved = windowControllers.reduce(0) { $0 + $1.mainViewController.unsavedDocumentCount(keeping: kept) }
         // The questions below bring each window to the front in turn; the
         // workspace keeps the order the person left.
         workspaceRecorder?.freezeOrder()
@@ -603,13 +604,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
         var inThisCall = true
         var answer: NSApplication.TerminateReply?
-        askToClose(windowControllers) { [weak sender, weak self] agreed in
+        askToClose(windowControllers, keeping: kept) { [weak sender, weak self] agreed in
             answer = agreed ? .terminateNow : .terminateCancel
             if !agreed { self?.workspaceRecorder?.thawOrder() }
             if !inThisCall { sender?.reply(toApplicationShouldTerminate: agreed) }
         }
         inThisCall = false
         return answer ?? .terminateLater
+    }
+
+    /// What quitting does not ask about: with the workspace on, an untitled
+    /// document or a part whose bytes the workspace holds as they are now
+    /// comes back at the next launch, still unsaved — only changes to files on
+    /// disk are asked about (`Design/WORKSPACE_PLAN.md`, "Untitled documents").
+    /// A snapshot is taken first, so "as they are now" is true; a document
+    /// whose bytes could not be written is asked about as before.
+    private func keptAtQuit() -> (PaneViewModel) -> Bool {
+        guard WorkspaceSettings.restoresWorkspace, let recorder = workspaceRecorder else { return { _ in false } }
+        recorder.record()
+        return { pane in pane.isUntitled && recorder.keeper.holdsCurrentBytes(of: pane) }
     }
 
     /// The one question asked before the queue of them: review, throw it all
@@ -629,6 +642,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// Asks the windows in `queue` one at a time, stopping at the first that
     /// says no.
     private func askToClose(_ queue: [MainWindowController],
+                            keeping kept: @escaping (PaneViewModel) -> Bool,
                             then done: @escaping (Bool) -> Void) {
         var rest = queue
         guard let controller = rest.first else {
@@ -640,12 +654,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // that is not in front is a question about something nobody can see —
         // so the window being asked about comes to the front to ask it.
         controller.window?.makeKeyAndOrderFront(nil)
-        controller.mainViewController.confirmClose { [weak self] agreed in
+        controller.mainViewController.confirmClose(keeping: kept) { [weak self] agreed in
             guard agreed, let self else {
                 done(agreed)
                 return
             }
-            self.askToClose(rest, then: done)
+            self.askToClose(rest, keeping: kept, then: done)
         }
     }
 }

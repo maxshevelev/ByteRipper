@@ -276,9 +276,42 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertEqual(controllers.count, 2)
         let recorder = WorkspaceRecorder(folder: WorkspaceFolder(url: folderURL), controllers: { controllers })
 
-        recorder.record(final: true)
+        recorder.record()
         let saved = try XCTUnwrap(recorder.savedWorkspace())
-        XCTAssertEqual(saved.windows.count, 2, "a part is taken out again, not discarded like untitled bytes")
+        XCTAssertEqual(saved.windows.count, 2, "a part is kept, its parent beside it")
+    }
+
+    /// A part with changes its parent has not got comes back with them, still
+    /// linked — and without its parent, still with them.
+    func testAPartComesBackWithItsChanges() async throws {
+        let (parentTab, partTab, bytes, _) = try tornOffPart()
+        let part = partTab.windowModel.pane1
+        part.select(range: 0..<0)
+        try part.pasteWrite([0xDE, 0xAD])
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("PartEdits-\(UUID().uuidString)")
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
+        let keeper = UntitledKeeper(folder: WorkspaceFolder(url: folder))
+        let ids = WorkspacePaneIDs()
+        let tabs = [partTab.workspaceTab(keeper: keeper, ids: ids), parentTab.workspaceTab(keeper: keeper, ids: ids)]
+        guard case let .part(origin)? = tabs[0].panes[0]?.document else { return XCTFail("written as a part") }
+        XCTAssertNotNil(origin.edits)
+
+        let restoredPart = shownWindow().mainViewController
+        let restoredParent = shownWindow().mainViewController
+        let issues = await restore([(tabs[0], restoredPart), (tabs[1], restoredParent)], keeper: keeper)
+        XCTAssertEqual(issues, [])
+        let pane = restoredPart.windowModel.pane1
+        XCTAssertEqual(try pane.document?.read(at: 0, length: 4),
+                       [0xDE, 0xAD] + Array(bytes[0x202..<0x204]))
+        XCTAssertIdentical(pane.origin?.parent, restoredParent.windowModel.pane1)
+        XCTAssertEqual(pane.origin.map { $0.hasChanges(in: pane) }, true, "Update in Parent has them to put back")
+
+        let alone = shownWindow().mainViewController
+        let orphanIssues = await restore([(tabs[0], alone)], keeper: keeper)
+        XCTAssertEqual(orphanIssues, [])
+        XCTAssertEqual(try alone.windowModel.pane1.document?.read(at: 0, length: 2), [0xDE, 0xAD],
+                       "without its parent, the changes still come back")
+        XCTAssertNil(alone.windowModel.pane1.origin)
     }
 
     func testAPartWhoseParentIsGoneIsReported() async throws {
@@ -360,7 +393,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertEqual(restored.document?.selection.start, 0x120)
     }
 
-    func testTheSnapshotAtQuitLeavesOutUntitledDocumentsAndTheirBytes() async throws {
+    func testUntitledBytesAreKeptUntilTheirDocumentCloses() async throws {
         WorkspaceSettings.set(restoresWorkspace: true)
         let a = try dump(0x100, 0xAA)
         let files = shownWindow()
@@ -375,10 +408,38 @@ final class WorkspaceRestoreTests: XCTestCase {
         let kept = folderURL.appendingPathComponent("Untitled")
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: kept.path).count, 1)
 
-        recorder.record(final: true)
-        XCTAssertEqual(try XCTUnwrap(recorder.savedWorkspace()).windows.count, 1,
-                       "an untitled document still open at quit was discarded")
-        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: kept.path), [])
+        untitled.mainViewController.windowModel.pane1.close()
+        recorder.record()
+        XCTAssertEqual(try XCTUnwrap(recorder.savedWorkspace()).windows.count, 1)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: kept.path), [],
+                       "a closed document takes its bytes with it")
+    }
+
+    /// Quitting with the workspace on asks about changes to files on disk,
+    /// and not about an untitled document the workspace holds.
+    func testQuittingDoesNotAskAboutAKeptUntitledDocument() async throws {
+        WorkspaceSettings.set(restoresWorkspace: true)
+        let window = shownWindow()
+        let controller = window.mainViewController
+        let pane = controller.windowModel.pane1
+        pane.openBytes([1, 2, 3], named: "scratch")
+        pane.document?.undoHistory.clearKeepingDirty()
+        controller.refreshMode()
+        let (recorder, _) = recorder([window])
+        XCTAssertEqual(controller.unsavedDocumentCount, 1, "the premise: unsaved")
+
+        recorder.record()
+        let kept: (PaneViewModel) -> Bool = { $0.isUntitled && recorder.keeper.holdsCurrentBytes(of: $0) }
+        XCTAssertEqual(controller.unsavedDocumentCount(keeping: kept), 0)
+        var agreed: Bool?
+        // Under test an asked question answers Cancel: agreeing is the proof
+        // that nothing was asked.
+        controller.confirmClose(keeping: kept) { agreed = $0 }
+        XCTAssertEqual(agreed, true)
+
+        pane.select(range: 0..<0)
+        try pane.pasteWrite([9])
+        XCTAssertFalse(kept(pane), "a change since the snapshot is not held")
     }
 
     func testUnchangedUntitledBytesAreNotWrittenAgain() async throws {

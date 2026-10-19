@@ -14,20 +14,21 @@ The switch is **Reopen the workspace at launch** in [[topic:settings|Settings �
 - In each pane, the address at the top of the screen, the caret and the selection, the hex or text column, and insert mode.
 - The [[topic:bookmarks|bookmarks]] and the [[topic:segments|segments]]: cuts, names, and the links of segments to the files they were joined from.
 - The [[topic:fragments|fragment panels]], with the panel that was in front, and parts moved into tabs of their own. A part is not stored as bytes: it is extracted from its file again, so it shows what the file holds now and can still be written back into it, whichever tab or window that file is in.
+- **Documents never saved** — New File, a join, a duplicate, including one that has been given a name — with their bytes, still unsaved, and parts with changes not yet put back into their file, with those changes. They are kept beside the workspace while the program runs, so that an abnormal termination does not lose them either, and quitting does not ask about them.
 - The [[topic:notes|Annotations window]], at its place among the tabs or as a window of its own, with the cards that were selected.
 - The [[topic:minimap|minimap]], the Find bar with its pattern, and the tool panel with the node or row selected in it and the open branches of the UEFI tree.
 
 ## What is not restored
 
 - **The undo history.** It belongs to the session in which the edits were made.
-- **Unsaved changes to a file on disk.** Quitting asks to save or discard them, as it always has. If the program terminates abnormally, such changes are lost; the file itself, its position and its bookmarks are restored from the disk.
-- **Untitled documents** — New File, a join, a duplicate — are kept beside the workspace while the program runs, so that an abnormal termination does not lose them; they return as unsaved. At a normal quit they are offered for saving as before, and a document that was discarded does not return.
+- **Unsaved changes to a file on disk.** Quitting asks to save or discard them, as it always has; this is the only question it asks. If the program terminates abnormally, such changes are lost; the file itself, its position and its bookmarks are restored from the disk.
+- The link of a part to its file, when that file is missing or has changed: the part returns with its changes, as a document never saved.
 - The Back / Forward history and the results of Search All.
 - Settings such as the font, the word size and the pane layout. They are stored separately and apply in any case.
 
 ## When the workspace is written
 
-Continuously: every few seconds while the program is in front, when it goes to the background, when a window is closed, and at quit after all questions about unsaved changes have been answered. If the last window is closed by hand, the workspace is empty, and the next launch opens one empty window. Switching the setting off deletes the stored workspace.
+Continuously: every few seconds while the program is in front, when it goes to the background, when a window is closed, and at quit after the questions about unsaved changes to files on disk have been answered. If the last window is closed by hand, the workspace is empty, and the next launch opens one empty window. Switching the setting off deletes the stored workspace.
 
 The workspace is stored in `~/Library/Application Support/ByteRipper/Workspace` and does not leave this Mac.
 

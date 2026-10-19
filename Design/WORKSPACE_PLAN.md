@@ -33,8 +33,9 @@ and not an app-wide preference:
 
 - **Undo history.** It belongs to the session that made it.
 - **Unsaved changes to a file on disk.** Quitting asks Save / Discard first, as
-  it does today, so at a normal quit there are none. After a crash they are
-  lost. The tab, the file and its position still come back.
+  it does today — the one question it still asks — so at a normal quit there
+  are none. After a crash they are lost. The tab, the file and its position
+  still come back.
 - **Search All results.** They are recomputed from the pattern on demand.
 - **Navigation history (Back / Forward).** Its places hold live pane
   references. It starts empty.
@@ -66,13 +67,23 @@ to date as the session changes, not only at quit.
 
 ### Untitled documents
 
-An untitled document (New, Join, Duplicate, a torn-off fragment) has no file
-to come back from, so its bytes are written beside the workspace:
+A document never saved (New, Join, Duplicate, a torn-off fragment — named
+by Rename or not: what matters is that it has never been written) has no
+file to come back from, so its bytes are written beside the workspace:
 `Untitled/<uuid>.bin`, one per document, rewritten only when the document's
-content changed since the last write. At a normal quit Save / Discard still
-runs first: a saved document comes back as its file, a discarded one is gone
-(its `.bin` is deleted). After a crash it comes back as it was at the last
-snapshot.
+content changed since the last write (`UndoHistory.version`). A part with
+changes its parent has not got keeps its own bytes the same way
+(`PartOrigin.edits`), and they are laid over what the parent gives at
+restore.
+
+**Quitting does not ask about them** with the switch on: they come back at
+the next launch, still unsaved. Before its questions, quitting takes a
+snapshot, and asks only about what the workspace does not hold as it is now
+— changes to files on disk, and anything whose bytes could not be written.
+A document closed in the session takes its copy with it.
+
+A part whose parent did not come back still brings its changes, as an
+untitled document with no way home.
 
 The join case — the reason issue #19 exists — comes back whole: the image's
 bytes, its segments, and their links to `chip1.bin` and `chip2.bin`.

@@ -2254,8 +2254,11 @@ final class MainViewController: NSViewController {
     /// Panels with nothing to lose are left where they are. They go with the
     /// window, and closing them here would throw them away for nothing if the
     /// question about the files is then cancelled.
-    private func closeFragmentsHoldingSomething(then done: @escaping () -> Void) {
-        guard let id = fragmentsInnermostFirst.first(where: fragmentHasSomethingToLose),
+    private func closeFragmentsHoldingSomething(keeping kept: @escaping (PaneViewModel) -> Bool = { _ in false },
+                                                then done: @escaping () -> Void) {
+        guard let id = fragmentsInnermostFirst.first(where: { id in
+                  fragmentHasSomethingToLose(id) && !(fragments.pane(id).map(kept) ?? false)
+              }),
               let pane = fragments.pane(id)
         else {
             done()
@@ -2263,7 +2266,7 @@ final class MainViewController: NSViewController {
         }
         closeFragment(id, pane: pane) { [weak self] closed in
             guard closed else { return }
-            self?.closeFragmentsHoldingSomething(then: done)
+            self?.closeFragmentsHoldingSomething(keeping: kept, then: done)
         }
     }
 
@@ -7641,11 +7644,18 @@ extension MainViewController: NSWindowDelegate {
     /// Counted so that quitting can say how much is at stake before it starts
     /// asking — the reader deciding whether to go through four questions wants
     /// to know there are four.
-    var unsavedDocumentCount: Int {
+    var unsavedDocumentCount: Int { unsavedDocumentCount(keeping: { _ in false }) }
+
+    /// The same count, leaving out the documents `kept` says the workspace
+    /// keeps as they are — what quitting with it on does not ask about
+    /// (`Design/WORKSPACE_PLAN.md`, "Untitled documents").
+    func unsavedDocumentCount(keeping kept: (PaneViewModel) -> Bool) -> Int {
         let files = [windowModel.pane1, windowModel.pane2]
-            .filter { $0.isOpen && $0.status.isDirty }
+            .filter { $0.isOpen && $0.status.isDirty && !kept($0) }
             .count
-        return files + fragments.dock.panels.filter(fragmentHasSomethingToLose).count
+        return files + fragments.dock.panels.filter { id in
+            fragmentHasSomethingToLose(id) && !(fragments.pane(id).map(kept) ?? false)
+        }.count
     }
 
     /// Everything the tab has to ask before it can go: the parts it holds,
@@ -7658,19 +7668,25 @@ extension MainViewController: NSWindowDelegate {
     ///
     /// Asked in this shape, rather than as a Bool, because quitting asks it of
     /// every window in turn and a window may take a sheet to answer.
-    func confirmClose(then done: @escaping (Bool) -> Void) {
-        closeFragmentsHoldingSomething { [weak self] in
+    ///
+    /// `kept` names the documents not to ask about: quitting with the
+    /// workspace on keeps untitled documents and parts as they are, and asks
+    /// only about changes to files on disk.
+    func confirmClose(keeping kept: @escaping (PaneViewModel) -> Bool = { _ in false },
+                      then done: @escaping (Bool) -> Void) {
+        closeFragmentsHoldingSomething(keeping: kept) { [weak self] in
             guard let self else {
                 done(false)
                 return
             }
-            self.confirmClosingFiles(then: done)
+            self.confirmClosingFiles(keeping: kept, then: done)
         }
     }
 
-    private func confirmClosingFiles(then done: @escaping (Bool) -> Void) {
+    private func confirmClosingFiles(keeping kept: (PaneViewModel) -> Bool,
+                                     then done: @escaping (Bool) -> Void) {
         let panes = [windowModel.pane1, windowModel.pane2]
-        let dirty = panes.filter { $0.isOpen && $0.status.isDirty }
+        let dirty = panes.filter { $0.isOpen && $0.status.isDirty && !kept($0) }
         guard !dirty.isEmpty else {
             done(true)
             return

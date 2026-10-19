@@ -190,7 +190,7 @@
 "Save Node as…" = "Сохранить узел как…";
 "Save “%1$@” as…" = "Сохранить «%1$@» как…";
 "Saved %1$@ bytes." = "Сохранено байт: %1$@.";
-"The tabs and the files in them come back as they were at quit: addresses on screen, cursor and selection, bookmarks, segments and tool panels. Unsaved changes are not kept — quitting asks about them first." = "Вкладки и открытые в них файлы возвращаются такими, какими были при выходе: адрес на экране, курсор и выделение, закладки, сегменты и панели инструментов. Несохранённые правки не переносятся — о них программа спрашивает при выходе.";
+"The tabs and the files in them come back as they were at quit: addresses on screen, cursor and selection, bookmarks, segments and tool panels. Documents never saved come back unsaved, and quitting does not ask about them; changes to files on disk are asked about as before." = "Вкладки и открытые в них файлы возвращаются такими, какими были при выходе: адрес на экране, курсор и выделение, закладки, сегменты и панели инструментов. Ни разу не сохранённые документы возвращаются несохранёнными, и при выходе программа о них не спрашивает; о правках в файлах на диске она спрашивает, как и прежде.";
 "The variable does not decompress." = "Переменная не распаковывается.";
 "The workspace was not restored in full" = "Рабочая сессия восстановлена не полностью";
 "There is nothing to save here." = "Здесь нечего сохранять.";

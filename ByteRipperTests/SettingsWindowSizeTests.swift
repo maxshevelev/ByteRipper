@@ -50,14 +50,14 @@ final class SettingsWindowSizeTests: XCTestCase {
         let window = try XCTUnwrap(settings.window)
         window.makeKeyAndOrderFront(nil)
 
-        try switchTo(settings, "TextDecoding")   // the tallest tab
-        let tallHeight = window.frame.height
-        try switchTo(settings, "General")        // a shorter tab
-        let shortHeight = window.frame.height
-        XCTAssertLessThan(shortHeight, tallHeight,
-                          "a short tab must be shorter than the tall one")
-        try switchTo(settings, "TextDecoding")   // back to the tall tab
-        XCTAssertEqual(window.frame.height, tallHeight, accuracy: 1,
+        try switchTo(settings, "TextDecoding")
+        let firstHeight = window.frame.height
+        try switchTo(settings, "General")
+        let otherHeight = window.frame.height
+        XCTAssertNotEqual(otherHeight, firstHeight, accuracy: 1,
+                          "the premise: the two tabs differ in height")
+        try switchTo(settings, "TextDecoding")
+        XCTAssertEqual(window.frame.height, firstHeight, accuracy: 1,
                        "returning to a tab must restore its height")
     }
 

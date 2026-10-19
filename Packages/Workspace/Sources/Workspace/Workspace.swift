@@ -190,9 +190,14 @@ public struct PartOrigin: Codable, Equatable, Sendable {
     /// What it decoded to, so a part that decodes to another length is known
     /// to be other bytes.
     public var size: UInt64
+    /// The part's own bytes, when it holds changes its parent has not got:
+    /// kept beside the workspace like an untitled document's, and laid over
+    /// what the parent gives at restore. Nil for a part that is what its
+    /// parent holds.
+    public var edits: UntitledStamp?
 
     public init(parent: String, sourceStart: UInt64, sourceEnd: UInt64, name: String,
-                layout: String?, codec: String?, size: UInt64) {
+                layout: String?, codec: String?, size: UInt64, edits: UntitledStamp? = nil) {
         self.parent = parent
         self.sourceStart = sourceStart
         self.sourceEnd = sourceEnd
@@ -200,6 +205,7 @@ public struct PartOrigin: Codable, Equatable, Sendable {
         self.layout = layout
         self.codec = codec
         self.size = size
+        self.edits = edits
     }
 }
 

@@ -53,6 +53,15 @@ final class UntitledKeeper {
                              dirty: pane.status.isDirty)
     }
 
+    /// Whether the bytes `pane` holds now are the ones last written for it —
+    /// what lets quitting leave them unasked: they come back at the next
+    /// launch as they are.
+    func holdsCurrentBytes(of pane: PaneViewModel) -> Bool {
+        guard let document = pane.document,
+              let entry = entries[ObjectIdentifier(document)], entry.document === document else { return false }
+        return entry.written == document.undoHistory.version
+    }
+
     /// A snapshot is about to be taken.
     func beginSnapshot() {
         named = []

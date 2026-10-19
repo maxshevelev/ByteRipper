@@ -73,13 +73,10 @@ final class WorkspaceRecorder {
     /// would write the workspace with them missing.
     var isPaused = false
 
-    /// Writes the workspace as it stands, if the switch is on.
-    ///
-    /// `final` is the snapshot at quit, after every Save / Discard was
-    /// answered: an untitled document still open then is one the person chose
-    /// to discard, so it is left out and its bytes go. Every other snapshot
-    /// keeps untitled documents, so a crash does not take them.
-    func record(final: Bool = false) {
+    /// Writes the workspace as it stands, if the switch is on — untitled
+    /// documents and the parts' changes included, at quit as at every other
+    /// time: quitting does not ask about them, they come back.
+    func record() {
         guard WorkspaceSettings.restoresWorkspace else {
             if !removedWhileOff { folder.remove() }
             removedWhileOff = true
@@ -88,7 +85,7 @@ final class WorkspaceRecorder {
         removedWhileOff = false
         guard !isPaused else { return }
         keeper.beginSnapshot()
-        let workspace = snapshot(keepingUntitled: !final)
+        let workspace = snapshot()
         guard (try? folder.write(workspace)) != nil else { return }
         keeper.endSnapshot()
     }
@@ -115,7 +112,7 @@ final class WorkspaceRecorder {
     }
 
     /// Every window, front to back, each with its tabs left to right.
-    func snapshot(keepingUntitled: Bool = true) -> Workspace {
+    func snapshot() -> Workspace {
         let controllers = controllers()
         func controller(of window: NSWindow) -> MainWindowController? {
             controllers.first { $0.window === window }
@@ -146,7 +143,7 @@ final class WorkspaceRecorder {
                     continue
                 }
                 guard let tab = controller(of: tabWindow)?.mainViewController
-                        .workspaceTab(keeper: keepingUntitled ? keeper : nil, ids: ids),
+                        .workspaceTab(keeper: keeper, ids: ids),
                       !tab.isEmpty else { continue }
                 if tabWindow === shown { selectedTab = tabs.count }
                 tabs.append(tab)

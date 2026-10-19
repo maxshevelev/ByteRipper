@@ -190,7 +190,7 @@
 "Save Node as…" = "Knoten sichern unter…";
 "Save “%1$@” as…" = "„%1$@“ sichern unter…";
 "Saved %1$@ bytes." = "%1$@ Bytes gesichert.";
-"The tabs and the files in them come back as they were at quit: addresses on screen, cursor and selection, bookmarks, segments and tool panels. Unsaved changes are not kept — quitting asks about them first." = "Die Tabs und die darin geöffneten Dateien kehren so zurück, wie sie beim Beenden waren: die angezeigte Adresse, Cursor und Auswahl, Lesezeichen, Segmente und Werkzeugbereiche. Ungesicherte Änderungen werden nicht übernommen — nach ihnen fragt das Programm beim Beenden.";
+"The tabs and the files in them come back as they were at quit: addresses on screen, cursor and selection, bookmarks, segments and tool panels. Documents never saved come back unsaved, and quitting does not ask about them; changes to files on disk are asked about as before." = "Die Tabs und die darin geöffneten Dateien kehren so zurück, wie sie beim Beenden waren: die angezeigte Adresse, Cursor und Auswahl, Lesezeichen, Segmente und Werkzeugbereiche. Nie gesicherte Dokumente kehren ungesichert zurück, und beim Beenden fragt das Programm nicht nach ihnen; nach Änderungen an Dateien auf dem Datenträger fragt es wie bisher.";
 "The variable does not decompress." = "Die Variable lässt sich nicht entpacken.";
 "The workspace was not restored in full" = "Der Arbeitsbereich wurde nicht vollständig wiederhergestellt";
 "There is nothing to save here." = "Hier gibt es nichts zu sichern.";
