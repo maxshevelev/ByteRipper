@@ -27,9 +27,14 @@ final class WorkspaceRecorder {
     /// The untitled documents' bytes, beside the workspace.
     let keeper: UntitledKeeper
 
-    init(folder: WorkspaceFolder, controllers: @escaping () -> [MainWindowController]) {
+    /// The Annotations window, if it has been made.
+    private let notes: @MainActor () -> NotesWindowController?
+
+    init(folder: WorkspaceFolder, controllers: @escaping () -> [MainWindowController],
+         notes: @escaping @MainActor () -> NotesWindowController? = { NotesWindowController.shared }) {
         self.folder = folder
         self.controllers = controllers
+        self.notes = notes
         self.keeper = UntitledKeeper(folder: folder)
     }
 
@@ -90,7 +95,7 @@ final class WorkspaceRecorder {
 
     /// Quitting has begun: keep the window order as it is now.
     func freezeOrder() {
-        let windows = controllers().compactMap(\.window)
+        let windows = controllers().compactMap(\.window) + [openNotesWindow].compactMap { $0 }
         frozenOrder = (NSApp.orderedWindows.filter { windows.contains($0) },
                        windows.compactMap { $0.tabGroup?.selectedWindow ?? $0 })
     }
@@ -100,13 +105,23 @@ final class WorkspaceRecorder {
         frozenOrder = nil
     }
 
+    /// The Annotations window while it is open — on screen, or a tab behind
+    /// another in its window.
+    private var openNotesWindow: NSWindow? {
+        guard let window = notes()?.window else { return nil }
+        if window.isVisible { return window }
+        return (window.tabGroup?.windows.count ?? 0) > 1 && window.tabGroup?.windows.contains(window) == true
+            ? window : nil
+    }
+
     /// Every window, front to back, each with its tabs left to right.
     func snapshot(keepingUntitled: Bool = true) -> Workspace {
         let controllers = controllers()
         func controller(of window: NSWindow) -> MainWindowController? {
             controllers.first { $0.window === window }
         }
-        let all = controllers.compactMap(\.window)
+        let notesWindow = openNotesWindow
+        let all = controllers.compactMap(\.window) + [notesWindow].compactMap { $0 }
         let front = frozenOrder?.windows ?? NSApp.orderedWindows.filter { all.contains($0) }
         let selected = frozenOrder?.selected
         var seen = Set<ObjectIdentifier>()
@@ -123,18 +138,24 @@ final class WorkspaceRecorder {
                 ?? window.tabGroup?.selectedWindow ?? window
             var tabs: [TabState] = []
             var selectedTab = 0
+            var notesState: NotesState?
             for tabWindow in group {
+                if tabWindow === notesWindow, let cards = notes()?.cards {
+                    notesState = NotesState(position: tabs.count, isSelected: tabWindow === shown,
+                                            selected: cards.selectedIDs)
+                    continue
+                }
                 guard let tab = controller(of: tabWindow)?.mainViewController
                         .workspaceTab(keeper: keepingUntitled ? keeper : nil, ids: ids),
                       !tab.isEmpty else { continue }
                 if tabWindow === shown { selectedTab = tabs.count }
                 tabs.append(tab)
             }
-            guard !tabs.isEmpty else { continue }
+            guard !tabs.isEmpty || notesState != nil else { continue }
             let frame = shown.frame
             windows.append(WindowState(
                 frame: Rect(x: frame.minX, y: frame.minY, width: frame.width, height: frame.height),
-                tabs: tabs, selectedTab: selectedTab))
+                tabs: tabs, selectedTab: selectedTab, notes: notesState))
         }
         return Workspace(windows: windows)
     }

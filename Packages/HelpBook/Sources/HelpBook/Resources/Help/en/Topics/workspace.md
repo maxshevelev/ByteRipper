@@ -14,6 +14,7 @@ The switch is **Reopen the workspace at launch** in [[topic:settings|Settings â–
 - In each pane, the address at the top of the screen, the caret and the selection, the hex or text column, and insert mode.
 - The [[topic:bookmarks|bookmarks]] and the [[topic:segments|segments]]: cuts, names, and the links of segments to the files they were joined from.
 - The [[topic:fragments|fragment panels]], with the panel that was in front, and parts moved into tabs of their own. A part is not stored as bytes: it is extracted from its file again, so it shows what the file holds now and can still be written back into it, whichever tab or window that file is in.
+- The [[topic:notes|Annotations window]], at its place among the tabs or as a window of its own, with the cards that were selected.
 - The [[topic:minimap|minimap]], the Find bar with its pattern, and the tool panel with the node or row selected in it and the open branches of the UEFI tree.
 
 ## What is not restored

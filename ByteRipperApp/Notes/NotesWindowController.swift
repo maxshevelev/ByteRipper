@@ -3,6 +3,7 @@ import Cocoa
 import HelpUI
 import Localization
 import ToolModuleKit
+import Workspace
 
 /// The Annotations window: every note made on the files — by an agent or by
 /// the person — as cards (`AgentAnnotationTools`).
@@ -35,6 +36,12 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
     static func discardForTesting() {
         shared?.window?.orderOut(nil)
         shared = nil
+    }
+
+    /// Whether the window is open: on screen, or a tab behind another.
+    static var isOpen: Bool {
+        guard let window = shared?.window else { return false }
+        return window.isVisible || (window.tabGroup?.windows.count ?? 0) > 1
     }
 
     /// Whether the notes are in front of someone: the window on screen and
@@ -144,6 +151,26 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
         noteLookedAt()
         refresh()
         syncAgentItem()
+    }
+
+    /// Puts the window back where a restored workspace had it — at its place
+    /// among `tabs`, or on its own when `tabs` is empty — with the cards that
+    /// were selected selected again (`Design/WORKSPACE_PLAN.md`).
+    @discardableResult
+    func restore(_ state: NotesState, among tabs: [NSWindow]) -> NSWindow? {
+        guard let window else { return nil }
+        // A tab closed on the way, its files gone, moves the place up.
+        let position = min(state.position, tabs.count)
+        if position > 0 {
+            tabs[position - 1].addTabbedWindow(window, ordered: .above)
+        } else if let first = tabs.first {
+            first.addTabbedWindow(window, ordered: .below)
+        }
+        show(tabbedWith: nil)
+        window.layoutIfNeeded()
+        cards.collection.layoutSubtreeIfNeeded()
+        cards.select(state.selected)
+        return window
     }
 
     /// The tab's title with the notes' picture. Given before the window is

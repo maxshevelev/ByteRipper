@@ -22,9 +22,10 @@ public struct Workspace: Codable, Equatable, Sendable {
         self.windows = windows
     }
 
-    /// Nothing to bring back: no window has a tab with anything open in it.
+    /// Nothing to bring back: no window has a tab with anything open in it,
+    /// and the Annotations window was closed.
     public var isEmpty: Bool {
-        windows.allSatisfy { $0.tabs.allSatisfy(\.isEmpty) }
+        windows.allSatisfy { $0.notes == nil && $0.tabs.allSatisfy(\.isEmpty) }
     }
 }
 
@@ -34,11 +35,33 @@ public struct WindowState: Codable, Equatable, Sendable {
     public var tabs: [TabState]
     /// The tab on screen, as an index into `tabs`.
     public var selectedTab: Int
+    /// The Annotations window, when it is this window or one of its tabs.
+    public var notes: NotesState?
 
-    public init(frame: Rect, tabs: [TabState], selectedTab: Int) {
+    public init(frame: Rect, tabs: [TabState], selectedTab: Int, notes: NotesState? = nil) {
         self.frame = frame
         self.tabs = tabs
         self.selectedTab = selectedTab
+        self.notes = notes
+    }
+}
+
+/// The Annotations window: where it stands among the window's tabs, and which
+/// cards were selected. The annotations themselves are kept in a file of
+/// their own, with ids that last from one launch to the next.
+public struct NotesState: Codable, Equatable, Sendable {
+    /// Its place in the tab bar: before `tabs[position]`, or after the last
+    /// tab when it equals `tabs.count`.
+    public var position: Int
+    /// Whether it was the tab on screen; `selectedTab` is then not.
+    public var isSelected: Bool
+    /// The annotations' ids, as `Annotations.json` keeps them.
+    public var selected: [String]
+
+    public init(position: Int, isSelected: Bool, selected: [String]) {
+        self.position = position
+        self.isSelected = isSelected
+        self.selected = selected
     }
 }
 

@@ -2,6 +2,7 @@ import AppPalette
 import AgentKit
 import Localization
 import ToolModuleKit
+import Workspace
 import XCTest
 import UEFIImage
 @testable import UEFIToolUI
@@ -255,6 +256,34 @@ final class AgentAnnotationTests: XCTestCase {
         XCTAssertTrue(pane.agentAnnotations.isEmpty)
         XCTAssertFalse(notesWindow.emptyView.isHidden, "the window stays, empty")
         XCTAssertTrue(notesWindow.window?.isVisible == true)
+    }
+
+    /// The workspace keeps the Annotations window open and the cards chosen
+    /// in it, and puts both back.
+    func testTheWorkspaceKeepsTheNotesWindowAndItsSelection() async throws {
+        try open()
+        _ = try await client.answer("annotate", ["offset": "0x100", "length": 0x40, "title": "Table"])
+        _ = try await client.answer("annotate", ["offset": "0x20", "length": 4, "title": "Pointer"])
+        _ = await settle(AgentAnnotationCards.moveDuration + 0.2)
+        let list = try notes()
+        list.select(["a2"])
+        WorkspaceSettings.set(restoresWorkspace: true)
+        defer { WorkspaceSettings.resetToDefaults() }
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("NotesWorkspace-\(UUID().uuidString)")
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
+        let recorder = WorkspaceRecorder(folder: WorkspaceFolder(url: folder), controllers: { [] })
+
+        recorder.record()
+        let saved = try XCTUnwrap(recorder.savedWorkspace())
+        XCTAssertEqual(saved.windows.map(\.notes), [NotesState(position: 0, isSelected: true, selected: ["a2"])],
+                       "the notes alone are a workspace worth keeping")
+
+        NotesWindowController.instance.window?.close()
+        list.select(["a1"])
+        let notes = NotesWindowController.instance
+        XCTAssertNotNil(notes.restore(try XCTUnwrap(saved.windows.first?.notes), among: []))
+        XCTAssertTrue(notes.window?.isVisible == true)
+        XCTAssertEqual(notes.cards.selectedIDs, ["a2"])
     }
 
     /// The agent's notes made while the Annotations window is not in front

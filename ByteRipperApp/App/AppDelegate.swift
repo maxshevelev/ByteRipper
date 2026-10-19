@@ -239,24 +239,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 let open = group.filter { controller in
                     self?.windowControllers.contains { $0 === controller } == true
                 }
-                guard let first = open.first?.window else { continue }
+                let notesWindow = saved.notes.flatMap {
+                    NotesWindowController.instance.restore($0, among: open.compactMap(\.window))
+                }
+                guard let first = open.first?.window ?? notesWindow else { continue }
                 // The frame last: a tab joining the window and a comparison
                 // opening in it both fit the window to their content, and
                 // the window is to stand where it was left.
                 let frame = NSRect(x: saved.frame.x, y: saved.frame.y,
                                    width: saved.frame.width, height: saved.frame.height)
                 first.setFrame(first.constrainFrameRect(frame, to: first.screen), display: true)
-                if let window = (selected.flatMap { open.contains($0) ? $0 : nil } ?? open.first)?.window {
+                let front = saved.notes?.isSelected == true ? notesWindow
+                    : (selected.flatMap { open.contains($0) ? $0 : nil } ?? open.first)?.window
+                if let window = front ?? first as NSWindow? {
                     window.tabGroup?.selectedWindow = window
                     window.makeKeyAndOrderFront(nil)
                 }
             }
-            if self?.windowControllers.isEmpty == true { self?.makeWindow() }
+            if self?.windowControllers.isEmpty == true, !NotesWindowController.isOpen { self?.makeWindow() }
             recorder.isPaused = false
             self?.lastRestoreIssues = restorer.issues
             self?.reportRestoreIssues(restorer.issues)
         }
-        return !windowControllers.isEmpty
+        return !windowControllers.isEmpty || workspace.windows.contains { $0.notes != nil }
     }
 
     /// The parts still being put back after a restore, and the windows being

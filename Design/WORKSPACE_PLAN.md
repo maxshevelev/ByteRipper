@@ -27,6 +27,7 @@ and not an app-wide preference:
 | tool panel | which tool, its parked state, open UEFI rows | `tools.activate` after `restore(state)` |
 | find bar | visible, pattern text | a new setter on the find bar |
 | untitled documents | their bytes and name | `openBytes(_:named:origin:)` |
+| the Annotations window | its place among a window's tabs, or a window of its own; the selected cards by annotation id | `NotesWindowController.restore(_:among:)` |
 
 **Not kept**, deliberately:
 
