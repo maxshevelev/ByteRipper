@@ -1085,7 +1085,6 @@
 "GPR0, the whole word" = "GPR0, das ganze Wort";
 "Bits" = "Bits";
 "Setting help" = "Hilfe zur Einstellung";
-"%1$@ = %2$@" = "%1$@ = %2$@";
 "disabled by %1$@" = "außer Kraft bei %1$@";
 "Show what Flash Image Tool says about this setting" = "Zeigt, was Flash Image Tool zu dieser Einstellung sagt";
 "Default" = "Standard";

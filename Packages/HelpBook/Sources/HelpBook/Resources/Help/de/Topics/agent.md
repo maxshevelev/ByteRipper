@@ -1,4 +1,4 @@
-@source-sha 65f1dcdefe47085bc73b92956d11c35378b84722ba41bce4b48cd03214dbbfd5
+@source-sha ad02d315e0b929cdea913762c5d62be0aa5b6a2f8124f6e0c6248d5235db99c6
 # Mit einem Agenten arbeiten
 
 > An ByteRipper lässt sich ein Agent anbinden: Claude Code, Claude Desktop oder ein anderes Programm, das das Protokoll MCP unterstützt. Der angebundene Agent hat Zugriff auf die in ByteRipper geöffneten Dateien, liest deren Inhalt und zeigt die betreffenden Stellen im Dump an. Die Unterhaltung mit dem Agenten selbst findet im Fenster seines eigenen Programms statt.
