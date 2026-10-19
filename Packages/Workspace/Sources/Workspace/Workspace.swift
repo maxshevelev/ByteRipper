@@ -124,6 +124,29 @@ public enum InputRegion: String, Codable, Equatable, Sendable {
 public enum DocumentSource: Codable, Equatable, Sendable {
     /// A file on disk, as it was when the workspace was written.
     case file(FileStamp)
+    /// A document with no file — New, a join, a duplicate — whose bytes the
+    /// workspace keeps beside itself (`WorkspaceFolder.untitledURL`).
+    case untitled(UntitledStamp)
+}
+
+/// An untitled document: the name of its bytes in the workspace folder, the
+/// name it showed, and whether it held work nobody had saved.
+public struct UntitledStamp: Codable, Equatable, Sendable {
+    /// The file under `Untitled/` its bytes are in.
+    public var id: String
+    /// The name the header showed; nil for a plain "Untitled".
+    public var name: String?
+    public var size: UInt64
+    /// Whether closing it would have asked to save. A restored document asks
+    /// the same.
+    public var dirty: Bool
+
+    public init(id: String, name: String?, size: UInt64, dirty: Bool) {
+        self.id = id
+        self.name = name
+        self.size = size
+        self.dirty = dirty
+    }
 }
 
 /// A file on disk and what it was like: enough to open it again and to tell

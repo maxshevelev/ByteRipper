@@ -164,6 +164,85 @@ final class WorkspaceRestoreTests: XCTestCase {
                        "cuts made on other bytes are not put on these")
     }
 
+    // MARK: - Untitled documents
+
+    private func recorder(_ controllers: [MainWindowController]) -> (WorkspaceRecorder, URL) {
+        let folderURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WorkspaceRecorderTests-\(UUID().uuidString)")
+        addTeardownBlock { try? FileManager.default.removeItem(at: folderURL) }
+        return (WorkspaceRecorder(folder: WorkspaceFolder(url: folderURL), controllers: { controllers }), folderURL)
+    }
+
+    func testAnUntitledDocumentComesBackWithItsBytesAndStillUnsaved() throws {
+        WorkspaceSettings.set(restoresWorkspace: true)
+        let window = shownWindow()
+        let pane = window.mainViewController.windowModel.pane1
+        let bytes: [UInt8] = (0..<0x300).map { UInt8($0 & 0xFF) }
+        pane.openBytes(bytes, named: "joined.bin")
+        pane.document?.undoHistory.clearKeepingDirty()
+        pane.select(range: 0x120..<0x130)
+        window.mainViewController.refreshMode()
+        let (recorder, _) = recorder([window])
+        recorder.record()
+
+        let saved = try XCTUnwrap(recorder.savedWorkspace())
+        let tab = try XCTUnwrap(saved.windows.first?.tabs.first)
+        guard case let .untitled(stamp)? = tab.panes[0]?.document else { return XCTFail("an untitled pane") }
+        XCTAssertEqual(stamp.name, "joined.bin")
+        XCTAssertTrue(stamp.dirty)
+
+        let target = shownWindow().mainViewController
+        XCTAssertEqual(target.restoreWorkspaceTab(tab, keeper: recorder.keeper), [])
+        let restored = target.windowModel.pane1
+        XCTAssertTrue(restored.isUntitled)
+        XCTAssertEqual(restored.status.fileName, "joined.bin")
+        XCTAssertEqual(try restored.document?.read(at: 0, length: 0x300), bytes)
+        XCTAssertTrue(restored.status.isDirty, "closing it must still ask")
+        XCTAssertEqual(restored.document?.selection.start, 0x120)
+    }
+
+    func testTheSnapshotAtQuitLeavesOutUntitledDocumentsAndTheirBytes() throws {
+        WorkspaceSettings.set(restoresWorkspace: true)
+        let a = try dump(0x100, 0xAA)
+        let files = shownWindow()
+        files.mainViewController.openFiles([a])
+        let untitled = shownWindow()
+        untitled.mainViewController.windowModel.pane1.openBytes([1, 2, 3], named: nil)
+        untitled.mainViewController.refreshMode()
+        let (recorder, folderURL) = recorder([files, untitled])
+
+        recorder.record()
+        XCTAssertEqual(try XCTUnwrap(recorder.savedWorkspace()).windows.count, 2)
+        let kept = folderURL.appendingPathComponent("Untitled")
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: kept.path).count, 1)
+
+        recorder.record(final: true)
+        XCTAssertEqual(try XCTUnwrap(recorder.savedWorkspace()).windows.count, 1,
+                       "an untitled document still open at quit was discarded")
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: kept.path), [])
+    }
+
+    func testUnchangedUntitledBytesAreNotWrittenAgain() throws {
+        WorkspaceSettings.set(restoresWorkspace: true)
+        let window = shownWindow()
+        let pane = window.mainViewController.windowModel.pane1
+        pane.openBytes([UInt8](repeating: 7, count: 64), named: nil)
+        window.mainViewController.refreshMode()
+        let (recorder, folderURL) = recorder([window])
+        recorder.record()
+        let kept = try XCTUnwrap(try FileManager.default.contentsOfDirectory(
+            at: folderURL.appendingPathComponent("Untitled"), includingPropertiesForKeys: nil).first)
+        try FileManager.default.removeItem(at: kept)
+
+        pane.select(range: 4..<8)
+        recorder.record()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: kept.path), "a caret move is not new bytes")
+
+        pane.document?.undoHistory.clearKeepingDirty()
+        recorder.record()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: kept.path), "new content is written")
+    }
+
     // MARK: - The recorder
 
     func testTheRecorderWritesTabsWithFilesAndOnlyWhileSwitchedOn() throws {

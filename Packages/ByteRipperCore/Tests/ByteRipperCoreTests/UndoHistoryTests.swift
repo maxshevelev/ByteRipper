@@ -28,6 +28,28 @@ final class UndoHistoryTests: XCTestCase {
         XCTAssertTrue(history.canUndo)
     }
 
+    /// Equal versions mean equal content: an edit makes a new one, an undo
+    /// goes back to the one before it, and emptying the history never lands
+    /// on a version the content had before.
+    func testTheVersionNamesTheContentsState() {
+        let history = UndoHistory()
+        let start = history.version
+        history.record([op(0)])
+        let edited = history.version
+        XCTAssertNotEqual(edited, start)
+
+        history.undo()
+        XCTAssertEqual(history.version, start, "an undo puts the content back")
+        history.redo()
+        XCTAssertEqual(history.version, edited)
+
+        history.clearKeepingDirty()
+        XCTAssertNotEqual(history.version, start, "cleared content is not the content at the start")
+        let cleared = history.version
+        history.reset()
+        XCTAssertNotEqual(history.version, cleared)
+    }
+
     func testDirtyCheckpointLifecycle() {
         let history = UndoHistory()
         XCTAssertFalse(history.isDirty)

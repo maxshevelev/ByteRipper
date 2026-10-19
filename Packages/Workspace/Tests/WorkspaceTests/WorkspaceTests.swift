@@ -154,3 +154,18 @@ extension WorkspaceTests {
         XCTAssertFalse(unsorted.applies(toSize: 0x1000, unchanged: true))
     }
 }
+
+extension WorkspaceTests {
+    func testUntitledBytesAreKeptUntilTheirDocumentGoes() throws {
+        let folder = WorkspaceFolder(url: FileManager.default.temporaryDirectory
+            .appendingPathComponent("WorkspaceTests-\(UUID().uuidString)"))
+        addTeardownBlock { folder.remove() }
+        try folder.writeUntitled("a", bytes: Data([1, 2, 3]))
+        try folder.writeUntitled("b", bytes: Data([4]))
+        XCTAssertEqual(folder.readUntitled("a"), Data([1, 2, 3]))
+
+        folder.removeUntitled(except: ["b"])
+        XCTAssertNil(folder.readUntitled("a"))
+        XCTAssertEqual(folder.readUntitled("b"), Data([4]))
+    }
+}

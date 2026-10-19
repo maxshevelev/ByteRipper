@@ -165,6 +165,23 @@ public final class UndoHistory: @unchecked Sendable {
     /// document is in. Zero with nothing committed: the file as it was opened.
     private var currentSerial: UInt64 { undoSteps.last?.entries.last?.serial ?? 0 }
 
+    /// How many times the history was emptied (`reset`, `clearKeepingDirty`).
+    /// After either, the current serial is 0 again while the content is not
+    /// what it was the last time it was 0 — the epoch tells the two apart.
+    private var epoch: UInt64 = 0
+
+    /// Names the content's state: two equal versions of one document hold
+    /// the same bytes. An undo goes back to an earlier version; every edit and
+    /// every emptying of the history makes a new one. What lets a copy of the
+    /// bytes kept elsewhere — a workspace's untitled document — be rewritten
+    /// only when they changed.
+    public struct Version: Hashable, Sendable {
+        let epoch: UInt64
+        let serial: UInt64
+    }
+
+    public var version: Version { Version(epoch: epoch, serial: currentSerial) }
+
     /// The serial of the newest committed transaction, or `nil` when nothing has
     /// been committed. A document-level act (a join, §22.2) captures this right
     /// after its transaction commits, so undo/redo can recognise that step.
@@ -284,6 +301,7 @@ public final class UndoHistory: @unchecked Sendable {
         // caller still remembers.
         savedSerial = 0
         dirtyAfterClear = false
+        epoch += 1
         undoTransactionCount = 0
         lastUndoWasSeriesByte = false
         lastUndoSeriesID = nil
@@ -300,6 +318,7 @@ public final class UndoHistory: @unchecked Sendable {
         redoSteps.removeAll()
         savedSerial = 0
         dirtyAfterClear = true
+        epoch += 1
         undoTransactionCount = 0
         lastUndoWasSeriesByte = false
         lastUndoSeriesID = nil

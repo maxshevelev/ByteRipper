@@ -24,9 +24,13 @@ final class WorkspaceRecorder {
 
     static let interval: TimeInterval = 2
 
+    /// The untitled documents' bytes, beside the workspace.
+    let keeper: UntitledKeeper
+
     init(folder: WorkspaceFolder, controllers: @escaping () -> [MainWindowController]) {
         self.folder = folder
         self.controllers = controllers
+        self.keeper = UntitledKeeper(folder: folder)
     }
 
     /// The folder under Application Support, beside the annotations. Nil under
@@ -61,14 +65,22 @@ final class WorkspaceRecorder {
     private var removedWhileOff = false
 
     /// Writes the workspace as it stands, if the switch is on.
-    func record() {
+    ///
+    /// `final` is the snapshot at quit, after every Save / Discard was
+    /// answered: an untitled document still open then is one the person chose
+    /// to discard, so it is left out and its bytes go. Every other snapshot
+    /// keeps untitled documents, so a crash does not take them.
+    func record(final: Bool = false) {
         guard WorkspaceSettings.restoresWorkspace else {
             if !removedWhileOff { folder.remove() }
             removedWhileOff = true
             return
         }
         removedWhileOff = false
-        try? folder.write(snapshot())
+        keeper.beginSnapshot()
+        let workspace = snapshot(keepingUntitled: !final)
+        guard (try? folder.write(workspace)) != nil else { return }
+        keeper.endSnapshot()
     }
 
     /// Quitting has begun: keep the window order as it is now.
@@ -84,7 +96,7 @@ final class WorkspaceRecorder {
     }
 
     /// Every window, front to back, each with its tabs left to right.
-    func snapshot() -> Workspace {
+    func snapshot(keepingUntitled: Bool = true) -> Workspace {
         let controllers = controllers()
         func controller(of window: NSWindow) -> MainWindowController? {
             controllers.first { $0.window === window }
@@ -104,7 +116,8 @@ final class WorkspaceRecorder {
             var tabs: [TabState] = []
             var selectedTab = 0
             for tabWindow in group {
-                guard let tab = controller(of: tabWindow)?.mainViewController.workspaceTab(),
+                guard let tab = controller(of: tabWindow)?.mainViewController
+                        .workspaceTab(keeper: keepingUntitled ? keeper : nil),
                       !tab.isEmpty else { continue }
                 if tabWindow === shown { selectedTab = tabs.count }
                 tabs.append(tab)

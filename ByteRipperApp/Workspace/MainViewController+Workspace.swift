@@ -1,14 +1,16 @@
 import ByteRipperCore
 import Cocoa
+import Localization
 import Workspace
 
 /// A tab's half of the workspace (`Design/WORKSPACE_PLAN.md`): what it writes
 /// down about itself, and how it puts that back into a fresh tab.
 extension MainViewController {
     /// The tab as it stands: File A and File B, the active pane, the split,
-    /// the bookmarks, the minimap and the Find bar.
-    func workspaceTab() -> TabState {
-        let panes = [windowModel.pane1, windowModel.pane2].map(workspacePane(of:))
+    /// the bookmarks, the minimap and the Find bar. Untitled documents are
+    /// written down through `keeper`, and left out without one.
+    func workspaceTab(keeper: UntitledKeeper? = nil) -> TabState {
+        let panes = [windowModel.pane1, windowModel.pane2].map { workspacePane(of: $0, keeper: keeper) }
         let fraction = mode == .comparison ? comparisonView.map { Double($0.currentFraction) } : nil
         let minimap = surface.minimap
         return TabState(
@@ -22,13 +24,19 @@ extension MainViewController {
 
     /// One pane, or nil when there is nothing in it that could be opened
     /// again.
-    private func workspacePane(of pane: PaneViewModel) -> PaneState? {
-        guard pane.isOpen, !pane.isUntitled, let document = pane.document else { return nil }
-        let stamp = FileStamp(url: document.url)
-            ?? FileStamp(path: document.url.standardizedFileURL.path, size: pane.fileSize, modified: nil)
+    private func workspacePane(of pane: PaneViewModel, keeper: UntitledKeeper?) -> PaneState? {
+        guard pane.isOpen, let document = pane.document else { return nil }
+        let source: DocumentSource
+        if pane.isUntitled {
+            guard let stamp = keeper?.stamp(for: pane) else { return nil }
+            source = .untitled(stamp)
+        } else {
+            source = .file(FileStamp(url: document.url)
+                ?? FileStamp(path: document.url.standardizedFileURL.path, size: pane.fileSize, modified: nil))
+        }
         let selection = document.selection
         return PaneState(
-            document: .file(stamp),
+            document: source,
             selectionStart: selection.start, selectionEnd: selection.end,
             inputRegion: pane.inputRegion == .ascii ? .text : .hex,
             insertMode: pane.isInsertMode,
@@ -40,27 +48,40 @@ extension MainViewController {
     /// Returns what could not be brought back as it was. Asks nothing: a file
     /// that is gone is reported, not alerted about, and nothing is added to
     /// Open Recent — the files were opened by the person, last session.
-    func restoreWorkspaceTab(_ tab: TabState) -> [RestoreIssue] {
+    func restoreWorkspaceTab(_ tab: TabState, keeper: UntitledKeeper? = nil) -> [RestoreIssue] {
         var issues: [RestoreIssue] = []
         // A pane alone is File A, whichever slot it was written from.
         let saved = tab.panes.compactMap { $0 }
         var opened: [(pane: PaneViewModel, state: PaneState, unchanged: Bool)] = []
         for state in saved.prefix(2) {
-            guard case let .file(stamp) = state.document else { continue }
-            guard let current = FileStamp(url: stamp.url) else {
-                issues.append(.missing(path: stamp.path))
-                continue
-            }
             let pane = opened.isEmpty ? windowModel.pane1 : windowModel.pane2
-            do {
-                try pane.open(url: stamp.url)
-            } catch {
-                issues.append(.missing(path: stamp.path))
-                continue
+            switch state.document {
+            case let .file(stamp):
+                guard let current = FileStamp(url: stamp.url) else {
+                    issues.append(.missing(path: stamp.path))
+                    continue
+                }
+                do {
+                    try pane.open(url: stamp.url)
+                } catch {
+                    issues.append(.missing(path: stamp.path))
+                    continue
+                }
+                let unchanged = stamp.isUnchanged(comparedWith: current)
+                if !unchanged { issues.append(.changed(path: stamp.path)) }
+                opened.append((pane, state, unchanged))
+            case let .untitled(stamp):
+                guard let bytes = keeper?.bytes(for: stamp) else {
+                    issues.append(.missing(path: stamp.name ?? L("Untitled")))
+                    continue
+                }
+                pane.openBytes([UInt8](bytes), named: stamp.name)
+                // Work nobody saved is still work nobody saved: closing it
+                // asks, as it would have before the app went down.
+                if stamp.dirty { pane.document?.undoHistory.clearKeepingDirty() }
+                keeper?.adopt(pane, as: stamp)
+                opened.append((pane, state, UInt64(bytes.count) == stamp.size))
             }
-            let unchanged = stamp.isUnchanged(comparedWith: current)
-            if !unchanged { issues.append(.changed(path: stamp.path)) }
-            opened.append((pane, state, unchanged))
         }
         guard !opened.isEmpty else { return issues }
 

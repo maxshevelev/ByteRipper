@@ -202,7 +202,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                     window.setFrame(window.constrainFrameRect(frame, to: window.screen), display: true)
                 }
                 group.append(controller)
-                issues += controller.mainViewController.restoreWorkspaceTab(tab)
+                issues += controller.mainViewController.restoreWorkspaceTab(
+                    tab, keeper: workspaceRecorder?.keeper)
             }
             if saved.tabs.indices.contains(saved.selectedTab),
                let window = group[saved.selectedTab].window {
@@ -451,7 +452,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // The last snapshot, after every Save / Discard was answered: a file
         // saved under a new name in the quit's questions is in it by that name.
         workspaceRecorder?.stop()
-        workspaceRecorder?.record()
+        workspaceRecorder?.record(final: true)
         if let themeObserver {
             NotificationCenter.default.removeObserver(themeObserver)
         }

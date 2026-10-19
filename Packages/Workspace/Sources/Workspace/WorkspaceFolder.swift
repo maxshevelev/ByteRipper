@@ -57,6 +57,33 @@ public final class WorkspaceFolder {
         return true
     }
 
+    // MARK: - Untitled documents
+
+    private var untitledFolder: URL { url.appendingPathComponent("Untitled", isDirectory: true) }
+
+    /// Where the untitled document `id` keeps its bytes.
+    public func untitledURL(_ id: String) -> URL {
+        untitledFolder.appendingPathComponent(id).appendingPathExtension("bin")
+    }
+
+    public func writeUntitled(_ id: String, bytes: Data) throws {
+        try fileManager.createDirectory(at: untitledFolder, withIntermediateDirectories: true)
+        try bytes.write(to: untitledURL(id), options: .atomic)
+    }
+
+    public func readUntitled(_ id: String) -> Data? {
+        try? Data(contentsOf: untitledURL(id))
+    }
+
+    /// Deletes the bytes of every untitled document `ids` does not name: a
+    /// document that was saved, discarded or closed takes its copy with it.
+    public func removeUntitled(except ids: Set<String>) {
+        guard let files = try? fileManager.contentsOfDirectory(at: untitledFolder, includingPropertiesForKeys: nil) else { return }
+        for file in files where !ids.contains(file.deletingPathExtension().lastPathComponent) {
+            try? fileManager.removeItem(at: file)
+        }
+    }
+
     /// Deletes the folder and everything in it: the switch was turned off, and
     /// a workspace from months ago must not come back when it is turned on
     /// again.
