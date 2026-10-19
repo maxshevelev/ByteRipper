@@ -1,0 +1,44 @@
+# The Workspace
+
+> With the switch on, ByteRipper opens at launch what was open when it was closed.
+
+@covers settings.general.restore-workspace
+@covers workspace.restore-warning
+
+The switch is **Reopen the workspace at launch** in [[topic:settings|Settings ▸ General]]. It is off after installation: on a repair bench each job is a different board, and dumps from an earlier job opening by themselves would be in the way.
+
+## What is restored
+
+- The windows and their tabs, in their order and at their size and position, with the same tab in front.
+- In each tab, File A and File B, the active pane and the position of the divider between them.
+- In each pane, the address at the top of the screen, the caret and the selection, the hex or text column, and insert mode.
+- The [[topic:bookmarks|bookmarks]] and the [[topic:segments|segments]]: cuts, names, and the links of segments to the files they were joined from.
+- The [[topic:fragments|fragment panels]], with the panel that was in front. A part is not stored as bytes: it is extracted from its file again, so it shows what the file holds now and can still be written back into it.
+- The [[topic:minimap|minimap]], the Find bar with its pattern, and the tool panel with the node or row selected in it and the open branches of the UEFI tree.
+
+## What is not restored
+
+- **The undo history.** It belongs to the session in which the edits were made.
+- **Unsaved changes to a file on disk.** Quitting asks to save or discard them, as it always has. If the program terminates abnormally, such changes are lost; the file itself, its position and its bookmarks are restored from the disk.
+- **Untitled documents** — New File, a join, a duplicate — are kept beside the workspace while the program runs, so that an abnormal termination does not lose them; they return as unsaved. At a normal quit they are offered for saving as before, and a document that was discarded does not return.
+- The Back / Forward history and the results of Search All.
+- Settings such as the font, the word size and the pane layout. They are stored separately and apply in any case.
+
+## When the workspace is written
+
+Continuously: every few seconds while the program is in front, when it goes to the background, when a window is closed, and at quit after all questions about unsaved changes have been answered. If the last window is closed by hand, the workspace is empty, and the next launch opens one empty window. Switching the setting off deletes the stored workspace.
+
+The workspace is stored in `~/Library/Application Support/ByteRipper/Workspace` and does not leave this Mac.
+
+## Files that changed or are missing
+
+At launch, each file is compared with its size and modification date at the time the workspace was written.
+
+- A file that is no longer at its path is not opened.
+- A file that has changed is opened. If it became shorter, the caret and the screen move to its last address, and bookmarks beyond its end are removed. Its segments, its parts and the state of its tool panel are not restored: they were made on other bytes and would point to wrong places.
+
+When either happens, one message after the restore lists the files concerned.
+
+## Opening a file from the Finder
+
+When ByteRipper is started by opening a file from the Finder, the workspace is restored first and the file opens in a new tab. A file that is already open in the workspace is not opened a second time: its tab is brought to the front.

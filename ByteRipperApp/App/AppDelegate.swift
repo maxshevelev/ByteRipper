@@ -165,7 +165,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 self.workspaceRecorder?.record()
             }
         }
-        if !restoreWorkspace() {
+        let restored = restoreWorkspace()
+        if !restored {
             makeWindow()
         }
         workspaceRecorder?.start()
@@ -175,7 +176,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         if !pendingOpenURLs.isEmpty {
             let urls = pendingOpenURLs
             pendingOpenURLs.removeAll()
-            openFiles(urls)
+            if restored {
+                openFilesBesideWorkspace(urls)
+            } else {
+                openFiles(urls)
+            }
         }
         if !pendingNodeLinks.isEmpty {
             let links = pendingNodeLinks
@@ -193,25 +198,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
               !workspace.isEmpty else { return false }
         var issues: [RestoreIssue] = []
         var pending: [(controller: MainViewController, tab: TabState, restored: TabRestore)] = []
+        // Nothing is written while the workspace is being rebuilt: a window
+        // closed on the way would otherwise write a workspace of what had been
+        // rebuilt so far.
+        recorder.isPaused = true
         // Back to front, so the window made last — the front one — is key.
         for saved in workspace.windows.reversed() {
             var group: [MainWindowController] = []
-            for tab in saved.tabs {
+            var selected: MainWindowController?
+            for (index, tab) in saved.tabs.enumerated() {
                 let controller = makeWindow(tabbedWith: group.first?.window)
-                if group.isEmpty, let window = controller.window {
-                    let frame = NSRect(x: saved.frame.x, y: saved.frame.y,
-                                       width: saved.frame.width, height: saved.frame.height)
-                    window.setFrame(window.constrainFrameRect(frame, to: window.screen), display: true)
-                }
-                group.append(controller)
                 let restored = controller.mainViewController.restoreWorkspaceTab(tab, keeper: recorder.keeper)
                 issues += restored.issues
+                // A tab with nothing left to show — every file in it gone — is
+                // not kept as an empty window; the warning says what it held.
+                guard !restored.slots.isEmpty else {
+                    controller.window?.close()
+                    continue
+                }
+                group.append(controller)
+                if index == saved.selectedTab { selected = controller }
                 if !tab.fragments.isEmpty {
                     pending.append((controller.mainViewController, tab, restored))
                 }
             }
-            if saved.tabs.indices.contains(saved.selectedTab),
-               let window = group[saved.selectedTab].window {
+            guard let first = group.first?.window else { continue }
+            // The frame last: a tab joining the window and a comparison
+            // opening in it both fit the window to their content, and the
+            // window is to stand where it was left.
+            let frame = NSRect(x: saved.frame.x, y: saved.frame.y,
+                               width: saved.frame.width, height: saved.frame.height)
+            first.setFrame(first.constrainFrameRect(frame, to: first.screen), display: true)
+            if let window = (selected ?? group.first)?.window {
                 window.tabGroup?.selectedWindow = window
                 window.makeKeyAndOrderFront(nil)
             }
@@ -219,7 +237,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // The panels last: a part may have to be decompressed again, and the
         // windows are on screen meanwhile. The recorder waits for them, or a
         // snapshot taken halfway would write a workspace with panels missing.
-        recorder.isPaused = !pending.isEmpty
         restoringFragments = Task { @MainActor [weak self] in
             for entry in pending {
                 issues += await entry.controller.restoreWorkspaceFragments(
@@ -227,8 +244,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             }
             recorder.isPaused = false
             self?.lastRestoreIssues = issues
+            self?.reportRestoreIssues(issues)
         }
         return !windowControllers.isEmpty
+    }
+
+    /// Files handed to a launch that restored a workspace: one already open in
+    /// it is brought forward, the rest open in a tab of their own — never into
+    /// a restored tab, where they would replace a file the person left there.
+    private func openFilesBesideWorkspace(_ urls: [URL]) {
+        var fresh: [URL] = []
+        for url in urls {
+            if let (holder, pane) = openDocuments.location(of: url, excluding: nil) {
+                holder.revealOpenFile(inPane: pane)
+            } else {
+                fresh.append(url)
+            }
+        }
+        guard !fresh.isEmpty else { return }
+        makeWindow(tabbedWith: frontmostWindowController()?.window).mainViewController.openFiles(fresh)
+    }
+
+    /// One warning for everything the restore could not bring back as it was,
+    /// on the window in front, once every panel is back
+    /// (`Design/WORKSPACE_PLAN.md`, "Restoring"). Nothing to say, no sheet.
+    // help: workspace.restore-warning
+    private func reportRestoreIssues(_ issues: [RestoreIssue]) {
+        guard !issues.isEmpty else { return }
+        func list(_ paths: [String]) -> String {
+            paths.map { "• " + ($0 as NSString).abbreviatingWithTildeInPath }.joined(separator: "\n")
+        }
+        let missing = issues.compactMap { if case let .missing(path) = $0 { path } else { nil } }
+        let changed = issues.compactMap { if case let .changed(path) = $0 { path } else { nil } }
+        var sections: [String] = []
+        if !missing.isEmpty {
+            sections.append(L("No longer found, not opened:") + "\n" + list(missing))
+        }
+        if !changed.isEmpty {
+            sections.append(L("Changed on disk since the last session. Opened without their segments, parts and tool state:")
+                            + "\n" + list(changed))
+        }
+        let alert = NSAlert()
+        alert.messageText = L("The workspace was not restored in full")
+        alert.informativeText = sections.joined(separator: "\n\n")
+        alert.addButton(withTitle: L("OK"))
+        if let window = frontmostWindowController()?.window {
+            alert.beginSheetModal(for: window)
+        } else {
+            alert.runModal()
+        }
     }
 
     /// The panels still being put back after a restore.

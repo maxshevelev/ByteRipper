@@ -148,6 +148,7 @@
 "BIOS ID" = "BIOS-ID";
 "Board" = "Platine";
 "Build date" = "Build-Datum";
+"Changed on disk since the last session. Opened without their segments, parts and tool state:" = "Seit der letzten Sitzung auf dem Datenträger geändert. Ohne Segmente, Teile und Werkzeugzustand geöffnet:";
 "Click to change the background" = "Klicken, um den Hintergrund zu wechseln";
 "Copied at %1$@–%2$@; %3$@" = "Kopie bei %1$@–%2$@; %3$@";
 "Copy of" = "Kopie des Abbilds bei";
@@ -172,6 +173,7 @@
 "Microcode removed" = "Microcode entfernt";
 "Microcode replaced" = "Microcode ersetzt";
 "Minor version" = "Nebenversion";
+"No longer found, not opened:" = "Nicht mehr gefunden, nicht geöffnet:";
 "OEM" = "OEM";
 "Open Decompressed Variable" = "Entpackte Variable öffnen";
 "Picture" = "Bild";
@@ -190,6 +192,7 @@
 "Saved %1$@ bytes." = "%1$@ Bytes gesichert.";
 "The tabs and the files in them come back as they were at quit: addresses on screen, cursor and selection, bookmarks, segments and tool panels. Unsaved changes are not kept — quitting asks about them first." = "Die Tabs und die darin geöffneten Dateien kehren so zurück, wie sie beim Beenden waren: die angezeigte Adresse, Cursor und Auswahl, Lesezeichen, Segmente und Werkzeugbereiche. Ungesicherte Änderungen werden nicht übernommen — nach ihnen fragt das Programm beim Beenden.";
 "The variable does not decompress." = "Die Variable lässt sich nicht entpacken.";
+"The workspace was not restored in full" = "Der Arbeitsbereich wurde nicht vollständig wiederhergestellt";
 "There is nothing to save here." = "Hier gibt es nichts zu sichern.";
 "Top Swap" = "Top Swap";
 "Value" = "Wert";

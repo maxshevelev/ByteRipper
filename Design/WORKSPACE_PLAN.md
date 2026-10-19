@@ -147,6 +147,11 @@ At launch, before the first empty window would be made:
 4. Fragments are replayed parent first; a fragment whose parent did not come
    back, or whose source range no longer fits, is skipped and reported.
 5. Positions are applied after the tab has laid out, as `go(to:)` already does.
+   A window's frame is set once all its tabs are in: a tab joining it and a
+   comparison opening in it both fit the window to their content. A tab in
+   which nothing could be opened is closed rather than left empty; with
+   nothing opened anywhere, the launch makes its one empty window. The
+   recorder is paused for the whole restore.
 6. **One warning after everything is open**, if anything was skipped or reset:
    a sheet on the key window listing the missing files and the files that
    changed on disk, saying what was not restored for each. Nothing to report,
@@ -222,4 +227,4 @@ Each phase is a commit, and each leaves the app working with the setting on.
 5. **Fragments and parts.** *(done)*
 6. **Tools.** *(done)*
 7. **Changes on disk, and launch with a file** — the warning sheet, Finder
-   launch, and the help page `workspace.md` in three languages.
+   launch, and the help page `workspace.md` in three languages. *(done)*

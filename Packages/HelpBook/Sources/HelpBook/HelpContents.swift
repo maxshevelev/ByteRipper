@@ -69,7 +69,8 @@ public enum HelpContents {
             .recipeChecksums
         ]),
         ("settings", [
-            .settings
+            .settings,
+            .workspace
         ])
     ]
 

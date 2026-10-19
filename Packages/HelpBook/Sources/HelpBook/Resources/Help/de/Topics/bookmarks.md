@@ -1,4 +1,4 @@
-@source-sha 5f952d99dd534e65f99f2cd7452f4c75bfecf46bdbd9645d5ac28408921405f0
+@source-sha c425789c8c6db94da925082d019dbe3610164a812dc17508cbf8c7b2b9fe3b96
 # Lesezeichen
 
 > Markierte Adressen, zu denen schnell zurückgekehrt werden kann: auf der Zeile angezeigt und beiden Bereichen gemeinsam.
@@ -18,6 +18,6 @@ Ein Lesezeichen hält eine **absolute Adresse** und gehört zum Fenster, nicht z
 
 Weil die Adresse absolut ist, verschiebt das Einfügen oder Löschen von Bytes den Inhalt, nicht aber das Lesezeichen. Anders als ein Lesezeichen ist ein [[topic:segments|Segmentschnitt]] eine Markierung, die mit den Bytes wandert, wenn sich Daten in der Datei verschieben.
 
-Lesezeichen bestehen, solange das Fenster besteht, nicht die Datei: Eine Datei zu schließen und wieder zu öffnen behält sie.
+Lesezeichen bestehen, solange das Fenster besteht, nicht die Datei: Eine Datei zu schließen und wieder zu öffnen behält sie. Ist der [[topic:workspace|Arbeitsbereich]] eingeschaltet, überstehen sie auch einen Neustart des Programms.
 
 Welche Adressen sich zu markieren lohnen, nennen die Werkzeuge: Wird ein Knoten ausgewählt, steht seine Adresse in der Detailliste ([[topic:tools-overview|Die Werkzeugbereiche]]).

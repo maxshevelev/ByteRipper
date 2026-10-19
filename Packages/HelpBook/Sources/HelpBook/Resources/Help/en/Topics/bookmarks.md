@@ -20,6 +20,6 @@ A bookmark is an **absolute address**, and it belongs to the window rather than 
 
 Because the address is absolute, inserting or deleting bytes moves the content but not the bookmark. Unlike a bookmark, a [[topic:segments|segment]] cut is a mark that travels with the bytes when data in the file shifts.
 
-Bookmarks last as long as the window, not as long as the file: closing a file and reopening it retains them.
+Bookmarks last as long as the window, not as long as the file: closing a file and reopening it retains them. With [[topic:workspace|the workspace]] switched on, they also outlast a restart.
 
 The addresses to bookmark are reported by the tool panels: selecting a node in a panel gives its address in the detail list ([[topic:tools-overview|The Tool Panels]]).
