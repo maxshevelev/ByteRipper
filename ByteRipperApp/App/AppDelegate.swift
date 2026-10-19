@@ -356,6 +356,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         controller.mainViewController.makeSiblingTab = { [weak self, weak controller] in
             self?.makeWindow(tabbedWith: controller?.window).mainViewController
         }
+        controller.mainViewController.hasOtherTabs = { [weak self] in
+            (self?.windowControllers.count ?? 0) > 1
+        }
         windowControllers.append(controller)
         // A tab takes its place from the window it joins, so it is added before
         // being shown; a window on its own is placed by `NSWindowController`,

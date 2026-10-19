@@ -28,7 +28,7 @@ The second pane is optional. Nothing needs a second file except the comparison i
 
 ## Panes, tabs and windows
 
-Each pane header names its file and whether it has unsaved changes; the status bar below it gives the size. The ✕ in the header closes that pane and leaves the other one open.
+Each pane header names its file and whether it has unsaved changes; the status bar below it gives the size. The ✕ in the header closes that pane and leaves the other one open. Closing the last file of a tab closes the tab as well, when other tabs are open and the tab holds no [[topic:bookmarks|bookmarks]] and no [[topic:fragments|fragment panels]]; the last tab in the program stays open, empty.
 
 A window can hold several tabs (**File ▸ New Tab**, ⌘T), each with its own pair of panes to compare in. Several unrelated comparisons are therefore held in one window: BIOS dumps in one tab, embedded-controller dumps in the next.
 

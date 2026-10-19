@@ -243,6 +243,46 @@ final class CloseFileTests: XCTestCase {
 
         XCTAssertEqual(answers, [false])
     }
+
+    // MARK: - A tab left empty
+
+    /// A tab whose last file closes, beside other tabs, closes with it.
+    private func closableTab(otherTabs: Bool) throws -> (MainViewController, NSWindow, URL) {
+        let url = try tempFile([1, 2, 3, 4], "empty-tab")
+        let controller = MainViewController()
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
+                              styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentViewController = controller
+        window.makeKeyAndOrderFront(nil)
+        controller.hasOtherTabs = { otherTabs }
+        try controller.windowModel.pane1.open(url: url)
+        controller.apply(mode: .singleFile)
+        addTeardownBlock { window.orderOut(nil) }
+        return (controller, window, url)
+    }
+
+    func testClosingTheLastFileClosesTheTabWhenOthersAreOpen() throws {
+        let (controller, window, _) = try closableTab(otherTabs: true)
+        controller.closePane(at: 0)
+        XCTAssertTrue(pumpUntil(1) { !window.isVisible }, "an empty tab among others goes with its file")
+    }
+
+    func testATabKeepsItsBookmarksOpen() throws {
+        let (controller, window, _) = try closableTab(otherTabs: true)
+        _ = controller.windowModel.bookmarkStore.add(rowContaining: 0)
+        controller.closePane(at: 0)
+        _ = pumpUntil(0.3) { !window.isVisible }
+        XCTAssertTrue(window.isVisible, "bookmarks outlast the file, so the tab stays to hold them")
+        XCTAssertEqual(controller.mode, .empty)
+    }
+
+    func testTheLastTabStays() throws {
+        let (controller, window, _) = try closableTab(otherTabs: false)
+        controller.closePane(at: 0)
+        _ = pumpUntil(0.3) { !window.isVisible }
+        XCTAssertTrue(window.isVisible, "the last tab is where the next file opens")
+    }
 }
 
 /// A window delegate that records being asked to close but declines (returns
@@ -254,4 +294,5 @@ private final class CloseRoutingSpy: NSObject, NSWindowDelegate {
         windowShouldCloseCalled = true
         return false
     }
+
 }

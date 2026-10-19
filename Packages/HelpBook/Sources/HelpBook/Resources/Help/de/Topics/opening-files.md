@@ -1,4 +1,4 @@
-@source-sha ad462ea419b965b93eedbfdeb1b82fd5d6c49f565688379845f79ceed77c5dfb
+@source-sha 11815bef13460ecdcdcdd5ad9aa7582f97ee545074b05343a67683cd24962336
 # Dateien öffnen: ein Bereich oder zwei
 
 > Ein Tab hält zwei Dateibereiche. Eine Datei ist schlicht ein Editor; eine zweite Datei fügt den Vergleich hinzu. Bearbeiten geht in beiden Bereichen, so oder so.
@@ -21,7 +21,7 @@ Der zweite Bereich ist optional. Außer dem Vergleich selbst braucht nichts eine
 
 ## Bereiche, Tabs und Fenster
 
-Jeder Bereichskopf nennt seine Datei und ob es ungesicherte Änderungen gibt; die Größe steht in der Statuszeile darunter. Das ✕ im Kopf schließt diesen Bereich und lässt den anderen offen.
+Jeder Bereichskopf nennt seine Datei und ob es ungesicherte Änderungen gibt; die Größe steht in der Statuszeile darunter. Das ✕ im Kopf schließt diesen Bereich und lässt den anderen offen. Wird die letzte Datei eines Tabs geschlossen, schließt sich auch der Tab, sofern weitere Tabs geöffnet sind und er weder [[topic:bookmarks|Lesezeichen]] noch [[topic:fragments|Fragment-Bereiche]] enthält; der letzte Tab des Programms bleibt leer geöffnet.
 
 Ein Fenster kann mehrere Tabs halten (**Ablage ▸ Neuer Tab**, ⌘T), jeder mit einem eigenen Paar Dateibereiche zum Vergleichen. So werden in einem Fenster mehrere voneinander unabhängige Vergleiche geführt: BIOS-Dumps im einen Tab, Dumps des Embedded Controllers im nächsten.
 

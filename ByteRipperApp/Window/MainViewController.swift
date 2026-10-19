@@ -126,6 +126,11 @@ final class MainViewController: NSViewController {
     /// command that needs one is disabled.
     var makeSiblingTab: (() -> MainViewController?)?
 
+    /// Whether the app has a dump tab besides this one. Set by the app
+    /// delegate, which owns the windows; nil reads as "no", so a controller
+    /// built on its own never closes its window by itself.
+    var hasOtherTabs: (() -> Bool)?
+
     /// File ▸ New Tab (⌘T): an empty tab beside this window.
     ///
     /// It lands on the key window's controller, which is the window the tab
@@ -4442,6 +4447,25 @@ final class MainViewController: NSViewController {
         refreshMode()
         if mode == .singleFile {
             activeFilePane?.focusHexView()
+        }
+        closeTabIfLeftEmpty()
+    }
+
+    /// Closing the last file leaves a tab with nothing in it, and an empty tab
+    /// among others is only something to close next. So it goes with its file —
+    /// unless it still holds something the person made there: bookmarks, which
+    /// outlast the file (§20), or a panel. The last dump tab in the app stays:
+    /// it is where the next file is opened.
+    // help: menu.file.close
+    private func closeTabIfLeftEmpty() {
+        guard mode == .empty, fragments.isEmpty,
+              windowModel.bookmarkStore.bookmarks.isEmpty,
+              hasOtherTabs?() == true else { return }
+        // After the close that got here has finished: the menu action, or the
+        // Save As sheet it waited on, is still on the stack.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.mode == .empty else { return }
+            self.view.window?.performClose(nil)
         }
     }
 
