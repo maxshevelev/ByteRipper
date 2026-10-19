@@ -180,7 +180,7 @@
 "Put this tab's changes back into the document it was opened from, as one undo step there. Nothing is written to disk." = "Записать изменения этой вкладки обратно в документ, из которого она открыта, одним шагом отмены в нём. На диск ничего не пишется.";
 "Reading the file…" = "Чтение файла…";
 "Removing a microcode" = "Удаление микрокода";
-"Reopen the workspace at launch" = "Восстанавливать рабочее пространство при запуске";
+"Reopen the workspace at launch" = "Восстанавливать рабочую сессию при запуске";
 "Replacing a microcode" = "Замена микрокода";
 "Rules" = "Правила";
 "Save Body of “%1$@” as…" = "Сохранить тело «%1$@» как…";
