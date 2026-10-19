@@ -123,9 +123,15 @@ public struct UEFIDetailTable: Equatable, Sendable {
     /// for a table of plain rows.
     public var sections: [Section]
 
+    /// One line under the table, for what its rows add up to — the verdict the
+    /// BIOS master's access masks make. Nil for a table that is only a list of
+    /// facts, and drawn in the ordinary colour: it says what the rows show,
+    /// not a second answer in a tone of its own.
+    public var note: String?
+
     public init(title: String, symbol: String, columns: [String], rows: [[Cell]],
                 rowTargets: [Target?] = [], linkColumn: Int = 1, startsFolded: Bool = false,
-                sections: [Section] = []) {
+                sections: [Section] = [], note: String? = nil) {
         self.title = title
         self.symbol = symbol
         self.columns = columns
@@ -134,6 +140,7 @@ public struct UEFIDetailTable: Equatable, Sendable {
         self.linkColumn = linkColumn
         self.startsFolded = startsFolded
         self.sections = sections
+        self.note = note
     }
 }
 
@@ -1505,6 +1512,13 @@ public enum UEFIDetail {
             ))
         }
         if !descriptor.biosAccess.isEmpty {
+            // The masks are a grid of facts; what they add up to is the
+            // question a bench asks first — is this an image that lets the
+            // host rewrite the whole chip, or one that holds it in? It is a
+            // sign and not the End of Manufacturing setting: early Flash Image
+            // Tool versions did not touch the masks when that setting changed,
+            // so the line says "usually" and never that the two agree.
+            let open = descriptor.biosAccess.allSatisfy { $0.read && $0.write }
             tables.append(UEFIDetailTable(
                 title: L("BIOS access table", in: language),
                 symbol: "lock.shield",
@@ -1513,7 +1527,10 @@ public enum UEFIDetail {
                     [.init(access.region),
                      .permission(access.read, in: language),
                      .permission(access.write, in: language)]
-                }
+                },
+                note: open
+                    ? L("The host may read and write every region, as a service image is usually built.", in: language)
+                    : L("Access is narrowed: the host may not read and write every region, as a production image is usually built.", in: language)
             ))
         }
         if !descriptor.chips.isEmpty {

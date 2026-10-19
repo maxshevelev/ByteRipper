@@ -1651,3 +1651,5 @@
 "Read from" = "Gelesen aus";
 "OEM Configuration partition" = "OEM-Konfigurationspartition";
 "ME file system" = "ME-Dateisystem";
+"The host may read and write every region, as a service image is usually built." = "Der Host darf alle Regionen lesen und schreiben — so wird ein Service-Image üblicherweise gebaut.";
+"Access is narrowed: the host may not read and write every region, as a production image is usually built." = "Der Zugriff ist eingeschränkt: Der Host darf nicht alle Regionen lesen und schreiben — so wird ein Serien-Image üblicherweise gebaut.";

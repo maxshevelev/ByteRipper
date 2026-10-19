@@ -1651,3 +1651,5 @@
 "Read from" = "Откуда прочитано";
 "OEM Configuration partition" = "Раздел OEM-конфигурации";
 "ME file system" = "Файловая система ME";
+"The host may read and write every region, as a service image is usually built." = "Хост может читать и записывать все регионы — так обычно собран служебный образ.";
+"Access is narrowed: the host may not read and write every region, as a production image is usually built." = "Доступ сужен: хост не может читать и записывать все регионы — так обычно собран серийный образ.";

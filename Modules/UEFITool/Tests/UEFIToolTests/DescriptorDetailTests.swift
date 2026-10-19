@@ -149,6 +149,21 @@ final class DescriptorDetailTests: XCTestCase {
         XCTAssertEqual(table.rows.map { $0[2].tone }, [.yes, .yes, .yes, .yes, .yes])
     }
 
+    /// Under the BIOS access table, the masks are read as a verdict: the host
+    /// is let into every region, or it is not. The line is evidence — the End
+    /// of Manufacturing setting can disagree with it — so it says how such an
+    /// image is *usually* built and nothing stronger.
+    func testTheBiosAccessTableSaysWhatItsMasksAddUpTo() throws {
+        let narrowed = try XCTUnwrap(table(detail(TestUEFI.flashDescriptor()), "BIOS access table"))
+        XCTAssertEqual(narrowed.note,
+                       "Access is narrowed: the host may not read and write every region, as a production image is usually built.")
+
+        let open = try XCTUnwrap(table(detail(TestUEFI.flashDescriptor(
+            masters: [(0x1F, 0x1F), (0, 0), (0, 0)])), "BIOS access table"))
+        XCTAssertEqual(open.note,
+                       "The host may read and write every region, as a service image is usually built.")
+    }
+
     /// The chips the firmware was built to drive, named where the catalogue
     /// knows the id.
     func testTheVsccTableIsAGridOfChips() throws {
