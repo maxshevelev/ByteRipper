@@ -161,9 +161,11 @@ public struct ToolTextMark: Comparable, Sendable {
         select(Spot(row: 0, mark: first.startMark)..<Spot(row: rows.count - 1, mark: last.endMark))
     }
 
-    /// ⌘C and ⌘A while the rows have the focus. The Edit menu's own Copy and
-    /// Select All are the dump's — they copy and select bytes — so the rows
-    /// answer these keys before the menu is asked.
+    /// ⌘C and ⌘A while the rows have the focus. The Edit menu's Copy is the
+    /// dump's — it copies bytes — so the rows answer ⌘C before the menu is
+    /// asked. Select All is the standard action and would reach the rows as the
+    /// first responder anyway; ⌘A is answered here as well so the two keys
+    /// behave alike whatever menu the host builds.
     open override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard window?.firstResponder === self,
               event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command

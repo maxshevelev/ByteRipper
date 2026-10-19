@@ -5070,7 +5070,10 @@ final class MainViewController: NSViewController {
         _ = try? activePane.redo()
     }
 
-    @objc func selectAllBytes() {
+    /// Edit ▸ Select All (⌘A) with a dump in focus: every byte of the active
+    /// pane. A text field in focus answers the same action itself first and
+    /// selects its own text, so this is reached only when no field is edited.
+    @objc override func selectAll(_ sender: Any?) {
         activePane.selectAll()
         focusActiveHexView()
     }
@@ -7941,7 +7944,7 @@ extension MainViewController: NSMenuItemValidation {
              #selector(selectBlock),
              #selector(goToPosition),
              #selector(findPattern),
-             #selector(selectAllBytes):
+             #selector(selectAll(_:)):
             return activePane.isOpen
         case #selector(toggleBookmark):
             // The title says what ⌘D will do to the caret's row: add a mark,

@@ -365,9 +365,10 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
         (NSApp.delegate as? AppDelegate)?.newWindowForTab(sender)
     }
 
-    /// Edit ▸ Select All (⌘A): every card. The menu sends the dump's own
-    /// action, which selects every byte there; here it selects every note.
-    @objc func selectAllBytes() {
+    /// Edit ▸ Select All (⌘A): every card. The menu sends the standard action,
+    /// which selects every byte in a dump and the text in a field; here it
+    /// selects every note.
+    @objc override func selectAll(_ sender: Any?) {
         cards.selectAll()
         window?.makeFirstResponder(cards.collection)
     }
@@ -390,7 +391,7 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
 
     @objc func validateMenuItem(_ item: NSMenuItem) -> Bool {
         switch item.action {
-        case #selector(selectAllBytes): return !cards.isEmpty
+        case #selector(selectAll(_:)): return !cards.isEmpty
         case #selector(undoEdit): return !undoable.isEmpty
         case #selector(redoEdit): return !redoable.isEmpty
         case #selector(navigateBack): return canNavigateBack

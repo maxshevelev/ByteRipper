@@ -1255,7 +1255,8 @@ final class AgentAnnotationTests: XCTestCase {
         XCTAssertEqual(moving, plain)
     }
 
-    /// ⌘A — Edit ▸ Select All, whose action selects every byte in a dump —
+    /// ⌘A — Edit ▸ Select All, the standard action, which selects every byte
+    /// in a dump —
     /// selects every card; Delete then removes them all.
     func testSelectAllSelectsEveryCard() async throws {
         try open()
@@ -1264,11 +1265,11 @@ final class AgentAnnotationTests: XCTestCase {
         }
         _ = try notes()
         let notesWindow = try XCTUnwrap(NotesWindowController.shared)
-        let item = NSMenuItem(title: "Select All", action: #selector(MainViewController.selectAllBytes), keyEquivalent: "a")
+        let item = NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         XCTAssertTrue(NSApp.target(forAction: item.action!, to: nil, from: item) as AnyObject? === notesWindow
                       || notesWindow.responds(to: item.action!))
         XCTAssertTrue(notesWindow.validateMenuItem(item))
-        notesWindow.selectAllBytes()
+        notesWindow.selectAll(nil)
         XCTAssertEqual(Set(notesWindow.cards.selectedIDs), ["a1", "a2", "a3"])
     }
 

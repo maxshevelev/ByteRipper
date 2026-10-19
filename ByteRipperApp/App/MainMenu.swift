@@ -410,7 +410,10 @@ enum MainMenu {
         // help: menu.edit.fill
         editMenu.addItem(withTitle: L("Fill Selection with…"), action: #selector(MainViewController.fillSelectionWithBytes), keyEquivalent: "")
         // help: menu.edit.select-all
-        editMenu.addItem(withTitle: L("Select All"), action: #selector(MainViewController.selectAllBytes), keyEquivalent: "a")
+        // The standard action, not one of the dump's own: the menu sends it to
+        // the first responder, so a text field being typed in selects its own
+        // text, and only a dump with the focus selects every byte.
+        editMenu.addItem(withTitle: L("Select All"), action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         editMenu.addItem(.separator())
         // help: menu.edit.find
         editMenu.addItem(withTitle: L("Find"), action: #selector(MainViewController.findPattern), keyEquivalent: "f")
