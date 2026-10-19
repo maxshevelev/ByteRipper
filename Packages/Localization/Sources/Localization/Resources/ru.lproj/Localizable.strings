@@ -1091,7 +1091,6 @@
 "GPR0, the whole word" = "GPR0, всё слово";
 "Bits" = "Биты";
 "Setting help" = "Справка о настройке";
-"%1$@ = %2$@" = "%1$@ = %2$@";
 "disabled by %1$@" = "не действует при %1$@";
 "Show what Flash Image Tool says about this setting" = "Показать, что Flash Image Tool говорит об этой настройке";
 "Default" = "По умолчанию";
