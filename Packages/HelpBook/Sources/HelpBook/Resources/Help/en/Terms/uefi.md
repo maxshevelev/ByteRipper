@@ -463,7 +463,7 @@ Lost fields are not always lost for good. Some vendors — HP and Acer among the
 
 Where the fields sit inside the image is not standardised. Each vendor puts them where it likes and the layout moves between generations, so carrying them over is in general a job of comparing two images.
 
-Four layouts are the exceptions the app reads. Lenovo InsydeH2O firmware keeps these fields in an encoded store of its own, the [[term:lenv|LENV]] blocks ([[topic:lenovo-dmi|Lenovo DMI]]). ASUS laptops on AMI firmware keep them in a [[term:gpnv|GPNV]] store. Acer keeps them in an 8 KiB block in the [[term:padding|padding]] of the BIOS region, the [[term:acer-dmi|Acer DMI]] area. HP keeps them in NVRAM variables of the main [[term:vss|VSS2]] store, [[term:hp-dmi|HP DMI]]. Each layout was read off the dumps of that vendor's laptops; none of the four vendors has published it.
+Five layouts are the exceptions the app reads. Lenovo InsydeH2O firmware keeps these fields in an encoded store of its own, the [[term:lenv|LENV]] blocks ([[topic:lenovo-dmi|Lenovo DMI]]). ASUS laptops on AMI firmware keep them in a [[term:gpnv|GPNV]] store. Acer keeps them in an 8 KiB block in the [[term:padding|padding]] of the BIOS region, the [[term:acer-dmi|Acer DMI]] area. HP keeps them in NVRAM variables of the main [[term:vss|VSS2]] store, [[term:hp-dmi|HP DMI]]. Apple keeps them in the SysF store of the NVRAM, [[term:apple-dmi|Apple DMI]]. Each layout was read off the dumps of that vendor's machines; none of the five vendors has published it.
 
 **Tools ▸ UEFI Structure** shows that store as one row of the tree, **Lenovo DMI**, wherever in the image it lies: in place of the three regions the Insyde flash device map declares as "Unknown", or inside padding where there is no map. Its detail names the block the firmware reads and lists that block's entries decoded, the serial number and the UUID among them; a click on an entry opens its row. Under the row are the change log and both blocks, each entry with its value beside its name.
 
@@ -472,6 +472,7 @@ Four layouts are the exceptions the app reads. Lenovo InsydeH2O firmware keeps t
 @see term:gpnv
 @see term:acer-dmi
 @see term:hp-dmi
+@see term:apple-dmi
 @see topic:recipe-board-data
 
 @term acer-dmi
@@ -510,6 +511,27 @@ HP has not published the layout; it was read off the dumps of HP EliteBooks of 2
 
 @see term:dmi
 @see term:vss
+
+@term apple-dmi
+@name Apple DMI
+@short The Mac's serial number, configuration code and sales order number, which Apple's firmware keeps in the SysF store of the NVRAM, and the board's own serial beside them.
+
+Apple's firmware keeps the machine's identity in the SysF store, the `Fsys` store of the [[term:nvram|NVRAM]], not in a block of its own. Its variables are:
+
+- `ssn`: the system serial number, 12 characters (11 on the MacBook Pro of 2010 examined), the number printed on the case, for example `C02QMDJVG940`.
+- `hwc`: the configuration code, the end of the serial number — four characters, three on the 11-character one — for example `G940`. It is what lookup services use to tell the model.
+- `son`: the sales order number, which on the dumps examined held the model's order number, for example `MJVE2D/`. What Apple means by it is not published, and the app shows it as the store holds it.
+
+The board's own serial, the MLB, is no variable of this store. It is part of the names of the calibration variables beside the three: each is named by the MLB and a suffix, for example `C02542600KXG91TANMAC-1`, and the app reads the MLB from the 17 characters that at least two such names share. The MLB is what the machine's activation and the Apple lookup tools check against the serial number.
+
+The [[topic:tool-uefi|UEFI tool]] shows the store as the row **Apple SysF store**, with the serial number beside the name, and the **DMI** badge goes to it. The detail lists the four values, then what a technician should know before trusting them: the configuration code is not the end of the serial number, as it is on a Mac's own, which is what a placeholder serial such as `123456789012` looks like; the serial and the board's serial do not begin alike, since both start with the code of the factory; or the store marks the serial invalid and keeps no current copy.
+
+On the MacBook Pro of 2010 and 2011 examined, the store holds the serial number, the code and the order number (`MC371D/A`) but no calibration variables, so the detail shows no MLB there.
+
+Apple has not published the layout; it was read off four Mac dumps — a MacBook Air, a MacBook Pro 13 and two MacBook Pro 15 — and no more than that is claimed. A store that is not a `Fsys` one, such as the Diag store, is not read.
+
+@see term:dmi
+@see term:nvram
 
 @term lenv
 @name LENV block

@@ -1604,3 +1604,10 @@
 "“%1$@” would move, and it is fixed at its address — the Volume Top File, a FIT target or a file marked fixed." = "„%1$@“ müsste verschoben werden, ist aber an seine Adresse gebunden — das Volume Top File, ein FIT-Ziel oder eine als fixed markierte Datei.";
 "“%1$@” would need more blocks than its block map can count." = "„%1$@“ bräuchte mehr Blöcke, als seine Block-Map zählen kann.";
 "The agent is at work" = "Der Agent arbeitet";
+"Apple DMI" = "Apple DMI";
+"Configuration code" = "Konfigurationscode";
+"Sales order number" = "Bestellnummer (Sales Order Number)";
+"MLB (board serial)" = "MLB (Seriennummer der Platine)";
+"The store marks the serial invalid and keeps no current copy. The value is whole; where the firmware takes it from on such a board, the dump does not show." = "Der Speicher markiert die Seriennummer als ungültig und hält keine gültige Kopie. Der Wert ist vollständig; woher die Firmware einer solchen Platine ihn tatsächlich nimmt, zeigt der Dump nicht.";
+"The configuration code is not the end of the serial, as it is on a Mac's own. The serial was written without its code, or is a placeholder." = "Der Konfigurationscode stimmt nicht mit dem Ende der Seriennummer überein, wie es bei einem original Mac der Fall ist. Die Seriennummer wurde ohne ihren Code geschrieben oder ist ein Platzhalter.";
+"The serial does not begin as the board's serial does. On a Mac's own both begin with the code of the factory; the serial was changed, or came over from another machine." = "Die Seriennummer beginnt nicht wie die der Platine. Bei einem original Mac beginnen beide mit dem Code des Werks; die Seriennummer wurde geändert oder stammt von einem anderen Gerät.";

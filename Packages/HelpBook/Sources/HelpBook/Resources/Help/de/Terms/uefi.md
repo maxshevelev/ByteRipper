@@ -1,4 +1,4 @@
-@source-sha d1eb2825e71f412b7ba48c5f9b51bbb3cba292ce9a90a1a4c350fce595e9cf4d
+@source-sha 360df93692e40286006157452ee785b0591504bece4a0f8b4691724352624a0f
 @term flash-descriptor
 @name Flash Descriptor
 @short Die ersten `0x1000` Bytes eines Intel-Flash-Images: die Karte des Chips.
@@ -464,7 +464,7 @@ Verlorene Felder sind nicht immer endgültig verloren. Einige Hersteller — dar
 
 Wo diese Felder im Abbild stehen, ist nicht standardisiert. Jeder Hersteller legt sie dorthin, wo er will, und die Aufteilung wandert von Generation zu Generation; im Allgemeinen läuft das Übertragen deshalb auf den Vergleich zweier Abbilder hinaus.
 
-Vier Aufteilungen sind die Ausnahmen, die das Programm lesen kann. Die Firmware Lenovo InsydeH2O hält diese Felder in einem eigenen, kodierten Speicher, den [[term:lenv|LENV]]-Blöcken ([[topic:lenovo-dmi|Lenovo DMI]]). ASUS-Notebooks mit AMI-Firmware halten sie in einem [[term:gpnv|GPNV]]-Speicher. Acer hält sie in einem 8-KiB-Block im [[term:padding|Padding]] des BIOS-Regions, dem Bereich [[term:acer-dmi|Acer DMI]]. HP hält sie in NVRAM-Variablen des Hauptspeichers [[term:vss|VSS2]], siehe [[term:hp-dmi|HP DMI]]. Jede Aufteilung wurde aus den Dumps der Notebooks dieses Herstellers erschlossen; keiner der vier hat sie veröffentlicht.
+Fünf Aufteilungen sind die Ausnahmen, die das Programm lesen kann. Die Firmware Lenovo InsydeH2O hält diese Felder in einem eigenen, kodierten Speicher, den [[term:lenv|LENV]]-Blöcken ([[topic:lenovo-dmi|Lenovo DMI]]). ASUS-Notebooks mit AMI-Firmware halten sie in einem [[term:gpnv|GPNV]]-Speicher. Acer hält sie in einem 8-KiB-Block im [[term:padding|Padding]] des BIOS-Regions, dem Bereich [[term:acer-dmi|Acer DMI]]. HP hält sie in NVRAM-Variablen des Hauptspeichers [[term:vss|VSS2]], siehe [[term:hp-dmi|HP DMI]]. Apple hält sie im SysF-Speicher des NVRAM, siehe [[term:apple-dmi|Apple DMI]]. Jede Aufteilung wurde aus den Dumps der Maschinen dieses Herstellers erschlossen; keiner der fünf hat sie veröffentlicht.
 
 Im Baum von **Werkzeuge ▸ UEFI-Struktur** erscheint dieser Speicher als ein Knoten, **Lenovo DMI**, gleich wo er im Abbild liegt: anstelle der drei Regionen, die die Insyde-Flash-Device-Map als „Unknown" deklariert, oder innerhalb von Padding, wenn es keine Map gibt. Seine Beschreibung nennt den Block, den die Firmware liest, und führt dessen Einträge dekodiert auf, darunter Seriennummer und UUID; ein Klick auf einen Eintrag öffnet seinen Knoten. Unter dem Knoten liegen das Änderungsprotokoll und beide Blöcke, jeder Eintrag mit seinem Wert neben dem Namen.
 
@@ -473,6 +473,7 @@ Im Baum von **Werkzeuge ▸ UEFI-Struktur** erscheint dieser Speicher als ein Kn
 @see term:gpnv
 @see term:acer-dmi
 @see term:hp-dmi
+@see term:apple-dmi
 @see topic:recipe-board-data
 
 @term acer-dmi
@@ -511,6 +512,27 @@ HP hat die Aufteilung nicht veröffentlicht; sie wurde aus Dumps von HP EliteBoo
 
 @see term:dmi
 @see term:vss
+
+@term apple-dmi
+@name Apple DMI
+@short Die Seriennummer, der Konfigurationscode und die Bestellnummer des Mac, die die Firmware von Apple im SysF-Speicher des NVRAM hält, und daneben die Seriennummer der Platine selbst.
+
+Die Firmware von Apple hält die Identität der Maschine nicht in einem eigenen Block, sondern im SysF-Speicher, dem `Fsys`-Speicher des [[term:nvram|NVRAM]]. Seine Variablen sind:
+
+- `ssn`: die Seriennummer des Systems, 12 Zeichen (beim untersuchten MacBook Pro von 2010 11), dieselbe, die auf dem Gehäuse steht, zum Beispiel `C02QMDJVG940`.
+- `hwc`: der Konfigurationscode, das Ende der Seriennummer — vier Zeichen, bei der 11-stelligen drei —, zum Beispiel `G940`. Mit ihm bestimmen Prüfdienste das Modell.
+- `son`: die Bestellnummer (Sales Order Number); in den untersuchten Dumps stand dort die Bestellnummer des Modells, zum Beispiel `MJVE2D/`. Was Apple genau darunter versteht, ist nicht veröffentlicht; das Programm zeigt den Wert so, wie der Speicher ihn hält.
+
+Die Seriennummer der Platine selbst, die MLB, ist keine Variable dieses Speichers. Sie steckt in den Namen der Kalibrierungsvariablen neben den dreien: Jede heißt nach der MLB und einem Suffix, zum Beispiel `C02542600KXG91TANMAC-1`, und das Programm liest die MLB aus den 17 Zeichen, die mindestens zwei solcher Namen gemeinsam haben. Gegen die MLB prüfen die Aktivierung der Maschine und die Prüfdienste von Apple.
+
+Das [[topic:tool-uefi|UEFI-Werkzeug]] zeigt den Speicher als Zeile **Apple SysF store**, die Seriennummer steht neben dem Namen; die Schaltfläche **DMI** führt dorthin. Die Details des Knotens nennen die vier Werte und danach, was ein Techniker wissen sollte, ehe er ihnen traut: Der Konfigurationscode bildet nicht das Ende der Seriennummer, wie es bei einem original Mac der Fall ist — so sieht eine Platzhalter-Seriennummer wie `123456789012` aus; die Seriennummer und die der Platine beginnen verschieden, obwohl beide mit dem Code des Werks beginnen; oder der Speicher markiert die Seriennummer als ungültig und hält keine gültige Kopie.
+
+In den untersuchten MacBook Pro von 2010 und 2011 enthält der Speicher die Seriennummer, den Code und die Bestellnummer (`MC371D/A`), aber keine Kalibrierungsvariablen; die Details zeigen dort deshalb keine MLB.
+
+Apple hat die Aufteilung nicht veröffentlicht; sie wurde aus vier Mac-Dumps erschlossen — einem MacBook Air, einem MacBook Pro 13 und zwei MacBook Pro 15 —, mehr wird nicht behauptet. Ein Speicher, der kein `Fsys`-Speicher ist, etwa der Diag-Speicher, wird nicht gelesen.
+
+@see term:dmi
+@see term:nvram
 
 @term lenv
 @name LENV-Block

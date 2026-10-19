@@ -365,6 +365,13 @@ public enum UEFIDetail {
             fields += hp.fields
             tables += hp.tables
         }
+        // Apple's identity, on the SysF store: the serial, the configuration
+        // code and the order number the store keeps, the board's serial.
+        if node.kind == .sysFStore {
+            let apple = UEFIAppleDMIDetail.build(for: node, reader: reader, in: language)
+            fields += apple.fields
+            tables += apple.tables
+        }
         // A GPNV record's data is fields nobody has published: the text in
         // it is what can be read, at its offset in the data.
         if node.kind == .gpnvRecord, let body = reader.bytes(node.body) {

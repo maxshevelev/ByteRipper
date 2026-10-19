@@ -22,7 +22,9 @@ public enum UEFIAgentDMI {
         DMI store (an LDBG change log and two LENV blocks), AMI's GPNV store as ASUS writes it, \
         Acer's 8 KiB DMI area, and HP's HP_MUD variable in the main VSS2 store, with BuildId, \
         FactoryConfig (the feature byte) and HP_TAGS (the asset tracking number) beside it — what HP's \
-        BCU reports. An area that is not found is not therefore absent from the dump: it may \
+        BCU reports, and Apple's SysF store of the Mac's serial number (ssn), configuration code (hwc) \
+        and sales order number (son), with the board's serial read from the names of its calibration \
+        variables. An area that is not found is not therefore absent from the dump: it may \
         be in a layout the parser does not know, or a known one that is damaged, wiped or moved so its \
         checks fail.
         """
@@ -35,7 +37,7 @@ public enum UEFIAgentDMI {
             model — as the UEFI Structure panel's DMI button finds them. It opens every container in the \
             file, but no compressed section. Each area: `layout` ("Lenovo DMI store", "GPNV store", "Acer \
             DMI" — the Type column calls these Padding — or "HP DMI", a VSS entry that may be one the \
-            store marks deleted, as most HP boards keep it), its node as `uefi_tree` gives it (`id`, `label`, \
+            store marks deleted, as most HP boards keep it, or "Apple DMI", a SysF store), its node as `uefi_tree` gives it (`id`, `label`, \
             `link`, `start`, `end`, `encoded` for an XORed LENV block), `size`, `path`, and the panel's \
             `fields` and `tables` for it; `uefi_node` on its children reads further, `uefi_node_data` \
             reads the bytes. \(scope) So an empty `areas` means only that the parser recognised none — \
@@ -89,6 +91,7 @@ public enum UEFIAgentDMI {
         case .gpnvStore: return "GPNV store"
         case .acerDMIStore: return "Acer DMI"
         case .vssEntry: return "HP DMI"
+        case .sysFStore: return "Apple DMI"
         default: return "Unknown"
         }
     }

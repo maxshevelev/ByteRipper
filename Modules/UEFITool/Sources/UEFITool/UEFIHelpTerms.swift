@@ -18,11 +18,15 @@ public enum UEFIHelpTerms {
     /// about Top Swap: what a reader asks of it is why the volumes are there
     /// twice.
     /// With `reader`, HP's `HP_MUD` entry goes to the page about HP's DMI:
-    /// it is told from the other VSS entries only by its bytes.
+    /// it is told from the other VSS entries only by its bytes; so is Apple's
+    /// SysF store that holds the serial.
     public static func term(for node: UEFINode, in image: UEFIImage, reader: ImageReader? = nil) -> HelpTermID? {
         if case .copy = UEFITopSwap.role(of: node, in: image) { return HelpTermID("top-swap") }
         if let reader, UEFIHPDMIDetail.area(for: node, image: image, reader: reader) != nil {
             return HelpTermID("hp-dmi")
+        }
+        if let reader, UEFIAppleDMIDetail.area(for: node, reader: reader) != nil {
+            return HelpTermID("apple-dmi")
         }
         return term(for: node)
     }

@@ -323,6 +323,11 @@ public enum UEFITreeDisplay {
         if let text = UEFIHPDMIDetail.row(for: node, store: store, image: image, reader: reader, in: language) {
             return text
         }
+        // Apple's SysF store says whose it is: the serial, the rest in the
+        // detail.
+        if node.kind == .sysFStore, let text = UEFIAppleDMIDetail.row(for: node, reader: reader, in: language) {
+            return text
+        }
         guard let guid = node.guid else {
             return node.name.isEmpty ? kindLabel(node.kind, in: language) : node.displayName(in: language)
         }
@@ -373,7 +378,12 @@ public enum UEFITreeDisplay {
     /// what it is and where — "Lenovo DMI store at 0x00630000".
     public static func dmiStoreTitle(_ store: DMIStore, in language: AppLanguage) -> String {
         // HP's is a VSS entry, and what it is to the bench is HP's DMI.
-        let kind = store.kind == .vssEntry ? L("HP DMI", in: language) : kindLabel(store.kind, in: language)
+        let kind: String
+        switch store.kind {
+        case .vssEntry: kind = L("HP DMI", in: language)
+        case .sysFStore: kind = L("Apple DMI", in: language)
+        default: kind = kindLabel(store.kind, in: language)
+        }
         return L("%1$@ at %2$@", in: language, kind, String(format: "0x%08llX", store.range.lowerBound))
     }
 

@@ -1753,6 +1753,32 @@ returns the `HP_MUD` entry, kind `vssEntry`, and the details and the row
 read the store around it. A `HP_MUD` of another size, or whose fields are
 not printable text, is not read.
 
+**Apple's identity** (`AppleDMIArea.swift`) is not a block of its own either:
+it is variables of the SysF store (`Fsys`, §9 above), the one every Mac's
+NVRAM keeps. Three of them are read, each a plain ASCII text:
+
+| Variable | Field |
+|---|---|
+| `ssn` | the system serial number, 12 characters (11 on the 2010 MacBook Pro) |
+| `hwc` | the configuration code, the end of the serial: four characters, three on the 11-character one |
+| `son` | the sales order number, the model's order number (`MJVE2D/A`, `MC371D/A`); the one on the A1708 reads `Z0UK000CB` |
+
+The board's serial, the MLB, is no variable. It is in the names of the
+calibration variables beside them, `<MLB><suffix>` — `C02542600KXG91TANMAC-1`,
+`…TCFMAC-1`, `…SCREEN` — each a 4-byte value. The MLB is the 17 characters at
+least two names share; the 2010 and 2011 boards keep no such variable and
+give none. The layout is read off four dumps (MacBook Air 13, MacBook Pro 13
+A1708, MacBook Pro 15 of 2010 and of 2011), and nothing is published. The
+A1708's `ssn` is the placeholder `123456789012`, which is what the two checks
+find: its `hwc` does not end it, and it does not begin as the MLB does (the
+factory code, the first three characters, `C02`).
+
+The area is found only with the bytes — a SysF store holds it when `ssn`,
+`hwc`, `son` or an MLB is there — and is the store's own row: the DMI search
+(`DMIStore.all(in:reader:)`) returns the `sysFStore` node, and the Diag
+(`Gaid`) store is never read. Where a variable occurs more than once, the
+current copy wins over a marked one.
+
 **The AMD PSP's map** (`AMDFirmware.swift`) is read from the Embedded
 Firmware Structure: `0x55AA55AA` at one of `0x20000`, `0xFA0000`, `0xF20000`,
 `0xE20000`, `0xC20000`, `0x820000`, `0x120000`, tried in that order, with at
