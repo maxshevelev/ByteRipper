@@ -51,6 +51,13 @@ struct PieceTable: Equatable {
         rebuildStarts()
     }
 
+    /// A table holding `pieces` as they are — a restored edit list
+    /// (`OverlayEdits`). Empty pieces are dropped.
+    init(pieces: [Piece]) {
+        self.pieces = pieces.filter { $0.length > 0 }
+        rebuildStarts()
+    }
+
     var size: UInt64 { starts.last ?? 0 }
     var pieceCount: Int { pieces.count }
 

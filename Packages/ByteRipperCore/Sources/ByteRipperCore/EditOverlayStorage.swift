@@ -232,6 +232,95 @@ public final class EditOverlayStorage: EditableByteStorage, @unchecked Sendable 
         return table.pieceCount
     }
 
+    // MARK: - Edits kept between sessions (Design/WORKSPACE_PLAN.md, "Projects")
+
+    /// The content as a list of runs over the base, with the bytes editing
+    /// added: what a project keeps of a file's unsaved changes. Its size is
+    /// about the size of the changes, not of the file.
+    ///
+    /// Once the content has been written into a scratch file of this storage's
+    /// own (`materialize`) the base is no longer the file on disk, and nothing
+    /// about it can be said in the file's terms — the runs are then the whole
+    /// content, as bytes.
+    public func exportEdits() throws -> OverlayEdits {
+        lock.lock()
+        defer { lock.unlock() }
+        if baseIsPrivate {
+            let bytes = try readLocked(at: 0, length: Int(table.size))
+            return OverlayEdits(baseSize: 0, runs: bytes.isEmpty ? [] : [.added(0..<UInt64(bytes.count))],
+                                added: Data(bytes))
+        }
+        var runs: [OverlayEdits.Run] = []
+        var kept = Data()
+        for piece in table.pieces {
+            switch piece.source {
+            case .base:
+                runs.append(.base(piece.start..<piece.end))
+            case .added:
+                let start = UInt64(kept.count)
+                kept.append(contentsOf: added[Int(piece.start)..<Int(piece.end)])
+                runs.append(.added(start..<UInt64(kept.count)))
+            }
+        }
+        return OverlayEdits(baseSize: base.size, runs: runs, added: kept)
+    }
+
+    /// Lays `edits` over this storage's base, replacing whatever it held: the
+    /// other half of `exportEdits`. Throws `StorageError` when the edits were
+    /// written against a base of another size, or name bytes they do not
+    /// carry — the file changed since, and the runs would point at the wrong
+    /// places.
+    public func applyEdits(_ edits: OverlayEdits) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        let baseSize = base.size
+        let isWhole = edits.baseSize == 0 && edits.runs.allSatisfy {
+            if case .added = $0 { return true } else { return false }
+        }
+        guard isWhole || edits.baseSize == baseSize else { throw StorageError.invalidOffset }
+        var pieces: [PieceTable.Piece] = []
+        var buffer: [UInt8] = []
+        for run in edits.runs {
+            switch run {
+            case let .base(range):
+                guard range.upperBound <= baseSize else { throw StorageError.invalidOffset }
+                pieces.append(PieceTable.Piece(source: .base, start: range.lowerBound, length: UInt64(range.count)))
+            case let .added(range):
+                guard range.upperBound <= UInt64(edits.added.count) else { throw StorageError.invalidOffset }
+                let start = UInt64(buffer.count)
+                buffer.append(contentsOf: edits.added[Int(range.lowerBound)..<Int(range.upperBound)])
+                pieces.append(PieceTable.Piece(source: .added, start: start, length: UInt64(range.count)))
+            }
+        }
+        table = PieceTable(pieces: pieces)
+        added = buffer
+        retainedChangedRanges = []
+        // Where the content stops being the base at its own offsets: the
+        // first base run read from elsewhere, or the first added run that is
+        // not followed by the base where it left off.
+        var shift: UInt64?
+        var position: UInt64 = 0
+        for (index, piece) in table.pieces.enumerated() {
+            if piece.source == .base, piece.start != position {
+                shift = position
+                break
+            }
+            if piece.source == .added {
+                let next = table.pieces[(index + 1)...].first { $0.source == .base }
+                let resumes = next.map { $0.start == position + piece.length }
+                    ?? (position + piece.length >= baseSize)
+                if !resumes {
+                    shift = position
+                    break
+                }
+            }
+            position += piece.length
+        }
+        if shift == nil, table.size != baseSize { shift = min(table.size, baseSize) }
+        shiftedFrom = shift
+        didLengthChange = shift != nil
+    }
+
     // MARK: - Snapshots (Duplicate, §23)
 
     /// An immutable view of the content as it is right now, for a second
@@ -411,5 +500,28 @@ public final class EditOverlayStorage: EditableByteStorage, @unchecked Sendable 
             }
         }
         return out
+    }
+}
+
+/// A file's unsaved changes as a list of runs: stretches of the file as it is
+/// on disk, and bytes editing added (`EditOverlayStorage.exportEdits`).
+public struct OverlayEdits: Equatable, Sendable, Codable {
+    public enum Run: Equatable, Sendable, Codable {
+        /// The file's own bytes over this range.
+        case base(Range<UInt64>)
+        /// This range of `added`.
+        case added(Range<UInt64>)
+    }
+
+    /// The size of the file the runs were written against; zero when the
+    /// runs are the whole content and need no file.
+    public var baseSize: UInt64
+    public var runs: [Run]
+    public var added: Data
+
+    public init(baseSize: UInt64, runs: [Run], added: Data) {
+        self.baseSize = baseSize
+        self.runs = runs
+        self.added = added
     }
 }
