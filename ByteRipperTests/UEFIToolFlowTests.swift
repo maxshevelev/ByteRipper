@@ -2751,7 +2751,29 @@ final class UEFIToolFlowTests: XCTestCase {
     /// then throws, and AppKit swallowing the throw inside a main-actor task
     /// leaves the concurrency runtime pointing at a task that is gone: the
     /// next `MainActor.assumeIsolated` anywhere crashes.
-    func testATableWithANoteShowsTheNoteUnderIt() {
+    /// A double click on a section's line opens it, and leaves it open: the
+    /// second press of a double click is not a second toggle.
+    func testADoubleClickOnASectionOpensIt() throws {
+        let table = UEFIDetailTable(title: "Straps", symbol: "switch.2", columns: ["Field", "Value"],
+                                    rows: [[.init("A_FIELD"), .init("1")]],
+                                    sections: [.init(title: "PCHSTRP0", rows: 0..<1)])
+        let view = DetailTableView(table: table, onFollow: { _ in })
+        let window = makeTestWindow(width: 400, height: 200)
+        window.contentView?.addSubview(view)
+        view.frame = NSRect(origin: .zero, size: view.intrinsicContentSize)
+        view.layoutSubtreeIfNeeded()
+        let line = try XCTUnwrap(view.sectionRows.first)
+        let point = line.convert(NSPoint(x: 4, y: 4), to: nil)
+
+        line.mouseDown(with: mouse(.leftMouseDown, at: point, window: window, clickCount: 1))
+        XCTAssertEqual(view.openSections, ["PCHSTRP0"], "the first press opens the section")
+        line.mouseDown(with: mouse(.leftMouseDown, at: point, window: window, clickCount: 2))
+        XCTAssertEqual(view.openSections, ["PCHSTRP0"], "the second press of a double click leaves it open")
+        line.mouseDown(with: mouse(.leftMouseDown, at: point, window: window, clickCount: 1))
+        XCTAssertEqual(view.openSections, [], "a click after that folds it")
+    }
+
+    func testATableWithANoteShowsTheNoteUnderIt() throws {
         let controller = UEFIToolViewController()
         _ = controller.view
         let table = UEFIDetailTable(title: "BIOS access", symbol: "lock",

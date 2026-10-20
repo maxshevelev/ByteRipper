@@ -297,8 +297,15 @@ import UEFITool
     /// On a section's line, whether the section is open — the triangle drawn
     /// before the line's words. Nil on any other row.
     var disclosure: Bool? {
-        didSet { if disclosure != oldValue { needsDisplay = true } }
+        didSet {
+            guard disclosure != oldValue else { return }
+            disclosureImage = disclosure.flatMap(makeDisclosureImage(open:))
+            needsDisplay = true
+        }
     }
+    /// The triangle for `disclosure` — made when the section opens or folds,
+    /// not at every draw: it depends on nothing else.
+    private var disclosureImage: NSImage?
     /// A click on a section's line, away from its link: opens or folds it.
     var onToggle: (() -> Void)?
 
@@ -413,7 +420,7 @@ import UEFITool
 
     override func draw(_ dirtyRect: NSRect) {
         drawSelection()
-        if let disclosure { drawDisclosure(open: disclosure) }
+        drawDisclosure()
         for column in cells.indices {
             let cellRect = rect(of: column)
             guard cellRect.width > 0, cellRect.intersects(dirtyRect) else { continue }
@@ -427,14 +434,18 @@ import UEFITool
 
     /// The triangle before a section's words: pointing right when folded,
     /// down when open, as a disclosure triangle does.
-    private func drawDisclosure(open: Bool) {
-        guard let font = cells.first?.font else { return }
-        let side = font.pointSize * 0.75
-        let config = NSImage.SymbolConfiguration(pointSize: side, weight: .semibold)
+    private func makeDisclosureImage(open: Bool) -> NSImage? {
+        guard let font = cells.first?.font else { return nil }
+        let config = NSImage.SymbolConfiguration(pointSize: font.pointSize * 0.75, weight: .semibold)
             .applying(.init(paletteColors: [.secondaryLabelColor]))
-        guard let image = NSImage(systemSymbolName: open ? "chevron.down" : "chevron.right",
-                                  accessibilityDescription: nil)?
-            .withSymbolConfiguration(config) else { return }
+        return NSImage(systemSymbolName: open ? "chevron.down" : "chevron.right",
+                       accessibilityDescription: nil)?
+            .withSymbolConfiguration(config)
+    }
+
+    /// The triangle, centred in the room before the section's words.
+    private func drawDisclosure() {
+        guard let image = disclosureImage, let font = cells.first?.font else { return }
         let size = image.size
         let room = Self.disclosureWidth(for: font)
         image.draw(in: NSRect(x: (room - size.width) / 2, y: (bounds.height - Self.spacing - size.height) / 2,
@@ -526,9 +537,11 @@ import UEFITool
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         if follow(at: point) { return }
-        // A section's line is its switch, all of it but the link.
+        // A section's line is its switch, all of it but the link. A double
+        // click is two presses, and the second would fold back what the first
+        // opened: only the first press of one is the switch.
         if let onToggle {
-            onToggle()
+            if event.clickCount == 1 { onToggle() }
             return
         }
         super.mouseDown(with: event)
