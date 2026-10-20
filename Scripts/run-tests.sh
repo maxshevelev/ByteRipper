@@ -51,10 +51,11 @@ done
 derived="${BYTERIPPER_DD:-${DUMPCOMPARE_DD:-$PWD/.build/xcode}}"
 failed=0
 
-# The binary strap tables, the JSON manifest and the code's version mark must
-# agree (`Design/UEFI/STRAP_MAP_DATA.md`). `--check` reads and rebuilds in
-# memory; it never writes. A stale pair fails the run before a test starts,
-# because every descriptor test would otherwise be testing the wrong tables.
+# The binary maps, their JSON manifests and the code's version marks must
+# agree (`Design/MAP_DATA.md`). `--check` reads and rebuilds in memory; it
+# never writes. A stale pair fails the run before a test starts, because every
+# descriptor and configuration test would otherwise be testing the wrong
+# tables.
 if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
     --out Packages/UEFIImage/Sources/UEFIImage/Resources/StrapMaps/StrapMaps.bin \
     --manifest Packages/UEFIImage/MapSources/manifest.json \
@@ -63,6 +64,24 @@ if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
     Packages/UEFIImage/MapSources/strap/pch18.json \
     Packages/UEFIImage/MapSources/strap/spt.json; then
     echo "the strap map binary is stale: rebuild it (Skills/me-eom-structures/SKILL.md)" >&2
+    exit 1
+fi
+if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
+    --out Packages/MEFirmware/Sources/MEFirmware/Resources/ConfigMaps/ConfigMaps.bin \
+    --manifest Packages/MEFirmware/MapSources/manifest.json \
+    --swift-version-file Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationDataVersion.swift \
+    --swift-enum-name MEConfigurationDataVersion \
+    Packages/MEFirmware/MapSources/configuration/csme11.json \
+    Packages/MEFirmware/MapSources/configuration/csme12.json \
+    Packages/MEFirmware/MapSources/configuration/csme12Desktop.json \
+    Packages/MEFirmware/MapSources/configuration/csme13.json \
+    Packages/MEFirmware/MapSources/configuration/csme13Desktop.json \
+    Packages/MEFirmware/MapSources/configuration/csme14.json \
+    Packages/MEFirmware/MapSources/configuration/csme14Desktop.json \
+    Packages/MEFirmware/MapSources/configuration/csme15.json \
+    Packages/MEFirmware/MapSources/configuration/csme15Desktop.json \
+    Packages/MEFirmware/MapSources/configuration/csme18.json; then
+    echo "the configuration map binary is stale: rebuild it (Skills/me-eom-structures/SKILL.md)" >&2
     exit 1
 fi
 

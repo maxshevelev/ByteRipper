@@ -1026,7 +1026,8 @@ Lenovo NM-C711 (это IdeaPad S145-15IIL, судя по boardview рядом) �
 
 ```bash
 python3 Skills/me-eom-structures/scripts/fit_map.py fit-13.0.exe \
-    --straps icl_lp --generation 13 --tool 13.0 > MEConfigurationMap+CSME13.swift
+    --straps icl_lp --generation 13 --tool 13.0 --format json > \
+    Packages/MEFirmware/MapSources/configuration/csme13.json
 ```
 
 — **10 файлов и 35 настроек** (у 14-й для сравнения 10 и 31). Два отличия от соседей:
@@ -1117,8 +1118,9 @@ OEM key hash (CSME 15+, 48 bytes):   3BEC617351668E9FD97BFC8229CC9F6064D9D5CD1D2
 безымянного документа той же длины, у которого 417 полей стоят по другим адресам
 вовсе.
 
-Отсюда таблицы в `Packages/UEFIImage/Sources/UEFIImage/StrapMap+PCH.swift`
-(генератор — `scripts/strap_map.py`, `--words 69,70,74,90,101`) и две задачи
+Отсюда таблицы в `Packages/UEFIImage/MapSources/strap/pch.json`
+(генератор — `scripts/strap_map.py`, `--words 69,70,74,90,101`), которые
+компилируются в `StrapMaps.bin` (`Design/MAP_DATA.md`), и две задачи
 движка, которые теперь берутся из таблицы **по имени поля**, а не по зашитому
 адресу:
 

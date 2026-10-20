@@ -1,0 +1,140 @@
+{
+ "kind": "configuration",
+ "schema": "byteripper.map/1",
+ "tool": "18.1",
+ "maps": [
+  {"id": "csme18", "name": "CSME 18 (Flash Image Tool 18.1)", "files": [
+   {"alias": "eom_config", "path": "/home/mca/eom_config", "settings": [
+    {"bits": [0, 0], "help": "This setting determines if End of Manufacturing will be triggered on first boot of the platform after flashing.\nNote: When this setting is enabled Intel(R) CSME will enter End of Manufacturing regardless of the descriptor settings.", "label": "EOM on First Boot Enabled", "length": 2, "name": "EomFirstBootEnabled_eom_config", "offset": 0, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [1, 2], "help": "This setting deteremines which settings will be automatically commited during End of Manufacturing flows.\nNote: The FPFs, RPMB / RPMC and set manufacturing mode settings are mandatory and cannot be overridden revenue parts. Simulation can be done on non-revenue part with the Hardware binding set to disabled.", "label": "Flexible EOM setting options", "length": 2, "name": "FlexibleEomSettings", "offset": 0, "options": [[0, "Lock Descriptor and OEM Configs"], [1, "Lock OEM Configs Only"], [2, "Lock Descriptor Only"], [3, "Do not lock Descriptor and OEM Configs"]]}
+   ]},
+   {"alias": "MCA_EOM", "path": "/home/mca/eom", "settings": [
+    {"help": "This setting determines if End of Manufacturing will be triggered on first boot of the platform after flashing.\nNote: When this setting is enabled Intel(R) CSME will enter End of Manufacturing regardless of the descriptor settings.", "label": "EOM on First Boot Enabled", "length": 1, "name": "EomFirstBootEnabled_eom", "offset": 0, "options": [[0, "No"], [1, "Yes"]]}
+   ]},
+   {"alias": "SMLINK_BUS_SELECTION", "path": "/home/smbus/smlink_bus", "settings": [
+    {"help": "Defines the 8-bits MCTP address and 7-bits SMBus address of the EC on SMLink0 or SMLink0b or eSPI bus. This value is needed if EC is using the MCTP protocol. The SMBus (LS byte) must be from 0x01 to 0x7f (and should not overlap with any SMBus address in PCH Strap 11).  The EID (MS byte) must be outside 0x01 through 0x07.", "hex": true, "label": "MCTP EC Address", "length": 2, "name": "MctpEcAddress", "offset": 1}
+   ]},
+   {"alias": "iunit_oem_cfg", "path": "/home/iunit/iunit_oem_cfg", "settings": [
+    {"help": "Debug feature for pre-production platforms only, can be edited only via the config XML. If enabled, access blockers in IS and PS are enabled, and FW is read from IMR. Must be enabled for FW authentication flow and execution of authenticated FW.", "label": "FW Secure Mode", "length": 1, "name": "FWSecureMode", "offset": 0, "options": [[0, "Disabled"], [1, "Enabled"]]}
+   ]},
+   {"alias": "IUNIT_PRIVACY_MODE", "path": "/home/iunit/iunit_privacy_mode", "settings": [
+    {"help": "This NVAR enables/disables the camera privacy. Enabling this NVAR means that the Camera privacy GPIO Pin value is used to mask/unmask all cameras' data from being used", "label": "Camera privacy feature control disabled", "length": 1, "name": "PrivacyFeatureControlDisabled", "offset": 0}
+   ]},
+   {"alias": "POLICY_CFG_RULES", "path": "/home/policy/cfgmgr/cfg_rules", "settings": [
+    {"bits": [1, 1], "help": "This setting allows customers to hide the Firmware Update option in the MEBx interface.", "label": "Hide MEBx Firmware Update Control", "length": 1, "name": "HideMEBxFwUpdCtrl", "offset": 88, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [0, 2], "help": "This setting allows the customer to configure the powerwell that will be used by Intel(R) Integrated LAN.  Note: Recommended setting is SLP_LAN#.", "label": "LAN Power Well", "length": 4, "name": "MELanPowerWell", "offset": 188, "options": [[0, "Core Well"], [1, "SUS Well"], [2, "ME Well"], [3, "SLP_LAN#"]]},
+    {"bits": [0, 7], "help": "This setting allow the customer to configure the powerwell that will be used by Intel(R) wireless lan. note: recommended setting is slp_wlan#", "label": "WLAN Power Well", "length": 4, "name": "MEWlanPowerWell", "offset": 200, "options": [[128, "Disabled"], [129, "Core Well || SLP_S3#"], [130, "Primary Well || SLP_SUS#"], [131, "SLP_A#"], [134, "SLP_WLAN#"]]},
+    {"bits": [3, 3], "help": "This setting enables the One Click Recovery capability", "label": "Intel(R) One Click Recovery supported", "length": 4, "name": "OCRSupported", "offset": 344, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [4, 4], "help": "This setting enables the Remote Platform Erase capability", "label": "Intel(R) Remote Platform Erase supported", "length": 4, "name": "RPESupported", "offset": 344, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [15, 15], "length": 4, "name": "PRTCM", "offset": 344, "options": [[0, "Disabled"], [1, "Enabled"]]},
+    {"bits": [27, 27], "help": "YES = Enables communication with, vPro supporting NIC, via TBT dock\nNO = No support for vPro dock solution", "label": "vPro Over Thunderbolt Dock State", "length": 4, "name": "vproDockEnabled", "offset": 344, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [31, 31], "help": "This setting allows customers to enable / disable the Fast identity online device onboarding (FIDO) state of the firmware.", "label": "Fast identity online device onboarding state", "length": 4, "name": "FidoSupported", "offset": 404, "options": [[0, "Disabled"], [1, "Enabled"]]},
+    {"bits": [0, 0], "help": "This setting allows customers to enable / disable the Wireless LAN CLINK signal through Intel(R) ME firmware.  Note: For using Intel(R) vPro Wireless solutions this should be set to Yes.", "label": "Intel(R) ME CLINK Signal Enabled", "length": 4, "name": "MeClinkEnable", "offset": 464, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [0, 3], "help": "This setting determines processor type to be emulated on pre-production silicon.", "label": "Processor Emulation", "length": 4, "name": "ProcEmulation", "offset": 488, "options": [[0, "No Emulation"], [1, "EMULATE Intel (R) vPro (TM) capable Processor"], [2, "EMULATE Intel (R) Core (TM) branded Processor"], [3, "EMULATE Intel (R) Celeron (R) branded Processor"], [4, "EMULATE Intel (R) Pentium (R) branded Processor"], [5, "EMULATE Intel (R) Xeon E (R) branded Processor"], [6, "EMULATE Intel (R) Xeon W (R) Manageability capable Processor"]]},
+    {"bits": [5, 5], "help": "This setting enables the Platform Support Record capability", "label": "Platform Service Record supported", "length": 4, "name": "PSRSupported", "offset": 344, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [13, 13], "help": "This setting can be used to disable crypto funtionality. This settings disables all crypto dependent features.", "label": "Crypto HW Support", "length": 4, "name": "CryptoHwSupport", "offset": 344, "options": [[0, "Yes"], [1, "No"]]},
+    {"help": "This is a free form 32bit field that allows the OEM to configure their own unique identifier in the firmware image.", "hex": true, "label": "OEM Tag", "length": 4, "name": "OemTag", "offset": 524},
+    {"bits": [0, 0], "label": "Hide MEBx Firmware Update Control", "length": 4, "name": "FwUpdEnable", "offset": 92, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [0, 0], "help": "This setting allows customers to disable Intel(R) AMT on the platform.\nNote: Either Intel(R) AMT or Intel(R) ISM can be enabled as manageability application", "label": "Intel(R) AMT Supported", "length": 4, "name": "AmtSupported", "offset": 344, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [1, 1], "help": "Intel(R) Standard Manageability is a manageability mode that supports a subset of the Intel(R) Active Management Technology (Intel(R) AMT).\nNote: Either Intel(R) AMT or Intel(R) ISM can be enabled as manageability application", "label": "Intel(R) Standard Manageability", "length": 4, "name": "ISMSupported", "offset": 344, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [2, 2], "help": "This setting allows customers to permenantly disable Intel(R) AMT and Standard Manageability mode on the platform.", "label": "Manageability Application Supported", "length": 4, "name": "MngAppSupported", "offset": 344, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [2, 2], "help": "This setting allows customers to determine the power up state for Intel(R) AMT or Standard Manageability.  Note: If this setting is disabled Intel(R) AMT or Standard Manageability can still be re-enabled through the MEBx interface.", "label": "Manageability Application initial power-up state", "length": 4, "name": "MngAppPowerUpState", "offset": 404, "options": [[0, "Disabled"], [1, "Enabled"]]},
+    {"bits": [18, 18], "help": "This setting allows customers to enable / disable the KVM Redirection capabilities of the firmware.  Note: If this setting have been set to disabled it cannot be re-enabled once the descriptor has been locked.", "label": "KVM Redirection Supported", "length": 4, "name": "KvmSupported", "offset": 344, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [21, 21], "help": "This setting allows customers to enable / disable firmware Transport Layer Security support.  Note: If this is disabled TLS will be permanently disabled in the firmware image.", "label": "Transport Layer Security Crypto Support", "length": 4, "name": "TlsCryptoSupport", "offset": 344, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [10, 10], "help": "This setting allows customers to determine the power up state for ISH.", "label": "Integrated Sensor Hub Initial Power Up State", "length": 4, "name": "IshPowerUpState", "offset": 404, "options": [[0, "Disabled"], [1, "Enabled"]]},
+    {"bits": [29, 29], "help": "This setting permanently disables Intel(R) PTT in the firmware image.", "label": "Intel(R) PTT Supported", "length": 4, "name": "PttSupported", "offset": 344, "options": [[0, "No"], [1, "Yes"]]},
+    {"bits": [29, 29], "help": "This setting determines if Intel(R) PTT is enabled on platform power-up.", "label": "Intel(R) PTT initial power-up state", "length": 4, "name": "PttPwrUpState", "offset": 404, "options": [[0, "Disabled"], [1, "Enabled"]]}
+   ]},
+   {"alias": "PRIVACY_LEVEL_FILE", "path": "/home/amt/rtfd/PrivacyLvl", "settings": [
+    {"help": "This setting allows customers to configure the Privacy and Security level for redirection operations.  Default enables all redirection ports (User consent is configurable).  Enhanced enables all redirection ports (User consent is required and cannot be disabled).  Extreme disables all redirection capabilities.", "label": "Redirection Privacy / Security Level", "length": 1, "name": "RedirectionPrivSecLevel", "offset": 0, "options": [[1, "Default"], [2, "Enhanced"], [3, "Extreme"]]}
+   ]},
+   {"alias": "AMT_WD_RESET_STATE", "path": "/home/amt/rtfd/WDResetState", "settings": [
+    {"help": "This setting allows customers to enable the Intel (R) ME firmware to trigger an automatic platform reset if either the MEI or Agent Presence are in a hung state.  Note: This feature only allows one reset at a time when the watchdog expires.  After this feature has triggered a reset it must be re-armed for re-use via management console.", "label": "Watchdog Automatic Reset Enabled", "length": 1, "name": "AmtWdAutoReset", "offset": 0, "options": [[0, "No"], [1, "Yes"]]}
+   ]},
+   {"alias": "PCR_AMT_IDLE_TIMEOUT", "path": "/home/amt/rtfd/amt.wol", "settings": [
+    {"help": "This setting configures the idle timeout value before Manageability app enters into an off state.", "hex": true, "label": "Idle Timeout", "length": 2, "name": "AmtIdleTimeout", "offset": 0}
+   ]},
+   {"alias": "RSB_FITC_STATE_NVAR", "path": "/home/amt/rtfd/rsb.state", "settings": [
+    {"help": "This setting enables KVM Screen blanking capabilities in the firmware image.  Note: This feature is dependent on processor level support.", "label": "Firmware KVM Screen Blanking", "length": 1, "name": "KvmScreenBlnkEnable", "offset": 0, "options": [[0, "No"], [1, "Yes"]]}
+   ]},
+   {"alias": "NCSI_LAN_SETTINGS_FILE", "path": "/home/amt/skip_rtfd/ncsi", "settings": [
+    {"bits": [0, 0], "help": "YES = Discrete NIC enabled in platform\nNO = Integrated GBE LAN enabled in platform", "label": "Platform vPro 2.5G Wired LAN Enabled", "length": 1, "name": "vproNicEnabled", "offset": 0, "options": [[0, "No"], [1, "Yes"]]},
+    {"help": "Platform discrete NIC slave address\nNote: Input needs to be in HEX format(OEM specific), e.g. 0x12", "hex": true, "label": "Platform vPro 2.5G Wired LAN SMBUS slave address", "length": 1, "name": "vproNicSMBusAddress", "offset": 5},
+    {"help": "Dock NIC slave address\nNote: Input needs to  be in HEX format(OEM specific), e.g. 0x12", "hex": true, "label": "vPro 2.5G Wired LAN on dock slave SMBUS Address", "length": 1, "name": "TypeCPortRetimerMCTPSmbusAddr_ncsi", "offset": 6},
+    {"help": "This setting configures the Intel(R) SMBus I2C Address.\nNote: Input needs to be in HEX format(OEM specific), e.g. 0x12", "hex": true, "label": "Thunderbolt Port1 SMBUS Address", "length": 1, "name": "ThunderboltPort1SMBUSAddress", "offset": 1},
+    {"help": "This setting configures the Intel(R) SMBus I2C Address.\nNote: Input needs to be in HEX format(OEM specific), e.g. 0x12", "hex": true, "label": "Thunderbolt Port2 SMBUS Address", "length": 1, "name": "ThunderboltPort2SMBUSAddress", "offset": 2},
+    {"help": "This setting configures the Intel(R) SMBus I2C Address.\nNote: Input needs to be in HEX format(OEM specific), e.g. 0x12", "hex": true, "label": "Thunderbolt Port3 SMBUS Address", "length": 1, "name": "ThunderboltPort3SMBUSAddress", "offset": 3},
+    {"help": "This setting configures the Intel(R) SMBus I2C Address.\nNote: Input needs to be in HEX format(OEM specific), e.g. 0x12", "hex": true, "label": "Thunderbolt Port4 SMBUS Address", "length": 1, "name": "ThunderboltPort4SMBUSAddress", "offset": 4}
+   ]},
+   {"alias": "PROV_PKI_FQDN_SUFFIX_IS_SECURE", "path": "/home/amt/skip_rtfd/sfx.isSecure", "settings": [
+    {"length": 1, "name": "SuffixIsSecure", "offset": 0}
+   ]},
+   {"alias": "HW_BINDING_ENABLED", "path": "/home/bup/bup_sku/hw_binding", "settings": [
+    {"help": "This setting configures the FPF Hardware and RPMC / RPMB binding behavior for the platform image.\nIf this setting is enabled FPF Hardware and RPMC / RPMB binding behavior will occur when platform close manufacturing flow is executed with Intel(R) FPT. \nIf this setting is disabled FPF Hardware and RPMC / RPMB binding behavior will not take place when close manufacturing flow is executed.\nNote: For Revenue parts this setting will be ignored and FPF Hardware and RPMC / RPMB binding behavior will take place when close manufacturing flow is executed.", "label": "Hardware Binding Enabled", "length": 1, "name": "HwBindingEn", "offset": 0, "options": [[0, "Disabled"], [1, "Enabled"]]}
+   ]},
+   {"alias": "BUP_SI_FEATURES", "path": "/home/bup/si_features", "settings": [
+    {"help": "Allows the OEM to control FW features to assist with pre-production platform debugging.  This control has no effect if used on production silicon.  Note: Certain options will do not work when the descriptor is locked (See FW Bring-up Guide for setting details).  Important: Due to an HW issue, this setting should be set temporarily to 0x400107 to prevent boot issues.", "hex": true, "label": "Debug Override Pre-Production Silicon", "length": 4, "name": "DbgOverridePreProdSi", "offset": 12},
+    {"help": "Allows the OEM to control FW features to assist with production platform debugging.  Note: Certain options will do not work when the descriptor is locked (See FW Bring-up Guide for setting details).", "hex": true, "label": "Debug Override Production Silicon", "length": 4, "name": "DbgOverrideProdSi", "offset": 16}
+   ]},
+   {"alias": "HOTHAM_DAM_EN", "path": "/home/hotham/dbg_dam_req", "settings": [
+    {"help": "This setting enables Delayed Authentication Mode on the platform.", "label": "Delayed Authentication Mode Enabled", "length": 1, "name": "DelayedAuthMode", "offset": 0, "options": [[0, "No"], [1, "Yes"]]}
+   ]},
+   {"alias": "HOST_SW_SEQUENCING_MODE", "path": "/home/mca/host_sw_sqnc_mode", "settings": [
+    {"bits": [0, 0], "help": "IoTG configuration. This setting will enable SPI software sequencing, in order to allow the host to write PCH binding information. Note: This setting is disabled b default and can be enabeled until EOM.", "label": "SPI Software Sequencing Enabled", "length": 1, "name": "SpiSwSeqEnable", "offset": 0, "options": [[0, "No"], [1, "Yes"]]}
+   ]},
+   {"alias": "SKU_MGR_REQUESTED_BRAND_ENTITLEMENTS", "path": "/home/mca/icps", "settings": [
+    {"bits": [1, 4], "label": "System Brand", "length": 4, "name": "PlatformBrandIdentity", "offset": 0, "options": [[0, "Not selected"], [1, "Intel vPro(TM) Enterprise"], [2, "Intel vPro(TM) Essentials"], [8, "Intel-based PC"]]}
+   ]},
+   {"alias": "MCTP_DEVICE_PORTS", "path": "/home/mctp/device_ports", "settings": [
+    {"hex": true, "length": 1, "name": "MctpDevicePortEc", "offset": 0},
+    {"hex": true, "length": 1, "name": "MctpDevicePortSio", "offset": 1},
+    {"hex": true, "length": 1, "name": "MctpDevicePortIsh", "offset": 2},
+    {"hex": true, "length": 1, "name": "MctpDevicePortBmc", "offset": 3}
+   ]},
+   {"alias": "EC_OOB_SMBUS_ADDR", "path": "/home/mctp/ec_oob_smbus_addr", "settings": [
+    {"help": "This setting determines the SMBUS address for eSPI OOB to be handled by EC.", "hex": true, "label": "eSPI OOB EC SMBUs Address", "length": 1, "name": "ECOOBSmbusAddr", "offset": 0}
+   ]},
+   {"alias": "opaque_en", "path": "/home/mctp/opaque_en", "settings": [
+    {"help": "This setting enables the 'WSMAN Opaque' interface. OEM ID must be set (under UPID). 'eSPI OOB EC SMBus address' is set in the new 'eSPI OOB' section under 'Intel ME Kernel' that is shared with eRPMC", "label": "Opaque Supported", "length": 1, "name": "EspiEnabled", "offset": 0, "options": [[0, "No"], [1, "Yes"]]}
+   ]},
+   {"alias": "MCTP_SMT2_DEVICES", "path": "/home/mctp/smt2_devices", "settings": [
+    {"help": "Platform discrete NIC slave address\nNote: Input needs to be in HEX format(OEM specific), e.g. 0x12", "hex": true, "label": "Platform vPro 2.5G Wired LAN SMBUS slave address", "length": 1, "name": "vproNicSMBusAddress_sm2_devices", "offset": 0},
+    {"help": "Dock NIC slave address\nNote: Input needs to  be in HEX format(OEM specific), e.g. 0x12", "hex": true, "label": "vPro 2.5G Wired LAN on dock slave SMBUS Address", "length": 1, "name": "TypeCPortRetimerMCTPSmbusAddr_smt2", "offset": 2}
+   ]},
+   {"alias": "POLICY_BIST_AUTO_CONFIG", "path": "/home/policy/Bist/auto_config", "settings": [
+    {"bits": [0, 0], "help": "This setting enables the firmware Automatic Built in Self Test which is executed during first platform boot after initial image flashing.", "label": "Automatic Built in Self Test", "length": 4, "name": "FwAutoBist", "offset": 0, "options": [[0, "Disabled"], [1, "Enabled"]]}
+   ]},
+   {"alias": "POLICY_HMRFPO_STATE", "path": "/home/policy/hmrfpo_state", "settings": [
+    {"help": "This setting enables descriptor unlock of the ME Region when the HMRFPO message is sent to firmware prior to BIOS End of POST.", "label": "Intel(R) ME Region Flash Protection Override", "length": 1, "name": "HmrfpoEnable", "offset": 0, "options": [[0, "No"], [1, "Yes"]]}
+   ]},
+   {"alias": "POLICY_MSRMT_SUPPORT", "path": "/home/policy/msrmnt_sup", "settings": [
+    {"help": "When measured boot is enabled firmware will use additional extended registers for all IUPs and Key Manifests that firmware loads and verifies from flash. \nNote: When measured boot is enabled any IUPs or firmware updates will require a global reset", "label": "Intel(R) ME Measured Boot State", "length": 1, "name": "MeMeasuredBootState", "offset": 0, "options": [[0, "Disabled"], [1, "Enabled"]]}
+   ]},
+   {"alias": "PTT_SMX_DISABLE", "path": "/home/ptt/ptt_smx_disable", "settings": [
+    {"bits": [0, 0], "label": "SMx State", "length": 1, "name": "SmxSupport", "offset": 0, "options": [[0, "Enabled"], [1, "Disabled"]]},
+    {"bits": [1, 1], "label": "Rsa 1K State", "length": 1, "name": "Rsa1KSupport", "offset": 0, "options": [[0, "Enabled"], [1, "Disabled"]]}
+   ]},
+   {"alias": "DISABLE_MANAGEABILITY_HW", "path": "/home/rbe/MANAGEABILITY_HW_DIS", "settings": [
+    {"help": "This setting will disable Intel(R) AMT hardware.", "label": "Manageability Application Hardware Status EFS", "length": 1, "name": "MngHwStatusEfs", "offset": 0, "options": [[0, "Yes"], [1, "No"]]}
+   ]},
+   {"alias": "BINDING_SIGNATURE_TYPE", "path": "/home/rbe/binding_sig_type", "settings": [
+    {"bits": [0, 0], "help": "IoTG Configuration. Defines the type of the Binding Signature that will be supported by FW.", "label": "Binding Signature Type", "length": 1, "name": "BindingSigType", "offset": 0, "options": [[0, "PCH Based Signature"], [1, "IFP based Signature"]]}
+   ]},
+   {"alias": "SECUREBOOT_BRM_CONFIG", "path": "/home/secureboot/brm_cfg", "settings": [
+    {"help": "In case of BIOS boot failure, CSME will configure the platform to boot with backup BIOS using Top Swap. Note: This option is only available when Boot Guard is enabled.", "label": "BIOS Redundancy Assistance", "length": 4, "name": "BiosRedAssistance", "offset": 0, "options": [[0, "Disabled"], [1, "Enabled"]]}
+   ]},
+   {"alias": "STP_ENABLED", "path": "/home/stp/stp_enabled", "settings": [
+    {"help": "Enable/disable STP on the target platform", "label": "STP Enabled", "length": 1, "name": "StpEnabled", "offset": 0, "options": [[0, "No"], [1, "Yes"]]}
+   ]},
+   {"alias": "STP_SMLINK_SELECTION", "path": "/home/stp/stp_smlink_selection", "settings": [
+    {"help": "Select which SMLink is to be used for STP.", "label": "STP SMLink selection", "length": 1, "name": "StpSmlinkSelection", "offset": 0, "options": [[0, "SMLink0"], [1, "SMLink1"], [255, "Not Selected"]]}
+   ]},
+   {"alias": "tcss_tcss_ctrl", "path": "/home/tcss/tcss_ctrl", "settings": [
+    {"help": "This setting enables / disables firmware authentication for the Type-C Subsystem on power-up", "label": "Type-C SubSystem Authentication Enabled", "length": 1, "name": "TcssAuthenticateEn", "offset": 0, "options": [[0, "Yes"], [1, "No"]]}
+   ]},
+   {"alias": "UPID_PLATFORM_ID_SUPPORT", "path": "/home/upid/platform_id_support", "settings": [
+    {"bits": [0, 0], "help": "This setting allows OEM to create their own unique platform identifier. If this setting is enabled, the below OEM ID should be set.", "label": "UPID Supported", "length": 1, "name": "UniquePlatformIdSupportedFeature", "offset": 0, "options": [[0, "No"], [1, "Yes"]]}
+   ]}
+  ]}
+ ]
+}

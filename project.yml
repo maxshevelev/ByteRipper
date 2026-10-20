@@ -51,6 +51,10 @@ packages:
   # to build a compressed section to search in.
   FirmwareCompression:
     path: Packages/FirmwareCompression
+  # The envelope of the compiled map resources (`Design/MAP_DATA.md`).
+  # UEFIImage and MEFirmware link it; no target here links it directly.
+  MapData:
+    path: Packages/MapData
   # The ME/engine analysis engine. MEATool consumes it; the app's flow tests
   # install a stub `MEADataSource` and so import it directly.
   MEFirmware:

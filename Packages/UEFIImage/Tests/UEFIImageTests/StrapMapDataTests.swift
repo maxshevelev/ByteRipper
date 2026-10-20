@@ -1,7 +1,7 @@
 import XCTest
 @testable import UEFIImage
 
-/// The binary strap tables (`Design/UEFI/STRAP_MAP_DATA.md`): what the JSON
+/// The binary strap tables (`Design/MAP_DATA.md`): what the JSON
 /// sources state, and what the reader refuses before it interprets a byte.
 final class StrapMapDataTests: XCTestCase {
     func testTheResourceLoadsWithTheVersionTheCodeWasMarkedWith() {
