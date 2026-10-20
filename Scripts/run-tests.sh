@@ -80,6 +80,7 @@ if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
     Packages/MEFirmware/MapSources/configuration/csme14Desktop.json \
     Packages/MEFirmware/MapSources/configuration/csme15.json \
     Packages/MEFirmware/MapSources/configuration/csme15Desktop.json \
+    Packages/MEFirmware/MapSources/configuration/csme16.json \
     Packages/MEFirmware/MapSources/configuration/csme18.json; then
     echo "the configuration map binary is stale: rebuild it (Skills/me-eom-structures/SKILL.md)" >&2
     exit 1

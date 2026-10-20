@@ -5,5 +5,5 @@
 // reported before a byte of it is interpreted.
 enum MEConfigurationDataVersion {
     static let formatVersion: UInt16 = 1
-    static let version: UInt32 = 1
+    static let version: UInt32 = 2
 }

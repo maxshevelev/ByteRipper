@@ -393,10 +393,10 @@ expected counts apply. Data files are copied as they are.
 - **Strap:** the PCH tables (`pch69` … `pch115`, `pch130`) and FIT 11's SPT
   set (`sptPch66` … `sptPch139`). The legacy guide tables, the processor
   tables, the MIP tables and the PMC tables are still Swift.
-- **Configuration:** CSME 11–15 (mobile and desktop) and CSME 18. CSME 16 is
-  still the generated Swift map: the 16.0.15.1662 build its map was read from
-  is not at hand, so its JSON waits for that source rather than dropping the
-  files only that build states.
+- **Configuration:** CSME 11–16 (mobile and desktop where the generation has
+  two halves) and CSME 18. CSME 16's map is merged from 16.1.42 and 16.0.15:
+  the newer build's database no longer lists `/home/mctp/smt3_devices`, and
+  the older one states it.
 - **UEP:** CSME 12–16 and 18, each from its own tool build. 17 has no map yet.
 - **GPIO:** CSME 11–15, the generations whose Flash Image Tool carries the
   `GpioCsme*` value classes. CSME 16 and 18 use MFIT's database, which does

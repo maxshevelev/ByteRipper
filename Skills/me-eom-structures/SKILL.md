@@ -50,8 +50,10 @@ force now is in the MFS file system, and that is what the app's engine decodes.
 ## Emitting a generation's configuration map
 
 ```bash
-python3 Skills/me-eom-structures/scripts/mfit_map.py <mfit.exe> > \
-    Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationMap+CSME16.swift
+python3 Skills/me-eom-structures/scripts/mfit_map.py \
+    <mfit-16.1.42.exe> <mfit-16.0.15.exe> \
+    --generation 16 --tool "16.1.42, 16.0.15.1817" --format json > \
+    Packages/MEFirmware/MapSources/configuration/csme16.json
 ```
 
 MFIT's settings database, unpacked and turned into the map the panel reads: the
@@ -61,9 +63,9 @@ behind the `?` beside a row) and
 its `Auto`/`Generic` marks, and the tool's own name for a setting where its panel
 shows something other than the identifier (`label` — "LAN Power Well" for
 `MELanPowerWell`). **Several builds may be given at once**, and are merged with
-the same rules: the CSME 16 map is emitted from 16.0.15.1662, 16.1.25.2091 and
-16.1.42 together, so a file a newer build's lists dropped is still read out of
-the images the older ones wrote. It merges the platform lists and reports what
+the same rules: the CSME 16 map is emitted from 16.1.42 and 16.0.15.1817
+together, so a file a newer build's lists dropped is still read out of the
+images the older ones wrote. It merges the platform lists and reports what
 it could not merge rather than guessing — a setting two lists lay out **differently**
 (different offset, width or bits) is dropped and named. A setting the lists give
 the same place but word differently — one truncates a label or a help sentence —
@@ -236,15 +238,14 @@ python3 Skills/me-eom-structures/scripts/map_bin.py build \
     --swift-enum-name MEConfigurationDataVersion \
     Packages/MEFirmware/MapSources/configuration/csme11.json \
     … csme12, csme12Desktop, csme13, csme13Desktop, csme14, csme14Desktop,
-    csme15, csme15Desktop, csme18 …
+    csme15, csme15Desktop, csme16, csme18 …
 python3 Skills/me-eom-structures/scripts/map_bin.py build --check …same arguments…
 ```
 
-**CSME 16 is still emitted as Swift.** Its map was read from the 16.0.15.1662
-build, which is not at hand; the builds that are state a different set — one
-drops `/home/mctp/smt3_devices`, another drops `MEWlanPowerWell` — so a JSON
-regenerated from them would lose files the map serves today. It waits for its
-own source; there is no `csme16.json`.
+**CSME 16's map is the merge of two builds**, and the older one is not
+optional: 16.1.42's database no longer lists `/home/mctp/smt3_devices`, so the
+map read from it alone would lose that file and its `MctpEcAddress` setting.
+The 16.0.15 build states it, and the merge keeps it.
 
 The tool lays the Boot Guard bits out per family as well, which is a fact about
 the *tool's documents* and not about where a vendor image keeps them: on both
@@ -315,7 +316,7 @@ declared in the same documents' `<CfgOpt>` lists:
 
 ```bash
 python3 Skills/me-eom-structures/scripts/uep_map.py <mfit.exe> \
-    --generation 16 --tool "Modular Flash Image Tool 16.0.15.1662" \
+    --generation 16 --tool "Modular Flash Image Tool 16.1.42" \
     --format json > Packages/MEFirmware/MapSources/uep/csme16.json
 ```
 
