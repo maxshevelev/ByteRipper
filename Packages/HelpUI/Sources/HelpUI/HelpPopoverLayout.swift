@@ -120,6 +120,11 @@ import AppKit
         body.hasVerticalScroller = !fits
         body.verticalScrollElasticity = fits ? .none : .automatic
         body.horizontalScrollElasticity = .none
+        // The width the note wraps at, said outright: the popover takes its
+        // size from `fittingSize`, which asks the label for its height before
+        // any layout has told it how wide it is — and a label that has not
+        // been told answers with one line, which the popover then cut off.
+        note?.preferredMaxLayoutWidth = width - 2 * margin
 
         for subview in [title, body] + (note.map { [$0] } ?? []) + (footer.map { [$0] } ?? []) {
             root.addSubview(subview)
