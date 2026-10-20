@@ -8,6 +8,7 @@ public enum MapKind: UInt16, Sendable {
     case uep = 3
     case gpio = 4
     case register = 5
+    case layout = 6
 }
 
 /// The envelope's sections. A reader skips one it does not know.
@@ -21,6 +22,10 @@ public enum MapSection: UInt16, Sendable {
     case settings = 6
     // Kind 5:
     case registers = 7
+    // Kind 6:
+    case containers = 8
+    case anchors = 9
+    case layoutFields = 10
 }
 
 /// Why a map resource cannot be used.

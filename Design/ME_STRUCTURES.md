@@ -810,7 +810,8 @@ out, the reader taking at most 64 bits. The Boot Guard profile proper is
 still the record these generations keep; the array's bits are read beside it.
 
 **The CPU strap message.** `strap18_map.py` turns the `CPU_smip` document into
-`CPUStrapMap+CSME18` (35 fields), and the message itself is read out of the
+`MapSources/layout/cpu.json` (35 fields, compiled into `LayoutMaps.bin`), and
+the message itself is read out of the
 image's **MIP table**, which CSME 18 keeps in the FITC partition rather than
 in the descriptor's MIP area:
 
@@ -860,7 +861,8 @@ borrowed from `PMC_SoC_smip`/`CPU_smip` through the layout's
 generator keeps only the `PMC_SoC_smip_Strap_` names, since the CPU message
 has its own map.
 
-`mip18_map.py` emits them into `MIPStrapMap+CSME18`. The IOE document has two
+`mip18_map.py` emits them into `MapSources/layout/mip.json` (compiled into
+`LayoutMaps.bin`). The IOE document has two
 layouts that place the shared names at different offsets, so a layout is
 chosen by the block's own length — the CSME 18 dump's block is 0xD0 and reads
 the MTL-P layout. The check: every field whose document states one value for

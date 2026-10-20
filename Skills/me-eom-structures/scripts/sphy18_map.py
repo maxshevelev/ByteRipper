@@ -21,13 +21,17 @@ and 0x19 there), so that field and the common header are emitted as **anchors**
 and the reader refuses an nvar whose anchors do not hold — an image of the
 other variant answers nothing rather than wrong names.
 
-    python3 sphy18_map.py <mfit-18.1.exe> > \\
-        Packages/MEFirmware/Sources/MEFirmware/Configuration/SphyNvarMap+CSME18.swift
+    python3 sphy18_map.py <mfit-18.1.exe> --format json > \\
+        Packages/MEFirmware/MapSources/layout/sphy.json
+
+The JSON is compiled into `LayoutMaps.bin` by `map_bin.py`
+(`Design/MAP_DATA.md`).
 
 Stdlib only, read-only, no network; read the diff, don't paste blind.
 """
 
 import hashlib
+import json
 import os
 import re
 import sys
@@ -153,8 +157,78 @@ def swift(tool, fields):
     return "\n".join(lines)
 
 
+def pretty_json(document):
+    """JSON with one field per line: a diff reads a field at a time."""
+    lines = ["{"]
+    for key in sorted(document):
+        if key == "maps":
+            continue
+        lines.append(" %s: %s," % (
+            json.dumps(key),
+            json.dumps(document[key], ensure_ascii=False, sort_keys=True)))
+    lines.append(' "maps": [')
+    for map_index, mapping in enumerate(document["maps"]):
+        rest = ", ".join(
+            "%s: %s" % (json.dumps(key),
+                        json.dumps(mapping[key], ensure_ascii=False, sort_keys=True))
+            for key in sorted(mapping) if key not in ("anchors", "fields"))
+        lines.append('  {%s, "anchors": [' % rest)
+        anchors = mapping["anchors"]
+        for anchor_index, anchor in enumerate(anchors):
+            lines.append("   %s%s" % (
+                json.dumps(anchor, ensure_ascii=False, sort_keys=True,
+                           separators=(", ", ": ")),
+                "," if anchor_index + 1 < len(anchors) else ""))
+        lines.append('  ], "fields": [')
+        fields = mapping["fields"]
+        for field_index, field in enumerate(fields):
+            lines.append("   %s%s" % (
+                json.dumps(field, ensure_ascii=False, sort_keys=True,
+                           separators=(", ", ": ")),
+                "," if field_index + 1 < len(fields) else ""))
+        lines.append('  ]}%s' % ("," if map_index + 1 < len(document["maps"]) else ""))
+    lines.append(" ]")
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def json_document(tool, digest, fields):
+    return pretty_json({
+        "schema": "byteripper.map/1",
+        "kind": "layout",
+        "tool": tool,
+        "maps": [{
+            "id": "csme18-sphy",
+            "name": "CSME 18 (%s)" % tool,
+            "layout": "sphy",
+            "anchors": [{
+                "name": field["name"],
+                "bitOffset": field["bitOffset"],
+                "count": field["count"],
+                "value": field["constant"],
+            } for field in fields
+               if field["name"] in ANCHOR_NAMES and field["constant"] is not None],
+            "fields": [{
+                "name": field["name"],
+                "bitOffset": field["bitOffset"],
+                "count": field["count"],
+            } for field in fields],
+            "source": {"tool": tool, "document": digest[:8]},
+        }],
+    })
+
+
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    args = sys.argv[1:]
+    output_format = "swift"
+    if "--format" in args:
+        at = args.index("--format")
+        output_format = args[at + 1]
+        del args[at:at + 2]
+    if output_format not in ("swift", "json"):
+        print("--format is swift or json", file=sys.stderr)
+        return 2
+    args = [a for a in args if not a.startswith("-")]
     if not args:
         print(__doc__)
         return 2
@@ -185,7 +259,8 @@ def main():
         print("no MTL SPHY layout found in this build", file=sys.stderr)
         return 1
     print("chosen %s: %d fields" % (chosen[0][:8], len(chosen[1])), file=sys.stderr)
-    print(swift(tool, chosen[1]))
+    print(json_document(tool, chosen[0], chosen[1]) if output_format == "json"
+          else swift(tool, chosen[1]))
     return 0
 
 

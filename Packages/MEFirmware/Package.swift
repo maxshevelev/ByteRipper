@@ -59,7 +59,9 @@ let package = Package(
             // The UEP layouts and the GPIO pin dictionaries, each likewise
             // compiled from its own JSON sources.
             .copy("Resources/UEPMaps"),
-            .copy("Resources/GPIOMaps")
+            .copy("Resources/GPIOMaps"),
+            // CSME 18's MIP containers, CPU message and SPHY nvar layouts.
+            .copy("Resources/LayoutMaps")
         ]),
         .testTarget(
             name: "MEFirmwareTests",
