@@ -74,6 +74,20 @@ if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
     exit 1
 fi
 if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
+    --out Packages/UEFIImage/Sources/UEFIImage/Resources/RegisterMaps/RegisterMaps.bin \
+    --manifest Packages/UEFIImage/MapSources/register/manifest.json \
+    --swift-version-file Packages/UEFIImage/Sources/UEFIImage/DescriptorRegisterMapDataVersion.swift \
+    --swift-enum-name DescriptorRegisterMapDataVersion \
+    Packages/UEFIImage/MapSources/register/sunrisePoint.json \
+    Packages/UEFIImage/MapSources/register/cannonPoint.json \
+    Packages/UEFIImage/MapSources/register/tigerPoint.json \
+    Packages/UEFIImage/MapSources/register/elkhartLake.json \
+    Packages/UEFIImage/MapSources/register/jasperLake.json \
+    Packages/UEFIImage/MapSources/register/csme18.json; then
+    echo "the register map binary is stale: rebuild it (Skills/me-eom-structures/SKILL.md)" >&2
+    exit 1
+fi
+if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
     --out Packages/MEFirmware/Sources/MEFirmware/Resources/ConfigMaps/ConfigMaps.bin \
     --manifest Packages/MEFirmware/MapSources/manifest.json \
     --swift-version-file Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationDataVersion.swift \

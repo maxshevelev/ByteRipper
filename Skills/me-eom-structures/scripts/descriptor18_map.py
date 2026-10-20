@@ -17,16 +17,20 @@ or stated by the descriptor itself (FLCOMP and FLIL at `FCBA << 4`, FLMSTR at
 
 The generator keeps the tool's names (with the `Base_Descriptor_SOC_Strap_`
 prefix stripped), labels and option words, and emits them into
-`DescriptorRegisterMap+CSME18.swift`. Where the three platform documents
+`MapSources/register/csme18.json`. Where the three platform documents
 disagree about a field, it is dropped and named.
 
-    python3 descriptor18_map.py <mfit-18.1.exe> > \\
-        Packages/UEFIImage/Sources/UEFIImage/DescriptorRegisterMap+CSME18.swift
+    python3 descriptor18_map.py <mfit-18.1.exe> --format json > \\
+        Packages/UEFIImage/MapSources/register/csme18.json
+
+The JSON is compiled into `RegisterMaps.bin` by `map_bin.py`
+(`Design/MAP_DATA.md`).
 
 Stdlib only, read-only, no network; read the diff, don't paste blind.
 """
 
 import hashlib
+import json
 import os
 import re
 import sys
@@ -252,8 +256,81 @@ def swift(tool, registers):
     return "\n".join(lines)
 
 
+def pretty_json(document):
+    """JSON with one field per line: a diff reads a field at a time."""
+    lines = ["{"]
+    for key in sorted(document):
+        if key == "maps":
+            continue
+        lines.append(" %s: %s," % (
+            json.dumps(key),
+            json.dumps(document[key], ensure_ascii=False, sort_keys=True)))
+    lines.append(' "maps": [')
+    for map_index, mapping in enumerate(document["maps"]):
+        rest = ", ".join(
+            "%s: %s" % (json.dumps(key),
+                        json.dumps(mapping[key], ensure_ascii=False, sort_keys=True))
+            for key in sorted(mapping) if key != "registers")
+        lines.append('  {%s, "registers": [' % rest)
+        registers = mapping["registers"]
+        for register_index, register in enumerate(registers):
+            rest = ", ".join(
+                "%s: %s" % (json.dumps(key),
+                            json.dumps(register[key], ensure_ascii=False, sort_keys=True))
+                for key in sorted(register) if key != "fields")
+            lines.append('   {%s, "fields": [' % rest)
+            fields = register["fields"]
+            for field_index, field in enumerate(fields):
+                lines.append("    %s%s" % (
+                    json.dumps(field, ensure_ascii=False, sort_keys=True,
+                               separators=(", ", ": ")),
+                    "," if field_index + 1 < len(fields) else ""))
+            lines.append('   ]}%s' % ("," if register_index + 1 < len(registers) else ""))
+        lines.append('  ]}%s' % ("," if map_index + 1 < len(document["maps"]) else ""))
+    lines.append(" ]")
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def json_document(tool, registers):
+    return pretty_json({
+        "schema": "byteripper.map/1",
+        "kind": "register",
+        "tool": tool,
+        "maps": [{
+            "id": "csme18",
+            "name": "csme18",
+            "registers": [{
+                "name": name,
+                "place": {"kind": place, "offset": offset},
+                "words": words,
+                "fields": [
+                    {"name": field["name"],
+                     "bitOffset": field["bitOffset"],
+                     "count": field["count"],
+                     **({"label": field["label"]} if field["label"] else {}),
+                     **({"options": [[number, word]
+                                     for number, word in sorted(field["options"].items())]}
+                        if field["options"] else {})}
+                    for field in fields
+                ],
+            } for name, place, offset, words, fields in registers],
+            "source": {"tool": tool},
+        }],
+    })
+
+
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    args = sys.argv[1:]
+    output_format = "swift"
+    if "--format" in args:
+        at = args.index("--format")
+        output_format = args[at + 1]
+        del args[at:at + 2]
+    if output_format not in ("swift", "json"):
+        print("--format is swift or json", file=sys.stderr)
+        return 2
+    args = [a for a in args if not a.startswith("-")]
     if not args:
         print(__doc__)
         return 2
@@ -276,7 +353,8 @@ def main():
         registers.append((name, place, offset, words, fields))
         print("%s: %d fields from %d document(s)" % (name, len(fields), len(found)),
               file=sys.stderr)
-    print(swift(tool, registers))
+    print(json_document(tool, registers) if output_format == "json"
+          else swift(tool, registers))
     return 0
 
 

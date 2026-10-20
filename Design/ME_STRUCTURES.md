@@ -882,7 +882,8 @@ configuration".
 
 **The descriptor's registers.** The same harness documents lay out FLMAP0/1/2,
 FLCOMP, FLIL, FLMSTR, FLDRPLCY and FLUMAP1 bit by bit; `descriptor18_map.py`
-emits them into `DescriptorRegisterMap+CSME18`, and the UEFI Structure panel
+emits them into `MapSources/register/csme18.json` (compiled into
+`RegisterMaps.bin`), and the UEFI Structure panel
 shows each register with the tool's field names. Places: absolute for
 FLMAP0/1/2 (0x14/0x18/0x1C), FLDRPLCY (0x340) and FLUMAP1 (0xEFC); `FCBA << 4`
 for FLCOMP/FLIL and `FMBA << 4` for FLMSTR. Verified on the CSME 18 dump:

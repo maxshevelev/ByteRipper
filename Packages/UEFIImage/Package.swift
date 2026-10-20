@@ -52,7 +52,9 @@ let package = Package(
         ], resources: [
             // The strap tables as one binary (`Design/MAP_DATA.md`):
             // the JSON sources are the reviewable form, this is what loads.
-            .copy("Resources/StrapMaps")
+            .copy("Resources/StrapMaps"),
+            // The descriptor's register maps, likewise compiled from JSON.
+            .copy("Resources/RegisterMaps")
         ]),
         .testTarget(
             name: "UEFIImageTests",

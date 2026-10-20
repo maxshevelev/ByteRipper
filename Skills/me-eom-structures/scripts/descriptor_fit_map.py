@@ -25,8 +25,11 @@ the configuration classes the class's `Action`s bind each field to
 as they do for the UEP map.
 
     python3 descriptor_fit_map.py <fit-15.0.exe> [<fit-14.0.exe> …] \\
-        --platform tgp_lp --generation tigerPoint --tool 15.0 > \\
-        Packages/UEFIImage/Sources/UEFIImage/DescriptorRegisterMap+TigerPoint.swift
+        --platform tgp_lp --generation tigerPoint --tool 15.0 --format json > \\
+        Packages/UEFIImage/MapSources/register/tigerPoint.json
+
+The JSON is compiled into `RegisterMaps.bin` by `map_bin.py`
+(`Design/MAP_DATA.md`).
 
 `--platform` takes a comma-separated list of strap tokens (a generation's two
 halves are two documents), and several executables may be named: one
@@ -37,6 +40,7 @@ Stdlib only, read-only, no network.
 
 import collections
 import hashlib
+import json
 import os
 import re
 import sys
@@ -247,6 +251,69 @@ def swift_literal(text):
     return '"%s"' % escaped
 
 
+def pretty_json(document):
+    """JSON with one field per line: a diff reads a field at a time."""
+    lines = ["{"]
+    for key in sorted(document):
+        if key == "maps":
+            continue
+        lines.append(" %s: %s," % (
+            json.dumps(key),
+            json.dumps(document[key], ensure_ascii=False, sort_keys=True)))
+    lines.append(' "maps": [')
+    for map_index, mapping in enumerate(document["maps"]):
+        rest = ", ".join(
+            "%s: %s" % (json.dumps(key),
+                        json.dumps(mapping[key], ensure_ascii=False, sort_keys=True))
+            for key in sorted(mapping) if key != "registers")
+        lines.append('  {%s, "registers": [' % rest)
+        registers = mapping["registers"]
+        for register_index, register in enumerate(registers):
+            rest = ", ".join(
+                "%s: %s" % (json.dumps(key),
+                            json.dumps(register[key], ensure_ascii=False, sort_keys=True))
+                for key in sorted(register) if key != "fields")
+            lines.append('   {%s, "fields": [' % rest)
+            fields = register["fields"]
+            for field_index, field in enumerate(fields):
+                lines.append("    %s%s" % (
+                    json.dumps(field, ensure_ascii=False, sort_keys=True,
+                               separators=(", ", ": ")),
+                    "," if field_index + 1 < len(fields) else ""))
+            lines.append('   ]}%s' % ("," if register_index + 1 < len(registers) else ""))
+        lines.append('  ]}%s' % ("," if map_index + 1 < len(document["maps"]) else ""))
+    lines.append(" ]")
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def json_document(generation, tool, platform, registers):
+    return pretty_json({
+        "schema": "byteripper.map/1",
+        "kind": "register",
+        "tool": tool,
+        "maps": [{
+            "id": generation,
+            "name": generation,
+            "registers": [{
+                "name": name,
+                "place": {"kind": kind, "offset": offset},
+                "words": 1,
+                "fields": [
+                    {"name": key, "bitOffset": bit, "count": count,
+                     **({"label": unescaped(label)} if label else {}),
+                     **({"options": [[number, word]
+                                     for number, word in sorted(options.items())]}
+                        if options else {})}
+                    for key, bit, count, label, options in entries
+                ],
+            } for name, kind, offset, entries in registers],
+            "source": {"platform": platform, "tool": tool,
+                       "generation": generation},
+        }],
+    })
+
+
 def main():
     args = sys.argv[1:]
     if not args or args[0] in ("-h", "--help"):
@@ -255,6 +322,10 @@ def main():
     args, platform = option(args, "--platform", None)
     args, generation = option(args, "--generation", None)
     args, tool = option(args, "--tool", None)
+    args, output_format = option(args, "--format", "swift")
+    if output_format not in ("swift", "json"):
+        print("--format is swift or json", file=sys.stderr)
+        return 2
     if not platform or not generation or not args:
         print(__doc__)
         return 2
@@ -327,6 +398,13 @@ def main():
         print("no register classes for platform %r in this build" % platform,
               file=sys.stderr)
         return 1
+
+    if output_format == "json":
+        print(json_document(generation, tool, platform, registers))
+        print("registers: %d (%s)" % (len(registers),
+                                     ", ".join(r[0] for r in registers)),
+              file=sys.stderr)
+        return 0
 
     lines = [
         "// The flash descriptor's registers of %s, as %s lays them out —" % (
