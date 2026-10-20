@@ -315,6 +315,8 @@ final class AgentUITests: XCTestCase {
         badge.sync(in: window, active: true)
         XCTAssertTrue(badge.superview === button)
         XCTAssertFalse(badge.isHidden)
+        XCTAssertEqual(badge.frame.maxX, button.bounds.maxX + AgentActivityBadge.overhang,
+                       "on the button's corner, past its edge where the button is no wider than its symbol")
         XCTAssertEqual(badge.isBlinking, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
 
         badge.sync(in: window, active: false)

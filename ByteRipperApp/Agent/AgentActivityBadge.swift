@@ -13,6 +13,16 @@ import Localization
 final class AgentActivityBadge: NSView {
     static let side: CGFloat = 8
 
+    /// How far the dot reaches past the button's right edge. Before macOS 26
+    /// the toolbar's button is hardly wider than its symbol, and a dot inside
+    /// its corner sat on the symbol; from 26 the button is a capsule with room
+    /// round the symbol, and the dot stays inside it. The view does not clip
+    /// its subviews, so the part outside is still drawn.
+    static var overhang: CGFloat {
+        if #available(macOS 26, *) { return 0 }
+        return 4
+    }
+
     override init(frame: NSRect) {
         super.init(frame: NSRect(x: 0, y: 0, width: Self.side, height: Self.side))
         wantsLayer = true
@@ -40,7 +50,7 @@ final class AgentActivityBadge: NSView {
             return
         }
         if superview !== button { button.addSubview(self) }
-        frame = NSRect(x: button.bounds.maxX - Self.side,
+        frame = NSRect(x: button.bounds.maxX - Self.side + Self.overhang,
                        y: button.isFlipped ? 0 : button.bounds.maxY - Self.side,
                        width: Self.side, height: Self.side)
         isHidden = false
