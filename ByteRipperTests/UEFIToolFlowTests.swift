@@ -2786,7 +2786,8 @@ final class UEFIToolFlowTests: XCTestCase {
                         rowsChanged: false)
 
         let labels = descendants(of: controller.view, ToolWrappingLabel.self)
-        XCTAssertTrue(labels.contains { $0.stringValue == table.note }, "the note is drawn under its table")
+        let note = try XCTUnwrap(labels.first { $0.stringValue == table.note }, "the note is drawn under its table")
+        XCTAssertEqual(note.textColor, .labelColor, "in the ordinary colour, as the rows above it")
     }
 }
 

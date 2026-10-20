@@ -140,10 +140,10 @@ import UEFITool
     /// size without waiting for the next parse — a zoom is not a re-read.
     private var detailShown: UEFINodeDetail = .empty
     private var detailSubject = ""
-    /// The folding tables the reader has opened, by title — kept for the
-    /// panel's life, so a table opened on one node is open on the next and
-    /// stays open through a re-render, and folded again only at the next
-    /// launch.
+    /// The folding tables the reader has opened, by title — kept while the
+    /// panel shows one file, so a table opened on one node is open on the
+    /// next and stays open through a re-render; another file starts with
+    /// every table as its definition says.
     private var unfoldedTables: Set<String> = []
     /// The sections open inside each table (a descriptor's strap words), by
     /// the table's title: kept as the tables are, across nodes.
@@ -1405,13 +1405,15 @@ import UEFITool
     /// The table and, where it has one, the line that sums it up under it —
     /// one view, so a folding table shows and hides both together. The line
     /// wraps inside the list and is not selectable: it is a reading of the
-    /// rows, not a value to copy.
+    /// rows, not a value to copy. It is drawn in the ordinary colour
+    /// (`UEFIDetailTable.note`): it says what the rows show, and neither a
+    /// tone nor a quieter grey of its own.
     private func makeTableBody(_ table: UEFIDetailTable) -> NSView {
         let grid = makeGrid(table)
         guard let note = table.note, !note.isEmpty else { return grid }
         let label = ToolWrappingLabel(string: note)
         label.font = ToolPanelFont.body()
-        label.textColor = .secondaryLabelColor
+        label.textColor = .labelColor
         let body = NSStackView(views: [grid, label])
         body.orientation = .vertical
         body.alignment = .leading
