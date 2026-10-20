@@ -144,9 +144,12 @@ def settings_of(body):
     one setting's byte under another's name.
     """
     found = []
-    logical_count = len(re.findall(r'<LogicalAccess ', body))
-    for match in re.finditer(r'<LogicalAccess name="([^"]+)"([^>]*)>(.*?)</LogicalAccess\s*>',
-                             body, re.S):
+    blocks = re.findall(r'<LogicalAccess\b', body)
+    matched = list(re.finditer(
+        r'<LogicalAccess name="([^"]+)"([^>]*)>(.*?)</LogicalAccess\s*>',
+        body, re.S))
+    logical_count = len(blocks)
+    for match in matched:
         name, attrs, inner = match.group(1), match.group(2), match.group(3)
         place = re.search(r'offset="(-?\d+)" length="(\d+)"(?: bit_low="(\d+)" bit_high="(\d+)")?',
                           inner)
@@ -182,7 +185,7 @@ def settings_of(body):
             "hex": kind in HEX_KINDS,
             "text": kind == "string" and physical == "String",
         })
-    return found
+    return found, len(blocks), len(matched)
 
 
 # What makes two lists' entries the same setting for reading purposes: where
@@ -212,13 +215,22 @@ def collect(texts):
     the thing to report: one map cannot serve two offsets, and the file has to
     be split per project before either is used.
     """
-    files, conflicts = {}, []
+    files, conflicts, unread = {}, [], []
     for text in texts:
-        for match in re.finditer(r'<File path="([^"]+)"[^>]*alias="([^"]*)"[^>]*>(.*?)</File\s*>',
-                                 text, re.S):
+        tokens = len(re.findall(r'<File\s+path=', text))
+        matches = list(re.finditer(
+            r'<File path="([^"]+)"[^>]*alias="([^"]*)"[^>]*>(.*?)</File\s*>',
+            text, re.S))
+        if tokens != len(matches):
+            unread.append("%d of %d <File> blocks did not parse"
+                          % (tokens - len(matches), tokens))
+        for match in matches:
             path, alias, body = match.group(1), match.group(2), match.group(3)
             path = "/home/" + path
-            settings = settings_of(body)
+            settings, blocks, matched = settings_of(body)
+            if blocks != matched:
+                unread.append("%s: %d of %d <LogicalAccess> blocks did not parse"
+                              % (path, blocks - matched, blocks))
             if not settings:
                 continue
             if path not in files:
@@ -247,7 +259,7 @@ def collect(texts):
     for path, name, _, _ in conflicts:
         files[path]["settings"] = [s for s in files[path]["settings"]
                                    if s["name"] != name]
-    return files, conflicts
+    return files, conflicts, unread
 
 
 def unescaped(text):
@@ -432,13 +444,18 @@ def main():
     if not texts:
         print("no platform list found in these builds", file=sys.stderr)
         return 1
-    files, conflicts = collect(texts)
+    files, conflicts, unread = collect(texts)
     readable = sum(len(f["settings"]) for f in files.values())
     print("builds: %d  platform lists: %d  files with readable settings: %d  settings: %d"
           % (len(paths), len(texts), len(files), readable), file=sys.stderr)
     for path, name, there, here in conflicts:
         print("! dropped %s %s: the lists lay it out differently (%s / %s)" %
               (path, name, there, here), file=sys.stderr)
+    # A block the regexes did not match is the one kind of loss the counts
+    # above cannot show: it is not a setting that states no place, it is a
+    # setting nobody looked at.
+    for note in unread:
+        print("! %s" % note, file=sys.stderr)
     if output_format == "json":
         print(json_document(files, generation, tool, variable))
         return 0
