@@ -21,7 +21,8 @@ Two more sources widen it, in this order of precedence after UEFITool:
   the Linux kernel's SPI-NOR tables (drivers/mtd/spi-nor/<vendor>.c, the files
   its Makefile lists, entries with a three-byte SNOR_ID and a name), then
   flashrom's per-vendor chip files (flashchips/*.c on branch main, the ids
-  resolved through include/flashchips.h, SPI chips probed by plain RDID).
+  resolved through include/flashchips.h, SPI chips probed by plain RDID; the
+  size defines — SIZE_8MiB, KiB — read from flashchips.c and include/flash.h).
 
 Only facts are read from them — the id, the part name, the size. The first
 source that knows an id names it; the size is the first one any source lists.
@@ -88,10 +89,13 @@ def parse(source):
 
 
 def flashrom_files(read):
-    """The per-vendor files flashchips.c includes, and the header that names ids."""
+    """The per-vendor files flashchips.c includes, the header that names ids, and
+    the sources whose defines spell sizes: `SIZE_8MiB` in flashchips.c, built
+    from `KiB` and `MiB` in include/flash.h."""
     index = read("flashchips.c")
     names = re.findall(r'#include\s+"(flashchips/[A-Za-z0-9_]+\.c)"', index)
-    return read("include/flashchips.h"), [read(name) for name in names]
+    return (read("include/flashchips.h"), [read(name) for name in names],
+            [index, read("include/flash.h")])
 
 
 def size_kb(expression):
@@ -104,8 +108,36 @@ def size_kb(expression):
     return product or None
 
 
-def parse_flashrom(header, sources):
-    """{jedec_id: (name, size_kb)} for SPI chips probed by RDID, first entry wins."""
+def size_defines(sources):
+    """{name: expression} for the defines that are products of integers and
+    other names — `SIZE_8MiB (8 * SIZE_1MiB)`, `MiB (1024 * KiB)` — and nothing
+    else, so a macro with arguments or code is never taken for a size."""
+    defines = {}
+    for text in sources:
+        for name, value in re.findall(r"^#define\s+(\w+)[ \t]+([^\n]*?)\s*(?:/\*.*)?$", text, re.M):
+            if re.fullmatch(r"[\w\s*()]+", value):
+                defines[name] = value
+    return defines
+
+
+def expand(expression, defines):
+    """`expression` with its names replaced by what they are defined as, and the
+    parentheses dropped — fine for a product, which is all a size is."""
+    for _ in range(8):
+        replaced = re.sub(r"\b[A-Za-z_]\w*\b",
+                          lambda name: "(%s)" % defines.get(name.group(0), name.group(0)), expression)
+        if replaced == expression:
+            break
+        expression = replaced
+    return expression.replace("(", " ").replace(")", " ")
+
+
+def parse_flashrom(header, sources, size_sources=()):
+    """{jedec_id: (name, size_kb)} for SPI chips probed by RDID, first entry wins.
+
+    `.total_size` is in KiB, spelled as a number, a product, or a define
+    (`SIZE_8MiB`, `8 * KiB`) that `size_sources` resolves."""
+    sizes = size_defines(size_sources)
     defines = dict(re.findall(r"#define\s+(\w+)\s+(0x[0-9A-Fa-f]+|\d+)\b", header))
 
     def value(token):
@@ -134,7 +166,8 @@ def parse_flashrom(header, sources):
             full = name.group(1)
             if not full.startswith(vendor):
                 full = vendor + " " + full
-            found.setdefault(maker << 16 | device, (full, size_kb(field("total_size"))))
+            size = field("total_size")
+            found.setdefault(maker << 16 | device, (full, size_kb(expand(size, sizes) if size else None)))
     return found
 
 
@@ -311,11 +344,18 @@ def main():
     if len(linux) < 100:
         print("read only %d Linux chips — the layout changed" % len(linux), file=sys.stderr)
         return 1
-    header, files = flashrom_files(read)
-    flashrom = parse_flashrom(header, files)
+    header, files, size_sources = flashrom_files(read)
+    flashrom = parse_flashrom(header, files, size_sources)
     if len(flashrom) < 200:
         print("read only %d flashrom chips — the layout changed" % len(flashrom),
               file=sys.stderr)
+        return 1
+    # Every flashrom chip has a size; one read as none is a spelling the parser
+    # does not know (as when sizes became `SIZE_8MiB`), not a chip without one.
+    unsized = sorted(table[0] for table in flashrom.values() if table[1] is None)
+    if len(unsized) > len(flashrom) // 50:
+        print("read no size for %d of %d flashrom chips — the size spelling changed: %s" % (
+            len(unsized), len(flashrom), ", ".join(unsized[:5])), file=sys.stderr)
         return 1
     entries = merge(uefitool, linux, flashrom)
     if len(uefitool) < 100:

@@ -47,7 +47,12 @@ python3 Skills/update-jedec-ids/scripts/gen_jedec.py --repo /path/to/ByteRipper
    XM25QH64A`). Entries without a name or id, or with a longer id, are skipped.
 3. **flashrom** — `flashchips/*.c` on `main`, ids resolved through
    `include/flashchips.h`. Only SPI chips probed by plain RDID; the first entry
-   for an id wins.
+   for an id wins. `.total_size` is in KiB and is spelled as a define —
+   `SIZE_8MiB`, from `flashchips.c`, built on `KiB` / `MiB` from
+   `include/flash.h` — which the generator expands. When more than one chip in
+   fifty reads with no size, it stops: flashrom has changed how it spells a
+   size, and the table would otherwise lose its capacities quietly (as a run
+   between upstream's two renames did, `8 * KiB`).
 
 The name is the first source's that knows the id; the size is the first any
 lists, in the same order, also for an entry UEFITool named. Each entry keeps
