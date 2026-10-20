@@ -553,13 +553,15 @@ python3 Skills/me-eom-structures/scripts/strap_map.py \
 ```
 
 The JSON is the source of truth and what a review reads; `map_bin.py` compiles
-the JSON files into `StrapMaps.bin` and increments the build the code is marked
-with (`Design/UEFI/STRAP_MAP_DATA.md`):
+the JSON files into `StrapMaps.bin`. The version lives in
+`MapSources/manifest.json` and changes only when the source JSON changes; the
+same number is a constant in `StrapMapDataVersion.swift`, and the reader
+refuses a binary that carries another (`Design/UEFI/STRAP_MAP_DATA.md`):
 
 ```bash
 python3 Skills/me-eom-structures/scripts/map_bin.py build \
     --out Packages/UEFIImage/Sources/UEFIImage/Resources/StrapMaps/StrapMaps.bin \
-    --version-file Packages/UEFIImage/MapSources/build.version \
+    --manifest Packages/UEFIImage/MapSources/manifest.json \
     --swift-version-file Packages/UEFIImage/Sources/UEFIImage/StrapMapDataVersion.swift \
     Packages/UEFIImage/MapSources/strap/pch.json \
     Packages/UEFIImage/MapSources/strap/pch18.json \

@@ -51,13 +51,13 @@ done
 derived="${BYTERIPPER_DD:-${DUMPCOMPARE_DD:-$PWD/.build/xcode}}"
 failed=0
 
-# The binary strap tables and the code's build mark must match their JSON
-# sources (`Design/UEFI/STRAP_MAP_DATA.md`). `--check` reads and rebuilds in
+# The binary strap tables, the JSON manifest and the code's version mark must
+# agree (`Design/UEFI/STRAP_MAP_DATA.md`). `--check` reads and rebuilds in
 # memory; it never writes. A stale pair fails the run before a test starts,
 # because every descriptor test would otherwise be testing the wrong tables.
 if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
     --out Packages/UEFIImage/Sources/UEFIImage/Resources/StrapMaps/StrapMaps.bin \
-    --version-file Packages/UEFIImage/MapSources/build.version \
+    --manifest Packages/UEFIImage/MapSources/manifest.json \
     --swift-version-file Packages/UEFIImage/Sources/UEFIImage/StrapMapDataVersion.swift \
     Packages/UEFIImage/MapSources/strap/pch.json \
     Packages/UEFIImage/MapSources/strap/pch18.json \

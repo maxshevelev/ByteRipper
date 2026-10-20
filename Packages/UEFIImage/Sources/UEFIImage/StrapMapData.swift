@@ -8,7 +8,7 @@ public enum MapDataError: Error, CustomStringConvertible, Equatable {
     case resourceMissing(String)
     case badMagic
     case unsupportedFormat(UInt16)
-    case buildMismatch(file: UInt32, code: UInt32)
+    case versionMismatch(file: UInt32, code: UInt32)
     case corrupt(String)
 
     public var description: String {
@@ -20,9 +20,9 @@ public enum MapDataError: Error, CustomStringConvertible, Equatable {
         case .unsupportedFormat(let version):
             return "the map resource is format \(version); this code reads "
                 + "\(StrapMapDataVersion.formatVersion)"
-        case .buildMismatch(let file, let code):
-            return "the map resource is build \(file); this code was marked "
-                + "with build \(code)"
+        case .versionMismatch(let file, let code):
+            return "the map resource is version \(file); this code was marked "
+                + "with version \(code)"
         case .corrupt(let reason):
             return "the map resource is corrupt: \(reason)"
         }
@@ -41,13 +41,13 @@ struct LoadedStrapMap: Sendable {
 ///
 /// The file is generated from the JSON under
 /// `Packages/UEFIImage/MapSources/strap` and committed
-/// (`Design/UEFI/STRAP_MAP_DATA.md`). Its header carries a build number that
-/// the code was marked with too (`StrapMapDataVersion`); a file whose build
+/// (`Design/UEFI/STRAP_MAP_DATA.md`). Its header carries a version that the
+/// code was marked with too (`StrapMapDataVersion`); a file whose version
 /// differs is refused before a section is read, so a stale resource can never
 /// be mistaken for a changed layout.
 enum StrapMapData {
     static let formatVersion = StrapMapDataVersion.formatVersion
-    static let expectedBuild = StrapMapDataVersion.build
+    static let expectedVersion = StrapMapDataVersion.version
 
     private static let loaded: Result<[LoadedStrapMap], MapDataError> = {
         guard let url = resourceURL else {
@@ -157,9 +157,9 @@ enum StrapMapData {
         guard version == formatVersion else {
             throw MapDataError.unsupportedFormat(version)
         }
-        let build = try u32(8)
-        guard build == expectedBuild else {
-            throw MapDataError.buildMismatch(file: build, code: expectedBuild)
+        let dataVersion = try u32(8)
+        guard dataVersion == expectedVersion else {
+            throw MapDataError.versionMismatch(file: dataVersion, code: expectedVersion)
         }
         var unchecked = bytes
         let storedChecksum = try u32(20)

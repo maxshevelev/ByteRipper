@@ -16,15 +16,16 @@ Swift layout is involved.
 | What | Where | Committed |
 | --- | --- | --- |
 | JSON sources | `Packages/UEFIImage/MapSources/strap/*.json` | yes |
-| Build counter | `Packages/UEFIImage/MapSources/build.version` | yes |
+| Version and source digest | `Packages/UEFIImage/MapSources/manifest.json` | yes |
 | Binary | `Packages/UEFIImage/Sources/UEFIImage/Resources/StrapMaps/StrapMaps.bin` | yes |
-| Code's build mark | `Packages/UEFIImage/Sources/UEFIImage/StrapMapDataVersion.swift` | yes, generated |
+| Code's version mark | `Packages/UEFIImage/Sources/UEFIImage/StrapMapDataVersion.swift` | yes, generated |
 | Reader | `Packages/UEFIImage/Sources/UEFIImage/StrapMapData.swift` | yes |
 | Compiler and dumper | `Skills/me-eom-structures/scripts/map_bin.py` | yes |
 
-The JSON is the source of truth. The binary and the Swift constant are
-generated from it; `map_bin.py build --check` rebuilds them in memory and
-compares, so a stale pair is reported rather than shipped.
+The JSON is the source of truth. The manifest holds the version and a digest
+of those JSON files; the binary and the Swift constant are generated from it.
+`map_bin.py build --check` rebuilds them in memory and compares, so a stale
+pair is reported rather than shipped.
 
 ## JSON
 
@@ -63,7 +64,7 @@ before it is used.
 | 0 | 4 bytes | `BRM1` |
 | 4 | u16 | format version (1) |
 | 6 | u16 | header size (32) |
-| 8 | u32 | build |
+| 8 | u32 | version (the data contract) |
 | 12 | u16 | kind (1 = strap) |
 | 14 | u16 | flags |
 | 16 | u32 | section count |
@@ -124,14 +125,24 @@ There are two numbers, for two different jobs:
 - **format version** changes when the layout above changes. The reader has one
   it was written for and refuses any other; unknown sections are skipped, so a
   newer file with an unchanged core still reads.
-- **build** changes on **every** compilation. The compiler increments
-  `build.version`, writes it into the header and into
-  `StrapMapDataVersion.swift`. The reader compares the file's build with the
-  one its code was marked with **before reading a section**, and refuses a
-  mismatch. A stale binary is therefore reported as a stale binary, never
-  misread as a changed layout.
+- **version** is the data contract. It lives in `manifest.json` together with
+  a digest of the source JSON, and changes **only when that digest changes**.
+  The compile step recomputes the digest: a changed source increments the
+  version once, an unchanged one leaves it; a rebuild that rewrites the same
+  descriptions keeps both the version and the bytes. The same number is
+  written into the binary and into `StrapMapDataVersion.swift`, and the reader
+  compares the file's version with the code's **before reading a section**. A
+  stale binary is therefore reported as a stale binary, never misread as a
+  changed layout.
 
-The checksum catches an edited or truncated file independently of the build.
+When the reader's *expectations* change without a data change (a new field
+interpreted, a different rule), the version is bumped by hand in the manifest;
+the build then requires the code mark to carry it too and refuses otherwise.
+The build also refuses when the source digest is unchanged but
+`StrapMapDataVersion.swift` carries another number — the code would not be
+marked with the data it reads.
+
+The checksum catches an edited or truncated file independently of the version.
 
 The reader degrades: `StrapMapData.map(id:)` returns nil, `DescriptorStrapMap.all`
 is empty, and the panel shows a strap section's words as numbers. Tests use the
@@ -147,16 +158,17 @@ python3 Skills/me-eom-structures/scripts/strap_map.py \
     --words 69,70,74,90,101,114,115 --format json > \
     Packages/UEFIImage/MapSources/strap/pch.json
 
-# 2. Compile, which increments the build.
+# 2. Compile. The version comes from the manifest; if the JSON digest changed,
+#    it is incremented and written into the binary and the Swift constant.
 python3 Skills/me-eom-structures/scripts/map_bin.py build \
     --out Packages/UEFIImage/Sources/UEFIImage/Resources/StrapMaps/StrapMaps.bin \
-    --version-file Packages/UEFIImage/MapSources/build.version \
+    --manifest Packages/UEFIImage/MapSources/manifest.json \
     --swift-version-file Packages/UEFIImage/Sources/UEFIImage/StrapMapDataVersion.swift \
     Packages/UEFIImage/MapSources/strap/pch.json \
     Packages/UEFIImage/MapSources/strap/pch18.json \
     Packages/UEFIImage/MapSources/strap/spt.json
 
-# 3. Verify the committed pair (no increment, byte-for-byte).
+# 3. Verify the committed pair (no write, byte-for-byte).
 python3 Skills/me-eom-structures/scripts/map_bin.py build --check …same arguments…
 
 # 4. Read a binary back, for review or debugging.
