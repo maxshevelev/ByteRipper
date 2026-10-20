@@ -228,7 +228,8 @@ final class DescriptorDetailTests: XCTestCase {
 
     /// On Cougar Point the 18-word section reads as the fields Intel's SPI
     /// Programming Guide names, with the words the guide calls reserved left
-    /// as raw rows; the values here are `ME 7`'s.
+    /// as raw rows; the values here are `ME 7`'s, and the defaults are the
+    /// tool template's.
     func testTheCougarPointStrapsAreFields() throws {
         var words = [UInt32](repeating: 0, count: 18)
         words[0] = 0x0920_D682
@@ -238,11 +239,11 @@ final class DescriptorDetailTests: XCTestCase {
 
         XCTAssertEqual(table.columns, ["Field", "Bits", "Value", "Default"])
         XCTAssertEqual(try XCTUnwrap(row(table, "PCHSTRP0_SMB_EN")).map(\.text),
-                       ["PCHSTRP0_SMB_EN", "7", "0x1", ""])
+                       ["PCHSTRP0_SMB_EN", "7", "0x1", "0x1"])
         XCTAssertEqual(try XCTUnwrap(row(table, "PCHSTRP0_BBBS")).map(\.text),
-                       ["PCHSTRP0_BBBS", "29–30", "0x0", ""])
+                       ["PCHSTRP0_BBBS", "29–30", "0x0", "0x0"])
         XCTAssertEqual(try XCTUnwrap(row(table, "PCHSTRP10_Deep_SX_EN")).map(\.text),
-                       ["PCHSTRP10_Deep_SX_EN", "23", "0x1", ""])
+                       ["PCHSTRP10_Deep_SX_EN", "23", "0x1", "0x1"])
         XCTAssertEqual(try XCTUnwrap(row(table, "PCHSTRP3")).map(\.text),
                        ["PCHSTRP3", "", "0x0", ""],
                        "a reserved word keeps its raw row")

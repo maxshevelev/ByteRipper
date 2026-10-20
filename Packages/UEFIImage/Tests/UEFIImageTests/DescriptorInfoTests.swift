@@ -571,15 +571,19 @@ final class DescriptorInfoTests: XCTestCase {
         let smb = try XCTUnwrap(cougar.fields.first { $0.name == "PCHSTRP0_SMB_EN" })
         XCTAssertEqual(smb.bits, 7...7)
         XCTAssertEqual(smb.options?[1], "Enabled")
+        XCTAssertEqual(smb.defaultValue, 1, "Flash Image Tool builds it enabled")
         let bbbs = try XCTUnwrap(cougar.fields.first { $0.name == "PCHSTRP0_BBBS" })
         XCTAssertEqual(bbbs.bits, 29...30)
         XCTAssertEqual(bbbs.options?[0], "64 KB")
+        XCTAssertEqual(bbbs.defaultValue, 0, "the tool's default is a 64 KB block")
         let deepSx = try XCTUnwrap(cougar.fields.first { $0.name == "PCHSTRP10_Deep_SX_EN" })
         XCTAssertEqual(deepSx.word, 10)
         XCTAssertEqual(deepSx.bits, 23...23)
+        XCTAssertEqual(deepSx.defaultValue, 1)
         let profile = try XCTUnwrap(cougar.fields.first { $0.name == "PCHSTRP10_ICC_PRO_SEL" })
         XCTAssertEqual(profile.bits, 22...22)
         XCTAssertEqual(profile.options?[1], "Soft strap")
+        XCTAssertEqual(profile.defaultValue, 1)
         XCTAssertEqual(Set(0..<cougar.words)
             .subtracting(Set(cougar.fields.map(\.word))), Set([3, 5, 6, 8, 12, 13, 14, 16]),
                        "the words the guide calls reserved")
@@ -592,9 +596,36 @@ final class DescriptorInfoTests: XCTestCase {
 
         let lynx = try XCTUnwrap(DescriptorStrapMap.pch21)
         XCTAssertEqual(lynx.words, 21)
-        XCTAssertTrue(lynx.fields.allSatisfy { $0.word < 18 },
-                      "words 18-20 have no public layout")
+        XCTAssertNil(lynx.fields.first { $0.word == 18 },
+                     "word 18 is in neither the guide nor the tool's template")
+        XCTAssertNil(lynx.fields.first { $0.word == 20 },
+                     "nor is word 20")
         XCTAssertNotNil(lynx.fields.first { $0.name == "PCHSTRP0_SMB_EN" })
+
+        // The template's own words: Lynx Point's PCIe/SATA lane modes, and the
+        // Wildcat Point power controls. Their positions are the template's
+        // order, packed from the high end of the section they fill.
+        let lane = try XCTUnwrap(lynx.fields.first {
+            $0.name == "PCHSTRP14_PciePortConfigStrap3"
+        })
+        XCTAssertEqual(lane.word, 14)
+        XCTAssertEqual(lane.bits, 12...13)
+        XCTAssertEqual(lane.defaultValue, 3, "1x4")
+        let sata3 = try XCTUnwrap(lynx.fields.first {
+            $0.name == "PCHSTRP14_Sata3PcieP6L0Mode"
+        })
+        XCTAssertEqual(sata3.bits, 2...3)
+        XCTAssertEqual(sata3.defaultValue, 2, "assigned by GPIO37's native mode")
+        let sataMphy = try XCTUnwrap(lynx.fields.first {
+            $0.name == "PCHSTRP19_SataMphyPowerControlDefault"
+        })
+        XCTAssertEqual(sataMphy.word, 19)
+        XCTAssertEqual(sataMphy.bits, 1...1)
+        XCTAssertEqual(sataMphy.defaultValue, 0)
+        let usb3Mphy = try XCTUnwrap(lynx.fields.first {
+            $0.name == "PCHSTRP19_Usb3MphyPowerControlDefault"
+        })
+        XCTAssertEqual(usb3Mphy.bits, 0...0)
     }
 
     /// Three boards' strap words through the tables, as the guide reads them:
@@ -648,6 +679,18 @@ final class DescriptorInfoTests: XCTestCase {
         XCTAssertEqual(air2013["PCHSTRP0_LANPHYPC_GP12_SEL"], 1)
         XCTAssertEqual(air2013["PCHSTRP10_ICC_PRO_SEL"], 1)
         XCTAssertEqual(air2013["PCHSTRP10_Deep_SX_EN"], 1)
+        // The template's word 14: this board routes all four SATA ports to
+        // PCIe port 6 lanes, keeps 1x4 port configurations, and leaves the
+        // power controls clear.
+        XCTAssertEqual(air2013["PCHSTRP14_PciePortConfigStrap3"], 3)
+        XCTAssertEqual(air2013["PCHSTRP14_PciePortConfigStrap2"], 3)
+        XCTAssertEqual(air2013["PCHSTRP14_Sata0PcieP6L3Mode"], 1)
+        XCTAssertEqual(air2013["PCHSTRP14_Sata1PcieP6L2Mode"], 1)
+        XCTAssertEqual(air2013["PCHSTRP14_Sata2PcieP6L1Mode"], 1)
+        XCTAssertEqual(air2013["PCHSTRP14_Sata3PcieP6L0Mode"], 1)
+        XCTAssertEqual(air2013["PCHSTRP14_PcieNandSelect"], 1)
+        XCTAssertEqual(air2013["PCHSTRP19_SataMphyPowerControlDefault"], 0)
+        XCTAssertEqual(air2013["PCHSTRP19_Usb3MphyPowerControlDefault"], 0)
     }
 
     /// No strap base, no section — the bytes at offset zero are not straps.

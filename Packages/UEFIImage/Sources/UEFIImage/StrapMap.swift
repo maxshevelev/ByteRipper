@@ -29,7 +29,12 @@ import Foundation
 /// before. The generations before FIT's layout documents — Ibex Peak, Cougar
 /// Point and Lynx Point — read flashrom's structures written from Intel's SPI
 /// Programming Guides (`intel_strap_map.py`): their sections are 16, 18 and 21
-/// words, and a length is only theirs on the generation that states it.
+/// words, and a length is only theirs on the generation that states it. On
+/// Cougar Point and Lynx Point the tool package's own `newfiletmpl.xml` adds
+/// what the guide leaves out — each field's default, the tool's option words,
+/// and Lynx Point's words 14 and 19, whose positions the dumps at hand read
+/// back; Ibex Peak's package states defaults too, but its table is the guide's
+/// alone until its template is read.
 public struct DescriptorStrapMap: Sendable {
     /// One named field of the section: where it sits and what the tool writes
     /// there by default. The name is the tool's own identifier —
