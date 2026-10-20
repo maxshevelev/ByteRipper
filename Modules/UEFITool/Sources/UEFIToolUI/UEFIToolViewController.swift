@@ -866,6 +866,8 @@ import UEFITool
             )
         }
 
+        bindScrollRequest()
+
         // The ME focus is the sub-tree's half of the selection: it reveals its
         // own row, not a UEFI node. The two focuses are apart, so only one is
         // in play at a time.
@@ -878,13 +880,13 @@ import UEFITool
         // to select, and the title already stands for it in accent colour, so
         // there is nothing to do to the tree.
         if presented.title != nil, focus == presented.title?.id {
-            scrollsToFocusOnNextShow = false
+            scrollRequest = nil
             outline.deselectAll(nil)
             return
         }
 
         guard let focus, let tree, tree.node(focus) != nil else {
-            scrollsToFocusOnNextShow = false
+            scrollRequest = nil
             outline.deselectAll(nil)
             return
         }
@@ -896,6 +898,10 @@ import UEFITool
     /// the sub-tree — opened on the way the UEFI reveal opens its own — so the
     /// row exists by the time a selection is asked to land on it.
     private func revealME(_ path: [Int]) {
+        // Taken here rather than where the row is found: a reveal that ends
+        // early still answers the request, which must not wait for a later
+        // show to scroll for.
+        let scrollsAnyway = takeScrollRequest(for: .me(path))
         guard !path.isEmpty else {
             deselectForShow()
             return
@@ -919,7 +925,6 @@ import UEFITool
         // The same rule the UEFI half's `selectAndScroll` keeps: a show that
         // finds the row where it already was does not move the table — unless
         // the reader asked to be shown it.
-        let scrollsAnyway = takeScrollToFocus()
         guard outline.selectedRow != row else {
             if scrollsAnyway { outline.scrollRowToVisible(row) }
             return
@@ -958,7 +963,12 @@ import UEFITool
             let settled = [preferred, self.meFocus].compactMap { $0 }
                 .first { self.meNode(of: self.meRow($0)) != nil }
                 ?? self.meRoots.first?.path
-            guard let settled else { return }
+            guard let settled else {
+                // Nowhere to land: a reveal that asked to be shown its row is
+                // over, and the next show is not it.
+                if self.scrollRequest == .next { self.scrollRequest = nil }
+                return
+            }
             self.revealME(settled)
             // The panel chose this row, so the session is told outright rather
             // than the outline being asked. A selection read back off the
@@ -1034,7 +1044,13 @@ import UEFITool
             // that selected the old one then took the selection back from the
             // new one — what the full show after every selection used to
             // paper over, by revealing the focus again.
-            guard let self, self.focus == nodeID, tree.node(nodeID) != nil else { return }
+            guard let self else { return }
+            guard self.focus == nodeID, tree.node(nodeID) != nil else {
+                // The row this reveal was asked to show is not the focus any
+                // more: the request for it goes with it.
+                if self.scrollRequest == .uefi(nodeID) { self.scrollRequest = nil }
+                return
+            }
             // The selection is the panel's own doing, not the reader's, so it
             // must not read back as a click — that would publish a zone and
             // scroll the dump away from the byte a reveal was asked about.
@@ -1044,21 +1060,45 @@ import UEFITool
         }
     }
 
-    /// Set by `scrollToFocusOnNextShow`: the next reveal brings its row on
-    /// screen even when the row is the selection already.
-    private var scrollsToFocusOnNextShow = false
+    /// A row the reader asked to be shown (`scrollToFocusOnNextShow`): armed
+    /// until the show that follows says which row that is, then tied to it.
+    /// Tied, it is answered by the reveal that lands on that row, or dropped
+    /// when a show moves the focus elsewhere — never left over for a later
+    /// show that only redraws, which would move the table nobody asked to.
+    private enum ScrollRequest: Equatable {
+        case next
+        case uefi(NodeID)
+        case me([Int])
+    }
+
+    private var scrollRequest: ScrollRequest?
 
     /// The reader asked to be shown a row — the reveal button, **Show in
     /// Tree**, the DMI button — rather than the panel showing its focus again
     /// after a change. The reveal that follows scrolls to the row even when it
     /// finds it already selected, which a passive show must not do.
     func scrollToFocusOnNextShow() {
-        scrollsToFocusOnNextShow = true
+        scrollRequest = .next
     }
 
-    private func takeScrollToFocus() -> Bool {
-        defer { scrollsToFocusOnNextShow = false }
-        return scrollsToFocusOnNextShow
+    /// The show's focus is known: an armed request is tied to it, and one tied
+    /// to a row the focus has left is dropped.
+    private func bindScrollRequest() {
+        guard let request = scrollRequest else { return }
+        let current = meFocus.map(ScrollRequest.me) ?? focus.map(ScrollRequest.uefi)
+        if request == .next {
+            scrollRequest = current
+        } else if request != current {
+            scrollRequest = nil
+        }
+    }
+
+    /// Whether the reveal landing on `target` is one the reader asked for —
+    /// answered once.
+    private func takeScrollRequest(for target: ScrollRequest) -> Bool {
+        guard let request = scrollRequest, request == .next || request == target else { return false }
+        scrollRequest = nil
+        return true
     }
 
     private func selectAndScroll(to nodeID: NodeID) {
@@ -1070,7 +1110,7 @@ import UEFITool
            let standing = supersededCopies(in: store)[nodeID] {
             row = outline.row(forItem: self.row(standing))
         }
-        let scrollsAnyway = takeScrollToFocus()
+        let scrollsAnyway = takeScrollRequest(for: .uefi(nodeID))
         guard row >= 0 else { return }
         // A show that finds the focus where it already was — a branch opening,
         // the checksum pass that follows it, an edit — is not a reason to move

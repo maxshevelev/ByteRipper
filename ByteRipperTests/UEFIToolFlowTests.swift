@@ -184,6 +184,51 @@ final class UEFIToolFlowTests: XCTestCase {
     /// checksum pass behind it produce — used to scroll the tree back to the
     /// selected row, taking the reader away from whatever they had scrolled to
     /// look at.
+    /// A reveal the reader asked for that finds nowhere to land does not leave
+    /// its "scroll there anyway" behind for a later show. Left over, it made
+    /// the next show that only redrew — a checksum pass, an edit's re-read —
+    /// bring the table back to the selection the reader had scrolled away
+    /// from.
+    func testAnUnansweredRevealLeavesNoScrollBehind() throws {
+        _ = try open(UEFITestImage.make())
+        let tree = try expandRow(0)
+        guard tree.numberOfRows >= 4 else {
+            return XCTFail("the premise: rows to scroll past — \(tree.numberOfRows) rows")
+        }
+        let panel = try XCTUnwrap(controller?.tools.panel)
+        let splitter = try XCTUnwrap(descendants(of: panel, ALSplitView.self).first)
+        splitter.setDividerPosition(56, at: 0)
+        window?.layoutIfNeeded()
+        tree.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        followUEFISelection(controller)
+        window?.layoutIfNeeded()
+        let selected = try node(atRow: 0).id
+        // The shows the selection started have had their turn.
+        RunLoop.main.run(until: Date().addingTimeInterval(0.35))
+
+        let clip = try XCTUnwrap(tree.enclosingScrollView)
+        clip.contentView.scroll(to: NSPoint(x: 0, y: 40))
+        clip.reflectScrolledClipView(clip.contentView)
+        let away = clip.contentView.bounds.origin.y
+        XCTAssertGreaterThan(away, 0, "the premise: scrolled away from the row")
+
+        // Asked to show a row, and nowhere to land: the test image has no ME
+        // region, so opening a node onto its ME sub-tree settles on nothing.
+        let vc = try XCTUnwrap(session().viewController as? UEFIToolViewController)
+        vc.scrollToFocusOnNextShow()
+        vc.openMERegion(selected)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.35))
+
+        // A show that only redraws, with the focus where it was.
+        let lazyTree = try XCTUnwrap(controller?.windowModel.pane1.uefiState.tree)
+        vc.show(image: nil, tree: lazyTree, focus: selected, detail: .empty, catalogue: .empty,
+                badChecksums: [:], canWrite: false, isBuilding: false, rowsChanged: false)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.35))
+        XCTAssertEqual(clip.contentView.bounds.origin.y, away, accuracy: 0.5,
+                       "the table stays where the reader scrolled it")
+        XCTAssertEqual(tree.selectedRow, 0, "and the selection is where it was")
+    }
+
     func testOpeningARowDoesNotScrollBackToTheSelection() throws {
         _ = try open(UEFITestImage.make())
         let tree = try expandRow(0)
