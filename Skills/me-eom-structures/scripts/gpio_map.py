@@ -79,12 +79,21 @@ def members(texts, name):
     """
     found, conflicts = {}, []
     for text in texts:
-        match = re.search(r'<Class name="%s"[^>]*>(.*?)</Class>' % re.escape(name),
+        match = re.search(r'<Class name="%s"[^>]*>(.*?)</Class\s*>' % re.escape(name),
                           text, re.S)
         if not match:
             continue
-        for label, value in re.findall(
-                r'<CfgOpt name="([^"]+)"\s+value="([^"]*)"', match.group(1)):
+        definitions = len(re.findall(r'<Class name="%s"' % re.escape(name), text))
+        if definitions > 1:
+            print("! %s: %d definitions, the first is read"
+                  % (name, definitions), file=sys.stderr)
+        body = match.group(1)
+        stated = len(re.findall(r'<CfgOpt\b', body))
+        pairs = re.findall(r'<CfgOpt name="([^"]+)"\s+value="([^"]*)"', body)
+        if stated != len(pairs):
+            print("! %s: %d of %d <CfgOpt> entries did not parse"
+                  % (name, stated - len(pairs), stated), file=sys.stderr)
+        for label, value in pairs:
             try:
                 number = int(value, 0)
             except ValueError:

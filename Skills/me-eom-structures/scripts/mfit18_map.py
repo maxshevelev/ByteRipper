@@ -107,7 +107,12 @@ def ui_items(docs):
     words = {}
     conflicts = set()
     for _, text in docs:
-        for match in re.finditer(r'<ui_item name="([^"]+)"([^>]*)>', text):
+        matches = list(re.finditer(r'<ui_item\s+name="([^"]+)"([^>]*)>', text))
+        stated = len(re.findall(r'<ui_item\b', text))
+        if stated != len(matches):
+            print("! %d of %d <ui_item> entries did not parse"
+                  % (stated - len(matches), stated), file=sys.stderr)
+        for match in matches:
             name, attrs = match.group(1), match.group(2)
             kind = re.search(r'config_type="([^"]*)"', attrs)
             kind = kind.group(1) if kind else None
@@ -166,22 +171,41 @@ def options_of(entry):
 
 
 def settings_files(docs):
-    """The `<Files>` document that holds the settings: alias → its `<nvar>`s."""
+    """The `<Files>` document that holds the settings: alias → its `<nvar>`s.
+
+    Returns the files and what the block regexes did not read: a `<File>` or
+    `<nvar>` the document states but no pattern matched is a setting nobody
+    looked at, as distinct from one MFIT deliberately leaves to a plugin.
+    """
     for _, text in docs:
         if "<nvar " not in text:
             continue
+        unread = []
+        stated_files = len(re.findall(r'<File\b[^>]*>', text))
+        matches = list(re.finditer(r'<File name="([^"]+)"[^>]*>(.*?)</File\s*>',
+                                   text, re.S))
+        if stated_files != len(matches):
+            unread.append("%d of %d <File> blocks did not parse"
+                          % (stated_files - len(matches), stated_files))
         files = []
-        for match in re.finditer(r'<File name="([^"]+)"[^>]*>(.*?)</File>', text, re.S):
+        for match in matches:
             alias, body = match.group(1), match.group(2)
             nvars = []
-            for nvar in re.finditer(r'<nvar name="([^"]+)"[^>]*>(.*?)</nvar>', body, re.S):
+            stated_nvars = len(re.findall(r'<nvar\b[^>]*>', body))
+            matched_nvars = list(re.finditer(
+                r'<nvar name="([^"]+)"[^>]*>(.*?)</nvar\s*>', body, re.S))
+            if stated_nvars != len(matched_nvars):
+                unread.append("%s: %d of %d <nvar> blocks did not parse"
+                              % (alias, stated_nvars - len(matched_nvars),
+                                 stated_nvars))
+            for nvar in matched_nvars:
                 name, inner = nvar.group(1), nvar.group(2)
-                place = re.search(r'<physical[^>]*offset="([^"]+)" length="([^"]+)"'
+                place = re.search(r'<physical\b[^>]*?offset="([^"]+)"\s+length="([^"]+)"'
                                   r'(?:\s+bit_low="(\d+)"\s+bit_high="(\d+)")?', inner)
                 nvars.append((name, place, inner))
             files.append((alias, nvars))
-        return files
-    return []
+        return files, unread
+    return [], []
 
 
 def swift_literal(text):
@@ -340,10 +364,12 @@ def main():
     docs = list(documents(open(path, "rb").read()))
     paths_of = paths(docs)
     words, conflicts = ui_items(docs)
-    raw = settings_files(docs)
+    raw, unread = settings_files(docs)
     if not raw or not paths_of:
         print("no settings database found in this build", file=sys.stderr)
         return 1
+    for note in unread:
+        print("! %s" % note, file=sys.stderr)
 
     files = []
     skipped = collections.Counter()

@@ -116,9 +116,29 @@ def documents(blob):
 
 def classes(text):
     """The document's `<Class name="…">` bodies, in order."""
-    for match in re.finditer(r'<Class name="([^"]+)"[^>]*>(.*?)</Class>',
+    for match in re.finditer(r'<Class name="([^"]+)"[^>]*>(.*?)</Class\s*>',
                              text, re.S):
         yield match.group(1), match.group(2)
+
+
+def class_blocks(text):
+    """Every `<Class>` the document closes before its next opening.
+
+    The tools leave a class or two unclosed; the block regex reads such a
+    class through to the next `</Class>`, which is the following class's.
+    `classes()` is compared with this count, so a class the tool never closed
+    is not reported as a parse failure of ours.
+    """
+    out = 0
+    for match in re.finditer(r'<Class\b([^>]*)>', text):
+        if match.group(0).rstrip().endswith("/>"):
+            continue
+        following = text.find("<Class", match.end())
+        close = re.search(r'</Class\s*>', text[match.end():
+                                                following if following >= 0 else len(text)])
+        if close is not None:
+            out += 1
+    return out
 
 
 def attrs_of(text):
@@ -474,6 +494,12 @@ def main():
     if not documents_found:
         print("no XML documents found in this build", file=sys.stderr)
         return 1
+    for text in documents_found:
+        stated = class_blocks(text)
+        matched = sum(1 for _ in classes(text))
+        if stated != matched:
+            print("! %d of %d well-formed <Class> blocks did not parse"
+                  % (stated - matched, stated), file=sys.stderr)
     body = uep_body(documents_found, generation)
     values = value_classes(documents_found)
     words = settings_words(documents_found)

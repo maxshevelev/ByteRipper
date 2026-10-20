@@ -54,8 +54,8 @@ REGISTERS = [
 ]
 
 ITEM = re.compile(r'<serialized_item ([^>]*)/>')
-UI = re.compile(r'<ui_item name="([^"]+)"([^>]*)>')
-BIND = re.compile(r'<bind_action type="([^"]+)" ui_controller="([^"]+)" '
+UI = re.compile(r'<ui_item\s+name="([^"]+)"([^>]*)>')
+BIND = re.compile(r'<bind_action\s+type="([^"]+)"\s+ui_controller="([^"]+)"\s+'
                   r'serialized_item="([^"]+)"')
 
 
@@ -107,12 +107,49 @@ def options_of(kind, params):
     return table or None
 
 
+def mfit_block(text, block_id):
+    """A `<mfit_data id="…">` block's body, or None."""
+    opening = re.search(r'<mfit_data\s+id="%s"[^>]*>' % re.escape(block_id), text)
+    if not opening:
+        return None
+    closing = re.search(r'</mfit_data\s*>', text[opening.end():])
+    if not closing:
+        print("! %s: the block has no closing tag" % block_id, file=sys.stderr)
+        return None
+    return text[opening.end():opening.end() + closing.start()]
+
+
+def account_block(block, where):
+    """A tag the regexes did not read is a field nobody looked at."""
+    stated = sum(1 for match in re.finditer(r'<serialized_item\b[^>]*>', block)
+                 if 'type="BitfieldItem"' in match.group(0))
+    matched = sum(1 for match in ITEM.finditer(block)
+                  if 'type="BitfieldItem"' in match.group(0))
+    if stated != matched:
+        print("! %s: %d of %d <serialized_item> bitfields did not parse"
+              % (where, stated - matched, stated), file=sys.stderr)
+    for pattern, tag in ((UI, "ui_item"), (BIND, "bind_action")):
+        if tag == "bind_action":
+            # A master-access bind names a custom controller, and a
+            # mapping bind names several items; neither is the plain
+            # one-item form these scripts read.
+            stated_tag = sum(1 for match in re.finditer(r'<bind_action\b[^>]*>', block)
+                             if 'custom_ui_controller' not in match.group(0)
+                             and 'type="mapping"' not in match.group(0))
+        else:
+            stated_tag = len(re.findall(r'<%s\b' % tag, block))
+        matched_tag = sum(1 for _ in pattern.finditer(block))
+        if stated_tag != matched_tag:
+            print("! %s: %d of %d <%s> entries did not parse"
+                  % (where, stated_tag - matched_tag, stated_tag, tag),
+                  file=sys.stderr)
+
+
 def fields_of(text, register):
-    start = text.find('<mfit_data id="%s">' % register)
-    if start < 0:
+    block = mfit_block(text, register)
+    if block is None:
         return []
-    end = text.find('</mfit_data>', start)
-    block = text[start:end]
+    account_block(block, register)
     words = {}
     for match in UI.finditer(block):
         name, attrs = match.group(1), match.group(2)

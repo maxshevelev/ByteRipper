@@ -82,8 +82,8 @@ TWO_KINDS = {
 }
 
 ITEM = re.compile(r'<serialized_item ([^>]*)/>')
-UI = re.compile(r'<ui_item name="([^"]+)"([^>]*)>')
-BIND = re.compile(r'<bind_action type="([^"]+)" ui_controller="([^"]+)" '
+UI = re.compile(r'<ui_item\s+name="([^"]+)"([^>]*)>')
+BIND = re.compile(r'<bind_action\s+type="([^"]+)"\s+ui_controller="([^"]+)"\s+'
                   r'serialized_item="([^"]+)"')
 
 
@@ -149,21 +149,62 @@ def block_words(block):
     return words
 
 
+def mfit_block(text, block_id):
+    """A `<mfit_data id="…">` block's body, or None.
+
+    Both tags are matched with tolerated spacing: the tools' writer does not
+    always put the bracket straight after the name.
+    """
+    opening = re.search(r'<mfit_data\s+id="%s"[^>]*>' % re.escape(block_id), text)
+    if not opening:
+        return None
+    closing = re.search(r'</mfit_data\s*>', text[opening.end():])
+    if not closing:
+        print("! %s: the block has no closing tag" % block_id, file=sys.stderr)
+        return None
+    return text[opening.end():opening.end() + closing.start()]
+
+
+def account_block(block, where):
+    """A tag the regexes did not read is a field nobody looked at."""
+    stated = sum(1 for match in re.finditer(r'<serialized_item\b[^>]*>', block)
+                 if 'type="BitfieldItem"' in match.group(0))
+    matched = sum(1 for match in ITEM.finditer(block)
+                  if 'type="BitfieldItem"' in match.group(0))
+    if stated != matched:
+        print("! %s: %d of %d <serialized_item> bitfields did not parse"
+              % (where, stated - matched, stated), file=sys.stderr)
+    for pattern, tag in ((UI, "ui_item"), (BIND, "bind_action")):
+        if tag == "bind_action":
+            # A master-access bind names a custom controller, and a
+            # mapping bind names several items; neither is the plain
+            # one-item form these scripts read.
+            stated_tag = sum(1 for match in re.finditer(r'<bind_action\b[^>]*>', block)
+                             if 'custom_ui_controller' not in match.group(0)
+                             and 'type="mapping"' not in match.group(0))
+        else:
+            stated_tag = len(re.findall(r'<%s\b' % tag, block))
+        matched_tag = sum(1 for _ in pattern.finditer(block))
+        if stated_tag != matched_tag:
+            print("! %s: %d of %d <%s> entries did not parse"
+                  % (where, stated_tag - matched_tag, stated_tag, tag),
+                  file=sys.stderr)
+
+
 def fields_of(text, block_id, prefix=None, ui_from=None):
-    start = text.find('<mfit_data id="%s">' % block_id)
-    if start < 0:
+    block = mfit_block(text, block_id)
+    if block is None:
         return []
-    end = text.find('</mfit_data>', start)
-    block = text[start:end]
+    account_block(block, block_id)
     words = block_words(block)
     # A container may bind its fields to another container's interface text —
     # `ui_controller="$(ui_ref_container):HyperThreadingDisable"` — since the
     # layout gives it that container's UI (`ui_ref_container`).
     fallback = {}
     if ui_from:
-        other_start = text.find('<mfit_data id="%s">' % ui_from)
-        if other_start >= 0:
-            fallback = block_words(text[other_start:text.find('</mfit_data>', other_start)])
+        other = mfit_block(text, ui_from)
+        if other is not None:
+            fallback = block_words(other)
     binds = {item: controller for _, controller, item in BIND.findall(block)}
     fields = []
     for attrs in ITEM.findall(block):

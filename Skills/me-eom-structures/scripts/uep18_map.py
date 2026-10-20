@@ -67,9 +67,9 @@ TWO_KINDS = {
 ITEM = re.compile(
     r'<serialized_item name="([^"]+)" type="([^"]+)" value="([^"]*)" '
     r'offset="([^"]+)" bit_low="(\d+)" bit_high="(\d+)"/>')
-UI = re.compile(r'<ui_item name="([^"]+)"([^>]*)>')
-BIND = re.compile(r'<bind_action type="([^"]+)" ui_controller="([^"]+)" '
-                  r'serialized_item="([^"]+)"/>')
+UI = re.compile(r'<ui_item\s+name="([^"]+)"([^>]*)>')
+BIND = re.compile(r'<bind_action\s+type="([^"]+)"\s+ui_controller="([^"]+)"\s+'
+                  r'serialized_item="([^"]+)"\s*/>')
 
 
 def documents(blob):
@@ -143,11 +143,37 @@ def options_of(entry):
     return table or None
 
 
+def account_text(text, where):
+    """A tag the regexes did not read is a setting nobody looked at."""
+    stated = sum(1 for match in re.finditer(r'<serialized_item\b[^>]*>', text)
+                 if 'type="BitfieldItem"' in match.group(0))
+    matched = len(ITEM.findall(text))
+    if stated != matched:
+        print("! %s: %d of %d <serialized_item> bitfields did not parse"
+              % (where, stated - matched, stated), file=sys.stderr)
+    for pattern, tag in ((UI, "ui_item"), (BIND, "bind_action")):
+        if tag == "bind_action":
+            # A master-access bind names a custom controller, and a mapping
+            # bind names several items; neither is the plain one-item form
+            # this script reads.
+            stated_tag = sum(1 for match in re.finditer(r'<bind_action\b[^>]*>', text)
+                             if 'custom_ui_controller' not in match.group(0)
+                             and 'type="mapping"' not in match.group(0))
+        else:
+            stated_tag = len(re.findall(r'<%s\b' % tag, text))
+        matched_tag = sum(1 for _ in pattern.finditer(text))
+        if stated_tag != matched_tag:
+            print("! %s: %d of %d <%s> entries did not parse"
+                  % (where, stated_tag - matched_tag, stated_tag, tag),
+                  file=sys.stderr)
+
+
 def settings_of(text):
     """The settings of one document that the container's arrays hold."""
+    account_text(text, "UEPs_Data")
     binds = {item: controller for _, controller, item in BIND.findall(text)}
     words = ui_words(text)
-    arrays = re.search(r'<ui_item name="arrays_count"[^>]*value="([^"]+)"', text)
+    arrays = re.search(r'<ui_item\s+name="arrays_count"[^>]*value="([^"]+)"', text)
     count = int(arrays.group(1)) if arrays else None
     extent = (count if count is not None else DEFAULT_ARRAYS) * ARRAY_SIZE
     found, left_out = [], 0

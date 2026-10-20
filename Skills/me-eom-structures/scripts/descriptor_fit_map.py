@@ -121,9 +121,29 @@ def layout_documents(texts, platforms):
 
 
 def classes(text):
-    for match in re.finditer(r'<Class name="([^"]+)"[^>]*>(.*?)</Class>',
+    for match in re.finditer(r'<Class name="([^"]+)"[^>]*>(.*?)</Class\s*>',
                              text, re.S):
         yield match.group(1), match.group(2)
+
+
+def class_blocks(text):
+    """Every `<Class>` the document closes before its next opening.
+
+    The tools leave a class or two unclosed; the block regex reads such a
+    class through to the next `</Class>`, which is the following class's.
+    `classes()` is compared with this count, so a class the tool never closed
+    is not reported as a parse failure of ours.
+    """
+    out = 0
+    for match in re.finditer(r'<Class\b([^>]*)>', text):
+        if match.group(0).rstrip().endswith("/>"):
+            continue
+        following = text.find("<Class", match.end())
+        close = re.search(r'</Class\s*>', text[match.end():
+                                                following if following >= 0 else len(text)])
+        if close is not None:
+            out += 1
+    return out
 
 
 def fields_of(body):
@@ -249,6 +269,12 @@ def main():
     for path in paths:
         texts.extend(documents(open(path, "rb").read()))
     chosen = layout_documents(texts, platform)
+    for text in chosen:
+        stated = class_blocks(text)
+        matched = sum(1 for _ in classes(text))
+        if stated != matched:
+            print("! %d of %d well-formed <Class> blocks did not parse"
+                  % (stated - matched, stated), file=sys.stderr)
     values = value_classes(texts)
     words = setting_words(texts)
 
