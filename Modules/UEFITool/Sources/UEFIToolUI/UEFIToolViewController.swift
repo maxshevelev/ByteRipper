@@ -1383,7 +1383,10 @@ import UEFITool
         body.alignment = .leading
         body.spacing = 4
         body.translatesAutoresizingMaskIntoConstraints = false
-        label.widthAnchor.constraint(lessThanOrEqualTo: detail.content.widthAnchor).isActive = true
+        // Against the body, not the list: the body is not in the list yet, and
+        // a constraint across two hierarchies throws. `install` keeps the
+        // body inside the list, and so the line with it.
+        label.widthAnchor.constraint(lessThanOrEqualTo: body.widthAnchor).isActive = true
         return body
     }
 

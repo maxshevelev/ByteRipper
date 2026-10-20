@@ -2811,6 +2811,27 @@ final class UEFIToolFlowTests: XCTestCase {
         _ = await (before, after)
         XCTAssertEqual(reads.count, 2, "the ask after the edit read the region again")
     }
+
+    /// A table with a line under it — the BIOS access masks' verdict — builds
+    /// that line before the list holds it. A constraint from it to the list
+    /// then throws, and AppKit swallowing the throw inside a main-actor task
+    /// leaves the concurrency runtime pointing at a task that is gone: the
+    /// next `MainActor.assumeIsolated` anywhere crashes.
+    func testATableWithANoteShowsTheNoteUnderIt() {
+        let controller = UEFIToolViewController()
+        _ = controller.view
+        let table = UEFIDetailTable(title: "BIOS access", symbol: "lock",
+                                    columns: ["Region", "Read"], rows: [[.init("BIOS"), .init("yes", tone: .yes)]],
+                                    note: "The host may read and write every region.")
+        controller.show(image: nil, tree: nil, focus: nil,
+                        detail: UEFINodeDetail(title: "Descriptor", fields: [UEFIDetailField("Size", "0x1000")],
+                                               tables: [table]),
+                        catalogue: .empty, badChecksums: [:], canWrite: false, isBuilding: false,
+                        rowsChanged: false)
+
+        let labels = descendants(of: controller.view, ToolWrappingLabel.self)
+        XCTAssertTrue(labels.contains { $0.stringValue == table.note }, "the note is drawn under its table")
+    }
 }
 
 /// A 4 KiB FFSv2 volume with one sectioned file in it, built byte by byte — the
