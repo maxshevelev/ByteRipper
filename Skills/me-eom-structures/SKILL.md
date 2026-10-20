@@ -433,8 +433,8 @@ table (the `smip` nvar), and `strap18_map.py` emits the tool's `CPU_smip`
 document for it:
 
 ```bash
-python3 Skills/me-eom-structures/scripts/strap18_map.py ~/Downloads/1/mfit-18.1.exe > \
-    Packages/MEFirmware/Sources/MEFirmware/Configuration/CPUStrapMap+CSME18.swift
+python3 Skills/me-eom-structures/scripts/strap18_map.py ~/Downloads/1/mfit-18.1.exe \
+    --format json > Packages/MEFirmware/MapSources/layout/cpu.json
 ```
 
 The document lives among the strap XMLs (`DescriptorPluginsCommon/data/straps/`,
@@ -486,8 +486,8 @@ message the table keeps the CSME (DBC), PMC IOE and IOE blocks —
 `MipDescNvar`'s children — and `mip18_map.py` emits their layouts:
 
 ```bash
-python3 Skills/me-eom-structures/scripts/mip18_map.py ~/Downloads/1/mfit-18.1.exe > \
-    Packages/MEFirmware/Sources/MEFirmware/Configuration/MIPStrapMap+CSME18.swift
+python3 Skills/me-eom-structures/scripts/mip18_map.py ~/Downloads/1/mfit-18.1.exe \
+    --format json > Packages/MEFirmware/MapSources/layout/mip.json
 ```
 
 The blocks' types are the MIP descriptor's: **1** PmcAndCpu — `PMC_SoC_smip`
@@ -603,8 +603,25 @@ FLMAP2 `00340330` the 3-word section at 0x30; CSME 15's `46100208` reads PSL
 the FITC partition, and MFIT 18 lays it out as `SphyNvar`:
 
 ```bash
-python3 Skills/me-eom-structures/scripts/sphy18_map.py ~/Downloads/1/mfit-18.1.exe > \
-    Packages/MEFirmware/Sources/MEFirmware/Configuration/SphyNvarMap+CSME18.swift
+python3 Skills/me-eom-structures/scripts/sphy18_map.py ~/Downloads/1/mfit-18.1.exe \
+    --format json > Packages/MEFirmware/MapSources/layout/sphy.json
+```
+
+The three CSME 18 layouts — the MIP containers, the CPU message and the SPHY
+nvar — are compiled into one `LayoutMaps.bin`; the version in
+`MapSources/layout/manifest.json` changes only when their digest does, and the
+same number is the code's mark (`Design/MAP_DATA.md`):
+
+```bash
+python3 Skills/me-eom-structures/scripts/map_bin.py build \
+    --out Packages/MEFirmware/Sources/MEFirmware/Resources/LayoutMaps/LayoutMaps.bin \
+    --manifest Packages/MEFirmware/MapSources/layout/manifest.json \
+    --swift-version-file Packages/MEFirmware/Sources/MEFirmware/Configuration/LayoutMapDataVersion.swift \
+    --swift-enum-name LayoutMapDataVersion \
+    Packages/MEFirmware/MapSources/layout/mip.json \
+    Packages/MEFirmware/MapSources/layout/cpu.json \
+    Packages/MEFirmware/MapSources/layout/sphy.json
+python3 Skills/me-eom-structures/scripts/map_bin.py build --check …same arguments…
 ```
 
 Fields are `offset*8 + bitfield_low … + bitfield_high`; a `ValidByte`/

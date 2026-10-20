@@ -33,13 +33,17 @@ value — 249/249 in PMC_IOE, 5/5 in CSME, 443/448 in IOE (the five are board
 values the reference list does not carry; the placement itself is the 63
 fields whose value is a plain constant, all of them matching).
 
-    python3 mip18_map.py <mfit-18.1.exe> > \\
-        Packages/MEFirmware/Sources/MEFirmware/Configuration/MIPStrapMap+CSME18.swift
+    python3 mip18_map.py <mfit-18.1.exe> --format json > \\
+        Packages/MEFirmware/MapSources/layout/mip.json
+
+The JSON is compiled into `LayoutMaps.bin` by `map_bin.py`
+(`Design/MAP_DATA.md`).
 
 Stdlib only, read-only, no network; read the diff, don't paste blind.
 """
 
 import hashlib
+import json
 import os
 import re
 import sys
@@ -310,8 +314,86 @@ def swift(tool, containers):
     return "\n".join(lines)
 
 
+def pretty_json(document):
+    """JSON with one field per line: a diff reads a field at a time."""
+    lines = ["{"]
+    for key in sorted(document):
+        if key == "maps":
+            continue
+        lines.append(" %s: %s," % (
+            json.dumps(key),
+            json.dumps(document[key], ensure_ascii=False, sort_keys=True)))
+    lines.append(' "maps": [')
+    for map_index, mapping in enumerate(document["maps"]):
+        rest = ", ".join(
+            "%s: %s" % (json.dumps(key),
+                        json.dumps(mapping[key], ensure_ascii=False, sort_keys=True))
+            for key in sorted(mapping) if key != "containers")
+        lines.append('  {%s, "containers": [' % rest)
+        containers = mapping["containers"]
+        for container_index, container in enumerate(containers):
+            rest = ", ".join(
+                "%s: %s" % (json.dumps(key),
+                            json.dumps(container[key], ensure_ascii=False, sort_keys=True))
+                for key in sorted(container) if key != "fields")
+            lines.append('   {%s, "fields": [' % rest)
+            fields = container["fields"]
+            for field_index, field in enumerate(fields):
+                lines.append("    %s%s" % (
+                    json.dumps(field, ensure_ascii=False, sort_keys=True,
+                               separators=(", ", ": ")),
+                    "," if field_index + 1 < len(fields) else ""))
+            lines.append('   ]}%s' % ("," if container_index + 1 < len(containers) else ""))
+        lines.append('  ]}%s' % ("," if map_index + 1 < len(document["maps"]) else ""))
+    lines.append(" ]")
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def json_document(tool, containers):
+    return pretty_json({
+        "schema": "byteripper.map/1",
+        "kind": "layout",
+        "tool": tool,
+        "maps": [{
+            "id": "csme18-mip",
+            "name": "CSME 18 (%s)" % tool,
+            "layout": "mip",
+            "containers": [{
+                "name": name,
+                "blockType": block_type,
+                "blockLength": block_length,
+                "offset": offset,
+                "length": length,
+                "fields": [{
+                    "name": field["name"],
+                    "bitOffset": field["start"],
+                    "count": field["count"],
+                    **({"label": field["label"]} if field["label"] else {}),
+                    **({"section": field["section"]} if field["section"] else {}),
+                    **({"help": field["help"]} if field["help"] else {}),
+                    **({"options": [[number, word]
+                                    for number, word in sorted(field["options"].items())]}
+                       if field["options"] else {}),
+                } for field in fields],
+                "source": {"block": block_id, "tool": tool},
+            } for name, block_id, block_type, block_length, offset, length, fields
+               in containers],
+        }],
+    })
+
+
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    args = sys.argv[1:]
+    output_format = "swift"
+    if "--format" in args:
+        at = args.index("--format")
+        output_format = args[at + 1]
+        del args[at:at + 2]
+    if output_format not in ("swift", "json"):
+        print("--format is swift or json", file=sys.stderr)
+        return 2
+    args = [a for a in args if not a.startswith("-")]
     if not args:
         print(__doc__)
         return 2
@@ -354,7 +436,8 @@ def main():
                   "%d fields from %d document(s)"
                   % (name, block_id, block_type, extent, offset, size,
                      len(fields), len(found)), file=sys.stderr)
-    print(swift(tool, containers))
+    print(json_document(tool, containers) if output_format == "json"
+          else swift(tool, containers))
     return 0
 
 

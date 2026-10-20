@@ -24,14 +24,18 @@ The three platform documents at hand (`mtl_arl_p_a0`, `mtl_m`, `mtl_p`) place
 the fields alike; a name two of them place differently is dropped and named,
 as `mip_strap_map.py` does for the descriptor's older message.
 
-    python3 strap18_map.py <mfit-18.1.exe> > \\
-        Packages/MEFirmware/Sources/MEFirmware/Configuration/CPUStrapMap+CSME18.swift
+    python3 strap18_map.py <mfit-18.1.exe> --format json > \\
+        Packages/MEFirmware/MapSources/layout/cpu.json
+
+The JSON is compiled into `LayoutMaps.bin` by `map_bin.py`
+(`Design/MAP_DATA.md`).
 
 Stdlib only, read-only, no network; read the diff, don't paste blind.
 """
 
 import collections
 import hashlib
+import json
 import os
 import re
 import sys
@@ -241,8 +245,71 @@ def swift(tool, fields):
     return "\n".join(lines)
 
 
+def pretty_json(document):
+    """JSON with one field per line: a diff reads a field at a time."""
+    lines = ["{"]
+    for key in sorted(document):
+        if key == "maps":
+            continue
+        lines.append(" %s: %s," % (
+            json.dumps(key),
+            json.dumps(document[key], ensure_ascii=False, sort_keys=True)))
+    lines.append(' "maps": [')
+    for map_index, mapping in enumerate(document["maps"]):
+        rest = ", ".join(
+            "%s: %s" % (json.dumps(key),
+                        json.dumps(mapping[key], ensure_ascii=False, sort_keys=True))
+            for key in sorted(mapping) if key != "fields")
+        lines.append('  {%s, "fields": [' % rest)
+        fields = mapping["fields"]
+        for field_index, field in enumerate(fields):
+            lines.append("   %s%s" % (
+                json.dumps(field, ensure_ascii=False, sort_keys=True,
+                           separators=(", ", ": ")),
+                "," if field_index + 1 < len(fields) else ""))
+        lines.append('  ]}%s' % ("," if map_index + 1 < len(document["maps"]) else ""))
+    lines.append(" ]")
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def json_document(tool, fields):
+    return pretty_json({
+        "schema": "byteripper.map/1",
+        "kind": "layout",
+        "tool": tool,
+        "maps": [{
+            "id": "csme18-cpu",
+            "name": "CSME 18 (%s)" % tool,
+            "layout": "cpu",
+            "fields": [{
+                "name": field["name"],
+                "offset": field["offset"],
+                "bit": field["bit"],
+                "count": field["count"],
+                **({"label": field["label"]} if field["label"] else {}),
+                **({"section": field["section"]} if field["section"] else {}),
+                **({"help": field["help"]} if field["help"] else {}),
+                **({"options": [[number, word]
+                                for number, word in sorted(field["options"].items())]}
+                   if field["options"] else {}),
+            } for field in fields],
+            "source": {"tool": tool},
+        }],
+    })
+
+
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    args = sys.argv[1:]
+    output_format = "swift"
+    if "--format" in args:
+        at = args.index("--format")
+        output_format = args[at + 1]
+        del args[at:at + 2]
+    if output_format not in ("swift", "json"):
+        print("--format is swift or json", file=sys.stderr)
+        return 2
+    args = [a for a in args if not a.startswith("-")]
     if not args:
         print(__doc__)
         return 2
@@ -265,7 +332,8 @@ def main():
               file=sys.stderr)
     fields.sort(key=lambda f: (f["offset"], f["bit"], f["name"]))
     print("fields: %d" % len(fields), file=sys.stderr)
-    print(swift(tool, fields))
+    print(json_document(tool, fields) if output_format == "json"
+          else swift(tool, fields))
     return 0
 
 

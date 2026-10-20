@@ -88,6 +88,17 @@ if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
     exit 1
 fi
 if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
+    --out Packages/MEFirmware/Sources/MEFirmware/Resources/LayoutMaps/LayoutMaps.bin \
+    --manifest Packages/MEFirmware/MapSources/layout/manifest.json \
+    --swift-version-file Packages/MEFirmware/Sources/MEFirmware/Configuration/LayoutMapDataVersion.swift \
+    --swift-enum-name LayoutMapDataVersion \
+    Packages/MEFirmware/MapSources/layout/mip.json \
+    Packages/MEFirmware/MapSources/layout/cpu.json \
+    Packages/MEFirmware/MapSources/layout/sphy.json; then
+    echo "the CSME 18 layout binary is stale: rebuild it (Skills/me-eom-structures/SKILL.md)" >&2
+    exit 1
+fi
+if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
     --out Packages/MEFirmware/Sources/MEFirmware/Resources/ConfigMaps/ConfigMaps.bin \
     --manifest Packages/MEFirmware/MapSources/manifest.json \
     --swift-version-file Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationDataVersion.swift \

@@ -85,6 +85,7 @@ KIND_CONFIGURATION = 2
 KIND_UEP = 3
 KIND_GPIO = 4
 KIND_REGISTER = 5
+KIND_LAYOUT = 6
 SECTION_STRINGS = 1
 SECTION_MAPS = 2
 SECTION_FIELDS = 3
@@ -92,6 +93,9 @@ SECTION_OPTIONS = 4
 SECTION_FILES = 5
 SECTION_SETTINGS = 6
 SECTION_REGISTERS = 7
+SECTION_CONTAINERS = 8
+SECTION_ANCHORS = 9
+SECTION_LAYOUT_FIELDS = 10
 SECTION_TABLE = 12
 MAP_RECORD = 24
 FIELD_RECORD = 28
@@ -104,6 +108,11 @@ UEP_SETTING_RECORD = 32
 GPIO_MAP_RECORD = 40
 REGISTER_MAP_RECORD = 20
 REGISTER_RECORD = 24
+LAYOUT_MAP_RECORD = 40
+CONTAINER_RECORD = 28
+ANCHOR_RECORD = 16
+LAYOUT_FIELD_RECORD = 36
+LAYOUT_NAMES = {"mip": 0, "cpu": 1, "sphy": 2}
 NO_REF = 0xFFFFFFFF
 SET_NAMES = {"pch": 0, "spt": 1, "cpu": 2, "other": 3,
              "pmc": 4, "mip": 5, "legacy": 6, "sptcpu": 7}
@@ -158,7 +167,7 @@ def load(path):
     if document.get("schema") != "byteripper.map/1":
         raise ValueError("%s: schema is not byteripper.map/1" % path)
     if document.get("kind") not in ("strap", "configuration", "uep", "gpio",
-                                    "register"):
+                                    "register", "layout"):
         raise ValueError("%s: unknown kind %r" % (path, document.get("kind")))
     maps = document.get("maps")
     if not isinstance(maps, list) or not maps:
@@ -276,6 +285,82 @@ def validate_register(document, path):
                                          % (where, name, text))
 
 
+def layout_place(field, layout):
+    """A layout field's byte offset and bit, from either JSON spelling."""
+    if layout == "cpu":
+        return int(field["offset"]), int(field["bit"])
+    return int(field["bitOffset"]), 0
+
+
+def validate_layout_field(field, where, layout):
+    if not field.get("name"):
+        raise ValueError("%s: a field has no name" % where)
+    try:
+        offset, bit = layout_place(field, layout)
+        count = int(field["count"])
+    except (KeyError, TypeError, ValueError):
+        raise ValueError("%s: %s has no valid place"
+                         % (where, field.get("name")))
+    if offset < 0 or bit < 0 or not 0 < count <= 32:
+        raise ValueError("%s: %s at %d/%d, %d bits"
+                         % (where, field["name"], offset, bit, count))
+    if layout == "cpu" and bit + count > 32:
+        raise ValueError("%s: %s bits %d..%d of a dword"
+                         % (where, field["name"], bit, bit + count - 1))
+    for number, text in option_pairs(field):
+        if number < 0 or (count < 32 and number >= (1 << count)):
+            raise ValueError("%s: %s option %d does not fit %d bits"
+                             % (where, field["name"], number, count))
+        if not isinstance(text, str):
+            raise ValueError("%s: %s option %r is not text"
+                             % (where, field["name"], text))
+
+
+def validate_layout(document, path):
+    for index, mapping in enumerate(document["maps"]):
+        where = "%s: map %d" % (path, index)
+        for key in ("id", "name", "layout"):
+            if key not in mapping:
+                raise ValueError("%s: no %s" % (where, key))
+        layout = mapping["layout"]
+        if layout not in LAYOUT_NAMES:
+            raise ValueError("%s: unknown layout %r" % (where, layout))
+        if layout == "mip":
+            for container in mapping.get("containers", []):
+                name = container.get("name")
+                if not name:
+                    raise ValueError("%s: a container has no name" % where)
+                block_type = int(container.get("blockType", -1))
+                block_length = int(container.get("blockLength", 0))
+                offset = int(container.get("offset", 0))
+                length = int(container.get("length", 0))
+                if not (0 <= block_type <= 0xFFFF and block_length > 0
+                        and offset >= 0 and length > 0
+                        and offset + length <= block_length):
+                    raise ValueError("%s: %s is not a container of its block"
+                                     % (where, name))
+                for field in container.get("fields", []):
+                    validate_layout_field(field, "%s/%s" % (where, name),
+                                          layout)
+        if layout == "sphy":
+            for anchor in mapping.get("anchors", []):
+                if not anchor.get("name"):
+                    raise ValueError("%s: an anchor has no name" % where)
+                bit = int(anchor.get("bitOffset", -1))
+                count = int(anchor.get("count", 0))
+                value = int(anchor.get("value", -1))
+                if not (bit >= 0 and 0 < count <= 32
+                        and 0 <= value < (1 << count)):
+                    raise ValueError("%s: anchor %s is not a value of %d bits"
+                                     % (where, anchor["name"], count))
+        for field in mapping.get("fields", []):
+            validate_layout_field(field, where, layout)
+        if layout == "cpu" and not mapping.get("fields"):
+            raise ValueError("%s: a CPU layout has no fields" % where)
+        if layout == "sphy" and not mapping.get("fields"):
+            raise ValueError("%s: an SPHY layout has no fields" % where)
+
+
 def validate(document, path):
     if document["kind"] == "strap":
         validate_strap(document, path)
@@ -285,8 +370,10 @@ def validate(document, path):
         validate_uep(document, path)
     elif document["kind"] == "gpio":
         validate_gpio(document, path)
-    else:
+    elif document["kind"] == "register":
         validate_register(document, path)
+    else:
+        validate_layout(document, path)
 
 
 def validate_strap(document, path):
@@ -746,6 +833,126 @@ def compile_register(documents, version):
                     [section for section in sections if section[1]], version)
 
 
+def compile_layout(documents, version):
+    """Kind 6: CSME 18's container, CPU-message and SPHY layouts."""
+    mappings = []
+    for document in documents:
+        mappings.extend(document["maps"])
+    ids = [mapping["id"] for mapping in mappings]
+    if len(ids) != len(set(ids)):
+        raise ValueError("map ids repeat: %s"
+                         % ", ".join(sorted({i for i in ids if ids.count(i) > 1})))
+
+    strings = StringPool()
+    fields_blob = bytearray()
+    options_blob = bytearray()
+    option_offsets = {}
+    containers_blob = bytearray()
+    anchors_blob = bytearray()
+    map_records = []
+
+    def write_field(field, layout):
+        nonlocal options_blob
+        offset, bit = layout_place(field, layout)
+        count = int(field["count"])
+        pairs = option_pairs(field)
+        options_offset = NO_REF
+        if pairs:
+            key = tuple(pairs)
+            if key not in option_offsets:
+                option_offsets[key] = len(options_blob)
+                for number, text in pairs:
+                    options_blob += struct.pack(
+                        "<HHI", number, 0, strings.ref(text))
+            options_offset = option_offsets[key]
+        flags = 0
+        if field.get("label"):
+            flags |= 1
+        if field.get("section"):
+            flags |= 2
+        if field.get("help"):
+            flags |= 4
+        if pairs:
+            flags |= 8
+        fields_blob.extend(struct.pack(
+            "<IIHHHHIIIIHH",
+            strings.ref(field["name"]),
+            offset,
+            bit,
+            count,
+            flags,
+            0,
+            strings.ref(field.get("label")),
+            strings.ref(field.get("section")),
+            strings.ref(field.get("help")),
+            options_offset,
+            len(pairs),
+            0,
+        ))
+
+    for mapping in mappings:
+        layout = mapping["layout"]
+        container_count = container_offset = 0
+        if layout == "mip":
+            container_offset = len(containers_blob)
+            container_count = len(mapping.get("containers", []))
+            for container in mapping.get("containers", []):
+                fields_offset = len(fields_blob)
+                for field in container.get("fields", []):
+                    write_field(field, layout)
+                containers_blob.extend(struct.pack(
+                    "<IHHIIIII",
+                    strings.ref(container["name"]),
+                    int(container["blockType"]),
+                    0,
+                    int(container["blockLength"]),
+                    int(container.get("offset", 0)),
+                    int(container["length"]),
+                    len(container.get("fields", [])),
+                    fields_offset,
+                ))
+        anchor_count = anchor_offset = 0
+        if layout == "sphy":
+            anchor_offset = len(anchors_blob)
+            anchor_count = len(mapping.get("anchors", []))
+            for anchor in mapping.get("anchors", []):
+                anchors_blob.extend(struct.pack(
+                    "<IIHHI",
+                    strings.ref(anchor["name"]),
+                    int(anchor["bitOffset"]),
+                    int(anchor["count"]),
+                    0,
+                    int(anchor["value"]),
+                ))
+        field_offset = len(fields_blob)
+        field_count = len(mapping.get("fields", []))
+        for field in mapping.get("fields", []):
+            write_field(field, layout)
+        map_records.append(struct.pack(
+            "<IIHHIIIIIII",
+            strings.ref(mapping["id"]),
+            strings.ref(mapping["name"]),
+            LAYOUT_NAMES[layout],
+            0,
+            container_count,
+            container_offset,
+            anchor_count,
+            anchor_offset,
+            field_count,
+            field_offset,
+            0,
+        ))
+    sections = [(SECTION_STRINGS, bytes(strings.data)),
+                (SECTION_MAPS, struct.pack("<I", len(map_records))
+                 + b"".join(map_records)),
+                (SECTION_LAYOUT_FIELDS, bytes(fields_blob)),
+                (SECTION_OPTIONS, bytes(options_blob)),
+                (SECTION_CONTAINERS, bytes(containers_blob)),
+                (SECTION_ANCHORS, bytes(anchors_blob))]
+    return assemble(KIND_LAYOUT,
+                    [section for section in sections if section[1]], version)
+
+
 def compile_documents(documents, version):
     kinds = {document["kind"] for document in documents}
     if len(kinds) != 1:
@@ -760,7 +967,9 @@ def compile_documents(documents, version):
         return compile_uep(documents, version)
     if kind == "gpio":
         return compile_gpio(documents, version)
-    return compile_register(documents, version)
+    if kind == "register":
+        return compile_register(documents, version)
+    return compile_layout(documents, version)
 
 
 def assemble(kind, sections, version):
@@ -1075,6 +1284,62 @@ def dump_register(data, sections, text):
     return 0
 
 
+def dump_layout(data, sections, text):
+    maps_at, _ = sections.get(SECTION_MAPS, (0, 0))
+    containers_at, _ = sections.get(SECTION_CONTAINERS, (0, 0))
+    anchors_at, _ = sections.get(SECTION_ANCHORS, (0, 0))
+    fields_at, _ = sections.get(SECTION_LAYOUT_FIELDS, (0, 0))
+    options_at, _ = sections.get(SECTION_OPTIONS, (0, 0))
+    names = {value: key for key, value in LAYOUT_NAMES.items()}
+
+    def field_lines(at, count, indent):
+        for index in range(count):
+            fat = fields_at + at + index * LAYOUT_FIELD_RECORD
+            (name_ref, offset, bit, bits, flags, _, label_ref, section_ref,
+             help_ref, options_offset, options_count, _) = struct.unpack_from(
+                "<IIHHHHIIIIHH", data, fat)
+            line = "%s%-52s offset 0x%X bit %2d count %2d" % (
+                indent, text(name_ref), offset, bit, bits)
+            if flags & 1:
+                line += ", label %r" % text(label_ref)
+            if flags & 2:
+                line += ", section %r" % text(section_ref)
+            print(line)
+            if flags & 8:
+                for option_index in range(options_count):
+                    number, _, option_ref = struct.unpack_from(
+                        "<HHI", data, options_at + options_offset
+                        + option_index * OPTION_RECORD)
+                    print("%s    %d = %r" % (indent, number, text(option_ref)))
+
+    total = struct.unpack_from("<I", data, maps_at)[0]
+    for index in range(total):
+        at = maps_at + 4 + index * LAYOUT_MAP_RECORD
+        (id_ref, name_ref, layout, _, container_count, container_offset,
+         anchor_count, anchor_offset, field_count, field_offset, _) = \
+            struct.unpack_from("<IIHHIIIIIII", data, at)
+        print("map %s (%s), layout %s, %d containers, %d anchors, %d fields"
+              % (text(id_ref), text(name_ref), names.get(layout, "?"),
+                 container_count, anchor_count, field_count))
+        for container_index in range(container_count):
+            cat = containers_at + container_offset + container_index * CONTAINER_RECORD
+            (container_ref, block_type, _, block_length, offset, length,
+             container_fields, fields_off) = struct.unpack_from(
+                "<IHHIIIII", data, cat)
+            print("  %s: block type %d, block 0x%X, at 0x%X, 0x%X bytes, %d fields"
+                  % (text(container_ref), block_type, block_length, offset,
+                     length, container_fields))
+            field_lines(fields_off, container_fields, "    ")
+        for anchor_index in range(anchor_count):
+            aat = anchors_at + anchor_offset + anchor_index * ANCHOR_RECORD
+            anchor_ref, bit, count, _, value = struct.unpack_from(
+                "<IIHHI", data, aat)
+            print("  anchor %s bit %d count %d = 0x%X"
+                  % (text(anchor_ref), bit, count, value))
+        field_lines(field_offset, field_count, "  ")
+    return 0
+
+
 def dump(path):
     with open(path, "rb") as handle:
         data = handle.read()
@@ -1110,6 +1375,8 @@ def dump(path):
         return dump_gpio(data, sections, text)
     if kind == KIND_REGISTER:
         return dump_register(data, sections, text)
+    if kind == KIND_LAYOUT:
+        return dump_layout(data, sections, text)
     total = struct.unpack_from("<I", data, maps_at)[0]
     for index in range(total):
         record_at = maps_at + 4 + index * MAP_RECORD
