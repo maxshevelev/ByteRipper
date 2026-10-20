@@ -346,6 +346,7 @@ enum JedecIDs {
         0x1C3111: c("Eon EN25F10", 128, .flashrom),
         0x1C3112: c("Eon EN25F20", 256, .flashrom),
         0x1C3113: c("Eon EN25F40", 512, .flashrom),
+        0x1C4116: c("Eon EN25QE32A", 4096, .flashrom),
         0x1C7118: c("Eon EN25QX128A", 16384, .flashrom),
         0x1F1401: c("Atmel AT25EU0041A", 512, .flashrom),
         0x1F1601: c("Atmel AT25EU0161A", 2048, .flashrom),
