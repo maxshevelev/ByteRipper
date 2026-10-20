@@ -326,6 +326,24 @@ final class HelpTermPopoverTests: XCTestCase {
         XCTAssertNotNil(built.view.subviews.compactMap { $0 as? HelpBodyView }.first,
                         "the words stay under it")
     }
+
+    /// A note longer than a line wraps, and the popover is as tall as all of
+    /// it: the popover's size comes from `fittingSize`, asked before any
+    /// layout pass has told the label how wide it is.
+    func testALongNoteIsNotCutToOneLine() throws {
+        let words = String(repeating: "eSpiEnabled = No, assumed when the strap is absent. ", count: 4)
+        func popoverHeight(note: String) -> CGFloat {
+            let body = HelpBodyView()
+            body.show(HelpPopoverLayout.prose("The tool's words."))
+            return HelpPopoverLayout.build(title: HelpPopoverLayout.title("MELanPowerWell"), body: body,
+                                           note: HelpPopoverLayout.note(note)).view.fittingSize.height
+        }
+        let oneLine = popoverHeight(note: "eSpiEnabled = No")
+        let lineHeight = NSLayoutManager().defaultLineHeight(
+            for: .systemFont(ofSize: HelpPopoverLayout.bodySize))
+        XCTAssertGreaterThan(popoverHeight(note: words) - oneLine, 2 * lineHeight,
+                             "the popover grows by the lines the note wraps onto")
+    }
 }
 
 extension HelpPopoverController {
