@@ -101,7 +101,8 @@ UEP_MAP_RECORD = 24
 UEP_SETTING_RECORD = 32
 GPIO_MAP_RECORD = 40
 NO_REF = 0xFFFFFFFF
-SET_NAMES = {"pch": 0, "spt": 1, "cpu": 2, "other": 3}
+SET_NAMES = {"pch": 0, "spt": 1, "cpu": 2, "other": 3,
+             "pmc": 4, "mip": 5, "legacy": 6, "sptcpu": 7}
 
 
 def fnv1a32(data):

@@ -359,8 +359,13 @@ def json_document(kind, chosen, prefix, tools):
     the same whichever output is used.
     """
     set_name = {"PCH": "pch", "CPU": "cpu"}.get(kind, kind.lower())
-    if (prefix or "").lower().startswith("spt"):
+    # SPT's PCH documents and its processor table are sets of their own: a
+    # length can mean another section in the shared sets, and the three-word
+    # SPT processor table is not the newer three-word CPU one.
+    if kind == "PCH" and (prefix or "").lower().startswith("spt"):
         set_name = "spt"
+    if kind == "CPU" and (prefix or "").lower() == "sptcpu":
+        set_name = "sptcpu"
     maps = []
     for words, table in chosen:
         source = table["tool"] if not table["document"] else "%s (%s)" % (

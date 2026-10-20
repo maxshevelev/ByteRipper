@@ -6,7 +6,8 @@ import MapData
 public typealias MapDataError = MapData.MapDataError
 
 /// One map as the binary states it: the identifier the code asks for, the set
-/// it belongs to (PCH, SPT, CPU) and the table itself.
+/// it belongs to (PCH, SPT, CPU, PMC, MIP, the legacy guides) and the table
+/// itself.
 struct LoadedStrapMap: Sendable {
     var id: String
     var set: UInt16
@@ -66,6 +67,31 @@ enum StrapMapData {
     /// different sections in the two sets.
     static var sptMaps: [DescriptorStrapMap] {
         maps(in: 1)
+    }
+
+    /// The processor strap sections, keyed by the length `FLMAP2` states.
+    static var cpuMaps: [DescriptorStrapMap] {
+        maps(in: 2)
+    }
+
+    /// The PMC soft straps, keyed by the block's length less the CPU message.
+    static var pmcMaps: [DescriptorStrapMap] {
+        maps(in: 4)
+    }
+
+    /// The CPU strap messages in the MIP area, keyed by their length.
+    static var mipMaps: [DescriptorStrapMap] {
+        maps(in: 5)
+    }
+
+    /// The generations before FIT's documents, from Intel's guides.
+    static var legacyMaps: [DescriptorStrapMap] {
+        maps(in: 6)
+    }
+
+    /// FIT 11's three-word processor table, not the newer three-word one.
+    static var sptCPUMaps: [DescriptorStrapMap] {
+        maps(in: 7)
     }
 
     static func map(id: String) -> DescriptorStrapMap? {
@@ -192,4 +218,29 @@ public extension DescriptorStrapMap {
     static var sptPch88: DescriptorStrapMap { StrapMapData.required("sptPch88") }
     static var sptPch90: DescriptorStrapMap { StrapMapData.required("sptPch90") }
     static var sptPch139: DescriptorStrapMap { StrapMapData.required("sptPch139") }
+    // The processor sections, FIT 11's SPT one, the PMC soft straps, the MIP
+    // message, and the legacy guides' PCH tables.
+    static var cpu1: DescriptorStrapMap { StrapMapData.required("cpu1") }
+    static var cpu3: DescriptorStrapMap { StrapMapData.required("cpu3") }
+    static var cpu7: DescriptorStrapMap { StrapMapData.required("cpu7") }
+    static var cpu10: DescriptorStrapMap { StrapMapData.required("cpu10") }
+    static var cpu11: DescriptorStrapMap { StrapMapData.required("cpu11") }
+    static var cpu14: DescriptorStrapMap { StrapMapData.required("cpu14") }
+    static var cpu15: DescriptorStrapMap { StrapMapData.required("cpu15") }
+    static var cpu17: DescriptorStrapMap { StrapMapData.required("cpu17") }
+    static var cpu18: DescriptorStrapMap { StrapMapData.required("cpu18") }
+    static var cpu20: DescriptorStrapMap { StrapMapData.required("cpu20") }
+    static var cpu21: DescriptorStrapMap { StrapMapData.required("cpu21") }
+    static var cpu22: DescriptorStrapMap { StrapMapData.required("cpu22") }
+    static var cpu25: DescriptorStrapMap { StrapMapData.required("cpu25") }
+    static var sptCpu3: DescriptorStrapMap { StrapMapData.required("sptCpu3") }
+    static var pmc7: DescriptorStrapMap { StrapMapData.required("pmc7") }
+    static var pmc20: DescriptorStrapMap { StrapMapData.required("pmc20") }
+    static var pmc21: DescriptorStrapMap { StrapMapData.required("pmc21") }
+    static var pmc22: DescriptorStrapMap { StrapMapData.required("pmc22") }
+    static var mipCpu17: DescriptorStrapMap { StrapMapData.required("mipCpu17") }
+    static var mipCpu20: DescriptorStrapMap { StrapMapData.required("mipCpu20") }
+    static var pch16: DescriptorStrapMap { StrapMapData.required("pch16") }
+    static var pch18: DescriptorStrapMap { StrapMapData.required("pch18") }
+    static var pch21: DescriptorStrapMap { StrapMapData.required("pch21") }
 }
