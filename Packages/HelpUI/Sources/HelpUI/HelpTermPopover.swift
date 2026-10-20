@@ -10,17 +10,13 @@ import Localization
 /// contents list, and not a trip away from the dump they were reading. So the
 /// popover answers in place, and offers the window only for a reader who wants
 /// the rest.
-@MainActor public final class HelpTermPopover: NSViewController {
+@MainActor public final class HelpTermPopover: HelpPopoverController {
     private let term: HelpTerm
-    private let popover = NSPopover()
 
     public init(term: HelpTerm) {
         self.term = term
-        super.init(nibName: nil, bundle: nil)
+        super.init()
     }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     /// Shows the entry for `id` off `anchor`, or does nothing when the book has
     /// no such term — a panel may name a row the glossary has not caught up
@@ -34,30 +30,13 @@ import Localization
         return controller
     }
 
-    public override func loadView() {
-        view = makeView()
-        // The zoom moving while the popover is open re-sets its words at the
-        // new size, as it does the rows beside it.
-        zoomObserver = HelpPopoverLayout.observeTextSize { [weak self] in
-            guard let self else { return }
-            self.view = self.makeView()
-            self.popover.contentSize = self.view.fittingSize
-        }
-    }
-
-    private var zoomObserver: NSObjectProtocol?
-
-    deinit {
-        if let zoomObserver { NotificationCenter.default.removeObserver(zoomObserver) }
-    }
-
-    private func makeView() -> NSView {
+    public override func makeContent() -> NSView {
         let body = HelpBodyView()
         body.show(HelpPopoverLayout.fitted(HelpText.renderBrief(term)))
         // Following a link inside a popover would be a second window inside a
         // window; the reader is sent to the real one instead, where Back works.
         body.onFollow = { [weak self] link in
-            self?.popover.performClose(nil)
+            self?.close()
             HelpPresenter.show(link)
         }
 
@@ -69,19 +48,11 @@ import Localization
                                        body: body, footer: more).view
     }
 
-    private func present(from anchor: NSView, edge: NSRectEdge) {
-        popover.contentViewController = self
-        popover.behavior = .transient
-        popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: edge)
-    }
-
     @objc private func openInHelp() {
-        popover.performClose(nil)
+        close()
         HelpPresenter.show(.term(term.id))
     }
 
     /// What the popover is about, for the tests.
     public var shownTerm: HelpTermID { term.id }
-    public var isShown: Bool { popover.isShown }
-    public func close() { popover.performClose(nil) }
 }

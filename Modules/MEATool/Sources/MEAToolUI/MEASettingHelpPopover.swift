@@ -16,46 +16,23 @@ import ToolModuleKit
 /// own words rather than the book's, under the identifier the row does not
 /// show: the one name a setting is written down by everywhere else, and the
 /// thing a reader with the popover open is most often after.
-@MainActor final class MEASettingHelpPopover: NSViewController {
+@MainActor final class MEASettingHelpPopover: HelpPopoverController {
     private let help: FieldHelp
-    private let popover = NSPopover()
 
     init(help: FieldHelp) {
         self.help = help
-        super.init(nibName: nil, bundle: nil)
+        super.init()
     }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     /// Shows `help` off `anchor` — the button the reader pressed.
     @discardableResult
     static func show(_ help: FieldHelp, from anchor: NSView) -> MEASettingHelpPopover {
         let controller = MEASettingHelpPopover(help: help)
-        controller.popover.contentViewController = controller
-        controller.popover.behavior = .transient
-        controller.popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .maxY)
+        controller.present(from: anchor)
         return controller
     }
 
-    override func loadView() {
-        view = makeView()
-        // The zoom moving while the popover is open re-sets its words at the
-        // new size, as it does the rows beside it.
-        zoomObserver = HelpPopoverLayout.observeTextSize { [weak self] in
-            guard let self else { return }
-            self.view = self.makeView()
-            self.popover.contentSize = self.view.fittingSize
-        }
-    }
-
-    private var zoomObserver: NSObjectProtocol?
-
-    deinit {
-        if let zoomObserver { NotificationCenter.default.removeObserver(zoomObserver) }
-    }
-
-    private func makeView() -> NSView {
+    override func makeContent() -> NSView {
         // The tool's words with its own line breaks kept: they are where the
         // tool put its paragraphs.
         let body = HelpBodyView()
@@ -72,6 +49,4 @@ import ToolModuleKit
 
     /// What the popover is showing, for the tests.
     var shown: FieldHelp { help }
-    var isShown: Bool { popover.isShown }
-    func close() { popover.performClose(nil) }
 }
