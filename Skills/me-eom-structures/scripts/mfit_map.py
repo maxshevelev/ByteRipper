@@ -6,17 +6,20 @@ document per platform list (ADL-S, MTL-M, MTL-S, ELG in the 16.0.15 build), each
 listing the MFS files, the settings that live in them, the byte offset and bits
 of each, the values it may take, and who writes it (`process_type`).
 
-Run it, read the diff, and paste the file into
-`Packages/MEFirmware/Sources/MEFirmware/Configuration/`:
+Run it, read the diff and the notes it prints, and write the JSON (which the
+compiler reads, `Design/MAP_DATA.md`) under `MapSources/configuration/`:
 
-    python3 Skills/me-eom-structures/scripts/mfit_map.py <mfit.exe> > \\
-        Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationMap+CSME16.swift
+    python3 Skills/me-eom-structures/scripts/mfit_map.py \\
+        <mfit-16.1.42.exe> <mfit-16.0.15.exe> \\
+        --generation 16 --tool "16.1.42, 16.0.15.1817" --format json > \\
+        Packages/MEFirmware/MapSources/configuration/csme16.json
 
 Stdlib only, read-only, no network. The script decides nothing about what a
 value *means*: it copies MFIT's own labels, offsets and option numbers, and says
 on stderr what it left out.
 """
 
+import json
 import os
 import re
 import sys
@@ -142,7 +145,7 @@ def settings_of(body):
     """
     found = []
     logical_count = len(re.findall(r'<LogicalAccess ', body))
-    for match in re.finditer(r'<LogicalAccess name="([^"]+)"([^>]*)>(.*?)</LogicalAccess>',
+    for match in re.finditer(r'<LogicalAccess name="([^"]+)"([^>]*)>(.*?)</LogicalAccess\s*>',
                              body, re.S):
         name, attrs, inner = match.group(1), match.group(2), match.group(3)
         place = re.search(r'offset="(-?\d+)" length="(\d+)"(?: bit_low="(\d+)" bit_high="(\d+)")?',
@@ -211,7 +214,7 @@ def collect(texts):
     """
     files, conflicts = {}, []
     for text in texts:
-        for match in re.finditer(r'<File path="([^"]+)"[^>]*alias="([^"]*)"[^>]*>(.*?)</File>',
+        for match in re.finditer(r'<File path="([^"]+)"[^>]*alias="([^"]*)"[^>]*>(.*?)</File\s*>',
                                  text, re.S):
             path, alias, body = match.group(1), match.group(2), match.group(3)
             path = "/home/" + path
@@ -315,8 +318,94 @@ def swift(files):
     return "\n".join(out)
 
 
+def setting_json(setting):
+    entry = {"name": setting["name"],
+             "offset": setting["offset"],
+             "length": setting["length"]}
+    if setting.get("label") and setting["label"] != setting["name"]:
+        entry["label"] = setting["label"]
+    if setting.get("help"):
+        entry["help"] = setting["help"]
+    if setting.get("bits"):
+        entry["bits"] = [setting["bits"][0], setting["bits"][1]]
+    if setting.get("options"):
+        entry["options"] = [[number, setting["options"][number]]
+                            for number in sorted(setting["options"])]
+    if setting.get("auto"):
+        entry["auto"] = True
+    if setting.get("hex"):
+        entry["hex"] = True
+    if setting.get("text"):
+        entry["text"] = True
+    return entry
+
+
+def pretty_json(document):
+    """JSON with one setting per line: a diff reads a setting at a time."""
+    lines = ["{"]
+    for key in sorted(document):
+        if key == "maps":
+            continue
+        lines.append(" %s: %s," % (
+            json.dumps(key),
+            json.dumps(document[key], ensure_ascii=False, sort_keys=True)))
+    lines.append(' "maps": [')
+    for map_index, mapping in enumerate(document["maps"]):
+        rest = ", ".join(
+            "%s: %s" % (json.dumps(key),
+                        json.dumps(mapping[key], ensure_ascii=False, sort_keys=True))
+            for key in sorted(mapping) if key != "files")
+        lines.append('  {%s, "files": [' % rest)
+        for file_index, entry in enumerate(mapping["files"]):
+            rest = ", ".join(
+                "%s: %s" % (json.dumps(key),
+                            json.dumps(entry[key], ensure_ascii=False, sort_keys=True))
+                for key in sorted(entry) if key != "settings")
+            lines.append('   {%s, "settings": [' % rest)
+            for setting_index, setting in enumerate(entry["settings"]):
+                lines.append("    %s%s" % (
+                    json.dumps(setting, ensure_ascii=False, sort_keys=True,
+                               separators=(", ", ": ")),
+                    "," if setting_index + 1 < len(entry["settings"]) else ""))
+            lines.append('   ]}%s' % ("," if file_index + 1 < len(mapping["files"]) else ""))
+        lines.append('  ]}%s' % ("," if map_index + 1 < len(document["maps"]) else ""))
+    lines.append(" ]")
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def json_document(files, generation, tool, variable):
+    ordered = [path for path in FIRST + [p for p in files if p not in FIRST]
+               if path in files]
+    return pretty_json({
+        "schema": "byteripper.map/1",
+        "kind": "configuration",
+        "tool": tool,
+        "maps": [{
+            "id": variable,
+            "name": "CSME %s (Flash Image Tool %s)" % (generation, tool),
+            "files": [{
+                "path": path,
+                "alias": files[path]["alias"],
+                "settings": [setting_json(setting)
+                             for setting in files[path]["settings"]],
+            } for path in ordered],
+        }],
+    })
+
+
+def option(args, name, default):
+    """A `--name value` option, taken out of the argument list."""
+    if name not in args:
+        return args, default
+    at = args.index(name)
+    value = args[at + 1]
+    return [a for i, a in enumerate(args) if i not in (at, at + 1)], value
+
+
 def main():
-    if len(sys.argv) < 2:
+    args = sys.argv[1:]
+    if not args:
         print(__doc__)
         return 2
     # More than one build may be given, and their databases are merged with the
@@ -325,7 +414,18 @@ def main():
     # whole generation — a file the newest build's lists dropped (a platform
     # retired, a setting renamed) is still read out of the images the older
     # builds wrote, where it is at the same place.
-    paths = [a for a in sys.argv[1:] if not a.startswith("-")]
+    args, generation = option(args, "--generation", "16")
+    args, output_format = option(args, "--format", "swift")
+    if output_format not in ("swift", "json"):
+        print("--format is swift or json", file=sys.stderr)
+        return 2
+    # Which builds the map was read from, for the map's name: the databases'
+    # own versions, unless the caller states them (a file name may not carry
+    # the build number the executable does).
+    builds = ", ".join(build_name(path) for path in args)
+    args, tool = option(args, "--tool", builds)
+    args, variable = option(args, "--variable", "csme%s" % generation)
+    paths = args
     texts = []
     for path in paths:
         texts.extend(documents(open(path, "rb").read()))
@@ -339,10 +439,12 @@ def main():
     for path, name, there, here in conflicts:
         print("! dropped %s %s: the lists lay it out differently (%s / %s)" %
               (path, name, there, here), file=sys.stderr)
+    if output_format == "json":
+        print(json_document(files, generation, tool, variable))
+        return 0
     print("// The CSME 16 map of the ME configuration — emitted by")
     print("// `Skills/me-eom-structures/scripts/mfit_map.py` from the settings")
-    print("// databases of Flash Image Tool %s," % ", ".join(
-        build_name(p) for p in paths))
+    print("// databases of Flash Image Tool %s," % tool)
     print("// merged as one: the offsets, bits, the tool's own name for")
     print("// each setting (`label`), its option labels and the")
     print("// `Auto` marks are Intel's, copied; nothing here is read out of a dump.")
@@ -358,8 +460,7 @@ def main():
     print('    /// policy and the settings an edit is usually about — and the rest in')
     print('    /// MFIT\'s own order, which is the order to diff a new build against.')
     print('    public static let csme16 = MEConfigurationMap(')
-    print('        name: "CSME 16 (Flash Image Tool %s)",' % ", ".join(
-        build_name(p) for p in paths))
+    print('        name: "CSME 16 (Flash Image Tool %s)",' % tool)
     print('        files: [')
     print(swift(files))
     print('        ])')

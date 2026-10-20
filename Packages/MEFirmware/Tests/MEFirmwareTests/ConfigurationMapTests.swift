@@ -152,8 +152,9 @@ final class ConfigurationMapTests: XCTestCase {
         }
     }
 
-    /// The 16 map is merged from three builds: the settings 16.1.42 adds are
-    /// there, and one whose lists disagree only on the `Auto` mark is kept.
+    /// The 16 map is merged from two builds: the settings 16.1.42 adds are
+    /// there, the file only 16.0.15 lists is read, and one whose lists
+    /// disagree only on the `Auto` mark is kept.
     func testTheSixteenMapCarriesEveryBuildsSettings() {
         let settings = MEConfigurationMap.csme16.files.flatMap(\.settings)
         for name in ["OEMInfo", "OEMMakeInfo", "OEMModelInfo", "OEMDataStore",

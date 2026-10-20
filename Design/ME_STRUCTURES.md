@@ -369,11 +369,12 @@ empty, and the panel then draws that column as its heading and nothing else; on
 mapped files on a Lenovo Legion board — and they agree on every setting).
 
 **The map the panel reads is emitted from that database, not typed out.**
-`Skills/me-eom-structures/scripts/mfit_map.py <mfit.exe>` prints
-`MEConfigurationMap+CSME16.swift`: every file with a readable setting, its
-offset, length, bits, MFIT's option labels and its `Auto` marks, straight from
-the XML. It merges the platform lists into one — the four ADL-S lists agree on
-every offset of every setting we map, so one map serves them — and reports what
+`Skills/me-eom-structures/scripts/mfit_map.py <mfit.exe> --format json` writes
+`MapSources/configuration/csme16.json` (compiled into `ConfigMaps.bin`,
+`Design/MAP_DATA.md`): every file with a readable setting, its offset, length,
+bits, MFIT's option labels and its `Auto` marks, straight from the XML. It
+merges the platform lists into one — the four ADL-S lists agree on every
+offset of every setting we map, so one map serves them — and reports what
 it cannot merge: a setting whose **place** differs between lists is dropped and
 named. Mere wording is not a place (below), and neither is the window around a
 bitfield: `icpsSwSkuing` is read as 8 bytes in six lists and 32 in one, all of
@@ -391,12 +392,12 @@ certificates, the ICC profiles, `pavp/hdcp_ports`' second port — is left to
 MFIT's plugin: a guess would put one setting's byte under another's name. The
 16 map holds **88 settings in 40 files** with these rules — every setting the
 database gives a place in the bytes, whole-file or bitfield, and nothing else.
-Since 2026-10-17 it is emitted from **three builds at once** (16.0.15.1662,
-16.1.25.2091 and 16.1.42), merged with the same rules as one build's lists: a
-file or a setting a newer build's lists dropped (a platform retired, a name
-changed) is still read out of the images the older builds wrote, and the three
-agree on every setting all of them carry. 16.1.42 adds ten settings the older
-builds lack — `OEMInfo` / `OEMMakeInfo` / `OEMModelInfo` / `OEMDataStore` /
+It is emitted from **two builds at once** (16.0.15.1817 and 16.1.42), merged
+with the same rules as one build's lists: a file or a setting a newer build's
+lists dropped (a platform retired, a name changed) is still read out of the
+images the older builds wrote. The earlier merge of 16.0.15.1662, 16.1.25.2091
+and 16.1.42 states the same 88 settings in the same 40 files. 16.1.42 adds ten
+settings the older builds lack — `OEMInfo` / `OEMMakeInfo` / `OEMModelInfo` / `OEMDataStore` /
 `MfgCountryOfOrigin`, `PSRSupported` (`/home/psr/genesis_info`), `SpiSwSeqEnable`
 (`/home/mca/host_sw_sqnc_mode`), `ECOOBSmbusAddr`
 (`/home/mctp/ec_oob_smbus_addr`), `BindingSigType` (`/home/rbe/binding_sig_type`)

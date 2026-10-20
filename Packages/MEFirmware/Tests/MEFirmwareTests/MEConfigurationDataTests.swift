@@ -11,7 +11,8 @@ final class MEConfigurationDataTests: XCTestCase {
             ("csme12Desktop", 31, 70), ("csme13", 31, 67),
             ("csme13Desktop", 27, 61), ("csme14", 31, 71),
             ("csme14Desktop", 27, 65), ("csme15", 38, 85),
-            ("csme15Desktop", 35, 77), ("csme18", 32, 67),
+            ("csme15Desktop", 35, 77), ("csme16", 40, 88),
+            ("csme18", 32, 67),
         ]
         for (id, files, settings) in expected {
             let map = MEConfigurationData.map(id: id)
@@ -44,7 +45,7 @@ final class MEConfigurationDataTests: XCTestCase {
         XCTAssertNotNil(hex, "the 18 map's addresses are hex")
         let auto = try XCTUnwrap(MEConfigurationMap.csme16)
             .files.flatMap(\.settings).first { $0.auto }
-        XCTAssertNotNil(auto, "CSME 16 is still the generated Swift map")
+        XCTAssertNotNil(auto, "MFIT marks the settings it works out")
     }
 
     func testAStaleVersionIsRefusedBeforeAnySectionIsRead() throws {

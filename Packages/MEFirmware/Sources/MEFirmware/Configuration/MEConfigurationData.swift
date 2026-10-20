@@ -219,5 +219,6 @@ public extension MEConfigurationMap {
     static var csme15Desktop: MEConfigurationMap {
         MEConfigurationData.required("csme15Desktop")
     }
+    static var csme16: MEConfigurationMap { MEConfigurationData.required("csme16") }
     static var csme18: MEConfigurationMap { MEConfigurationData.required("csme18") }
 }

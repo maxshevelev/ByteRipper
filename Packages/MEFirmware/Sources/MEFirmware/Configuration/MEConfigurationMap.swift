@@ -13,9 +13,7 @@
 // `Design/ME_STRUCTURES.md`. The maps are compiled data
 // (`Packages/MEFirmware/MapSources/configuration`, `Design/MAP_DATA.md`):
 // a new generation is a new JSON source and one line in `forME(major:)`, and
-// no map can be edited into another's shape by accident. CSME 16 is still a
-// file of its own beside this one (`MEConfigurationMap+CSME16.swift`): the
-// build its map was read from is not at hand to regenerate its JSON.
+// no map can be edited into another's shape by accident.
 //
 // The FPF/UEP settings — the Boot Guard profile, the OEM key hash and the rest
 // of what a platform burns into its fuses — are not files of the MFS and are
@@ -205,10 +203,7 @@ public struct MEConfigurationMap: Sendable, Equatable {
         case 13: id = desktop ? "csme13Desktop" : "csme13"
         case 14: id = desktop ? "csme14Desktop" : "csme14"
         case 15: id = desktop ? "csme15Desktop" : "csme15"
-        case 16:
-            // Still the generated Swift map: the 16.0.15.1662 build its JSON
-            // was read from is not at hand, so it waits for its own source.
-            return MEConfigurationMap.csme16.addingManufacturingLock()
+        case 16: id = "csme16"
         case 18: id = "csme18"
         default: return nil
         }
