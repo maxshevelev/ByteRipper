@@ -647,6 +647,18 @@ and Intel's 7 Series/C216 SPI Programming Guide (document 475653, Appendix A)
 is the public check on the `cougar` union: it names the same fields at the
 same bits.
 
+**The tool package's `newfiletmpl.xml` is the other half.** The executable
+reads it from its directory — it is not embedded, which is why an exe-only
+extraction never saw it — and the ME System Tools packages ship it beside
+`fitc.exe`. Per `PchStrapN` it states every field's default value, the words
+of every option (`value_list`) and the tool's own label, all absent from the
+guide. `--template` adds them to the table; the guide keeps the bits. Two
+words exist only in the template: **14** (Lynx Point's PCIe/SATA lane modes)
+and **19** (Wildcat Point's SATA/USB3 MPHY power controls). Its fields are
+listed most significant first, so they pack from the high end of the section
+they fill, each as wide as its option list needs — and the dumps read word
+14's low 16 bits back as exactly those lane modes on every board examined.
+
 ```bash
 python3 Skills/me-eom-structures/scripts/intel_strap_map.py \
     --header <flashrom>/include/ich_descriptors.h \
@@ -654,26 +666,39 @@ python3 Skills/me-eom-structures/scripts/intel_strap_map.py \
     Packages/UEFIImage/Sources/UEFIImage/StrapMap+IBX.swift
 python3 Skills/me-eom-structures/scripts/intel_strap_map.py \
     --header <flashrom>/include/ich_descriptors.h \
+    --template "<tools>/Flash Image Tool/v8.1.40.1456/newfiletmpl.xml" \
     --kind cougar --generation cougarPoint --words 18 --variable pch18 > \
     Packages/UEFIImage/Sources/UEFIImage/StrapMap+CPT.swift
+python3 Skills/me-eom-structures/scripts/intel_strap_map.py \
+    --header <flashrom>/include/ich_descriptors.h \
+    --template "<tools>/Flash Image Tool/WIN32/newfiletmpl.xml" \
+    --kind cougar --carried-forward --generation lynxPoint --words 21 \
+    --variable pch21 > Packages/UEFIImage/Sources/UEFIImage/StrapMap+LPT.swift
 ```
+
+The Cougar Point table is emitted from ME System Tools v8 r3's template and
+the Lynx Point one from v10.0 r8's, which carries both template-only words
+the dumps at hand could show (v9.5 r6 has word 14 but not 19). Ibex Peak's
+template (v7 r2) exists too but its table is still the guide's alone.
 
 The sections are **16 words on Ibex Peak, 18 on Cougar Point/Panther Point and
 21 on Lynx Point**, and each table is read only on the generation that states
 that length — as SPT's are — so an uncertain generation claims nothing. The
 7-series guide's fields carry through Panther Point; the tables' option words
 (64/128/256 KB boot block, the SMBus frequencies, the PCIe port configurations
-and the rest) are the guide's.
+and the rest) are the guide's, and the defaults are the tool's.
 
 **Lynx Point's own guide is not public** (Intel document 487990), so `pch21`
 is the Cougar Point field set carried forward over the first 18 of the 21
-words: the MacBook Air 13 dump corroborates the shared bits there (`SMB_EN`,
-`SML1_EN`, `Deep_SX_EN` and `ICC_PRO_SEL` read where the 7-series layout puts
-them), and words 18-20 have no public layout and stay raw. The `cougar`
-union's `STRP1` adds up to 37 bits in flashrom — a reserved tail five bits too
-wide — and the script trims that tail to the 32 bits a word is. On the dumps
-at hand `MacBook Pro 15 2010` states 16 words, `ME 7` and `MacBook Pro 15
-2011` 18, and `MacBook Air 13` 21.
+words: the dumps corroborate the shared bits there (`SMB_EN`, `SML1_EN`,
+`Deep_SX_EN` and `ICC_PRO_SEL` read where the 7-series layout puts them). The
+template adds word 14's lane modes (low 16 bits, checked on eight dumps) and
+word 19's two power controls (low bits, clear on every dump); **words 18 and
+20 are in neither source and stay raw**. The `cougar` union's `STRP1` adds up
+to 37 bits in flashrom — a reserved tail five bits too wide — and the script
+trims that tail to the 32 bits a word is. On the dumps at hand `MacBook Pro 15
+2010` states 16 words, `ME 7` and `MacBook Pro 15 2011` 18, and `MacBook Air
+13` 21.
 
 **The PMC straps are a table too, keyed by what the MIP area leaves.** On
 Cannon Point and later, the MIP table's block type 1 is the PMC section
