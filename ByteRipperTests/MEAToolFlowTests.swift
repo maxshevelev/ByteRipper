@@ -2,7 +2,7 @@ import AppKit
 import AppPalette
 import XCTest
 import MEFirmware
-import MEAToolUI
+@testable import MEAToolUI
 import ToolModuleKit
 @testable import ByteRipper
 
@@ -215,6 +215,29 @@ final class MEAToolFlowTests: XCTestCase {
         tabs.selectedSegment = 2
         tabs.sendAction(tabs.action, to: tabs.target)
         window?.layoutIfNeeded()
+    }
+
+    // MARK: - The tab a workspace keeps
+
+    /// The tab is kept by name: a number would point at another tab as soon
+    /// as one was added before it — which the Configuration tab was.
+    func testTheTabIsKeptByName() throws {
+        let kept = try XCTUnwrap(MEAParkedState(tabIndex: 1, focusPath: [0, 2]).encoded)
+        XCTAssertTrue(String(decoding: kept, as: UTF8.self).contains("\"configuration\""))
+        let back = try XCTUnwrap(MEAToolModule.restoredState(from: kept) as? MEAParkedState)
+        XCTAssertEqual(back.tabIndex, 1)
+        XCTAssertEqual(back.focusPath, [0, 2])
+    }
+
+    /// A workspace written before the Configuration tab numbered Full Info 1;
+    /// it still opens on Full Info, not on the tab that now sits there.
+    func testAWorkspaceFromBeforeTheConfigurationTabKeepsItsTab() throws {
+        let fullInfo = Data(#"{"tabIndex":1,"focusPath":[0,2]}"#.utf8)
+        let state = try XCTUnwrap(MEAToolModule.restoredState(from: fullInfo) as? MEAParkedState)
+        XCTAssertEqual(MEAParkedState.tabNames[state.tabIndex], "fullInfo")
+        XCTAssertEqual(state.focusPath, [0, 2])
+        let summary = Data(#"{"tabIndex":0}"#.utf8)
+        XCTAssertEqual(try XCTUnwrap(MEAToolModule.restoredState(from: summary) as? MEAParkedState).tabIndex, 0)
     }
 
     // MARK: - The app ships it
