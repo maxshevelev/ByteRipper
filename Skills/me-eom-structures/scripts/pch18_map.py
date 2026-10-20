@@ -33,6 +33,7 @@ Stdlib only, read-only, no network; read the diff, don't paste blind.
 """
 
 import hashlib
+import json
 import os
 import re
 import sys
@@ -220,8 +221,76 @@ def swift(tool, fields):
     return "\n".join(lines)
 
 
+def pretty_json(document):
+    """JSON with one field per line: a diff reads a field at a time."""
+    lines = ["{"]
+    for key in sorted(document):
+        if key == "maps":
+            continue
+        lines.append(" %s: %s," % (
+            json.dumps(key),
+            json.dumps(document[key], ensure_ascii=False, sort_keys=True)))
+    lines.append(' "maps": [')
+    for map_index, mapping in enumerate(document["maps"]):
+        rest = ", ".join(
+            "%s: %s" % (json.dumps(key),
+                        json.dumps(mapping[key], ensure_ascii=False, sort_keys=True))
+            for key in sorted(mapping) if key != "fields")
+        lines.append('  {%s, "fields": [' % rest)
+        fields = mapping["fields"]
+        for field_index, field in enumerate(fields):
+            lines.append("   %s%s" % (
+                json.dumps(field, ensure_ascii=False, sort_keys=True,
+                           separators=(", ", ": ")),
+                "," if field_index + 1 < len(fields) else ""))
+        lines.append('  ]}%s' % ("," if map_index + 1 < len(document["maps"]) else ""))
+    lines.append(" ]")
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def json_document(tool, fields):
+    """The same table as data, for the binary map compiler.
+
+    Option lists become `[number, words]` pairs so the JSON stays free of the
+    string keys a JSON object would force on a numeric code.
+    """
+    return pretty_json({
+        "schema": "byteripper.map/1",
+        "kind": "strap",
+        "tool": tool,
+        "maps": [{
+            "id": "pch%d" % SECTION_WORDS,
+            "set": "pch",
+            "name": "%s, SoC straps, %d words" % (tool, SECTION_WORDS),
+            "words": SECTION_WORDS,
+            "fields": [
+                {"name": field["name"],
+                 "word": field["word"],
+                 "bits": [field["bits"][0], field["bits"][1]],
+                 "default": None,
+                 "label": field["label"] or None,
+                 "options": [[number, words]
+                             for number, words in sorted(field["options"].items())]
+                 if field["options"] else []}
+                for field in fields
+            ],
+            "source": {"tool": tool},
+        }],
+    })
+
+
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    argv = sys.argv[1:]
+    output_format = "swift"
+    if "--format" in argv:
+        at = argv.index("--format")
+        output_format = argv[at + 1]
+        del argv[at:at + 2]
+    if output_format not in ("swift", "json"):
+        print("--format is swift or json", file=sys.stderr)
+        return 2
+    args = [a for a in argv if not a.startswith("-")]
     if not args:
         print(__doc__)
         return 2
@@ -247,7 +316,8 @@ def main():
     print("fields: %d of %d names, %d left out (a word-boundary crossing)"
           % (len(fields), len({f["name"] for _, s in documents_found for f in s}),
              crossings), file=sys.stderr)
-    print(swift(tool, fields))
+    print(json_document(tool, fields) if output_format == "json"
+          else swift(tool, fields))
     return 0
 
 

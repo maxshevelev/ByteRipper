@@ -51,6 +51,21 @@ done
 derived="${BYTERIPPER_DD:-${DUMPCOMPARE_DD:-$PWD/.build/xcode}}"
 failed=0
 
+# The binary strap tables and the code's build mark must match their JSON
+# sources (`Design/UEFI/STRAP_MAP_DATA.md`). `--check` reads and rebuilds in
+# memory; it never writes. A stale pair fails the run before a test starts,
+# because every descriptor test would otherwise be testing the wrong tables.
+if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
+    --out Packages/UEFIImage/Sources/UEFIImage/Resources/StrapMaps/StrapMaps.bin \
+    --version-file Packages/UEFIImage/MapSources/build.version \
+    --swift-version-file Packages/UEFIImage/Sources/UEFIImage/StrapMapDataVersion.swift \
+    Packages/UEFIImage/MapSources/strap/pch.json \
+    Packages/UEFIImage/MapSources/strap/pch18.json \
+    Packages/UEFIImage/MapSources/strap/spt.json; then
+    echo "the strap map binary is stale: rebuild it (Skills/me-eom-structures/SKILL.md)" >&2
+    exit 1
+fi
+
 report() {   # keeps the counts, the failures, and any death of the test host
     # A test host that dies mid-run is not a line in this output: XCTest prints
     # "Restarting after unexpected exit", launches a second host, and reports

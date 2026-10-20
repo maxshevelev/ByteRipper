@@ -43,6 +43,7 @@ default; a field the documents disagree about is left out rather than guessed.
 
 import collections
 import hashlib
+import json
 import os
 import re
 import sys
@@ -311,6 +312,75 @@ def swift(kind, chosen, prefix=None):
     return "\n".join(lines)
 
 
+def pretty_json(document):
+    """JSON with one field per line: a diff reads a field at a time."""
+    lines = ["{"]
+    for key in sorted(document):
+        if key == "maps":
+            continue
+        lines.append(" %s: %s," % (
+            json.dumps(key),
+            json.dumps(document[key], ensure_ascii=False, sort_keys=True)))
+    lines.append(' "maps": [')
+    for map_index, mapping in enumerate(document["maps"]):
+        rest = ", ".join(
+            "%s: %s" % (json.dumps(key),
+                        json.dumps(mapping[key], ensure_ascii=False, sort_keys=True))
+            for key in sorted(mapping) if key != "fields")
+        lines.append('  {%s, "fields": [' % rest)
+        fields = mapping["fields"]
+        for field_index, field in enumerate(fields):
+            lines.append("   %s%s" % (
+                json.dumps(field, ensure_ascii=False, sort_keys=True,
+                           separators=(", ", ": ")),
+                "," if field_index + 1 < len(fields) else ""))
+        lines.append('  ]}%s' % ("," if map_index + 1 < len(document["maps"]) else ""))
+    lines.append(" ]")
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def json_document(kind, chosen, prefix, tools):
+    """The same tables as data, for the binary map compiler.
+
+    `set` is what the reader groups by: SPT's documents are a set of their own
+    because a length can mean two different sections in the two sets. The
+    fields keep the order the Swift emitter writes them in, so a table reads
+    the same whichever output is used.
+    """
+    set_name = {"PCH": "pch", "CPU": "cpu"}.get(kind, kind.lower())
+    if (prefix or "").lower().startswith("spt"):
+        set_name = "spt"
+    maps = []
+    for words, table in chosen:
+        source = table["tool"] if not table["document"] else "%s (%s)" % (
+            table["tool"], table["document"])
+        maps.append({
+            "id": "%s%d" % (prefix or kind.lower(), words),
+            "set": set_name,
+            "name": table["document"] or "Flash Image Tool %s, %d words" % (
+                table["tool"], words),
+            "words": words,
+            "fields": [
+                {"name": field["name"],
+                 "word": field["offset"] // 4,
+                 "bits": [field["low"], field["high"]],
+                 "default": field.get("default")}
+                for field in sorted(table["fields"],
+                                    key=lambda f: (f["offset"], f["low"]))
+            ],
+            "source": {"tool": table["tool"],
+                       "document": table["document"] or None,
+                       "class": table["class"]},
+        })
+    return pretty_json({
+        "schema": "byteripper.map/1",
+        "kind": "strap",
+        "tool": ", ".join(tool for tool, _ in tools),
+        "maps": maps,
+    })
+
+
 def main():
     args = sys.argv[1:]
     if not args or args[0] in ("-h", "--help"):
@@ -319,7 +389,11 @@ def main():
     args, words = option(args, "--words")
     args, kind = option(args, "--kind", "PCH")
     args, prefix = option(args, "--prefix", None)
+    args, output_format = option(args, "--format", "swift")
     kind = kind.upper()
+    if output_format not in ("swift", "json"):
+        print("--format is swift or json", file=sys.stderr)
+        return 2
     paths = [a for a in args if not a.startswith("-")]
     if not words or not paths:
         print(__doc__)
@@ -391,7 +465,10 @@ def main():
                 "%s word %d bits %d..%d" % (f["name"], f["offset"] // 4, f["low"], f["high"])
                 for f in found) or "—"), file=sys.stderr)
 
-    print(swift(kind, chosen, prefix))
+    if output_format == "json":
+        print(json_document(kind, chosen, prefix, tools))
+    else:
+        print(swift(kind, chosen, prefix))
     return 0
 
 
