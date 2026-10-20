@@ -452,13 +452,15 @@ import ToolModuleKit
     /// drag on the seam of something that is not there. Open, it stays between
     /// the panel's minimum and the point where the dump would fall below its
     /// own — so on a narrow window the panel stops growing rather than the dump
-    /// disappearing.
+    /// disappearing. `allowance` is how much narrower than the tab's this
+    /// surface draws its panel (`DocumentSurface.toolPanelWidthAllowance`):
+    /// the band moves down by it.
     func clampPanelDivider(_ position: CGFloat, total: CGFloat, dividers: CGFloat,
-                           minimapWidth: CGFloat) -> CGFloat {
+                           minimapWidth: CGFloat, allowance: CGFloat = 0) -> CGFloat {
         guard isPanelVisible else { return 0 }
         let roomForPanel = max(0, total - dividers - minimapWidth - Self.minContentWidth)
-        let upper = min(Self.maxPanelWidth, roomForPanel)
-        return min(max(position, min(Self.minPanelWidth, upper)), max(0, upper))
+        let upper = min(Self.maxPanelWidth - allowance, roomForPanel)
+        return min(max(position, min(Self.minPanelWidth - allowance, upper)), max(0, upper))
     }
 
     /// Remembers the panel's width for the tool-module that is open, so the

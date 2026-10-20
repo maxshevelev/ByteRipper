@@ -18,7 +18,12 @@ final class FragmentPillView: NSView {
     let id: FragmentDock.PanelID
     /// Whether this is the panel on screen. Filled rather than outlined, so the
     /// dock says at a glance which pill the panel in front belongs to.
-    var isUp = false { didSet { needsDisplay = true } }
+    var isUp = false {
+        didSet {
+            needsDisplay = true
+            updateShadow()
+        }
+    }
     /// Whether the part holds bytes the parent has not got back yet. A dot, not
     /// a word: the pill has room for a name and a codec's word and no more.
     var hasChanges = false {
@@ -68,6 +73,12 @@ final class FragmentPillView: NSView {
         self.id = id
         super.init(frame: .zero)
         wantsLayer = true
+        // A folded pill stands slightly off the dock, like a card laid on it;
+        // the one that is up is filled and needs nothing more to stand out.
+        layer?.shadowColor = NSColor.black.cgColor
+        layer?.shadowRadius = 2
+        layer?.shadowOffset = CGSize(width: 0, height: -1)
+        updateShadow()
 
         icon.image = NSImage(systemSymbolName: "doc", accessibilityDescription: nil)
         icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 10, weight: .regular)
@@ -135,6 +146,33 @@ final class FragmentPillView: NSView {
         }
     }
 
+    private func updateShadow() {
+        layer?.shadowOpacity = isUp ? 0 : 0.2
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        // A theme change zeroes the layer's shadow opacity — AppKit resets it
+        // from the view's own `shadow`, which is nil — before this is called,
+        // so the shadow has to be put back here or it is gone.
+        updateShadow()
+    }
+
+    override func layout() {
+        super.layout()
+        let rect = bounds.insetBy(dx: 0.5, dy: 0.5)
+        layer?.shadowPath = CGPath(roundedRect: rect, cornerWidth: rect.height / 2,
+                                   cornerHeight: rect.height / 2, transform: nil)
+    }
+
+    /// A folded pill's plate: white in a light window. A dark window has no
+    /// white that does not glare, so there it is a step lighter than the dock.
+    private var foldedFill: NSColor {
+        effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? NSColor(white: 0.3, alpha: 1)
+            : .white
+    }
+
     @objc private func closeTapped() { onClose?() }
     @objc private func tearOffTapped() { onTearOff?() }
 
@@ -167,10 +205,10 @@ final class FragmentPillView: NSView {
             NSColor.selectedContentBackgroundColor.setFill()
             pill.fill()
         } else {
-            NSColor.windowBackgroundColor.withAlphaComponent(0.95).setFill()
+            foldedFill.setFill()
             pill.fill()
-            NSColor.separatorColor.setStroke()
-            pill.lineWidth = 1
+            NSColor.separatorColor.withAlphaComponent(0.5).setStroke()
+            pill.lineWidth = 0.5
             pill.stroke()
         }
         let ink: NSColor = isUp ? .alternateSelectedControlTextColor : .labelColor
@@ -242,6 +280,15 @@ final class FragmentDockStrip: NSView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
+        // Cast upward, over the panes and over the panel that is up: the dock
+        // lies on top of everything, and the panel comes out from under it.
+        // Drawn above its siblings for the same reason — the panel host is
+        // added after it and would otherwise cover the shadow.
+        layer?.zPosition = Self.zPosition
+        layer?.shadowColor = NSColor.black.cgColor
+        layer?.shadowOpacity = Self.shadowOpacity
+        layer?.shadowRadius = 8
+        layer?.shadowOffset = CGSize(width: 0, height: 2)
         row.orientation = .horizontal
         row.spacing = 6
         row.alignment = .centerY
@@ -257,6 +304,26 @@ final class FragmentDockStrip: NSView {
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) is not supported")
+    }
+
+    /// Where the dock stands among its siblings' layers: over the panel host,
+    /// so the panel reads as coming out from under it.
+    static let zPosition: CGFloat = 1
+    private static let shadowOpacity: Float = 0.22
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        // A theme change zeroes the layer's shadow opacity — AppKit resets it
+        // from the view's own `shadow`, which is nil — before this is called,
+        // so the shadow has to be put back here or it is gone.
+        layer?.shadowOpacity = Self.shadowOpacity
+    }
+
+    override func layout() {
+        super.layout()
+        // An explicit path: without one Core Animation works the shadow out
+        // from the drawn content on every frame.
+        layer?.shadowPath = CGPath(rect: bounds, transform: nil)
     }
 
     override func draw(_ dirtyRect: NSRect) {

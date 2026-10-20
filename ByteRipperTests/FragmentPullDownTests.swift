@@ -81,6 +81,58 @@ final class FragmentPullDownTests: XCTestCase {
         XCTAssertEqual(PullDown.Direction.of(offset: PullDown.movementThreshold), .up)
     }
 
+    // MARK: - How fast the hand was going
+
+    private func samples(_ points: [(y: CGFloat, t: TimeInterval)]) -> [PullDown.Sample] {
+        points.map { PullDown.Sample(y: $0.y, time: $0.t) }
+    }
+
+    /// A fling that slows in its last frames is still a fling. Recorded in the
+    /// app: 270 points in 150 ms, the last movement 4 points at 170 a second —
+    /// which, measured over the last movement alone, was read as a drag and
+    /// the panel sprang back.
+    func testAFlingThatSlowsAtTheEndIsStillAFlick() {
+        let fling = samples([(869.3, 0.0000), (837.1, 0.0112), (792.7, 0.0338), (740.6, 0.0449),
+                             (687.7, 0.0675), (637.1, 0.0788), (605.6, 0.1013), (602.0, 0.1125),
+                             (598.3, 0.1350), (597.3, 0.1462), (597.3, 0.1574)])
+        let recent = PullDown.recentTravel(fling, direction: .down)
+        let movement = PullDown.Movement(direction: .down, distance: recent.distance,
+                                         speed: recent.speed)
+        XCTAssertTrue(movement.isFlick, "\(recent)")
+        XCTAssertEqual(PullDown.outcome(travelled: 287, height: 867, movement: movement),
+                       .collapse)
+    }
+
+    /// A fling followed by a pause is not one: the panel has stopped, so there
+    /// is nothing to carry on.
+    func testAFlingThenAPauseIsNotAFlick() {
+        let window = PullDown.flickWindow
+        let paused = samples([(800, 0), (600, 0.08), (600, 0.08 + window + 0.05)])
+        XCTAssertEqual(PullDown.recentTravel(paused, direction: .down).distance, 0)
+    }
+
+    /// Only travel in the direction asked about counts: down and back up
+    /// inside the window has not flung the panel down.
+    func testTravelTheOtherWayDoesNotCount() {
+        let back = samples([(600, 0), (540, 0.03), (620, 0.06)])
+        XCTAssertEqual(PullDown.recentTravel(back, direction: .down).distance, 0)
+        XCTAssertEqual(PullDown.recentTravel(back, direction: .up).distance, 20, accuracy: 0.001)
+        XCTAssertEqual(PullDown.recentTravel(back, direction: .none).distance, 0)
+    }
+
+    /// The fold that carries a throw on starts at speed — never slower than its
+    /// own average, which is what an ease-in start was, and what showed as a
+    /// pause between the hand and the animation.
+    func testAThrownFoldStartsAtSpeed() {
+        var start: [Float] = [0, 0]
+        for speed: CGFloat in [0, 1200, 100_000] {
+            FragmentPanels.throwTiming(speed: speed, travel: 800, duration: 0.2)
+                .getControlPoint(at: 1, values: &start)
+            XCTAssertGreaterThanOrEqual(start[1] / start[0], 1, "at \(speed) pt/s")
+            XCTAssertLessThan(start[1], 1, "and does not overshoot its end at \(speed) pt/s")
+        }
+    }
+
     // MARK: - Where it sits while pulled
 
     /// Downward it follows the hand exactly.

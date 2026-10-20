@@ -495,8 +495,12 @@ final class FragmentToolTests: XCTestCase {
 
         XCTAssertTrue(host.acceptsFirstMouse(for: nil),
                       "a click that merely brings the window forward is not a click on a pane")
+        // Inside the panel: a click on the scrim beside it folds the panel,
+        // which `FragmentPanelTests` pins.
+        let panel = try XCTUnwrap(host.subviews.first)
+        let inside = host.convert(NSPoint(x: panel.frame.midX, y: panel.frame.midY), to: nil)
         let click = try XCTUnwrap(NSEvent.mouseEvent(
-            with: .rightMouseDown, location: NSPoint(x: 10, y: 10), modifierFlags: [],
+            with: .rightMouseDown, location: inside, modifierFlags: [],
             timestamp: ProcessInfo.processInfo.systemUptime,
             windowNumber: window.windowNumber, context: nil,
             eventNumber: 0, clickCount: 1, pressure: 1))
@@ -506,6 +510,7 @@ final class FragmentToolTests: XCTestCase {
         host.rightMouseDown(with: click)
         host.mouseDown(with: click)
         host.scrollWheel(with: click)
+        XCTAssertNotNil(controller.fragments.expanded, "and the panel is still up")
     }
 
     /// A drag does not travel the responder chain: the window looks for a view
@@ -605,5 +610,32 @@ final class FragmentToolTests: XCTestCase {
         XCTAssertEqual(window.frame, frame,
                        "a tool opened inside a panel is not the window's business")
         XCTAssertEqual(controller.toolPanelWidth(), 0, "and the tab's own panel stays shut")
+    }
+
+    /// The panel's side margins come out of its tool panel, not its dump: the
+    /// part's bytes are as wide as the file's behind it would be with the same
+    /// tool open, and the width remembered is the tab's.
+    func testThePanelsMarginsComeOutOfItsToolPanel() throws {
+        let (controller, window, url) = try makeController()
+        defer { cleanup(controller, url) }
+        let id = try XCTUnwrap(controller.openFragment([UInt8](0..<32), named: "part",
+                                                       animated: false))
+        window.layoutIfNeeded()
+        let surface = try XCTUnwrap(controller.fragments.surface(id))
+        surface.tools.activate(StubToolA.identifier, animated: false)
+        window.layoutIfNeeded()
+
+        let margins = FragmentPanelLayout.sideInset * 2
+        XCTAssertEqual(surface.toolPanelWidthAllowance, margins)
+        XCTAssertEqual(surface.toolPanelWidth(),
+                       surface.tools.preferredWidth(for: StubToolA.self) - margins,
+                       accuracy: 0.5, "the tool panel gives up the margins")
+
+        // And the divider's legal band moves down by the same amount: the
+        // narrowest tool panel in a fragment is the tab's narrowest less the
+        // margins, not the margins taken out of the dump.
+        let clamp = try XCTUnwrap(surface.panelSplit.clampDividerPosition)
+        XCTAssertEqual(clamp(DocumentSurface.toolDividerIndex, 0),
+                       ToolController.minPanelWidth - margins)
     }
 }

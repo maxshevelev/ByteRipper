@@ -6,17 +6,16 @@ import Cocoa
 /// Pure, so the one rule the geometry has — how much of the file underneath
 /// stays showing — is pinned without a window.
 enum FragmentPanelLayout {
-    /// How much of the pane header behind the panel the panel covers.
-    ///
-    /// A fifth. The overlap is what says the panel is laid *over* the file
-    /// rather than docked beside it — a panel that cleared the header entirely
-    /// would read as a second pane — and a fifth is enough to say so while
-    /// leaving the header itself readable.
-    static let headerCoveredShare: CGFloat = 0.2
+    /// How far the panel stands in from the left and right edges of the panes
+    /// behind it. A margin on three sides, with the panes showing dimmed
+    /// through it, is what says the panel lies *over* them: a strip at the top
+    /// alone read to some as the window having changed its layout.
+    static let sideInset: CGFloat = 16
 
-    /// How much of the panes behind is left showing above the panel: the rest
-    /// of that header.
-    static var parentPeek: CGFloat { FilePaneView.headerHeight * (1 - headerCoveredShare) }
+    /// How much of the panes behind is left showing above the panel: twice the
+    /// side margin, so the top reads as the panel's open edge and the file's
+    /// own header stays visible behind the scrim.
+    static var parentPeek: CGFloat { sideInset * 2 }
 
     /// The panel never folds itself smaller than this by being in a short
     /// window: below it there is no room for a header, a row of bytes and a
@@ -68,14 +67,52 @@ enum PullDown {
     /// rather than a drag — what lets a decisive swipe from the top put the
     /// panel away without dragging it all the way down.
     ///
-    /// Nine hundred is about seven points a frame: not something a hand
-    /// positioning a panel produces, and not something a shove fails to.
-    static var flickSpeed: CGFloat = 900
+    /// Measured over `flickWindow`, so it is an average over the fling rather
+    /// than its peak: the flings recorded in the app averaged 1000–2000 over
+    /// it. Six hundred leaves room for a softer one; a slow drag has not been
+    /// measured, so this is the value to tune if one starts to count.
+    static var flickSpeed: CGFloat = 600
 
     /// And a flick has to be a real shove, not a fast tremble: the movement
     /// that carries the speed must itself be this long, in points. Two points
     /// crossed in two milliseconds is arithmetic, not a gesture.
     static var flickDistance: CGFloat = 8
+
+    /// How far back from the release the flick's speed is measured, in
+    /// seconds.
+    ///
+    /// A hand that flings a panel slows in the last frame or two before the
+    /// button comes up: measured over the last movement alone, a fling of
+    /// 1800 points a second ended as 4 points at 170 and was read as a drag
+    /// (measured in the app, 2026-10-21). A tenth of a second is the fling
+    /// itself, and short enough that a fling followed by a pause is no longer
+    /// one — the panel has stopped, so there is no inertia to carry on.
+    static var flickWindow: TimeInterval = 0.1
+
+    /// One position of the hand during a pull: its height in the window and
+    /// when it was there.
+    struct Sample: Equatable {
+        var y: CGFloat
+        var time: TimeInterval
+    }
+
+    /// How far, and how fast, the hand went `direction` over the last
+    /// `flickWindow` of `samples` — the oldest first, the release last.
+    ///
+    /// Only travel in that direction counts: a hand that went down and came
+    /// back up inside the window has not flung the panel down.
+    static func recentTravel(_ samples: [Sample],
+                             direction: Direction) -> (distance: CGFloat, speed: CGFloat) {
+        guard let last = samples.last, direction != .none else { return (0, 0) }
+        let since = last.time - flickWindow
+        guard let first = samples.first(where: { $0.time >= since }), first.time < last.time else {
+            return (0, 0)
+        }
+        let travel = last.y - first.y
+        let along = direction == .down ? -travel : travel
+        guard along > 0 else { return (0, 0) }
+        return (along, along / CGFloat(last.time - first.time))
+    }
 
     /// Which way the hand last went.
     enum Direction: Equatable {
@@ -207,6 +244,43 @@ final class FragmentPanelHost: NSView {
     /// constraints, because they are animated by their frames.
     var onLayout: (() -> Void)?
 
+    /// A click on the scrim — the dimmed panes around the panel, not the panel
+    /// itself. Folds the panel: what is behind is what the click asked for.
+    var onBackgroundClick: (() -> Void)?
+
+    /// How dark the scrim over the panes is with a panel fully up.
+    private var scrimOpacity: CGFloat {
+        effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? 0.4 : 0.15
+    }
+
+    /// How far up the scrim is, from 0 (clear) to 1 (a panel fully up).
+    private(set) var scrimLevel: CGFloat = 0
+
+    /// Dims the panes behind to `level` of the full scrim, over `duration`
+    /// seconds, or at once when nil. Animated from wherever the scrim is on
+    /// screen, so a fold that starts mid-fade does not jump.
+    func setScrim(_ level: CGFloat, duration: TimeInterval? = nil) {
+        scrimLevel = max(0, min(1, level))
+        guard let layer else { return }
+        let target = NSColor.black.withAlphaComponent(scrimOpacity * scrimLevel).cgColor
+        let current = layer.presentation()?.backgroundColor ?? layer.backgroundColor
+        layer.removeAnimation(forKey: "scrim")
+        layer.backgroundColor = target
+        guard let duration, duration > 0,
+              !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+        let fade = CABasicAnimation(keyPath: "backgroundColor")
+        fade.fromValue = current
+        fade.toValue = target
+        fade.duration = duration
+        fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        layer.add(fade, forKey: "scrim")
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        setScrim(scrimLevel)
+    }
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
@@ -249,7 +323,15 @@ final class FragmentPanelHost: NSView {
     // Every way a mouse can speak, answered with silence. A view that does not
     // implement these passes them to the next responder, which is how an event
     // over a covered pane finds something behind that still wants it.
-    override func mouseDown(with event: NSEvent) {}
+    //
+    // Except a click on the scrim itself, outside every panel: that folds the
+    // panel. A click inside a panel that nothing in it wanted climbs to here
+    // too, which is why the point is checked against the panels' frames.
+    override func mouseDown(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        guard !subviews.contains(where: { $0.frame.contains(point) }) else { return }
+        onBackgroundClick?()
+    }
     override func mouseDragged(with event: NSEvent) {}
     override func mouseUp(with event: NSEvent) {}
     override func rightMouseDown(with event: NSEvent) {}
@@ -321,8 +403,9 @@ final class FragmentPanelHost: NSView {
 final class FragmentPanelView: NSView {
     static let cornerRadius: CGFloat = 10
 
-    /// How far the shadow reaches onto the panes above.
-    static let shadowRadius: CGFloat = 14
+    /// How far the shadow reaches onto the panes around it.
+    static let shadowRadius: CGFloat = 16
+    static let shadowOpacity: Float = 0.35
 
     /// The rounded, clipped body. Separate from the panel itself because one
     /// layer cannot both clip its content to a corner radius and cast a shadow
@@ -340,9 +423,9 @@ final class FragmentPanelView: NSView {
         // Cast upward, onto the file the part came out of. In a view that is
         // not flipped a positive offset is towards the top of the screen.
         layer?.shadowColor = NSColor.black.cgColor
-        layer?.shadowOpacity = 0.28
+        layer?.shadowOpacity = Self.shadowOpacity
         layer?.shadowRadius = Self.shadowRadius
-        layer?.shadowOffset = CGSize(width: 0, height: 3)
+        layer?.shadowOffset = CGSize(width: 0, height: 2)
 
         body.wantsLayer = true
         body.layer?.masksToBounds = true
@@ -393,11 +476,14 @@ final class FragmentPanelView: NSView {
         fatalError("init(coder:) is not supported")
     }
 
-    /// The panel fills its host but for the peek left at the top, and sits on
-    /// the host's bottom edge — which is the dock's top edge.
+    /// The panel fills its host but for the margins — the peek at the top and
+    /// the narrower one at either side — and sits on the host's bottom edge,
+    /// which is the dock's top edge.
     static func restingFrame(in host: NSView) -> NSRect {
         let height = FragmentPanelLayout.panelHeight(hostHeight: host.bounds.height)
-        return NSRect(x: 0, y: 0, width: host.bounds.width, height: height)
+        let inset = min(FragmentPanelLayout.sideInset, host.bounds.width / 4)
+        return NSRect(x: inset, y: 0, width: max(0, host.bounds.width - inset * 2),
+                      height: height)
     }
 
     /// Where the panel waits before it rises and where it goes when it folds:
@@ -418,6 +504,10 @@ final class FragmentPanelView: NSView {
 
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
+        // A theme change zeroes the layer's shadow opacity — AppKit resets it
+        // from the view's own `shadow`, which is nil — before this is called,
+        // so the shadow has to be put back here or it is gone.
+        layer?.shadowOpacity = Self.shadowOpacity
         effectiveAppearance.performAsCurrentDrawingAppearance {
             body.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
         }

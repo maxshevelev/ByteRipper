@@ -42,15 +42,25 @@ final class FragmentPanelTests: XCTestCase {
 
     // MARK: - The geometry
 
-    /// The panel's top edge covers a fifth of the parent's header: enough of an
-    /// overlap to say the panel is over it, little enough that the header is
-    /// still readable.
-    func testThePanelCoversAFifthOfTheParentsHeader() {
-        let height = FragmentPanelLayout.panelHeight(hostHeight: 600)
-        XCTAssertEqual(height, 600 - FragmentPanelLayout.parentPeek)
-        XCTAssertEqual(FragmentPanelLayout.parentPeek,
-                       FilePaneView.headerHeight * 0.8, accuracy: 0.001)
-        XCTAssertEqual(FragmentPanelLayout.headerCoveredShare, 0.2)
+    /// The panel stands in from the panes on three sides — twice as far at the
+    /// top as at either side — and sits on the dock: a margin all round, with
+    /// the panes dimmed through it, is what says it lies over them.
+    func testThePanelStandsInFromThePanesBehind() {
+        XCTAssertEqual(FragmentPanelLayout.parentPeek, FragmentPanelLayout.sideInset * 2)
+        let host = NSView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
+        let side = FragmentPanelLayout.sideInset
+        XCTAssertEqual(FragmentPanelView.restingFrame(in: host),
+                       NSRect(x: side, y: 0, width: 800 - side * 2,
+                              height: 600 - FragmentPanelLayout.parentPeek))
+    }
+
+    /// In a window too narrow for the margins they give way rather than the
+    /// panel shrinking to nothing.
+    func testTheSideMarginsGiveWayInANarrowArea() {
+        let host = NSView(frame: NSRect(x: 0, y: 0, width: 40, height: 600))
+        let frame = FragmentPanelView.restingFrame(in: host)
+        XCTAssertEqual(frame.width, 20, "a quarter of the width at each side at most")
+        XCTAssertEqual(frame.midX, 20, "and still centred")
     }
 
     /// In a short window the peek gives way before the panel does: the part is
@@ -342,6 +352,36 @@ final class FragmentPanelTests: XCTestCase {
 
         controller.fragments.collapse(animated: false)
         XCTAssertTrue(controller.validateMenuItem(join), "folded, they answer again")
+    }
+
+    /// A click on the dimmed panes around the panel folds it: what is behind
+    /// is what the click asked for. A click inside the panel that nothing in
+    /// it wanted climbs to the same view, and that one does nothing.
+    func testAClickOnTheScrimFoldsThePanel() throws {
+        let (controller, window) = makeController()
+        defer { cleanup(controller) }
+        let id = try XCTUnwrap(controller.openFragment([0x01], named: "part", animated: false))
+        window.layoutIfNeeded()
+        let host = try host(of: controller)
+        let panel = try XCTUnwrap(controller.fragments.panelView(id))
+
+        func click(at point: NSPoint) throws -> NSEvent {
+            try XCTUnwrap(NSEvent.mouseEvent(
+                with: .leftMouseDown, location: host.convert(point, to: nil), modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber, context: nil,
+                eventNumber: 0, clickCount: 1, pressure: 1))
+        }
+
+        host.mouseDown(with: try click(at: NSPoint(x: panel.frame.midX, y: panel.frame.midY)))
+        XCTAssertEqual(controller.fragments.expanded, id, "a click inside the panel leaves it up")
+
+        host.mouseDown(with: try click(at: NSPoint(x: panel.frame.midX, y: host.bounds.maxY - 4)))
+        XCTAssertNil(controller.fragments.expanded, "a click on the peek above it folds it")
+
+        controller.fragments.expand(id, animated: false)
+        host.mouseDown(with: try click(at: NSPoint(x: panel.frame.minX / 2, y: panel.frame.midY)))
+        XCTAssertNil(controller.fragments.expanded, "and so does one on the margin beside it")
     }
 
     /// The first panel of a tab stands where every later one does. It did not:

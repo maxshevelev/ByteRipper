@@ -33,6 +33,15 @@ import ALSplitView
     /// hidden just means a panel is fixed at zero width.
     let panelSplit = ALSplitView()
 
+    /// How much narrower this surface is than the tab's own, and so how much
+    /// narrower its tool panel is than the width the tool-module asked for.
+    ///
+    /// A fragment panel stands in from the window's sides; taking that margin
+    /// out of the tool panel rather than the dump keeps the part's bytes the
+    /// same width as the file's behind it. Widths are still remembered at the
+    /// tab's scale, so a tool-module opens at one width wherever it opens.
+    var toolPanelWidthAllowance: CGFloat = 0
+
     /// The middle pane: whatever the mode puts on screen — the empty state, one
     /// file pane, or the comparison.
     let contentHost = NSView()
@@ -246,7 +255,8 @@ import ALSplitView
                 // not eat into, and the minimap has already taken its share.
                 return self.tools.clampPanelDivider(position, total: total,
                                                     dividers: thickness * 2,
-                                                    minimapWidth: self.currentMinimapWidth())
+                                                    minimapWidth: self.currentMinimapWidth(),
+                                                    allowance: self.toolPanelWidthAllowance)
             }
             guard self.minimapPanelVisible else {
                 // Pinned flat against the trailing edge: a hidden panel is a
@@ -269,7 +279,7 @@ import ALSplitView
         panelSplit.onDividerMoved = { [weak self] index, position in
             guard let self else { return }
             if index == Self.toolDividerIndex {
-                self.tools.persistPanelWidth(position)
+                self.tools.persistPanelWidth(position + self.toolPanelWidthAllowance)
             } else {
                 self.persistMinimapPanelWidth(position: position)
             }
@@ -315,6 +325,7 @@ import ALSplitView
     /// window edge and the panel edge move as one thing (§19).
     func setToolPanelWidth(_ width: CGFloat, animated: Bool,
                            windowResize: ((CGFloat) -> Void)? = nil) {
+        let width = width > 0 ? max(0, width - toolPanelWidthAllowance) : 0
         let total = panelSplit.bounds.width
         guard total > 0 else {
             // No bounds yet: park the width in the pane's policy and let the

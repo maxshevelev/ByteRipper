@@ -381,10 +381,14 @@ final class UEFIContentSearchFlowTests: XCTestCase {
         let view = try XCTUnwrap(controller.filePaneView(for: part))
         let clip = try XCTUnwrap(descendants(of: view, NSClipView.self).first)
         let at = part.hexSelection().start
+        // The caret onto the node's first byte first, and the view read after:
+        // that row can sit half under the top edge, and placing the caret
+        // there rightly scrolls it fully into view. What is under test is the
+        // typing.
+        part.moveCaret(to: at, center: false)
         let scrolled = clip.bounds.origin.y
         print("PROBE before: selection \(part.hexSelection()) scrolled \(scrolled)")
 
-        part.moveCaret(to: at, center: false)
         part.typeHexNibble(0x4)
         part.typeHexNibble(0x1)
         _ = pumpUntil(1.5) { false }

@@ -28,6 +28,11 @@ import ToolModuleKit
     /// dump behind it is not a wait.
     static var slideDuration: TimeInterval { 0.22 * slowMotion }
 
+    /// How long a panel takes to rise from the dock edge to rest. A little
+    /// longer than the fold: the rise is the moment that has to say "this is
+    /// laid over the panes", and it covers the whole height of the window.
+    static var riseDuration: TimeInterval { 0.3 * slowMotion }
+
     /// What a panel is made of, beyond its id.
     private final class Entry {
         let id: FragmentDock.PanelID
@@ -69,6 +74,7 @@ import ToolModuleKit
         self.strip = strip
         container.isHidden = true
         container.onLayout = { [weak self] in self?.layoutPanels() }
+        container.onBackgroundClick = { [weak self] in self?.collapse() }
         strip.onSelect = { [weak self] id in self?.toggle(id) }
         // Through the tab, not straight to `close`: a pill's ✕ has to ask the
         // same question ⌘W does about bytes the parent has not got back.
@@ -141,6 +147,8 @@ import ToolModuleKit
         // The panel's tool-module reads the part, not whatever the tab's active
         // pane is — the panel is a surface with exactly one pane.
         surface.pinnedPane = pane
+        // The panel's side margins come out of its tool panel, not its dump.
+        surface.toolPanelWidthAllowance = FragmentPanelLayout.sideInset * 2
         host.addChild(surface)
         let paneView = host.paneView(for: pane)
         surface.setContent(paneView)
@@ -158,7 +166,9 @@ import ToolModuleKit
             self?.beginPullDown(opened.id, from: event)
         }
         host.prepareFragmentMinimap(of: surface, pane: pane, paneView: paneView)
-        apply(opened.transition, animated: animated)
+        // The first showing slides up from below; every later raise grows out
+        // of the pill, which by then is what says where the panel lives.
+        apply(opened.transition, animated: animated, risesFromBelow: true)
         return opened.id
     }
 
@@ -284,27 +294,28 @@ import ToolModuleKit
         guard dock.expanded == id, let entry = entries[id],
               let window = entry.view.window else { return }
         let start = event.locationInWindow.y
-        // Where the hand last was, when it was there, and what it did on the
-        // way — measured over the movement itself rather than over a window of
-        // time, so a nudge followed by a pause is still a nudge.
+        // Where the hand last was and which way it went — measured over the
+        // movement itself rather than over a window of time, so a nudge
+        // followed by a pause is still a nudge. How fast it went is the other
+        // question, and that one is asked of the last tenth of a second
+        // (`PullDown.flickWindow`).
         var anchor = start
-        var anchorTime = event.timestamp
         var movement = PullDown.Movement()
+        var samples = [PullDown.Sample(y: start, time: event.timestamp)]
 
         window.trackEvents(matching: [.leftMouseDragged, .leftMouseUp],
                            timeout: .greatestFiniteMagnitude, mode: .eventTracking) { tracked, stop in
             guard let tracked else { stop.pointee = true; return }
             let y = tracked.locationInWindow.y
+            samples.append(PullDown.Sample(y: y, time: tracked.timestamp))
+            samples.removeAll { $0.time < tracked.timestamp - PullDown.flickWindow * 2 }
             if let direction = PullDown.Direction.of(offset: y - anchor) {
-                let distance = abs(y - anchor)
-                // A floor under the interval: two events can share a timestamp,
-                // and a division by nothing is not a speed.
-                let seconds = max(tracked.timestamp - anchorTime, 1.0 / 240)
-                movement = PullDown.Movement(direction: direction, distance: distance,
-                                             speed: distance / CGFloat(seconds))
+                movement.direction = direction
                 anchor = y
-                anchorTime = tracked.timestamp
             }
+            let recent = PullDown.recentTravel(samples, direction: movement.direction)
+            movement.distance = recent.distance
+            movement.speed = recent.speed
             switch tracked.type {
             case .leftMouseDragged:
                 self.pullPanel(id, by: y - start)
@@ -352,14 +363,24 @@ import ToolModuleKit
             let remaining = max(0, resting.height - travelled)
             let share = resting.height > 0 ? remaining / resting.height : 1
             let duration = max(0.1, Self.slideDuration * Double(share))
-            apply(dock.collapse(), animated: true, duration: duration)
+            // At the hand's own speed: the fold carries the throw on rather
+            // than starting a movement of its own.
+            apply(dock.collapse(), animated: true, duration: duration,
+                  throwSpeed: movement.direction == .down ? movement.speed : nil)
         }
     }
 
     // MARK: - Running a transition
 
     private func apply(_ transition: FragmentDock.Transition, animated: Bool,
-                       duration: TimeInterval? = nil, closesDocument: Bool = false) {
+                       duration: TimeInterval? = nil, closesDocument: Bool = false,
+                       risesFromBelow: Bool = false, throwSpeed: CGFloat? = nil) {
+        // In flight from this moment, before anything below can run a layout
+        // pass — asking where the pill is lays the window out, and so does
+        // refreshing the dock. A pass that ran first found the panel no longer
+        // up and put it at its folded frame under the dock, so the fold
+        // started from where it was meant to end and the panel just vanished.
+        if animated, let folding = transition.folding { flying.insert(folding) }
         // Where a folding panel is flying to, read before the dock is brought
         // in line: a panel that is closing takes its pill with it.
         let foldTarget = transition.folding.flatMap { pillRect(for: $0) }
@@ -374,6 +395,12 @@ import ToolModuleKit
             NotificationCenter.default.post(name: .fragmentPanelRaised, object: host?.view.window)
         }
         let span = duration ?? Self.slideDuration
+        // The scrim follows the stage: up while any panel is up, clear once the
+        // last one has folded. A switch between two panels leaves it where it
+        // is.
+        let rising = risesFromBelow && transition.folding == nil
+        container.setScrim(dock.expanded != nil ? 1 : 0,
+                           duration: animated ? (rising ? Self.riseDuration : span) : nil)
 
         let raise: () -> Void = { [weak self] in
             guard let self, let raising = transition.raising,
@@ -382,7 +409,15 @@ import ToolModuleKit
             let resting = FragmentPanelView.restingFrame(in: self.container)
             if entry.view.superview !== self.container { self.container.addSubview(entry.view) }
             entry.view.frame = resting
-            guard animated, let pill = self.pillRect(for: raising) else { return }
+            guard animated else { return }
+            if risesFromBelow {
+                self.flying.insert(raising)
+                self.rise(entry.view, duration: duration ?? Self.riseDuration) { [weak self] in
+                    self?.flying.remove(raising)
+                }
+                return
+            }
+            guard let pill = self.pillRect(for: raising) else { return }
             self.flying.insert(raising)
             self.fly(entry.view, to: pill, duration: span, out: false) { [weak self] in
                 self?.flying.remove(raising)
@@ -392,6 +427,7 @@ import ToolModuleKit
         if let folding = transition.folding, let entry = entries[folding] {
             let land: () -> Void = { [weak self] in
                 guard let self else { return }
+                self.flying.remove(folding)
                 // Unless it has been raised again in the meantime: a pill
                 // clicked twice while the flight was still running must not
                 // take the panel it just brought back off the stage.
@@ -407,7 +443,8 @@ import ToolModuleKit
             }
             if animated, let pill = foldTarget {
                 flying.insert(folding)
-                fly(entry.view, to: pill, duration: span, out: true) { [weak self] in
+                fly(entry.view, to: pill, duration: span, out: true,
+                    throwSpeed: throwSpeed) { [weak self] in
                     self?.flying.remove(folding)
                     land()
                 }
@@ -497,7 +534,8 @@ import ToolModuleKit
     /// otherwise the last part of it, the part over the dock, is cut off at the
     /// very moment it is saying where the panel went.
     private func fly(_ view: FragmentPanelView, to pill: NSRect, duration: TimeInterval,
-                     out: Bool, completion: @escaping () -> Void) {
+                     out: Bool, throwSpeed: CGFloat? = nil,
+                     completion: @escaping () -> Void) {
         let frame = view.frame
         guard frame.width > 0, frame.height > 0, let layer = view.layer else {
             completion()
@@ -526,7 +564,10 @@ import ToolModuleKit
         flight.fromValue = NSValue(caTransform3D: out ? full : shrunk)
         flight.toValue = NSValue(caTransform3D: out ? shrunk : full)
         flight.duration = duration
-        flight.timingFunction = CAMediaTimingFunction(name: out ? .easeIn : .easeOut)
+        let timing = throwSpeed.map {
+            Self.throwTiming(speed: $0, travel: frame.maxY - pill.maxY, duration: duration)
+        } ?? CAMediaTimingFunction(name: out ? .easeIn : .easeOut)
+        flight.timingFunction = timing
         layer.transform = out ? shrunk : full
         layer.add(flight, forKey: "flight")
 
@@ -538,13 +579,65 @@ import ToolModuleKit
             fade.fromValue = 1
             fade.toValue = 0.35
             fade.duration = duration
-            fade.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            fade.timingFunction = throwSpeed == nil ? CAMediaTimingFunction(name: .easeIn) : timing
             layer.opacity = 0.35
             layer.add(fade, forKey: "fade")
         } else {
             layer.opacity = 1
         }
         CATransaction.commit()
+    }
+
+    /// Brings a panel up from under the dock edge to where it rests: a slide,
+    /// not a growth out of its pill, because what the rise has to say is that
+    /// the panel comes from below and lies over the panes — and a sheet that
+    /// slides up is how that is said everywhere else.
+    ///
+    /// The layer's transform does the moving, as in `fly`, so the panel is laid
+    /// out once at its resting size and not re-laid out on the way.
+    private func rise(_ view: FragmentPanelView, duration: TimeInterval,
+                      completion: @escaping () -> Void) {
+        let frame = view.frame
+        guard frame.height > 0, let layer = view.layer,
+              !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+            completion()
+            return
+        }
+        let below = CATransform3DMakeTranslation(0, -frame.maxY, 0)
+        CATransaction.begin()
+        CATransaction.setCompletionBlock(completion)
+        let slide = CABasicAnimation(keyPath: "transform")
+        slide.fromValue = NSValue(caTransform3D: below)
+        slide.toValue = NSValue(caTransform3D: CATransform3DIdentity)
+        slide.duration = duration
+        // Quick off the mark, settling gently: the panel arrives, it does not
+        // bounce.
+        slide.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.8, 0.25, 1)
+        layer.transform = CATransform3DIdentity
+        layer.opacity = 1
+        layer.add(slide, forKey: "flight")
+        CATransaction.commit()
+    }
+
+    /// A curve that starts at the speed the hand let go at, for a fold that
+    /// carries a throw on.
+    ///
+    /// An ease-in fold out of a throw starts from rest, and the panel visibly
+    /// stopped between the hand and the animation. The first control point's
+    /// slope is the starting speed, as a share of the fold per share of its
+    /// time: the panel's top edge has `travel` points to cover in `duration`,
+    /// and starts covering them at `speed` — or at the fold's own average
+    /// speed, whichever is faster. A throw is usually the slower of the two
+    /// (1000–1500 points a second against some 4000 for the fold), and
+    /// starting at it would be a visible acceleration out of the hand. Then it
+    /// eases out onto the pill. Capped so a hard throw is a fast start, not a
+    /// curve that overshoots its end.
+    static func throwTiming(speed: CGFloat, travel: CGFloat,
+                            duration: TimeInterval) -> CAMediaTimingFunction {
+        guard travel > 0, duration > 0 else { return CAMediaTimingFunction(name: .linear) }
+        let slope = max(1, Float(speed * CGFloat(duration) / travel))
+        let x1: Float = 0.25
+        return CAMediaTimingFunction(controlPoints: x1, min(x1 * slope, 0.9), 0.6, 1)
     }
 
     private func move(_ view: NSView, to frame: NSRect, animated: Bool,

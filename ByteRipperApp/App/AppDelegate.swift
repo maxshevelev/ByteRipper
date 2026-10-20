@@ -28,6 +28,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// Observes theme changes so a Settings change re-themes the running app
     /// without a relaunch (§3.2).
     private var themeObserver: NSObjectProtocol?
+    #if DEBUG
+    private var themeToggleMonitor: Any?
+    #endif
 
     /// Keeps the workspace on disk while the app runs, and hands back the one
     /// written last (`Design/WORKSPACE_PLAN.md`). Nil under test, where the
@@ -143,6 +146,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // more than one window, and the place the system also hangs its own tab
         // commands.
         NSApp.windowsMenu = mainMenu.items.compactMap(\.submenu).first { $0.title == L("Window", context: "menu") }
+        #if DEBUG
+        installThemeToggle()
+        #endif
         themeObserver = NotificationCenter.default.addObserver(
             forName: AppTheme.didChangeNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -577,6 +583,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func showFavoritePatternSettings() {
         settingsWindowController.showFavorites(nil)
     }
+
+    #if DEBUG
+    /// ⌘⇧A flips light and dark, in a debug build only: for looking at a
+    /// change in both themes without a trip to Settings. Not stored — the
+    /// next launch, or a change in Settings, puts the chosen theme back.
+    private func installThemeToggle() {
+        themeToggleMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            // By the key, not the character: in a Russian layout the same key
+            // types «ф», and the shortcut is the key under the finger.
+            // 0 is kVK_ANSI_A.
+            guard modifiers == [.command, .shift], event.keyCode == 0 else { return event }
+            let isDark = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            NSApp.appearance = NSAppearance(named: isDark ? .aqua : .darkAqua)
+            return nil
+        }
+    }
+    #endif
 
     /// Maps the stored theme onto `NSApp.appearance`: nil for system (follow the
     /// OS), an explicit appearance for light/dark.
