@@ -130,7 +130,7 @@ def kind_of(name):
     return name.split("_")[0]
 
 
-CLASS = re.compile(r'<Class name="([^"]+)"[^>]*>(.*?)</Class>', re.S)
+CLASS = re.compile(r'<Class name="([^"]+)"[^>]*>(.*?)</Class\s*>', re.S)
 ENTRY_TAG = re.compile(r"<LayoutEntry ([^>]*)/?>")
 
 
@@ -149,6 +149,16 @@ def tables(blob, tool):
     for text, name in documents(blob):
         for match in CLASS.finditer(text):
             body = match.group(2)
+            # A table's own entries are where a malformed tag would cost a
+            # field: a class the regexes swallowed is a table the length
+            # lookup below will not find, and that is reported as a missing
+            # table. Unrelated classes the tools leave unclosed are not.
+            entry_tags = list(ENTRY_TAG.finditer(body))
+            stated_entries = len(re.findall(r'<LayoutEntry\b', body))
+            if stated_entries != len(entry_tags):
+                print("! %s/%s: %d of %d <LayoutEntry> blocks did not parse"
+                      % (name, match.group(1), stated_entries - len(entry_tags),
+                         stated_entries), file=sys.stderr)
             entries = entries_of(body)
             named = [entry for entry in entries if entry[6]]
             # A section's own class is taken however few of its fields are
@@ -160,7 +170,7 @@ def tables(blob, tool):
             if len(named) < (10 if named_section else 50):
                 continue
             offsets = []
-            for tag in ENTRY_TAG.finditer(body):
+            for tag in entry_tags:
                 attributes = dict(re.findall(
                     r'([A-Za-z_][\w:.-]*)="([^"]*)"', tag.group(1)))
                 if "offset" in attributes and "bitfield_low" in attributes:

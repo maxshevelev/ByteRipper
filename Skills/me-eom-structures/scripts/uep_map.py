@@ -87,6 +87,17 @@ def settings(blob):
         actions = ACTION.findall(text)
         if not actions:
             continue
+        stated_actions = len(re.findall(r'GetBitArrayValue', text))
+        if stated_actions != len(actions):
+            print("! %d of %d GetBitArrayValue actions did not parse"
+                  % (stated_actions - len(actions), stated_actions),
+                  file=sys.stderr)
+        stated_options = len(re.findall(r'<CfgOpt\b', text))
+        matched_options = len(OPTION_ELEMENT.findall(text))
+        if stated_options != matched_options:
+            print("! %d of %d <CfgOpt> entries did not parse"
+                  % (stated_options - matched_options, stated_options),
+                  file=sys.stderr)
         for match in OPTION_ELEMENT.finditer(text):
             attrs = dict(re.findall(r"([a-zA-Z_][\w]*)=\"([^\"]*)\"", match.group(2)))
             name = match.group(1)

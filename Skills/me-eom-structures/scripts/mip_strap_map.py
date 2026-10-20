@@ -44,10 +44,10 @@ TWO_KINDS = {
     "enabled_disabled_options": {0: "Enabled", 1: "Disabled"},
 }
 
-CLASS = re.compile(r'<Class name="CpuStrapsLayout".*?</Class>', re.S)
+CLASS = re.compile(r'<Class name="CpuStrapsLayout".*?</Class\s*>', re.S)
 ENTRY = re.compile(
     r'<LayoutEntry name="([^"]+)" type="bitfield32" offset="([^"]+)" '
-    r'bitfield_high="(\d+)" bitfield_low="(\d+)">(.*?)</LayoutEntry>', re.S)
+    r'bitfield_high="(\d+)" bitfield_low="(\d+)">(.*?)</LayoutEntry\s*>', re.S)
 
 
 def documents(blob):
@@ -65,7 +65,13 @@ def documents(blob):
             continue
         seen.add(digest)
         text = out.decode("utf-8", "replace")
-        for block in CLASS.findall(text):
+        classes = CLASS.findall(text)
+        stated = len(re.findall(
+            r'<Class\s+name="CpuStrapsLayout"[^>]*>', text))
+        if stated != len(classes):
+            print("! %s: %d of %d <Class> blocks did not parse"
+                  % (digest[:8], stated - len(classes), stated), file=sys.stderr)
+        for block in classes:
             yield digest, block
 
 
@@ -90,7 +96,13 @@ def options_of(ui):
 
 def fields_of(block):
     fields = []
-    for name, offset, high, low, inner in ENTRY.findall(block):
+    stated = sum(1 for match in re.finditer(r'<LayoutEntry\b[^>]*>', block)
+                 if 'type="bitfield32"' in match.group(0))
+    entries = ENTRY.findall(block)
+    if stated != len(entries):
+        print("! %d of %d <LayoutEntry> bitfields did not parse"
+              % (stated - len(entries), stated), file=sys.stderr)
+    for name, offset, high, low, inner in entries:
         ui = re.search(r"<UI\b[^>]*>", inner)
         ui = ui.group(0) if ui else ""
         label = re.search(r'\blabel="([^"]*)"', ui)

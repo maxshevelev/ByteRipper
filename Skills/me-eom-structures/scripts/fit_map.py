@@ -179,9 +179,36 @@ def included_layout_documents(texts, chosen):
     return closure
 
 
+CLASS = re.compile(r'<Class name="([^"]+)"[^>]*>(.*?)</Class\s*>', re.S)
+
+
+def class_blocks(text):
+    """Every `<Class>` the document closes before its next opening.
+
+    The tools leave a class or two unclosed, and the block regex reads such a
+    class through to the next `</Class>` — which is the following class's. That
+    is not a loss the count below can see; this pairing is what the count of
+    well-formed blocks is compared with.
+    """
+    out = []
+    for match in re.finditer(r'<Class\b([^>]*)>', text):
+        if match.group(0).rstrip().endswith("/>"):
+            continue
+        following = text.find("<Class", match.end())
+        close = re.search(r'</Class\s*>', text[match.end():
+                                                following if following >= 0 else len(text)])
+        if close is None:
+            continue
+        name = re.search(r'name="([^"]*)"', match.group(1))
+        out.append((name.group(1) if name else "",
+                    text[match.end():match.end() + close.start()]))
+    return out
+
+
 def class_members(text, name):
     """The `<CfgOpt>` children of a `<Class>`, as name → value."""
-    match = re.search(r'<Class name="%s"[^>]*>(.*?)</Class>' % re.escape(name), text, re.S)
+    match = re.search(r'<Class name="%s"[^>]*>(.*?)</Class\s*>' % re.escape(name),
+                      text, re.S)
     if not match:
         return None
     return dict(re.findall(r'<CfgOpt name="([^"]+)"\s+value="([^"]*)"', match.group(1)))
@@ -211,7 +238,7 @@ def value_classes(texts):
     """
     classes = {}
     for text in texts:
-        for match in re.finditer(r'<Class name="([^"]+)"[^>]*>(.*?)</Class>', text, re.S):
+        for match in CLASS.finditer(text):
             name, body = match.group(1), match.group(2)
             if name in PATH_CLASSES or "<LayoutEntry" in body:
                 continue
@@ -597,6 +624,15 @@ def main():
     blob = open(args[0], "rb").read()
 
     texts = list(documents(blob))
+    # A well-formed class the block regex did not read is a class whose
+    # settings or value words are now missing; a class the tool left unclosed
+    # is not counted here (see `class_blocks`).
+    for text in texts:
+        stated = len(class_blocks(text))
+        matched = len(CLASS.findall(text))
+        if stated != matched:
+            print("! %d of %d well-formed <Class> blocks did not parse"
+                  % (stated - matched, stated), file=sys.stderr)
     chosen = layout_documents(texts, straps)
     # The chosen layout and the common documents it includes: the bindings of
     # both, or every setting the family shares is missing from the map.

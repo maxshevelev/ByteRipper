@@ -67,11 +67,29 @@ def attribute(attrs, name):
     return found.group(1) if found else None
 
 
+def mfit_block(text, block_id):
+    """A `<mfit_data id="…">` block's body, or None."""
+    opening = re.search(r'<mfit_data\s+id="%s"[^>]*>' % re.escape(block_id), text)
+    if not opening:
+        return None
+    closing = re.search(r'</mfit_data\s*>', text[opening.end():])
+    if not closing:
+        print("! %s: the block has no closing tag" % block_id, file=sys.stderr)
+        return None
+    return text[opening.end():opening.end() + closing.start()]
+
+
 def fields_of(text):
-    start = text.find('<mfit_data id="SphyNvar">')
-    end = text.find('</mfit_data>', start)
+    block = mfit_block(text, "SphyNvar")
+    if block is None:
+        return []
+    stated = len(re.findall(r'<serialized_item\b[^>]*>', block))
+    matched = len(ITEM.findall(block))
+    if stated != matched:
+        print("! SphyNvar: %d of %d <serialized_item> entries did not parse"
+              % (stated - matched, stated), file=sys.stderr)
     fields = []
-    for tag in ITEM.findall(text[start:end]):
+    for tag in ITEM.findall(block):
         name = attribute(tag, "name")
         offset = attribute(tag, "offset")
         value = attribute(tag, "value")
