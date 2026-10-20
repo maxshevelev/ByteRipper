@@ -267,8 +267,22 @@ pins to `/home/gpio/csme_pins`, the file the `MeFeaturePins` class's
 
 ```bash
 python3 Skills/me-eom-structures/scripts/gpio_map.py <fit-11.exe> \
-    --generation 11 --tool 11.0 --variable csme11 > \
-    Packages/MEFirmware/Sources/MEFirmware/Configuration/GPIOPinMap+CSME11.swift
+    --generation 11 --tool 11.0 --variable csme11 --format json > \
+    Packages/MEFirmware/MapSources/gpio/csme11.json
+```
+
+The JSON files are compiled into `GPIOMaps.bin`; the version in
+`MapSources/gpio/manifest.json` changes only when their digest does, and the
+same number is the code's mark (`Design/MAP_DATA.md`):
+
+```bash
+python3 Skills/me-eom-structures/scripts/map_bin.py build \
+    --out Packages/MEFirmware/Sources/MEFirmware/Resources/GPIOMaps/GPIOMaps.bin \
+    --manifest Packages/MEFirmware/MapSources/gpio/manifest.json \
+    --swift-version-file Packages/MEFirmware/Sources/MEFirmware/Configuration/GPIOPinMapDataVersion.swift \
+    --swift-enum-name GPIOPinMapDataVersion \
+    Packages/MEFirmware/MapSources/gpio/csme11.json … csme15 …
+python3 Skills/me-eom-structures/scripts/map_bin.py build --check …same arguments…
 ```
 
 Neither the file nor its records are in any published specification. Both
@@ -301,8 +315,8 @@ declared in the same documents' `<CfgOpt>` lists:
 
 ```bash
 python3 Skills/me-eom-structures/scripts/uep_map.py <mfit.exe> \
-    --generation 16 --tool "Modular Flash Image Tool 16.0.15.1662" > \
-    Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMap+CSME16.swift
+    --generation 16 --tool "Modular Flash Image Tool 16.0.15.1662" \
+    --format json > Packages/MEFirmware/MapSources/uep/csme16.json
 ```
 
 The container keeps several arrays (`UepBitsArray0`, `…2`, `…4`) and the tool
@@ -328,8 +342,8 @@ and that reading more of them from a dump is not a test of the map.
 generator:
 
 ```bash
-python3 Skills/me-eom-structures/scripts/uep18_map.py ~/Downloads/1/mfit-18.1.exe > \
-    Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMap+CSME18.swift
+python3 Skills/me-eom-structures/scripts/uep18_map.py ~/Downloads/1/mfit-18.1.exe \
+    --format json > Packages/MEFirmware/MapSources/uep/csme18.json
 ```
 
 A setting is a `<serialized_item name… type="BitfieldItem" offset bit_low
@@ -374,14 +388,11 @@ the resource names to itself:
 
 ```bash
 python3 Skills/me-eom-structures/scripts/uep_fit_map.py ~/Downloads/1/fit-12.exe \
-    --generation 12 > \
-    Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMap+CSME12.swift
+    --generation 12 --format json > Packages/MEFirmware/MapSources/uep/csme12.json
 python3 Skills/me-eom-structures/scripts/uep_fit_map.py ~/Downloads/1/fit-13.0.exe \
-    --generation 13 > \
-    Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMap+CSME13.swift
+    --generation 13 --format json > Packages/MEFirmware/MapSources/uep/csme13.json
 python3 Skills/me-eom-structures/scripts/uep_fit_map.py ~/Downloads/1/fit-14.0.exe \
-    --generation 14 > \
-    Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMap+CSME14.swift
+    --generation 14 --format json > Packages/MEFirmware/MapSources/uep/csme14.json
 ```
 
 The `Uep` class also states the container — signature, CRC-16, reserved, then
@@ -400,6 +411,20 @@ CRC-16 covers header and arrays — +6…+0x208 on CSME 12, +6…+0x302 on CSME 
 and on the four Boot Guard builds of 13 and of 14 the profile bits at array 0
 +0x5C (13) and +0x44 (14) read 0, 0b0111_1000, 0b0110_1001 and 0b0111_1001:
 profiles 0, 3, 4 and 5, exactly what each build's record says.
+
+The JSON files are compiled into `UEPMaps.bin`; the version in
+`MapSources/uep/manifest.json` changes only when their digest does, and the
+same number is the code's mark (`Design/MAP_DATA.md`):
+
+```bash
+python3 Skills/me-eom-structures/scripts/map_bin.py build \
+    --out Packages/MEFirmware/Sources/MEFirmware/Resources/UEPMaps/UEPMaps.bin \
+    --manifest Packages/MEFirmware/MapSources/uep/manifest.json \
+    --swift-version-file Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMapDataVersion.swift \
+    --swift-enum-name UEPMapDataVersion \
+    Packages/MEFirmware/MapSources/uep/csme12.json … csme18 …
+python3 Skills/me-eom-structures/scripts/map_bin.py build --check …same arguments…
+```
 
 **The CPU strap message has its own layout and its own place.** CSME 18 does
 not keep it in the descriptor's MIP area; it is in the FITC partition's MIP

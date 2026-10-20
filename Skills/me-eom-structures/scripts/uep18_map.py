@@ -37,14 +37,17 @@ configuration map. The ESE document (`ESE_CFG_DONE`, `ESE_TRC_EN`,
 `ESE_ROM_SVN_EN`) is part of the same merge; its three settings do not all sit
 in the same array.
 
-    python3 uep18_map.py <mfit-18.1.exe> > \\
-        Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMap+CSME18.swift
+    python3 uep18_map.py <mfit-18.1.exe> --format json > \\
+        Packages/MEFirmware/MapSources/uep/csme18.json
+
+The JSON is compiled into `UEPMaps.bin` by `map_bin.py` (`Design/MAP_DATA.md`).
 
 Stdlib only, read-only, no network; read the diff, don't paste blind.
 """
 
 import collections
 import hashlib
+import json
 import os
 import re
 import sys
@@ -245,8 +248,76 @@ def swift(tool, entries):
     return "\n".join(lines)
 
 
+def setting_json(entry):
+    value = {"name": entry["name"], "array": entry["array"],
+             "offset": entry["in_array"], "bit": entry["bit"],
+             "count": entry["count"]}
+    if entry.get("label"):
+        value["label"] = entry["label"]
+    if entry.get("section"):
+        value["section"] = entry["section"]
+    if entry.get("help"):
+        value["help"] = entry["help"]
+    if entry.get("options"):
+        value["options"] = [[number, entry["options"][number]]
+                            for number in sorted(entry["options"])]
+    return value
+
+
+def pretty_json(document):
+    """JSON with one setting per line: a diff reads a setting at a time."""
+    lines = ["{"]
+    for key in sorted(document):
+        if key == "maps":
+            continue
+        lines.append(" %s: %s," % (
+            json.dumps(key),
+            json.dumps(document[key], ensure_ascii=False, sort_keys=True)))
+    lines.append(' "maps": [')
+    for map_index, mapping in enumerate(document["maps"]):
+        rest = ", ".join(
+            "%s: %s" % (json.dumps(key),
+                        json.dumps(mapping[key], ensure_ascii=False, sort_keys=True))
+            for key in sorted(mapping) if key != "settings")
+        lines.append('  {%s, "settings": [' % rest)
+        settings_ = mapping["settings"]
+        for setting_index, setting in enumerate(settings_):
+            lines.append("   %s%s" % (
+                json.dumps(setting, ensure_ascii=False, sort_keys=True,
+                           separators=(", ", ": ")),
+                "," if setting_index + 1 < len(settings_) else ""))
+        lines.append('  ]}%s' % ("," if map_index + 1 < len(document["maps"]) else ""))
+    lines.append(" ]")
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def json_document(tool, entries):
+    return pretty_json({
+        "schema": "byteripper.map/1",
+        "kind": "uep",
+        "tool": tool,
+        "maps": [{
+            "id": "csme%s" % GENERATION,
+            "name": "CSME %s (%s)" % (GENERATION, tool),
+            "arrayStart": 8,
+            "arraySize": ARRAY_SIZE,
+            "settings": [setting_json(entry) for entry in entries],
+        }],
+    })
+
+
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    argv = sys.argv[1:]
+    output_format = "swift"
+    if "--format" in argv:
+        at = argv.index("--format")
+        output_format = argv[at + 1]
+        del argv[at:at + 2]
+    if output_format not in ("swift", "json"):
+        print("--format is swift or json", file=sys.stderr)
+        return 2
+    args = [a for a in argv if not a.startswith("-")]
     if not args:
         print(__doc__)
         return 2
@@ -275,7 +346,8 @@ def main():
     print("settings: %d (of %d names)" % (len(entries),
                                           sum(len(f) for _, f in documents_found)),
           file=sys.stderr)
-    print(swift(tool, entries))
+    print(json_document(tool, entries) if output_format == "json"
+          else swift(tool, entries))
     return 0
 
 

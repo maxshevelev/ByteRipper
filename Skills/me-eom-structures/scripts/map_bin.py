@@ -82,6 +82,8 @@ FORMAT_VERSION = 1
 HEADER_SIZE = 32
 KIND_STRAP = 1
 KIND_CONFIGURATION = 2
+KIND_UEP = 3
+KIND_GPIO = 4
 SECTION_STRINGS = 1
 SECTION_MAPS = 2
 SECTION_FIELDS = 3
@@ -95,6 +97,9 @@ OPTION_RECORD = 8
 CONFIG_MAP_RECORD = 24
 FILE_RECORD = 20
 SETTING_RECORD = 50
+UEP_MAP_RECORD = 24
+UEP_SETTING_RECORD = 32
+GPIO_MAP_RECORD = 40
 NO_REF = 0xFFFFFFFF
 SET_NAMES = {"pch": 0, "spt": 1, "cpu": 2, "other": 3}
 
@@ -146,7 +151,7 @@ def load(path):
         document = json.load(handle)
     if document.get("schema") != "byteripper.map/1":
         raise ValueError("%s: schema is not byteripper.map/1" % path)
-    if document.get("kind") not in ("strap", "configuration"):
+    if document.get("kind") not in ("strap", "configuration", "uep", "gpio"):
         raise ValueError("%s: unknown kind %r" % (path, document.get("kind")))
     maps = document.get("maps")
     if not isinstance(maps, list) or not maps:
@@ -166,11 +171,74 @@ def option_pairs(field):
     return sorted(pairs)
 
 
+def pairs_of(mapping, key, where):
+    raw = mapping.get(key) or []
+    if not isinstance(raw, list):
+        raise ValueError("%s: %s is not a list of [number, text]" % (where, key))
+    pairs = []
+    for item in raw:
+        if not isinstance(item, list) or len(item) != 2:
+            raise ValueError("%s: %s entry %r is not [number, text]"
+                             % (where, key, item))
+        number, text = int(item[0]), item[1]
+        if number < 0 or number > 0xFFFF:
+            raise ValueError("%s: %s number %d" % (where, key, number))
+        if not isinstance(text, str):
+            raise ValueError("%s: %s text %r" % (where, key, text))
+        pairs.append((number, text))
+    return sorted(pairs)
+
+
+def validate_uep(document, path):
+    for index, mapping in enumerate(document["maps"]):
+        where = "%s: map %d" % (path, index)
+        for key in ("id", "name", "settings"):
+            if key not in mapping:
+                raise ValueError("%s: no %s" % (where, key))
+        for key in ("arrayStart", "arraySize"):
+            value = int(mapping.get(key, 0))
+            if not (0 <= value <= 0xFFFF):
+                raise ValueError("%s: %s %d" % (where, key, value))
+        for entry in mapping["settings"]:
+            if not entry.get("name"):
+                raise ValueError("%s: a setting has no name" % where)
+            array = int(entry.get("array", 0))
+            offset = int(entry.get("offset", -1))
+            bit = int(entry.get("bit", -1))
+            count = int(entry.get("count", 0))
+            if not (0 <= array <= 0xFFFF):
+                raise ValueError("%s: %s array %d" % (where, entry["name"], array))
+            if not (0 <= offset <= 0xFFFF):
+                raise ValueError("%s: %s offset %d" % (where, entry["name"], offset))
+            if not (0 <= bit < 64 and 1 <= count <= 64 and bit + count <= 64):
+                raise ValueError("%s: %s bit %d count %d"
+                                 % (where, entry["name"], bit, count))
+            for number, text in pairs_of(entry, "options", where):
+                if number >= (1 << count):
+                    raise ValueError("%s: %s option %d does not fit %d bits"
+                                     % (where, entry["name"], number, count))
+
+
+def validate_gpio(document, path):
+    dictionaries = ("features", "usages", "ownerships", "padModes", "groups")
+    for index, mapping in enumerate(document["maps"]):
+        where = "%s: map %d" % (path, index)
+        for key in ("id", "name", "usages"):
+            if key not in mapping:
+                raise ValueError("%s: no %s" % (where, key))
+        for key in dictionaries:
+            pairs_of(mapping, key, where)
+
+
 def validate(document, path):
     if document["kind"] == "strap":
         validate_strap(document, path)
-    else:
+    elif document["kind"] == "configuration":
         validate_configuration(document, path)
+    elif document["kind"] == "uep":
+        validate_uep(document, path)
+    else:
+        validate_gpio(document, path)
 
 
 def validate_strap(document, path):
@@ -439,6 +507,122 @@ def compile_configuration(documents, version):
                     [section for section in sections if section[1]], version)
 
 
+def compile_uep(documents, version):
+    """Kind 3: the FPF/UEP settings and their places in the bit arrays."""
+    mappings = []
+    for document in documents:
+        mappings.extend(document["maps"])
+    ids = [mapping["id"] for mapping in mappings]
+    if len(ids) != len(set(ids)):
+        raise ValueError("map ids repeat: %s"
+                         % ", ".join(sorted({i for i in ids if ids.count(i) > 1})))
+
+    strings = StringPool()
+    settings_blob = bytearray()
+    options_blob = bytearray()
+    option_offsets = {}
+    map_records = []
+    for mapping in mappings:
+        settings_offset = len(settings_blob)
+        for setting in mapping["settings"]:
+            pairs = pairs_of(setting, "options", mapping["id"])
+            options_offset = NO_REF
+            if pairs:
+                key = tuple(pairs)
+                if key not in option_offsets:
+                    option_offsets[key] = len(options_blob)
+                    for number, text in pairs:
+                        options_blob += struct.pack(
+                            "<HHI", number, 0, strings.ref(text))
+                options_offset = option_offsets[key]
+            flags = 0
+            if setting.get("label"):
+                flags |= 1
+            if setting.get("section"):
+                flags |= 2
+            if setting.get("help"):
+                flags |= 4
+            if pairs:
+                flags |= 8
+            settings_blob += struct.pack(
+                "<IHHHBBIIIIHH",
+                strings.ref(setting["name"]),
+                flags,
+                int(setting.get("array", 0)),
+                int(setting["offset"]),
+                int(setting["bit"]),
+                int(setting["count"]),
+                strings.ref(setting.get("label")),
+                strings.ref(setting.get("section")),
+                strings.ref(setting.get("help")),
+                options_offset,
+                len(pairs),
+                0,
+            )
+        map_records.append(struct.pack(
+            "<IIHHIII",
+            strings.ref(mapping["id"]),
+            strings.ref(mapping["name"]),
+            int(mapping.get("arrayStart", 0)),
+            int(mapping.get("arraySize", 0)),
+            len(mapping["settings"]),
+            settings_offset,
+            0,
+        ))
+    sections = [(SECTION_STRINGS, bytes(strings.data)),
+                (SECTION_MAPS, struct.pack("<I", len(map_records))
+                 + b"".join(map_records)),
+                (SECTION_SETTINGS, bytes(settings_blob)),
+                (SECTION_OPTIONS, bytes(options_blob))]
+    return assemble(KIND_UEP,
+                    [section for section in sections if section[1]], version)
+
+
+def compile_gpio(documents, version):
+    """Kind 4: the five value dictionaries behind a feature pin."""
+    dictionaries = ("features", "usages", "ownerships", "padModes", "groups")
+    mappings = []
+    for document in documents:
+        mappings.extend(document["maps"])
+    ids = [mapping["id"] for mapping in mappings]
+    if len(ids) != len(set(ids)):
+        raise ValueError("map ids repeat: %s"
+                         % ", ".join(sorted({i for i in ids if ids.count(i) > 1})))
+
+    strings = StringPool()
+    options_blob = bytearray()
+    option_offsets = {}
+    map_records = []
+    for mapping in mappings:
+        offsets, counts = {}, {}
+        for key in dictionaries:
+            pairs = pairs_of(mapping, key, mapping["id"])
+            offsets[key], counts[key] = NO_REF, len(pairs)
+            if pairs:
+                content = tuple(pairs)
+                if content not in option_offsets:
+                    option_offsets[content] = len(options_blob)
+                    for number, text in pairs:
+                        options_blob += struct.pack(
+                            "<HHI", number, 0, strings.ref(text))
+                offsets[key] = option_offsets[content]
+        map_records.append(struct.pack(
+            "<IIIIIIIHHHHHH",
+            strings.ref(mapping["id"]),
+            strings.ref(mapping["name"]),
+            offsets["features"], offsets["usages"], offsets["ownerships"],
+            offsets["padModes"], offsets["groups"],
+            counts["features"], counts["usages"], counts["ownerships"],
+            counts["padModes"], counts["groups"], 0,
+        ))
+    sections = [(SECTION_STRINGS, bytes(strings.data)),
+                (SECTION_MAPS, struct.pack("<I", len(map_records))
+                 + b"".join(map_records)),
+                (SECTION_OPTIONS, bytes(options_blob))]
+    return assemble(KIND_GPIO,
+                    [section for section in sections if section[1]], version)
+
+
 def compile_documents(documents, version):
     kinds = {document["kind"] for document in documents}
     if len(kinds) != 1:
@@ -447,7 +631,11 @@ def compile_documents(documents, version):
     kind = kinds.pop()
     if kind == "strap":
         return compile_strap(documents, version)
-    return compile_configuration(documents, version)
+    if kind == "configuration":
+        return compile_configuration(documents, version)
+    if kind == "uep":
+        return compile_uep(documents, version)
+    return compile_gpio(documents, version)
 
 
 def assemble(kind, sections, version):
@@ -670,6 +858,60 @@ def dump_configuration(data, sections, text):
     return 0
 
 
+def dump_uep(data, sections, text):
+    maps_at, _ = sections.get(SECTION_MAPS, (0, 0))
+    settings_at, _ = sections.get(SECTION_SETTINGS, (0, 0))
+    options_at, _ = sections.get(SECTION_OPTIONS, (0, 0))
+    total = struct.unpack_from("<I", data, maps_at)[0]
+    for index in range(total):
+        at = maps_at + 4 + index * UEP_MAP_RECORD
+        id_ref, name_ref, array_start, array_size, count, offset, _ = \
+            struct.unpack_from("<IIHHIII", data, at)
+        print("map %s (%s), arrayStart 0x%X, arraySize 0x%X, %d settings"
+              % (text(id_ref), text(name_ref), array_start, array_size, count))
+        for setting_index in range(count):
+            sat = settings_at + offset + setting_index * UEP_SETTING_RECORD
+            (name_ref, flags, array, place, bit, bits, label_ref, section_ref,
+             help_ref, options_offset, options_count, _) = struct.unpack_from(
+                "<IHHHBBIIIIHH", data, sat)
+            marks = ["array %d, offset 0x%X, bit %d, %d bits"
+                     % (array, place, bit, bits)]
+            if flags & 1:
+                marks.append("label %r" % text(label_ref))
+            if flags & 2:
+                marks.append("section %r" % text(section_ref))
+            print("  %-45s %s" % (text(name_ref), ", ".join(marks)))
+            if flags & 8:
+                for option_index in range(options_count):
+                    number, _, option_ref = struct.unpack_from(
+                        "<HHI", data, options_at + options_offset
+                        + option_index * OPTION_RECORD)
+                    print("      %d = %r" % (number, text(option_ref)))
+    return 0
+
+
+def dump_gpio(data, sections, text):
+    maps_at, _ = sections.get(SECTION_MAPS, (0, 0))
+    options_at, _ = sections.get(SECTION_OPTIONS, (0, 0))
+    total = struct.unpack_from("<I", data, maps_at)[0]
+    names = ("features", "usages", "ownerships", "padModes", "groups")
+    for index in range(total):
+        at = maps_at + 4 + index * GPIO_MAP_RECORD
+        fields = struct.unpack_from("<IIIIIIIHHHHHH", data, at)
+        print("map %s (%s)" % (text(fields[0]), text(fields[1])))
+        offsets = fields[2:7]
+        counts = fields[7:12]
+        for name, offset, count in zip(names, offsets, counts):
+            print("  %s: %d" % (name, count))
+            if offset == NO_REF:
+                continue
+            for entry_index in range(count):
+                number, _, entry_ref = struct.unpack_from(
+                    "<HHI", data, options_at + offset + entry_index * OPTION_RECORD)
+                print("    %d = %r" % (number, text(entry_ref)))
+    return 0
+
+
 def dump(path):
     with open(path, "rb") as handle:
         data = handle.read()
@@ -699,6 +941,10 @@ def dump(path):
     options_at, _ = sections.get(SECTION_OPTIONS, (0, 0))
     if kind == KIND_CONFIGURATION:
         return dump_configuration(data, sections, text)
+    if kind == KIND_UEP:
+        return dump_uep(data, sections, text)
+    if kind == KIND_GPIO:
+        return dump_gpio(data, sections, text)
     total = struct.unpack_from("<I", data, maps_at)[0]
     for index in range(total):
         record_at = maps_at + 4 + index * MAP_RECORD

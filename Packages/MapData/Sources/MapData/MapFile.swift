@@ -5,6 +5,8 @@ import Foundation
 public enum MapKind: UInt16, Sendable {
     case strap = 1
     case configuration = 2
+    case uep = 3
+    case gpio = 4
 }
 
 /// The envelope's sections. A reader skips one it does not know.

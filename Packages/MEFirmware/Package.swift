@@ -55,7 +55,11 @@ let package = Package(
         ], resources: [
             // The configuration maps as one binary; the JSON sources under
             // `MapSources/configuration` are the reviewable form.
-            .copy("Resources/ConfigMaps")
+            .copy("Resources/ConfigMaps"),
+            // The UEP layouts and the GPIO pin dictionaries, each likewise
+            // compiled from its own JSON sources.
+            .copy("Resources/UEPMaps"),
+            .copy("Resources/GPIOMaps")
         ]),
         .testTarget(
             name: "MEFirmwareTests",
