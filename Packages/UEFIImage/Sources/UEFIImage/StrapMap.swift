@@ -178,10 +178,13 @@ public struct DescriptorStrapMap: Sendable {
 }
 
 public extension DescriptorStrapMap {
-    /// The tables at hand, one per section length.
+    /// The tables at hand, one per section length — the PCH set first, then
+    /// FIT 11's SPT set, which shares some lengths without sharing their
+    /// layout. They are read from `StrapMaps.bin` (`StrapMapData`); a resource
+    /// that cannot be used leaves the list empty, and the panel then shows a
+    /// section's words as numbers.
     static var all: [DescriptorStrapMap] {
-        [.pch69, .pch70, .pch74, .pch90, .pch101, .pch114, .pch115, .pch130,
-         .sptPch66, .sptPch88, .sptPch90, .sptPch139]
+        StrapMapData.pchMaps + StrapMapData.sptMaps
     }
 
     /// SPT's own tables — FIT 11's SPT documents, which name the straps in
@@ -190,7 +193,7 @@ public extension DescriptorStrapMap {
     /// here, four there). Sunrise Point and Lewisburg read these; every other
     /// generation reads the tables above, keyed by length alone.
     static var sptTables: [DescriptorStrapMap] {
-        [.sptPch66, .sptPch88, .sptPch90, .sptPch139]
+        StrapMapData.sptMaps
     }
 
     /// Whether the generation's straps are FIT 11's SPT spellings — the

@@ -554,7 +554,9 @@ their FIT Classic builds, but flashrom's `ich_descriptors.h` carries the
 sections are **16 words on Ibex Peak, 18 on Cougar Point and 21 on Lynx
 Point**, and each table is read only on the generation that states its length.
 Intel's 7 Series/C216 SPI Programming Guide (document 475653, Appendix A)
-states the same fields and bits for the `cougar` union.
+states the same fields and bits for the `cougar` union. The tables themselves
+are JSON sources compiled into `StrapMaps.bin` (`STRAP_MAP_DATA.md`), not
+Swift literals.
 
 The XML is not in the executable, but the tool package ships the project
 template it reads — `newfiletmpl.xml`. Per `PchStrapN` it states each field's

@@ -45,6 +45,10 @@ let package = Package(
             .product(name: "FirmwareCompression", package: "FirmwareCompression"),
             .product(name: "Localization", package: "Localization"),
             .product(name: "LenovoDMI", package: "LenovoDMI")
+        ], resources: [
+            // The strap tables as one binary (`Design/UEFI/STRAP_MAP_DATA.md`):
+            // the JSON sources are the reviewable form, this is what loads.
+            .copy("Resources/StrapMaps")
         ]),
         .testTarget(
             name: "UEFIImageTests",

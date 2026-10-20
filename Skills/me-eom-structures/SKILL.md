@@ -409,8 +409,8 @@ at hand), and MFIT 18's `SoC` harness block lays it out — 1184 fields after
 merging the three platform documents:
 
 ```bash
-python3 Skills/me-eom-structures/scripts/pch18_map.py ~/Downloads/1/mfit-18.1.exe > \
-    Packages/UEFIImage/Sources/UEFIImage/StrapMap+PCH18.swift
+python3 Skills/me-eom-structures/scripts/pch18_map.py ~/Downloads/1/mfit-18.1.exe \
+    --format json > Packages/UEFIImage/MapSources/strap/pch18.json
 ```
 
 The document is **byte-addressed**: a `serialized_item`'s `offset` is a byte
@@ -548,8 +548,23 @@ names the words in the UEFI Structure panel:
 
 ```bash
 python3 Skills/me-eom-structures/scripts/strap_map.py \
-    <fit-15.0.exe> <fit-14.0.exe> --words 69,70,74,90,101,114,115 > \
-    Packages/UEFIImage/Sources/UEFIImage/StrapMap+PCH.swift
+    <fit-15.0.exe> <fit-14.0.exe> --words 69,70,74,90,101,114,115 \
+    --format json > Packages/UEFIImage/MapSources/strap/pch.json
+```
+
+The JSON is the source of truth and what a review reads; `map_bin.py` compiles
+the JSON files into `StrapMaps.bin` and increments the build the code is marked
+with (`Design/UEFI/STRAP_MAP_DATA.md`):
+
+```bash
+python3 Skills/me-eom-structures/scripts/map_bin.py build \
+    --out Packages/UEFIImage/Sources/UEFIImage/Resources/StrapMaps/StrapMaps.bin \
+    --version-file Packages/UEFIImage/MapSources/build.version \
+    --swift-version-file Packages/UEFIImage/Sources/UEFIImage/StrapMapDataVersion.swift \
+    Packages/UEFIImage/MapSources/strap/pch.json \
+    Packages/UEFIImage/MapSources/strap/pch18.json \
+    Packages/UEFIImage/MapSources/strap/spt.json
+python3 Skills/me-eom-structures/scripts/map_bin.py build --check …same arguments…
 ```
 
 A table is asked for by the **length of the section it describes** — the words
@@ -584,8 +599,8 @@ panel shows such a word as its raw value rather than dropping it.
 
 ```bash
 python3 Skills/me-eom-structures/scripts/strap_map.py ~/Downloads/1/fit-11.exe \
-    --words 66,88,90,139 --prefix sptPch > \
-    Packages/UEFIImage/Sources/UEFIImage/StrapMap+SPT.swift
+    --words 66,88,90,139 --prefix sptPch --format json > \
+    Packages/UEFIImage/MapSources/strap/spt.json
 ```
 
 The `sptPch` constants are a set of their own: 90 words is a section in both
