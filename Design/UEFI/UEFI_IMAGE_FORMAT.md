@@ -376,8 +376,9 @@ and the chip densities with the dump's length — `SPI_ALL_192Mbit` is
 
 **MFIT's own register names.** MFIT 18 lays the registers out field by field —
 FLMAP0/1/2, FLCOMP, FLIL, FLMSTR (six master words), FLDRPLCY and FLUMAP1 —
-and `Packages/UEFIImage/Sources/UEFIImage/DescriptorRegisterMap+CSME18.swift`
-carries them (emitted by `descriptor18_map.py`); the UEFI Structure panel shows
+and `Packages/UEFIImage/MapSources/register/csme18.json` carries them
+(emitted by `descriptor18_map.py`, compiled into `RegisterMaps.bin`); the
+UEFI Structure panel shows
 them as a "Descriptor registers" table, one section per register. A register's
 place is absolute or stated by the map words themselves (`FCBA << 4`,
 `FMBA << 4`). The map applies from Meteor Lake on: FLCOMP's density and clock

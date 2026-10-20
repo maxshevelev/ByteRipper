@@ -84,12 +84,14 @@ KIND_STRAP = 1
 KIND_CONFIGURATION = 2
 KIND_UEP = 3
 KIND_GPIO = 4
+KIND_REGISTER = 5
 SECTION_STRINGS = 1
 SECTION_MAPS = 2
 SECTION_FIELDS = 3
 SECTION_OPTIONS = 4
 SECTION_FILES = 5
 SECTION_SETTINGS = 6
+SECTION_REGISTERS = 7
 SECTION_TABLE = 12
 MAP_RECORD = 24
 FIELD_RECORD = 28
@@ -100,9 +102,12 @@ SETTING_RECORD = 50
 UEP_MAP_RECORD = 24
 UEP_SETTING_RECORD = 32
 GPIO_MAP_RECORD = 40
+REGISTER_MAP_RECORD = 20
+REGISTER_RECORD = 24
 NO_REF = 0xFFFFFFFF
 SET_NAMES = {"pch": 0, "spt": 1, "cpu": 2, "other": 3,
              "pmc": 4, "mip": 5, "legacy": 6, "sptcpu": 7}
+PLACE_KINDS = {"absolute": 0, "flashComponent": 1, "flashMaster": 2}
 
 
 def fnv1a32(data):
@@ -152,7 +157,8 @@ def load(path):
         document = json.load(handle)
     if document.get("schema") != "byteripper.map/1":
         raise ValueError("%s: schema is not byteripper.map/1" % path)
-    if document.get("kind") not in ("strap", "configuration", "uep", "gpio"):
+    if document.get("kind") not in ("strap", "configuration", "uep", "gpio",
+                                    "register"):
         raise ValueError("%s: unknown kind %r" % (path, document.get("kind")))
     maps = document.get("maps")
     if not isinstance(maps, list) or not maps:
@@ -231,6 +237,45 @@ def validate_gpio(document, path):
             pairs_of(mapping, key, where)
 
 
+def validate_register(document, path):
+    for index, mapping in enumerate(document["maps"]):
+        where = "%s: map %d" % (path, index)
+        for key in ("id", "name", "registers"):
+            if key not in mapping:
+                raise ValueError("%s: no %s" % (where, key))
+        for register in mapping["registers"]:
+            if not register.get("name"):
+                raise ValueError("%s: a register has no name" % where)
+            place = register.get("place")
+            if (not isinstance(place, dict)
+                    or place.get("kind") not in PLACE_KINDS
+                    or not (0 <= int(place.get("offset", -1)) <= 0xFFFFFFFF)):
+                raise ValueError("%s: %s has no valid place"
+                                 % (where, register["name"]))
+            words = int(register.get("words", 0))
+            if not 0 < words <= 0xFFFF:
+                raise ValueError("%s: %s states %d words"
+                                 % (where, register["name"], words))
+            for field in register["fields"]:
+                name = field.get("name")
+                bit = int(field.get("bitOffset", -1))
+                count = int(field.get("count", 0))
+                if not name:
+                    raise ValueError("%s: a field has no name" % where)
+                if (bit < 0 or not 0 < count <= 32
+                        or bit + count > words * 32
+                        or bit % 32 + count > 32):
+                    raise ValueError("%s: %s bits %d..%d"
+                                     % (where, name, bit, bit + count - 1))
+                for number, text in option_pairs(field):
+                    if number < 0 or (count < 32 and number >= (1 << count)):
+                        raise ValueError("%s: %s option %d does not fit %d bits"
+                                         % (where, name, number, count))
+                    if not isinstance(text, str):
+                        raise ValueError("%s: %s option %r is not text"
+                                         % (where, name, text))
+
+
 def validate(document, path):
     if document["kind"] == "strap":
         validate_strap(document, path)
@@ -238,8 +283,10 @@ def validate(document, path):
         validate_configuration(document, path)
     elif document["kind"] == "uep":
         validate_uep(document, path)
-    else:
+    elif document["kind"] == "gpio":
         validate_gpio(document, path)
+    else:
+        validate_register(document, path)
 
 
 def validate_strap(document, path):
@@ -624,6 +671,81 @@ def compile_gpio(documents, version):
                     [section for section in sections if section[1]], version)
 
 
+def compile_register(documents, version):
+    """Kind 5: the descriptor's registers, their places and their fields."""
+    mappings = []
+    for document in documents:
+        mappings.extend(document["maps"])
+    ids = [mapping["id"] for mapping in mappings]
+    if len(ids) != len(set(ids)):
+        raise ValueError("map ids repeat: %s"
+                         % ", ".join(sorted({i for i in ids if ids.count(i) > 1})))
+
+    strings = StringPool()
+    fields_blob = bytearray()
+    options_blob = bytearray()
+    option_offsets = {}
+    registers_blob = bytearray()
+    map_records = []
+    for mapping in mappings:
+        register_offset = len(registers_blob)
+        for register in mapping["registers"]:
+            fields_offset = len(fields_blob)
+            for field in register["fields"]:
+                bit = int(field["bitOffset"])
+                count = int(field["count"])
+                low, high = bit % 32, bit % 32 + count - 1
+                pairs = option_pairs(field)
+                options_offset = NO_REF
+                if pairs:
+                    key = tuple(pairs)
+                    if key not in option_offsets:
+                        option_offsets[key] = len(options_blob)
+                        for number, text in pairs:
+                            options_blob += struct.pack(
+                                "<HHI", number, 0, strings.ref(text))
+                    options_offset = option_offsets[key]
+                flags = (2 if pairs else 0) | (4 if field.get("label") else 0)
+                fields_blob += struct.pack(
+                    "<IHBBHIIIHHH",
+                    strings.ref(field["name"]),
+                    bit // 32, low, high, flags, 0,
+                    strings.ref(field.get("label")),
+                    options_offset,
+                    len(pairs),
+                    0,
+                    0,
+                )
+            place = register["place"]
+            registers_blob += struct.pack(
+                "<IHHIHHII",
+                strings.ref(register["name"]),
+                PLACE_KINDS[place["kind"]],
+                0,
+                int(place["offset"]),
+                int(register["words"]),
+                len(register["fields"]),
+                fields_offset,
+                0,
+            )
+        map_records.append(struct.pack(
+            "<IIIII",
+            strings.ref(mapping["id"]),
+            len(mapping["registers"]),
+            register_offset,
+            0,
+            0,
+        ))
+    sections = [(SECTION_STRINGS, bytes(strings.data)),
+                (SECTION_MAPS, struct.pack("<I", len(map_records))
+                 + b"".join(map_records)),
+                (SECTION_REGISTERS, bytes(registers_blob)),
+                (SECTION_FIELDS, bytes(fields_blob)),
+                (SECTION_OPTIONS, bytes(options_blob))]
+    return assemble(KIND_REGISTER,
+                    [section for section in sections if section[1]], version)
+
+
 def compile_documents(documents, version):
     kinds = {document["kind"] for document in documents}
     if len(kinds) != 1:
@@ -636,7 +758,9 @@ def compile_documents(documents, version):
         return compile_configuration(documents, version)
     if kind == "uep":
         return compile_uep(documents, version)
-    return compile_gpio(documents, version)
+    if kind == "gpio":
+        return compile_gpio(documents, version)
+    return compile_register(documents, version)
 
 
 def assemble(kind, sections, version):
@@ -913,6 +1037,44 @@ def dump_gpio(data, sections, text):
     return 0
 
 
+def dump_register(data, sections, text):
+    maps_at, _ = sections.get(SECTION_MAPS, (0, 0))
+    registers_at, _ = sections.get(SECTION_REGISTERS, (0, 0))
+    fields_at, _ = sections.get(SECTION_FIELDS, (0, 0))
+    options_at, _ = sections.get(SECTION_OPTIONS, (0, 0))
+    names = {value: key for key, value in PLACE_KINDS.items()}
+    total = struct.unpack_from("<I", data, maps_at)[0]
+    for index in range(total):
+        at = maps_at + 4 + index * REGISTER_MAP_RECORD
+        id_ref, count, register_offset, _, _ = struct.unpack_from(
+            "<IIIII", data, at)
+        print("map %s, %d registers" % (text(id_ref), count))
+        for register_index in range(count):
+            rat = registers_at + register_offset + register_index * REGISTER_RECORD
+            (name_ref, place, _, offset, words, field_count,
+             fields_offset, _) = struct.unpack_from("<IHHIHHII", data, rat)
+            print("  %s at %s(0x%X), %d words, %d fields"
+                  % (text(name_ref), names.get(place, "?"), offset, words,
+                     field_count))
+            for field_index in range(field_count):
+                fat = fields_at + fields_offset + field_index * FIELD_RECORD
+                (field_ref, word, low, high, flags, _, label_ref,
+                 options_offset, options_count, _, _) = struct.unpack_from(
+                    "<IHBBHIIIHHH", data, fat)
+                line = "    %-52s word %2d bits %2d..%2d" % (
+                    text(field_ref), word, low, high)
+                if flags & 4:
+                    line += ", label %r" % text(label_ref)
+                print(line)
+                if flags & 2:
+                    for option_index in range(options_count):
+                        number, _, option_ref = struct.unpack_from(
+                            "<HHI", data, options_at + options_offset
+                            + option_index * OPTION_RECORD)
+                        print("        %d = %r" % (number, text(option_ref)))
+    return 0
+
+
 def dump(path):
     with open(path, "rb") as handle:
         data = handle.read()
@@ -946,6 +1108,8 @@ def dump(path):
         return dump_uep(data, sections, text)
     if kind == KIND_GPIO:
         return dump_gpio(data, sections, text)
+    if kind == KIND_REGISTER:
+        return dump_register(data, sections, text)
     total = struct.unpack_from("<I", data, maps_at)[0]
     for index in range(total):
         record_at = maps_at + 4 + index * MAP_RECORD

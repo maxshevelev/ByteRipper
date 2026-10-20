@@ -1,9 +1,9 @@
 # The compiled map files
 
-Four kinds of description used to be emitted as Swift literals: the
+Five kinds of description used to be emitted as Swift literals: the
 descriptor's strap layouts (`StrapMap+PCH.swift` alone was 6 407 lines and
-650 KB), the ME configuration maps, the FPF/UEP layouts and the GPIO pin
-dictionaries. All are descriptions, not logic, and change only when a tool
+650 KB), the descriptor's register maps, the ME configuration maps, the
+FPF/UEP layouts and the GPIO pin dictionaries. All are descriptions, not logic, and change only when a tool
 version is added. They now live as JSON sources, which is what a review reads,
 and are compiled into binaries, which is what ships.
 
@@ -20,6 +20,11 @@ layout is involved.
 | Strap binary | `Packages/UEFIImage/Sources/UEFIImage/Resources/StrapMaps/StrapMaps.bin` | yes |
 | Strap code's version mark | `Packages/UEFIImage/Sources/UEFIImage/StrapMapDataVersion.swift` | yes, generated |
 | Strap reader | `Packages/UEFIImage/Sources/UEFIImage/StrapMapData.swift` | yes |
+| Register JSON sources | `Packages/UEFIImage/MapSources/register/*.json` | yes |
+| Register version and source digest | `Packages/UEFIImage/MapSources/register/manifest.json` | yes |
+| Register binary | `Packages/UEFIImage/Sources/UEFIImage/Resources/RegisterMaps/RegisterMaps.bin` | yes |
+| Register code's version mark | `Packages/UEFIImage/Sources/UEFIImage/DescriptorRegisterMapDataVersion.swift` | yes, generated |
+| Register reader | `Packages/UEFIImage/Sources/UEFIImage/DescriptorRegisterMapData.swift` | yes |
 | Configuration JSON sources | `Packages/MEFirmware/MapSources/configuration/*.json` | yes |
 | Configuration version and source digest | `Packages/MEFirmware/MapSources/manifest.json` | yes |
 | Configuration binary | `Packages/MEFirmware/Sources/MEFirmware/Resources/ConfigMaps/ConfigMaps.bin` | yes |
@@ -41,9 +46,9 @@ layout is involved.
 The JSON is the source of truth. Each family's manifest holds its version and
 a digest of its JSON files; the binary and the Swift constant are generated
 from it. `map_bin.py build --check` rebuilds them in memory and compares, so a
-stale pair is reported rather than shipped. The four families version
-independently: a strap change does not move the configuration map's version,
-nor either family move the UEP or GPIO one.
+stale pair is reported rather than shipped. The five families version
+independently: a strap change does not move the register map's version, nor
+either family move the configuration, UEP or GPIO one.
 
 ## JSON
 
@@ -139,6 +144,31 @@ A GPIO file states the five value dictionaries behind a feature pin:
 Every dictionary maps a number to the tool's name; an empty one may be
 omitted.
 
+A register map states the descriptor's registers and their fields:
+
+```json
+{
+ "kind": "register",
+ "schema": "byteripper.map/1",
+ "tool": "FIT 12-15",
+ "maps": [
+  {"id": "cannonPoint", "name": "cannonPoint", "registers": [
+   {"name": "FLMAP0", "place": {"kind": "absolute", "offset": 20}, "words": 1,
+    "fields": [
+     {"name": "Flmap0_Flash_Component_Base_Address", "bitOffset": 0, "count": 8},
+     {"name": "Flmap0_Number_Of_Components", "bitOffset": 8, "count": 2,
+      "label": "Number of Flash Components", "options": [[0, "1"], [1, "2"]]}
+    ]}
+  ]}
+ ]
+}
+```
+
+- `place.kind` is `absolute` (an offset in the descriptor), `flashComponent`
+  (offset from `FCBA << 4`) or `flashMaster` (offset from `FMBA << 4`).
+- A field is a bit range that stays inside one 32-bit word.
+- `label` and `options` are optional.
+
 ## Binary
 
 All numbers are little-endian and unaligned; every offset and length is checked
@@ -152,7 +182,7 @@ before it is used.
 | 4 | u16 | format version (1) |
 | 6 | u16 | header size (32) |
 | 8 | u32 | version (the data contract) |
-| 12 | u16 | kind (1 = strap, 2 = configuration, 3 = UEP, 4 = GPIO) |
+| 12 | u16 | kind (1 = strap, 2 = configuration, 3 = UEP, 4 = GPIO, 5 = register) |
 | 14 | u16 | flags |
 | 16 | u32 | section count |
 | 20 | u32 | checksum: FNV-1a over the whole file with this field zeroed |
@@ -163,7 +193,8 @@ before it is used.
 
 One 12-byte entry per section: `u16 kind`, `u16 flags`, `u32 offset`,
 `u32 length`. Section kinds: 1 strings, 2 maps, 3 fields, 4 options, 5 files,
-6 settings. A reader skips a section kind it does not know by its length.
+6 settings, 7 registers. A reader skips a section kind it does not know by its
+length.
 
 ### Strings (1) and options (4)
 
@@ -301,6 +332,35 @@ Maps (2): `u32 count`, then 40 bytes per map:
 Each dictionary is an array of option records (8 bytes each, as above); an
 empty one has count 0 and `0xFFFFFFFF` as its offset.
 
+### Kind 5: register
+
+Maps (2): `u32 count`, then 20 bytes per map:
+
+| Type | Field |
+| --- | --- |
+| u32 | id string reference |
+| u32 | register count |
+| u32 | register array offset, from the registers section start |
+| u32 | reserved |
+| u32 | reserved |
+
+Registers (7): 24 bytes per register:
+
+| Type | Field |
+| --- | --- |
+| u32 | name reference |
+| u16 | place kind (0 absolute, 1 flash component, 2 flash master) |
+| u16 | reserved |
+| u32 | place offset |
+| u16 | words |
+| u16 | field count |
+| u32 | field array offset, from the fields section start |
+| u32 | reserved |
+
+Fields (3) are the strap field records: 28 bytes, with `word`, low and high
+bits, flags 2 (options) and 4 (label) — the default word is unused. A field's
+`bitOffset` is `word * 32 + low`.
+
 ## Versioning
 
 There are two numbers, for two different jobs:
@@ -314,8 +374,9 @@ There are two numbers, for two different jobs:
   increments the version once, an unchanged one leaves it. The same number is
   written into the binary and into the family's Swift constant
   (`StrapMapDataVersion`, `MEConfigurationDataVersion`, `UEPMapDataVersion`,
-  `GPIOPinMapDataVersion`), and the reader compares the file's version with
-  the code's **before reading a section**.
+  `GPIOPinMapDataVersion`, `DescriptorRegisterMapDataVersion`), and the
+  reader compares the file's version with the code's **before reading a
+  section**.
 
 When a reader's *expectations* change without a data change, the version is
 bumped by hand in the manifest; the build then requires the code mark to carry
@@ -342,6 +403,11 @@ python3 Skills/me-eom-structures/scripts/uep_fit_map.py ~/Downloads/1/fit-15.0.e
 python3 Skills/me-eom-structures/scripts/gpio_map.py ~/Downloads/1/fit-15.0.exe \
     --generation 15 --tool 15.0 --format json > \
     Packages/MEFirmware/MapSources/gpio/csme15.json
+python3 Skills/me-eom-structures/scripts/descriptor_fit_map.py ~/Downloads/1/fit-15.0.exe \
+    --platform tgp_lp --generation tigerPoint --tool 15.0 --format json > \
+    Packages/UEFIImage/MapSources/register/tigerPoint.json
+python3 Skills/me-eom-structures/scripts/descriptor18_map.py ~/Downloads/1/mfit-18.1.exe \
+    --format json > Packages/UEFIImage/MapSources/register/csme18.json
 
 # 2. Compile a family. The version comes from its manifest; if the JSON digest
 #    changed, it is incremented and written into the binary and Swift constant.
@@ -359,6 +425,17 @@ python3 Skills/me-eom-structures/scripts/map_bin.py build \
     Packages/UEFIImage/MapSources/strap/legacy-ibx.json \
     Packages/UEFIImage/MapSources/strap/legacy-cpt.json \
     Packages/UEFIImage/MapSources/strap/legacy-lpt.json
+python3 Skills/me-eom-structures/scripts/map_bin.py build \
+    --out Packages/UEFIImage/Sources/UEFIImage/Resources/RegisterMaps/RegisterMaps.bin \
+    --manifest Packages/UEFIImage/MapSources/register/manifest.json \
+    --swift-version-file Packages/UEFIImage/Sources/UEFIImage/DescriptorRegisterMapDataVersion.swift \
+    --swift-enum-name DescriptorRegisterMapDataVersion \
+    Packages/UEFIImage/MapSources/register/sunrisePoint.json \
+    Packages/UEFIImage/MapSources/register/cannonPoint.json \
+    Packages/UEFIImage/MapSources/register/tigerPoint.json \
+    Packages/UEFIImage/MapSources/register/elkhartLake.json \
+    Packages/UEFIImage/MapSources/register/jasperLake.json \
+    Packages/UEFIImage/MapSources/register/csme18.json
 python3 Skills/me-eom-structures/scripts/map_bin.py build \
     --out Packages/MEFirmware/Sources/MEFirmware/Resources/ConfigMaps/ConfigMaps.bin \
     --manifest Packages/MEFirmware/MapSources/manifest.json \
@@ -405,6 +482,9 @@ expected counts apply. Data files are copied as they are.
   processor tables of 2026-10-17: the FIT builds at hand state a different
   field set for those lengths, so it is edited as JSON until that is
   reconciled (`Skills/me-eom-structures/SKILL.md`).
+- **Register maps:** Sunrise Point, Cannon Point, Tiger Point, Elkhart Lake,
+  Jasper Lake and CSME 18 — the registers each build's documents state, with
+  the places the tool gives them.
 - **Configuration:** CSME 11–16 (mobile and desktop where the generation has
   two halves) and CSME 18. CSME 16's map is merged from 16.1.42 and 16.0.15:
   the newer build's database no longer lists `/home/mctp/smt3_devices`, and

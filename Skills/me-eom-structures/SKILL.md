@@ -525,8 +525,8 @@ FLMAP0/1/2, FLCOMP, FLIL, FLMSTR, FLDRPLCY and FLUMAP1 as `mfit_data`
 bitfields, and `descriptor18_map.py` emits them for the UEFI Structure panel:
 
 ```bash
-python3 Skills/me-eom-structures/scripts/descriptor18_map.py ~/Downloads/1/mfit-18.1.exe > \
-    Packages/UEFIImage/Sources/UEFIImage/DescriptorRegisterMap+CSME18.swift
+python3 Skills/me-eom-structures/scripts/descriptor18_map.py ~/Downloads/1/mfit-18.1.exe \
+    --format json > Packages/UEFIImage/MapSources/register/csme18.json
 ```
 
 A register is placed absolutely (FLMAP0/1/2 at 0x14, FLDRPLCY at 0x340,
@@ -552,20 +552,42 @@ documents states identically:
 ```bash
 python3 Skills/me-eom-structures/scripts/descriptor_fit_map.py \
     ~/Downloads/1/fit-15.0.exe --platform tgp_lp --generation tigerPoint \
-    --tool 15.0 > \
-    Packages/UEFIImage/Sources/UEFIImage/DescriptorRegisterMap+TigerPoint.swift
+    --tool 15.0 --format json > \
+    Packages/UEFIImage/MapSources/register/tigerPoint.json
 python3 Skills/me-eom-structures/scripts/descriptor_fit_map.py \
-    ~/Downloads/1/fit-12.exe --platform cnp --generation cannonPoint \
-    --tool 12.0 > \
-    Packages/UEFIImage/Sources/UEFIImage/DescriptorRegisterMap+CannonPoint.swift
+    ~/Downloads/1/fit-12.exe ~/Downloads/1/fit-13.0.exe \
+    ~/Downloads/1/fit-14.0.exe ~/Downloads/1/fit-15.0.exe \
+    --platform cnp_lp_rvp,cnp_h_rvp --generation cannonPoint \
+    --tool "FIT 12-15" --format json > \
+    Packages/UEFIImage/MapSources/register/cannonPoint.json
 ```
 
-and the same for FIT 11's `spt` (Sunrise Point) and FIT 13's `ehl`/`jsl`.
-A generation's documents can be spread over several builds, so several
-executables and several platform tokens may be named —
-`--platform cnp_lp_rvp,cnp_h_rvp` takes both halves, and FIT 12–15 together
-state all four Cannon Point registers (the CNP build FLMAP1 and FLCOMP, FIT
-13's CNP documents FLMAP0, FIT 14's FLMAP2).
+and the same for FIT 11's `spt` (Sunrise Point) and FIT 13's `ehl`/`jsl` —
+`--generation sunrisePoint --tool 11.0`, `--generation elkhartLake` and
+`--generation jasperLake`. A generation's documents can be spread over
+several builds, so several executables and several platform tokens may be
+named — `--platform cnp_lp_rvp,cnp_h_rvp` takes both halves, and FIT 12–15
+together state all four Cannon Point registers (the CNP build FLMAP1 and
+FLCOMP, FIT 13's CNP documents FLMAP0, FIT 14's FLMAP2).
+
+The JSON files are compiled into `RegisterMaps.bin`; the version in
+`MapSources/register/manifest.json` changes only when their digest does, and
+the same number is the code's mark (`Design/MAP_DATA.md`):
+
+```bash
+python3 Skills/me-eom-structures/scripts/map_bin.py build \
+    --out Packages/UEFIImage/Sources/UEFIImage/Resources/RegisterMaps/RegisterMaps.bin \
+    --manifest Packages/UEFIImage/MapSources/register/manifest.json \
+    --swift-version-file Packages/UEFIImage/Sources/UEFIImage/DescriptorRegisterMapDataVersion.swift \
+    --swift-enum-name DescriptorRegisterMapDataVersion \
+    Packages/UEFIImage/MapSources/register/sunrisePoint.json \
+    Packages/UEFIImage/MapSources/register/cannonPoint.json \
+    Packages/UEFIImage/MapSources/register/tigerPoint.json \
+    Packages/UEFIImage/MapSources/register/elkhartLake.json \
+    Packages/UEFIImage/MapSources/register/jasperLake.json \
+    Packages/UEFIImage/MapSources/register/csme18.json
+python3 Skills/me-eom-structures/scripts/map_bin.py build --check …same arguments…
+```
 **The maps are partial where the builds are**: masters 1, 2 and 4 and the
 region registers are in a common document the builds name but do not embed,
 so a register a map does not hold stays unnamed rather than taking another
