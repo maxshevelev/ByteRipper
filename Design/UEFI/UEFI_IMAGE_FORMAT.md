@@ -550,7 +550,8 @@ and reports `AltMeDisable` from the wrong word.
 Ibex Peak, Cougar Point/Panther Point and Lynx Point have no strap XML inside
 their FIT Classic builds, but flashrom's `ich_descriptors.h` carries the
 `ibex` and `cougar` unions written from Intel's SPI Programming Guides, and
-`intel_strap_map.py` emits them into `StrapMap+IBX` / `+CPT` / `+LPT`. The
+`intel_strap_map.py` emits them into `legacy-ibx.json` / `legacy-cpt.json` /
+`legacy-lpt.json`. The
 sections are **16 words on Ibex Peak, 18 on Cougar Point and 21 on Lynx
 Point**, and each table is read only on the generation that states its length.
 Intel's 7 Series/C216 SPI Programming Guide (document 475653, Appendix A)
@@ -582,7 +583,9 @@ as their raw values.
 `UINT32`s (`PROCSTRP0`, `PROCSTRP1`, …) — the processor's own straps, read
 before it lets the chipset go. Its layout is Flash Image Tool's
 `<LayoutEntry name="CPU_Strap_…">` entries, emitted per section length into
-`StrapMap+CPU.swift` by `strap_map.py --kind cpu`. **The length is a weak key
+`cpu.json` by `strap_map.py --kind cpu` (that source was bootstrapped from
+the generated tables and is edited as JSON until the generator is
+reconciled — `Skills/me-eom-structures/SKILL.md`). **The length is a weak key
 here**: documents of one length can lay a field out differently —
 `Num_Active_Cores` is three bits in `cnp_lp_rvp.xml` and four in a nameless
 newer document of the same three words — so a table keeps only the fields
@@ -619,7 +622,7 @@ The message's layout is MFIT's `CpuStrapsLayout` class, whose `<UI>` elements
 are the panel's own words ("Disable Hyperthreading", "All Cores Active") and
 whose entries carry no default — the values are stated per reference platform.
 `Skills/me-eom-structures/scripts/mip_strap_map.py` emits it into
-`StrapMap+MIP.swift`, keyed by message length and keeping the fields every
+`mip.json`, keyed by message length and keeping the fields every
 document of that length agrees on; 17 and 20 words are the lengths the
 documents and the dumps at hand state. The table shows the tool's labels and
 option words, and no field is emphasised because there is no default to differ

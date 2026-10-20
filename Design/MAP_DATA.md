@@ -183,7 +183,7 @@ Maps (2): `u32 count`, then 24 bytes per map:
 | u32 | id string reference |
 | u32 | name string reference |
 | u16 | section words |
-| u16 | set (0 pch, 1 spt, 2 cpu, 3 other) |
+| u16 | set (0 pch, 1 spt, 2 cpu, 3 other, 4 pmc, 5 mip, 6 legacy, 7 sptcpu) |
 | u32 | field count |
 | u32 | field array offset, from the fields section start |
 | u32 | help reference (reserved; `0xFFFFFFFF`) |
@@ -351,7 +351,14 @@ python3 Skills/me-eom-structures/scripts/map_bin.py build \
     --swift-version-file Packages/UEFIImage/Sources/UEFIImage/StrapMapDataVersion.swift \
     Packages/UEFIImage/MapSources/strap/pch.json \
     Packages/UEFIImage/MapSources/strap/pch18.json \
-    Packages/UEFIImage/MapSources/strap/spt.json
+    Packages/UEFIImage/MapSources/strap/spt.json \
+    Packages/UEFIImage/MapSources/strap/cpu.json \
+    Packages/UEFIImage/MapSources/strap/sptcpu.json \
+    Packages/UEFIImage/MapSources/strap/pmc.json \
+    Packages/UEFIImage/MapSources/strap/mip.json \
+    Packages/UEFIImage/MapSources/strap/legacy-ibx.json \
+    Packages/UEFIImage/MapSources/strap/legacy-cpt.json \
+    Packages/UEFIImage/MapSources/strap/legacy-lpt.json
 python3 Skills/me-eom-structures/scripts/map_bin.py build \
     --out Packages/MEFirmware/Sources/MEFirmware/Resources/ConfigMaps/ConfigMaps.bin \
     --manifest Packages/MEFirmware/MapSources/manifest.json \
@@ -390,9 +397,14 @@ expected counts apply. Data files are copied as they are.
 
 ## What is converted
 
-- **Strap:** the PCH tables (`pch69` … `pch115`, `pch130`) and FIT 11's SPT
-  set (`sptPch66` … `sptPch139`). The legacy guide tables, the processor
-  tables, the MIP tables and the PMC tables are still Swift.
+- **Strap:** every table — the PCH set (`pch69` … `pch115`, `pch130`), FIT
+  11's SPT set (`sptPch66` … `sptPch139`), the processor sections
+  (`cpu1` … `cpu25`, `sptCpu3`), the PMC soft straps (`pmc7` … `pmc22`), the
+  MIP CPU messages (`mipCpu17`, `mipCpu20`) and the legacy guides' PCH tables
+  (`pch16`, `pch18`, `pch21`). `cpu.json` was bootstrapped from the generated
+  processor tables of 2026-10-17: the FIT builds at hand state a different
+  field set for those lengths, so it is edited as JSON until that is
+  reconciled (`Skills/me-eom-structures/SKILL.md`).
 - **Configuration:** CSME 11–16 (mobile and desktop where the generation has
   two halves) and CSME 18. CSME 16's map is merged from 16.1.42 and 16.0.15:
   the newer build's database no longer lists `/home/mctp/smt3_devices`, and

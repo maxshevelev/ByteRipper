@@ -234,8 +234,8 @@ public extension DescriptorStrapMap {
 
     /// The legacy table of a generation, or nil where the generations at hand
     /// have none. Lynx Point's 21-word section is read with the Cougar Point
-    /// field set carried forward — `StrapMap+LPT` says why, and which words
-    /// that covers.
+    /// field set carried forward — `legacy-lpt.json` says why, and which
+    /// words that covers.
     static func legacyTable(for generation: DescriptorGeneration)
         -> DescriptorStrapMap? {
         switch generation {
@@ -255,7 +255,7 @@ public extension DescriptorStrapMap {
 
     /// The processor strap section's tables, one per length the tools state.
     /// Their layout is the weaker key — the documents of one length can
-    /// disagree, and a table carries only what they agree on (`StrapMap+CPU`)
+    /// disagree, and a table carries only what they agree on (`cpu.json`)
     /// — so they are kept apart from the PCH tables above.
     static var processorTables: [DescriptorStrapMap] {
         [.cpu1, .cpu3, .cpu7, .cpu10, .cpu11, .cpu14, .cpu15,
@@ -303,7 +303,7 @@ public extension DescriptorStrapMap {
 
     /// The CPU strap **message**'s tables, by length — the form from Tiger
     /// Point on, where the descriptor's MIP area carries the message instead
-    /// of a strap section (`StrapMap+MIP`, from MFIT's `CpuStrapsLayout`). A
+    /// of a strap section (`mip.json`, from MFIT's `CpuStrapsLayout`). A
     /// message's fields say what they are ("Disable Hyperthreading") and what
     /// their values mean, and state no default: the documents give values per
     /// reference platform.

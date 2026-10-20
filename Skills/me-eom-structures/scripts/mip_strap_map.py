@@ -32,6 +32,7 @@ Stdlib only, read-only, no network; read the diff, don't paste blind.
 """
 
 import hashlib
+import json
 import os
 import re
 import sys
@@ -191,8 +192,75 @@ def swift(tool, chosen):
     return "\n".join(lines)
 
 
+def pretty_json(document):
+    """JSON with one field per line: a diff reads a field at a time."""
+    lines = ["{"]
+    for key in sorted(document):
+        if key == "maps":
+            continue
+        lines.append(" %s: %s," % (
+            json.dumps(key),
+            json.dumps(document[key], ensure_ascii=False, sort_keys=True)))
+    lines.append(' "maps": [')
+    for map_index, mapping in enumerate(document["maps"]):
+        rest = ", ".join(
+            "%s: %s" % (json.dumps(key),
+                        json.dumps(mapping[key], ensure_ascii=False, sort_keys=True))
+            for key in sorted(mapping) if key != "fields")
+        lines.append('  {%s, "fields": [' % rest)
+        fields = mapping["fields"]
+        for field_index, field in enumerate(fields):
+            lines.append("   %s%s" % (
+                json.dumps(field, ensure_ascii=False, sort_keys=True,
+                           separators=(", ", ": ")),
+                "," if field_index + 1 < len(fields) else ""))
+        lines.append('  ]}%s' % ("," if map_index + 1 < len(document["maps"]) else ""))
+    lines.append(" ]")
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def json_document(tool, chosen):
+    """The same message tables as data, for the binary map compiler."""
+    maps = []
+    for words, table in chosen:
+        maps.append({
+            "id": "mipCpu%d" % words,
+            "set": "mip",
+            "name": "Flash Image Tool %s, MIP CPU straps, %d words"
+                    % (tool, words),
+            "words": words,
+            "fields": [
+                {"name": field["name"],
+                 "word": field["offset"] // 4,
+                 "bits": [field["low"], field["high"]],
+                 **({"label": field["label"]} if field["label"] else {}),
+                 **({"options": [[number, word]
+                                 for number, word in sorted(field["options"].items())]}
+                    if field["options"] else {})}
+                for field in table
+            ],
+            "source": {"tool": tool, "class": "CpuStrapsLayout"},
+        })
+    return pretty_json({
+        "schema": "byteripper.map/1",
+        "kind": "strap",
+        "tool": tool,
+        "maps": maps,
+    })
+
+
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    argv = sys.argv[1:]
+    output_format = "swift"
+    if "--format" in argv:
+        at = argv.index("--format")
+        output_format = argv[at + 1]
+        del argv[at:at + 2]
+    if output_format not in ("swift", "json"):
+        print("--format is swift or json", file=sys.stderr)
+        return 2
+    args = [a for a in argv if not a.startswith("-")]
     if not args:
         print(__doc__)
         return 2
@@ -212,7 +280,8 @@ def main():
         print("CPU strap message of %d words: %d fields from %d document(s) (%s)"
               % (words, len(merged), len(by_length[words]),
                  ", ".join(t["digest"][:8] for t in by_length[words])), file=sys.stderr)
-    print(swift(tool, chosen))
+    print(json_document(tool, chosen) if output_format == "json"
+          else swift(tool, chosen))
     return 0
 
 

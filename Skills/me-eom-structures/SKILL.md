@@ -621,7 +621,14 @@ python3 Skills/me-eom-structures/scripts/map_bin.py build \
     --swift-version-file Packages/UEFIImage/Sources/UEFIImage/StrapMapDataVersion.swift \
     Packages/UEFIImage/MapSources/strap/pch.json \
     Packages/UEFIImage/MapSources/strap/pch18.json \
-    Packages/UEFIImage/MapSources/strap/spt.json
+    Packages/UEFIImage/MapSources/strap/spt.json \
+    Packages/UEFIImage/MapSources/strap/cpu.json \
+    Packages/UEFIImage/MapSources/strap/sptcpu.json \
+    Packages/UEFIImage/MapSources/strap/pmc.json \
+    Packages/UEFIImage/MapSources/strap/mip.json \
+    Packages/UEFIImage/MapSources/strap/legacy-ibx.json \
+    Packages/UEFIImage/MapSources/strap/legacy-cpt.json \
+    Packages/UEFIImage/MapSources/strap/legacy-lpt.json
 python3 Skills/me-eom-structures/scripts/map_bin.py build --check …same arguments…
 ```
 
@@ -668,8 +675,8 @@ shared tables. The same applies to the processor section's 3 words:
 
 ```bash
 python3 Skills/me-eom-structures/scripts/strap_map.py ~/Downloads/1/fit-11.exe \
-    --kind cpu --words 3 --prefix sptCpu > \
-    Packages/UEFIImage/Sources/UEFIImage/StrapMap+SPTCpu.swift
+    --kind cpu --words 3 --prefix sptCpu --format json > \
+    Packages/UEFIImage/MapSources/strap/sptcpu.json
 ```
 
 FIT 11's class is `FMSBA` rather than `CpuStrapsLayout`; its word 0 names
@@ -684,15 +691,23 @@ its `PCHSTRP0` `0x00100000` reads Deep Sx support set and every other bit
 clear — the same word ifdtool prints — and the processor words read
 `CpuStrapCpuMaxFreqBoot` 1 (boot at P1) with the rest at the defaults.
 
-`--kind cpu` emits the processor strap section's tables into
-`StrapMap+CPU.swift` instead:
+`--kind cpu` emits the processor strap section's tables into `cpu.json`
+instead:
 
 ```bash
 python3 Skills/me-eom-structures/scripts/strap_map.py \
     <fit-15.0.exe> <fit-14.0.exe> <fit-12.exe> --kind cpu \
-    --words 1,3,7,10,11,14,15,17,18,20,21,22,25 > \
-    Packages/UEFIImage/Sources/UEFIImage/StrapMap+CPU.swift
+    --words 1,3,7,10,11,14,15,17,18,20,21,22,25 --format json > \
+    Packages/UEFIImage/MapSources/strap/cpu.json
 ```
+
+**`cpu.json` is the one source not regenerated as it stands.** It was
+bootstrapped from the generated processor tables of 2026-10-17: the FIT
+builds at hand state a different field set for these lengths (the class
+selection and the names the newer `CpuStrapsLayout` documents give them
+changed), so a rerun today would not reproduce it. Editing it is a JSON diff
+by hand; reconciling the generator with it is a separate task. `sptCpu3` is
+an ordinary generated table and is not affected.
 
 Their place and length are `FLMAP2`'s — up to Cannon Point, the only
 generations whose descriptor carries the section at all. From Tiger Point on
@@ -735,18 +750,19 @@ they fill, each as wide as its option list needs — and the dumps read word
 ```bash
 python3 Skills/me-eom-structures/scripts/intel_strap_map.py \
     --header <flashrom>/include/ich_descriptors.h \
-    --kind ibex --generation ibexPeak --words 16 --variable pch16 > \
-    Packages/UEFIImage/Sources/UEFIImage/StrapMap+IBX.swift
+    --kind ibex --generation ibexPeak --words 16 --variable pch16 \
+    --format json > Packages/UEFIImage/MapSources/strap/legacy-ibx.json
 python3 Skills/me-eom-structures/scripts/intel_strap_map.py \
     --header <flashrom>/include/ich_descriptors.h \
     --template "<tools>/Flash Image Tool/v8.1.40.1456/newfiletmpl.xml" \
-    --kind cougar --generation cougarPoint --words 18 --variable pch18 > \
-    Packages/UEFIImage/Sources/UEFIImage/StrapMap+CPT.swift
+    --kind cougar --generation cougarPoint --words 18 --variable pch18 \
+    --format json > Packages/UEFIImage/MapSources/strap/legacy-cpt.json
 python3 Skills/me-eom-structures/scripts/intel_strap_map.py \
     --header <flashrom>/include/ich_descriptors.h \
     --template "<tools>/Flash Image Tool/WIN32/newfiletmpl.xml" \
     --kind cougar --carried-forward --generation lynxPoint --words 21 \
-    --variable pch21 > Packages/UEFIImage/Sources/UEFIImage/StrapMap+LPT.swift
+    --variable pch21 --format json > \
+    Packages/UEFIImage/MapSources/strap/legacy-lpt.json
 ```
 
 The Cougar Point table is emitted from ME System Tools v8 r3's template and
@@ -783,8 +799,8 @@ section:
 ```bash
 python3 Skills/me-eom-structures/scripts/strap_map.py \
     <fit-15.0.exe> <fit-14.0.exe> <fit-13.0.exe> <fit-12.exe> --kind PMC \
-    --words 7,20,21,22 > \
-    Packages/UEFIImage/Sources/UEFIImage/StrapMap+PMC.swift
+    --words 7,20,21,22 --format json > \
+    Packages/UEFIImage/MapSources/strap/pmc.json
 ```
 
 The lengths at hand are 7 (CNP H and Comet Point), 20 (Ice Lake LP), 21
@@ -801,8 +817,8 @@ keyed by message length, with the tool's own labels and option words and with
 **no defaults**, because the documents state values per reference platform:
 
 ```bash
-python3 Skills/me-eom-structures/scripts/mip_strap_map.py <mfit.exe> > \
-    Packages/UEFIImage/Sources/UEFIImage/StrapMap+MIP.swift
+python3 Skills/me-eom-structures/scripts/mip_strap_map.py <mfit.exe> \
+    --format json > Packages/UEFIImage/MapSources/strap/mip.json
 ```
 
 The panel then reads the message with the table of its length and shows

@@ -48,6 +48,7 @@ and words 18 and 20 have no layout in either source and stay raw.
 Stdlib only, read-only, no network.
 """
 
+import json
 import math
 import re
 import sys
@@ -395,10 +396,88 @@ def field(name, low, high, word, label=None, options=None, default=None):
     return "            Field(%s)," % ", ".join(parts)
 
 
+def pretty_json(document):
+    """JSON with one field per line: a diff reads a field at a time."""
+    lines = ["{"]
+    for key in sorted(document):
+        if key == "maps":
+            continue
+        lines.append(" %s: %s," % (
+            json.dumps(key),
+            json.dumps(document[key], ensure_ascii=False, sort_keys=True)))
+    lines.append(' "maps": [')
+    for map_index, mapping in enumerate(document["maps"]):
+        rest = ", ".join(
+            "%s: %s" % (json.dumps(key),
+                        json.dumps(mapping[key], ensure_ascii=False, sort_keys=True))
+            for key in sorted(mapping) if key != "fields")
+        lines.append('  {%s, "fields": [' % rest)
+        fields = mapping["fields"]
+        for field_index, field in enumerate(fields):
+            lines.append("   %s%s" % (
+                json.dumps(field, ensure_ascii=False, sort_keys=True,
+                           separators=(", ", ": ")),
+                "," if field_index + 1 < len(fields) else ""))
+        lines.append('  ]}%s' % ("," if map_index + 1 < len(document["maps"]) else ""))
+    lines.append(" ]")
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def json_document(variable, source, generation, header, template, carried,
+                  words, covered, rows):
+    fields = []
+    for word in covered:
+        for name, low, high, label, options, default in rows[word]:
+            # The names, labels and options are the ones `field()` writes:
+            # the guide's names carry their word, and its tables fill a few
+            # labels and option words the structs do not state.
+            field = {"name": "PCHSTRP%d_%s" % (word, name),
+                     "word": word, "bits": [low, high]}
+            shown_label = label if label is not None else LABELS.get(name)
+            shown_options = options if options is not None else OPTIONS.get(name)
+            if shown_label:
+                field["label"] = shown_label
+            if shown_options:
+                field["options"] = [[number, text]
+                                    for number, text in sorted(shown_options.items())]
+            width = high - low + 1
+            if default is not None and 0 <= default < (1 << width):
+                field["default"] = default
+            fields.append(field)
+    return pretty_json({
+        "schema": "byteripper.map/1",
+        "kind": "strap",
+        "tool": "flashrom's ich_descriptors.h",
+        "maps": [{
+            "id": variable,
+            "set": "legacy",
+            "name": source,
+            "words": words,
+            "fields": fields,
+            "source": {
+                "generation": generation,
+                "header": "flashrom's include/ich_descriptors.h",
+                "template": ("Flash Image Tool newfiletmpl.xml"
+                             if template else None),
+                "carriedForward": carried,
+            },
+        }],
+    })
+
+
 def main():
     args = sys.argv[1:]
     if "--header" not in args:
         print(__doc__)
+        return 2
+    output_format = "swift"
+    if "--format" in args:
+        at = args.index("--format")
+        output_format = args[at + 1]
+        del args[at:at + 2]
+    if output_format not in ("swift", "json"):
+        print("--format is swift or json", file=sys.stderr)
         return 2
     header = args[args.index("--header") + 1]
     kind = args[args.index("--kind") + 1] if "--kind" in args else "cougar"
@@ -464,6 +543,14 @@ def main():
         ]
     covered = sorted(rows)
     missing = [word for word in range(words) if word not in rows]
+
+    if output_format == "json":
+        print(json_document(variable, source, generation, header, template,
+                            carried, words, covered, rows))
+        print("%s: %d words, %d fields" %
+              (variable, words, sum(len(fields) for fields in rows.values())),
+              file=sys.stderr)
+        return 0
 
     emit = []
     emit.append("// The PCH soft straps of %s, as Intel's SPI Programming Guide" % generation)
