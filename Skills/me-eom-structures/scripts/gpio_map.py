@@ -15,17 +15,20 @@ The tool writes the configured pins to `/home/gpio/csme_pins` — the file the
 (`GPIOPinReader`) turns those records back into the names with this map. Only
 the dictionaries are emitted: the record's shape is the file's, not the map's.
 
-Run it and paste the file into
-`Packages/MEFirmware/Sources/MEFirmware/Configuration/`:
+Run it and write the JSON (which the compiler reads, `Design/MAP_DATA.md`)
+under `MapSources/gpio/`:
 
     python3 Skills/me-eom-structures/scripts/gpio_map.py <fit-11.exe> \
-        --generation 11 --tool 11.0 > \
-        Packages/MEFirmware/Sources/MEFirmware/Configuration/GPIOPinMap+CSME11.swift
+        --generation 11 --tool 11.0 --format json > \
+        Packages/MEFirmware/MapSources/gpio/csme11.json
+
+The JSON is compiled into `GPIOMaps.bin` by `map_bin.py`.
 
 Stdlib only, read-only, no network, and the binary is never run.
 """
 
 import hashlib
+import json
 import re
 import sys
 import zlib
@@ -115,6 +118,52 @@ def option(args, name, default):
     return [a for i, a in enumerate(args) if i not in (at, at + 1)], value
 
 
+def pretty_json(document):
+    """JSON with one value per line: a diff reads a number at a time."""
+    dictionaries = ("features", "usages", "ownerships", "padModes", "groups")
+    lines = ["{"]
+    for key in sorted(document):
+        if key == "maps":
+            continue
+        lines.append(" %s: %s," % (
+            json.dumps(key),
+            json.dumps(document[key], ensure_ascii=False, sort_keys=True)))
+    lines.append(' "maps": [')
+    for map_index, mapping in enumerate(document["maps"]):
+        scalars = ", ".join(
+            "%s: %s" % (json.dumps(key),
+                        json.dumps(mapping[key], ensure_ascii=False, sort_keys=True))
+            for key in sorted(mapping) if key not in dictionaries)
+        lines.append("  {%s," % scalars)
+        present = [key for key in dictionaries if key in mapping]
+        for key_index, key in enumerate(present):
+            pairs = mapping[key]
+            lines.append('   "%s": [' % key)
+            for pair_index, pair in enumerate(pairs):
+                lines.append("    %s%s" % (
+                    json.dumps(pair, ensure_ascii=False,
+                               separators=(", ", ": ")),
+                    "," if pair_index + 1 < len(pairs) else ""))
+            lines.append('   ]%s' % ("," if key_index + 1 < len(present) else ""))
+        lines.append('  }%s' % ("," if map_index + 1 < len(document["maps"]) else ""))
+    lines.append(" ]")
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def json_document(generation, tool, variable, values):
+    mapping = {"id": variable,
+               "name": "CSME %s (Flash Image Tool %s)" % (generation, tool)}
+    for key, table in values.items():
+        mapping[key] = [[number, table[number]] for number in sorted(table)]
+    return pretty_json({
+        "schema": "byteripper.map/1",
+        "kind": "gpio",
+        "tool": tool,
+        "maps": [mapping],
+    })
+
+
 def main():
     args = sys.argv[1:]
     if not args:
@@ -123,6 +172,10 @@ def main():
     args, generation = option(args, "--generation", "15")
     args, tool = option(args, "--tool", "15.0")
     args, variable = option(args, "--variable", "csme%s" % generation)
+    args, output_format = option(args, "--format", "swift")
+    if output_format not in ("swift", "json"):
+        print("--format is swift or json", file=sys.stderr)
+        return 2
     blob = open(args[0], "rb").read()
     texts = list(documents(blob))
 
@@ -138,6 +191,15 @@ def main():
         values[key] = found
     if "usages" not in values:
         raise SystemExit("no GpioCsmeFunctionValues class in this build")
+
+    if output_format == "json":
+        print(json_document(generation, tool, variable, values))
+        if missing:
+            print("classes absent from this build: %s" % ", ".join(missing),
+                  file=sys.stderr)
+        print("values: %s" % ", ".join("%s %d" % (key, len(values[key]))
+                                       for key in values), file=sys.stderr)
+        return 0
 
     print("// The GPIO feature pins of CSME %s, as Flash Image Tool %s names them —"
           % (generation, tool))

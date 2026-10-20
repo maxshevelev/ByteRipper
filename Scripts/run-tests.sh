@@ -84,6 +84,33 @@ if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
     echo "the configuration map binary is stale: rebuild it (Skills/me-eom-structures/SKILL.md)" >&2
     exit 1
 fi
+if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
+    --out Packages/MEFirmware/Sources/MEFirmware/Resources/UEPMaps/UEPMaps.bin \
+    --manifest Packages/MEFirmware/MapSources/uep/manifest.json \
+    --swift-version-file Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMapDataVersion.swift \
+    --swift-enum-name UEPMapDataVersion \
+    Packages/MEFirmware/MapSources/uep/csme12.json \
+    Packages/MEFirmware/MapSources/uep/csme13.json \
+    Packages/MEFirmware/MapSources/uep/csme14.json \
+    Packages/MEFirmware/MapSources/uep/csme15.json \
+    Packages/MEFirmware/MapSources/uep/csme16.json \
+    Packages/MEFirmware/MapSources/uep/csme18.json; then
+    echo "the UEP map binary is stale: rebuild it (Skills/me-eom-structures/SKILL.md)" >&2
+    exit 1
+fi
+if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
+    --out Packages/MEFirmware/Sources/MEFirmware/Resources/GPIOMaps/GPIOMaps.bin \
+    --manifest Packages/MEFirmware/MapSources/gpio/manifest.json \
+    --swift-version-file Packages/MEFirmware/Sources/MEFirmware/Configuration/GPIOPinMapDataVersion.swift \
+    --swift-enum-name GPIOPinMapDataVersion \
+    Packages/MEFirmware/MapSources/gpio/csme11.json \
+    Packages/MEFirmware/MapSources/gpio/csme12.json \
+    Packages/MEFirmware/MapSources/gpio/csme13.json \
+    Packages/MEFirmware/MapSources/gpio/csme14.json \
+    Packages/MEFirmware/MapSources/gpio/csme15.json; then
+    echo "the GPIO map binary is stale: rebuild it (Skills/me-eom-structures/SKILL.md)" >&2
+    exit 1
+fi
 
 report() {   # keeps the counts, the failures, and any death of the test host
     # A test host that dies mid-run is not a line in this output: XCTest prints

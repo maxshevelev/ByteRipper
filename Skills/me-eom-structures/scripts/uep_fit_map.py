@@ -49,18 +49,21 @@ that class's `CfgOpt` — its label, help and, for a `class:…` type, the value
 words the class defines (`SupportedFpfValues`' 0xC "No", 0xF "Yes"). A bare
 bit has the UEP document's own `<!--NAME-->` comment.
 
-    python3 uep_fit_map.py <fit-12.exe> --generation 12 > \\
-        Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMap+CSME12.swift
-    python3 uep_fit_map.py <fit-13.0.exe> --generation 13 > \\
-        Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMap+CSME13.swift
-    python3 uep_fit_map.py <fit-14.0.exe> --generation 14 > \\
-        Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMap+CSME14.swift
+    python3 uep_fit_map.py <fit-12.exe> --generation 12 --format json > \\
+        Packages/MEFirmware/MapSources/uep/csme12.json
+    python3 uep_fit_map.py <fit-13.0.exe> --generation 13 --format json > \\
+        Packages/MEFirmware/MapSources/uep/csme13.json
+    python3 uep_fit_map.py <fit-14.0.exe> --generation 14 --format json > \\
+        Packages/MEFirmware/MapSources/uep/csme14.json
+
+The JSON is compiled into `UEPMaps.bin` by `map_bin.py` (`Design/MAP_DATA.md`).
 
 Stdlib only, read-only, no network; read the diff, don't paste blind.
 """
 
 import collections
 import hashlib
+import json
 import os
 import re
 import sys
@@ -377,6 +380,65 @@ def swift(generation, platform, tool, entries):
     return "\n".join(lines)
 
 
+def setting_json(entry):
+    value = {"name": entry["name"], "array": entry["array"],
+             "offset": entry["offset"], "bit": entry["bit"],
+             "count": entry["count"]}
+    if entry.get("label"):
+        value["label"] = entry["label"]
+    if entry.get("section"):
+        value["section"] = entry["section"]
+    if entry.get("help"):
+        value["help"] = entry["help"]
+    if entry.get("options"):
+        value["options"] = [[number, entry["options"][number]]
+                            for number in sorted(entry["options"])]
+    return value
+
+
+def pretty_json(document):
+    """JSON with one setting per line: a diff reads a setting at a time."""
+    lines = ["{"]
+    for key in sorted(document):
+        if key == "maps":
+            continue
+        lines.append(" %s: %s," % (
+            json.dumps(key),
+            json.dumps(document[key], ensure_ascii=False, sort_keys=True)))
+    lines.append(' "maps": [')
+    for map_index, mapping in enumerate(document["maps"]):
+        rest = ", ".join(
+            "%s: %s" % (json.dumps(key),
+                        json.dumps(mapping[key], ensure_ascii=False, sort_keys=True))
+            for key in sorted(mapping) if key != "settings")
+        lines.append('  {%s, "settings": [' % rest)
+        settings_ = mapping["settings"]
+        for setting_index, setting in enumerate(settings_):
+            lines.append("   %s%s" % (
+                json.dumps(setting, ensure_ascii=False, sort_keys=True,
+                           separators=(", ", ": ")),
+                "," if setting_index + 1 < len(settings_) else ""))
+        lines.append('  ]}%s' % ("," if map_index + 1 < len(document["maps"]) else ""))
+    lines.append(" ]")
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def json_document(generation, platform, tool, entries):
+    return pretty_json({
+        "schema": "byteripper.map/1",
+        "kind": "uep",
+        "tool": tool,
+        "maps": [{
+            "id": "csme%s" % generation,
+            "name": "CSME %s (%s, %s)" % (generation, tool, platform),
+            "arrayStart": 8,
+            "arraySize": ARRAY_SIZE,
+            "settings": [setting_json(entry) for entry in entries],
+        }],
+    })
+
+
 def main():
     argv = sys.argv[1:]
     generation = "12"
@@ -390,6 +452,14 @@ def main():
     if generation not in SELECTORS:
         print("no selector for generation %s (have %s)"
               % (generation, ", ".join(sorted(SELECTORS))), file=sys.stderr)
+        return 2
+    output_format = "swift"
+    if "--format" in argv:
+        at = argv.index("--format")
+        output_format = argv[at + 1]
+        del argv[at:at + 2]
+    if output_format not in ("swift", "json"):
+        print("--format is swift or json", file=sys.stderr)
         return 2
     args = [a for a in argv if not a.startswith("-")]
     if not args:
@@ -420,7 +490,9 @@ def main():
              sum(1 for e in entries if e["label"]),
              sum(1 for e in entries if e["section"])),
           file=sys.stderr)
-    print(swift(generation, SELECTORS[generation]["platform"], tool, entries))
+    print(json_document(generation, SELECTORS[generation]["platform"], tool,
+                        entries) if output_format == "json"
+          else swift(generation, SELECTORS[generation]["platform"], tool, entries))
     return 0
 
 

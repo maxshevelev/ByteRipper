@@ -21,11 +21,12 @@ transitively: the platform document carries that build's straps, while the
 settings the family shares are bound in its `*_common.xml` — Boot Guard's
 policy files, the EOM record and the FPF hardware binding among them.
 
-Run it, read the diff and the notes it prints, and paste the file into
-`Packages/MEFirmware/Sources/MEFirmware/Configuration/`:
+Run it, read the diff and the notes it prints, and write the JSON (which the
+compiler reads, `Design/MAP_DATA.md`) under `MapSources/configuration/`:
 
-    python3 Skills/me-eom-structures/scripts/fit_map.py <fit-15.0.exe> --straps tgp_lp > \\
-        Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationMap+CSME15.swift
+    python3 Skills/me-eom-structures/scripts/fit_map.py <fit-15.0.exe> \\
+        --straps tgp_lp --generation 15 --tool 15.0 --format json > \\
+        Packages/MEFirmware/MapSources/configuration/csme15.json
 
 Stdlib only, read-only, no network, and the binary is never run.
 """

@@ -21,6 +21,7 @@ the state the build wrote and not a gap: see `Design/ME_STRUCTURES.md`.
 
 import collections
 import hashlib
+import json
 import os
 import re
 import sys
@@ -163,6 +164,65 @@ def swift(generation, tool, entries):
     return "\n".join(lines)
 
 
+def setting_json(entry):
+    value = {"name": entry["name"], "array": 0,
+             "offset": entry["offset"], "bit": entry["bit"],
+             "count": entry["count"]}
+    if entry.get("label"):
+        value["label"] = entry["label"]
+    if entry.get("section"):
+        value["section"] = entry["section"]
+    if entry.get("help"):
+        value["help"] = entry["help"]
+    if entry.get("options"):
+        value["options"] = [[number, entry["options"][number]]
+                            for number in sorted(entry["options"])]
+    return value
+
+
+def pretty_json(document):
+    """JSON with one setting per line: a diff reads a setting at a time."""
+    lines = ["{"]
+    for key in sorted(document):
+        if key == "maps":
+            continue
+        lines.append(" %s: %s," % (
+            json.dumps(key),
+            json.dumps(document[key], ensure_ascii=False, sort_keys=True)))
+    lines.append(' "maps": [')
+    for map_index, mapping in enumerate(document["maps"]):
+        rest = ", ".join(
+            "%s: %s" % (json.dumps(key),
+                        json.dumps(mapping[key], ensure_ascii=False, sort_keys=True))
+            for key in sorted(mapping) if key != "settings")
+        lines.append('  {%s, "settings": [' % rest)
+        settings = mapping["settings"]
+        for setting_index, setting in enumerate(settings):
+            lines.append("   %s%s" % (
+                json.dumps(setting, ensure_ascii=False, sort_keys=True,
+                           separators=(", ", ": ")),
+                "," if setting_index + 1 < len(settings) else ""))
+        lines.append('  ]}%s' % ("," if map_index + 1 < len(document["maps"]) else ""))
+    lines.append(" ]")
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def json_document(generation, tool, entries):
+    return pretty_json({
+        "schema": "byteripper.map/1",
+        "kind": "uep",
+        "tool": tool,
+        "maps": [{
+            "id": "csme%s" % generation,
+            "name": "CSME %s (%s)" % (generation, tool),
+            "arrayStart": 0x0C,
+            "arraySize": 0,
+            "settings": [setting_json(entry) for entry in entries],
+        }],
+    })
+
+
 def main():
     args = sys.argv[1:]
     if not args or args[0] in ("-h", "--help"):
@@ -170,6 +230,10 @@ def main():
         return 2
     args, generation = option(args, "--generation", None)
     args, tool = option(args, "--tool", None)
+    args, output_format = option(args, "--format", "swift")
+    if output_format not in ("swift", "json"):
+        print("--format is swift or json", file=sys.stderr)
+        return 2
     if not generation or not tool or not args:
         print(__doc__)
         return 2
@@ -179,7 +243,8 @@ def main():
           "another array)" % (len(entries), left_out), file=sys.stderr)
     print("  without a label (the tool names no UI text for them): %d"
           % sum(1 for e in entries if not e["label"]), file=sys.stderr)
-    print(swift(generation, tool, entries))
+    print(json_document(generation, tool, entries) if output_format == "json"
+          else swift(generation, tool, entries))
     return 0
 
 

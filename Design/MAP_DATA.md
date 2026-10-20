@@ -1,10 +1,11 @@
 # The compiled map files
 
-Two kinds of description used to be emitted as Swift literals: the descriptor's
-strap layouts (`StrapMap+PCH.swift` alone was 6 407 lines and 650 KB) and the
-ME configuration maps. Both are descriptions, not logic, and change only when
-a tool version is added. They now live as JSON sources, which is what a review
-reads, and are compiled into binaries, which is what ships.
+Four kinds of description used to be emitted as Swift literals: the
+descriptor's strap layouts (`StrapMap+PCH.swift` alone was 6 407 lines and
+650 KB), the ME configuration maps, the FPF/UEP layouts and the GPIO pin
+dictionaries. All are descriptions, not logic, and change only when a tool
+version is added. They now live as JSON sources, which is what a review reads,
+and are compiled into binaries, which is what ships.
 
 The format is deliberately small and language-neutral: the web edition can
 read the same file with a reader of its own, and no Foundation type or Swift
@@ -24,14 +25,25 @@ layout is involved.
 | Configuration binary | `Packages/MEFirmware/Sources/MEFirmware/Resources/ConfigMaps/ConfigMaps.bin` | yes |
 | Configuration code's version mark | `Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationDataVersion.swift` | yes, generated |
 | Configuration reader | `Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationData.swift` | yes |
+| UEP JSON sources | `Packages/MEFirmware/MapSources/uep/*.json` | yes |
+| UEP version and source digest | `Packages/MEFirmware/MapSources/uep/manifest.json` | yes |
+| UEP binary | `Packages/MEFirmware/Sources/MEFirmware/Resources/UEPMaps/UEPMaps.bin` | yes |
+| UEP code's version mark | `Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMapDataVersion.swift` | yes, generated |
+| UEP reader | `Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMapData.swift` | yes |
+| GPIO JSON sources | `Packages/MEFirmware/MapSources/gpio/*.json` | yes |
+| GPIO version and source digest | `Packages/MEFirmware/MapSources/gpio/manifest.json` | yes |
+| GPIO binary | `Packages/MEFirmware/Sources/MEFirmware/Resources/GPIOMaps/GPIOMaps.bin` | yes |
+| GPIO code's version mark | `Packages/MEFirmware/Sources/MEFirmware/Configuration/GPIOPinMapDataVersion.swift` | yes, generated |
+| GPIO reader | `Packages/MEFirmware/Sources/MEFirmware/Configuration/GPIOPinMapData.swift` | yes |
 | Envelope reader | `Packages/MapData/Sources/MapData/MapFile.swift` | yes |
 | Compiler and dumper | `Skills/me-eom-structures/scripts/map_bin.py` | yes |
 
 The JSON is the source of truth. Each family's manifest holds its version and
 a digest of its JSON files; the binary and the Swift constant are generated
 from it. `map_bin.py build --check` rebuilds them in memory and compares, so a
-stale pair is reported rather than shipped. The two families version
-independently: a strap change does not move the configuration map's version.
+stale pair is reported rather than shipped. The four families version
+independently: a strap change does not move the configuration map's version,
+nor either family move the UEP or GPIO one.
 
 ## JSON
 
@@ -81,6 +93,52 @@ A configuration file states files and settings instead:
 - `auto`, `hex`, `text` are present only when true.
 - `condition` and `disabledBy` are `{name, value}` objects when present.
 
+A UEP file states settings and their places in the container's bit arrays:
+
+```json
+{
+ "kind": "uep",
+ "schema": "byteripper.map/1",
+ "tool": "Modular Flash Image Tool 18.0",
+ "maps": [
+  {"id": "csme18", "name": "CSME 18 (…)", "arrayStart": 8, "arraySize": 128,
+   "settings": [
+    {"name": "BTG_PROFILE", "array": 0, "offset": 72, "bit": 30, "count": 3,
+     "label": "Boot Guard Profile", "section": "BootGuardConfiguration",
+     "options": [[0, "Boot Guard Disabled"], [3, "Debug Profile"],
+                 [4, "Verified Boot"], [5, "Verified and Measured Boot"]]}
+   ]}
+ ]
+}
+```
+
+- `arrayStart` is how far past the container's signature the first array
+  begins; `arraySize` is the stride between arrays (0 where the map keeps to
+  the first and offsets are already places in it).
+- `array` is the array a setting sits in, `offset` a byte into it.
+- `label`, `section`, `help` and `options` are optional.
+
+A GPIO file states the five value dictionaries behind a feature pin:
+
+```json
+{
+ "kind": "gpio",
+ "schema": "byteripper.map/1",
+ "tool": "15.0",
+ "maps": [
+  {"id": "csme15", "name": "CSME 15 (Flash Image Tool 15.0)",
+   "features": [[1, "GPIO_TOUCH_FEATURE_ID"]],
+   "usages": [[0, "INTEGRATED_TOUCH_1"]],
+   "ownerships": [[1, "CSME_MODE"]],
+   "padModes": [[4, "DEFAULT_MODE"]],
+   "groups": [[4, "GPP_E"]]}
+ ]
+}
+```
+
+Every dictionary maps a number to the tool's name; an empty one may be
+omitted.
+
 ## Binary
 
 All numbers are little-endian and unaligned; every offset and length is checked
@@ -94,7 +152,7 @@ before it is used.
 | 4 | u16 | format version (1) |
 | 6 | u16 | header size (32) |
 | 8 | u32 | version (the data contract) |
-| 12 | u16 | kind (1 = strap, 2 = configuration) |
+| 12 | u16 | kind (1 = strap, 2 = configuration, 3 = UEP, 4 = GPIO) |
 | 14 | u16 | flags |
 | 16 | u32 | section count |
 | 20 | u32 | checksum: FNV-1a over the whole file with this field zeroed |
@@ -189,6 +247,60 @@ Settings (6): 50 bytes per setting:
 | i32 | disabled-by value |
 | u32 | reserved |
 
+### Kind 3: UEP
+
+Maps (2): `u32 count`, then 24 bytes per map:
+
+| Type | Field |
+| --- | --- |
+| u32 | id string reference |
+| u32 | name string reference |
+| u16 | array start |
+| u16 | array size |
+| u32 | setting count |
+| u32 | setting array offset, from the settings section start |
+| u32 | reserved |
+
+Settings (6): 32 bytes per setting:
+
+| Type | Field |
+| --- | --- |
+| u32 | name reference |
+| u16 | flags: 1 label, 2 section, 4 help, 8 options |
+| u16 | array |
+| u16 | offset into the array |
+| u8 | bit |
+| u8 | bit count |
+| u32 | label reference |
+| u32 | section reference |
+| u32 | help reference |
+| u32 | options offset, from the options section start |
+| u16 | options count |
+| u16 | reserved |
+
+### Kind 4: GPIO
+
+Maps (2): `u32 count`, then 40 bytes per map:
+
+| Type | Field |
+| --- | --- |
+| u32 | id string reference |
+| u32 | name string reference |
+| u32 | features offset, from the options section start |
+| u32 | usages offset |
+| u32 | ownerships offset |
+| u32 | pad modes offset |
+| u32 | groups offset |
+| u16 | features count |
+| u16 | usages count |
+| u16 | ownerships count |
+| u16 | pad modes count |
+| u16 | groups count |
+| u16 | reserved |
+
+Each dictionary is an array of option records (8 bytes each, as above); an
+empty one has count 0 and `0xFFFFFFFF` as its offset.
+
 ## Versioning
 
 There are two numbers, for two different jobs:
@@ -201,8 +313,9 @@ There are two numbers, for two different jobs:
   digest changes**. The compile step recomputes the digest: a changed source
   increments the version once, an unchanged one leaves it. The same number is
   written into the binary and into the family's Swift constant
-  (`StrapMapDataVersion`, `MEConfigurationDataVersion`), and the reader
-  compares the file's version with the code's **before reading a section**.
+  (`StrapMapDataVersion`, `MEConfigurationDataVersion`, `UEPMapDataVersion`,
+  `GPIOPinMapDataVersion`), and the reader compares the file's version with
+  the code's **before reading a section**.
 
 When a reader's *expectations* change without a data change, the version is
 bumped by hand in the manifest; the build then requires the code mark to carry
@@ -223,6 +336,12 @@ python3 Skills/me-eom-structures/scripts/strap_map.py \
 python3 Skills/me-eom-structures/scripts/fit_map.py ~/Downloads/1/fit-15.0.exe \
     --straps tgp_lp --generation 15 --tool 15.0 --format json > \
     Packages/MEFirmware/MapSources/configuration/csme15.json
+python3 Skills/me-eom-structures/scripts/uep_fit_map.py ~/Downloads/1/fit-15.0.exe \
+    --generation 15 --tool 15.0 --format json > \
+    Packages/MEFirmware/MapSources/uep/csme15.json
+python3 Skills/me-eom-structures/scripts/gpio_map.py ~/Downloads/1/fit-15.0.exe \
+    --generation 15 --tool 15.0 --format json > \
+    Packages/MEFirmware/MapSources/gpio/csme15.json
 
 # 2. Compile a family. The version comes from its manifest; if the JSON digest
 #    changed, it is incremented and written into the binary and Swift constant.
@@ -239,6 +358,18 @@ python3 Skills/me-eom-structures/scripts/map_bin.py build \
     --swift-version-file Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationDataVersion.swift \
     --swift-enum-name MEConfigurationDataVersion \
     Packages/MEFirmware/MapSources/configuration/csme11.json … csme18.json
+python3 Skills/me-eom-structures/scripts/map_bin.py build \
+    --out Packages/MEFirmware/Sources/MEFirmware/Resources/UEPMaps/UEPMaps.bin \
+    --manifest Packages/MEFirmware/MapSources/uep/manifest.json \
+    --swift-version-file Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMapDataVersion.swift \
+    --swift-enum-name UEPMapDataVersion \
+    Packages/MEFirmware/MapSources/uep/csme12.json … csme18.json
+python3 Skills/me-eom-structures/scripts/map_bin.py build \
+    --out Packages/MEFirmware/Sources/MEFirmware/Resources/GPIOMaps/GPIOMaps.bin \
+    --manifest Packages/MEFirmware/MapSources/gpio/manifest.json \
+    --swift-version-file Packages/MEFirmware/Sources/MEFirmware/Configuration/GPIOPinMapDataVersion.swift \
+    --swift-enum-name GPIOPinMapDataVersion \
+    Packages/MEFirmware/MapSources/gpio/csme11.json … csme15.json
 
 # 3. Verify the committed pairs (no write, byte-for-byte).
 python3 Skills/me-eom-structures/scripts/map_bin.py build --check …same arguments…
@@ -266,3 +397,7 @@ expected counts apply. Data files are copied as they are.
   still the generated Swift map: the 16.0.15.1662 build its map was read from
   is not at hand, so its JSON waits for that source rather than dropping the
   files only that build states.
+- **UEP:** CSME 12–16 and 18, each from its own tool build. 17 has no map yet.
+- **GPIO:** CSME 11–15, the generations whose Flash Image Tool carries the
+  `GpioCsme*` value classes. CSME 16 and 18 use MFIT's database, which does
+  not, so they have no map.
