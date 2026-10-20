@@ -4,7 +4,7 @@ import XCTest
 /// The binary strap tables (`Design/UEFI/STRAP_MAP_DATA.md`): what the JSON
 /// sources state, and what the reader refuses before it interprets a byte.
 final class StrapMapDataTests: XCTestCase {
-    func testTheResourceLoadsWithTheBuildTheCodeWasMarkedWith() {
+    func testTheResourceLoadsWithTheVersionTheCodeWasMarkedWith() {
         XCTAssertNil(StrapMapData.failure)
         XCTAssertEqual(StrapMapData.pchMaps.map(\.words),
                        [69, 70, 74, 90, 101, 114, 115, 130])
@@ -35,19 +35,19 @@ final class StrapMapDataTests: XCTestCase {
         XCTAssertFalse(try XCTUnwrap(field.options).isEmpty)
     }
 
-    func testAStaleBuildIsRefusedBeforeAnySectionIsRead() throws {
+    func testAStaleVersionIsRefusedBeforeAnySectionIsRead() throws {
         var data = try XCTUnwrap(StrapMapData.bundledData)
-        let wrong = StrapMapData.expectedBuild + 1
+        let wrong = StrapMapData.expectedVersion + 1
         data[8] = UInt8(truncatingIfNeeded: wrong)
         data[9] = UInt8(truncatingIfNeeded: wrong >> 8)
         data[10] = UInt8(truncatingIfNeeded: wrong >> 16)
         data[11] = UInt8(truncatingIfNeeded: wrong >> 24)
         XCTAssertThrowsError(try StrapMapData.decode(data)) { error in
-            guard case .buildMismatch(let file, let code)? = error as? MapDataError else {
+            guard case .versionMismatch(let file, let code)? = error as? MapDataError else {
                 return XCTFail("\(error)")
             }
             XCTAssertEqual(file, wrong)
-            XCTAssertEqual(code, StrapMapData.expectedBuild)
+            XCTAssertEqual(code, StrapMapData.expectedVersion)
         }
     }
 
