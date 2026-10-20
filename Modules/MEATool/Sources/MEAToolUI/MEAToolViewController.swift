@@ -873,8 +873,10 @@ import ToolModuleKit
 
     /// The popover a setting's `?` opened, kept so the next one can close it —
     /// a transient popover closes itself on a click elsewhere, and one left
-    /// open behind the next is two popovers over one tab.
-    private var settingHelpPopover: MEASettingHelpPopover?
+    /// open behind the next is two popovers over one tab. Weak: a closed
+    /// popover lets go of itself (`HelpPopoverController`), and this must not
+    /// be what keeps it.
+    private weak var settingHelpPopover: MEASettingHelpPopover?
 
     /// Closes a setting's popover, where one is open — when its rows are
     /// rebuilt, and when the tab it belongs to goes off screen.

@@ -226,12 +226,14 @@ final class HelpTermPopoverTests: XCTestCase {
         let term = try XCTUnwrap(Help.shared.term(HelpTermID("mfs")))
         let popover = HelpTermPopover(term: term)
         XCTAssertEqual(popover.shownTerm, term.id)
-        XCTAssertTrue(popover.view.subviews.contains { ($0 as? NSTextField)?.stringValue == term.name })
+        XCTAssertTrue(popover.content.subviews.contains { ($0 as? NSTextField)?.stringValue == term.name })
     }
 
     /// The popover's type is the panels': their body size for the words, a
     /// point over it for the title — and it moves with the zoom, the popover
-    /// on screen laying itself out again.
+    /// on screen laying itself out again. On screen: a new view handed to an
+    /// open popover's controller is one the popover never draws, so what is
+    /// checked is the view the popover holds.
     func testItFollowsTheZoom() throws {
         var size: CGFloat = 13
         let zoomed = Notification.Name("HelpPopoverTestZoom")
@@ -241,15 +243,20 @@ final class HelpTermPopoverTests: XCTestCase {
             HelpPopoverLayout.textSize = { 13 }
             HelpPopoverLayout.textSizeDidChange = nil
         }
-        let term = try XCTUnwrap(Help.shared.term(HelpTermID("mfs")))
-        let popover = HelpTermPopover(term: term)
+        let (window, anchor) = makeAnchor()
+        defer { window.close() }
+        let popover = try XCTUnwrap(HelpTermPopover.show(HelpTermID("mfs"), from: anchor))
+        defer { popover.close() }
+        XCTAssertTrue(popover.isShown, "the premise: the popover is on screen")
+        let shown = try XCTUnwrap(popover.view.superview, "the popover holds the controller's view")
 
         func fonts() throws -> (title: CGFloat, body: CGFloat, width: CGFloat) {
-            let title = try XCTUnwrap(popover.view.subviews.compactMap { $0 as? NSTextField }.first)
-            let body = try XCTUnwrap(popover.view.subviews.compactMap { $0 as? HelpBodyView }.first)
+            let content = popover.content
+            let title = try XCTUnwrap(content.subviews.compactMap { $0 as? NSTextField }.first)
+            let body = try XCTUnwrap(content.subviews.compactMap { $0 as? HelpBodyView }.first)
             let text = try XCTUnwrap(body.documentView as? NSTextView)
             let last = try XCTUnwrap(text.textStorage?.attribute(
-                .font, at: text.string.count - 1, effectiveRange: nil) as? NSFont)
+                .font, at: text.textStorage!.length - 1, effectiveRange: nil) as? NSFont)
             return (title.font?.pointSize ?? 0, last.pointSize, popover.view.fittingSize.width)
         }
         let before = try fonts()
@@ -262,6 +269,42 @@ final class HelpTermPopoverTests: XCTestCase {
         XCTAssertEqual(after.title, 19)
         XCTAssertEqual(after.body, 18, accuracy: 0.01)
         XCTAssertGreaterThan(after.width, before.width, "the box grows with the type")
+        XCTAssertTrue(popover.view.superview === shown, "the words changed inside the view on screen")
+    }
+
+    /// Closed, a popover stops following the zoom and lets go of itself:
+    /// left joined to its controller, every popover ever opened stayed in
+    /// memory and rebuilt its words at every zoom step.
+    func testAClosedPopoverGoes() throws {
+        HelpPopoverLayout.textSizeDidChange = Notification.Name("HelpPopoverTestZoom")
+        defer { HelpPopoverLayout.textSizeDidChange = nil }
+        let (window, anchor) = makeAnchor()
+        defer { window.close() }
+        weak var gone: HelpTermPopover?
+        // The close is animated: the popover says it has closed a moment later.
+        let closed = expectation(forNotification: NSPopover.didCloseNotification, object: nil)
+        try autoreleasepool {
+            let popover = try XCTUnwrap(HelpTermPopover.show(HelpTermID("mfs"), from: anchor))
+            XCTAssertTrue(popover.followsZoom)
+            gone = popover
+            popover.close()
+        }
+        wait(for: [closed], timeout: 2)
+        let deadline = Date().addingTimeInterval(2)
+        while gone != nil, Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        }
+        XCTAssertNil(gone, "the closed popover's controller was released, its zoom observer with it")
+    }
+
+    private func makeAnchor() -> (NSWindow, NSView) {
+        let window = NSWindow(contentRect: NSRect(x: 200, y: 200, width: 300, height: 200),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        let anchor = NSView(frame: NSRect(x: 100, y: 80, width: 20, height: 20))
+        window.contentView?.addSubview(anchor)
+        window.orderFront(nil)
+        return (window, anchor)
     }
 
     /// A note sits under the title, in the quiet colour and the popover's own
@@ -283,4 +326,9 @@ final class HelpTermPopoverTests: XCTestCase {
         XCTAssertNotNil(built.view.subviews.compactMap { $0 as? HelpBodyView }.first,
                         "the words stay under it")
     }
+}
+
+extension HelpPopoverController {
+    /// What the popover shows: the one view inside the controller's own.
+    var content: NSView { view.subviews.first ?? view }
 }
