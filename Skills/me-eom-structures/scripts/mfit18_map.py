@@ -36,6 +36,7 @@ Stdlib only, read-only, no network; read the diff, don't paste blind.
 
 import collections
 import hashlib
+import json
 import os
 import re
 import sys
@@ -190,6 +191,79 @@ def swift_literal(text):
     return '"%s"' % escaped
 
 
+def setting_json(setting):
+    entry = {"name": setting["name"],
+             "offset": setting["offset"],
+             "length": setting["length"]}
+    if setting.get("label") and setting["label"] != setting["name"]:
+        entry["label"] = setting["label"]
+    if setting.get("help"):
+        entry["help"] = setting["help"]
+    if setting.get("bits"):
+        entry["bits"] = [setting["bits"][0], setting["bits"][1]]
+    if setting.get("options"):
+        entry["options"] = [[number, setting["options"][number]]
+                            for number in sorted(setting["options"])]
+    if setting.get("auto"):
+        entry["auto"] = True
+    if setting.get("hex"):
+        entry["hex"] = True
+    if setting.get("text"):
+        entry["text"] = True
+    return entry
+
+
+def pretty_json(document):
+    """JSON with one setting per line: a diff reads a setting at a time."""
+    lines = ["{"]
+    for key in sorted(document):
+        if key == "maps":
+            continue
+        lines.append(" %s: %s," % (
+            json.dumps(key),
+            json.dumps(document[key], ensure_ascii=False, sort_keys=True)))
+    lines.append(' "maps": [')
+    for map_index, mapping in enumerate(document["maps"]):
+        rest = ", ".join(
+            "%s: %s" % (json.dumps(key),
+                        json.dumps(mapping[key], ensure_ascii=False, sort_keys=True))
+            for key in sorted(mapping) if key != "files")
+        lines.append('  {%s, "files": [' % rest)
+        for file_index, entry in enumerate(mapping["files"]):
+            rest = ", ".join(
+                "%s: %s" % (json.dumps(key),
+                            json.dumps(entry[key], ensure_ascii=False, sort_keys=True))
+                for key in sorted(entry) if key != "settings")
+            lines.append('   {%s, "settings": [' % rest)
+            for setting_index, setting in enumerate(entry["settings"]):
+                lines.append("    %s%s" % (
+                    json.dumps(setting, ensure_ascii=False, sort_keys=True,
+                               separators=(", ", ": ")),
+                    "," if setting_index + 1 < len(entry["settings"]) else ""))
+            lines.append('   ]}%s' % ("," if file_index + 1 < len(mapping["files"]) else ""))
+        lines.append('  ]}%s' % ("," if map_index + 1 < len(document["maps"]) else ""))
+    lines.append(" ]")
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def json_document(name, files):
+    return pretty_json({
+        "schema": "byteripper.map/1",
+        "kind": "configuration",
+        "tool": name,
+        "maps": [{
+            "id": "csme18",
+            "name": "CSME 18 (Flash Image Tool %s)" % name,
+            "files": [{
+                "path": path,
+                "alias": alias,
+                "settings": [setting_json(setting) for setting in settings],
+            } for path, alias, settings in files],
+        }],
+    })
+
+
 def swift(name, files):
     out = [
         "// The CSME 18 map of the ME configuration — emitted by",
@@ -247,7 +321,16 @@ def lookup(words, name):
 
 
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    argv = sys.argv[1:]
+    output_format = "swift"
+    if "--format" in argv:
+        at = argv.index("--format")
+        output_format = argv[at + 1]
+        del argv[at:at + 2]
+    if output_format not in ("swift", "json"):
+        print("--format is swift or json", file=sys.stderr)
+        return 2
+    args = [a for a in argv if not a.startswith("-")]
     if not args:
         print(__doc__)
         return 2
@@ -317,7 +400,8 @@ def main():
           file=sys.stderr)
     for reason, count in sorted(skipped.items(), key=lambda item: -item[1]):
         print("! left out %d: %s" % (count, reason), file=sys.stderr)
-    print(swift(name, files))
+    print(json_document(name, files) if output_format == "json"
+          else swift(name, files))
     return 0
 
 

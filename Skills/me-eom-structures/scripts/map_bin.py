@@ -81,14 +81,20 @@ MAGIC = b"BRM1"
 FORMAT_VERSION = 1
 HEADER_SIZE = 32
 KIND_STRAP = 1
+KIND_CONFIGURATION = 2
 SECTION_STRINGS = 1
 SECTION_MAPS = 2
 SECTION_FIELDS = 3
 SECTION_OPTIONS = 4
+SECTION_FILES = 5
+SECTION_SETTINGS = 6
 SECTION_TABLE = 12
 MAP_RECORD = 24
 FIELD_RECORD = 28
 OPTION_RECORD = 8
+CONFIG_MAP_RECORD = 24
+FILE_RECORD = 20
+SETTING_RECORD = 50
 NO_REF = 0xFFFFFFFF
 SET_NAMES = {"pch": 0, "spt": 1, "cpu": 2, "other": 3}
 
@@ -140,8 +146,8 @@ def load(path):
         document = json.load(handle)
     if document.get("schema") != "byteripper.map/1":
         raise ValueError("%s: schema is not byteripper.map/1" % path)
-    if document.get("kind") != "strap":
-        raise ValueError("%s: kind is not strap" % path)
+    if document.get("kind") not in ("strap", "configuration"):
+        raise ValueError("%s: unknown kind %r" % (path, document.get("kind")))
     maps = document.get("maps")
     if not isinstance(maps, list) or not maps:
         raise ValueError("%s: no maps" % path)
@@ -161,6 +167,13 @@ def option_pairs(field):
 
 
 def validate(document, path):
+    if document["kind"] == "strap":
+        validate_strap(document, path)
+    else:
+        validate_configuration(document, path)
+
+
+def validate_strap(document, path):
     for index, mapping in enumerate(document["maps"]):
         where = "%s: map %d" % (path, index)
         for key in ("id", "set", "name", "words", "fields"):
@@ -199,8 +212,62 @@ def validate(document, path):
                                      % (where, field["name"], text))
 
 
-def compile_maps(documents, version):
-    """The binary bytes for the JSON documents, with `version` in the header."""
+def condition_value(condition, where):
+    if condition is None:
+        return None
+    if not isinstance(condition, dict) or not condition.get("name"):
+        raise ValueError("%s: a condition is not {name, value}" % where)
+    return (condition["name"], int(condition.get("value", 0)))
+
+
+def validate_configuration(document, path):
+    for index, mapping in enumerate(document["maps"]):
+        where = "%s: map %d" % (path, index)
+        for key in ("id", "name", "files"):
+            if key not in mapping:
+                raise ValueError("%s: no %s" % (where, key))
+        for file_index, entry in enumerate(mapping["files"]):
+            at = "%s: file %d" % (where, file_index)
+            for key in ("path", "alias", "settings"):
+                if key not in entry:
+                    raise ValueError("%s: no %s" % (at, key))
+            for setting in entry["settings"]:
+                if not setting.get("name"):
+                    raise ValueError("%s: a setting has no name" % at)
+                length = int(setting["length"])
+                offset = int(setting["offset"])
+                if length <= 0 or length > 0xFFFF:
+                    raise ValueError("%s: %s length %d" % (at, setting["name"], length))
+                if offset < 0:
+                    raise ValueError("%s: %s offset %d" % (at, setting["name"], offset))
+                bits = setting.get("bits")
+                if bits is not None:
+                    low, high = int(bits[0]), int(bits[1])
+                    if not (0 <= low <= high < length * 8):
+                        raise ValueError("%s: %s bits %d..%d of %d bytes"
+                                         % (at, setting["name"], low, high, length))
+                    width = high - low + 1
+                else:
+                    width = length * 8
+                for number, text in option_pairs(setting):
+                    if number < 0 or (width < 32 and number >= (1 << width)):
+                        raise ValueError("%s: %s option %d does not fit %d bits"
+                                         % (at, setting["name"], number, width))
+                    if not isinstance(text, str):
+                        raise ValueError("%s: %s option %r is not text"
+                                         % (at, setting["name"], text))
+                for key in ("condition", "disabledBy"):
+                    condition = condition_value(setting.get(key), at)
+                    if condition and not condition[0]:
+                        raise ValueError("%s: an empty condition name" % at)
+                for key in ("auto", "hex", "text"):
+                    if not isinstance(setting.get(key, False), bool):
+                        raise ValueError("%s: %s %s is not a boolean"
+                                         % (at, setting["name"], key))
+
+
+def compile_strap(documents, version):
+    """Kind 1: the descriptor strap tables."""
     mappings = []
     for document in documents:
         mappings.extend(document["maps"])
@@ -266,23 +333,141 @@ def compile_maps(documents, version):
                 (SECTION_FIELDS, bytes(fields_blob)),
                 (SECTION_OPTIONS, bytes(options_blob))]
     sections = [section for section in sections if section[1]]
+    return assemble(KIND_STRAP, sections, version)
+
+
+def compile_configuration(documents, version):
+    """Kind 2: the ME configuration, file by file and setting by setting."""
+    mappings = []
+    for document in documents:
+        mappings.extend(document["maps"])
+    ids = [mapping["id"] for mapping in mappings]
+    if len(ids) != len(set(ids)):
+        raise ValueError("map ids repeat: %s"
+                         % ", ".join(sorted({i for i in ids if ids.count(i) > 1})))
+
+    strings = StringPool()
+    files_blob = bytearray()
+    settings_blob = bytearray()
+    options_blob = bytearray()
+    option_offsets = {}
+    map_records = []
+
+    for mapping in mappings:
+        files_offset = len(files_blob)
+        file_records = []
+        for entry in mapping["files"]:
+            settings_offset = len(settings_blob)
+            for setting in entry["settings"]:
+                pairs = option_pairs(setting)
+                options_offset = NO_REF
+                if pairs:
+                    key = tuple(pairs)
+                    if key not in option_offsets:
+                        option_offsets[key] = len(options_blob)
+                        for number, text in pairs:
+                            options_blob += struct.pack(
+                                "<HHI", int(number), 0, strings.ref(text))
+                    options_offset = option_offsets[key]
+                bits = setting.get("bits")
+                condition = condition_value(setting.get("condition"), entry["path"])
+                disabled = condition_value(setting.get("disabledBy"), entry["path"])
+                flags = 0
+                if bits is not None:
+                    flags |= 1
+                if pairs:
+                    flags |= 2
+                if setting.get("label"):
+                    flags |= 4
+                if setting.get("help"):
+                    flags |= 8
+                if setting.get("auto"):
+                    flags |= 16
+                if setting.get("hex"):
+                    flags |= 32
+                if setting.get("text"):
+                    flags |= 64
+                if condition:
+                    flags |= 128
+                if disabled:
+                    flags |= 256
+                settings_blob += struct.pack(
+                    "<IIHHBBIIIHHIiIiI",
+                    strings.ref(setting["name"]),
+                    int(setting["offset"]),
+                    int(setting["length"]),
+                    flags,
+                    int(bits[0]) if bits else 0,
+                    int(bits[1]) if bits else 0,
+                    strings.ref(setting.get("label")),
+                    strings.ref(setting.get("help")),
+                    options_offset,
+                    len(pairs),
+                    0,
+                    strings.ref(condition[0]) if condition else NO_REF,
+                    condition[1] if condition else 0,
+                    strings.ref(disabled[0]) if disabled else NO_REF,
+                    disabled[1] if disabled else 0,
+                    0,
+                )
+            file_records.append(struct.pack(
+                "<IIIII",
+                strings.ref(entry["path"]),
+                strings.ref(entry["alias"]),
+                len(entry["settings"]),
+                settings_offset,
+                0,
+            ))
+        files_blob += b"".join(file_records)
+        map_records.append(struct.pack(
+            "<IIIIII",
+            strings.ref(mapping["id"]),
+            strings.ref(mapping["name"]),
+            len(mapping["files"]),
+            files_offset,
+            0,
+            0,
+        ))
+
+    maps_blob = struct.pack("<I", len(map_records)) + b"".join(map_records)
+    sections = [(SECTION_STRINGS, bytes(strings.data)),
+                (SECTION_MAPS, maps_blob),
+                (SECTION_FILES, bytes(files_blob)),
+                (SECTION_SETTINGS, bytes(settings_blob)),
+                (SECTION_OPTIONS, bytes(options_blob))]
+    return assemble(KIND_CONFIGURATION,
+                    [section for section in sections if section[1]], version)
+
+
+def compile_documents(documents, version):
+    kinds = {document["kind"] for document in documents}
+    if len(kinds) != 1:
+        raise ValueError("one binary holds one kind, not %s"
+                         % ", ".join(sorted(kinds)))
+    kind = kinds.pop()
+    if kind == "strap":
+        return compile_strap(documents, version)
+    return compile_configuration(documents, version)
+
+
+def assemble(kind, sections, version):
+    """The header, the section table, the sections and the checksum."""
     offset = HEADER_SIZE + len(sections) * SECTION_TABLE
     table = bytearray()
     body = bytearray()
-    for kind, payload in sections:
-        table += struct.pack("<HHII", kind, 0, offset, len(payload))
+    for section_kind, payload in sections:
+        table += struct.pack("<HHII", section_kind, 0, offset, len(payload))
         body += payload
         offset += len(payload)
     header = bytearray(struct.pack(
         "<4sHHIHHIIII", MAGIC, FORMAT_VERSION, HEADER_SIZE, version,
-        KIND_STRAP, 0, len(sections), 0, 0, 0))
+        kind, 0, len(sections), 0, 0, 0))
     data = bytes(header) + bytes(table) + bytes(body)
     checksum = fnv1a32(data)
-    data = data[:20] + struct.pack("<I", checksum) + data[24:]
-    return data
+    return data[:20] + struct.pack("<I", checksum) + data[24:]
 
 
-def swift_version(version):
+def swift_version(version, enum_name="StrapMapDataVersion"):
     return (
         "// Generated by `Skills/me-eom-structures/scripts/map_bin.py`. "
         "Do not edit.\n"
@@ -290,10 +475,10 @@ def swift_version(version):
         "// The binary map file and the code are marked with one version: the\n"
         "// reader refuses a file whose version differs, so a stale resource is\n"
         "// reported before a byte of it is interpreted.\n"
-        "enum StrapMapDataVersion {\n"
+        "enum %s {\n"
         "    static let formatVersion: UInt16 = %d\n"
         "    static let version: UInt32 = %d\n"
-        "}\n" % (FORMAT_VERSION, version))
+        "}\n" % (enum_name, FORMAT_VERSION, version))
 
 
 def source_hash(paths):
@@ -341,9 +526,11 @@ def build(args):
     manifest_path = args[args.index("--manifest") + 1]
     swift_file = (args[args.index("--swift-version-file") + 1]
                   if "--swift-version-file" in args else None)
+    enum_name = (args[args.index("--swift-enum-name") + 1]
+                 if "--swift-enum-name" in args else "StrapMapDataVersion")
     check = "--check" in args
     skip = set()
-    for name in ("--out", "--manifest", "--swift-version-file"):
+    for name in ("--out", "--manifest", "--swift-version-file", "--swift-enum-name"):
         if name in args:
             at = args.index(name)
             skip.update((at, at + 1))
@@ -376,13 +563,13 @@ def build(args):
         if swift_file:
             try:
                 with open(swift_file, encoding="utf-8") as handle:
-                    if handle.read() != swift_version(version):
+                    if handle.read() != swift_version(version, enum_name):
                         return fail("%s is not marked with version %d: rebuild "
                                     "with --build" % (swift_file, version))
             except OSError as error:
                 return fail(str(error))
         try:
-            data = compile_maps(documents, version)
+            data = compile_documents(documents, version)
         except ValueError as error:
             return fail(str(error))
         try:
@@ -406,14 +593,14 @@ def build(args):
         if swift_file:
             if changed or not os.path.exists(swift_file):
                 with open(swift_file, "w", encoding="utf-8") as handle:
-                    handle.write(swift_version(version))
+                    handle.write(swift_version(version, enum_name))
             else:
                 with open(swift_file, encoding="utf-8") as handle:
-                    if handle.read() != swift_version(version):
+                    if handle.read() != swift_version(version, enum_name):
                         return fail("%s is not marked with version %d; set it "
                                     "to that version before building"
                                     % (swift_file, version))
-        data = compile_maps(documents, version)
+        data = compile_documents(documents, version)
     except (OSError, ValueError) as error:
         return fail(str(error))
 
@@ -424,6 +611,62 @@ def build(args):
           % (out, version, "bumped" if changed else "unchanged",
              sum(len(document["maps"]) for document in documents), len(data)),
           file=sys.stderr)
+    return 0
+
+
+def dump_configuration(data, sections, text):
+    """Kind 2, as the reader sees it: maps, files, settings and options."""
+    maps_at, _ = sections.get(SECTION_MAPS, (0, 0))
+    files_at, _ = sections.get(SECTION_FILES, (0, 0))
+    settings_at, _ = sections.get(SECTION_SETTINGS, (0, 0))
+    options_at, _ = sections.get(SECTION_OPTIONS, (0, 0))
+    total = struct.unpack_from("<I", data, maps_at)[0]
+    for index in range(total):
+        at = maps_at + 4 + index * CONFIG_MAP_RECORD
+        id_ref, name_ref, file_count, files_offset, _, _ = struct.unpack_from(
+            "<IIIIII", data, at)
+        print("map %s (%s), %d files"
+              % (text(id_ref), text(name_ref), file_count))
+        for file_index in range(file_count):
+            fat = files_at + files_offset + file_index * FILE_RECORD
+            (path_ref, alias_ref, setting_count, settings_offset,
+             _) = struct.unpack_from("<IIIII", data, fat)
+            print("  file %s (%s), %d settings"
+                  % (text(path_ref), text(alias_ref), setting_count))
+            for setting_index in range(setting_count):
+                sat = settings_at + settings_offset + setting_index * SETTING_RECORD
+                (name_ref, offset, length, flags, low, high,
+                 label_ref, help_ref, options_offset, options_count, _,
+                 condition_ref, condition_value, disabled_ref,
+                 disabled_value, _) = struct.unpack_from(
+                    "<IIHHBBIIIHHIiIiI", data, sat)
+                marks = []
+                if flags & 1:
+                    marks.append("bits %d..%d" % (low, high))
+                if flags & 16:
+                    marks.append("auto")
+                if flags & 32:
+                    marks.append("hex")
+                if flags & 64:
+                    marks.append("text")
+                if flags & 128:
+                    marks.append("if %s = %d" % (text(condition_ref), condition_value))
+                if flags & 256:
+                    marks.append("off if %s = %d"
+                                 % (text(disabled_ref), disabled_value))
+                print("    %-55s offset %4d length %3d%s"
+                      % (text(name_ref), offset, length,
+                         (", " + ", ".join(marks)) if marks else ""))
+                if flags & 4:
+                    print("        label %r" % text(label_ref))
+                if flags & 8:
+                    print("        help %r" % text(help_ref))
+                if flags & 2:
+                    for option_index in range(options_count):
+                        number, _, option_ref = struct.unpack_from(
+                            "<HHI", data, options_at + options_offset
+                            + option_index * OPTION_RECORD)
+                        print("        %d = %r" % (number, text(option_ref)))
     return 0
 
 
@@ -454,6 +697,8 @@ def dump(path):
     maps_at, _ = sections.get(SECTION_MAPS, (0, 0))
     fields_at, _ = sections.get(SECTION_FIELDS, (0, 0))
     options_at, _ = sections.get(SECTION_OPTIONS, (0, 0))
+    if kind == KIND_CONFIGURATION:
+        return dump_configuration(data, sections, text)
     total = struct.unpack_from("<I", data, maps_at)[0]
     for index in range(total):
         record_at = maps_at + 4 + index * MAP_RECORD

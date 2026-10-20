@@ -42,12 +42,20 @@ let package = Package(
         // day — see FreshData's own manifest for why that is a package.
         .package(path: "../FreshData"),
         // The LZMA decoder a CSME module is stored with (`mod_comp == 2`).
-        .package(path: "../FirmwareCompression")
+        .package(path: "../FirmwareCompression"),
+        // The envelope of the compiled configuration maps (`Design/MAP_DATA.md`),
+        // shared with the descriptor strap tables.
+        .package(path: "../MapData")
     ],
     targets: [
         .target(name: "MEFirmware", dependencies: [
             "FreshData",
-            .product(name: "FirmwareCompression", package: "FirmwareCompression")
+            .product(name: "FirmwareCompression", package: "FirmwareCompression"),
+            .product(name: "MapData", package: "MapData")
+        ], resources: [
+            // The configuration maps as one binary; the JSON sources under
+            // `MapSources/configuration` are the reviewable form.
+            .copy("Resources/ConfigMaps")
         ]),
         .testTarget(
             name: "MEFirmwareTests",

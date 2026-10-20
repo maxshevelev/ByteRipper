@@ -90,8 +90,8 @@ and a second document mapping each alias to its MFS path
 generator for that shape:
 
 ```bash
-python3 Skills/me-eom-structures/scripts/mfit18_map.py ~/Downloads/1/mfit-18.1.exe > \
-    Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationMap+CSME18.swift
+python3 Skills/me-eom-structures/scripts/mfit18_map.py ~/Downloads/1/mfit-18.1.exe \
+    --format json > Packages/MEFirmware/MapSources/configuration/csme18.json
 ```
 
 The same rules apply in the new shape: `length="dynamic"` is a place only the
@@ -112,8 +112,8 @@ MIP strap table here.
 The older FIT carries the same material in its own shape, per platform:
 
 ```bash
-python3 Skills/me-eom-structures/scripts/fit_map.py <fit-15.0.exe> --straps tgp_lp > \
-    Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationMap+CSME15.swift
+python3 Skills/me-eom-structures/scripts/fit_map.py <fit-15.0.exe> --straps tgp_lp \
+    --format json > Packages/MEFirmware/MapSources/configuration/csme15.json
 ```
 
 There a setting's place is a `ProcessNvar` action — `filePath` into an alias
@@ -162,8 +162,11 @@ it emits:
 
 ```bash
 python3 Skills/me-eom-structures/scripts/fit_map.py <fit-14.0.exe> \
-    --straps cml_lp --generation 14 --tool 14.0 > \
-    Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationMap+CSME14.swift
+    --straps cml_lp --generation 14 --tool 14.0 --format json > \
+    Packages/MEFirmware/MapSources/configuration/csme14.json
+python3 Skills/me-eom-structures/scripts/fit_map.py <fit-14.0.exe> \
+    --straps cml_h --generation 14 --tool 14.0 --variable csme14Desktop \
+    --format json > Packages/MEFirmware/MapSources/configuration/csme14Desktop.json
 ```
 
 ME 11's is FIT 11's SPT layout (`--straps spt_fit_layout`): one set of
@@ -186,11 +189,11 @@ the policy file, `bup/si_features` and `bup/bup_sku/hw_binding`.
 
 ```bash
 python3 Skills/me-eom-structures/scripts/fit_map.py <fit-12.exe> \
-    --straps cnp_lp_rvp --generation 12 --tool 12.0 > \
-    Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationMap+CSME12.swift
+    --straps cnp_lp_rvp --generation 12 --tool 12.0 --format json > \
+    Packages/MEFirmware/MapSources/configuration/csme12.json
 python3 Skills/me-eom-structures/scripts/fit_map.py <fit-12.exe> \
-    --straps cnp_h_rvp --generation 12 --tool 12.0 --variable csme12Desktop > \
-    Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationMap+CSME12Desktop.swift
+    --straps cnp_h_rvp --generation 12 --tool 12.0 --variable csme12Desktop \
+    --format json > Packages/MEFirmware/MapSources/configuration/csme12Desktop.json
 ```
 
 **A generation has two maps, one for each half of it** — the mobile families
@@ -205,8 +208,8 @@ manifest's platform name is the same for both halves.
 
 ```bash
 python3 Skills/me-eom-structures/scripts/fit_map.py <fit-15.0.exe> \
-    --straps tgp_h --generation 15 --tool 15.0 --variable csme15Desktop > \
-    Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationMap+CSME15Desktop.swift
+    --straps tgp_h --generation 15 --tool 15.0 --variable csme15Desktop \
+    --format json > Packages/MEFirmware/MapSources/configuration/csme15Desktop.json
 ```
 
 ME 14's families are `cml_lp` and `cml_h`, ME 13's `icl_lp` and `icl_h`
@@ -215,6 +218,33 @@ its database merges the eight platform lists it builds from, and conflicts are
 dropped and named. When a new family is added, run the generator twice and keep
 both files — the panel and the engine ask through `forME`, so a half without a
 map is a generation read with the other half's offsets.
+
+The remaining families use the same invocation: `csme11` with
+`--straps spt_fit_layout --generation 11 --tool 11.0`, `csme13` with
+`icl_lp --generation 13 --tool 13.0`, `csme13Desktop` with `icl_h` and
+`--variable csme13Desktop`, `csme14Desktop` with `cml_h` and its variable.
+
+The JSON files are compiled into one binary; the version in
+`Packages/MEFirmware/MapSources/manifest.json` changes only when their digest
+does, and the same number is the code's mark (`Design/MAP_DATA.md`):
+
+```bash
+python3 Skills/me-eom-structures/scripts/map_bin.py build \
+    --out Packages/MEFirmware/Sources/MEFirmware/Resources/ConfigMaps/ConfigMaps.bin \
+    --manifest Packages/MEFirmware/MapSources/manifest.json \
+    --swift-version-file Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationDataVersion.swift \
+    --swift-enum-name MEConfigurationDataVersion \
+    Packages/MEFirmware/MapSources/configuration/csme11.json \
+    … csme12, csme12Desktop, csme13, csme13Desktop, csme14, csme14Desktop,
+    csme15, csme15Desktop, csme18 …
+python3 Skills/me-eom-structures/scripts/map_bin.py build --check …same arguments…
+```
+
+**CSME 16 is still emitted as Swift.** Its map was read from the 16.0.15.1662
+build, which is not at hand; the builds that are state a different set — one
+drops `/home/mctp/smt3_devices`, another drops `MEWlanPowerWell` — so a JSON
+regenerated from them would lose files the map serves today. It waits for its
+own source; there is no `csme16.json`.
 
 The tool lays the Boot Guard bits out per family as well, which is a fact about
 the *tool's documents* and not about where a vendor image keeps them: on both
@@ -556,7 +586,7 @@ The JSON is the source of truth and what a review reads; `map_bin.py` compiles
 the JSON files into `StrapMaps.bin`. The version lives in
 `MapSources/manifest.json` and changes only when the source JSON changes; the
 same number is a constant in `StrapMapDataVersion.swift`, and the reader
-refuses a binary that carries another (`Design/UEFI/STRAP_MAP_DATA.md`):
+refuses a binary that carries another (`Design/MAP_DATA.md`):
 
 ```bash
 python3 Skills/me-eom-structures/scripts/map_bin.py build \

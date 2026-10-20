@@ -31,6 +31,7 @@ Stdlib only, read-only, no network, and the binary is never run.
 """
 
 import hashlib
+import json
 import re
 import sys
 import zlib
@@ -482,6 +483,89 @@ def swift(files):
     return "\n".join(out)
 
 
+def setting_json(setting):
+    entry = {"name": setting["name"],
+             "offset": setting["offset"],
+             "length": setting["length"]}
+    if setting.get("label") and setting["label"] != setting["name"]:
+        entry["label"] = setting["label"]
+    if setting.get("help"):
+        entry["help"] = setting["help"]
+    if setting.get("condition"):
+        entry["condition"] = {"name": setting["condition"][0],
+                              "value": setting["condition"][1]}
+    if setting.get("disabledBy"):
+        entry["disabledBy"] = {"name": setting["disabledBy"][0],
+                               "value": setting["disabledBy"][1]}
+    if setting.get("bits"):
+        entry["bits"] = [setting["bits"][0], setting["bits"][1]]
+    if setting.get("options"):
+        entry["options"] = [[number, setting["options"][number]]
+                            for number in sorted(setting["options"])]
+    if setting.get("auto"):
+        entry["auto"] = True
+    if setting.get("hex"):
+        entry["hex"] = True
+    if setting.get("text"):
+        entry["text"] = True
+    return entry
+
+
+def pretty_json(document):
+    """JSON with one setting per line: a diff reads a setting at a time."""
+    lines = ["{"]
+    for key in sorted(document):
+        if key == "maps":
+            continue
+        lines.append(" %s: %s," % (
+            json.dumps(key),
+            json.dumps(document[key], ensure_ascii=False, sort_keys=True)))
+    lines.append(' "maps": [')
+    for map_index, mapping in enumerate(document["maps"]):
+        rest = ", ".join(
+            "%s: %s" % (json.dumps(key),
+                        json.dumps(mapping[key], ensure_ascii=False, sort_keys=True))
+            for key in sorted(mapping) if key != "files")
+        lines.append('  {%s, "files": [' % rest)
+        for file_index, entry in enumerate(mapping["files"]):
+            rest = ", ".join(
+                "%s: %s" % (json.dumps(key),
+                            json.dumps(entry[key], ensure_ascii=False, sort_keys=True))
+                for key in sorted(entry) if key != "settings")
+            lines.append('   {%s, "settings": [' % rest)
+            for setting_index, setting in enumerate(entry["settings"]):
+                lines.append("    %s%s" % (
+                    json.dumps(setting, ensure_ascii=False, sort_keys=True,
+                               separators=(", ", ": ")),
+                    "," if setting_index + 1 < len(entry["settings"]) else ""))
+            lines.append('   ]}%s' % ("," if file_index + 1 < len(mapping["files"]) else ""))
+        lines.append('  ]}%s' % ("," if map_index + 1 < len(document["maps"]) else ""))
+    lines.append(" ]")
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def json_document(files, generation, tool, straps, variable):
+    ordered = [path for path in FIRST + [p for p in files if p not in FIRST]
+               if path in files]
+    return pretty_json({
+        "schema": "byteripper.map/1",
+        "kind": "configuration",
+        "tool": tool,
+        "maps": [{
+            "id": variable,
+            "name": "CSME %s (Flash Image Tool %s, %s)"
+                    % (generation, tool, straps),
+            "files": [{
+                "path": path,
+                "alias": files[path]["alias"],
+                "settings": [setting_json(setting)
+                             for setting in files[path]["settings"]],
+            } for path in ordered],
+        }],
+    })
+
+
 def option(args, name, default):
     """A `--name value` option, taken out of the argument list."""
     if name not in args:
@@ -505,6 +589,10 @@ def main():
     # than one: the mobile family keeps `csme15`, the desktop one is
     # `csme15Desktop`.
     args, variable = option(args, "--variable", "csme%s" % generation)
+    args, output_format = option(args, "--format", "swift")
+    if output_format not in ("swift", "json"):
+        print("--format is swift or json", file=sys.stderr)
+        return 2
     blob = open(args[0], "rb").read()
 
     texts = list(documents(blob))
@@ -568,6 +656,10 @@ def main():
               "read as a number: %s"
               % ", ".join("%s (%s)" % (name, kind) for name, kind in sorted(skipped.items())),
               file=sys.stderr)
+
+    if output_format == "json":
+        print(json_document(files, generation, tool, straps, variable))
+        return 0
 
     print("// The CSME %s map of the ME configuration — emitted by" % generation)
     print("// `Skills/me-eom-structures/scripts/fit_map.py` from Flash Image Tool %s's" % tool)
