@@ -13,10 +13,13 @@ import Foundation
 /// `BinaryDocument` splits it into an overwrite of the existing bytes plus an
 /// insert of the new tail, so every stored op is length-preserving and reverts
 /// without a truncate operation.
+///
+/// The bytes are `UndoBytes`: in memory as an edit hands them over, in the
+/// history's journal once it has recorded them.
 public enum UndoOperation: Equatable, Sendable {
-    case overwrite(range: Range<UInt64>, before: [UInt8], after: [UInt8])
-    case insert(at: UInt64, bytes: [UInt8])
-    case delete(range: Range<UInt64>, bytes: [UInt8])
+    case overwrite(range: Range<UInt64>, before: UndoBytes, after: UndoBytes)
+    case insert(at: UInt64, bytes: UndoBytes)
+    case delete(range: Range<UInt64>, bytes: UndoBytes)
 
     /// The op that reverts this one, for applying a transaction in reverse
     /// (undo): an overwrite swaps its before/after bytes, an insert becomes the
@@ -31,6 +34,36 @@ public enum UndoOperation: Equatable, Sendable {
             return .insert(at: range.lowerBound, bytes: bytes)
         }
     }
+
+    /// The bytes the op carries, before and after alike — what it costs the
+    /// history to keep (`UndoLimits.bytes`).
+    var heldBytes: UInt64 {
+        switch self {
+        case .overwrite(_, let before, let after): return UInt64(before.count + after.count)
+        case .insert(_, let bytes), .delete(_, let bytes): return UInt64(bytes.count)
+        }
+    }
+
+    /// The same op with its bytes in `journal`.
+    func stored(in journal: UndoJournal) throws -> UndoOperation {
+        switch self {
+        case .overwrite(let range, let before, let after):
+            return .overwrite(range: range, before: try journal.store(before), after: try journal.store(after))
+        case .insert(let at, let bytes):
+            return .insert(at: at, bytes: try journal.store(bytes))
+        case .delete(let range, let bytes):
+            return .delete(range: range, bytes: try journal.store(bytes))
+        }
+    }
+
+    /// How many of the op's bytes lie in `journal`.
+    func bytes(in journal: UndoJournal) -> UInt64 {
+        func count(_ bytes: UndoBytes) -> UInt64 { bytes.journal === journal ? UInt64(bytes.count) : 0 }
+        switch self {
+        case .overwrite(_, let before, let after): return count(before) + count(after)
+        case .insert(_, let bytes), .delete(_, let bytes): return count(bytes)
+        }
+    }
 }
 
 /// A committed undo step: the ops applied as a unit, plus the selections that
@@ -43,7 +76,7 @@ public enum UndoOperation: Equatable, Sendable {
 /// the two directions asymmetric — the state undo returns to would be one the
 /// editing never passed through (§7.5).
 public struct UndoTransaction: Equatable, Sendable {
-    public let ops: [UndoOperation]
+    public fileprivate(set) var ops: [UndoOperation]
     public let selectionBefore: SelectionModel
     /// Set at record time from the edit's natural end, then refined by
     /// `noteSelectionAfterOnLast` once the command that made the edit has left
@@ -132,6 +165,12 @@ public final class UndoHistory: @unchecked Sendable {
         var seriesID: UInt64?
 
         var transactions: [UndoTransaction] { entries.map(\.transaction) }
+        var heldBytes: UInt64 {
+            entries.reduce(0) { $0 + $1.transaction.ops.reduce(0) { $0 + $1.heldBytes } }
+        }
+        func bytes(in journal: UndoJournal) -> UInt64 {
+            entries.reduce(0) { $0 + $1.transaction.ops.reduce(0) { $0 + $1.bytes(in: journal) } }
+        }
     }
 
     private var undoSteps: [Step] = []
@@ -148,6 +187,31 @@ public final class UndoHistory: @unchecked Sendable {
     private var dirtyAfterClear = false
     private var undoTransactionCount = 0
 
+    /// The bounds this history keeps to; nil reads `UndoLimits.current` at
+    /// each edit, which is what a document does — the settings can change
+    /// while it is open.
+    public var limits: UndoLimits?
+    /// Where the journal is made. A test points it at a folder of its own.
+    let journalDirectory: URL
+    /// The file the ops' bytes live in, made at the first edit that has any.
+    private var journal: UndoJournal?
+    /// The bytes every recorded op carries, undo and redo side together.
+    public private(set) var heldBytes: UInt64 = 0
+    /// How many of those lie in the current journal; the rest of its length is
+    /// dead — steps dropped, redo sides cut, groups cancelled.
+    private var liveJournalBytes: UInt64 = 0
+    /// Dead bytes the journal may hold before it is compacted, at the least;
+    /// beyond that, it is compacted once they outweigh the live ones.
+    var compactionFloor: UInt64 = 64 << 20
+    /// The state an empty undo side stands for: 0 for the file as opened, the
+    /// serial of the newest dropped transaction once the bounds have dropped
+    /// any. Undoing everything that is left lands there, not on 0.
+    private(set) var baseSerial: UInt64 = 0
+
+    public init(journalDirectory: URL = FileManager.default.temporaryDirectory) {
+        self.journalDirectory = journalDirectory
+    }
+
     // Fast-rollback state:
     private var lastUndoWasSeriesByte = false
     private var lastUndoSeriesID: UInt64?
@@ -162,8 +226,10 @@ public final class UndoHistory: @unchecked Sendable {
     public var undoDepth: Int { undoTransactionCount }
 
     /// The serial of the newest committed transaction — the name of the state the
-    /// document is in. Zero with nothing committed: the file as it was opened.
-    private var currentSerial: UInt64 { undoSteps.last?.entries.last?.serial ?? 0 }
+    /// document is in. With nothing to undo, the state the undo side starts
+    /// from: the file as it was opened (0), or the newest step the bounds
+    /// dropped.
+    private var currentSerial: UInt64 { undoSteps.last?.entries.last?.serial ?? baseSerial }
 
     /// How many times the history was emptied (`reset`, `clearKeepingDirty`).
     /// After either, the current serial is 0 again while the content is not
@@ -202,7 +268,8 @@ public final class UndoHistory: @unchecked Sendable {
                        seriesID: UInt64? = nil,
                        label: String? = nil) {
         guard !ops.isEmpty else { return }
-        redoSteps.removeAll()
+        discardRedo()
+        let ops = stored(ops)
         let entry = Entry(transaction: UndoTransaction(ops: ops,
                                                       selectionBefore: selectionBefore,
                                                       selectionAfter: selectionAfter,
@@ -211,8 +278,108 @@ public final class UndoHistory: @unchecked Sendable {
         nextSerial += 1
         undoSteps.append(Step(label: label, entries: [entry], seriesID: seriesID))
         undoTransactionCount += 1
+        account(ops, sign: 1)
         lastUndoWasSeriesByte = false
         lastUndoSeriesID = nil
+        dropBeyondLimits()
+        compactIfNeeded()
+    }
+
+    /// `ops` with their bytes in the journal — what an edit group does with
+    /// the ops it collects, so a long group (a join, a streamed replace) does
+    /// not hold its bytes in memory until it closes. When the journal cannot
+    /// be made or written, the bytes stay in memory: the edit stays undoable.
+    func stored(_ ops: [UndoOperation]) -> [UndoOperation] {
+        do {
+            if journal == nil {
+                guard ops.contains(where: { $0.heldBytes > 0 }) else { return ops }
+                journal = try UndoJournal(directory: journalDirectory)
+            }
+            let journal = journal!
+            return try ops.map { try $0.stored(in: journal) }
+        } catch {
+            return ops
+        }
+    }
+
+    private func account(_ ops: [UndoOperation], sign: Int) {
+        for op in ops {
+            let held = op.heldBytes
+            let live = journal.map { op.bytes(in: $0) } ?? 0
+            if sign > 0 {
+                heldBytes += held
+                liveJournalBytes += live
+            } else {
+                heldBytes -= min(held, heldBytes)
+                liveJournalBytes -= min(live, liveJournalBytes)
+            }
+        }
+    }
+
+    private func discardRedo() {
+        for step in redoSteps {
+            for entry in step.entries { account(entry.transaction.ops, sign: -1) }
+        }
+        redoSteps.removeAll()
+    }
+
+    /// Drops the oldest steps until the history is within its bounds — never
+    /// the newest: one edit larger than the bound is still undoable once. Runs
+    /// right after a record, when the redo side is empty.
+    private func dropBeyondLimits() {
+        let limits = self.limits ?? UndoLimits.current
+        func over() -> Bool {
+            if let bytes = limits.bytes, heldBytes > bytes { return true }
+            if let count = limits.transactions, undoTransactionCount > count { return true }
+            return false
+        }
+        while undoSteps.count > 1, over() {
+            let step = undoSteps.removeFirst()
+            for entry in step.entries { account(entry.transaction.ops, sign: -1) }
+            undoTransactionCount -= step.entries.count
+            if let serial = step.entries.last?.serial { baseSerial = serial }
+        }
+    }
+
+    /// Moves the live bytes into a new journal once the dead ones outweigh
+    /// them. The old journal is let go, not rewritten: bytes handed out from
+    /// it stay readable while anything holds them.
+    private func compactIfNeeded() {
+        guard let old = journal else { return }
+        let dead = old.length - min(liveJournalBytes, old.length)
+        guard dead > compactionFloor, dead > liveJournalBytes else { return }
+        guard let fresh = try? UndoJournal(directory: journalDirectory) else { return }
+        do {
+            func move(_ steps: [Step]) throws -> [Step] {
+                try steps.map { step in
+                    var step = step
+                    for i in step.entries.indices {
+                        step.entries[i].transaction.ops = try step.entries[i].transaction.ops.map {
+                            try $0.stored(in: fresh)
+                        }
+                    }
+                    return step
+                }
+            }
+            let undo = try move(undoSteps)
+            let redo = try move(redoSteps)
+            undoSteps = undo
+            redoSteps = redo
+            journal = fresh
+            liveJournalBytes = (undoSteps + redoSteps).reduce(0) { $0 + $1.bytes(in: fresh) }
+        } catch {
+            // The old journal still holds everything; try again at a later edit.
+        }
+    }
+
+    /// Lets go of every op's bytes: the journal goes with them.
+    private func dropAll() {
+        undoSteps.removeAll()
+        redoSteps.removeAll()
+        journal = nil
+        heldBytes = 0
+        liveJournalBytes = 0
+        baseSerial = 0
     }
 
     /// Caret-only form of `record`, for edits with no selection to restore.
@@ -294,8 +461,7 @@ public final class UndoHistory: @unchecked Sendable {
 
     /// Discards all history and the dirty checkpoint.
     public func reset() {
-        undoSteps.removeAll()
-        redoSteps.removeAll()
+        dropAll()
         // `nextSerial` deliberately keeps counting: the history is empty, so the
         // current state is 0 again, and no future serial can collide with one a
         // caller still remembers.
@@ -314,8 +480,7 @@ public final class UndoHistory: @unchecked Sendable {
     /// survives the clear. A later save or reset clears it; edits made after the
     /// clear undo as usual and never reach the cleared work.
     public func clearKeepingDirty() {
-        undoSteps.removeAll()
-        redoSteps.removeAll()
+        dropAll()
         savedSerial = 0
         dirtyAfterClear = true
         epoch += 1

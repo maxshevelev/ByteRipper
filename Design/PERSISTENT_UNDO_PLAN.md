@@ -142,7 +142,12 @@ relaunch.
 
 1. **Journal as the store** — skeleton in RAM, bytes in the journal, a
    temporary journal without a workspace; the bounds and their settings.
-   Fixes today's RAM cost of large edits on its own.
+   Fixes today's RAM cost of large edits on its own. *(done)* An edit group
+   writes its ops into the journal as it collects them, so a join or a
+   streamed replace does not hold its bytes until it closes either. A journal
+   that cannot be made or written leaves the bytes in memory: the edit stays
+   undoable. Still in memory while an edit runs: a fill builds its before and
+   after whole before recording them.
 2. **Content from base + journal** — folds, compaction; `UntitledKeeper` and
    whole-file `Edits/` rewriting replaced; the manifest's journal length and
    chained hash.

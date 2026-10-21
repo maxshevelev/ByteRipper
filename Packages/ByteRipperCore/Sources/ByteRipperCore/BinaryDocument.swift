@@ -120,7 +120,7 @@ public final class BinaryDocument: @unchecked Sendable {
         guard !bytes.isEmpty else { return }
         let at = min(offset, storage.size)
         try storage.insert(at: at, bytes: bytes)
-        record([.insert(at: at, bytes: bytes)])
+        record([.insert(at: at, bytes: UndoBytes(bytes))])
         clampSelection()
     }
 
@@ -131,7 +131,7 @@ public final class BinaryDocument: @unchecked Sendable {
         guard end > start else { return }
         let removed = try storage.read(at: start, length: Int(end - start))
         try storage.delete(range: start..<end)
-        record([.delete(range: start..<end, bytes: removed)])
+        record([.delete(range: start..<end, bytes: UndoBytes(removed))])
         clampSelection()
     }
 
@@ -161,7 +161,8 @@ public final class BinaryDocument: @unchecked Sendable {
             after.append(pattern[i % pattern.count])
         }
         try storage.overwrite(range: start..<end, with: after)
-        record([.overwrite(range: start..<end, before: before, after: after)], caretAfter: caretAfter)
+        record([.overwrite(range: start..<end, before: UndoBytes(before), after: UndoBytes(after))],
+               caretAfter: caretAfter)
         clampSelection()
     }
 
@@ -175,7 +176,7 @@ public final class BinaryDocument: @unchecked Sendable {
         if leftoverEnd > writtenEnd {
             let removed = try storage.read(at: writtenEnd, length: Int(leftoverEnd - writtenEnd))
             try storage.delete(range: writtenEnd..<leftoverEnd)
-            ops.append(.delete(range: writtenEnd..<leftoverEnd, bytes: removed))
+            ops.append(.delete(range: writtenEnd..<leftoverEnd, bytes: UndoBytes(removed)))
         }
         record(ops)
         clampSelection()
@@ -481,6 +482,7 @@ public final class BinaryDocument: @unchecked Sendable {
             // As in `record`: the redo stack is gone, so the joins that sat on
             // it can never be redone.
             undoneJoinMarks.removeAll()
+            dropMarksOfDroppedSteps()
         }
     }
 
@@ -545,7 +547,10 @@ public final class BinaryDocument: @unchecked Sendable {
     private func record(_ ops: [UndoOperation], caretAfter: UInt64? = nil) {
         guard !ops.isEmpty else { return }
         if groupDepth > 0 {
-            pendingGroupOps.append(contentsOf: ops)
+            // Into the journal at once: a group can run to gigabytes (a join, a
+            // streamed replace), and holding its bytes until it closes would
+            // cost them in memory all the same.
+            pendingGroupOps.append(contentsOf: undoHistory.stored(ops))
         } else {
             undoHistory.record(
                 ops,
@@ -560,7 +565,16 @@ public final class BinaryDocument: @unchecked Sendable {
             // join's own commit too — `join` pushes its mark AFTER the commit
             // returns, so there is nothing of its own to lose here.
             undoneJoinMarks.removeAll()
+            dropMarksOfDroppedSteps()
         }
+    }
+
+    /// A join whose step the history's bounds dropped can no longer be undone,
+    /// so nothing is left to re-attach.
+    private func dropMarksOfDroppedSteps() {
+        let base = undoHistory.baseSerial
+        guard base > 0 else { return }
+        joinMarks.removeAll { $0.serial <= base }
     }
 
     /// The caret position the final op of a transaction naturally leaves:
@@ -591,12 +605,13 @@ public final class BinaryDocument: @unchecked Sendable {
         if existingEnd > start {
             let before = try storage.read(at: start, length: Int(existingEnd - start))
             let existingAfter = Array(bytes.prefix(before.count))
-            ops.append(.overwrite(range: start..<existingEnd, before: before, after: existingAfter))
+            ops.append(.overwrite(range: start..<existingEnd, before: UndoBytes(before),
+                                  after: UndoBytes(existingAfter)))
             try storage.overwrite(range: start..<existingEnd, with: existingAfter)
         }
         if end > existingEnd {
             let newPart = Array(bytes.dropFirst(Int(existingEnd - start)))
-            ops.append(.insert(at: existingEnd, bytes: newPart))
+            ops.append(.insert(at: existingEnd, bytes: UndoBytes(newPart)))
             try storage.append(newPart)
         }
         return ops
@@ -605,9 +620,9 @@ public final class BinaryDocument: @unchecked Sendable {
     private func applyForward(_ op: UndoOperation) throws {
         switch op {
         case .overwrite(let range, _, let after):
-            try storage.overwrite(range: range, with: after)
+            try storage.overwrite(range: range, with: try after.load())
         case .insert(let at, let bytes):
-            try storage.insert(at: at, bytes: bytes)
+            try storage.insert(at: at, bytes: try bytes.load())
         case .delete(let range, _):
             try storage.delete(range: range)
         }

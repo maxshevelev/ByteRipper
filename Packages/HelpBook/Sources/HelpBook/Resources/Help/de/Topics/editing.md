@@ -1,4 +1,4 @@
-@source-sha 7e19307501ba33166b2710ed8101f4ae62eeae6fe018c20738589f82ee10f0c3
+@source-sha 1f19d0420c8337b011bbf0406ab868b718118ddfcaf6a3bd1565848bee63fb92
 # Bytes bearbeiten
 
 > Tippen überschreibt die vorhandenen Bytes. Jeder Vorgang, der die Länge der Datei ändert, fragt vorher nach.
@@ -39,6 +39,10 @@ Die Rückfragen lassen sich in den [[topic:settings|Einstellungen ▸ Allgemein]
 ## Widerrufen
 
 Jede Änderung ist ein Widerrufsschritt (⌘Z), auch die großen: ein Zusammenfügen, ein Füllen, ein von einem [[topic:tools-overview|Werkzeug]] geschriebener Vorgang, ein in die Quelle zurückgeschriebenes Fragment. Widerrufen wird je Dokument geführt.
+
+Wie weit sich zurück widerrufen lässt, legen zwei Grenzen in den [[topic:settings|Einstellungen ▸ Allgemein]] fest, jede für jedes Dokument für sich. **Größe des Widerrufsverlaufs:** zählt die Bytes der Änderungen, den vorherigen wie den neuen Inhalt: Das Überschreiben von 1 GB belegt 2 GB. **Widerrufsschritte:** zählt die Änderungen; ein eingegebenes Byte ist eine. Jenseits einer der beiden Grenzen lassen sich die ältesten Änderungen nicht mehr widerrufen, und das Dokument bleibt geändert. Eine niedrigere Grenze gilt ab der nächsten Änderung. Eine einzelne Änderung, die größer ist als die Größengrenze, bleibt dennoch erhalten und kann widerrufen werden.
+
+Die Bytes der Änderungen werden in einer temporären Datei auf dem Datenträger aufbewahrt, nicht im Arbeitsspeicher; ein großes Ersetzen belegt so nicht seine Größe im Arbeitsspeicher, solange es widerrufen werden kann. Die Datei wird beim Schließen des Dokuments entfernt.
 
 ## In einem Eingabefeld
 

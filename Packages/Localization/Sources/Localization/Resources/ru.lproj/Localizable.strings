@@ -1621,3 +1621,11 @@
 "The store marks the serial invalid and keeps no current copy. The value is whole; where the firmware takes it from on such a board, the dump does not show." = "Хранилище помечает серийный номер недействительным, а действующей копии не держит. Значение целое; откуда прошивка такой платы берёт его на самом деле, по дампу не видно.";
 "The configuration code is not the end of the serial, as it is on a Mac's own. The serial was written without its code, or is a placeholder." = "Код конфигурации не совпадает с концом серийного номера, как у штатного Mac. Серийный номер записан без своего кода либо является заглушкой.";
 "The serial does not begin as the board's serial does. On a Mac's own both begin with the code of the factory; the serial was changed, or came over from another machine." = "Серийный номер начинается не так, как серийный номер платы. У штатного Mac оба начинаются с кода завода; серийный номер изменён либо перенесён с другой машины.";
+
+/* Settings ▸ General ▸ Editing: the undo history's bounds (Design/PERSISTENT_UNDO_PLAN.md) */
+"Undo history size:" = "Объём истории отмены:";
+"Undo steps:" = "Шагов отмены:";
+"Unlimited" = "Без ограничений";
+"How many bytes of changes each document's undo history keeps" = "Сколько байтов правок хранит история отмены каждого документа";
+"How many changes each document's undo history keeps" = "Сколько правок хранит история отмены каждого документа";
+"Each open document keeps an undo history of its own. The bytes of its changes are kept in a temporary file, not in memory, before and after alike: overwriting 1 GB keeps 2 GB. Past either limit the oldest changes can no longer be undone. A lower limit takes effect at the next change; a single change larger than the limit is still kept, so it can be undone." = "Каждый открытый документ ведёт собственную историю отмены. Байты его правок — и прежние, и новые — хранятся во временном файле, а не в памяти: перезапись 1 ГБ занимает 2 ГБ. Сверх любого из пределов самые старые правки отменить уже нельзя. Уменьшенный предел действует со следующей правки; одна правка, превышающая предел, всё равно сохраняется и может быть отменена.";

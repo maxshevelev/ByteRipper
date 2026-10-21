@@ -1186,6 +1186,12 @@ final class PaneViewModel: HexViewDataSource {
         pendingSegmentSnapshot = nil
         segmentUndoStack.append(snapshot)
         segmentRedoStack.removeAll()
+        // The history's bounds may have dropped its oldest steps with this
+        // commit; their snapshots go with them, or they would sit unreachable
+        // under the ones still paired with a step.
+        if let depth = document?.undoHistory.undoDepth, segmentUndoStack.count > depth {
+            segmentUndoStack.removeFirst(segmentUndoStack.count - depth)
+        }
     }
 
     /// Discards a captured snapshot whose gesture was cancelled (no transaction

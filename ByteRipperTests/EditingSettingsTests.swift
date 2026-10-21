@@ -62,6 +62,58 @@ final class EditingSettingsTests: XCTestCase {
         XCTAssertFalse(EditingSettings.warnsBeforeShiftingEdits)
     }
 
+    // MARK: - The undo history's bounds
+
+    /// Large by default — dumps are large — with no bound on steps, and every
+    /// choice handed to the histories at once.
+    func testTheUndoBoundsDefaultLargeAndReachEveryHistory() {
+        XCTAssertEqual(EditingSettings.undoHistoryMiB, 4096)
+        XCTAssertEqual(EditingSettings.undoSteps, 0)
+        XCTAssertEqual(UndoLimits.current, UndoLimits(bytes: 4 << 30, transactions: nil))
+
+        EditingSettings.set(undoHistoryMiB: 512)
+        EditingSettings.set(undoSteps: 10_000)
+        XCTAssertEqual(UndoLimits.current, UndoLimits(bytes: 512 << 20, transactions: 10_000))
+    }
+
+    /// The tab shows the stored bounds and writes the user's choice.
+    func testTheEditingTabReflectsAndWritesTheUndoBounds() {
+        let controller = EditingSettingsViewController()
+        _ = controller.view
+        XCTAssertEqual(controller.historySizeShownMiB, 4096)
+        XCTAssertEqual(controller.historyStepsShown, 0)
+
+        controller.chooseHistorySize(mib: 16384)
+        controller.chooseHistorySteps(100_000)
+        XCTAssertEqual(EditingSettings.undoHistoryMiB, 16384)
+        XCTAssertEqual(EditingSettings.undoSteps, 100_000)
+        XCTAssertEqual(UndoLimits.current.transactions, 100_000)
+    }
+
+    /// A step the bounds dropped takes its cuts' snapshot with it: undoing all
+    /// that is left puts the cuts where the dropped edit left them.
+    func testTheCutsFollowTheStepsTheBoundsKeep() throws {
+        let (controller, pane, url) = try makeController([UInt8](0..<32))
+        defer { controller.windowModel.pane1.close(); try? FileManager.default.removeItem(at: url) }
+        EditingSettings.set(warnsBeforeShiftingEdits: false)
+        let doc = try XCTUnwrap(pane.document)
+        doc.undoHistory.limits = UndoLimits(bytes: nil, transactions: 2)
+        pane.segmentStore.addCut(at: 16)
+
+        try pane.deleteBytes(in: 0..<4)                          // dropped later: the cut at 12
+        XCTAssertEqual(pane.segmentStore.segments.map(\.range), [0..<12, 12..<28])
+        try pane.deleteBytes(in: 0..<2)                          // the cut at 10
+        try pane.deleteBytes(in: 0..<2)                          // the cut at 8
+        XCTAssertEqual(doc.undoHistory.undoDepth, 2)
+
+        XCTAssertTrue(try pane.undo())
+        XCTAssertTrue(try pane.undo())
+        XCTAssertFalse(try pane.undo())
+        XCTAssertEqual(pane.segmentStore.segments.map(\.range), [0..<12, 12..<28])
+        XCTAssertTrue(try pane.redo())
+        XCTAssertEqual(pane.segmentStore.segments.map(\.range), [0..<10, 10..<26])
+    }
+
     // MARK: - What the commands do with it
 
     private func makeController(_ bytes: [UInt8]) throws -> (MainViewController, PaneViewModel, URL) {
