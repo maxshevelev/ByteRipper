@@ -38,12 +38,11 @@ Undo and redo read the bytes they need from the journal.
 
 Append-only. A record once written is never rewritten.
 
-One kind of record so far (`HistoryLog`, `BRT1`): a transaction — serial,
-parent, selection before and after, series id, label, the ops with their
-bytes, a fill's as its pattern. Still to come with phase 4: the label as its
-`L()` key, a refined selection after the last transaction
-(`noteSelectionAfterOnLast`), and with phase 5 the segment snapshot paired
-with it. There is no fold record: a fold writes a new base and a new log.
+Three kinds (`HistoryLog`): `BRT1`, a transaction — serial, parent, selection
+before and after, series id, label, the ops with their bytes, a fill's as its
+pattern; `BRS1`, a selection refined after a transaction already written
+(`noteSelectionAfterOnLast`); `BRP1`, the segments paired with a transaction.
+There is no fold record: a fold writes a new base and a new log.
 
 Each record carries SHA-256(previous record's hash ‖ its own bytes). Appending
 costs what is appended.
@@ -202,5 +201,11 @@ has no language.
    a redo side that does not add up is left out. The workspace format goes to
    version 4.
 5. **Segments** — the paired snapshot stack, source ids re-minted at restore.
+   *(done)* A `BRP1` record pairs a transaction with the segments before it
+   (undo side) or after it (redo side), as `SegmentationState` JSON with
+   links by path; the same segments again are a flag. Written when the log
+   has not got that pairing yet, and read back as far from the newest end of
+   each side as the log has them all.
 6. **Help** — `workspace.md` and the editing page in en, ru, de;
-   `WORKSPACE_PLAN.md` "Not kept" updated.
+   `WORKSPACE_PLAN.md` "Not kept" updated. *(done)* `workspace.md` and
+   `projects.md`; the editing page had its part with phase 1.

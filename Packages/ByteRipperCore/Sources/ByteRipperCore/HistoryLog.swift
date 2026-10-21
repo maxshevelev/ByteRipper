@@ -8,6 +8,11 @@ public struct KeptTransaction: Equatable, Sendable {
     public let transaction: UndoTransaction
     public let seriesID: UInt64?
     public let label: String?
+    /// What the pane paired with the transaction, read back from the log: the
+    /// segments before it (while it was on the undo side) and after it (while
+    /// it was on the redo side), in the app's own encoding.
+    public var segmentsBefore: Data?
+    public var segmentsAfter: Data?
 
     public init(transaction: UndoTransaction, seriesID: UInt64?, label: String?) {
         self.transaction = transaction
@@ -45,6 +50,10 @@ public enum HistoryLog {
     /// A refined selection after a transaction already written
     /// (`UndoHistory.noteSelectionAfterOnLast`): serial, then the selection.
     static let selectionMagic: [UInt8] = Array("BRS1".utf8)
+    /// The segments paired with a transaction already written: serial, side
+    /// (0 before it, 1 after it), then the encoding — or, flagged, the same as
+    /// the last such record in the log.
+    static let segmentsMagic: [UInt8] = Array("BRP1".utf8)
     /// The hash a log starts its chain from.
     public static let emptyHash = Data(repeating: 0, count: 32)
 
@@ -169,10 +178,13 @@ public enum HistoryLog {
         var chain = emptyHash
         var records: [KeptTransaction] = []
         var index: [UInt64: Int] = [:]
+        var lastSegments: Data?
         do {
             while reader.at < length {
                 let kind = try reader.bytes(4, hashing: false)
-                guard kind == magic || kind == selectionMagic else { throw HistoryLogError.unreadable }
+                guard kind == magic || kind == selectionMagic || kind == segmentsMagic else {
+                    throw HistoryLogError.unreadable
+                }
                 let bodyLength = try reader.u64(hashing: false)
                 guard bodyLength <= length - reader.at else { throw HistoryLogError.unreadable }
                 reader.hasher = SHA256()
@@ -182,14 +194,30 @@ public enum HistoryLog {
                     let record = try reader.transaction()
                     index[record.transaction.serial] = records.count
                     records.append(record)
+                } else if kind == segmentsMagic {
+                    let serial = try reader.u64()
+                    let after = try reader.u8() != 0
+                    let data: Data
+                    if try reader.u8() == 0 {
+                        guard let last = lastSegments else { throw HistoryLogError.unreadable }
+                        data = last
+                    } else {
+                        data = Data(try reader.bytes(Int(try reader.u32())))
+                    }
+                    lastSegments = data
+                    guard let at = index[serial] else { throw HistoryLogError.unreadable }
+                    if after { records[at].segmentsAfter = data } else { records[at].segmentsBefore = data }
                 } else {
                     let serial = try reader.u64()
                     let selection = try reader.selection()
                     guard let at = index[serial] else { throw HistoryLogError.unreadable }
                     var transaction = records[at].transaction
                     transaction.setSelectionAfter(selection)
-                    records[at] = KeptTransaction(transaction: transaction, seriesID: records[at].seriesID,
+                    var refined = KeptTransaction(transaction: transaction, seriesID: records[at].seriesID,
                                                   label: records[at].label)
+                    refined.segmentsBefore = records[at].segmentsBefore
+                    refined.segmentsAfter = records[at].segmentsAfter
+                    records[at] = refined
                 }
                 guard reader.at == bodyEnd else { throw HistoryLogError.unreadable }
                 let digest = Data(reader.hasher.finalize())
@@ -426,14 +454,40 @@ public final class HistoryLogWriter {
         }
     }
 
+    /// The segments last appended, so the same ones again cost a flag.
+    private var lastSegments: Data?
+
+    /// Appends the segments the pane paired with the transaction `serial`,
+    /// already in the log: those before it, or — `after` — those after it.
+    public func appendSegments(of serial: UInt64, after: Bool, _ data: Data) throws {
+        var body = Encoder()
+        body.u64(serial)
+        body.u8(after ? 1 : 0)
+        if data == lastSegments {
+            body.u8(0)
+        } else {
+            body.u8(1)
+            body.u32(UInt32(data.count))
+            body.bytes([UInt8](data))
+        }
+        try appendFramed(HistoryLog.segmentsMagic, body.buffer)
+        lastSegments = data
+    }
+
     /// Appends a refined selection after the transaction `serial`, already in
     /// the log.
     public func appendSelection(after serial: UInt64, _ selection: SelectionModel) throws {
         var body = Encoder()
         body.u64(serial)
         body.selection(selection)
+        try appendFramed(HistoryLog.selectionMagic, body.buffer)
+    }
+
+    /// A small record: its kind, the body's length, the body, the hash.
+    private func appendFramed(_ kind: [UInt8], _ body: [UInt8]) throws {
+        let body = Encoder(buffer: body)
         var frame = Encoder()
-        frame.bytes(HistoryLog.selectionMagic)
+        frame.bytes(kind)
         frame.u64(UInt64(body.buffer.count))
         var hasher = SHA256()
         hasher.update(data: hash)
@@ -458,6 +512,7 @@ public final class HistoryLogWriter {
 
     private struct Encoder {
         var buffer: [UInt8] = []
+        init(buffer: [UInt8] = []) { self.buffer = buffer }
         mutating func u8(_ v: UInt8) { buffer.append(v) }
         mutating func u32(_ v: UInt32) { for i in 0..<4 { buffer.append(UInt8(truncatingIfNeeded: v >> (8 * i))) } }
         mutating func u64(_ v: UInt64) { for i in 0..<8 { buffer.append(UInt8(truncatingIfNeeded: v >> (8 * i))) } }

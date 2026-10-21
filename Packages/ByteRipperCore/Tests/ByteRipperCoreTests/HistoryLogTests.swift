@@ -288,4 +288,25 @@ final class HistoryLogTests: XCTestCase {
         let read = try HistoryLog.read(url, length: writer.length, hash: writer.hash)
         XCTAssertEqual(read.first?.transaction.selectionAfter, refined)
     }
+
+    /// Segments paired with a transaction read back on its side; the same
+    /// ones again cost a flag, and still read back whole.
+    func testSegmentsPairedWithATransactionReadBack() throws {
+        let doc = makeDocument([UInt8](repeating: 0, count: 16))
+        try doc.overwrite(range: 0..<1, with: [1])
+        try doc.overwrite(range: 1..<2, with: [1])
+        let held = doc.undoHistory.heldTransactions
+        let url = folder.appendingPathComponent("p.log")
+        let writer = try write(held, to: url)
+        let a = Data("cuts A".utf8)
+        try writer.appendSegments(of: held[0].transaction.serial, after: false, a)
+        let lengthBefore = writer.length
+        try writer.appendSegments(of: held[1].transaction.serial, after: false, a)
+        XCTAssertLessThan(writer.length - lengthBefore, 64, "a repeat is a flag, not the bytes again")
+        try writer.appendSegments(of: held[1].transaction.serial, after: true, Data("cuts B".utf8))
+        let read = try HistoryLog.read(url, length: writer.length, hash: writer.hash)
+        XCTAssertEqual(read[0].segmentsBefore, a)
+        XCTAssertEqual(read[1].segmentsBefore, a)
+        XCTAssertEqual(read[1].segmentsAfter, Data("cuts B".utf8))
+    }
 }

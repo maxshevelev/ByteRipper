@@ -540,6 +540,14 @@ public final class UndoHistory: @unchecked Sendable {
     /// command can still refine the selection after.
     public var newestTransaction: UndoTransaction? { undoSteps.last?.entries.last?.transaction }
 
+    /// The serials of the undo side, oldest first — what a pane pairs its
+    /// segment snapshots with.
+    public var undoSideSerials: [UInt64] { undoSteps.flatMap { $0.entries.map(\.serial) } }
+    /// The serials of the redo side, from the one redone last to the next to
+    /// redo, each step's in recording order — the order a pane stacks the
+    /// segments after them.
+    public var redoSideSerials: [UInt64] { redoSteps.flatMap { $0.entries.map(\.serial) } }
+
     /// The state an empty undo side stands for: where undoing all that is
     /// left lands.
     public var undoBaseSerial: UInt64 { baseSerial }

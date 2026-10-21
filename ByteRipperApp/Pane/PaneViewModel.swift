@@ -249,9 +249,9 @@ final class PaneViewModel: HexViewDataSource {
     /// entry is the segment state *before* the transaction it sits under, so
     /// undo restores by snapshot rather than by inverse edit (a delete that
     /// swallowed a cut cannot be undone from the edit alone).
-    private var segmentUndoStack: [SegmentStore.Snapshot] = []
+    private(set) var segmentUndoStack: [SegmentStore.Snapshot] = []
     /// The redo side of the snapshot stack; dropped on every divergent edit.
-    private var segmentRedoStack: [SegmentStore.Snapshot] = []
+    private(set) var segmentRedoStack: [SegmentStore.Snapshot] = []
     /// The pre-edit segment snapshot captured at the start of the current edit
     /// gesture, pushed to `segmentUndoStack` when the gesture's transaction
     /// commits. Nil when no gesture is in flight.
@@ -1156,6 +1156,17 @@ final class PaneViewModel: HexViewDataSource {
     /// leave stale snapshots that pair with no undo step. The document's
     /// transaction hook and the store's change hook were wired on open and
     /// survive the revert, so there is nothing to re-set.
+    /// Puts back the segment snapshots paired with a restored history's steps
+    /// (`Design/PERSISTENT_UNDO_PLAN.md`, phase 5): the undo side's before
+    /// each step, oldest first, and the redo side's after each, the one redone
+    /// last first — each aligned to the newest end of its side, as the stacks
+    /// are kept.
+    func restoreSegmentSnapshots(undo: [SegmentStore.Snapshot], redo: [SegmentStore.Snapshot]) {
+        segmentUndoStack = undo
+        segmentRedoStack = redo
+        pendingSegmentSnapshot = nil
+    }
+
     private func preserveSegments(for doc: BinaryDocument) {
         segmentStore.rebase(to: doc.size)
         segmentUndoStack.removeAll()

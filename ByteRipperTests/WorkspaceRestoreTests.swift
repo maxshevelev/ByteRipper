@@ -524,6 +524,37 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertFalse(try restored.undo())
     }
 
+    /// The cuts follow an undo and a redo after a relaunch as they did before
+    /// it: each step comes back with the segments it was made on.
+    func testTheCutsFollowARestoredUndoAndRedo() async throws {
+        WorkspaceSettings.set(restoresWorkspace: true)
+        EditingSettings.set(warnsBeforeShiftingEdits: false)
+        addTeardownBlock { EditingSettings.resetToDefaults() }
+        let window = shownWindow()
+        let pane = window.mainViewController.windowModel.pane1
+        pane.openBytes([UInt8](repeating: 0x10, count: 64), named: "scratch")
+        window.mainViewController.refreshMode()
+        pane.segmentStore.addCut(at: 32)
+        try pane.deleteBytes(in: 0..<4)                       // the cut at 28
+        try pane.deleteBytes(in: 0..<8)                       // the cut at 20
+        try pane.undo()                                       // back at 28, one to redo
+        XCTAssertEqual(pane.segmentStore.segments.map(\.range), [0..<28, 28..<60])
+        let (recorder, folderURL) = recorder([window])
+        recorder.record()
+
+        let tab = try XCTUnwrap(recorder.savedWorkspace()?.windows.first?.tabs.first)
+        let target = shownWindow().mainViewController
+        let issues = await restore([(tab, target)], keeper: ContentKeeper(folder: WorkspaceFolder(url: folderURL)))
+        XCTAssertEqual(issues, [])
+        let restored = target.windowModel.pane1
+        XCTAssertEqual(restored.segmentStore.segments.map(\.range), [0..<28, 28..<60])
+        XCTAssertTrue(try restored.undo())
+        XCTAssertEqual(restored.segmentStore.segments.map(\.range), [0..<32, 32..<64], "the cut moves back")
+        XCTAssertTrue(try restored.redo())
+        XCTAssertTrue(try restored.redo())
+        XCTAssertEqual(restored.segmentStore.segments.map(\.range), [0..<20, 20..<52], "and on again")
+    }
+
     /// A file's history comes back with the saved state in it: undoing back to
     /// what is on disk makes the file clean.
     func testAFilesHistoryKnowsItsSavedState() async throws {
@@ -736,7 +767,8 @@ final class WorkspaceRestoreTests: XCTestCase {
         try pane.undo()
         let afterEdit = try size(log)
         recorder.record()
-        XCTAssertEqual(try size(log), afterEdit, "an undo only moves which state is kept")
+        XCTAssertLessThan(try size(log) - afterEdit, 128,
+                          "an undo writes no bytes again: which state is kept, and the segments it pairs with the redo")
 
         pane.document?.undoHistory.clearKeepingDirty()
         recorder.record()

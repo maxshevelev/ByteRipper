@@ -34,6 +34,9 @@ final class ContentKeeper {
         /// The selection after each transaction as the log has it, so one a
         /// command refined after the snapshot wrote it is written again.
         var afters: [UInt64: SelectionModel] = [:]
+        /// The segments the log pairs with each transaction, before it and
+        /// after it, so a snapshot paired anew is written again.
+        var segments: [SegmentKey: Segmentation] = [:]
         /// What the last snapshot wrote down for this document.
         var kept: KeptContent?
         /// The content's version and the saved state when it was.
@@ -44,6 +47,11 @@ final class ContentKeeper {
             self.document = document
             self.id = id
         }
+    }
+
+    private struct SegmentKey: Hashable {
+        let serial: UInt64
+        let after: Bool
     }
 
     private var entries: [ObjectIdentifier: Entry] = [:]
@@ -117,6 +125,7 @@ final class ContentKeeper {
             try rebase(entry, pane: pane, document: document, saved: saved)
         } else {
             try append(history.heldTransactions, to: entry)
+            try appendSegments(of: pane, history: history, to: entry)
             let tooLong = (entry.log?.length ?? 0) > max(compactionFloor, 2 * history.heldBytes)
             if tooLong || !HistoryLog.connects(entry.base!.serial, history.headSerial, parents: entry.parents) {
                 try rebase(entry, pane: pane, document: document, saved: saved)
@@ -175,6 +184,27 @@ final class ContentKeeper {
         entry.log = log
         entry.parents = parents
         entry.afters = afters
+        entry.segments = [:]
+        try appendSegments(of: pane, history: history, to: entry)
+    }
+
+    /// The pane's segment snapshots, each paired with its step's serial: the
+    /// undo side's before each step, the redo side's after each. Written when
+    /// the log has not got that one yet.
+    private func appendSegments(of pane: PaneViewModel, history: UndoHistory, to entry: Entry) throws {
+        guard let log = entry.log else { return }
+        func pair(_ serials: [UInt64], _ stack: [Segmentation], after: Bool) throws {
+            let offset = serials.count - stack.count
+            guard offset >= 0 else { return }
+            for (i, snapshot) in stack.enumerated() {
+                let key = SegmentKey(serial: serials[offset + i], after: after)
+                guard entry.segments[key] != snapshot, let data = pane.encodedSegments(snapshot) else { continue }
+                try log.appendSegments(of: key.serial, after: after, data)
+                entry.segments[key] = snapshot
+            }
+        }
+        try pair(history.undoSideSerials, pane.segmentUndoStack, after: false)
+        try pair(history.redoSideSerials, pane.segmentRedoStack, after: true)
     }
 
     private func append(_ held: [KeptTransaction], to entry: Entry) throws {
@@ -316,6 +346,20 @@ final class ContentKeeper {
         return url
     }
 
+    /// The segments paired with a restored history's steps, as far back from
+    /// the newest of each side as the log has them all.
+    private func restoreSegments(of pane: PaneViewModel, undo: [KeptTransaction], redo: [KeptTransaction]) {
+        func stack(_ side: [KeptTransaction], _ data: (KeptTransaction) -> Data?) -> [Segmentation] {
+            var snapshots: [Segmentation] = []
+            for kept in side.reversed() {
+                guard let encoded = data(kept), let snapshot = pane.decodedSegments(encoded) else { break }
+                snapshots.append(snapshot)
+            }
+            return snapshots.reversed()
+        }
+        pane.restoreSegmentSnapshots(undo: stack(undo, \.segmentsBefore), redo: stack(redo, \.segmentsAfter))
+    }
+
     /// The content of an untitled document or a part as it was kept.
     func bytes(of content: KeptContent) throws -> [UInt8] {
         guard case .bytes(let file, _, let hash) = content.base else { throw HistoryLogError.unreadable }
@@ -362,6 +406,7 @@ final class ContentKeeper {
                 BinaryDocument.KeptJoin(serial: kept.serial, url: URL(fileURLWithPath: kept.path), readOnly: kept.readOnly)
             }
             document.restoreJoins(undo: kept.joins.map(join), redo: sides.redo.isEmpty ? [] : kept.undoneJoins.map(join))
+            restoreSegments(of: pane, undo: sides.undo, redo: sides.redo.reversed().flatMap { $0 })
         } else {
             document.undoHistory.resume(at: content.head, nextSerial: content.nextSerial,
                                         saved: content.saved, dirty: dirty)
@@ -374,6 +419,15 @@ final class ContentKeeper {
         for record in records {
             entry.parents[record.transaction.serial] = record.transaction.parent
             entry.afters[record.transaction.serial] = record.transaction.selectionAfter
+        }
+        // What the log pairs with the steps is what the pane now holds.
+        for (serial, snapshot) in zip(document.undoHistory.undoSideSerials.suffix(pane.segmentUndoStack.count),
+                                      pane.segmentUndoStack) {
+            entry.segments[SegmentKey(serial: serial, after: false)] = snapshot
+        }
+        for (serial, snapshot) in zip(document.undoHistory.redoSideSerials.suffix(pane.segmentRedoStack.count),
+                                      pane.segmentRedoStack) {
+            entry.segments[SegmentKey(serial: serial, after: true)] = snapshot
         }
         entry.kept = content
         entry.version = document.undoHistory.version
