@@ -31,7 +31,8 @@ and not an app-wide preference:
 
 **Not kept**, deliberately:
 
-- **Undo history.** It belongs to the session that made it.
+- **Undo history.** It belongs to the session that made it — for now:
+  `PERSISTENT_UNDO_PLAN.md` keeps it.
 - **Search All results.** They are recomputed from the pattern on demand.
 - **Navigation history (Back / Forward).** Its places hold live pane
   references. It starts empty.
@@ -226,10 +227,14 @@ writes a tab with its panels half restored.
 - The codec is written by the app (`PartCodecState`: copy, read-only, UEFI
   structure, Lenovo `LENV` block), as JSON text the package does not read; the
   root layout and the UEFI rebuild target are `Codable` in `UEFIImage`.
-- A part whose parent did not come back, or changed on disk, is not opened:
-  its stretch of the parent may hold something else.
-- A part's unsaved edits are not kept: quitting asks to put them back or
-  discard them; after a crash the part comes back as its parent holds it.
+- A part whose parent did not come back, or changed on disk, is not taken
+  out of it: its stretch of the parent may hold something else. A part with
+  changes comes back all the same, as untitled bytes with its changes.
+- A part's unsaved changes are kept as an untitled document's are: its own
+  bytes, in `Untitled/` (`PartOrigin.edits`), written again only when its
+  content moved, laid over what the parent gives at restore. The parent's
+  bytes stay its baseline, what **Update in Parent** compares with. Quitting
+  does not ask about them, and a crash does not lose them.
 - A panel with no parent — bytes handed over by a tool, or a part whose
   parent was closed — is kept as untitled bytes, like an untitled document,
   and comes back without a way home.
@@ -243,8 +248,7 @@ writes a tab with its panels half restored.
   its parent is open, until none is left that can be. A tab is laid out once
   its own panes are in; its panels open after that. What still waits at the
   end had no parent to come out of, and is reported.
-- At quit a torn-off part is kept, like a panel: Save / Don't Save has been
-  answered for it, so what is left is what its parent holds.
+- At quit a torn-off part is kept, like a panel, with its changes.
 
 ## Projects
 
