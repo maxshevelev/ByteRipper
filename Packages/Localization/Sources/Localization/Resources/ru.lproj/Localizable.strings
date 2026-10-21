@@ -1494,7 +1494,6 @@
 "Save Encoded “%1$@” as…" = "Сохранить «%1$@» (закодировано) как…";
 "Save Encoded Body of “%1$@” as…" = "Сохранить тело «%1$@» (закодировано) как…";
 "Open Decoded “%1$@”" = "Открыть «%1$@» (декодировано)";
-"Open “%1$@” in “%2$@”" = "Открыть «%1$@» в «%2$@»";
 "Open Decoded Block" = "Открыть декодированный блок";
 "The two LENV blocks hold different values for: %1$@. The firmware reads the block in use." = "Значения в двух блоках LENV различаются у записей: %1$@. Прошивка читает действующий блок.";
 "These bytes were worked out of the file and cannot be put back into it." = "Эти байты получены из файла преобразованием и записать их обратно нельзя.";

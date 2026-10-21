@@ -810,6 +810,22 @@ final class UEFIToolFlowTests: XCTestCase {
         let store = try XCTUnwrap(chain.first { $0.kind == .lenovoDMIStore })
         XCTAssertEqual(vc.nodeMenuTitlesForTesting(store.id).first, "Open “\(store.name)”",
                        "a node with rows opens whole, and that comes first")
+
+        // In the block opened decoded there is nothing to decode: an entry's
+        // menu opens the entry, and that is what comes first.
+        try session().openDecodedBlock(for: entry.id)
+        let id = try XCTUnwrap(controller.fragments.expanded)
+        let part = try XCTUnwrap(controller.fragments.pane(id))
+        let partSession = try XCTUnwrap(controller.fragments.surface(id)?.tools.session as? UEFIToolSession)
+        let partVC = try XCTUnwrap(partSession.viewController as? UEFIToolViewController)
+        var partEntry: UEFINode?
+        XCTAssertTrue(pumpUntil(5) {
+            partEntry = part.uefiState.tree?.image().allNodes.first { $0.kind == .lenvEntry && $0.name == entry.name }
+            return partEntry != nil
+        })
+        let partMenu = partVC.nodeMenuTitlesForTesting(try XCTUnwrap(partEntry).id)
+        XCTAssertEqual(partMenu.first, "Open Body of “\(entry.name)”", "\(partMenu)")
+        XCTAssertFalse(partMenu.contains { $0.contains("Decoded") || $0.contains(" in “") }, "\(partMenu)")
     }
 
     /// An entry of a LENV block opens the block decoded on that entry: the

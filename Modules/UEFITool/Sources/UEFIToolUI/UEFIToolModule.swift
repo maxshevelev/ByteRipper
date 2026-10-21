@@ -1953,9 +1953,13 @@ private struct ChecksumPass: Sendable {
             return
         }
         // A LENV block's bytes are encoded: what it holds is the block
-        // decoded, from the block's row and from any of its entries'.
+        // decoded, from the block's row and from any of its entries'. A block
+        // stored in the clear — one opened decoded among them — opens as its
+        // block too, but an entry in it is its own bytes, and opens as any
+        // other node.
         if let reader = tree.spaceReaders.reader(for: .file),
-           UEFILenovoDMIDetail.decodableBlock(for: node, image: tree.image(), reader: reader) != nil {
+           let found = UEFILenovoDMIDetail.decodableBlock(for: node, image: tree.image(), reader: reader),
+           found.block.encoding == .encoded || node.kind == .lenvBlock {
             openDecodedBlock(for: nodeID)
             return
         }

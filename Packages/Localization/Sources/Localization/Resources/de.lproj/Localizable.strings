@@ -1494,7 +1494,6 @@
 "Save Encoded “%1$@” as…" = "„%1$@“ (kodiert) sichern unter…";
 "Save Encoded Body of “%1$@” as…" = "Rumpf von „%1$@“ (kodiert) sichern unter…";
 "Open Decoded “%1$@”" = "„%1$@“ (dekodiert) öffnen";
-"Open “%1$@” in “%2$@”" = "„%1$@“ in „%2$@“ öffnen";
 "Open Decoded Block" = "Dekodierten Block öffnen";
 "The two LENV blocks hold different values for: %1$@. The firmware reads the block in use." = "Die beiden LENV-Blöcke enthalten abweichende Werte für: %1$@. Die Firmware liest den aktiven Block.";
 "These bytes were worked out of the file and cannot be put back into it." = "Diese Bytes wurden aus der Datei umgeformt und lassen sich nicht zurückschreiben.";

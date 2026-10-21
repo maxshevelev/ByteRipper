@@ -2840,17 +2840,15 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             item.representedObject = node.id
             items.append(item)
         }
-        // A LENV block encoded, or an entry in any block, opens the block
-        // decoded: the entries read as text and can be typed over, and go
-        // back encoded. From an entry the block opens on that entry.
+        // A LENV block encoded, or an entry in one, opens the block decoded:
+        // the entries read as text and can be typed over, and go back
+        // encoded. From an entry the block opens on that entry. In a block
+        // stored in the clear — one already opened decoded — there is
+        // nothing to decode, and the items above are the whole of it.
         // help: panel.uefi.open-decoded-block
-        let decodedTitle: String? = lenv.flatMap { lenv in
-            if encoded { return L("Open Decoded “%1$@”", node.name) }
-            return node.kind == .lenvEntry ? L("Open “%1$@” in “%2$@”", node.name, lenv.name.text) : nil
-        }
-        if let decodedTitle {
+        if lenv != nil, encoded {
             let open = NSMenuItem(
-                title: decodedTitle,
+                title: L("Open Decoded “%1$@”", node.name),
                 action: #selector(openDecodedBlockClicked(_:)),
                 keyEquivalent: ""
             )
@@ -2882,7 +2880,8 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         }
         // What a double click on the row opens comes first, so the reader
         // sees which of the items that is (`UEFIToolSession.openNodeContent`).
-        if let first = items.firstIndex(where: { opensAsDoubleClick($0, node: node, decodable: lenv != nil) }),
+        if let first = items.firstIndex(where: { opensAsDoubleClick($0, node: node,
+                                                                       decodable: lenv != nil && (encoded || node.kind == .lenvBlock)) }),
            first > 0 {
             items.insert(items.remove(at: first), at: 0)
         }
