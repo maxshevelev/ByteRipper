@@ -394,15 +394,91 @@ final class ContentKeeper {
 
     // MARK: - Reading back
 
-    /// The transactions a kept content's log holds, checked against its pin.
-    private func records(of content: KeptContent) throws -> [KeptTransaction] {
-        guard let log = content.log else { return [] }
-        guard let hash = Data(hex: log.hash) else { throw HistoryLogError.unreadable }
-        return try HistoryLog.read(folder.keptURL(log.file), length: log.length, hash: hash)
+    /// What reading a kept content back gave: the log's transactions, and the
+    /// base read and checked — a document's whole content, or the runs over a
+    /// file. Worked out off the main thread (`readBack`).
+    struct ReadBack: @unchecked Sendable {
+        let records: [KeptTransaction]
+        let bytes: [UInt8]?
+        let edits: OverlayEdits?
+    }
+
+    /// What `readBack` has read, by content id.
+    private var readBacks: [String: Result<ReadBack, Error>] = [:]
+    /// The names of documents whose content came back without its history.
+    private var historiesLost: [String] = []
+
+    /// How many bytes reading `content` back reads: its log and its base.
+    func bytesToRead(_ content: KeptContent) -> UInt64 {
+        var total = content.log?.length ?? 0
+        if let file = content.files.first(where: { !$0.hasSuffix(".log") }),
+           let size = (try? FileManager.default.attributesOfItem(atPath: folder.keptURL(file).path))?[.size] as? NSNumber {
+            total += size.uint64Value
+        }
+        return total
+    }
+
+    /// Reads `contents` back, all at once and off the main thread: each log
+    /// checked by its chained hash, each base by its own, a document's content
+    /// rebuilt. What the restore then lays over or opens is already in memory.
+    func readBack(_ contents: [KeptContent], progress: (@Sendable (String, Int) -> Void)?) async {
+        let folder = folder
+        let jobs = contents.filter { readBacks[$0.id] == nil }.map { content in
+            (content, content.log.map { folder.keptURL($0.file) },
+             content.files.first { !$0.hasSuffix(".log") }.map { folder.keptURL($0) })
+        }
+        await withTaskGroup(of: (String, Result<ReadBack, Error>).self) { group in
+            for (content, log, base) in jobs {
+                group.addTask {
+                    let report: ((Int) -> Void)? = progress.map { progress in { progress(content.id, $0) } }
+                    return (content.id, Result { try Self.read(content, log: log, base: base, progress: report) })
+                }
+            }
+            for await (id, result) in group { readBacks[id] = result }
+        }
+    }
+
+    private nonisolated static func read(_ content: KeptContent, log: URL?, base: URL?,
+                                         progress: ((Int) -> Void)?) throws -> ReadBack {
+        var records: [KeptTransaction] = []
+        if let pin = content.log, let log {
+            guard let hash = Data(hex: pin.hash) else { throw HistoryLogError.unreadable }
+            records = try HistoryLog.read(log, length: pin.length, hash: hash, progress: progress)
+        }
+        func checked(_ hash: String) throws -> Data {
+            guard let base else { throw HistoryLogError.unreadable }
+            let data = try Data(contentsOf: base)
+            progress?(data.count)
+            guard FileDigest.sha256(data).hex == hash else { throw HistoryLogError.unreadable }
+            return data
+        }
+        switch content.base {
+        case .file:
+            return ReadBack(records: records, bytes: nil, edits: nil)
+        case .edits(_, _, let hash):
+            let edits = try PropertyListDecoder().decode(OverlayEdits.self, from: try checked(hash))
+            return ReadBack(records: records, bytes: nil, edits: edits)
+        case .bytes(_, _, let hash):
+            let storage = EditOverlayStorage(base: MemoryBackedStorage(bytes: [UInt8](try checked(hash))))
+            try HistoryLog.apply(try ops(of: content, records), to: storage)
+            return ReadBack(records: records, bytes: try storage.read(at: 0, length: Int(storage.size)), edits: nil)
+        }
+    }
+
+    /// What reading `content` back gives: read before, or read now.
+    private func readBack(of content: KeptContent) throws -> ReadBack {
+        if let done = readBacks[content.id] { return try done.get() }
+        let result = Result {
+            try Self.read(content, log: content.log.map { folder.keptURL($0.file) },
+                          base: content.files.first { !$0.hasSuffix(".log") }.map { folder.keptURL($0) },
+                          progress: nil)
+        }
+        readBacks[content.id] = result
+        return try result.get()
     }
 
     /// The ops from the content's base to the state it was in.
-    private func ops(of content: KeptContent, _ records: [KeptTransaction]) throws -> [UndoOperation] {
+    private nonisolated static func ops(of content: KeptContent, _ records: [KeptTransaction]) throws -> [UndoOperation] {
         let map = Dictionary(records.map { ($0.transaction.serial, $0.transaction) }, uniquingKeysWith: { a, _ in a })
         guard let ops = HistoryLog.path(from: content.base.serial, to: content.head, through: map) else {
             throw HistoryLogError.noPath
@@ -410,12 +486,11 @@ final class ContentKeeper {
         return ops
     }
 
-    /// Reads nothing that is not what was written: a base whose hash does not
-    /// come out as kept is refused.
-    private func checked(_ file: String, _ hash: String) throws -> URL {
-        let url = folder.keptURL(file)
-        guard try FileDigest.sha256(of: url).hex == hash else { throw HistoryLogError.unreadable }
-        return url
+    /// The names of documents that came back without their history since the
+    /// last call — for the restore's warning.
+    func takeHistoriesLost() -> [String] {
+        defer { historiesLost = [] }
+        return historiesLost
     }
 
     /// The segments paired with a restored history's steps, as far back from
@@ -434,29 +509,18 @@ final class ContentKeeper {
 
     /// The content of an untitled document or a part as it was kept.
     func bytes(of content: KeptContent) throws -> [UInt8] {
-        guard case .bytes(let file, _, let hash) = content.base else { throw HistoryLogError.unreadable }
-        let url = try checked(file, hash)
-        let records = try records(of: content)
-        let storage = EditOverlayStorage(base: try FileBackedStorage(url: url))
-        try HistoryLog.apply(try ops(of: content, records), to: storage)
-        return try storage.read(at: 0, length: Int(storage.size))
+        guard case .bytes = content.base, let bytes = try readBack(of: content).bytes else {
+            throw HistoryLogError.unreadable
+        }
+        return bytes
     }
 
     /// Lays a file's kept content over the file `pane` has just opened.
-    func apply(_ content: KeptContent, to pane: PaneViewModel) throws {
-        let records = try records(of: content)
-        var edits: OverlayEdits?
-        switch content.base {
-        case .file:
-            break
-        case .edits(let file, _, let hash):
-            edits = try PropertyListDecoder().decode(OverlayEdits.self,
-                                                     from: Data(contentsOf: try checked(file, hash)))
-        case .bytes:
-            throw HistoryLogError.unreadable
-        }
-        try pane.applyKeptContent(edits: edits, ops: try ops(of: content, records))
-        adopt(pane, content: content, records: records, dirty: true)
+    func apply(_ content: KeptContent, to pane: PaneViewModel, name: String) throws {
+        if case .bytes = content.base { throw HistoryLogError.unreadable }
+        let read = try readBack(of: content)
+        try pane.applyKeptContent(edits: read.edits, ops: try Self.ops(of: content, read.records))
+        adopt(pane, content: content, name: name, dirty: true)
     }
 
     /// A restored document goes on as kept: its history counts on from where
@@ -464,9 +528,9 @@ final class ContentKeeper {
     /// Its undo and redo sides come back with it when the workspace kept them
     /// and the log holds them; otherwise it goes on with an empty history, as
     /// dirty as it was.
-    func adopt(_ pane: PaneViewModel, content: KeptContent, records: [KeptTransaction]? = nil, dirty: Bool) {
+    func adopt(_ pane: PaneViewModel, content: KeptContent, name: String, dirty: Bool) {
         guard let document = pane.document else { return }
-        let records = records ?? ((try? self.records(of: content)) ?? [])
+        let records = (try? readBack(of: content).records) ?? []
         let map = Dictionary(records.map { ($0.transaction.serial, $0) }, uniquingKeysWith: { _, b in b })
         if let kept = content.history,
            let sides = HistoryLog.sides(head: content.head, undoBase: kept.undoBase, redoTip: kept.redoTip,
@@ -482,7 +546,13 @@ final class ContentKeeper {
         } else {
             document.undoHistory.resume(at: content.head, nextSerial: content.nextSerial,
                                         saved: content.saved, dirty: dirty)
+            // Kept, but the log no longer leads back: the content is right, the
+            // steps to undo it are gone, and the warning says so.
+            if let kept = content.history, kept.undoBase != content.head || kept.redoTip != nil {
+                historiesLost.append(name)
+            }
         }
+        readBacks[content.id] = nil
         let entry = Entry(document: document, id: content.id)
         entry.base = content.base
         entry.logName = content.log?.file

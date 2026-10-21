@@ -1634,3 +1634,5 @@
 /* Restoring a workspace: the check of the files kept changes are laid over */
 "Checking the files changes are kept for" = "Проверка файлов, для которых сохранены правки";
 "Checking “%1$@”" = "Проверяется «%1$@»";
+"Reading the changes kept for “%1$@”" = "Читаются правки, сохранённые для «%1$@»";
+"Their changes came back, but not the steps to undo them: the kept history no longer led back:" = "Правки восстановлены, но шаги для их отмены — нет: сохранённая история больше не ведёт назад:";

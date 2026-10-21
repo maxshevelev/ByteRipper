@@ -26,6 +26,10 @@ import Workspace
         var opened: [Int: RestoredPane] = [:]
         /// The tab's own slots still waiting for a parent.
         var pendingSlots: [Int] = []
+        /// Its untitled documents, opened once their kept content is read
+        /// back off the main thread — before any part, which may come out of
+        /// one of them.
+        var untitledSlots: [Int] = []
         /// Its panels still waiting, by index into `state.fragments`.
         var pendingFragments: [Int] = []
         var fragments: [Int: RestoredPane] = [:]
@@ -52,6 +56,10 @@ import Workspace
                 tab.pendingSlots.append(slot)
                 continue
             }
+            if case .untitled = saved.document, keeper != nil {
+                tab.untitledSlots.append(slot)
+                continue
+            }
             let pane = controller.workspaceSlot(slot)
             var checks: [KeptFileCheck] = []
             guard let unchanged = controller.openWorkspaceDocument(saved, in: pane, keeper: keeper,
@@ -68,14 +76,14 @@ import Workspace
     /// pass — for the caller deciding whether to keep its window.
     func mayShowAnything(_ controller: MainViewController) -> Bool {
         guard let tab = tabs.first(where: { $0.controller === controller }) else { return false }
-        return !tab.opened.isEmpty || !tab.pendingSlots.isEmpty
+        return !tab.opened.isEmpty || !tab.pendingSlots.isEmpty || !tab.untitledSlots.isEmpty
     }
 
     /// The second pass: the parts, parents first, and each tab laid out as
     /// soon as its own panes are in. What is still waiting when nothing more
     /// can be opened had a parent that did not come back.
     func openParts() async {
-        await settleKeptFiles()
+        await settleKeptContent()
         var progress = true
         while progress {
             progress = false
@@ -93,7 +101,7 @@ import Workspace
                     guard let opened = await tab.controller.openWorkspacePart(origin, from: parent, into: pane,
                                                                               keeper: keeper)
                             ?? tab.controller.openWorkspaceOrphan(origin, into: pane, keeper: keeper) else {
-                        issues.append(.missing(path: origin.name))
+                        issues.append(notOpened(origin))
                         continue
                     }
                     if opened.keptChangesLost { issues.append(.unreadable(name: origin.name)) }
@@ -112,7 +120,7 @@ import Workspace
                                                                                   keeper: keeper)
                                 ?? tab.controller.openWorkspaceOrphan(origin, into: nil, keeper: keeper)
                         else {
-                            issues.append(.missing(path: origin.name))
+                            issues.append(notOpened(origin))
                             continue
                         }
                         if opened.keptChangesLost { issues.append(.unreadable(name: origin.name)) }
@@ -121,7 +129,7 @@ import Workspace
                         tab.pendingFragments.removeAll { $0 == index }
                         progress = true
                         guard let opened = tab.controller.openWorkspaceLooseFragment(stamp, keeper: keeper) else {
-                            issues.append(.missing(path: stamp.name ?? L("Untitled")))
+                            issues.append(.unreadable(name: stamp.name ?? L("Untitled")))
                             continue
                         }
                         openedFragment(saved, opened, index: index, in: tab)
@@ -142,7 +150,7 @@ import Workspace
                     origin, into: tab.controller.workspaceSlot(slot), keeper: keeper) {
                     register(saved, opened, in: tab, slot: slot)
                 } else {
-                    issues.append(.missing(path: origin.name))
+                    issues.append(notOpened(origin))
                 }
             }
             tab.pendingSlots = []
@@ -153,13 +161,20 @@ import Workspace
                 if let opened = tab.controller.openWorkspaceOrphan(origin, into: nil, keeper: keeper) {
                     openedFragment(saved, opened, index: index, in: tab)
                 } else {
-                    issues.append(.missing(path: origin.name))
+                    issues.append(notOpened(origin))
                 }
             }
             tab.pendingFragments = []
             let front = tab.state.expandedFragment.flatMap { tab.fragments[$0]?.pane }
             tab.controller.settleWorkspaceFragments(expanded: front)
         }
+        issues += (keeper?.takeHistoriesLost() ?? []).map { .historyLost(name: $0) }
+    }
+
+    /// Why a part did not open: its kept changes could not be read, or there
+    /// was nothing to open it from.
+    private func notOpened(_ origin: PartOrigin) -> RestoreIssue {
+        origin.edits != nil ? .unreadable(name: origin.name) : .missing(path: origin.name)
     }
 
     /// Lays the kept content over the files the first pass opened, each once
@@ -167,27 +182,70 @@ import Workspace
     /// checked at once, off the main thread. One that is not opens as it is on
     /// disk, as a file changed since does; one whose kept content cannot be
     /// read opens as it is on disk too, and the warning says which.
-    private func settleKeptFiles() async {
+    private func settleKeptContent() async {
         let checks = keptFiles
         keptFiles = []
-        guard !checks.isEmpty else { return }
-        let progress = CheckProgress(checks: checks.map { ($0.check, $0.tab.controller) },
-                                     threshold: Self.progressThreshold)
+        guard let keeper else { return }
+        // Every content kept in the workspace, with the name a person knows it by.
+        var contents: [(content: KeptContent, name: String, controller: MainViewController)] = []
+        for (check, tab, _) in checks { contents.append((check.kept, check.url.lastPathComponent, tab.controller)) }
+        for tab in tabs {
+            func add(_ state: PaneState) {
+                switch state.document {
+                case let .untitled(stamp): contents.append((stamp.content, stamp.name ?? L("Untitled"), tab.controller))
+                case let .part(origin):
+                    if let edits = origin.edits { contents.append((edits.content, origin.name, tab.controller)) }
+                case .file: break
+                }
+            }
+            tab.state.panes.compactMap { $0 }.forEach(add)
+            tab.state.fragments.map(\.pane).forEach(add)
+        }
+        let reading = contents.reduce(0) { $0 + keeper.bytesToRead($1.content) }
+        let hashing = checks.filter { $0.check.readsTheFile }.reduce(0) { $0 + $1.check.stamp.size }
+        let progress = CheckProgress(controllers: contents.map(\.controller) + checks.map(\.tab.controller),
+                                     total: reading + hashing, threshold: Self.progressThreshold)
         defer { progress.finish() }
+        let report = progress.reporter()
+
+        // Read back, off the main thread: logs by their chained hash, bases by
+        // theirs, a document's whole content rebuilt.
+        let names = Dictionary(contents.map { ($0.content.id, $0.name) }, uniquingKeysWith: { a, _ in a })
+        await keeper.readBack(contents.map(\.content), progress: report.map { report in
+            { id, count in report(L("Reading the changes kept for “%1$@”", names[id] ?? ""), count) }
+        })
+
+        // The untitled documents, before any part: a part may come out of one.
+        for tab in tabs {
+            for slot in tab.untitledSlots {
+                guard let saved = tab.state.panes[slot] else { continue }
+                var none: [KeptFileCheck] = []
+                guard let unchanged = tab.controller.openWorkspaceDocument(
+                    saved, in: tab.controller.workspaceSlot(slot), keeper: keeper, issues: &issues, keptFiles: &none)
+                else { continue }
+                register(saved, RestoredPane(pane: tab.controller.workspaceSlot(slot), unchanged: unchanged),
+                         in: tab, slot: slot)
+            }
+            tab.untitledSlots = []
+        }
+
+        // The files kept changes are laid over, each checked to be the file
+        // they were made on.
         let same = await withTaskGroup(of: (Int, Bool).self) { group in
             for (index, entry) in checks.enumerated() {
                 let check = entry.check
-                let report = progress.reporter(for: check)
-                group.addTask { (index, await check.isTheSameFile(progress: report)) }
+                let name = L("Checking “%1$@”", check.url.lastPathComponent)
+                let fileReport: (@Sendable (Int) -> Void)? = report.map { report in { report(name, $0) } }
+                group.addTask { (index, await check.isTheSameFile(progress: fileReport)) }
             }
             var same = [Bool](repeating: false, count: checks.count)
             for await (index, result) in group { same[index] = result }
             return same
         }
         for (index, (check, tab, slot)) in checks.enumerated() {
-            if same[index], let keeper {
+            if same[index] {
                 do {
-                    try keeper.apply(check.kept, to: check.pane)
+                    try keeper.apply(check.kept, to: check.pane, name: check.url.path)
                 } catch {
                     issues.append(.unreadable(name: check.url.path))
                 }
@@ -199,8 +257,9 @@ import Workspace
         }
     }
 
-    /// How many bytes of files to check before their windows show how far
-    /// the check has got; below it the check is over before a sheet would be.
+    /// How many bytes — kept content to read back, files to check — before
+    /// the windows show how far it has got; below it the work is over before a
+    /// sheet would be.
     static var progressThreshold: UInt64 = 256 << 20
 
     /// The tabs in which nothing at all could be opened.
@@ -231,9 +290,9 @@ import Workspace
     }
 }
 
-/// How far the check of the files kept changes are laid over has got, shown
-/// on each window that has one of them — a sheet, so nothing is edited there
-/// before the changes are laid over (`Design/PERSISTENT_UNDO_PLAN.md`,
+/// How far reading back the kept content and checking the files it is laid
+/// over has got, shown on each window concerned — a sheet, so nothing is
+/// edited there before the content is in (`Design/PERSISTENT_UNDO_PLAN.md`,
 /// "Integrity"). Only when there is enough to read for it to matter.
 @MainActor private final class CheckProgress {
     private var operations: [BackgroundOperation] = []
@@ -248,30 +307,25 @@ import Workspace
     }
 
     // help: workspace.restore-check
-    init(checks: [(KeptFileCheck, MainViewController)], threshold: UInt64) {
-        let reading = checks.filter { $0.0.readsTheFile }
-        total = reading.reduce(0) { $0 + $1.0.stamp.size }
-        guard total >= threshold, total > 0, let first = reading.first?.0 else { return }
+    init(controllers: [MainViewController], total: UInt64, threshold: UInt64) {
+        self.total = total
+        guard total >= threshold, total > 0 else { return }
         var seen = Set<ObjectIdentifier>()
-        for (_, controller) in reading where seen.insert(ObjectIdentifier(controller)).inserted {
+        for controller in controllers where seen.insert(ObjectIdentifier(controller)).inserted {
             guard controller.view.window != nil else { continue }
-            let operation = BackgroundOperation(name: Self.name(of: first)) {}
+            let operation = BackgroundOperation(name: L("Getting ready")) {}
             BlockingOperationSheet.present(operation, title: L("Checking the files changes are kept for"),
                                            from: controller, cancellable: false)
             operations.append(operation)
         }
     }
 
-    private static func name(of check: KeptFileCheck) -> String {
-        L("Checking “%1$@”", check.url.lastPathComponent)
-    }
-
-    /// What `check` reports the bytes it read through.
-    func reporter(for check: KeptFileCheck) -> (@Sendable (Int) -> Void)? {
+    /// What the work reports through: what it is doing now, and the bytes it
+    /// read. Nil when nothing is shown.
+    func reporter() -> (@Sendable (String, Int) -> Void)? {
         guard !operations.isEmpty else { return nil }
         let operations = operations, counter = counter, total = Double(total)
-        let name = Self.name(of: check)
-        return { count in
+        return { name, count in
             let read = counter.add(count)
             for operation in operations {
                 operation.rename(name)

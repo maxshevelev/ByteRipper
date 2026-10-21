@@ -73,4 +73,7 @@ public enum RestoreIssue: Equatable, Sendable {
     /// damaged or missing: a file opened as it is on disk, a document with no
     /// file was not opened.
     case unreadable(name: String)
+    /// Its content came back, but not the steps to undo it: the log no longer
+    /// held the way back.
+    case historyLost(name: String)
 }

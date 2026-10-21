@@ -35,14 +35,14 @@ The workspace is stored in `~/Library/Application Support/ByteRipper/Workspace` 
 
 ## Files that changed or are missing
 
-At launch, each file is compared with its size and modification date at the time the workspace was written. A file with unsaved changes kept over it is compared by its contents as well (SHA-256): a copy or a backup moves the date of a file without changing a byte, so a file whose date alone has moved keeps its changes, and a file whose bytes differ is a changed file even when its date is the same. Reading a file of several gigabytes takes a few seconds; meanwhile its window shows how far the check has got and cannot be edited, since the changes are laid over the file only once it has been checked.
+At launch, each file is compared with its size and modification date at the time the workspace was written. A file with unsaved changes kept over it is compared by its contents as well (SHA-256): a copy or a backup moves the date of a file without changing a byte, so a file whose date alone has moved keeps its changes, and a file whose bytes differ is a changed file even when its date is the same. Reading a file of several gigabytes takes a few seconds, and so does reading back a long history kept for it; meanwhile its window shows how far the work has got and cannot be edited, since the changes are laid over the file only once it has been checked.
 
 - A file that is no longer at its path is not opened.
 - A file that has changed is opened. If it became shorter, the caret and the screen move to its last address, and bookmarks beyond its end are removed. Its unsaved changes, its segments, its parts and the state of its tool panel are not restored: they were made on other bytes and would point to wrong places.
 
 When either happens, one message after the restore lists the files concerned.
 
-The changes ByteRipper keeps beside the workspace are checked the same way. Changes that cannot be read back exactly as they were written — the files beside the workspace were damaged — are not applied: the file opens as it is on disk, a part as its file holds it, and a document with no file is not opened. The message after the restore names them.
+The changes ByteRipper keeps beside the workspace are checked the same way. Changes that cannot be read back exactly as they were written — the files beside the workspace were damaged — are not applied: the file opens as it is on disk, a part as its file holds it, and a document with no file is not opened. The message after the restore names them. When the kept history no longer leads back to its beginning, the content comes back as it was but without the steps to undo it, and the message says that too.
 
 ## Opening a file from the Finder
 

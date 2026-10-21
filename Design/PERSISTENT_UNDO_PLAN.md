@@ -107,8 +107,16 @@ down, and the kept files it does not name go after it; one that failed is
 not, the workspace on disk stays the last whole one, and the document that
 failed is started afresh by the next snapshot. A snapshot that may be the last
 (`record(final:)`) waits for the queue. Still on the main thread: runs over a
-file (`OverlayEdits`) when that base is needed — rare — and, at restore, the
-reading of bases and logs.
+file (`OverlayEdits`) when that base is needed — rare.
+
+At restore the kept content is read back off the main thread too
+(`ContentKeeper.readBack`): before the parts, every log is read and checked by
+its chained hash and every base by its own, all at once, and a document's
+whole content rebuilt; the untitled documents open after that, before any
+part, which may come out of one of them. The same sheet as for the files'
+check shows how far it has got. Content whose kept history no longer leads
+back comes back without it, and the restore warning says so
+(`RestoreIssue.historyLost`).
 
 ## Integrity
 

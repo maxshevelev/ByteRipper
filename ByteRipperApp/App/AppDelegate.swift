@@ -339,6 +339,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             sections.append(L("Changed on disk since the last session. Opened without their unsaved changes, segments, parts and tool state:")
                             + "\n" + list(changed))
         }
+        let historyLost = issues.compactMap { if case let .historyLost(name) = $0 { name } else { nil } }
+        if !historyLost.isEmpty {
+            sections.append(L("Their changes came back, but not the steps to undo them: the kept history no longer led back:")
+                            + "\n" + list(historyLost))
+        }
         let unreadable = issues.compactMap { if case let .unreadable(name) = $0 { name } else { nil } }
         if !unreadable.isEmpty {
             sections.append(L("Their kept changes could not be read. Files were opened as they are on disk and parts as their file holds them; documents with no file were not opened:")

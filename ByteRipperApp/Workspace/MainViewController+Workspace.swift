@@ -206,7 +206,7 @@ extension MainViewController {
             pane.openBytes(bytes, named: stamp.name)
             // Work nobody saved is still work nobody saved: closing it asks,
             // as it would have before the app went down.
-            keeper?.adopt(pane, content: stamp.content, dirty: stamp.dirty)
+            keeper?.adopt(pane, content: stamp.content, name: stamp.name ?? L("Untitled"), dirty: stamp.dirty)
             return UInt64(bytes.count) == stamp.size
         case .part:
             return nil
@@ -243,7 +243,7 @@ extension MainViewController {
             opened = panel
         }
         if let stamp = origin.edits, edited != nil {
-            keeper?.adopt(opened, content: stamp.content, dirty: stamp.dirty)
+            keeper?.adopt(opened, content: stamp.content, name: origin.name, dirty: stamp.dirty)
         }
         return RestoredPane(pane: opened, unchanged: UInt64(shown.count) == origin.size,
                             keptChangesLost: origin.edits != nil && edited == nil)
@@ -259,7 +259,7 @@ extension MainViewController {
         if let pane {
             guard let bytes = try? keeper?.bytes(of: stamp.content) else { return nil }
             pane.openBytes(bytes, named: stamp.name)
-            keeper?.adopt(pane, content: stamp.content, dirty: stamp.dirty)
+            keeper?.adopt(pane, content: stamp.content, name: stamp.name ?? origin.name, dirty: stamp.dirty)
             return RestoredPane(pane: pane, unchanged: UInt64(bytes.count) == stamp.size)
         }
         return openWorkspaceLooseFragment(stamp, keeper: keeper)
@@ -270,7 +270,7 @@ extension MainViewController {
         guard let bytes = try? keeper?.bytes(of: stamp.content),
               let id = openFragment(bytes, named: stamp.name ?? L("Untitled"), animated: false),
               let pane = fragments.pane(id) else { return nil }
-        keeper?.adopt(pane, content: stamp.content, dirty: stamp.dirty)
+        keeper?.adopt(pane, content: stamp.content, name: stamp.name ?? L("Untitled"), dirty: stamp.dirty)
         return RestoredPane(pane: pane, unchanged: UInt64(bytes.count) == stamp.size)
     }
 

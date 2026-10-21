@@ -167,7 +167,8 @@ public enum HistoryLog {
     /// Reads the records in the first `length` bytes of the log at `url`,
     /// checking each one's hash and the last against `hash`. The ops' bytes
     /// are not read into memory: they point into the log.
-    public static func read(_ url: URL, length: UInt64, hash: Data) throws -> [KeptTransaction] {
+    public static func read(_ url: URL, length: UInt64, hash: Data,
+                            progress: ((Int) -> Void)? = nil) throws -> [KeptTransaction] {
         guard length > 0 else {
             guard hash == emptyHash else { throw HistoryLogError.unreadable }
             return []
@@ -175,6 +176,7 @@ public enum HistoryLog {
         let file = try UndoJournal(reading: url)
         guard file.length >= length else { throw HistoryLogError.unreadable }
         var reader = Reader(file: file, end: length)
+        reader.progress = progress
         var chain = emptyHash
         var records: [KeptTransaction] = []
         var index: [UInt64: Int] = [:]
@@ -240,6 +242,7 @@ public enum HistoryLog {
         let end: UInt64
         var at: UInt64 = 0
         var hasher = SHA256()
+        var progress: ((Int) -> Void)?
 
         init(file: UndoJournal, end: UInt64) {
             self.file = file
@@ -251,6 +254,7 @@ public enum HistoryLog {
             let bytes = try file.read(at: at, count: count)
             if hashing { hasher.update(data: bytes) }
             at += UInt64(count)
+            progress?(count)
             return bytes
         }
 

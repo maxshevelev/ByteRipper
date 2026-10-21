@@ -556,6 +556,30 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertEqual(restored.segmentStore.segments.map(\.range), [0..<20, 20..<52], "and on again")
     }
 
+    /// Content whose kept history no longer leads back comes back without it,
+    /// and the warning says so.
+    func testAHistoryThatNoLongerLeadsBackIsReported() async throws {
+        WorkspaceSettings.set(restoresWorkspace: true)
+        let window = shownWindow()
+        let pane = window.mainViewController.windowModel.pane1
+        pane.openBytes([UInt8](repeating: 0, count: 32), named: "scratch")
+        window.mainViewController.refreshMode()
+        pane.select(range: 0..<0)
+        try pane.pasteWrite([7])
+        let (recorder, folderURL) = recorder([window])
+        recorder.record(); recorder.flush()
+        var tab = try XCTUnwrap(recorder.savedWorkspace()?.windows.first?.tabs.first)
+        guard case var .untitled(stamp)? = tab.panes[0]?.document else { return XCTFail("kept") }
+        stamp.content.history?.undoBase = 999_999
+        tab.panes[0]?.document = .untitled(stamp)
+
+        let target = shownWindow().mainViewController
+        let issues = await restore([(tab, target)], keeper: ContentKeeper(folder: WorkspaceFolder(url: folderURL)))
+        XCTAssertEqual(issues, [.historyLost(name: "scratch")])
+        XCTAssertEqual(try target.windowModel.pane1.document?.read(at: 0, length: 1), [7], "the content is right")
+        XCTAssertFalse(try target.windowModel.pane1.undo())
+    }
+
     /// A file's history comes back with the saved state in it: undoing back to
     /// what is on disk makes the file clean.
     func testAFilesHistoryKnowsItsSavedState() async throws {
