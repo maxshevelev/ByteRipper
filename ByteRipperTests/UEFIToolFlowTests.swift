@@ -741,6 +741,7 @@ final class UEFIToolFlowTests: XCTestCase {
         let controller = try open(LenovoTestImage.make())
         let vc = try XCTUnwrap(session().viewController as? UEFIToolViewController)
         XCTAssertTrue(pumpUntil(5) { vc.isDMIButtonShownForTesting }, "the image has a store")
+        XCTAssertEqual(vc.dmiButtonTitleForTesting, "Lenovo DMI", "the button says whose store it is")
 
         vc.clickDMIButtonForTesting()
         let tree = try outline()

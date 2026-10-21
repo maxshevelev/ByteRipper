@@ -387,6 +387,28 @@ public enum UEFITreeDisplay {
         return L("%1$@ at %2$@", in: language, kind, String(format: "0x%08llX", store.range.lowerBound))
     }
 
+    /// The DMI button's word: whose layout the image's stores are —
+    /// "Lenovo DMI", "ASUS DMI" — or plain "DMI" when they are more than one
+    /// vendor's, which no image seen so far is.
+    public static func dmiButtonTitle(_ stores: [DMIStore], in language: AppLanguage) -> String {
+        let vendors = Set(stores.compactMap { dmiVendorTitle($0.kind, in: language) })
+        return vendors.count == 1 ? vendors.first! : L("DMI", in: language)
+    }
+
+    /// The vendor whose layout a store of `kind` is, as the bench calls the
+    /// area: GPNV is ASUS's, a VSS entry here is HP's `HP_MUD`, a SysF store
+    /// Apple's.
+    private static func dmiVendorTitle(_ kind: UEFINodeKind, in language: AppLanguage) -> String? {
+        switch kind {
+        case .lenovoDMIStore: return L("Lenovo DMI", in: language)
+        case .gpnvStore: return L("ASUS DMI", in: language)
+        case .acerDMIStore: return L("Acer DMI", in: language)
+        case .vssEntry: return L("HP DMI", in: language)
+        case .sysFStore: return L("Apple DMI", in: language)
+        default: return nil
+        }
+    }
+
     /// `Baseboard serial number = PF0TEST1`, `LENV block 2 · generation 84`,
     /// `2022-06-29 20:30:25 · Set · Baseboard serial number`; nil for a row
     /// of anything else, or one whose bytes do not read.

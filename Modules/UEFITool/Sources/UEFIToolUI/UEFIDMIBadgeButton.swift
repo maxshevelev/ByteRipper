@@ -1,9 +1,10 @@
 import AppKit
 import Localization
 
-/// The DMI button in the panel's header: the word in a rounded frame, a badge
-/// rather than a glyph — no symbol says "the board's identity", and the
-/// technician knows the area by that name.
+/// The DMI button in the panel's header: the words in a rounded frame, a
+/// badge rather than a glyph — no symbol says "the board's identity", and the
+/// technician knows the area by that name, and by whose layout it is:
+/// `Lenovo DMI`, `ASUS DMI` (`UEFITreeDisplay.dmiButtonTitle`).
 ///
 /// Drawn rather than built from a layer, so the frame and the word follow the
 /// appearance: a layer's colour is a `CGColor` fixed when it was set.
@@ -19,6 +20,13 @@ final class UEFIDMIBadgeButton: NSButton {
         title = L("DMI")
         isBordered = false
         setButtonType(.momentaryChange)
+    }
+
+    override var title: String {
+        didSet {
+            invalidateIntrinsicContentSize()
+            needsDisplay = true
+        }
     }
 
     @available(*, unavailable)

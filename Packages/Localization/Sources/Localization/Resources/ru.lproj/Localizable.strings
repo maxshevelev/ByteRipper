@@ -1510,6 +1510,7 @@
 "Read by the firmware" = "Читается прошивкой";
 "block header|Signature" = "Сигнатура";
 "Acer DMI" = "Acer DMI";
+"ASUS DMI" = "ASUS DMI";
 "System serial" = "Серийный номер системы";
 "MB Serial" = "Серийный номер платы";
 "Asset tag" = "Инвентарный номер";

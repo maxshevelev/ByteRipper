@@ -1379,6 +1379,7 @@ import UEFITool
     /// shows when there is one, and goes away for an image with none.
     func showDMIStores(_ stores: [DMIStore]) {
         dmiStores = stores
+        dmiButton.title = UEFITreeDisplay.dmiButtonTitle(stores, in: Localization.appLanguage)
         dmiButton.isHidden = stores.isEmpty
         dmiButtonWidth?.constant = stores.isEmpty ? 0 : dmiButton.intrinsicContentSize.width
         dmiButtonGap?.constant = stores.isEmpty ? 0 : -4
@@ -1409,6 +1410,7 @@ import UEFITool
     /// For the tests: whether the DMI button is on screen, and its click.
     var isDMIButtonShownForTesting: Bool { !dmiButton.isHidden }
     func clickDMIButtonForTesting() { dmiClicked() }
+    var dmiButtonTitleForTesting: String { dmiButton.title }
 
     // MARK: - Searching the tree
 

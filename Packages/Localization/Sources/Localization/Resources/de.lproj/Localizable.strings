@@ -1510,6 +1510,7 @@
 "Read by the firmware" = "Von der Firmware gelesen";
 "block header|Signature" = "Signatur";
 "Acer DMI" = "Acer DMI";
+"ASUS DMI" = "ASUS DMI";
 "System serial" = "System-Seriennummer";
 "MB Serial" = "Platine-Seriennummer";
 "Asset tag" = "Inventarnummer";
