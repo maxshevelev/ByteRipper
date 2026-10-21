@@ -309,6 +309,38 @@ public final class BinaryDocument: @unchecked Sendable {
         readOnly = a.readOnly
     }
 
+    /// A join on the undo or the redo side, as a workspace keeps it: the
+    /// serial of its transaction, and the file the document was attached to
+    /// before it.
+    public struct KeptJoin: Equatable, Sendable {
+        public let serial: UInt64
+        public let url: URL
+        public let readOnly: Bool
+
+        public init(serial: UInt64, url: URL, readOnly: Bool) {
+            self.serial = serial
+            self.url = url
+            self.readOnly = readOnly
+        }
+    }
+
+    /// The joins a kept history has to know about: those that can be undone,
+    /// and those that can be redone.
+    public var keptJoins: (undo: [KeptJoin], redo: [KeptJoin]) {
+        func kept(_ mark: JoinMark) -> KeptJoin { KeptJoin(serial: mark.serial, url: mark.url, readOnly: mark.readOnly) }
+        return (joinMarks.map(kept), undoneJoinMarks.map(kept))
+    }
+
+    /// Puts back the joins of a restored history, so undoing one re-attaches
+    /// the document to its file as before the app went down.
+    public func restoreJoins(undo: [KeptJoin], redo: [KeptJoin]) {
+        func mark(_ kept: KeptJoin) -> JoinMark {
+            JoinMark(serial: kept.serial, url: kept.url, identity: FileIdentity(url: kept.url), readOnly: kept.readOnly)
+        }
+        joinMarks = undo.map(mark)
+        undoneJoinMarks = redo.map(mark)
+    }
+
     // MARK: - Duplicate (document-level, §23)
 
     /// A second document holding a copy of this one's current content — edits

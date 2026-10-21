@@ -205,4 +205,87 @@ final class HistoryLogTests: XCTestCase {
         clean.resume(at: 9, nextSerial: 10, saved: 9, dirty: false)
         XCTAssertFalse(clean.isDirty)
     }
+
+    // MARK: - The history itself
+
+    /// A history written down and put back into a fresh document undoes and
+    /// redoes as the one it was taken from — a fast-undone series one redo step,
+    /// a step's name and series with it, the saved state recognised.
+    func testAKeptHistoryUndoesAndRedoesAsBefore() throws {
+        let original = [UInt8](repeating: 0, count: 32)
+        let doc = makeDocument(original)
+        try doc.overwrite(range: 0..<2, with: [1, 1])
+        doc.undoHistory.markSaved()
+        doc.beginEditGroup(label: "Add Microcode")
+        try doc.overwrite(range: 4..<6, with: [2, 2])
+        doc.endEditGroup()
+        doc.beginSeries(5)
+        for i in 0..<3 { try doc.overwrite(range: UInt64(10 + i)..<UInt64(11 + i), with: [3]) }
+        doc.endSeries()
+        try doc.undo(batch: false)
+        try doc.undo(batch: true)                     // the rest of the series: one redo step
+        let history = doc.undoHistory
+        XCTAssertEqual(history.redoStepSizes, [2, 1])
+
+        let url = folder.appendingPathComponent("h.log")
+        let writer = try write(history.heldTransactions, to: url)
+        let records = try HistoryLog.read(url, length: writer.length, hash: writer.hash)
+        let map = Dictionary(uniqueKeysWithValues: records.map { ($0.transaction.serial, $0) })
+        let sides = try XCTUnwrap(HistoryLog.sides(head: history.headSerial, undoBase: history.undoBaseSerial,
+                                                   redoTip: history.redoTipSerial,
+                                                   redoSizes: history.redoStepSizes, in: map))
+        XCTAssertEqual(sides.undo.count, 2)
+        XCTAssertEqual(sides.redo.map(\.count), [2, 1])
+
+        let copy = makeDocument(try content(doc))
+        copy.undoHistory.restore(undo: sides.undo, redo: sides.redo, base: history.undoBaseSerial,
+                                 nextSerial: history.upcomingSerial, saved: history.savedStateSerial,
+                                 dirtyRegardless: history.isDirtyRegardless)
+        XCTAssertEqual(copy.undoHistory.undoLabel, "Add Microcode")
+        XCTAssertTrue(copy.isDirty)
+        try copy.redo()
+        try copy.redo()
+        XCTAssertEqual(try content(copy), try { try doc.redo(); try doc.redo(); return try content(doc) }())
+        try copy.undo(batch: false)
+        try copy.undo(batch: true)
+        try copy.undo()
+        XCTAssertFalse(copy.isDirty, "the saved state, reached by undo")
+        try copy.undo()
+        XCTAssertEqual(try content(copy), original)
+        XCTAssertFalse(copy.canUndo)
+        try copy.overwrite(range: 20..<21, with: [9])
+        XCTAssertGreaterThanOrEqual(copy.undoHistory.heldTransactions.last!.transaction.serial,
+                                    history.upcomingSerial, "serials go on, never named twice")
+    }
+
+    /// No way down to the undo base: nothing to put back. A redo side that does
+    /// not add up is left out, the undo side kept.
+    func testSidesThatDoNotAddUpAreLeftOut() throws {
+        let doc = makeDocument([UInt8](repeating: 0, count: 8))
+        try doc.overwrite(range: 0..<1, with: [1])
+        try doc.overwrite(range: 1..<2, with: [1])
+        try doc.undo()
+        let held = doc.undoHistory.heldTransactions
+        let map = Dictionary(uniqueKeysWithValues: held.map { ($0.transaction.serial, $0) })
+        let head = doc.undoHistory.headSerial
+        XCTAssertNil(HistoryLog.sides(head: head, undoBase: 999, redoTip: nil, redoSizes: [], in: map))
+        let wrong = try XCTUnwrap(HistoryLog.sides(head: head, undoBase: 0, redoTip: doc.undoHistory.redoTipSerial,
+                                                   redoSizes: [5], in: map))
+        XCTAssertEqual(wrong.undo.count, 1)
+        XCTAssertEqual(wrong.redo.count, 0)
+    }
+
+    /// A selection a command placed after the snapshot wrote its transaction
+    /// is written as a record of its own and read back over it.
+    func testARefinedSelectionReadsBack() throws {
+        let doc = makeDocument([UInt8](repeating: 0, count: 16))
+        try doc.overwrite(range: 0..<2, with: [1, 1])
+        let url = folder.appendingPathComponent("s.log")
+        let writer = try write(doc.undoHistory.heldTransactions, to: url)
+        let serial = doc.undoHistory.headSerial
+        let refined = SelectionModel(start: 3, end: 7, fileSize: 16)
+        try writer.appendSelection(after: serial, refined)
+        let read = try HistoryLog.read(url, length: writer.length, hash: writer.hash)
+        XCTAssertEqual(read.first?.transaction.selectionAfter, refined)
+    }
 }

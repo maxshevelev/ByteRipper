@@ -484,6 +484,123 @@ final class WorkspaceRestoreTests: XCTestCase {
                        "a closed file takes its changes with it")
     }
 
+    // MARK: - The history
+
+    /// What a restored pane holds now, whole.
+    private func bytes(_ pane: PaneViewModel) throws -> [UInt8]? {
+        try pane.document?.read(at: 0, length: Int(pane.fileSize))
+    }
+
+    /// An untitled document comes back with its undo and its redo: what could
+    /// be undone and redone before the app went down still can.
+    func testAnUntitledDocumentsUndoAndRedoComeBack() async throws {
+        WorkspaceSettings.set(restoresWorkspace: true)
+        let window = shownWindow()
+        let pane = window.mainViewController.windowModel.pane1
+        let original = [UInt8](repeating: 0x10, count: 64)
+        pane.openBytes(original, named: "scratch")
+        window.mainViewController.refreshMode()
+        pane.select(range: 4..<4)
+        try pane.pasteWrite([1, 2])
+        let afterFirst = try bytes(pane)
+        try pane.pasteInsert([3])
+        let afterSecond = try bytes(pane)
+        try pane.undo()
+        let (recorder, folderURL) = recorder([window])
+        recorder.record()
+
+        let tab = try XCTUnwrap(recorder.savedWorkspace()?.windows.first?.tabs.first)
+        let target = shownWindow().mainViewController
+        let issues = await restore([(tab, target)], keeper: ContentKeeper(folder: WorkspaceFolder(url: folderURL)))
+        XCTAssertEqual(issues, [])
+        let restored = target.windowModel.pane1
+        XCTAssertEqual(try bytes(restored), afterFirst)
+        XCTAssertTrue(try restored.redo())
+        XCTAssertEqual(try bytes(restored), afterSecond)
+        XCTAssertTrue(try restored.undo())
+        XCTAssertTrue(try restored.undo())
+        XCTAssertEqual(try bytes(restored), original)
+        XCTAssertFalse(restored.status.isDirty, "back to what New File opened")
+        XCTAssertFalse(try restored.undo())
+    }
+
+    /// A file's history comes back with the saved state in it: undoing back to
+    /// what is on disk makes the file clean.
+    func testAFilesHistoryKnowsItsSavedState() async throws {
+        WorkspaceSettings.set(restoresWorkspace: true)
+        let file = try dump(0x100, 0x22)
+        let window = shownWindow()
+        window.mainViewController.openFiles([file])
+        let pane = window.mainViewController.windowModel.pane1
+        pane.select(range: 0..<0)
+        try pane.pasteWrite([0xA1])
+        try pane.save()
+        try pane.pasteWrite([0xB2])
+        let (recorder, folderURL) = recorder([window])
+        recorder.record()
+
+        let tab = try XCTUnwrap(recorder.savedWorkspace()?.windows.first?.tabs.first)
+        pane.close()
+        let target = shownWindow().mainViewController
+        let issues = await restore([(tab, target)], keeper: ContentKeeper(folder: WorkspaceFolder(url: folderURL)))
+        XCTAssertEqual(issues, [])
+        let restored = target.windowModel.pane1
+        XCTAssertTrue(restored.status.isDirty)
+        XCTAssertTrue(try restored.undo())
+        XCTAssertFalse(restored.status.isDirty, "the state on disk")
+        XCTAssertTrue(try restored.undo())
+        XCTAssertEqual(try restored.document?.read(at: 0, length: 2), [0x22, 0x22], "before the save")
+        XCTAssertTrue(restored.status.isDirty)
+    }
+
+    /// A join comes back undoable: undoing it attaches the document to the
+    /// file it was joined from again.
+    func testAJoinComesBackUndoable() async throws {
+        WorkspaceSettings.set(restoresWorkspace: true)
+        let file = try dump(0x80, 0x31)
+        let other = try dump(0x40, 0x32)
+        let window = shownWindow()
+        window.mainViewController.openFiles([file])
+        let pane = window.mainViewController.windowModel.pane1
+        try pane.join(contentsOf: other, at: .end)
+        XCTAssertTrue(pane.isUntitled)
+        let (recorder, folderURL) = recorder([window])
+        recorder.record()
+
+        let tab = try XCTUnwrap(recorder.savedWorkspace()?.windows.first?.tabs.first)
+        pane.close()
+        let target = shownWindow().mainViewController
+        let issues = await restore([(tab, target)], keeper: ContentKeeper(folder: WorkspaceFolder(url: folderURL)))
+        XCTAssertEqual(issues, [])
+        let restored = target.windowModel.pane1
+        XCTAssertEqual(restored.fileSize, 0xC0)
+        XCTAssertTrue(try restored.undo())
+        XCTAssertEqual(restored.fileSize, 0x80)
+        XCTAssertFalse(restored.isUntitled, "attached to its file again")
+        XCTAssertEqual(restored.document?.url.standardizedFileURL, file.standardizedFileURL)
+    }
+
+    /// A part's history comes back with its changes.
+    func testAPartsHistoryComesBack() async throws {
+        let (parentTab, partTab, bytes, _) = try tornOffPart()
+        let part = partTab.windowModel.pane1
+        part.select(range: 0..<0)
+        try part.pasteWrite([0xDE, 0xAD])
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("PartHistory-\(UUID().uuidString)")
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
+        let keeper = ContentKeeper(folder: WorkspaceFolder(url: folder))
+        let ids = WorkspacePaneIDs()
+        let tabs = [partTab.workspaceTab(keeper: keeper, ids: ids), parentTab.workspaceTab(keeper: keeper, ids: ids)]
+
+        let restoredPart = shownWindow().mainViewController
+        let restoredParent = shownWindow().mainViewController
+        let issues = await restore([(tabs[0], restoredPart), (tabs[1], restoredParent)], keeper: keeper)
+        XCTAssertEqual(issues, [])
+        let pane = restoredPart.windowModel.pane1
+        XCTAssertTrue(try pane.undo())
+        XCTAssertEqual(try pane.document?.read(at: 0, length: 2), Array(bytes[0x200..<0x202]))
+    }
+
     // MARK: - Integrity
 
     /// A file with changes kept over it, recorded as the last snapshot is:

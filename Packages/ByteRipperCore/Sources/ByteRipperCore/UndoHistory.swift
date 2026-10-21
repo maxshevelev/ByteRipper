@@ -115,7 +115,7 @@ public struct UndoTransaction: Equatable, Sendable {
                   selectionAfter: .empty(at: caretAfter, fileSize: fileSize))
     }
 
-    fileprivate mutating func setSelectionAfter(_ selection: SelectionModel) {
+    mutating func setSelectionAfter(_ selection: SelectionModel) {
         selectionAfter = selection
     }
 }
@@ -532,13 +532,55 @@ public final class UndoHistory: @unchecked Sendable {
     /// `dirty` keeps a document dirty that has no saved state to compare with:
     /// an untitled one nobody saved.
     public func resume(at head: UInt64, nextSerial: UInt64, saved: UInt64?, dirty: Bool) {
+        restore(undo: [], redo: [], base: head, nextSerial: nextSerial,
+                saved: saved ?? head, dirtyRegardless: dirty && saved == nil)
+    }
+
+    /// The transaction the next undo would take back first — the only one a
+    /// command can still refine the selection after.
+    public var newestTransaction: UndoTransaction? { undoSteps.last?.entries.last?.transaction }
+
+    /// The state an empty undo side stands for: where undoing all that is
+    /// left lands.
+    public var undoBaseSerial: UInt64 { baseSerial }
+
+    /// Whether the document stays dirty whatever state it is in — content
+    /// nobody saved, with no earlier state to undo to (`clearKeepingDirty`).
+    public var isDirtyRegardless: Bool { dirtyAfterClear }
+
+    /// The newest state the redo side leads to: the redo side is the way from
+    /// the state the document is in down to it. Nil with nothing to redo.
+    public var redoTipSerial: UInt64? { redoSteps.first?.entries.last?.serial }
+
+    /// How many transactions each redo step holds, the next to redo first — a
+    /// fast undo of a typing series is one step of many.
+    public var redoStepSizes: [Int] { redoSteps.reversed().map(\.entries.count) }
+
+    /// Puts back a history kept beside a workspace: `undo`, oldest first, is
+    /// the way from `base` to the state the document is in; `redo`, the next to
+    /// redo first, the steps from there on. The ops' bytes stay where they are
+    /// — in the kept log — until a compaction moves them into this history's
+    /// own journal. Serials go on from `nextSerial`; `saved` names the saved
+    /// state, and `dirtyRegardless` keeps a document dirty in any state.
+    public func restore(undo: [KeptTransaction], redo: [[KeptTransaction]], base: UInt64,
+                        nextSerial: UInt64, saved: UInt64, dirtyRegardless: Bool) {
         dropAll()
-        baseSerial = head
-        self.nextSerial = max(nextSerial, head + 1)
-        savedSerial = saved ?? head
-        dirtyAfterClear = dirty && saved == nil
+        baseSerial = base
+        func step(_ kept: [KeptTransaction]) -> Step {
+            Step(label: kept.first?.label,
+                 entries: kept.map { Entry(transaction: $0.transaction, serial: $0.transaction.serial) },
+                 seriesID: kept.first?.seriesID)
+        }
+        undoSteps = undo.map { step([$0]) }
+        redoSteps = redo.reversed().map(step)
+        let all = undo + redo.flatMap { $0 }
+        for kept in all { account(kept.transaction.ops, sign: 1) }
+        let newest = all.map(\.transaction.serial).max() ?? 0
+        self.nextSerial = max(nextSerial, newest + 1, base + 1)
+        savedSerial = saved
+        dirtyAfterClear = dirtyRegardless
         epoch += 1
-        undoTransactionCount = 0
+        undoTransactionCount = undo.count
         lastUndoWasSeriesByte = false
         lastUndoSeriesID = nil
     }

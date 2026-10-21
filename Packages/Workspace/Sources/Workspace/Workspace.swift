@@ -11,7 +11,7 @@ public struct Workspace: Codable, Equatable, Sendable {
     /// The version this build writes. A file of another version is ignored
     /// rather than migrated: losing a workspace is an inconvenience, misreading
     /// one is not acceptable.
-    public static let currentVersion = 3
+    public static let currentVersion = 4
 
     public var version: Int
     /// Front to back, as `NSApp.orderedWindows` lists them.
@@ -267,15 +267,19 @@ public struct KeptContent: Codable, Equatable, Sendable {
     public var saved: UInt64?
     /// The transactions over the base; nil while there are none.
     public var log: KeptLog?
+    /// The history over the content: what undo and redo find after a
+    /// relaunch. Nil for content kept without one.
+    public var history: KeptHistory?
 
     public init(id: String, base: KeptBase, head: UInt64, nextSerial: UInt64,
-                saved: UInt64? = nil, log: KeptLog? = nil) {
+                saved: UInt64? = nil, log: KeptLog? = nil, history: KeptHistory? = nil) {
         self.id = id
         self.base = base
         self.head = head
         self.nextSerial = nextSerial
         self.saved = saved
         self.log = log
+        self.history = history
     }
 
     /// The files in `Kept/` this content is read from.
@@ -287,6 +291,52 @@ public struct KeptContent: Codable, Equatable, Sendable {
         }
         if let log { files.append(log.file) }
         return files
+    }
+}
+
+/// A document's undo history as a workspace keeps it, beside its content: the
+/// transactions are in the log, this says how they stand
+/// (`Design/PERSISTENT_UNDO_PLAN.md`, "Position lives in the manifest").
+public struct KeptHistory: Codable, Equatable, Sendable {
+    /// The state an empty undo side stands for: the undo side is the way from
+    /// it to `KeptContent.head`.
+    public var undoBase: UInt64
+    /// The newest state the redo side leads to; nil with nothing to redo.
+    public var redoTip: UInt64?
+    /// How many transactions each redo step holds, the next to redo first.
+    public var redoSteps: [Int]
+    /// The state last saved, and whether the document is dirty in any state —
+    /// content nobody saved, with nothing earlier to undo to.
+    public var savedState: UInt64
+    public var dirtyRegardless: Bool
+    /// The joins that can be undone and those that can be redone, each with
+    /// the file it detached the document from.
+    public var joins: [KeptJoin]
+    public var undoneJoins: [KeptJoin]
+
+    public init(undoBase: UInt64, redoTip: UInt64?, redoSteps: [Int], savedState: UInt64,
+                dirtyRegardless: Bool, joins: [KeptJoin] = [], undoneJoins: [KeptJoin] = []) {
+        self.undoBase = undoBase
+        self.redoTip = redoTip
+        self.redoSteps = redoSteps
+        self.savedState = savedState
+        self.dirtyRegardless = dirtyRegardless
+        self.joins = joins
+        self.undoneJoins = undoneJoins
+    }
+}
+
+/// A join on a kept history: its transaction, and the file it detached the
+/// document from — which undoing it attaches the document to again.
+public struct KeptJoin: Codable, Equatable, Sendable {
+    public var serial: UInt64
+    public var path: String
+    public var readOnly: Bool
+
+    public init(serial: UInt64, path: String, readOnly: Bool) {
+        self.serial = serial
+        self.path = path
+        self.readOnly = readOnly
     }
 }
 

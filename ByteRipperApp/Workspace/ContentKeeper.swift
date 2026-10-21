@@ -31,6 +31,9 @@ final class ContentKeeper {
         var log: HistoryLogWriter?
         /// The serials of the transactions in the log, each to its parent.
         var parents: [UInt64: UInt64] = [:]
+        /// The selection after each transaction as the log has it, so one a
+        /// command refined after the snapshot wrote it is written again.
+        var afters: [UInt64: SelectionModel] = [:]
         /// What the last snapshot wrote down for this document.
         var kept: KeptContent?
         /// The content's version and the saved state when it was.
@@ -85,7 +88,8 @@ final class ContentKeeper {
             ?? Entry(document: document, id: UUID().uuidString)
         entries[key] = entry
         let saved = pane.isUntitled ? nil : history.savedStateSerial
-        if entry.version != history.version || entry.saved != saved || entry.kept == nil {
+        let refined = history.newestTransaction.map { entry.afters[$0.serial].map { $0 } != $0.selectionAfter } ?? false
+        if entry.version != history.version || entry.saved != saved || entry.kept == nil || refined {
             do {
                 try update(entry, pane: pane, document: document, saved: saved)
             } catch {
@@ -119,10 +123,18 @@ final class ContentKeeper {
             }
         }
         entry.log?.synchronize()
+        let joins = document.keptJoins
+        func kept(_ join: BinaryDocument.KeptJoin) -> KeptJoin {
+            KeptJoin(serial: join.serial, path: join.url.path, readOnly: join.readOnly)
+        }
         entry.kept = KeptContent(
             id: entry.id, base: entry.base!, head: history.headSerial, nextSerial: history.upcomingSerial,
             saved: saved,
-            log: entry.log.map { KeptLog(file: $0.url.lastPathComponent, length: $0.length, hash: $0.hash.hex) })
+            log: entry.log.map { KeptLog(file: $0.url.lastPathComponent, length: $0.length, hash: $0.hash.hex) },
+            history: KeptHistory(undoBase: history.undoBaseSerial, redoTip: history.redoTipSerial,
+                                 redoSteps: history.redoStepSizes, savedState: history.savedStateSerial,
+                                 dirtyRegardless: history.isDirtyRegardless,
+                                 joins: joins.undo.map(kept), undoneJoins: joins.redo.map(kept)))
         entry.version = history.version
         entry.saved = saved
     }
@@ -138,9 +150,11 @@ final class ContentKeeper {
         let log = try HistoryLogWriter(creating: folder.keptURL(name + ".log"))
         let held = history.heldTransactions
         var parents: [UInt64: UInt64] = [:]
+        var afters: [UInt64: SelectionModel] = [:]
         for kept in held {
             try log.append(kept)
             parents[kept.transaction.serial] = kept.transaction.parent
+            afters[kept.transaction.serial] = kept.transaction.selectionAfter
         }
         let head = history.headSerial
         let base: KeptBase
@@ -160,13 +174,20 @@ final class ContentKeeper {
         entry.base = base
         entry.log = log
         entry.parents = parents
+        entry.afters = afters
     }
 
     private func append(_ held: [KeptTransaction], to entry: Entry) throws {
         guard let log = entry.log else { return }
-        for kept in held where entry.parents[kept.transaction.serial] == nil {
-            try log.append(kept)
-            entry.parents[kept.transaction.serial] = kept.transaction.parent
+        for kept in held {
+            let txn = kept.transaction
+            if entry.parents[txn.serial] == nil {
+                try log.append(kept)
+                entry.parents[txn.serial] = txn.parent
+            } else if entry.afters[txn.serial] != txn.selectionAfter {
+                try log.appendSelection(after: txn.serial, txn.selectionAfter)
+            }
+            entry.afters[txn.serial] = txn.selectionAfter
         }
     }
 
@@ -324,17 +345,36 @@ final class ContentKeeper {
 
     /// A restored document goes on as kept: its history counts on from where
     /// the kept one stopped, and the next snapshot appends to the same log.
+    /// Its undo and redo sides come back with it when the workspace kept them
+    /// and the log holds them; otherwise it goes on with an empty history, as
+    /// dirty as it was.
     func adopt(_ pane: PaneViewModel, content: KeptContent, records: [KeptTransaction]? = nil, dirty: Bool) {
         guard let document = pane.document else { return }
-        document.undoHistory.resume(at: content.head, nextSerial: content.nextSerial,
-                                    saved: content.saved, dirty: dirty)
+        let records = records ?? ((try? self.records(of: content)) ?? [])
+        let map = Dictionary(records.map { ($0.transaction.serial, $0) }, uniquingKeysWith: { _, b in b })
+        if let kept = content.history,
+           let sides = HistoryLog.sides(head: content.head, undoBase: kept.undoBase, redoTip: kept.redoTip,
+                                        redoSizes: kept.redoSteps, in: map) {
+            document.undoHistory.restore(undo: sides.undo, redo: sides.redo, base: kept.undoBase,
+                                         nextSerial: content.nextSerial, saved: kept.savedState,
+                                         dirtyRegardless: kept.dirtyRegardless)
+            func join(_ kept: KeptJoin) -> BinaryDocument.KeptJoin {
+                BinaryDocument.KeptJoin(serial: kept.serial, url: URL(fileURLWithPath: kept.path), readOnly: kept.readOnly)
+            }
+            document.restoreJoins(undo: kept.joins.map(join), redo: sides.redo.isEmpty ? [] : kept.undoneJoins.map(join))
+        } else {
+            document.undoHistory.resume(at: content.head, nextSerial: content.nextSerial,
+                                        saved: content.saved, dirty: dirty)
+        }
         let entry = Entry(document: document, id: content.id)
         entry.base = content.base
         if let log = content.log, let hash = Data(hex: log.hash) {
             entry.log = try? HistoryLogWriter(appendingTo: folder.keptURL(log.file), length: log.length, hash: hash)
         }
-        let records = records ?? ((try? self.records(of: content)) ?? [])
-        for record in records { entry.parents[record.transaction.serial] = record.transaction.parent }
+        for record in records {
+            entry.parents[record.transaction.serial] = record.transaction.parent
+            entry.afters[record.transaction.serial] = record.transaction.selectionAfter
+        }
         entry.kept = content
         entry.version = document.undoHistory.version
         entry.saved = content.saved

@@ -37,9 +37,14 @@ public enum HistoryLogError: Error, Equatable, Sendable {
 ///
 /// A record: `BRT1`, the body's length (u64), the body, the 32-byte hash. The
 /// body: serial, parent, the selections before and after, the series id, the
-/// label, and the ops with their bytes — a fill's as its pattern.
+/// label, and the ops with their bytes — a fill's as its pattern. `BRS1`
+/// records, framed the same way, refine the selection after a transaction
+/// written before the command that made it had placed it.
 public enum HistoryLog {
     static let magic: [UInt8] = Array("BRT1".utf8)
+    /// A refined selection after a transaction already written
+    /// (`UndoHistory.noteSelectionAfterOnLast`): serial, then the selection.
+    static let selectionMagic: [UInt8] = Array("BRS1".utf8)
     /// The hash a log starts its chain from.
     public static let emptyHash = Data(repeating: 0, count: 32)
 
@@ -73,6 +78,42 @@ public enum HistoryLog {
             ops += records[serial]!.ops
         }
         return ops
+    }
+
+    /// The undo and redo sides of a kept history, from the transactions in
+    /// its log: the undo side is the way from `undoBase` to `head`, oldest
+    /// first; the redo side the way from `head` down to `redoTip`, cut into
+    /// steps of `redoSizes`, the next to redo first. Nil when the log does not
+    /// hold the way to `undoBase`; a redo side that does not add up is left
+    /// empty — what can be undone is not lost over what could be redone.
+    public static func sides(head: UInt64, undoBase: UInt64, redoTip: UInt64?, redoSizes: [Int],
+                             in records: [UInt64: KeptTransaction])
+        -> (undo: [KeptTransaction], redo: [[KeptTransaction]])? {
+        var undo: [KeptTransaction] = []
+        var at = head
+        while at != undoBase {
+            guard let record = records[at], undo.count <= records.count else { return nil }
+            undo.append(record)
+            at = record.transaction.parent
+        }
+        undo.reverse()
+        guard let tip = redoTip else { return (undo, []) }
+        var way: [KeptTransaction] = []
+        at = tip
+        while at != head {
+            guard let record = records[at], way.count <= records.count else { return (undo, []) }
+            way.append(record)
+            at = record.transaction.parent
+        }
+        way.reverse()
+        guard redoSizes.allSatisfy({ $0 > 0 }), redoSizes.reduce(0, +) == way.count else { return (undo, []) }
+        var redo: [[KeptTransaction]] = []
+        var from = 0
+        for size in redoSizes {
+            redo.append(Array(way[from..<(from + size)]))
+            from += size
+        }
+        return (undo, redo)
     }
 
     /// Whether the transactions whose parents `parents` lists lead from the
@@ -127,20 +168,33 @@ public enum HistoryLog {
         var reader = Reader(file: file, end: length)
         var chain = emptyHash
         var records: [KeptTransaction] = []
+        var index: [UInt64: Int] = [:]
         do {
             while reader.at < length {
-                guard try reader.bytes(4, hashing: false) == magic else { throw HistoryLogError.unreadable }
+                let kind = try reader.bytes(4, hashing: false)
+                guard kind == magic || kind == selectionMagic else { throw HistoryLogError.unreadable }
                 let bodyLength = try reader.u64(hashing: false)
                 guard bodyLength <= length - reader.at else { throw HistoryLogError.unreadable }
                 reader.hasher = SHA256()
                 reader.hasher.update(data: chain)
                 let bodyEnd = reader.at + bodyLength
-                let record = try reader.transaction()
+                if kind == magic {
+                    let record = try reader.transaction()
+                    index[record.transaction.serial] = records.count
+                    records.append(record)
+                } else {
+                    let serial = try reader.u64()
+                    let selection = try reader.selection()
+                    guard let at = index[serial] else { throw HistoryLogError.unreadable }
+                    var transaction = records[at].transaction
+                    transaction.setSelectionAfter(selection)
+                    records[at] = KeptTransaction(transaction: transaction, seriesID: records[at].seriesID,
+                                                  label: records[at].label)
+                }
                 guard reader.at == bodyEnd else { throw HistoryLogError.unreadable }
                 let digest = Data(reader.hasher.finalize())
                 guard try Data(reader.bytes(32, hashing: false)) == digest else { throw HistoryLogError.unreadable }
                 chain = digest
-                records.append(record)
             }
         } catch is HistoryLogError {
             throw HistoryLogError.unreadable
@@ -363,6 +417,31 @@ public final class HistoryLogWriter {
             }
             let digest = Data(hasher.finalize())
             try out.write([UInt8](digest))
+            try out.flush()
+            length = out.at
+            hash = digest
+        } catch {
+            _ = ftruncate(fd, off_t(length))
+            throw error
+        }
+    }
+
+    /// Appends a refined selection after the transaction `serial`, already in
+    /// the log.
+    public func appendSelection(after serial: UInt64, _ selection: SelectionModel) throws {
+        var body = Encoder()
+        body.u64(serial)
+        body.selection(selection)
+        var frame = Encoder()
+        frame.bytes(HistoryLog.selectionMagic)
+        frame.u64(UInt64(body.buffer.count))
+        var hasher = SHA256()
+        hasher.update(data: hash)
+        hasher.update(data: body.buffer)
+        let digest = Data(hasher.finalize())
+        var out = Output(fd: fd, at: length)
+        do {
+            try out.write(frame.buffer + body.buffer + [UInt8](digest))
             try out.flush()
             length = out.at
             hash = digest

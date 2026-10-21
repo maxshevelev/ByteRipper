@@ -157,9 +157,13 @@ after a relaunch than before it would be a surprise):
 
 ## Labels
 
-A step's name ("Add Microcode") is stored as its `L()` key and arguments, not
-as the translated string, so the menu speaks the current language after a
-relaunch.
+A step's name ("Fill Zone A") is only what the Edit menu says — "Undo Fill
+Zone A" — and is kept as the string it was, in the language it was made in.
+Keeping its `L()` key instead would mean changing `ToolTransaction` and every
+module that names a write (several pass arguments, some a language of their
+own) for one effect: a menu caption in the earlier language after the
+language was switched between two launches. The step itself — the bytes —
+has no language.
 
 ## Phases
 
@@ -186,6 +190,17 @@ relaunch.
    chained hash from phase 2. The workspace format goes to version 3.
 4. **History restored** — `head`, `savedSerial`, redo grouping, join marks;
    undo and redo after a relaunch, for files, untitled documents and parts.
+   *(done)* `KeptContent.history` (`KeptHistory`): the undo base, the redo
+   tip and the redo steps' sizes — the redo side is the way from the state
+   the document is in down to the tip — the saved state, whether the
+   document is dirty in any state, and the joins on either side.
+   `HistoryLog.sides` finds both sides in the log, `UndoHistory.restore` puts
+   them back; the ops' bytes stay in the log until a compaction of the
+   history's own journal moves them. A refined selection after a transaction
+   already written is a `BRS1` record. When the log does not hold the way to
+   the undo base, the document comes back with an empty history, as before;
+   a redo side that does not add up is left out. The workspace format goes to
+   version 4.
 5. **Segments** — the paired snapshot stack, source ids re-minted at restore.
 6. **Help** — `workspace.md` and the editing page in en, ru, de;
    `WORKSPACE_PLAN.md` "Not kept" updated.
