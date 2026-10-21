@@ -28,11 +28,10 @@ and not an app-wide preference:
 | find bar | visible, pattern text | a new setter on the find bar |
 | untitled documents | their bytes and name | `openBytes(_:named:origin:)` |
 | the Annotations window | its place among a window's tabs, or a window of its own; the selected cards by annotation id | `NotesWindowController.restore(_:among:)` |
+| undo history | per document — files, untitled documents, parts — both sides, the saved state, the joins, the segments paired with each step | `ContentKeeper.adopt`, `UndoHistory.restore` (`PERSISTENT_UNDO_PLAN.md`) |
 
 **Not kept**, deliberately:
 
-- **Undo history.** It belongs to the session that made it — for now:
-  `PERSISTENT_UNDO_PLAN.md` keeps it.
 - **Search All results.** They are recomputed from the pattern on demand.
 - **Navigation history (Back / Forward).** Its places hold live pane
   references. It starts empty.

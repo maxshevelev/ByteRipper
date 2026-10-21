@@ -1,9 +1,9 @@
-@source-sha 74e740b8f704d91065aa0a3ff6c7cc6e708f116573184fbfa381dfbf1cc48ac9
+@source-sha 584fedeae5e8a2c1cc457d4d04a6c4d4f102b98a5300ec87280a9d3c538ecd7e
 # Projekte
 
 > Ein Projekt ist ein Arbeitsbereich in einer eigenen Datei: alles, was für einen Auftrag geöffnet ist, wird als Ganzes wieder geöffnet, und zwischen Projekten lässt sich wechseln.
 
-Ein Projekt enthält dasselbe wie der [[topic:workspace|Arbeitsbereich]] — die Fenster und Tabs, die darin geöffneten Dateien, die Position in jedem Bereich, die Lesezeichen, die Segmente, die Fragment-Bereiche, die Werkzeugbereiche und das Anmerkungen-Fenster — einschließlich jeder noch nicht gesicherten Änderung: unbenannte Dokumente, Änderungen in Teilen, die noch nicht zurückgeschrieben sind, und die geänderten Bytes von Dateien auf dem Datenträger, die rot zurückkehren, wie sie waren. Anders als der Arbeitsbereich wird ein Projekt unabhängig von der Einstellung **Arbeitsbereich beim Start wiederherstellen** aufbewahrt.
+Ein Projekt enthält dasselbe wie der [[topic:workspace|Arbeitsbereich]] — die Fenster und Tabs, die darin geöffneten Dateien, die Position in jedem Bereich, die Lesezeichen, die Segmente, die Fragment-Bereiche, die Werkzeugbereiche und das Anmerkungen-Fenster — einschließlich jeder noch nicht gesicherten Änderung: unbenannte Dokumente, Änderungen in Teilen, die noch nicht zurückgeschrieben sind, und die geänderten Bytes von Dateien auf dem Datenträger, die rot zurückkehren, wie sie waren — sowie den Widerrufsverlauf jedes Dokuments. Anders als der Arbeitsbereich wird ein Projekt unabhängig von der Einstellung **Arbeitsbereich beim Start wiederherstellen** aufbewahrt.
 
 ## Ein Projekt anlegen
 

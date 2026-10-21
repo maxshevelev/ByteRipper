@@ -1,4 +1,4 @@
-@source-sha 17d2792ed46027247581ac9a40369113b962257390a3eeae5cd7d35c53b88fa8
+@source-sha 402f966c2946e3c0c3e4f19c472ad968b01284d830f37957aac08a7b33fd2679
 # Der Arbeitsbereich
 
 > Bei eingeschalteter Einstellung öffnet ByteRipper beim Start, was beim Beenden geöffnet war.
@@ -14,12 +14,12 @@ Die Einstellung heißt **Arbeitsbereich beim Start wiederherstellen** und befind
 - Die [[topic:fragments|Fragment-Bereiche]] samt dem, der vorn lag, sowie Teile, die in eigene Tabs verschoben wurden. Ein Teil wird nicht als Bytes gespeichert, sondern erneut aus seiner Datei entnommen; er zeigt daher deren aktuellen Inhalt und lässt sich weiterhin zurückschreiben, gleich in welchem Tab oder Fenster diese Datei liegt.
 - **Nie gesicherte Dokumente** — eine neue Datei, ein Zusammenfügen, ein Duplikat, auch wenn es einen Namen erhalten hat — mit ihren Bytes und weiterhin ungesichert, sowie Teile mit Änderungen, die noch nicht in ihre Datei zurückgeschrieben sind, samt diesen Änderungen. Sie werden während der Arbeit neben dem Arbeitsbereich aufbewahrt, gehen daher auch bei einem unplanmäßigen Ende nicht verloren, und beim Beenden fragt das Programm nicht nach ihnen.
 - **Ungesicherte Änderungen an Dateien auf dem Datenträger**, die rot und weiterhin ungesichert zurückkehren, wie sie waren. Neben dem Arbeitsbereich werden nur die geänderten Bytes aufbewahrt, keine Kopie der Datei. Wie nie gesicherte Dokumente gehen sie bei einem unplanmäßigen Ende nicht verloren, und beim Beenden fragt das Programm nicht nach ihnen. Die Änderungen werden nur dann wieder auf die Datei gelegt, wenn es dieselbe Datei ist, an der sie vorgenommen wurden (siehe unten).
+- **Der Widerrufsverlauf** jedes Dokuments — Dateien auf dem Datenträger, nie gesicherte Dokumente, Teile — mit dem, was sich noch wiederholen lässt. Nach einem Neustart widerruft ⌘Z die Änderungen von davor: Die Schnitte der Segmente kehren mit ihnen zurück, das Widerrufen eines Zusammenfügens verbindet das Dokument wieder mit seiner Datei, und das Widerrufen bis zum auf dem Datenträger gesicherten Stand macht eine Datei wieder ungeändert. Der Verlauf hält sich an die Grenzen, die unter [[topic:editing|Bytes bearbeiten]] festgelegt sind. Der Name eines Schritts im Menü „Bearbeiten“ bleibt in der Sprache, in der das Programm lief, als die Änderung vorgenommen wurde.
 - Das [[topic:notes|Anmerkungen-Fenster]] an seinem Platz zwischen den Tabs oder als eigenes Fenster, mit den Karten, die ausgewählt waren.
 - Die [[topic:minimap|Minimap]], die Suchleiste mit ihrem Muster sowie der Werkzeugbereich mit dem darin gewählten Knoten oder der gewählten Zeile und den geöffneten Zweigen des UEFI-Baums.
 
 ## Was nicht wiederhergestellt wird
 
-- **Der Widerrufsverlauf.** Er gehört zu der Sitzung, in der die Änderungen vorgenommen wurden.
 - Die Verbindung eines Teils mit seiner Datei, wenn diese Datei fehlt oder sich geändert hat: Der Teil kehrt mit seinen Änderungen als nie gesichertes Dokument zurück.
 - Der Verlauf von Zurück / Vorwärts und die Ergebnisse von Search All.
 - Einstellungen wie Schrift, Wortbreite und Anordnung der Bereiche. Sie werden getrennt gespeichert und gelten ohnehin.
