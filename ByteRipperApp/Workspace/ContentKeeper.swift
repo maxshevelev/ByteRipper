@@ -1,5 +1,6 @@
 import ByteRipperCore
-import Foundation
+import Cocoa
+import Localization
 import Workspace
 
 /// Keeps every document's content beside the workspace, so a crash does not
@@ -95,7 +96,7 @@ final class ContentKeeper {
     /// changed since the last snapshot handed to the writer to append, the
     /// rest as it was. Nil for a file with nothing beyond what is on disk.
     /// Nothing is written here: `commit` hands the snapshot over.
-    func keep(_ pane: PaneViewModel) -> KeptContent? {
+    func keep(_ pane: PaneViewModel, presenter: NSViewController? = nil) -> KeptContent? {
         guard let document = pane.document else { return nil }
         let history = document.undoHistory
         let key = ObjectIdentifier(document)
@@ -108,8 +109,11 @@ final class ContentKeeper {
         entries[key] = entry
         let saved = pane.isUntitled ? nil : history.savedStateSerial
         let refined = history.newestTransaction.map { entry.afters[$0.serial].map { $0 } != $0.selectionAfter } ?? false
-        if entry.version != history.version || entry.saved != saved || entry.kept == nil || refined {
-            update(entry, pane: pane, document: document, saved: saved)
+        if moves[key] != nil {
+            // Its journal is on its way into `Kept/`: what the last snapshot
+            // kept stands until it is there.
+        } else if entry.version != history.version || entry.saved != saved || entry.kept == nil || refined {
+            update(entry, pane: pane, document: document, saved: saved, presenter: presenter)
         }
         if let kept = entry.kept {
             named.formUnion(kept.files)
@@ -118,13 +122,18 @@ final class ContentKeeper {
         return entry.kept
     }
 
-    private func update(_ entry: Entry, pane: PaneViewModel, document: BinaryDocument, saved: UInt64?) {
+    private func update(_ entry: Entry, pane: PaneViewModel, document: BinaryDocument, saved: UInt64?,
+                        presenter: NSViewController?) {
         let history = document.undoHistory
         let epochMoved = entry.version.map { $0.epoch != history.version.epoch } ?? false
         // The log is the history's journal, and it has to be in this
         // workspace's `Kept/`: one made before the workspace was recorded, or
         // in another, is moved here — once — and the log begins anew.
-        guard placeJournal(of: history) else { return failed(entry) }
+        switch placeJournal(of: pane, document: document, presenter: presenter) {
+        case .here: break
+        case .moving: return
+        case .failed: return failed(entry)
+        }
         var needsBase = entry.base == nil || epochMoved
         // Another journal — the first, a compacted one, a moved one — is a new
         // log; the base stays when the new log still leads from it.
@@ -187,18 +196,91 @@ final class ContentKeeper {
     /// the history leads from its saved state; otherwise the content is written
     /// — whole for a document with no file, from a snapshot of it taken now;
     /// as runs over the file for one.
+    private enum Placement { case here, moving, failed }
+
+    /// The journals being moved into `Kept/`, by document.
+    private var moves: [ObjectIdentifier: Task<Void, Never>] = [:]
+    /// A move still running after this long shows its progress in a sheet on
+    /// the document's window, and nothing is edited there until it is done. A
+    /// shorter one is over before anyone could notice: edits made meanwhile
+    /// are caught up with, not held back.
+    static var moveSheetDelay: Duration = .milliseconds(200)
+    /// Runs before each round is copied, off the main thread — a test holds a
+    /// move up with it to see the sheet.
+    nonisolated(unsafe) static var beforeMoveRound: (@Sendable () -> Void)?
+
     /// Puts the history's journal into this workspace's `Kept/` when it is not
     /// there — a temporary one, one in another workspace, or none while the
-    /// history has bytes in memory. False when it could not be.
-    private func placeJournal(of history: UndoHistory) -> Bool {
+    /// history has bytes in memory. A large one is copied off the main thread,
+    /// in rounds that catch up with edits made meanwhile, and switched to when
+    /// every byte has its copy (`UndoHistory.beginJournalMove`).
+    private func placeJournal(of pane: PaneViewModel, document: BinaryDocument,
+                              presenter: NSViewController?) -> Placement {
+        let history = document.undoHistory
         let here = folder.keptFolder.standardizedFileURL.path
         // Its file must still be there too: switching the restore off removes
         // the session's folder under a journal still being written.
         if let journal = history.journal, let url = journal.url,
            url.deletingLastPathComponent().standardizedFileURL.path == here,
-           FileManager.default.fileExists(atPath: url.path) { return true }
-        guard history.journal != nil || history.canUndo || history.canRedo else { return true }
-        return (try? history.moveJournal(to: folder.keptFolder)) != nil
+           FileManager.default.fileExists(atPath: url.path) { return .here }
+        guard history.journal != nil || history.canUndo || history.canRedo else { return .here }
+        guard history.journal != nil else {
+            // Bytes in memory only — the journal could not be made before:
+            // nothing on disk to copy.
+            return (try? history.moveJournal(to: folder.keptFolder)) != nil ? .here : .failed
+        }
+        guard let move = try? history.beginJournalMove(to: folder.keptFolder) else { return .failed }
+        let key = ObjectIdentifier(document)
+        let operation = BackgroundOperation(name: L("Copying the bytes of the changes")) {}
+        let title = L("Moving the undo history of “%1$@” beside the workspace", pane.status.fileName)
+        weak var presenter = presenter
+        // help: editing.journal-move
+        let sheet = Task { @MainActor in
+            try? await Task.sleep(for: Self.moveSheetDelay)
+            guard !Task.isCancelled, operation.isActive, let presenter, presenter.view.window != nil else { return }
+            BlockingOperationSheet.present(operation, title: title, from: presenter, cancellable: false)
+        }
+        moves[key] = Task { @MainActor [weak self, weak document] in
+            defer {
+                sheet.cancel()
+                operation.finish()
+                self?.moves[key] = nil
+            }
+            var copied: UInt64 = 0
+            while let document {
+                let total = Double(max(1, copied + move.bytesToCopy))
+                let base = copied
+                let round = move.bytesToCopy
+                let counter = Counter()
+                let report: @Sendable (Int) -> Void = { count in
+                    operation.report(Double(base + counter.add(count)) / total)
+                }
+                let hold = Self.beforeMoveRound
+                let ok = await Task.detached(priority: .userInitiated) {
+                    hold?()
+                    return (try? move.copy(progress: report)) != nil
+                }.value
+                copied += round
+                guard ok else { return }
+                switch document.undoHistory.finishJournalMove(move) {
+                case .done, .abandoned: return
+                case .again: continue
+                }
+            }
+        }
+        return .moving
+    }
+
+    /// Bytes counted from any thread.
+    private final class Counter: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value: UInt64 = 0
+        func add(_ count: Int) -> UInt64 { lock.withLock { value += UInt64(count); return value } }
+    }
+
+    /// Waits until every journal being moved is in place — for a test.
+    func settleMoves() async {
+        while let task = moves.values.first { await task.value }
     }
 
     /// A content that could not be taken afresh: the snapshot keeps what the
@@ -362,8 +444,9 @@ final class ContentKeeper {
 
     /// The untitled document or part in `pane`, kept: its content, its name,
     /// whether it is dirty. Nil when nothing about it could be kept.
-    func stamp(for pane: PaneViewModel) -> UntitledStamp? {
-        guard pane.isUntitled, let document = pane.document, let content = keep(pane) else { return nil }
+    func stamp(for pane: PaneViewModel, presenter: NSViewController? = nil) -> UntitledStamp? {
+        guard pane.isUntitled, let document = pane.document, let content = keep(pane, presenter: presenter)
+        else { return nil }
         return UntitledStamp(content: content, name: pane.untitledName, size: document.size,
                              dirty: pane.status.isDirty)
     }

@@ -1,4 +1,4 @@
-@source-sha a3460ac0ff8d3770d5ce52b1b3f91b4b4bc4a349ad9e4dab3c68751da5377c5f
+@source-sha 617704a6368fb96d2503bc5c327ab3066bc8a5bddcbf2a7cee95701373a42a13
 # Bytes bearbeiten
 
 > Tippen überschreibt die vorhandenen Bytes. Jeder Vorgang, der die Länge der Datei ändert, fragt vorher nach.
@@ -42,7 +42,7 @@ Jede Änderung ist ein Widerrufsschritt (⌘Z), auch die großen: ein Zusammenf�
 
 Wie weit sich zurück widerrufen lässt, legen zwei Grenzen in den [[topic:settings|Einstellungen ▸ Allgemein]] fest, jede für jedes Dokument für sich. **Größe des Widerrufsverlaufs:** zählt die Bytes der Änderungen, den vorherigen wie den neuen Inhalt: Das Überschreiben von 1 GB belegt 2 GB. Ein Füllen bewahrt nur den ersetzten Inhalt auf: Statt des Geschriebenen wird nur die wiederholte Byte-Folge aufbewahrt. **Widerrufsschritte:** zählt die Änderungen; ein eingegebenes Byte ist eine. Jenseits einer der beiden Grenzen lassen sich die ältesten Änderungen nicht mehr widerrufen, und das Dokument bleibt geändert. Eine niedrigere Grenze gilt ab der nächsten Änderung. Eine einzelne Änderung, die größer ist als die Größengrenze, bleibt dennoch erhalten und kann widerrufen werden.
 
-Die Bytes der Änderungen werden in einer Datei auf dem Datenträger aufbewahrt, nicht im Arbeitsspeicher; ein großes Ersetzen belegt so nicht seine Größe im Arbeitsspeicher, solange es widerrufen werden kann. Solange der [[topic:workspace|Arbeitsbereich]] oder ein [[topic:projects|Projekt]] aufbewahrt wird, liegt diese Datei daneben und dient zugleich als dessen Verlauf, sodass die Bytes einer Änderung nur einmal auf den Datenträger geschrieben werden. Andernfalls ist es eine temporäre Datei, die beim Schließen des Dokuments entfernt wird.
+Die Bytes der Änderungen werden in einer Datei auf dem Datenträger aufbewahrt, nicht im Arbeitsspeicher; ein großes Ersetzen belegt so nicht seine Größe im Arbeitsspeicher, solange es widerrufen werden kann. Solange der [[topic:workspace|Arbeitsbereich]] oder ein [[topic:projects|Projekt]] aufbewahrt wird, liegt diese Datei daneben und dient zugleich als dessen Verlauf, sodass die Bytes einer Änderung nur einmal auf den Datenträger geschrieben werden. Andernfalls ist es eine temporäre Datei, die beim Schließen des Dokuments entfernt wird. Hat der Verlauf eines Dokuments begonnen, bevor der Arbeitsbereich oder das Projekt es aufbewahrte – die Wiederherstellung wurde später eingeschaltet, eine Sitzung als Projekt gesichert –, wird diese Datei im Hintergrund dorthin verlegt; das Bearbeiten geht währenddessen weiter. Dauert die Verlegung länger als einen Augenblick, zeigt das Fenster ihren Fortschritt und lässt sich bis zum Ende nicht bearbeiten.
 
 ## In einem Eingabefeld
 

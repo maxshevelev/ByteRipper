@@ -121,9 +121,18 @@ same file.
   new log still leads from it, over a base written afresh when not.
 - A journal made elsewhere — before the workspace was recorded, in the
   session before Save as Project, or one whose folder was removed when the
-  restore was switched off — is moved into `Kept/` by the next snapshot
-  (`UndoHistory.moveJournal`), on the main thread. Rare, and a copy of
-  everything the history holds.
+  restore was switched off — is moved into `Kept/`, never on the main thread
+  (`UndoHistory.beginJournalMove` / `finishJournalMove`): the main thread
+  lists the runs of bytes the history keeps, a background task copies them
+  into a new journal, and the main thread switches to it — rewriting where
+  the ops point, no I/O — once every run has its copy. Edits are not held
+  back meanwhile: they append to the journal being left, and another round
+  copies what they added; a journal compacted or emptied under the move
+  abandons it, and the next snapshot starts another. While a document's
+  journal is moving, snapshots leave it as the last one kept it. A move still
+  running after 200 ms shows its progress in a sheet on the document's
+  window, so nothing is edited there by hand — what reaches the document
+  past the sheet, an agent or a part, is caught up with all the same.
 - A journal an open document writes is registered (`UndoJournal.liveNames`);
   tidying `Kept/` leaves it alone until the document lets go of it, whether
   a workspace names it yet or not.

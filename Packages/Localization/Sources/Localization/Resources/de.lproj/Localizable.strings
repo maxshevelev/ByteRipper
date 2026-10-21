@@ -1636,3 +1636,5 @@
 "Checking “%1$@”" = "„%1$@“ wird geprüft";
 "Reading the changes kept for “%1$@”" = "Die für „%1$@“ aufbewahrten Änderungen werden gelesen";
 "Their changes came back, but not the steps to undo them: the kept history no longer led back:" = "Die Änderungen wurden wiederhergestellt, nicht aber die Schritte, sie zu widerrufen: Der aufbewahrte Verlauf führte nicht mehr zurück:";
+"Copying the bytes of the changes" = "Die Bytes der Änderungen werden kopiert";
+"Moving the undo history of “%1$@” beside the workspace" = "Der Widerrufsverlauf von „%1$@“ wird zum Arbeitsbereich verlegt";

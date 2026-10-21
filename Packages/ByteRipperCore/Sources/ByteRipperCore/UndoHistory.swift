@@ -368,6 +368,122 @@ public final class UndoHistory: @unchecked Sendable {
         try? moveJournal(to: directoryForNew)
     }
 
+    // MARK: - Moving the journal off the main thread
+
+    /// A journal move under way: the bytes to copy, read on the main thread,
+    /// copied elsewhere (`JournalMove.copy`), then switched to here
+    /// (`finishJournalMove`). The history goes on meanwhile — edits append to
+    /// the journal being left, and the next round copies what they added.
+    public final class JournalMove: @unchecked Sendable {
+        let source: UndoJournal
+        public let target: UndoJournal
+        /// Where each run of the source's bytes went in the target.
+        private var copied: [UInt64: UndoBytes] = [:]
+        private var pending: [UndoBytes]
+
+        init(source: UndoJournal, target: UndoJournal, pending: [UndoBytes]) {
+            self.source = source
+            self.target = target
+            self.pending = pending
+        }
+
+        /// What this round copies, in bytes.
+        public var bytesToCopy: UInt64 { pending.reduce(0) { $0 + UInt64($1.count) } }
+
+        /// Copies this round's bytes. Off the main thread: nothing here is the
+        /// history's.
+        public func copy(progress: ((Int) -> Void)? = nil) throws {
+            for bytes in pending {
+                guard case .stored(_, let offset, let count) = bytes.storage else { continue }
+                copied[offset] = try target.store(bytes)
+                progress?(count)
+            }
+            pending = []
+        }
+
+        fileprivate func target(for bytes: UndoBytes) -> UndoBytes? {
+            guard case .stored(let journal, let offset, _) = bytes.storage, journal === source else { return nil }
+            return copied[offset]
+        }
+
+        fileprivate func setPending(_ bytes: [UndoBytes]) { pending = bytes }
+    }
+
+    public enum JournalMoveStep {
+        /// Switched: the history writes the new journal from now on.
+        case done
+        /// Edits added bytes while the round was copied: copy again.
+        case again
+        /// The journal changed under it — compacted, emptied: let it go.
+        case abandoned
+    }
+
+    /// Starts moving every op's bytes into a new journal in `directory`, to be
+    /// copied off the main thread. Nil when there is nothing to move.
+    public func beginJournalMove(to directory: URL?) throws -> JournalMove? {
+        guard let source = journal else { return nil }
+        let target = try UndoJournal(directory: directory)
+        return JournalMove(source: source, target: target, pending: bytes(in: source, except: nil))
+    }
+
+    /// After a round was copied: switches to the new journal when every op's
+    /// bytes have their copy — rewriting where they point is all it costs —
+    /// or asks for another round for what edits added meanwhile.
+    public func finishJournalMove(_ move: JournalMove) -> JournalMoveStep {
+        guard journal === move.source else { return .abandoned }
+        let left = bytes(in: move.source, except: move)
+        guard left.isEmpty else {
+            move.setPending(left)
+            return .again
+        }
+        func moved(_ bytes: UndoBytes) -> UndoBytes { move.target(for: bytes) ?? bytes }
+        func moved(_ op: UndoOperation) -> UndoOperation {
+            switch op {
+            case .overwrite(let range, let before, let after):
+                return .overwrite(range: range, before: moved(before), after: moved(after))
+            case .insert(let at, let bytes): return .insert(at: at, bytes: moved(bytes))
+            case .delete(let range, let bytes): return .delete(range: range, bytes: moved(bytes))
+            }
+        }
+        func moved(_ steps: [Step]) -> [Step] {
+            steps.map { step in
+                var step = step
+                for i in step.entries.indices {
+                    step.entries[i].transaction.ops = step.entries[i].transaction.ops.map(moved)
+                }
+                return step
+            }
+        }
+        undoSteps = moved(undoSteps)
+        redoSteps = moved(redoSteps)
+        journal = move.target
+        liveJournalBytes = (undoSteps + redoSteps).reduce(0) { $0 + $1.bytes(in: move.target) }
+        return .done
+    }
+
+    /// The runs of bytes the history's ops keep in `journal`, each once —
+    /// leaving out those `move` has copied.
+    private func bytes(in journal: UndoJournal, except move: JournalMove?) -> [UndoBytes] {
+        var seen = Set<UInt64>()
+        var found: [UndoBytes] = []
+        func add(_ bytes: UndoBytes) {
+            guard case .stored(let owner, let offset, _) = bytes.storage, owner === journal,
+                  move?.target(for: bytes) == nil, seen.insert(offset).inserted else { return }
+            found.append(bytes)
+        }
+        for step in undoSteps + redoSteps {
+            for entry in step.entries {
+                for op in entry.transaction.ops {
+                    switch op {
+                    case .overwrite(_, let before, let after): add(before); add(after)
+                    case .insert(_, let bytes), .delete(_, let bytes): add(bytes)
+                    }
+                }
+            }
+        }
+        return found
+    }
+
     /// Moves every op's bytes into a new journal in `directory` (nil: a
     /// temporary one): what compacting does, and what puts a document's
     /// journal into the workspace that keeps it when it was made elsewhere.

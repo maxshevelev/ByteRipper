@@ -218,4 +218,41 @@ final class UndoJournalTests: XCTestCase {
         XCTAssertNil(journal)
         XCTAssertEqual(history.heldBytes, 0)
     }
+
+    // MARK: - Moving the journal
+
+    /// A move copies in rounds while the history goes on: an edit made while
+    /// a round was copied is caught up by the next, and only then does the
+    /// history switch — every step still undoing and redoing to its bytes.
+    func testAMoveCatchesUpWithEditsMadeMeanwhile() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("Move-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let doc = makeDocument([UInt8](repeating: 0, count: 64))
+        try doc.overwrite(range: 0..<4, with: [1, 2, 3, 4])
+        let move = try XCTUnwrap(doc.undoHistory.beginJournalMove(to: folder))
+        try move.copy()                                         // off the main thread, in the app
+        try doc.overwrite(range: 8..<12, with: [5, 6, 7, 8])    // meanwhile
+        XCTAssertEqual(doc.undoHistory.finishJournalMove(move), .again)
+        try move.copy()
+        XCTAssertEqual(doc.undoHistory.finishJournalMove(move), .done)
+        XCTAssertTrue(doc.undoHistory.journal === move.target)
+        XCTAssertEqual(doc.undoHistory.journal?.url?.deletingLastPathComponent().standardizedFileURL,
+                       folder.standardizedFileURL)
+
+        try doc.undo(); try doc.undo()
+        XCTAssertEqual(try doc.read(at: 0, length: 64), [UInt8](repeating: 0, count: 64))
+        try doc.redo(); try doc.redo()
+        XCTAssertEqual(try doc.read(at: 0, length: 12), [1, 2, 3, 4, 0, 0, 0, 0, 5, 6, 7, 8])
+    }
+
+    /// A journal compacted or emptied under a move leaves the move nothing to
+    /// switch to.
+    func testAMoveTheHistoryOutranIsAbandoned() throws {
+        let doc = makeDocument([UInt8](repeating: 0, count: 16))
+        try doc.overwrite(range: 0..<1, with: [1])
+        let move = try XCTUnwrap(doc.undoHistory.beginJournalMove(to: nil))
+        try move.copy()
+        doc.undoHistory.reset()
+        XCTAssertEqual(doc.undoHistory.finishJournalMove(move), .abandoned)
+    }
 }

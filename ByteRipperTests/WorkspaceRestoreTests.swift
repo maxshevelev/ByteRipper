@@ -200,7 +200,7 @@ final class WorkspaceRestoreTests: XCTestCase {
             .appendingPathComponent("WorkspaceRecorderTests-\(UUID().uuidString)")
         addTeardownBlock { try? FileManager.default.removeItem(at: keeperFolder) }
         let keeper = ContentKeeper(folder: WorkspaceFolder(url: keeperFolder))
-        let tab = keeper.settled([source.workspaceTab(keeper: keeper)])[0]
+        let tab = await keeper.settledTabs { [source.workspaceTab(keeper: keeper)] }[0]
         func parent(_ index: Int) -> String? {
             if case let .part(origin) = tab.fragments[index].pane.document { origin.parent } else { nil }
         }
@@ -269,7 +269,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertEqual(restored.document?.selection.start, 0x30)
     }
 
-    func testATornOffPartIsKeptAtQuit() throws {
+    func testATornOffPartIsKeptAtQuit() async throws {
         let (parent, part, _, _) = try tornOffPart()
         let folderURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("WorkspaceRecorderTests-\(UUID().uuidString)")
@@ -279,7 +279,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertEqual(controllers.count, 2)
         let recorder = WorkspaceRecorder(folder: WorkspaceFolder(url: folderURL), controllers: { controllers })
 
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
         let saved = try XCTUnwrap(recorder.savedWorkspace())
         XCTAssertEqual(saved.windows.count, 2, "a part is kept, its parent beside it")
     }
@@ -294,9 +294,10 @@ final class WorkspaceRestoreTests: XCTestCase {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("PartEdits-\(UUID().uuidString)")
         addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
         let keeper = ContentKeeper(folder: WorkspaceFolder(url: folder))
-        let ids = WorkspacePaneIDs()
-        let tabs = keeper.settled([partTab.workspaceTab(keeper: keeper, ids: ids),
-                                   parentTab.workspaceTab(keeper: keeper, ids: ids)])
+        let tabs = await keeper.settledTabs {
+            let ids = WorkspacePaneIDs()
+            return [partTab.workspaceTab(keeper: keeper, ids: ids), parentTab.workspaceTab(keeper: keeper, ids: ids)]
+        }
         guard case let .part(origin)? = tabs[0].panes[0]?.document else { return XCTFail("written as a part") }
         XCTAssertNotNil(origin.edits)
 
@@ -378,7 +379,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         pane.select(range: 0x120..<0x130)
         window.mainViewController.refreshMode()
         let (recorder, _) = recorder([window])
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
 
         let saved = try XCTUnwrap(recorder.savedWorkspace())
         let tab = try XCTUnwrap(saved.windows.first?.tabs.first)
@@ -407,14 +408,14 @@ final class WorkspaceRestoreTests: XCTestCase {
         untitled.mainViewController.refreshMode()
         let (recorder, folderURL) = recorder([files, untitled])
 
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
         XCTAssertEqual(try XCTUnwrap(recorder.savedWorkspace()).windows.count, 2)
         let kept = folderURL.appendingPathComponent("Kept")
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: kept.path)
             .filter { $0.hasSuffix(".bin") }.count, 1, "its bytes, written whole once")
 
         untitled.mainViewController.windowModel.pane1.close()
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
         XCTAssertEqual(try XCTUnwrap(recorder.savedWorkspace()).windows.count, 1)
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: kept.path), [],
                        "a closed document takes its bytes with it")
@@ -433,7 +434,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         let (recorder, _) = recorder([window])
         XCTAssertEqual(controller.unsavedDocumentCount, 1, "the premise: unsaved")
 
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
         let kept: (PaneViewModel) -> Bool = { $0.isUntitled && recorder.keeper.holdsCurrentBytes(of: $0) }
         XCTAssertEqual(controller.unsavedDocumentCount(keeping: kept), 0)
         var agreed: Bool?
@@ -461,7 +462,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         try pane.pasteInsert([0x01])
         let expected = try pane.document?.read(at: 0, length: 0x401)
         let (recorder, folderURL) = recorder([window])
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
 
         let tab = try XCTUnwrap(recorder.savedWorkspace()?.windows.first?.tabs.first)
         XCTAssertNotNil(tab.panes[0]?.kept, "the changes are kept")
@@ -485,7 +486,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         // The restored copy writes the same journal; in a real launch it is the
         // only one.
         restored.close()
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: edits), [],
                        "a closed file takes its changes with it")
     }
@@ -513,7 +514,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         let afterSecond = try bytes(pane)
         try pane.undo()
         let (recorder, folderURL) = recorder([window])
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
 
         let tab = try XCTUnwrap(recorder.savedWorkspace()?.windows.first?.tabs.first)
         let target = shownWindow().mainViewController
@@ -546,7 +547,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         try pane.undo()                                       // back at 28, one to redo
         XCTAssertEqual(pane.segmentStore.segments.map(\.range), [0..<28, 28..<60])
         let (recorder, folderURL) = recorder([window])
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
 
         let tab = try XCTUnwrap(recorder.savedWorkspace()?.windows.first?.tabs.first)
         let target = shownWindow().mainViewController
@@ -572,7 +573,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         pane.select(range: 0..<0)
         try pane.pasteWrite([7])
         let (recorder, folderURL) = recorder([window])
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
         var tab = try XCTUnwrap(recorder.savedWorkspace()?.windows.first?.tabs.first)
         guard case var .untitled(stamp)? = tab.panes[0]?.document else { return XCTFail("kept") }
         stamp.content.history?.undoBase = 999_999
@@ -598,7 +599,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         try pane.save()
         try pane.pasteWrite([0xB2])
         let (recorder, folderURL) = recorder([window])
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
 
         let tab = try XCTUnwrap(recorder.savedWorkspace()?.windows.first?.tabs.first)
         pane.close()
@@ -626,7 +627,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         try pane.join(contentsOf: other, at: .end)
         XCTAssertTrue(pane.isUntitled)
         let (recorder, folderURL) = recorder([window])
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
 
         let tab = try XCTUnwrap(recorder.savedWorkspace()?.windows.first?.tabs.first)
         pane.close()
@@ -650,9 +651,10 @@ final class WorkspaceRestoreTests: XCTestCase {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("PartHistory-\(UUID().uuidString)")
         addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
         let keeper = ContentKeeper(folder: WorkspaceFolder(url: folder))
-        let ids = WorkspacePaneIDs()
-        let tabs = keeper.settled([partTab.workspaceTab(keeper: keeper, ids: ids),
-                                   parentTab.workspaceTab(keeper: keeper, ids: ids)])
+        let tabs = await keeper.settledTabs {
+            let ids = WorkspacePaneIDs()
+            return [partTab.workspaceTab(keeper: keeper, ids: ids), parentTab.workspaceTab(keeper: keeper, ids: ids)]
+        }
 
         let restoredPart = shownWindow().mainViewController
         let restoredParent = shownWindow().mainViewController
@@ -677,6 +679,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         try pane.pasteWrite([0xC0, 0xDE])
         let expected = try pane.document?.read(at: 0, length: 0x200)
         let (recorder, folderURL) = recorder([window])
+        await recorder.recordSettled()
         recorder.record(final: true)
         let tab = try XCTUnwrap(recorder.savedWorkspace()?.windows.first?.tabs.first)
         pane.close()
@@ -705,11 +708,11 @@ final class WorkspaceRestoreTests: XCTestCase {
             else { return nil }
             return stamp.sha256
         }
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
         XCTAssertNil(hash(), "not waited for")
         for _ in 0..<100 where hash() == nil {
             try await Task.sleep(nanoseconds: 20_000_000)
-            recorder.record(); recorder.flush()
+            await recorder.recordSettled()
         }
         XCTAssertEqual(hash(), try FileDigest.sha256(of: file).hex)
     }
@@ -770,7 +773,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertNotNil(pane.document?.savedDigest)
         try pane.pasteWrite([0x02])
         let (recorder, _) = recorder([window])
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
         guard case let .file(stamp)? = recorder.savedWorkspace()?.windows.first?.tabs.first?.panes[0]?.document
         else { return XCTFail("a file") }
         XCTAssertEqual(stamp.sha256, try FileDigest.sha256(of: file).hex, "in the first snapshot, not waited for")
@@ -809,7 +812,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         pane.openBytes([UInt8](repeating: 1, count: 128), named: "scratch")
         window.mainViewController.refreshMode()
         let (recorder, folderURL) = recorder([window])
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
         let base = try XCTUnwrap(try FileManager.default.contentsOfDirectory(
             at: folderURL.appendingPathComponent("Kept"), includingPropertiesForKeys: nil)
             .first { $0.pathExtension == "bin" })
@@ -834,7 +837,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         pane.openBytes([UInt8](repeating: 7, count: 64), named: nil)
         window.mainViewController.refreshMode()
         let (recorder, folderURL) = recorder([window])
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
         let keptFolder = folderURL.appendingPathComponent("Kept")
         func files(_ suffix: String) throws -> [URL] {
             try FileManager.default.contentsOfDirectory(at: keptFolder, includingPropertiesForKeys: nil)
@@ -846,28 +849,28 @@ final class WorkspaceRestoreTests: XCTestCase {
         try FileManager.default.removeItem(at: base)
 
         pane.select(range: 4..<8)
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
         XCTAssertFalse(FileManager.default.fileExists(atPath: base.path), "a caret move writes nothing")
 
         pane.select(range: 4..<4)
         try pane.pasteWrite([1, 2])
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
         XCTAssertFalse(FileManager.default.fileExists(atPath: base.path), "an edit is not new content whole")
         let log = try XCTUnwrap(try files("log").first, "it goes on the log")
         let logSize = try size(log)
         try pane.pasteWrite([3, 4])
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
         XCTAssertGreaterThan(try size(log), logSize, "the next one on the same log")
         XCTAssertFalse(FileManager.default.fileExists(atPath: base.path))
 
         try pane.undo()
         let afterEdit = try size(log)
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
         XCTAssertLessThan(try size(log) - afterEdit, 128,
                           "an undo writes no bytes again: which state is kept, and the segments it pairs with the redo")
 
         pane.document?.undoHistory.clearKeepingDirty()
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
         XCTAssertEqual(try files("bin").count, 1, "content that jumped is written whole, under a new name")
         XCTAssertNotEqual(try files("bin").first?.lastPathComponent, base.lastPathComponent)
     }
@@ -894,7 +897,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         let journal = try XCTUnwrap(pane.document?.undoHistory.journal)
         XCTAssertEqual(journal.url?.deletingLastPathComponent().standardizedFileURL, keptFolder.standardizedFileURL,
                        "made where its log will be")
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
         let logs = try FileManager.default.contentsOfDirectory(at: keptFolder, includingPropertiesForKeys: nil)
             .filter { $0.pathExtension == "log" }
         XCTAssertEqual(logs.map(\.lastPathComponent), [journal.url?.lastPathComponent].compactMap { $0 })
@@ -915,6 +918,57 @@ final class WorkspaceRestoreTests: XCTestCase {
                        Array(edit[(edit.count - 16)...]))
     }
 
+    /// A journal made before the workspace kept it is moved into `Kept/` off
+    /// the main thread, under a sheet: the snapshots leave the document alone
+    /// until it is there, an edit made meanwhile — by an agent, a part — is
+    /// caught up with, and what comes back undoes as before.
+    func testAJournalIsMovedOffTheMainThread() async throws {
+        WorkspaceSettings.set(restoresWorkspace: true)
+        let delay = ContentKeeper.moveSheetDelay
+        ContentKeeper.moveSheetDelay = .milliseconds(10)
+        ContentKeeper.beforeMoveRound = { Thread.sleep(forTimeInterval: 0.3) }
+        addTeardownBlock {
+            await MainActor.run {
+                ContentKeeper.moveSheetDelay = delay
+                ContentKeeper.beforeMoveRound = nil
+            }
+        }
+        let window = shownWindow()
+        let controller = window.mainViewController
+        let pane = controller.windowModel.pane1
+        pane.openBytes([UInt8](repeating: 0, count: 256 << 10), named: "moving")
+        controller.refreshMode()
+        pane.select(range: 0..<0)
+        try pane.pasteWrite([UInt8](repeating: 0x5A, count: 128 << 10))
+        XCTAssertNil(pane.document?.undoHistory.journal?.url, "a temporary journal: made before any workspace")
+        let (recorder, folderURL) = recorder([window])
+        recorder.record()
+        try pane.pasteWrite([0x01, 0x02])                  // what the sheet cannot stop
+        try await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertFalse(controller.presentedViewControllers?.isEmpty ?? true, "a move past the delay shows itself")
+        await recorder.keeper.settleMoves()
+        let journal = try XCTUnwrap(pane.document?.undoHistory.journal?.url)
+        XCTAssertEqual(journal.deletingLastPathComponent().standardizedFileURL,
+                       folderURL.appendingPathComponent("Kept").standardizedFileURL)
+        await recorder.recordSettled()
+        let expected = try pane.document?.read(at: 0, length: Int(pane.fileSize))
+
+        let tab = try XCTUnwrap(recorder.savedWorkspace()?.windows.first?.tabs.first)
+        pane.close()
+        let target = shownWindow().mainViewController
+        let issues = await restore([(tab, target)], keeper: ContentKeeper(folder: WorkspaceFolder(url: folderURL)))
+        XCTAssertEqual(issues, [])
+        let restored = target.windowModel.pane1
+        XCTAssertEqual(try restored.document?.read(at: 0, length: Int(restored.fileSize)), expected)
+        XCTAssertTrue(try restored.undo())
+        XCTAssertTrue(try restored.undo())
+        XCTAssertEqual(try restored.document?.read(at: 0, length: 4), [0, 0, 0, 0])
+        for _ in 0..<100 where !(controller.presentedViewControllers ?? []).isEmpty {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertEqual(controller.presentedViewControllers ?? [], [], "the sheet goes once it is there")
+    }
+
     /// The content comes back as it was, from the base and the transactions
     /// after it — an undo and a different edit after it included.
     func testAnUntitledDocumentComesBackFromItsBaseAndLog() async throws {
@@ -924,14 +978,14 @@ final class WorkspaceRestoreTests: XCTestCase {
         pane.openBytes([UInt8](0..<64), named: "scratch")
         window.mainViewController.refreshMode()
         let (recorder, folderURL) = recorder([window])
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
         pane.select(range: 8..<8)
         try pane.pasteWrite([0xAA, 0xBB])
         try pane.pasteInsert([0xCC])
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
         try pane.undo()
         try pane.deleteBytes(in: 0..<4)
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
         let expected = try pane.document?.read(at: 0, length: Int(pane.fileSize))
 
         let tab = try XCTUnwrap(recorder.savedWorkspace()?.windows.first?.tabs.first)
@@ -955,7 +1009,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         pane.select(range: 0..<0)
         try pane.pasteWrite([0x99, 0x98])
         let (recorder, folderURL) = recorder([window])
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
         let log = try XCTUnwrap(try FileManager.default.contentsOfDirectory(
             at: folderURL.appendingPathComponent("Kept"), includingPropertiesForKeys: nil).first)
         var data = try Data(contentsOf: log)
@@ -983,20 +1037,45 @@ final class WorkspaceRestoreTests: XCTestCase {
         let recorder = WorkspaceRecorder(folder: WorkspaceFolder(url: folderURL),
                                          controllers: { [withFile, empty] })
 
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
         XCTAssertFalse(FileManager.default.fileExists(atPath: folderURL.path),
                        "nothing is written while the switch is off")
 
         WorkspaceSettings.set(restoresWorkspace: true)
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
         let saved = try XCTUnwrap(recorder.savedWorkspace())
         XCTAssertEqual(saved.windows.count, 1, "an empty window is not part of the workspace")
         XCTAssertEqual(saved.windows.first?.tabs.first?.panes.first??.document,
                        .file(try XCTUnwrap(FileStamp(url: a))))
 
         WorkspaceSettings.set(restoresWorkspace: false)
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
         XCTAssertFalse(FileManager.default.fileExists(atPath: folderURL.path),
                        "switching off deletes the workspace")
+    }
+}
+
+extension WorkspaceRecorder {
+    /// A snapshot as the tests read it back: on disk, with every journal that
+    /// had to be moved into `Kept/` first moved — the app's own documents are
+    /// made there; a test's, made before its recorder, are moved in the
+    /// background.
+    func recordSettled() async {
+        record()
+        flush()
+        await keeper.settleMoves()
+        record()
+        flush()
+    }
+}
+
+extension ContentKeeper {
+    /// Tabs written down through this keeper outside a recorder, once every
+    /// journal they needed moved is in `Kept/`: taken, the moves waited for,
+    /// taken again and settled.
+    func settledTabs(_ take: () -> [TabState]) async -> [TabState] {
+        _ = take()
+        await settleMoves()
+        return settled(take())
     }
 }

@@ -118,7 +118,7 @@ extension MainViewController {
             var stamp = FileStamp(url: document.url)
                 ?? FileStamp(path: document.url.standardizedFileURL.path, size: pane.fileSize, modified: nil)
             stamp.relativePath = keeper?.relativeBase.flatMap { FileStamp.relativePath(of: stamp.path, to: $0) }
-            kept = keeper?.keep(pane)
+            kept = keeper?.keep(pane, presenter: self)
             // What the kept content is laid over is checked by its bytes at
             // restore, not only by its size and date.
             if kept != nil { stamp.sha256 = keeper?.fileHash(for: stamp, savedDigest: document.savedDigest) }
@@ -126,7 +126,7 @@ extension MainViewController {
         } else if let origin = partOrigin(of: pane, keeper: keeper, ids: ids) {
             source = .part(origin)
         } else {
-            guard let stamp = keeper?.stamp(for: pane) else { return nil }
+            guard let stamp = keeper?.stamp(for: pane, presenter: self) else { return nil }
             source = .untitled(stamp)
         }
         let selection = document.selection
@@ -151,7 +151,7 @@ extension MainViewController {
         guard let origin = pane.origin, origin.state != .parentClosed, let parent = origin.parent,
               let codec = PartCodecState(origin.codec).flatMap(PartCodecState.text) else { return nil }
         let range = origin.sourceRange
-        let edits = origin.hasChanges(in: pane) ? keeper?.stamp(for: pane) : nil
+        let edits = origin.hasChanges(in: pane) ? keeper?.stamp(for: pane, presenter: self) : nil
         return PartOrigin(parent: ids.id(for: parent), sourceStart: range.lowerBound,
                           sourceEnd: range.upperBound, name: origin.partName,
                           layout: PartCodecState.text(origin.layout), codec: codec, size: pane.fileSize,

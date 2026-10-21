@@ -27,13 +27,13 @@ final class ProjectTests: XCTestCase {
         return (folder, dump, folder.appendingPathComponent("Job.brp"))
     }
 
-    private func record(_ windows: [MainWindowController], into project: URL) -> WorkspaceRecorder {
+    private func record(_ windows: [MainWindowController], into project: URL) async -> WorkspaceRecorder {
         let session = FileManager.default.temporaryDirectory.appendingPathComponent("Session-\(UUID().uuidString)")
         addTeardownBlock { try? FileManager.default.removeItem(at: session) }
         let recorder = WorkspaceRecorder(folder: WorkspaceFolder(url: session), controllers: { windows },
                                          notes: { nil })
         recorder.switchTo(project: WorkspaceFolder.project(at: project))
-        recorder.record(); recorder.flush()
+        await recorder.recordSettled()
         return recorder
     }
 
@@ -56,7 +56,7 @@ final class ProjectTests: XCTestCase {
         pane.select(range: 0x10..<0x10)
         try pane.pasteWrite([0xDE, 0xAD])
         try pane.pasteInsert([0x01])
-        let recorder = record([window], into: project)
+        let recorder = await record([window], into: project)
 
         let saved = try XCTUnwrap(WorkspaceFolder.project(at: project).read())
         let state = try XCTUnwrap(saved.windows.first?.tabs.first?.panes.first ?? nil)
@@ -78,7 +78,7 @@ final class ProjectTests: XCTestCase {
         let (folder, dump, project) = try jobFolder()
         let window = shownWindow()
         window.mainViewController.openFiles([dump])
-        _ = record([window], into: project)
+        _ = await record([window], into: project)
         window.mainViewController.windowModel.pane1.close()
 
         let moved = folder.deletingLastPathComponent().appendingPathComponent("Moved-\(UUID().uuidString)")
@@ -98,7 +98,7 @@ final class ProjectTests: XCTestCase {
         window.mainViewController.openFiles([dump])
         pane.select(range: 0..<0)
         try pane.pasteWrite([0xFF])
-        _ = record([window], into: project)
+        _ = await record([window], into: project)
         pane.close()
         try Data(repeating: 7, count: 0x200).write(to: dump)
 
