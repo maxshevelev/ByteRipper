@@ -36,7 +36,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// written last (`Design/WORKSPACE_PLAN.md`). Nil under test, where the
     /// Application Support folder is the user's own.
     lazy var workspaceRecorder: WorkspaceRecorder? = WorkspaceRecorder.defaultFolder().map { folder in
-        WorkspaceRecorder(folder: folder, controllers: { [weak self] in self?.windowControllers ?? [] })
+        let recorder = WorkspaceRecorder(folder: folder, controllers: { [weak self] in self?.windowControllers ?? [] })
+        recorder.providesJournalDirectory = true
+        return recorder
     }
 
     /// The Settings window, owned by the app rather than by a window: there is

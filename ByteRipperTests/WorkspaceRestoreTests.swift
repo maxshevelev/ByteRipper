@@ -482,6 +482,9 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: edits).map { ($0 as NSString).pathExtension },
                        ["log"], "the file is the base: only the log of its changes is kept")
         pane.close()
+        // The restored copy writes the same journal; in a real launch it is the
+        // only one.
+        restored.close()
         recorder.record(); recorder.flush()
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: edits), [],
                        "a closed file takes its changes with it")
@@ -839,20 +842,23 @@ final class WorkspaceRestoreTests: XCTestCase {
         }
         func size(_ url: URL) throws -> Int { try Data(contentsOf: url).count }
         let base = try XCTUnwrap(try files("bin").first)
-        let log = try XCTUnwrap(try files("log").first)
-        let logSize = try size(log)
+        XCTAssertEqual(try files("log"), [], "no edits, no log")
         try FileManager.default.removeItem(at: base)
 
         pane.select(range: 4..<8)
         recorder.record(); recorder.flush()
         XCTAssertFalse(FileManager.default.fileExists(atPath: base.path), "a caret move writes nothing")
-        XCTAssertEqual(try size(log), logSize)
 
         pane.select(range: 4..<4)
         try pane.pasteWrite([1, 2])
         recorder.record(); recorder.flush()
         XCTAssertFalse(FileManager.default.fileExists(atPath: base.path), "an edit is not new content whole")
-        XCTAssertGreaterThan(try size(log), logSize, "it goes on the log")
+        let log = try XCTUnwrap(try files("log").first, "it goes on the log")
+        let logSize = try size(log)
+        try pane.pasteWrite([3, 4])
+        recorder.record(); recorder.flush()
+        XCTAssertGreaterThan(try size(log), logSize, "the next one on the same log")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: base.path))
 
         try pane.undo()
         let afterEdit = try size(log)
@@ -864,6 +870,49 @@ final class WorkspaceRestoreTests: XCTestCase {
         recorder.record(); recorder.flush()
         XCTAssertEqual(try files("bin").count, 1, "content that jumped is written whole, under a new name")
         XCTAssertNotEqual(try files("bin").first?.lastPathComponent, base.lastPathComponent)
+    }
+
+    /// With the workspace recorded, an edit's bytes are written once: into
+    /// the journal in `Kept/` as the edit is made, and the snapshot's record of
+    /// the step only names them. The log is about the size of the edit, not
+    /// twice it, and it brings the edit back undoable.
+    func testAnEditsBytesAreWrittenOnce() async throws {
+        WorkspaceSettings.set(restoresWorkspace: true)
+        EditingSettings.set(warnsBeforeShiftingEdits: false)
+        addTeardownBlock { EditingSettings.resetToDefaults() }
+        let window = shownWindow()
+        let pane = window.mainViewController.windowModel.pane1
+        let (recorder, folderURL) = recorder([window])
+        let keptFolder = folderURL.appendingPathComponent("Kept")
+        UndoJournal.directoryProvider = { keptFolder }
+        addTeardownBlock { UndoJournal.directoryProvider = nil }
+        pane.openBytes([UInt8](repeating: 0, count: 4 << 20), named: "big")
+        window.mainViewController.refreshMode()
+        pane.select(range: 0..<0)
+        let edit = (0..<(2 << 20)).map { UInt8(truncatingIfNeeded: $0 &* 13) }
+        try pane.pasteInsert(edit)
+        let journal = try XCTUnwrap(pane.document?.undoHistory.journal)
+        XCTAssertEqual(journal.url?.deletingLastPathComponent().standardizedFileURL, keptFolder.standardizedFileURL,
+                       "made where its log will be")
+        recorder.record(); recorder.flush()
+        let logs = try FileManager.default.contentsOfDirectory(at: keptFolder, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "log" }
+        XCTAssertEqual(logs.map(\.lastPathComponent), [journal.url?.lastPathComponent].compactMap { $0 })
+        let size = try Data(contentsOf: logs[0]).count
+        XCTAssertLessThan(size, edit.count + (64 << 10), "the edit's bytes once, and a short record naming them")
+
+        let tab = try XCTUnwrap(recorder.savedWorkspace()?.windows.first?.tabs.first)
+        pane.close()
+        let target = shownWindow().mainViewController
+        let issues = await restore([(tab, target)], keeper: ContentKeeper(folder: WorkspaceFolder(url: folderURL)))
+        XCTAssertEqual(issues, [])
+        let restored = target.windowModel.pane1
+        XCTAssertEqual(try restored.document?.read(at: 0, length: 16), Array(edit[0..<16]))
+        XCTAssertTrue(try restored.undo())
+        XCTAssertEqual(restored.fileSize, 4 << 20)
+        XCTAssertTrue(try restored.redo())
+        XCTAssertEqual(try restored.document?.read(at: UInt64(edit.count - 16), length: 16),
+                       Array(edit[(edit.count - 16)...]))
     }
 
     /// The content comes back as it was, from the base and the transactions

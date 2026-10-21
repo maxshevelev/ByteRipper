@@ -198,10 +198,13 @@ public final class UndoHistory: @unchecked Sendable {
     /// each edit, which is what a document does — the settings can change
     /// while it is open.
     public var limits: UndoLimits?
-    /// Where the journal is made. A test points it at a folder of its own.
-    let journalDirectory: URL
-    /// The file the ops' bytes live in, made at the first edit that has any.
-    private var journal: UndoJournal?
+    /// Where the journal is made, when given: a test's folder. Otherwise the
+    /// app says (`UndoJournal.directoryProvider`) — a workspace's `Kept/`
+    /// while one is recorded — or it is a temporary file.
+    let journalDirectory: URL?
+    /// The file the ops' bytes live in, made at the first edit that has any —
+    /// and, for a document a workspace keeps, its log.
+    public private(set) var journal: UndoJournal?
     /// The bytes every recorded op carries, undo and redo side together.
     public private(set) var heldBytes: UInt64 = 0
     /// How many of those lie in the current journal; the rest of its length is
@@ -215,8 +218,13 @@ public final class UndoHistory: @unchecked Sendable {
     /// any. Undoing everything that is left lands there, not on 0.
     private(set) var baseSerial: UInt64 = 0
 
-    public init(journalDirectory: URL = FileManager.default.temporaryDirectory) {
+    public init(journalDirectory: URL? = nil) {
         self.journalDirectory = journalDirectory
+    }
+
+    /// Where a new journal goes now.
+    private var directoryForNew: URL? {
+        journalDirectory ?? UndoJournal.directoryProvider?()
     }
 
     // Fast-rollback state:
@@ -302,7 +310,7 @@ public final class UndoHistory: @unchecked Sendable {
         do {
             if journal == nil {
                 guard ops.contains(where: { $0.heldBytes > 0 }) else { return ops }
-                journal = try UndoJournal(directory: journalDirectory)
+                journal = try UndoJournal(directory: directoryForNew)
             }
             let journal = journal!
             return try ops.map { try $0.stored(in: journal) }
@@ -357,7 +365,14 @@ public final class UndoHistory: @unchecked Sendable {
         guard let old = journal else { return }
         let dead = old.length - min(liveJournalBytes, old.length)
         guard dead > compactionFloor, dead > liveJournalBytes else { return }
-        guard let fresh = try? UndoJournal(directory: journalDirectory) else { return }
+        try? moveJournal(to: directoryForNew)
+    }
+
+    /// Moves every op's bytes into a new journal in `directory` (nil: a
+    /// temporary one): what compacting does, and what puts a document's
+    /// journal into the workspace that keeps it when it was made elsewhere.
+    public func moveJournal(to directory: URL?) throws {
+        let fresh = try UndoJournal(directory: directory)
         do {
             func move(_ steps: [Step]) throws -> [Step] {
                 try steps.map { step in
@@ -376,8 +391,6 @@ public final class UndoHistory: @unchecked Sendable {
             redoSteps = redo
             journal = fresh
             liveJournalBytes = (undoSteps + redoSteps).reduce(0) { $0 + $1.bytes(in: fresh) }
-        } catch {
-            // The old journal still holds everything; try again at a later edit.
         }
     }
 
@@ -531,9 +544,10 @@ public final class UndoHistory: @unchecked Sendable {
     /// disk — for a document that has one — holds the state `saved` names.
     /// `dirty` keeps a document dirty that has no saved state to compare with:
     /// an untitled one nobody saved.
-    public func resume(at head: UInt64, nextSerial: UInt64, saved: UInt64?, dirty: Bool) {
+    public func resume(at head: UInt64, nextSerial: UInt64, saved: UInt64?, dirty: Bool,
+                       journal: UndoJournal? = nil) {
         restore(undo: [], redo: [], base: head, nextSerial: nextSerial,
-                saved: saved ?? head, dirtyRegardless: dirty && saved == nil)
+                saved: saved ?? head, dirtyRegardless: dirty && saved == nil, journal: journal)
     }
 
     /// The transaction the next undo would take back first — the only one a
@@ -613,8 +627,12 @@ public final class UndoHistory: @unchecked Sendable {
     /// own journal. Serials go on from `nextSerial`; `saved` names the saved
     /// state, and `dirtyRegardless` keeps a document dirty in any state.
     public func restore(undo: [KeptTransaction], redo: [[KeptTransaction]], base: UInt64,
-                        nextSerial: UInt64, saved: UInt64, dirtyRegardless: Bool) {
+                        nextSerial: UInt64, saved: UInt64, dirtyRegardless: Bool,
+                        journal: UndoJournal? = nil) {
         dropAll()
+        // The kept log, taken up again: the ops' bytes are in it, and the
+        // edits from here on go on writing it.
+        self.journal = journal
         baseSerial = base
         func step(_ kept: [KeptTransaction]) -> Step {
             Step(label: kept.first?.label,

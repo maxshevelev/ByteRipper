@@ -1,3 +1,4 @@
+import ByteRipperCore
 import Cocoa
 import Workspace
 
@@ -62,6 +63,7 @@ final class WorkspaceRecorder {
         keeper = project.map { ContentKeeper(folder: $0, isProject: true) }
             ?? ContentKeeper(folder: folder)
         removedWhileOff = false
+        updateJournalDirectory()
     }
 
     /// Forgets the session the app keeps by itself: it was saved as a
@@ -78,7 +80,23 @@ final class WorkspaceRecorder {
         return folder.read()
     }
 
+    /// Whether this recorder tells new undo journals where to go — the app's
+    /// own one does; a test's leaves them temporary.
+    var providesJournalDirectory = false
+
+    /// Points new undo journals at the `Kept/` of what is recorded now, so a
+    /// document's history is written where its log will be, once
+    /// (`Design/PERSISTENT_UNDO_PLAN.md`, "One journal"); at nothing — a
+    /// temporary file — while nothing is.
+    private func updateJournalDirectory() {
+        guard providesJournalDirectory else { return }
+        let directory = project?.keptFolder
+            ?? (WorkspaceSettings.restoresWorkspace ? folder.keptFolder : nil)
+        UndoJournal.directoryProvider = { directory }
+    }
+
     func start() {
+        updateJournalDirectory()
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: Self.interval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.record() }
@@ -107,6 +125,7 @@ final class WorkspaceRecorder {
     /// project goes: what is still being worked out in the background — the
     /// hash of a file kept content is laid over — is worked out now.
     func record(final: Bool = false) {
+        updateJournalDirectory()
         keeper.waitsForHashes = final
         defer { keeper.waitsForHashes = false }
         if project != nil {

@@ -309,4 +309,41 @@ final class HistoryLogTests: XCTestCase {
         XCTAssertEqual(read[1].segmentsBefore, a)
         XCTAssertEqual(read[1].segmentsAfter, Data("cuts B".utf8))
     }
+
+    /// A history's journal is its log: a transaction's record names the bytes
+    /// the edit already wrote there, and reads back whole.
+    func testARecordNamesTheBytesTheJournalHolds() throws {
+        let history = UndoHistory(journalDirectory: folder)
+        let big = [UInt8](repeating: 0xAB, count: 300_000)
+        history.record([.insert(at: 0, bytes: UndoBytes(big))])
+        let journal = try XCTUnwrap(history.journal)
+        let before = journal.length
+        let writer = HistoryLogWriter(journal: journal)
+        try writer.append(history.heldTransactions[0])
+        XCTAssertLessThan(journal.length - before, 512, "named, not written again")
+        XCTAssertTrue(UndoJournal.liveNames(in: folder).contains(journal.url!.lastPathComponent))
+
+        let read = try HistoryLog.read(journal.url!, length: writer.length, hash: writer.hash)
+        XCTAssertEqual(read, history.heldTransactions)
+        guard case .insert(_, let bytes) = read[0].transaction.ops[0] else { return XCTFail() }
+        XCTAssertEqual(try bytes.load(), big)
+    }
+
+    /// A journal taken up again goes on: its old records name bytes written
+    /// into a record, and written again by reference.
+    func testAContinuedJournalNamesWhatItsRecordsCarried() throws {
+        let doc = makeDocument([UInt8](repeating: 0, count: 64))
+        try doc.overwrite(range: 0..<8, with: [UInt8](repeating: 7, count: 8))
+        let url = folder.appendingPathComponent("c2.log")
+        let first = try write(doc.undoHistory.heldTransactions, to: url)   // the bytes written into the record
+        let continuing = try UndoJournal(continuing: url, length: first.length, hash: first.hash)
+        let records = try HistoryLog.read(continuing, length: first.length, hash: first.hash)
+        let writer = HistoryLogWriter(journal: continuing)
+        let lengthBefore = writer.length
+        try writer.append(records[0])
+        XCTAssertLessThan(writer.length - lengthBefore, 300, "named by where the record carried them")
+        let again = try HistoryLog.read(url, length: writer.length, hash: writer.hash)
+        XCTAssertEqual(again.count, 2)
+        XCTAssertEqual(again[1].transaction.ops, records[0].transaction.ops)
+    }
 }

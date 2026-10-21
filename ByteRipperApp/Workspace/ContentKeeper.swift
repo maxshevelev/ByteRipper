@@ -30,10 +30,9 @@ final class ContentKeeper {
         /// The base as decided: its kind, file and serial. Its hash is the
         /// writer's to fill in.
         var base: KeptBase?
-        /// The log the writes go to.
-        var logName: String?
-        /// About what the log holds, to know when to start it afresh.
-        var loggedBytes: UInt64 = 0
+        /// The history's journal the log is written into; another one there
+        /// — compacted, moved — is a log begun anew.
+        var journal: UndoJournal?
         /// The serials of the transactions in the log, each to its parent.
         var parents: [UInt64: UInt64] = [:]
         /// The newest serial in the log: everything after it is new.
@@ -76,10 +75,6 @@ final class ContentKeeper {
 
     /// Writes off the main thread what the snapshots decide.
     let writer: KeptWriter
-
-    /// A log larger than this is let grow until it is twice what the history
-    /// holds; then the content is written whole again and the log begins anew.
-    var compactionFloor: UInt64 = 64 << 20
 
     init(folder: WorkspaceFolder, isProject: Bool = false) {
         self.folder = folder
@@ -126,7 +121,14 @@ final class ContentKeeper {
     private func update(_ entry: Entry, pane: PaneViewModel, document: BinaryDocument, saved: UInt64?) {
         let history = document.undoHistory
         let epochMoved = entry.version.map { $0.epoch != history.version.epoch } ?? false
-        var needsBase = entry.base == nil || entry.logName == nil || epochMoved
+        // The log is the history's journal, and it has to be in this
+        // workspace's `Kept/`: one made before the workspace was recorded, or
+        // in another, is moved here — once — and the log begins anew.
+        guard placeJournal(of: history) else { return failed(entry) }
+        var needsBase = entry.base == nil || epochMoved
+        // Another journal — the first, a compacted one, a moved one — is a new
+        // log; the base stays when the new log still leads from it.
+        let newLog = history.journal !== entry.journal
         if case .file = entry.base, pane.isUntitled { needsBase = true }
         var newBase: KeptBase?
         if !needsBase, let saved, saved != entry.saved {
@@ -135,8 +137,9 @@ final class ContentKeeper {
             newBase = .file(serial: saved)
             entry.base = newBase
         }
-        if needsBase {
-            guard rebase(entry, pane: pane, document: document, saved: saved) else { return failed(entry) }
+        if needsBase || newLog {
+            guard rebase(entry, pane: pane, document: document, saved: saved, keepingBase: !needsBase)
+            else { return failed(entry) }
         } else {
             var records: [KeptTransaction] = []
             var selections: [(UInt64, SelectionModel)] = []
@@ -146,7 +149,6 @@ final class ContentKeeper {
                 entry.parents[txn.serial] = txn.parent
                 entry.afters[txn.serial] = txn.selectionAfter
                 entry.newestLogged = max(entry.newestLogged, txn.serial)
-                entry.loggedBytes += txn.ops.reduce(0) { $0 + $1.heldBytes }
             }
             // Only the newest transaction can have its selection refined after
             // it was recorded.
@@ -155,8 +157,9 @@ final class ContentKeeper {
                 entry.afters[newest.serial] = newest.selectionAfter
             }
             let segments = segmentWrites(of: pane, history: history, entry: entry)
-            let tooLong = entry.loggedBytes > max(compactionFloor, 2 * history.heldBytes)
-            if tooLong || !connects(entry, to: history.headSerial) {
+            // The log grows only as far as the history's own compaction lets
+            // it: compacting makes a new journal, and with it a new log.
+            if !connects(entry, to: history.headSerial) {
                 guard rebase(entry, pane: pane, document: document, saved: saved) else { return failed(entry) }
             } else if !records.isEmpty || !selections.isEmpty || !segments.isEmpty || newBase != nil {
                 pending.append(.append(id: entry.id, records: records, selections: selections,
@@ -170,7 +173,7 @@ final class ContentKeeper {
         entry.kept = KeptContent(
             id: entry.id, base: entry.base!, head: history.headSerial, nextSerial: history.upcomingSerial,
             saved: saved,
-            log: entry.logName.map { KeptLog(file: $0, length: 0, hash: "") },
+            log: entry.journal?.url.map { KeptLog(file: $0.lastPathComponent, length: 0, hash: "") },
             history: KeptHistory(undoBase: history.undoBaseSerial, redoTip: history.redoTipSerial,
                                  redoSteps: history.redoStepSizes, savedState: history.savedStateSerial,
                                  dirtyRegardless: history.isDirtyRegardless,
@@ -184,6 +187,20 @@ final class ContentKeeper {
     /// the history leads from its saved state; otherwise the content is written
     /// — whole for a document with no file, from a snapshot of it taken now;
     /// as runs over the file for one.
+    /// Puts the history's journal into this workspace's `Kept/` when it is not
+    /// there — a temporary one, one in another workspace, or none while the
+    /// history has bytes in memory. False when it could not be.
+    private func placeJournal(of history: UndoHistory) -> Bool {
+        let here = folder.keptFolder.standardizedFileURL.path
+        // Its file must still be there too: switching the restore off removes
+        // the session's folder under a journal still being written.
+        if let journal = history.journal, let url = journal.url,
+           url.deletingLastPathComponent().standardizedFileURL.path == here,
+           FileManager.default.fileExists(atPath: url.path) { return true }
+        guard history.journal != nil || history.canUndo || history.canRedo else { return true }
+        return (try? history.moveJournal(to: folder.keptFolder)) != nil
+    }
+
     /// A content that could not be taken afresh: the snapshot keeps what the
     /// last one kept, and the next one tries again from the start.
     private func failed(_ entry: Entry) {
@@ -192,7 +209,8 @@ final class ContentKeeper {
     }
 
     @discardableResult
-    private func rebase(_ entry: Entry, pane: PaneViewModel, document: BinaryDocument, saved: UInt64?) -> Bool {
+    private func rebase(_ entry: Entry, pane: PaneViewModel, document: BinaryDocument, saved: UInt64?,
+                        keepingBase: Bool = false) -> Bool {
         let history = document.undoHistory
         let name = "\(entry.id)-\(UUID().uuidString.prefix(8))"
         let held = history.heldTransactions
@@ -205,7 +223,11 @@ final class ContentKeeper {
         let head = history.headSerial
         let pendingBase: PendingBase
         let base: KeptBase
-        if let saved, HistoryLog.connects(saved, head, parents: parents) {
+        if keepingBase, let kept = entry.base, HistoryLog.connects(kept.serial, head, parents: parents) {
+            // A new log over the same base: nothing written whole again.
+            pendingBase = .unchanged
+            base = kept
+        } else if let saved, HistoryLog.connects(saved, head, parents: parents) {
             pendingBase = .file(serial: saved)
             base = .file(serial: saved)
         } else if saved != nil {
@@ -227,15 +249,15 @@ final class ContentKeeper {
             base = .bytes(file: name + ".bin", serial: head, hash: "")
         }
         entry.base = base
-        entry.logName = name + ".log"
+        entry.journal = history.journal
         entry.parents = parents
         entry.newestLogged = held.last?.transaction.serial ?? 0
         entry.connected = [base.serial]
         entry.afters = afters
-        entry.loggedBytes = history.heldBytes
         entry.segments = [:]
         let segments = segmentWrites(of: pane, history: history, entry: entry)
-        pending.append(.rebase(id: entry.id, name: name, base: pendingBase, held: held, segments: segments))
+        pending.append(.rebase(id: entry.id, journal: history.journal, base: pendingBase, held: held,
+                               segments: segments))
         return true
     }
 
@@ -401,6 +423,9 @@ final class ContentKeeper {
         let records: [KeptTransaction]
         let bytes: [UInt8]?
         let edits: OverlayEdits?
+        /// The log taken up again, cut to its pin: the restored history's
+        /// journal, which its ops' bytes point into.
+        let journal: UndoJournal?
     }
 
     /// What `readBack` has read, by content id.
@@ -441,9 +466,12 @@ final class ContentKeeper {
     private nonisolated static func read(_ content: KeptContent, log: URL?, base: URL?,
                                          progress: ((Int) -> Void)?) throws -> ReadBack {
         var records: [KeptTransaction] = []
+        var journal: UndoJournal?
         if let pin = content.log, let log {
             guard let hash = Data(hex: pin.hash) else { throw HistoryLogError.unreadable }
-            records = try HistoryLog.read(log, length: pin.length, hash: hash, progress: progress)
+            let continuing = try UndoJournal(continuing: log, length: pin.length, hash: hash)
+            records = try HistoryLog.read(continuing, length: pin.length, hash: hash, progress: progress)
+            journal = continuing
         }
         func checked(_ hash: String) throws -> Data {
             guard let base else { throw HistoryLogError.unreadable }
@@ -454,14 +482,15 @@ final class ContentKeeper {
         }
         switch content.base {
         case .file:
-            return ReadBack(records: records, bytes: nil, edits: nil)
+            return ReadBack(records: records, bytes: nil, edits: nil, journal: journal)
         case .edits(_, _, let hash):
             let edits = try PropertyListDecoder().decode(OverlayEdits.self, from: try checked(hash))
-            return ReadBack(records: records, bytes: nil, edits: edits)
+            return ReadBack(records: records, bytes: nil, edits: edits, journal: journal)
         case .bytes(_, _, let hash):
             let storage = EditOverlayStorage(base: MemoryBackedStorage(bytes: [UInt8](try checked(hash))))
             try HistoryLog.apply(try ops(of: content, records), to: storage)
-            return ReadBack(records: records, bytes: try storage.read(at: 0, length: Int(storage.size)), edits: nil)
+            return ReadBack(records: records, bytes: try storage.read(at: 0, length: Int(storage.size)), edits: nil,
+                            journal: journal)
         }
     }
 
@@ -484,6 +513,13 @@ final class ContentKeeper {
             throw HistoryLogError.noPath
         }
         return ops
+    }
+
+    /// Lets go of what was read back and not taken up — content whose file
+    /// changed, a part whose parent did not come back — and the journals it
+    /// held open.
+    func forgetReadBacks() {
+        readBacks = [:]
     }
 
     /// The names of documents that came back without their history since the
@@ -530,14 +566,15 @@ final class ContentKeeper {
     /// dirty as it was.
     func adopt(_ pane: PaneViewModel, content: KeptContent, name: String, dirty: Bool) {
         guard let document = pane.document else { return }
-        let records = (try? readBack(of: content).records) ?? []
+        let read = try? readBack(of: content)
+        let records = read?.records ?? []
         let map = Dictionary(records.map { ($0.transaction.serial, $0) }, uniquingKeysWith: { _, b in b })
         if let kept = content.history,
            let sides = HistoryLog.sides(head: content.head, undoBase: kept.undoBase, redoTip: kept.redoTip,
                                         redoSizes: kept.redoSteps, in: map) {
             document.undoHistory.restore(undo: sides.undo, redo: sides.redo, base: kept.undoBase,
                                          nextSerial: content.nextSerial, saved: kept.savedState,
-                                         dirtyRegardless: kept.dirtyRegardless)
+                                         dirtyRegardless: kept.dirtyRegardless, journal: read?.journal)
             func join(_ kept: KeptJoin) -> BinaryDocument.KeptJoin {
                 BinaryDocument.KeptJoin(serial: kept.serial, url: URL(fileURLWithPath: kept.path), readOnly: kept.readOnly)
             }
@@ -545,7 +582,7 @@ final class ContentKeeper {
             restoreSegments(of: pane, undo: sides.undo, redo: sides.redo.reversed().flatMap { $0 })
         } else {
             document.undoHistory.resume(at: content.head, nextSerial: content.nextSerial,
-                                        saved: content.saved, dirty: dirty)
+                                        saved: content.saved, dirty: dirty, journal: read?.journal)
             // Kept, but the log no longer leads back: the content is right, the
             // steps to undo it are gone, and the warning says so.
             if let kept = content.history, kept.undoBase != content.head || kept.redoTip != nil {
@@ -555,9 +592,8 @@ final class ContentKeeper {
         readBacks[content.id] = nil
         let entry = Entry(document: document, id: content.id)
         entry.base = content.base
-        entry.logName = content.log?.file
-        entry.loggedBytes = content.log?.length ?? 0
-        writer.submit([.resume(id: content.id, base: content.base, log: content.log)])
+        entry.journal = document.undoHistory.journal
+        writer.submit([.resume(id: content.id, base: content.base, journal: document.undoHistory.journal)])
         for record in records {
             entry.parents[record.transaction.serial] = record.transaction.parent
             entry.afters[record.transaction.serial] = record.transaction.selectionAfter

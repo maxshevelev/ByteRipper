@@ -169,6 +169,7 @@ import Workspace
             tab.controller.settleWorkspaceFragments(expanded: front)
         }
         issues += (keeper?.takeHistoriesLost() ?? []).map { .historyLost(name: $0) }
+        keeper?.forgetReadBacks()
     }
 
     /// Why a part did not open: its kept changes could not be read, or there

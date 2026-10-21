@@ -54,6 +54,9 @@ public enum HistoryLog {
     /// (0 before it, 1 after it), then the encoding — or, flagged, the same as
     /// the last such record in the log.
     static let segmentsMagic: [UInt8] = Array("BRP1".utf8)
+    /// An edit's bytes, written the moment it was recorded; transaction
+    /// records name them by where they start.
+    static let blobMagic: [UInt8] = Array("BRB1".utf8)
     /// The hash a log starts its chain from.
     public static let emptyHash = Data(repeating: 0, count: 32)
 
@@ -169,11 +172,18 @@ public enum HistoryLog {
     /// are not read into memory: they point into the log.
     public static func read(_ url: URL, length: UInt64, hash: Data,
                             progress: ((Int) -> Void)? = nil) throws -> [KeptTransaction] {
+        try read(try UndoJournal(reading: url), length: length, hash: hash, progress: progress)
+    }
+
+    /// The same, from a journal already open — one taken up again
+    /// (`UndoJournal(continuing:)`), which the restored history then goes on
+    /// writing: the ops' bytes point into it.
+    public static func read(_ file: UndoJournal, length: UInt64, hash: Data,
+                            progress: ((Int) -> Void)? = nil) throws -> [KeptTransaction] {
         guard length > 0 else {
             guard hash == emptyHash else { throw HistoryLogError.unreadable }
             return []
         }
-        let file = try UndoJournal(reading: url)
         guard file.length >= length else { throw HistoryLogError.unreadable }
         var reader = Reader(file: file, end: length)
         reader.progress = progress
@@ -184,7 +194,7 @@ public enum HistoryLog {
         do {
             while reader.at < length {
                 let kind = try reader.bytes(4, hashing: false)
-                guard kind == magic || kind == selectionMagic || kind == segmentsMagic else {
+                guard kind == magic || kind == selectionMagic || kind == segmentsMagic || kind == blobMagic else {
                     throw HistoryLogError.unreadable
                 }
                 let bodyLength = try reader.u64(hashing: false)
@@ -192,7 +202,10 @@ public enum HistoryLog {
                 reader.hasher = SHA256()
                 reader.hasher.update(data: chain)
                 let bodyEnd = reader.at + bodyLength
-                if kind == magic {
+                if kind == blobMagic {
+                    reader.blobs[reader.at] = bodyLength
+                    try reader.skip(bodyLength)
+                } else if kind == magic {
                     let record = try reader.transaction()
                     index[record.transaction.serial] = records.count
                     records.append(record)
@@ -243,6 +256,8 @@ public enum HistoryLog {
         var at: UInt64 = 0
         var hasher = SHA256()
         var progress: ((Int) -> Void)?
+        /// The edits' bytes read past so far: where each starts, its length.
+        var blobs: [UInt64: UInt64] = [:]
 
         init(file: UndoJournal, end: UInt64) {
             self.file = file
@@ -256,6 +271,16 @@ public enum HistoryLog {
             at += UInt64(count)
             progress?(count)
             return bytes
+        }
+
+        /// Passes over `count` bytes, hashing them, a slice at a time.
+        mutating func skip(_ count: UInt64) throws {
+            var left = count
+            while left > 0 {
+                let slice = Int(min(left, UInt64(UndoJournal.copySlice)))
+                _ = try bytes(slice)
+                left -= UInt64(slice)
+            }
         }
 
         mutating func u64(hashing: Bool = true) throws -> UInt64 {
@@ -282,12 +307,15 @@ public enum HistoryLog {
                 let count = try u64()
                 guard count <= end - at else { throw HistoryLogError.unreadable }
                 let start = at
-                var left = count
-                while left > 0 {
-                    let slice = Int(min(left, UInt64(UndoJournal.copySlice)))
-                    _ = try bytes(slice)
-                    left -= UInt64(slice)
-                }
+                try skip(count)
+                // Written into the record, and named from here on like an
+                // edit's own bytes.
+                blobs[start] = count
+                return UndoBytes(journal: file, offset: start, count: Int(count))
+            case 2:
+                // The bytes of an edit written before, by where they start.
+                let start = try u64(), count = try u64()
+                guard blobs[start] == count else { throw HistoryLogError.unreadable }
                 return UndoBytes(journal: file, offset: start, count: Int(count))
             case 1:
                 let count = try u64()
@@ -334,127 +362,95 @@ public enum HistoryLog {
     }
 }
 
-/// Appends records to a kept history's log.
+/// Appends a kept history's records to its journal: the transactions — naming
+/// the bytes the journal already holds rather than writing them again — the
+/// refined selections and the segments paired with them.
 public final class HistoryLogWriter {
-    public let url: URL
-    /// Where the next record goes: the length a manifest pins the log at.
-    public private(set) var length: UInt64
-    /// The chained hash at `length`.
-    public private(set) var hash: Data
-    private let fd: Int32
+    public let journal: UndoJournal
+
+    public init(journal: UndoJournal) {
+        self.journal = journal
+    }
 
     /// A new, empty log at `url`.
     public convenience init(creating url: URL) throws {
-        try self.init(url: url, length: 0, hash: HistoryLog.emptyHash, truncating: true)
+        self.init(journal: try UndoJournal(creating: url))
     }
 
     /// The log at `url` as a manifest pinned it: anything past `length` is
     /// cut off before the next record goes on.
     public convenience init(appendingTo url: URL, length: UInt64, hash: Data) throws {
-        try self.init(url: url, length: length, hash: hash, truncating: false)
+        self.init(journal: try UndoJournal(continuing: url, length: length, hash: hash))
     }
 
-    private init(url: URL, length: UInt64, hash: Data, truncating: Bool) throws {
-        let fd = open(url.path, O_RDWR | O_CREAT | (truncating ? O_TRUNC : 0), 0o600)
-        guard fd >= 0 else { throw StorageError.writeFailed }
-        var info = stat()
-        guard fstat(fd, &info) == 0, UInt64(info.st_size) >= length, ftruncate(fd, off_t(length)) == 0 else {
-            close(fd)
-            throw StorageError.writeFailed
-        }
-        self.url = url
-        self.fd = fd
-        self.length = length
-        self.hash = hash
-    }
+    public var url: URL { journal.url! }
+    /// Where the next record goes: the length a manifest pins the log at.
+    public var length: UInt64 { journal.pin().length }
+    /// The chained hash at `length`.
+    public var hash: Data { journal.pin().hash }
 
-    deinit {
-        close(fd)
-    }
-
-    /// Appends one record. On failure the log is cut back to where it was.
+    /// Appends one transaction. Bytes already in this journal are named by
+    /// where they start; bytes elsewhere — in memory, in another journal —
+    /// are written into the record; a fill's are its pattern.
     public func append(_ kept: KeptTransaction) throws {
         let txn = kept.transaction
-        var head = Encoder()
-        head.u64(txn.serial)
-        head.u64(txn.parent)
-        head.selection(txn.selectionBefore)
-        head.selection(txn.selectionAfter)
-        head.u8(kept.seriesID == nil ? 0 : 1)
-        head.u64(kept.seriesID ?? 0)
+        var head: [UInt8] = []
+        head += UndoJournal.u64(txn.serial)
+        head += UndoJournal.u64(txn.parent)
+        head += selection(txn.selectionBefore) + selection(txn.selectionAfter)
+        head.append(kept.seriesID == nil ? 0 : 1)
+        head += UndoJournal.u64(kept.seriesID ?? 0)
         let label = Array((kept.label ?? "").utf8)
-        head.u32(UInt32(label.count))
-        head.bytes(label)
-        head.u32(UInt32(txn.ops.count))
-        // The body's length is known before a byte of payload is read: the
-        // header, then each op's fixed part and its payloads' sizes.
-        var bodyLength = UInt64(head.buffer.count)
-        func payloadLength(_ bytes: UndoBytes) -> UInt64 {
-            if let form = bytes.patternForm { return 1 + 8 + 4 + UInt64(form.pattern.count) }
-            return 1 + 8 + UInt64(bytes.count)
+        head += u32(UInt32(label.count)) + label
+        head += u32(UInt32(txn.ops.count))
+        let journal = journal
+        enum Form { case named(UInt64, Int), pattern([UInt8], Int), written(UndoBytes) }
+        func form(_ bytes: UndoBytes) -> Form {
+            if let pattern = bytes.patternForm { return .pattern(pattern.pattern, pattern.count) }
+            if case .stored(let owner, let offset, let count) = bytes.storage, owner === journal {
+                return .named(offset, count)
+            }
+            return .written(bytes)
         }
+        func size(_ form: Form) -> UInt64 {
+            switch form {
+            case .named: return 1 + 16
+            case .pattern(let pattern, _): return 1 + 8 + 4 + UInt64(pattern.count)
+            case .written(let bytes): return 1 + 8 + UInt64(bytes.count)
+            }
+        }
+        var parts: [(fixed: [UInt8], payloads: [Form])] = []
         for op in txn.ops {
-            bodyLength += 1 + 16
             switch op {
-            case .overwrite(_, let before, let after): bodyLength += payloadLength(before) + payloadLength(after)
-            case .insert(_, let bytes), .delete(_, let bytes): bodyLength += payloadLength(bytes)
+            case .overwrite(let range, let before, let after):
+                parts.append(([0] + UndoJournal.u64(range.lowerBound) + UndoJournal.u64(range.upperBound),
+                              [form(before), form(after)]))
+            case .insert(let at, let bytes):
+                parts.append(([1] + UndoJournal.u64(at) + UndoJournal.u64(0), [form(bytes)]))
+            case .delete(let range, let bytes):
+                parts.append(([2] + UndoJournal.u64(range.lowerBound) + UndoJournal.u64(range.upperBound),
+                              [form(bytes)]))
             }
         }
-
-        var out = Output(fd: fd, at: length)
-        var hasher = SHA256()
-        hasher.update(data: hash)
-        do {
-            try out.write(HistoryLog.magic)
-            var lengthField = Encoder()
-            lengthField.u64(bodyLength)
-            try out.write(lengthField.buffer)
-            func body(_ bytes: [UInt8]) throws {
-                hasher.update(data: bytes)
-                try out.write(bytes)
-            }
-            try body(head.buffer)
-            func payload(_ bytes: UndoBytes) throws {
-                var field = Encoder()
-                if let form = bytes.patternForm {
-                    field.u8(1)
-                    field.u64(UInt64(form.count))
-                    field.u32(UInt32(form.pattern.count))
-                    field.bytes(form.pattern)
-                    try body(field.buffer)
-                } else {
-                    field.u8(0)
-                    field.u64(UInt64(bytes.count))
-                    try body(field.buffer)
-                    try bytes.forEachSlice { try body($0) }
+        let bodyLength = UInt64(head.count) + parts.reduce(0) { total, part in
+            total + UInt64(part.fixed.count) + part.payloads.reduce(0) { $0 + size($1) }
+        }
+        try journal.appendRecord(HistoryLog.magic, bodyLength: bodyLength) { emit in
+            try emit(head)
+            for part in parts {
+                try emit(part.fixed)
+                for payload in part.payloads {
+                    switch payload {
+                    case .named(let offset, let count):
+                        try emit([2] + UndoJournal.u64(offset) + UndoJournal.u64(UInt64(count)))
+                    case .pattern(let pattern, let count):
+                        try emit([1] + UndoJournal.u64(UInt64(count)) + u32(UInt32(pattern.count)) + pattern)
+                    case .written(let bytes):
+                        try emit([0] + UndoJournal.u64(UInt64(bytes.count)))
+                        try bytes.forEachSlice { try emit($0) }
+                    }
                 }
             }
-            for op in txn.ops {
-                var fixed = Encoder()
-                switch op {
-                case .overwrite(let range, let before, let after):
-                    fixed.u8(0); fixed.u64(range.lowerBound); fixed.u64(range.upperBound)
-                    try body(fixed.buffer)
-                    try payload(before)
-                    try payload(after)
-                case .insert(let at, let bytes):
-                    fixed.u8(1); fixed.u64(at); fixed.u64(0)
-                    try body(fixed.buffer)
-                    try payload(bytes)
-                case .delete(let range, let bytes):
-                    fixed.u8(2); fixed.u64(range.lowerBound); fixed.u64(range.upperBound)
-                    try body(fixed.buffer)
-                    try payload(bytes)
-                }
-            }
-            let digest = Data(hasher.finalize())
-            try out.write([UInt8](digest))
-            try out.flush()
-            length = out.at
-            hash = digest
-        } catch {
-            _ = ftruncate(fd, off_t(length))
-            throw error
         }
     }
 
@@ -464,93 +460,30 @@ public final class HistoryLogWriter {
     /// Appends the segments the pane paired with the transaction `serial`,
     /// already in the log: those before it, or — `after` — those after it.
     public func appendSegments(of serial: UInt64, after: Bool, _ data: Data) throws {
-        var body = Encoder()
-        body.u64(serial)
-        body.u8(after ? 1 : 0)
+        var body = UndoJournal.u64(serial) + [after ? 1 : 0]
         if data == lastSegments {
-            body.u8(0)
+            body.append(0)
         } else {
-            body.u8(1)
-            body.u32(UInt32(data.count))
-            body.bytes([UInt8](data))
+            body += [1] + u32(UInt32(data.count)) + [UInt8](data)
         }
-        try appendFramed(HistoryLog.segmentsMagic, body.buffer)
+        try journal.appendRecord(HistoryLog.segmentsMagic, bodyLength: UInt64(body.count)) { try $0(body) }
         lastSegments = data
     }
 
     /// Appends a refined selection after the transaction `serial`, already in
     /// the log.
     public func appendSelection(after serial: UInt64, _ selection: SelectionModel) throws {
-        var body = Encoder()
-        body.u64(serial)
-        body.selection(selection)
-        try appendFramed(HistoryLog.selectionMagic, body.buffer)
-    }
-
-    /// A small record: its kind, the body's length, the body, the hash.
-    private func appendFramed(_ kind: [UInt8], _ body: [UInt8]) throws {
-        let body = Encoder(buffer: body)
-        var frame = Encoder()
-        frame.bytes(kind)
-        frame.u64(UInt64(body.buffer.count))
-        var hasher = SHA256()
-        hasher.update(data: hash)
-        hasher.update(data: body.buffer)
-        let digest = Data(hasher.finalize())
-        var out = Output(fd: fd, at: length)
-        do {
-            try out.write(frame.buffer + body.buffer + [UInt8](digest))
-            try out.flush()
-            length = out.at
-            hash = digest
-        } catch {
-            _ = ftruncate(fd, off_t(length))
-            throw error
-        }
+        let body = UndoJournal.u64(serial) + self.selection(selection)
+        try journal.appendRecord(HistoryLog.selectionMagic, bodyLength: UInt64(body.count)) { try $0(body) }
     }
 
     /// Puts what was appended on the disk, before a manifest names it.
     public func synchronize() {
-        _ = fsync(fd)
+        journal.synchronize()
     }
 
-    private struct Encoder {
-        var buffer: [UInt8] = []
-        init(buffer: [UInt8] = []) { self.buffer = buffer }
-        mutating func u8(_ v: UInt8) { buffer.append(v) }
-        mutating func u32(_ v: UInt32) { for i in 0..<4 { buffer.append(UInt8(truncatingIfNeeded: v >> (8 * i))) } }
-        mutating func u64(_ v: UInt64) { for i in 0..<8 { buffer.append(UInt8(truncatingIfNeeded: v >> (8 * i))) } }
-        mutating func bytes(_ b: [UInt8]) { buffer += b }
-        mutating func selection(_ s: SelectionModel) { u64(s.start); u64(s.end); u64(s.fileSize) }
-    }
-
-    /// Writes through a buffer of a slice's size.
-    private struct Output {
-        let fd: Int32
-        var at: UInt64
-        var pending: [UInt8] = []
-
-        init(fd: Int32, at: UInt64) {
-            self.fd = fd
-            self.at = at
-        }
-
-        mutating func write(_ bytes: [UInt8]) throws {
-            pending += bytes
-            if pending.count >= UndoJournal.copySlice { try flush() }
-        }
-
-        mutating func flush() throws {
-            try pending.withUnsafeBytes { raw in
-                var done = 0
-                while done < raw.count {
-                    let n = pwrite(fd, raw.baseAddress! + done, raw.count - done, off_t(at) + off_t(done))
-                    guard n > 0 else { throw StorageError.writeFailed }
-                    done += n
-                }
-            }
-            at += UInt64(pending.count)
-            pending.removeAll(keepingCapacity: true)
-        }
+    private func u32(_ v: UInt32) -> [UInt8] { (0..<4).map { UInt8(truncatingIfNeeded: v >> (8 * $0)) } }
+    private func selection(_ s: SelectionModel) -> [UInt8] {
+        UndoJournal.u64(s.start) + UndoJournal.u64(s.end) + UndoJournal.u64(s.fileSize)
     }
 }

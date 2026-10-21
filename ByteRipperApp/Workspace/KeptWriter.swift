@@ -7,11 +7,13 @@ import Workspace
 /// they lie — the history's journal, a kept log, memory — none of which the
 /// main thread rewrites.
 enum KeptWrite: @unchecked Sendable {
-    /// A restored document: its log goes on as the workspace pinned it.
-    case resume(id: String, base: KeptBase, log: KeptLog?)
-    /// The content afresh: a new log of every transaction the history holds,
-    /// the segments paired with them, and the base.
-    case rebase(id: String, name: String, base: PendingBase, held: [KeptTransaction],
+    /// A restored document: its log — the journal the history goes on
+    /// writing — taken up as the workspace pinned it.
+    case resume(id: String, base: KeptBase, journal: UndoJournal?)
+    /// The content afresh: the history's journal as its log, every transaction
+    /// the history holds recorded in it — naming the bytes already there — the
+    /// segments paired with them, and the base.
+    case rebase(id: String, journal: UndoJournal?, base: PendingBase, held: [KeptTransaction],
                 segments: [SegmentWrite])
     /// What changed since the last snapshot: transactions not in the log yet,
     /// selections refined after ones that are, segments paired anew — and a
@@ -30,6 +32,9 @@ enum KeptWrite: @unchecked Sendable {
 enum PendingBase {
     /// The file on disk, which holds the state `serial` names: nothing to write.
     case file(serial: UInt64)
+    /// The base already written, which a new log still leads from: kept as
+    /// the writer has it, its hash included.
+    case unchanged
     /// Runs over the file, encoded already.
     case edits(file: String, serial: UInt64, data: Data)
     /// The whole content, read from a snapshot nothing changes any more; the
@@ -95,8 +100,10 @@ final class KeptWriter: @unchecked Sendable {
             } catch {
                 return setWritten(false)
             }
-            folder.removeKept(except: named)
+            // Documents no longer kept let go of their journals first; a
+            // journal an open document still writes stays, named yet or not.
             kept = kept.filter { ids.contains($0.key) }
+            folder.removeKept(except: named.union(UndoJournal.liveNames(in: folder.keptFolder)))
             setWritten(true)
         }
     }
@@ -163,21 +170,20 @@ final class KeptWriter: @unchecked Sendable {
 
     private func perform(_ write: KeptWrite) throws {
         switch write {
-        case let .resume(id, base, log):
-            var writer: HistoryLogWriter?
-            if let log, let hash = Data(hex: log.hash) {
-                writer = try HistoryLogWriter(appendingTo: folder.keptURL(log.file), length: log.length, hash: hash)
-            }
-            kept[id] = Kept(base: base, log: writer)
-        case let .rebase(id, name, pending, held, segments):
+        case let .resume(id, base, journal):
+            kept[id] = Kept(base: base, log: journal.map(HistoryLogWriter.init(journal:)))
+        case let .rebase(id, journal, pending, held, segments):
             try folder.prepareKeptFolder()
-            let log = try HistoryLogWriter(creating: folder.keptURL(name + ".log"))
-            for record in held { try log.append(record) }
-            for segment in segments { try log.appendSegments(of: segment.serial, after: segment.after, segment.data) }
+            let log = journal.map(HistoryLogWriter.init(journal:))
+            for record in held { try log?.append(record) }
+            for segment in segments { try log?.appendSegments(of: segment.serial, after: segment.after, segment.data) }
             let base: KeptBase
             switch pending {
             case let .file(serial):
                 base = .file(serial: serial)
+            case .unchanged:
+                guard let current = kept[id]?.base else { throw StorageError.writeFailed }
+                base = current
             case let .edits(file, serial, data):
                 try data.write(to: folder.keptURL(file), options: .atomic)
                 base = .edits(file: file, serial: serial, hash: FileDigest.sha256(data).hex)

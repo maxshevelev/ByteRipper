@@ -54,7 +54,7 @@ Every edit is one undo step (⌘Z), including the large ones: a join, a fill, a 
 
 How far back undo reaches is set by two limits in [[topic:settings|Settings ▸ General]], each for every document on its own. **Undo history size:** counts the bytes of the changes, the content before and after each change alike: overwriting 1 GB keeps 2 GB. A fill keeps only the content it replaced: what it wrote is kept as the byte sequence it repeats. **Undo steps:** counts the changes; a typed byte is one. Past either limit the oldest changes can no longer be undone, and the document stays modified. A lower limit takes effect at the next change. A single change larger than the size limit is still kept and can be undone.
 
-The bytes of the changes are kept in a temporary file on disk, not in memory, so a large replace does not occupy its size in memory for as long as it can be undone. The file is removed when the document is closed.
+The bytes of the changes are kept in a file on disk, not in memory, so a large replace does not occupy its size in memory for as long as it can be undone. While the [[topic:workspace|workspace]] or a [[topic:projects|project]] is kept, that file lies beside it and is the same one it keeps the history in, so the bytes of a change are written to disk once. Otherwise it is a temporary file, removed when the document is closed.
 
 ## In a text field
 

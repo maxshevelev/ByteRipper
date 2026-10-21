@@ -25,12 +25,13 @@
 into RAM" — and then the history holds every slice twice. A 512 MB replace
 costs 1 GB of memory today. With bounds of gigabytes that cannot stay in RAM.
 
-So each document gets a **journal**, `History/<id>.log`, and the operations'
+So each document gets a **journal**, `Kept/<uuid>.log`, and the operations'
 bytes live there. RAM holds the history's skeleton — serials, ranges,
 selections, labels, series ids, and where each op's bytes sit in the journal.
 Undo and redo read the bytes they need from the journal.
 
-- With a workspace or project, the journal is inside it.
+- With a workspace or project, the journal is inside it — and is its log
+  ("One journal", below).
 - Without one (the restore switch off), the journal is a temporary file of the
   session, deleted when the document closes. One code path either way.
 
@@ -93,6 +94,39 @@ With the journal holding every change, the content is not written again:
   the transactions are applied up to `head`.
 - `UntitledKeeper` — whole bytes by `version` — is gone; `ContentKeeper`
   keeps every document's content this way.
+
+### One journal
+
+A document's undo journal and its log are one file. While a workspace or a
+project is recorded, a new journal is made in its `Kept/`
+(`UndoJournal.directoryProvider`, set by the app's recorder); otherwise in
+the temporary directory, unlinked. The journal is framed throughout:
+
+| record | written | carries |
+|---|---|---|
+| `BRB1` | by the history, as the edit is recorded | the edit's bytes |
+| `BRT1` | by the snapshot | a transaction, its bytes **named** by where a `BRB1` (or an earlier record) put them; bytes not in this journal are written into the record |
+| `BRS1`, `BRP1` | by the snapshot | a refined selection; the segments paired with a step |
+
+So an edit's bytes reach the disk once. One chain of hashes runs through all
+of them, under one lock: the history appends on the main thread, the writer on
+its queue. The log is pinned as before, by length and hash; bytes appended
+after the pin are cut off when the journal is taken up again
+(`UndoJournal(continuing:)`), and the restored history goes on writing the
+same file.
+
+- The history's compaction is the log's: compacting makes a new journal, and
+  the next snapshot starts a new log in it — records for every transaction
+  held, naming the bytes the compaction copied — over the same base when the
+  new log still leads from it, over a base written afresh when not.
+- A journal made elsewhere — before the workspace was recorded, in the
+  session before Save as Project, or one whose folder was removed when the
+  restore was switched off — is moved into `Kept/` by the next snapshot
+  (`UndoHistory.moveJournal`), on the main thread. Rare, and a copy of
+  everything the history holds.
+- A journal an open document writes is registered (`UndoJournal.liveNames`);
+  tidying `Kept/` leaves it alone until the document lets go of it, whether
+  a workspace names it yet or not.
 
 The writing is off the main thread (`KeptWriter`). A snapshot decides on the
 main thread, as before, what each document needs — which transactions,
@@ -202,10 +236,9 @@ has no language.
 2. **Content from base + journal** — folds, compaction; `UntitledKeeper` and
    whole-file `Edits/` rewriting replaced; the manifest's journal length and
    chained hash. *(done)* A log that does not read back as pinned is not laid
-   over anything: the restore warning names the document. The journal that
-   holds the history's bytes in a session and the log a workspace keeps are
-   two files for now; a restored history (phase 4) can read its bytes from
-   the log directly.
+   over anything: the restore warning names the document. They were two files
+   at first — the session's journal and the workspace's log — and became
+   one later ("One journal").
 3. **Integrity** — SHA-256 of the base file, the background check at open,
    hashes of the project's own files, the restore warning's new lines.
    *(done)* A kept base (`KeptBase.bytes`, `.edits`) carries its SHA-256,
@@ -218,8 +251,7 @@ has no language.
    the document is in down to the tip — the saved state, whether the
    document is dirty in any state, and the joins on either side.
    `HistoryLog.sides` finds both sides in the log, `UndoHistory.restore` puts
-   them back; the ops' bytes stay in the log until a compaction of the
-   history's own journal moves them. A refined selection after a transaction
+   them back; the log is the restored history's journal from then on. A refined selection after a transaction
    already written is a `BRS1` record. When the log does not hold the way to
    the undo base, the document comes back with an empty history, as before;
    a redo side that does not add up is left out. The workspace format goes to

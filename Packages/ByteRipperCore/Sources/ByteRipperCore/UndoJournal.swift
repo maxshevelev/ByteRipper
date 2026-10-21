@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// The bytes an undo op carries — what an overwrite had before and wrote, what
@@ -139,55 +140,216 @@ public struct UndoLimits: Equatable, Sendable {
     }
 }
 
-/// An append-only file the bytes of a document's undo history live in.
+/// The file a document's undo history keeps its bytes in — and, when a
+/// workspace keeps the document, the same file its log is
+/// (`Design/PERSISTENT_UNDO_PLAN.md`, "One journal").
 ///
-/// Unlinked as soon as it is opened: the file goes when the history lets go of
-/// it, and a crash leaves nothing behind in the temporary directory. A journal
-/// is never rewritten in place — compacting means a new journal, so bytes
-/// still pointing into the old one stay readable for as long as they live.
-final class UndoJournal: @unchecked Sendable {
+/// Append-only, in framed records, each carrying the SHA-256 of the previous
+/// record's hash and its own body (`HistoryLog`). An edit's bytes go in as a
+/// `BRB1` record the moment the edit is recorded; a workspace's snapshot later
+/// adds the transaction records that name them, without writing the bytes a
+/// second time.
+///
+/// Made in a workspace's `Kept/` while one is recorded (`directoryProvider`),
+/// and then registered as live, so tidying `Kept/` leaves it alone while a
+/// document writes it. Otherwise made in the temporary directory and unlinked
+/// at once: it goes when the history lets go of it, and a crash leaves
+/// nothing behind. A journal is never rewritten in place — compacting means a
+/// new journal, so bytes still pointing into the old one stay readable for as
+/// long as they live.
+public final class UndoJournal: @unchecked Sendable {
     private let lock = NSLock()
     private let fd: Int32
-    /// Bytes written so far: the offset the next append lands at.
-    private(set) var length: UInt64 = 0
+    /// Where it is on disk; nil for a temporary journal, unlinked.
+    public let url: URL?
+    private var end: UInt64 = 0
+    private var chain = HistoryLog.emptyHash
 
-    init(directory: URL = FileManager.default.temporaryDirectory) throws {
-        let path = directory.appendingPathComponent("ByteRipper-undo-\(UUID().uuidString)").path
-        let fd = open(path, O_RDWR | O_CREAT | O_EXCL, 0o600)
-        guard fd >= 0 else { throw StorageError.writeFailed }
-        unlink(path)
-        self.fd = fd
+    /// Where a new journal is made: the `Kept/` of the workspace being
+    /// recorded, or nil for the temporary directory. Set by the app.
+    public static var directoryProvider: (() -> URL?)? {
+        get { providerLock.withLock { provider } }
+        set { providerLock.withLock { provider = newValue } }
+    }
+    private static let providerLock = NSLock()
+    nonisolated(unsafe) private static var provider: (() -> URL?)?
+
+    /// A new, empty journal in `directory`, or a temporary one.
+    public init(directory: URL?) throws {
+        if let directory {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let url = directory.appendingPathComponent("\(UUID().uuidString).log")
+            let fd = open(url.path, O_RDWR | O_CREAT | O_EXCL, 0o600)
+            guard fd >= 0 else { throw StorageError.writeFailed }
+            self.fd = fd
+            self.url = url
+            Self.register(url)
+        } else {
+            let path = FileManager.default.temporaryDirectory
+                .appendingPathComponent("ByteRipper-undo-\(UUID().uuidString)").path
+            let fd = open(path, O_RDWR | O_CREAT | O_EXCL, 0o600)
+            guard fd >= 0 else { throw StorageError.writeFailed }
+            unlink(path)
+            self.fd = fd
+            self.url = nil
+        }
     }
 
-    /// A journal written elsewhere — a kept history's log — opened to read
-    /// the bytes its records carry. Appending to it fails.
+    /// A new, empty journal at `url` — a test's, or one a keeper makes.
+    public init(creating url: URL) throws {
+        let fd = open(url.path, O_RDWR | O_CREAT | O_TRUNC, 0o600)
+        guard fd >= 0 else { throw StorageError.writeFailed }
+        self.fd = fd
+        self.url = url
+        Self.register(url)
+    }
+
+    /// The journal at `url` as a workspace pinned it — `length` bytes ending
+    /// in the chained hash `hash` — taken up again: anything past `length` is
+    /// cut off, and appending goes on from there.
+    public init(continuing url: URL, length: UInt64, hash: Data) throws {
+        let fd = open(url.path, O_RDWR)
+        guard fd >= 0 else { throw StorageError.readFailed }
+        var info = stat()
+        guard fstat(fd, &info) == 0, UInt64(info.st_size) >= length, ftruncate(fd, off_t(length)) == 0 else {
+            close(fd)
+            throw StorageError.readFailed
+        }
+        self.fd = fd
+        self.url = url
+        self.end = length
+        self.chain = hash
+        Self.register(url)
+    }
+
+    /// A journal opened only to read it. Appending fails.
     init(reading url: URL) throws {
         let fd = open(url.path, O_RDONLY)
         guard fd >= 0 else { throw StorageError.readFailed }
         self.fd = fd
+        self.url = nil
         var info = stat()
-        length = fstat(fd, &info) == 0 ? UInt64(info.st_size) : 0
+        end = fstat(fd, &info) == 0 ? UInt64(info.st_size) : 0
     }
 
     deinit {
         close(fd)
+        if let url { Self.unregister(url) }
     }
 
-    /// Appends `bytes`, returning the offset they start at.
-    func append(_ bytes: [UInt8]) throws -> UInt64 {
+    /// Bytes written so far: where the next record goes.
+    public var length: UInt64 { lock.withLock { end } }
+
+    /// The length and the chained hash at it, together: what a workspace
+    /// pins the journal by.
+    public func pin() -> (length: UInt64, hash: Data) {
+        lock.withLock { (end, chain) }
+    }
+
+    /// Puts what was appended on the disk, before a workspace names it.
+    public func synchronize() {
+        _ = fsync(fd)
+    }
+
+    // MARK: - Live journals
+
+    private static let liveLock = NSLock()
+    nonisolated(unsafe) private static var live: [String: Int] = [:]
+
+    private static func register(_ url: URL) {
+        liveLock.withLock { live[url.standardizedFileURL.path, default: 0] += 1 }
+    }
+
+    private static func unregister(_ url: URL) {
+        liveLock.withLock {
+            let path = url.standardizedFileURL.path
+            live[path, default: 1] -= 1
+            if live[path] == 0 { live[path] = nil }
+        }
+    }
+
+    /// The names of the journals in `directory` an open document writes —
+    /// files a workspace that does not name them yet must not remove.
+    public static func liveNames(in directory: URL) -> Set<String> {
+        let folder = directory.standardizedFileURL.path
+        return liveLock.withLock {
+            Set(live.keys.filter { ($0 as NSString).deletingLastPathComponent == folder }
+                .map { ($0 as NSString).lastPathComponent })
+        }
+    }
+
+    // MARK: - Records
+
+    /// Appends one framed record: `kind`, the body's length, the body — given
+    /// in pieces through `emit`, never whole — and the chained hash. Returns
+    /// where the body starts. On failure the journal is cut back to where it
+    /// was.
+    @discardableResult
+    func appendRecord(_ kind: [UInt8], bodyLength: UInt64,
+                      _ body: (_ emit: ([UInt8]) throws -> Void) throws -> Void) throws -> UInt64 {
         lock.lock()
         defer { lock.unlock() }
-        let offset = length
-        try bytes.withUnsafeBytes { raw in
-            var done = 0
-            while done < raw.count {
-                let n = pwrite(fd, raw.baseAddress! + done, raw.count - done, off_t(offset) + off_t(done))
-                guard n > 0 else { throw StorageError.writeFailed }
-                done += n
+        let start = end
+        var out = Output(fd: fd, at: start)
+        var hasher = SHA256()
+        hasher.update(data: chain)
+        do {
+            try out.write(kind)
+            try out.write(Self.u64(bodyLength))
+            let bodyStart = out.position
+            try body { bytes in
+                hasher.update(data: bytes)
+                try out.write(bytes)
             }
+            guard out.position - bodyStart == bodyLength else { throw StorageError.writeFailed }
+            let digest = Data(hasher.finalize())
+            try out.write([UInt8](digest))
+            try out.flush()
+            end = out.position
+            chain = digest
+            return bodyStart
+        } catch {
+            _ = ftruncate(fd, off_t(start))
+            throw error
         }
-        length += UInt64(bytes.count)
-        return offset
+    }
+
+    /// Appends `bytes` as a `BRB1` record, returning where they start.
+    func appendBlob(_ bytes: [UInt8]) throws -> UInt64 {
+        try appendRecord(HistoryLog.blobMagic, bodyLength: UInt64(bytes.count)) { emit in try emit(bytes) }
+    }
+
+    static func u64(_ v: UInt64) -> [UInt8] { (0..<8).map { UInt8(truncatingIfNeeded: v >> (8 * $0)) } }
+
+    /// Writes through a buffer of a slice's size.
+    private struct Output {
+        let fd: Int32
+        var at: UInt64
+        var pending: [UInt8] = []
+        var position: UInt64 { at + UInt64(pending.count) }
+
+        init(fd: Int32, at: UInt64) {
+            self.fd = fd
+            self.at = at
+        }
+
+        mutating func write(_ bytes: [UInt8]) throws {
+            pending += bytes
+            if pending.count >= UndoJournal.copySlice { try flush() }
+        }
+
+        mutating func flush() throws {
+            try pending.withUnsafeBytes { raw in
+                var done = 0
+                while done < raw.count {
+                    let n = pwrite(fd, raw.baseAddress! + done, raw.count - done, off_t(at) + off_t(done))
+                    guard n > 0 else { throw StorageError.writeFailed }
+                    done += n
+                }
+            }
+            at += UInt64(pending.count)
+            pending.removeAll(keepingCapacity: true)
+        }
     }
 
     func read(at offset: UInt64, count: Int) throws -> [UInt8] {
@@ -211,17 +373,18 @@ final class UndoJournal: @unchecked Sendable {
         switch bytes.storage {
         case .inline(let inline):
             guard !inline.isEmpty else { return bytes }
-            return UndoBytes(journal: self, offset: try append(inline), count: inline.count)
+            return UndoBytes(journal: self, offset: try appendBlob(inline), count: inline.count)
         case .pattern:
             return bytes
         case .stored(let other, let offset, let count):
             if other === self { return bytes }
-            let start = length
-            var copied = 0
-            while copied < count {
-                let slice = min(Self.copySlice, count - copied)
-                _ = try append(try other.read(at: offset + UInt64(copied), count: slice))
-                copied += slice
+            let start = try appendRecord(HistoryLog.blobMagic, bodyLength: UInt64(count)) { emit in
+                var copied = 0
+                while copied < count {
+                    let slice = min(Self.copySlice, count - copied)
+                    try emit(try other.read(at: offset + UInt64(copied), count: slice))
+                    copied += slice
+                }
             }
             return UndoBytes(journal: self, offset: start, count: count)
         }
