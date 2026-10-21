@@ -424,6 +424,14 @@ final class FindBarView: NSView {
     /// What the field holds, and what the popup names — for tests that assert
     /// a pick loaded all three.
     var patternTextForTests: String { patternField.stringValue }
+
+    /// Types `text` into the field the way a user does: the text changes and
+    /// the controls hear of it, so it is the reader's own pattern.
+    func setPatternTextForTests(_ text: String) {
+        query.text = text
+        query.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification,
+                                                object: patternField))
+    }
     var encodingForTests: SearchEncoding { query.currentEncoding() }
     func setPatternForTests(_ text: String) { patternField.stringValue = text }
     func setEncodingForTests(_ encoding: SearchEncoding) {
@@ -580,6 +588,20 @@ final class FindBarView: NSView {
 
     private func press(segment: Int) {
         runSearch(segment == Self.previousSegment ? .backward : .forward)
+    }
+
+    /// Edit ▸ Find Next (⌘G) and Find Previous (⇧⌘G): the field's pattern,
+    /// or the find pasteboard's string when that is new to the field — a
+    /// search run elsewhere in the app, or in another app — searched for as
+    /// the arrows would. Handed back rather than sent through `onSearch`, so
+    /// the window can tell a ⌘G from a press in the bar: the keyboard stays
+    /// where it was after one, and comes back to the field after the other.
+    func requestForFindAgain() -> Request? {
+        query.adoptFindPasteboard(intoEmptyField: true)
+        guard let request = query.searchRequest() else { return nil }  // reported inside
+        if case .pattern(let pattern, _) = request { query.normalizeHexText(of: pattern) }
+        query.noteSearchStarted(recording: true)
+        return request
     }
 
     /// Presses one of the ‹ › segments the way a click would, mapping included.

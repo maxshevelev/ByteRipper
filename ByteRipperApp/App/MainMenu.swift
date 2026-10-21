@@ -425,6 +425,16 @@ enum MainMenu {
         editMenu.addItem(.separator())
         // help: menu.edit.find
         editMenu.addItem(withTitle: L("Find"), action: #selector(MainViewController.findPattern), keyEquivalent: "f")
+        // ⌘G and ⇧⌘G, where every Mac app has them: the next and the previous
+        // match of the find string — the one ⌘E and every search put on the
+        // system's find pasteboard, so a string searched for in another app,
+        // or in the UEFI tree, is the one found here (§11).
+        // help: menu.edit.find-next
+        editMenu.addItem(withTitle: L("Find Next"), action: #selector(MainViewController.findNextMatch),
+                         keyEquivalent: "g")
+        // help: menu.edit.find-previous
+        editMenu.addItem(withTitle: L("Find Previous"),
+                         action: #selector(MainViewController.findPreviousMatch), keyEquivalent: "G")
         // ⌘E beside Find, where every Mac app puts it: it loads the pattern the
         // next Find will use and does nothing else — no bar, no search (§11).
         // help: menu.edit.use-selection

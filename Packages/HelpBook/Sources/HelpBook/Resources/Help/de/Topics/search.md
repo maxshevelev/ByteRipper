@@ -1,4 +1,4 @@
-@source-sha a1386f146da312400b217d7afd7023e79980d0236f93cc2bc8148b1df125be4b
+@source-sha 615e095fd3590ec35d0548f8be8520096ccc7b606ef38a59cb6f0d606ba81a9f
 # Bytes und Text finden
 
 > ⌘F. Suche nach einer Byte-Folge oder einer Zeichenfolge über den ganzen Dump, im Hintergrund.
@@ -43,6 +43,8 @@ Die Treffer werden auch in der [[topic:minimap|Minimap]] markiert, in der ihre V
 ## Häufig gebrauchte Muster
 
 **⌘E** übernimmt die aktuelle Auswahl als Suchmuster, ohne eine Suche zu starten; so wird eine in einem Dump ausgewählte Folge im anderen gesucht.
+
+**Nächstes suchen** (⌘G) und **Vorheriges suchen** (⇧⌘G) im Menü **Bearbeiten** springen wie **‹ ›** zum nächsten und zum vorherigen Treffer des Musters in der Suchleiste und öffnen die Leiste, wenn sie geschlossen ist; die Tastatur bleibt, wo sie war. Außerdem legen ⌘E und jede Suche ihr Muster in der Suchzeichenfolge ab, die macOS für alle Programme gemeinsam führt. Ein Muster, das in einem anderen Programm oder im [[topic:tool-uefi|UEFI-Baum]] gesucht wurde, steht deshalb beim Öffnen in der Suchleiste, und ⌘G sucht danach; ein hier gesuchtes Muster wird umgekehrt dort angeboten. Die Leiste übernimmt die Zeichenfolge nur, wenn sie sich geändert hat, seit die Leiste sie zuletzt gezeigt hat; ein im Feld eingegebenes Muster wird also nicht durch ein altes ersetzt.
 
 Muster lassen sich benennen und in einer Musterbibliothek halten (**Einstellungen ▸ Suchmuster**) — etwa regelmäßig gebrauchte Signaturen wie `_FVH`, `$FPT` oder `24 00 00 00`. Die Bibliothek lässt sich über einen Ordner abgleichen, sodass mehrere Installationen dieselbe verwenden.
 

@@ -106,6 +106,10 @@ final class ToolPatternQueryControls: ToolPatternQuery {
         controls.focus()
     }
 
+    func adoptFindPasteboard(intoEmptyField: Bool) -> Bool {
+        controls.adoptFindPasteboard(intoEmptyField: intoEmptyField)
+    }
+
     func applyFont(_ font: NSFont) {
         controls.patternField.font = font
         controls.encodingPopup.font = font
