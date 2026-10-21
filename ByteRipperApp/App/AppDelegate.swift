@@ -89,6 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // the menu bar below is built from translated strings, and so is every
         // window after it (`Design/LOCALIZATION.md`).
         AppDefaults.startLocalization()
+        AppDefaults.isolateFindPasteboard()
         // Tabs are windows. Turning this on is what gives the app the system's
         // tab bar, ⌘T through `newWindowForTab(_:)`, ⌃Tab and ⌘1…⌘9, dragging a
         // tab out into its own window and dragging one back in, and the Window

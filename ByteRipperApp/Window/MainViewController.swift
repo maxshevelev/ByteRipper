@@ -1072,6 +1072,7 @@ final class MainViewController: NSViewController {
         findBar.translatesAutoresizingMaskIntoConstraints = false
         findBar.isHidden = true  // shown by Cmd+F (§11)
         findBar.onSearch = { [weak self] request, direction in
+            self?.findReturnsFocusTo = nil
             self?.runSearch(request, direction: direction)
         }
         findBar.onSearchAll = { [weak self] request in
@@ -6626,6 +6627,34 @@ final class MainViewController: NSViewController {
         findBar.stage(pattern)
     }
 
+    /// Edit ▸ Find Next (⌘G): the next match of what the Find bar holds — or
+    /// of the find pasteboard's string, when another search put a new one
+    /// there (`FindPasteboard`). A closed bar opens, so what is being looked
+    /// for is on screen, and the keyboard stays where it was.
+    @objc func findNextMatch() { findAgain(.forward) }
+
+    /// Edit ▸ Find Previous (⇧⌘G).
+    @objc func findPreviousMatch() { findAgain(.backward) }
+
+    private func findAgain(_ direction: SearchDirection) {
+        guard activePane.isOpen else { return }
+        // A reader who pressed ⌘G in the dump goes on reading the dump: the
+        // search hands the keyboard back there, not to the field that opening
+        // the bar focused. Pressed in the field, it stays in the field.
+        let responder = view.window?.firstResponder
+        let inBar = (responder as? NSView)?.isDescendant(of: findBar) ?? false
+        if findBar.isHidden { showFindBar() }
+        guard let request = findBar.requestForFindAgain() else { return }
+        findReturnsFocusTo = inBar ? nil : responder
+        runSearch(request, direction: direction)
+        if let responder = findReturnsFocusTo { view.window?.makeFirstResponder(responder) }
+    }
+
+    /// Where the keyboard goes once a ⌘G's search has landed: where it was when
+    /// the key was pressed. Nil for a search from the bar, which leaves it in
+    /// the field.
+    private var findReturnsFocusTo: NSResponder?
+
     /// The pattern ⌘E loaded, for tests.
     var stagedFindPatternForTests: SelectionFindPattern? { findBar.stagedPatternForTests }
 
@@ -7141,7 +7170,10 @@ final class MainViewController: NSViewController {
     /// a subsequent Enter re-searches; only when the bar is hidden does the
     /// search hand focus to the hex view.
     private func handOffFocusAfterFind() {
-        if findBar.isHidden {
+        if let responder = findReturnsFocusTo {
+            findReturnsFocusTo = nil
+            view.window?.makeFirstResponder(responder)
+        } else if findBar.isHidden {
             focusActiveHexView()
         } else {
             findBar.focusPatternField()
@@ -7959,6 +7991,8 @@ extension MainViewController: NSMenuItemValidation {
              #selector(selectBlock),
              #selector(goToPosition),
              #selector(findPattern),
+             #selector(findNextMatch),
+             #selector(findPreviousMatch),
              #selector(selectAll(_:)):
             return activePane.isOpen
         case #selector(toggleBookmark):

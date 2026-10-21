@@ -4,6 +4,8 @@
 
 @covers menu.edit.find
 @covers menu.edit.use-selection
+@covers menu.edit.find-next
+@covers menu.edit.find-previous
 @covers window.find-bar
 @covers window.search-results
 @covers settings.patterns
@@ -48,6 +50,8 @@ The matches are marked in the [[topic:minimap|minimap]] as well, where their dis
 ## Patterns you use often
 
 **⌘E** loads the current selection as the search pattern without starting a search, which is how a sequence selected in one dump is then looked for in the other.
+
+**Find Next** (⌘G) and **Find Previous** (⇧⌘G) in the **Edit** menu go to the next and the previous match of the pattern in the find bar, as **‹ ›** do, and open the bar if it is closed; the keyboard stays where it was. ⌘E and every search also put their pattern into the search string that macOS keeps for all programs. A pattern searched for in another program, or in the [[topic:tool-uefi|UEFI tree]], is therefore what the find bar shows when it opens and what ⌘G looks for, and a pattern searched for here is offered there in turn. The bar takes the string only when it has changed since the bar last showed it, so a pattern typed in the field is not replaced by an old one.
 
 Patterns can be named and kept in a pattern library (**Settings ▸ Search Patterns**) — for instance the recurring signatures `_FVH`, `$FPT` or `24 00 00 00`. The library can be synchronised through a folder so that it is shared by several installations.
 

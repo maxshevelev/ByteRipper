@@ -406,8 +406,46 @@ import UEFITool
         }
     }
 
+    /// The find pasteboard's change count when this bar's own field last saw
+    /// it (`FindPasteboard`). The app's pattern controls, in the Contents
+    /// mode, keep their own.
+    private var findPasteboardSeen = FindPasteboard.changeCount
+
+    /// Puts the text searched for on the find pasteboard: the Mac's find
+    /// string from here on, and not news to this bar.
+    func publishToFindPasteboard(_ text: String) {
+        guard !text.isEmpty else { return }
+        findPasteboardSeen = FindPasteboard.write(text)
+    }
+
+    /// Takes the find pasteboard's string into the field of the mode in force,
+    /// when it is new to this bar — a search in the dump, ⌘E, or another app
+    /// put it there (`FindPasteboard`). With `intoEmptyField`, an empty field
+    /// takes it whatever its age, which is what a Find Next asks for; a bar
+    /// merely opened keeps an empty field empty, so a search by type alone
+    /// stays one.
+    func adoptFindPasteboard(intoEmptyField: Bool = false) {
+        if mode == .contents, let query {
+            query.adoptFindPasteboard(intoEmptyField: intoEmptyField)
+            return
+        }
+        let current = mode == .contents ? UEFISearchSettings.content.text : UEFISearchSettings.query.text
+        // Empty means asking for nothing at all: a name search by type alone
+        // has an empty text and is still a search.
+        let asksNothing = mode == .contents ? current.isEmpty : UEFISearchSettings.query.isEmpty
+        var text = FindPasteboard.take(ifChangedSince: &findPasteboardSeen)
+        if text == nil, intoEmptyField, asksNothing { text = FindPasteboard.string }
+        guard let text, text != current else { return }
+        if mode == .contents {
+            storeContent { $0.text = text }
+        } else {
+            store(text: text)
+        }
+    }
+
     /// The text field takes the keyboard: the bar has just been opened.
     func focusField() {
+        adoptFindPasteboard()
         if mode == .contents, let query {
             query.focus()
         } else {

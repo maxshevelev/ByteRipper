@@ -59,6 +59,14 @@ public struct ToolPatternAttempt: Equatable, Sendable {
     /// The field takes the keyboard, its text selected.
     func focus()
 
+    /// Takes the find pasteboard's string into the field when it is new to
+    /// the field (`FindPasteboard`) — or, with `intoEmptyField`, whenever the
+    /// field is empty: what a Find Next asks for, where a field merely opened
+    /// keeps the emptiness it was left with. Returns whether the field
+    /// changed; a change is reported through `onEdited`.
+    @discardableResult
+    func adoptFindPasteboard(intoEmptyField: Bool) -> Bool
+
     /// The panel's type size moved.
     func applyFont(_ font: NSFont)
 }

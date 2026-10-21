@@ -3,6 +3,7 @@ import Cocoa
 import ByteRipperCore
 import HelpUI
 import Localization
+import ToolModuleKit
 
 /// What to look for, asked the way the dump's Find bar asks it (§11): the
 /// pattern field — whose magnifier drops the menu of recent queries and of the
@@ -245,7 +246,8 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
 
     /// Fills the controls for an opening: a staged pattern, else the last
     /// search that found something — pattern *and* the encoding it was found
-    /// in — else nothing; and the standing choices as stored.
+    /// in — else nothing; and the standing choices as stored. Then the find
+    /// pasteboard's string over all of that, if it is new to this field.
     func prepareForShow() {
         onPatternError?(nil, nil)
         if let staged = stagedPattern {
@@ -259,6 +261,32 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
             encodingPopup.selectItem(at: 0)
         }
         reloadStandingChoices()
+        adoptFindPasteboard()
+    }
+
+    // MARK: - The find pasteboard
+
+    /// The find pasteboard's change count when this field last saw it: its own
+    /// writes, and what it took from there (`FindPasteboard`).
+    private var findPasteboardSeen = FindPasteboard.changeCount
+
+    /// Takes the find pasteboard's string into the field, as if typed, when
+    /// it is new to this field — another search in the app, or another app,
+    /// put it there. With `intoEmptyField`, an empty field takes it whatever
+    /// its age: a Find Next on nothing asks for the find string, where a bar
+    /// that merely opens keeps what it was left with. Returns whether the
+    /// field changed.
+    @discardableResult
+    func adoptFindPasteboard(intoEmptyField: Bool = false) -> Bool {
+        var text = FindPasteboard.take(ifChangedSince: &findPasteboardSeen)
+        if text == nil, intoEmptyField, patternField.stringValue.isEmpty { text = FindPasteboard.string }
+        guard let text, text != patternField.stringValue else { return false }
+        stagedPattern = nil
+        pickedEncoding = nil
+        setPatternText(text)
+        onPatternError?(nil, nil)
+        onPatternEdited?()
+        return true
     }
 
     // MARK: - Use Selection for Find (§11)
@@ -270,6 +298,7 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
     /// ⌘E: the selection becomes the pattern to search for, and nothing else
     /// happens (§11).
     func stage(_ pattern: SelectionFindPattern) {
+        findPasteboardSeen = FindPasteboard.write(pattern.text)
         stagedPattern = pattern
         applyStaged(pattern)
         onPatternError?(nil, nil)
@@ -511,6 +540,7 @@ final class PatternQueryControls: NSObject, NSSearchFieldDelegate, NSMenuItemVal
     /// is kept to be written down if it finds anything. A picked row records
     /// nothing.
     func noteSearchStarted(recording: Bool) {
+        findPasteboardSeen = FindPasteboard.write(patternField.stringValue)
         stagedPattern = nil
         searchToRecord = recording ? (patternField.stringValue, isCaseSensitive) : nil
     }

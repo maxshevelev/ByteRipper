@@ -155,6 +155,71 @@ final class UEFITreeSearchFlowTests: XCTestCase {
                       "the cursor is in the field: \(String(describing: window.firstResponder))")
     }
 
+    // MARK: - The find pasteboard
+
+    /// A find pasteboard of the test's own, set before the panel is built:
+    /// what another app — or the dump's Find bar — would have written goes
+    /// there. Put back when the test ends.
+    private func ownFindPasteboard() -> NSPasteboard {
+        let saved = FindPasteboard.pasteboard
+        let pasteboard = NSPasteboard.withUniqueName()
+        FindPasteboard.pasteboard = pasteboard
+        addTeardownBlock { @MainActor in
+            FindPasteboard.pasteboard = saved
+            pasteboard.releaseGlobally()
+        }
+        return pasteboard
+    }
+
+    /// ⌘G with the keyboard in the tree looks for the Mac's find string — a
+    /// pattern searched for in the dump, or taken there with ⌘E — and opens
+    /// the bar on it.
+    func testFindNextInTheTreeLooksForTheFindString() throws {
+        let pasteboard = ownFindPasteboard()
+        try open(UEFITestImage.withTwoVolumes())
+        let outline = try outline()
+        try XCTUnwrap(window).makeFirstResponder(outline)
+        pasteboard.clearContents()
+        pasteboard.setString("mydriver", forType: .string)
+
+        XCTAssertTrue(outline.tryToPerform(#selector(MainViewController.findNextMatch), with: nil),
+                      "the panel answers before the window")
+        XCTAssertTrue(UEFISearchSettings.isOpen)
+        XCTAssertEqual(UEFISearchSettings.query.text, "mydriver")
+        XCTAssertTrue(pumpUntil(5) {
+            outline.selectedRow >= 0
+                && ((try? self.nodeName(atRow: outline.selectedRow)) ?? "").lowercased().contains("mydriver")
+        }, "a match is selected")
+    }
+
+    /// And a name searched for here becomes the find string the dump's bar
+    /// and other apps read.
+    func testANameSearchedForBecomesTheFindString() throws {
+        let pasteboard = ownFindPasteboard()
+        try open(UEFITestImage.withTwoVolumes())
+        try searchForTheDriver()
+
+        try next()
+
+        XCTAssertEqual(pasteboard.string(forType: .string), "mydriver")
+    }
+
+    /// Opening the bar does not fill a query that asks for a type alone: an
+    /// empty text there is a choice, and only a find string new to the bar
+    /// replaces it.
+    func testOpeningTheBarLeavesASearchByTypeAlone() throws {
+        let pasteboard = ownFindPasteboard()
+        pasteboard.clearContents()
+        pasteboard.setString("left over", forType: .string)
+        try open(UEFITestImage.withTwoVolumes())
+        UEFISearchSettings.query = UEFITreeQuery(type: UEFITypes.Item.volume.rawValue)
+
+        try openTheBar()
+
+        XCTAssertEqual(UEFISearchSettings.query.text, "")
+        XCTAssertEqual(UEFISearchSettings.query.type, UEFITypes.Item.volume.rawValue)
+    }
+
     func testTheTypeAndSubtypeAreKeptAsCodes() throws {
         try open(UEFITestImage.withTwoVolumes())
         try openTheBar()

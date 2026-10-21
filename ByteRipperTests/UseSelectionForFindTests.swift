@@ -269,9 +269,11 @@ final class UseSelectionForFindTests: XCTestCase {
         XCTAssertEqual(item.keyEquivalent, "e")
         XCTAssertEqual(item.keyEquivalentModifierMask, [.command])
 
+        // Where every Mac app has it: after Find and its Find Next and Find
+        // Previous, the commands it loads the pattern for.
         let titles = items.map(\.title)
         let find = try XCTUnwrap(titles.firstIndex(of: "Find"))
-        XCTAssertEqual(titles[find + 1], "Use Selection for Find",
+        XCTAssertEqual(titles[find + 3], "Use Selection for Find",
                        "it loads the pattern Find will use, so it sits beside Find")
     }
 }

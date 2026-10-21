@@ -1442,6 +1442,26 @@ import UEFITool
         searchBar.focusField()
     }
 
+    /// Edit ▸ Find Next (⌘G) and Find Previous (⇧⌘G) with the keyboard in the
+    /// tree or its details: the tree's search, on the find pasteboard's string
+    /// when another search put a new one there (`FindPasteboard`) — so bytes
+    /// taken with ⌘E in the dump are looked for here. The name search steps to
+    /// the next node or the previous; the Contents search, which has no step,
+    /// lists every match.
+    @objc func findNextMatch() { findAgain(.forward) }
+
+    @objc func findPreviousMatch() { findAgain(.backward) }
+
+    private func findAgain(_ direction: UEFITreeSearch.Direction) {
+        UEFISearchSettings.isOpen = true
+        searchBar.adoptFindPasteboard(intoEmptyField: true)
+        if UEFISearchSettings.mode == .contents {
+            findAllContents()
+        } else {
+            search(direction)
+        }
+    }
+
     @objc private func searchClicked() {
         UEFISearchSettings.isOpen.toggle()
         guard UEFISearchSettings.isOpen else { return }
@@ -1490,6 +1510,8 @@ import UEFITool
     private func search(_ direction: UEFITreeSearch.Direction) {
         let query = UEFISearchSettings.query
         guard !query.isEmpty, let tree else { return }
+        // The string searched for is the Mac's find string from here on.
+        searchBar.publishToFindPasteboard(query.text)
         guard !isBuilding else {
             waitForTree { [weak self] in self?.search(direction) }
             searchBar.status = .searching
@@ -1532,6 +1554,7 @@ import UEFITool
         if let query = searchBar.query { return query.attempts() }
         let text = UEFISearchSettings.content.text.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty else { return nil }
+        searchBar.publishToFindPasteboard(text)
         var attempts: [ToolPatternAttempt] = []
         let hexLike = text.split(separator: " ").allSatisfy { $0.count == 2 || $0.count % 2 == 0 }
         if hexLike, let hex = try? MaskedPattern.hex(text) {

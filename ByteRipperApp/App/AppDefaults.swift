@@ -1,6 +1,8 @@
+import AppKit
 import Foundation
 import HelpBook
 import Localization
+import ToolModuleKit
 
 /// The one `UserDefaults` the app reads and writes.
 ///
@@ -90,5 +92,16 @@ enum AppDefaults {
         }
         Localization.reload()
         Help.reload()
+    }
+
+    /// Under test, a find pasteboard of the run's own instead of the Mac's:
+    /// every search the suite runs writes its string there, and the string a
+    /// user last searched for in any app is not the suite's to overwrite.
+    /// Called once at launch, before any search field exists.
+    @MainActor static func isolateFindPasteboard() {
+        guard isUnderTest else { return }
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name("dev.maxik.DumpCompare.tests.find"))
+        pasteboard.clearContents()
+        FindPasteboard.pasteboard = pasteboard
     }
 }
