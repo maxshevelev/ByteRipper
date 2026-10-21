@@ -12,7 +12,7 @@ import Workspace
 /// of their parents, each once its parent is open, until none is left that
 /// can be. A tab is laid out once all of its own panes are in.
 @MainActor final class WorkspaceRestorer {
-    private let keeper: UntitledKeeper?
+    private let keeper: ContentKeeper?
 
     /// Every pane opened so far, by the id it was written down with.
     private var panes: [String: RestoredPane] = [:]
@@ -37,7 +37,7 @@ import Workspace
 
     private var tabs: [Tab] = []
 
-    init(keeper: UntitledKeeper?) {
+    init(keeper: ContentKeeper?) {
         self.keeper = keeper
     }
 
@@ -90,6 +90,7 @@ import Workspace
                         issues.append(.missing(path: origin.name))
                         continue
                     }
+                    if opened.keptChangesLost { issues.append(.unreadable(name: origin.name)) }
                     register(saved, opened, in: tab, slot: slot)
                 }
                 // A panel opens over a tab that is laid out.
@@ -108,6 +109,7 @@ import Workspace
                             issues.append(.missing(path: origin.name))
                             continue
                         }
+                        if opened.keptChangesLost { issues.append(.unreadable(name: origin.name)) }
                         openedFragment(saved, opened, index: index, in: tab)
                     case let .untitled(stamp):
                         tab.pendingFragments.removeAll { $0 == index }

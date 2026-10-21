@@ -69,6 +69,35 @@ public struct UndoBytes: Equatable, Sendable, ExpressibleByArrayLiteral {
         }
     }
 
+    /// A pattern and the count it is repeated to, when the bytes are one.
+    var patternForm: (pattern: [UInt8], count: Int)? {
+        if case .pattern(let pattern, let count) = storage { return (pattern, count) }
+        return nil
+    }
+
+    /// The bytes in slices of at most `size`, read from the journal one slice
+    /// at a time: what writes them elsewhere without holding them whole.
+    func forEachSlice(_ size: Int = UndoJournal.copySlice, _ body: ([UInt8]) throws -> Void) throws {
+        switch storage {
+        case .inline(let bytes):
+            var at = 0
+            while at < bytes.count {
+                let end = min(at + size, bytes.count)
+                try body(Array(bytes[at..<end]))
+                at = end
+            }
+        case .stored(let journal, let offset, let count):
+            var at = 0
+            while at < count {
+                let slice = min(size, count - at)
+                try body(try journal.read(at: offset + UInt64(at), count: slice))
+                at += slice
+            }
+        case .pattern:
+            try body(try load())
+        }
+    }
+
     /// The journal these bytes lie in; nil while they are still in memory.
     var journal: UndoJournal? {
         if case .stored(let journal, _, _) = storage { return journal }
@@ -128,6 +157,16 @@ final class UndoJournal: @unchecked Sendable {
         guard fd >= 0 else { throw StorageError.writeFailed }
         unlink(path)
         self.fd = fd
+    }
+
+    /// A journal written elsewhere — a kept history's log — opened to read
+    /// the bytes its records carry. Appending to it fails.
+    init(reading url: URL) throws {
+        let fd = open(url.path, O_RDONLY)
+        guard fd >= 0 else { throw StorageError.readFailed }
+        self.fd = fd
+        var info = stat()
+        length = fstat(fd, &info) == 0 ? UInt64(info.st_size) : 0
     }
 
     deinit {

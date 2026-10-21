@@ -69,4 +69,8 @@ public enum RestoreIssue: Equatable, Sendable {
     /// The file opened, but it changed on disk since the workspace was
     /// written: its position was kept, its segments and tool state were not.
     case changed(path: String)
+    /// The changes kept for it could not be read — the kept files are
+    /// damaged or missing: a file opened as it is on disk, a document with no
+    /// file was not opened.
+    case unreadable(name: String)
 }

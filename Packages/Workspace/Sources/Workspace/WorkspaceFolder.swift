@@ -1,7 +1,7 @@
 import Foundation
 
-/// The folder a workspace lives in: `Workspace.json`, and beside it the bytes
-/// of the untitled documents it names.
+/// The folder a workspace lives in: `Workspace.json`, and beside it, in
+/// `Kept/`, the content of the documents it names.
 ///
 /// Writes only what changed. The app snapshots its windows every few seconds,
 /// and almost every snapshot is the one before it; comparing the encoded bytes
@@ -70,56 +70,27 @@ public final class WorkspaceFolder {
         return true
     }
 
-    // MARK: - Untitled documents
+    // MARK: - Kept content
 
-    private var untitledFolder: URL { url.appendingPathComponent("Untitled", isDirectory: true) }
+    /// Where documents' kept content lives: bases and logs, each under a name
+    /// a `KeptContent` gives it (`Design/PERSISTENT_UNDO_PLAN.md`).
+    public var keptFolder: URL { url.appendingPathComponent("Kept", isDirectory: true) }
 
-    /// Where the untitled document `id` keeps its bytes.
-    public func untitledURL(_ id: String) -> URL {
-        untitledFolder.appendingPathComponent(id).appendingPathExtension("bin")
+    public func keptURL(_ file: String) -> URL {
+        keptFolder.appendingPathComponent(file)
     }
 
-    public func writeUntitled(_ id: String, bytes: Data) throws {
-        try fileManager.createDirectory(at: untitledFolder, withIntermediateDirectories: true)
-        try bytes.write(to: untitledURL(id), options: .atomic)
+    public func prepareKeptFolder() throws {
+        try fileManager.createDirectory(at: keptFolder, withIntermediateDirectories: true)
     }
 
-    public func readUntitled(_ id: String) -> Data? {
-        try? Data(contentsOf: untitledURL(id))
-    }
-
-    /// Deletes the bytes of every untitled document `ids` does not name: a
-    /// document that was saved, discarded or closed takes its copy with it.
-    public func removeUntitled(except ids: Set<String>) {
-        remove(in: untitledFolder, except: ids)
-    }
-
-    // MARK: - Unsaved changes to files on disk (projects)
-
-    private var editsFolder: URL { url.appendingPathComponent("Edits", isDirectory: true) }
-
-    public func editsURL(_ id: String) -> URL {
-        editsFolder.appendingPathComponent(id).appendingPathExtension("plist")
-    }
-
-    public func writeEdits(_ id: String, data: Data) throws {
-        try fileManager.createDirectory(at: editsFolder, withIntermediateDirectories: true)
-        try data.write(to: editsURL(id), options: .atomic)
-    }
-
-    public func readEdits(_ id: String) -> Data? {
-        try? Data(contentsOf: editsURL(id))
-    }
-
-    /// Deletes the changes of every file `ids` does not name: one saved,
-    /// reverted or closed takes them with it.
-    public func removeEdits(except ids: Set<String>) {
-        remove(in: editsFolder, except: ids)
-    }
-
-    private func remove(in folder: URL, except ids: Set<String>) {
-        guard let files = try? fileManager.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) else { return }
-        for file in files where !ids.contains(file.deletingPathExtension().lastPathComponent) {
+    /// Deletes every kept file `files` does not name: what a written workspace
+    /// no longer reads — a document saved, discarded or closed, a base or a
+    /// log replaced by a newer one.
+    public func removeKept(except files: Set<String>) {
+        guard let found = try? fileManager.contentsOfDirectory(at: keptFolder, includingPropertiesForKeys: nil)
+        else { return }
+        for file in found where !files.contains(file.lastPathComponent) {
             try? fileManager.removeItem(at: file)
         }
     }

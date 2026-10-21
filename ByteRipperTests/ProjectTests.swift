@@ -40,7 +40,7 @@ final class ProjectTests: XCTestCase {
     private func reopen(_ project: URL) async -> (MainViewController, [RestoreIssue]) {
         let folder = WorkspaceFolder.project(at: project)
         let workspace = folder.read()
-        let keeper = UntitledKeeper(folder: folder, isProject: true)
+        let keeper = ContentKeeper(folder: folder, isProject: true)
         let target = shownWindow().mainViewController
         let restorer = WorkspaceRestorer(keeper: keeper)
         if let tab = workspace?.windows.first?.tabs.first { restorer.openFiles(of: tab, in: target) }
@@ -60,7 +60,7 @@ final class ProjectTests: XCTestCase {
 
         let saved = try XCTUnwrap(WorkspaceFolder.project(at: project).read())
         let state = try XCTUnwrap(saved.windows.first?.tabs.first?.panes.first ?? nil)
-        XCTAssertNotNil(state.edits, "the changes are part of the project")
+        XCTAssertNotNil(state.kept, "the changes are part of the project")
         guard case let .file(stamp) = state.document else { return XCTFail("a file") }
         XCTAssertEqual(stamp.relativePath, "dumps/bios.bin")
         XCTAssertTrue(recorder.keeper.holdsCurrentBytes(of: pane), "leaving the project asks nothing")

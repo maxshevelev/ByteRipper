@@ -32,7 +32,7 @@ final class WorkspaceRecorder {
 
     /// The untitled documents' bytes and the files' unsaved changes, beside
     /// the workspace.
-    private(set) var keeper: UntitledKeeper
+    private(set) var keeper: ContentKeeper
 
     /// The Annotations window, if it has been made.
     private let notes: @MainActor () -> NotesWindowController?
@@ -42,7 +42,7 @@ final class WorkspaceRecorder {
         self.folder = folder
         self.controllers = controllers
         self.notes = notes
-        self.keeper = UntitledKeeper(folder: folder)
+        self.keeper = ContentKeeper(folder: folder)
     }
 
     /// The folder under Application Support, beside the annotations. Nil under
@@ -58,8 +58,8 @@ final class WorkspaceRecorder {
     /// written is in the folder it leaves.
     func switchTo(project: WorkspaceFolder?) {
         self.project = project
-        keeper = project.map { UntitledKeeper(folder: $0, isProject: true) }
-            ?? UntitledKeeper(folder: folder)
+        keeper = project.map { ContentKeeper(folder: $0, isProject: true) }
+            ?? ContentKeeper(folder: folder)
         removedWhileOff = false
     }
 

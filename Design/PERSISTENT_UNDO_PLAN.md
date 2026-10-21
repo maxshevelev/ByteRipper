@@ -38,11 +38,12 @@ Undo and redo read the bytes they need from the journal.
 
 Append-only. A record once written is never rewritten.
 
-| record | carries |
-|---|---|
-| `T` | a transaction: serial, ops (with their bytes), selection before and after, series id, label key, the segment snapshot paired with it |
-| `S` | a refined selection after the last transaction (`noteSelectionAfterOnLast`) |
-| `F` | a fold: older steps were folded into a new base (below) |
+One kind of record so far (`HistoryLog`, `BRT1`): a transaction — serial,
+parent, selection before and after, series id, label, the ops with their
+bytes, a fill's as its pattern. Still to come with phase 4: the label as its
+`L()` key, a refined selection after the last transaction
+(`noteSelectionAfterOnLast`), and with phase 5 the segment snapshot paired
+with it. There is no fold record: a fold writes a new base and a new log.
 
 Each record carries SHA-256(previous record's hash ‖ its own bytes). Appending
 costs what is appended.
@@ -64,26 +65,40 @@ last manifest (a crash between the two) is cut off at open.
 ## Content = base + journal up to `head`
 
 Writing the history incrementally gains nothing while the content is still
-written whole. Today `UntitledKeeper.stamp(for:)` reads a whole untitled
-document on the main thread and rewrites `Untitled/<id>.bin` at every change of
-`version`; `editsStamp(for:)` re-encodes the file's `OverlayEdits` whole. A
-32 MB joined image being typed into writes 32 MB every 2 s.
+written whole. `UntitledKeeper.stamp(for:)` used to read a whole untitled
+document on the main thread and rewrite `Untitled/<id>.bin` at every change
+of `version`, and `editsStamp(for:)` re-encoded the file's `OverlayEdits`
+whole: a 32 MB joined image being typed into wrote 32 MB every 2 s.
 
 With the journal holding every change, the content is not written again:
 
-- **Base** — the state before the oldest step kept. For a file on disk: the
-  file (by its hash) plus `OverlayEdits` at the fold. For an untitled document
-  or a part: a snapshot of its bytes in `Untitled/`.
-- **The base is rewritten only at a fold:** when a bound drops the oldest
-  steps, they are folded into a new base, an `F` is written, and the journal is
-  compacted without its dead records. Amortized, as `EditOverlayStorage`
-  materializes a fresh base once per many edits.
+- **Every state has a serial of its own**, a reset's and a cleared
+  history's included, and every transaction names the state it was applied
+  to (`UndoTransaction.parent`). The states form a tree, and the content of
+  any state is found from any other by the transactions between them —
+  undone up to where the two part, done down from there
+  (`HistoryLog.path`).
+- **Base** — one state, kept whole. For a file on disk: the file itself, which
+  holds the saved state, when the log leads from it; otherwise runs over the
+  file (`OverlayEdits`). For an untitled document or a part: its bytes. All
+  in `Kept/`, under names a `KeptContent` gives them.
+- **The base is written again only when it has to be:** when no transaction
+  in the log leads from it to the document's state any more — the history
+  was emptied, or its bounds dropped steps before a snapshot wrote them — or
+  when the log has grown past 64 MB and twice what the history holds. Then the
+  content is written whole, under a new name, with a new log of every
+  transaction the history holds. Amortized, as `EditOverlayStorage`
+  materializes a fresh base once per many edits. A save needs no new base: the
+  file now holds the saved state, and the log leads from it.
 - **At open:** the base is checked by its hash, the journal by its chain, and
   the transactions are applied up to `head`.
-- `UntitledKeeper` as it is today — whole bytes by `version` — goes away.
+- `UntitledKeeper` — whole bytes by `version` — is gone; `ContentKeeper`
+  keeps every document's content this way.
 
-Writing moves off the main thread: the timer only collects the new records,
-which are values already; a background queue appends and syncs.
+Still on the main thread: the appends, and a base written whole. An edit of a
+gigabyte is appended once, by the snapshot after it. Moving the writing to a
+background queue — the timer collecting the new records, which are values
+already — is left for later.
 
 ## Integrity
 
@@ -151,7 +166,11 @@ relaunch.
    the bytes it replaced.
 2. **Content from base + journal** — folds, compaction; `UntitledKeeper` and
    whole-file `Edits/` rewriting replaced; the manifest's journal length and
-   chained hash.
+   chained hash. *(done)* A log that does not read back as pinned is not laid
+   over anything: the restore warning names the document. The journal that
+   holds the history's bytes in a session and the log a workspace keeps are
+   two files for now; a restored history (phase 4) can read its bytes from
+   the log directly.
 3. **Integrity** — SHA-256 of the base file, the background check at open,
    hashes of the project's own files, the restore warning's new lines.
 4. **History restored** — `head`, `savedSerial`, redo grouping, join marks;

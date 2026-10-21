@@ -11,7 +11,7 @@ public struct Workspace: Codable, Equatable, Sendable {
     /// The version this build writes. A file of another version is ignored
     /// rather than migrated: losing a workspace is an inconvenience, misreading
     /// one is not acceptable.
-    public static let currentVersion = 1
+    public static let currentVersion = 2
 
     public var version: Int
     /// Front to back, as `NSApp.orderedWindows` lists them.
@@ -137,15 +137,16 @@ public struct PaneState: Codable, Equatable, Sendable {
     public var segments: SegmentationState?
     /// The rows the UEFI panel had open, each a node's path in the tree.
     public var uefiOpenRows: [[Int]]?
-    /// The unsaved changes of a file on disk, kept in a project's `Edits/`
-    /// under this name. Nil for a clean file, and always outside a project.
-    public var edits: String?
+    /// A file's content beyond what is on disk — its unsaved changes and the
+    /// history that made them — kept beside the workspace. Nil for a file
+    /// with neither.
+    public var kept: KeptContent?
 
     public init(id: String? = nil, document: DocumentSource,
                 selectionStart: UInt64, selectionEnd: UInt64,
                 inputRegion: InputRegion = .hex, insertMode: Bool = false,
                 topOffset: UInt64, segments: SegmentationState? = nil, uefiOpenRows: [[Int]]? = nil,
-                edits: String? = nil) {
+                kept: KeptContent? = nil) {
         self.id = id
         self.document = document
         self.selectionStart = selectionStart
@@ -155,7 +156,7 @@ public struct PaneState: Codable, Equatable, Sendable {
         self.topOffset = topOffset
         self.segments = segments
         self.uefiOpenRows = uefiOpenRows
-        self.edits = edits
+        self.kept = kept
     }
 }
 
@@ -168,8 +169,8 @@ public enum InputRegion: String, Codable, Equatable, Sendable {
 public enum DocumentSource: Codable, Equatable, Sendable {
     /// A file on disk, as it was when the workspace was written.
     case file(FileStamp)
-    /// A document with no file — New, a join, a duplicate — whose bytes the
-    /// workspace keeps beside itself (`WorkspaceFolder.untitledURL`).
+    /// A document with no file — New, a join, a duplicate — whose content the
+    /// workspace keeps beside itself (`KeptContent`).
     case untitled(UntitledStamp)
     /// A part of another document, decoded from it again at restore
     /// (`PartOrigin`) — in a panel over a tab, or torn off into a tab of its
@@ -226,11 +227,10 @@ public struct FragmentState: Codable, Equatable, Sendable {
     }
 }
 
-/// An untitled document: the name of its bytes in the workspace folder, the
-/// name it showed, and whether it held work nobody had saved.
+/// An untitled document: its content as the workspace keeps it, the name it
+/// showed, and whether it held work nobody had saved.
 public struct UntitledStamp: Codable, Equatable, Sendable {
-    /// The file under `Untitled/` its bytes are in.
-    public var id: String
+    public var content: KeptContent
     /// The name the header showed; nil for a plain "Untitled".
     public var name: String?
     public var size: UInt64
@@ -238,11 +238,86 @@ public struct UntitledStamp: Codable, Equatable, Sendable {
     /// the same.
     public var dirty: Bool
 
-    public init(id: String, name: String?, size: UInt64, dirty: Bool) {
-        self.id = id
+    public init(content: KeptContent, name: String?, size: UInt64, dirty: Bool) {
+        self.content = content
         self.name = name
         self.size = size
         self.dirty = dirty
+    }
+}
+
+/// A document's content as a workspace keeps it: a base, and the log of the
+/// transactions made over it (`Design/PERSISTENT_UNDO_PLAN.md`).
+///
+/// Every state a document passes through has a serial of its own. The base
+/// holds one state; the log holds transactions, each naming the state it was
+/// applied to; the content is the state `head` names, found from the base by
+/// the transactions between them. An edit appends to the log and an undo only
+/// moves `head`, so a snapshot writes what changed since the last one.
+public struct KeptContent: Codable, Equatable, Sendable {
+    /// The document's name in `Kept/`, for as long as it is kept.
+    public var id: String
+    public var base: KeptBase
+    /// The state the document was in.
+    public var head: UInt64
+    /// Where its serials go on counting from.
+    public var nextSerial: UInt64
+    /// For a file: the state the file on disk holds. Nil for a document with
+    /// no file.
+    public var saved: UInt64?
+    /// The transactions over the base; nil while there are none.
+    public var log: KeptLog?
+
+    public init(id: String, base: KeptBase, head: UInt64, nextSerial: UInt64,
+                saved: UInt64? = nil, log: KeptLog? = nil) {
+        self.id = id
+        self.base = base
+        self.head = head
+        self.nextSerial = nextSerial
+        self.saved = saved
+        self.log = log
+    }
+
+    /// The files in `Kept/` this content is read from.
+    public var files: [String] {
+        var files: [String] = []
+        switch base {
+        case .file: break
+        case .bytes(let file, _), .edits(let file, _): files.append(file)
+        }
+        if let log { files.append(log.file) }
+        return files
+    }
+}
+
+/// The state a kept content starts from.
+public enum KeptBase: Codable, Equatable, Sendable {
+    /// The file on disk, which holds the state `serial` names.
+    case file(serial: UInt64)
+    /// The whole content, in `Kept/<file>`: an untitled document or a part.
+    case bytes(file: String, serial: UInt64)
+    /// Runs over the file on disk (`OverlayEdits`), in `Kept/<file>`: a file
+    /// whose saved state no transaction kept leads to.
+    case edits(file: String, serial: UInt64)
+
+    public var serial: UInt64 {
+        switch self {
+        case .file(let serial), .bytes(_, let serial), .edits(_, let serial): return serial
+        }
+    }
+}
+
+/// A log in `Kept/`, pinned: the length it is read to and the chained hash
+/// at that length, hex.
+public struct KeptLog: Codable, Equatable, Sendable {
+    public var file: String
+    public var length: UInt64
+    public var hash: String
+
+    public init(file: String, length: UInt64, hash: String) {
+        self.file = file
+        self.length = length
+        self.hash = hash
     }
 }
 

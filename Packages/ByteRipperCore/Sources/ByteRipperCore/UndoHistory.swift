@@ -87,6 +87,11 @@ public struct UndoTransaction: Equatable, Sendable {
     /// out. A document-level act (a join, §22.2) captures it so undo/redo can
     /// recognise the transaction and re-attach/detach the file.
     public let serial: UInt64
+    /// The state this transaction was applied to: the serial the document
+    /// stood at when it was recorded. Every state has a serial of its own, so
+    /// the states form a tree, and a kept history finds its way from the state
+    /// it wrote down to any other by these (`Design/PERSISTENT_UNDO_PLAN.md`).
+    public let parent: UInt64
 
     /// Where the caret sits in each bracketing state — an empty selection is a
     /// caret, and a non-empty one's caret is its start.
@@ -94,11 +99,12 @@ public struct UndoTransaction: Equatable, Sendable {
     public var caretAfter: UInt64 { selectionAfter.start }
 
     public init(ops: [UndoOperation], selectionBefore: SelectionModel, selectionAfter: SelectionModel,
-                serial: UInt64 = 0) {
+                serial: UInt64 = 0, parent: UInt64 = 0) {
         self.ops = ops
         self.selectionBefore = selectionBefore
         self.selectionAfter = selectionAfter
         self.serial = serial
+        self.parent = parent
     }
 
     /// Caret-only form, for edits recorded without a selection to speak of.
@@ -243,8 +249,10 @@ public final class UndoHistory: @unchecked Sendable {
     /// bytes kept elsewhere — a workspace's untitled document — be rewritten
     /// only when they changed.
     public struct Version: Hashable, Sendable {
-        let epoch: UInt64
-        let serial: UInt64
+        /// Moves whenever the history is emptied: the content then jumped
+        /// with no transaction to say how.
+        public let epoch: UInt64
+        public let serial: UInt64
     }
 
     public var version: Version { Version(epoch: epoch, serial: currentSerial) }
@@ -274,7 +282,7 @@ public final class UndoHistory: @unchecked Sendable {
         let entry = Entry(transaction: UndoTransaction(ops: ops,
                                                       selectionBefore: selectionBefore,
                                                       selectionAfter: selectionAfter,
-                                                      serial: nextSerial),
+                                                      serial: nextSerial, parent: currentSerial),
                           serial: nextSerial)
         nextSerial += 1
         undoSteps.append(Step(label: label, entries: [entry], seriesID: seriesID))
@@ -463,10 +471,12 @@ public final class UndoHistory: @unchecked Sendable {
     /// Discards all history and the dirty checkpoint.
     public func reset() {
         dropAll()
-        // `nextSerial` deliberately keeps counting: the history is empty, so the
-        // current state is 0 again, and no future serial can collide with one a
-        // caller still remembers.
-        savedSerial = 0
+        // The content is not the state any serial named so far, so it gets a
+        // serial of its own — the one future edits name as their parent. A
+        // reset document is its file as saved, so that serial is also the
+        // saved one.
+        baseSerial = takeSerial()
+        savedSerial = baseSerial
         dirtyAfterClear = false
         epoch += 1
         undoTransactionCount = 0
@@ -482,8 +492,51 @@ public final class UndoHistory: @unchecked Sendable {
     /// clear undo as usual and never reach the cleared work.
     public func clearKeepingDirty() {
         dropAll()
+        baseSerial = takeSerial()
         savedSerial = 0
         dirtyAfterClear = true
+        epoch += 1
+        undoTransactionCount = 0
+        lastUndoWasSeriesByte = false
+        lastUndoSeriesID = nil
+    }
+
+    /// Hands out a serial no state has had.
+    private func takeSerial() -> UInt64 {
+        defer { nextSerial += 1 }
+        return nextSerial
+    }
+
+    // MARK: - Kept beside a workspace
+
+    /// The serial of the state the document is in.
+    public var headSerial: UInt64 { currentSerial }
+    /// The serial of the state last saved: what the file on disk holds while
+    /// the document is not dirty.
+    public var savedStateSerial: UInt64 { savedSerial }
+    /// The next serial `record` will hand out — what a kept history goes on
+    /// counting from, so a restored document never names two states alike.
+    public var upcomingSerial: UInt64 { nextSerial }
+
+    /// Every transaction the history holds, undo side and redo side, oldest
+    /// serial first: what a kept history writes down, parents before children.
+    public var heldTransactions: [KeptTransaction] {
+        (undoSteps + redoSteps).flatMap { step in
+            step.entries.map { KeptTransaction(transaction: $0.transaction, seriesID: step.seriesID, label: step.label) }
+        }.sorted { $0.transaction.serial < $1.transaction.serial }
+    }
+
+    /// Goes on from a document kept beside a workspace: its content is the
+    /// state `head` names, serials continue from `nextSerial`, and the file on
+    /// disk — for a document that has one — holds the state `saved` names.
+    /// `dirty` keeps a document dirty that has no saved state to compare with:
+    /// an untitled one nobody saved.
+    public func resume(at head: UInt64, nextSerial: UInt64, saved: UInt64?, dirty: Bool) {
+        dropAll()
+        baseSerial = head
+        self.nextSerial = max(nextSerial, head + 1)
+        savedSerial = saved ?? head
+        dirtyAfterClear = dirty && saved == nil
         epoch += 1
         undoTransactionCount = 0
         lastUndoWasSeriesByte = false

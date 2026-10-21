@@ -69,12 +69,11 @@ to date as the session changes, not only at quit.
 
 A document never saved (New, Join, Duplicate, a torn-off fragment — named
 by Rename or not: what matters is that it has never been written) has no
-file to come back from, so its bytes are written beside the workspace:
-`Untitled/<uuid>.bin`, one per document, rewritten only when the document's
-content changed since the last write (`UndoHistory.version`). A part with
-changes its parent has not got keeps its own bytes the same way
-(`PartOrigin.edits`), and they are laid over what the parent gives at
-restore.
+file to come back from, so its content is kept beside the workspace, in
+`Kept/`: its bytes written whole once, and a log its edits are appended to
+(`ContentKeeper`, `PERSISTENT_UNDO_PLAN.md`, "Content = base + journal"). A
+part with changes its parent has not got keeps its own content the same way
+(`PartOrigin.edits`), and it is laid over what the parent gives at restore.
 
 **Quitting does not ask about them** with the switch on: they come back at
 the next launch, still unsaved. Before its questions, quitting takes a
@@ -84,10 +83,9 @@ session takes its copy with it.
 
 ### Unsaved changes to files on disk
 
-Kept as a project keeps them (below, "Projects"): runs over the file
-(`OverlayEdits`) in `Edits/<uuid>.plist` beside the workspace, written again
-only when the content moved, laid over the file at restore only when it is
-the file they were made on. A file changed outside the app opens without
+Kept as a project keeps them (below, "Projects"): the file is the base, and
+the edits made over it are a log in `Kept/`, appended to as they are made,
+laid over the file at restore only when it is the file they were made on. A file changed outside the app opens without
 them, and the warning says so. Quitting does not ask about them either; the
 session differs from a project only in finding its files by path alone, with
 no `relativePath`. (They used to be the one question quitting still asked,
@@ -107,8 +105,10 @@ bytes, its segments, and their links to `chip1.bin` and `chip2.bin`.
 ```
 Workspace/
   Workspace.json
-  Untitled/
-    3F2A…E1.bin
+  Kept/
+    3F2A…E1-9C04B2D1.bin     an untitled document's or a part's base
+    3F2A…E1-9C04B2D1.log     the edits over it
+    77D0…3A-15E2C0FF.log     the edits over a file on disk
 ```
 
 `Workspace.json` carries a `version`. A file of an unknown version is ignored,
@@ -231,8 +231,8 @@ writes a tab with its panels half restored.
   out of it: its stretch of the parent may hold something else. A part with
   changes comes back all the same, as untitled bytes with its changes.
 - A part's unsaved changes are kept as an untitled document's are: its own
-  bytes, in `Untitled/` (`PartOrigin.edits`), written again only when its
-  content moved, laid over what the parent gives at restore. The parent's
+  content, in `Kept/` (`PartOrigin.edits`), laid over what the parent gives
+  at restore. The parent's
   bytes stay its baseline, what **Update in Parent** compares with. Quitting
   does not ask about them, and a crash does not lose them.
 - A panel with no parent — bytes handed over by a tool, or a part whose
@@ -257,20 +257,21 @@ for one job, kept in a file of its own, `.brp`, and opened again as one
 thing.
 
 - **A package.** `Job.brp/` holds `Project.json` (the `Workspace` value, a few
-  kilobytes), `Untitled/` (untitled documents and parts' changes, as in the
-  session) and `Edits/` (the unsaved changes of files on disk). A project with
+  kilobytes) and `Kept/` (the content of untitled documents and parts, and
+  the unsaved changes of files on disk, as in the session). A project with
   no unsaved work is as small as its JSON. The bytes live with the project,
   not in Application Support: deleting a project deletes them, copying it
   copies them, and a job folder moved whole takes them along.
 - **Files by two paths.** A file is written by its path and by its path
   relative to the folder the project is in (`FileStamp.relativePath`), and is
   looked for at the first, then the second (`FileStamp.locate`).
-- **Unsaved changes of files on disk** are kept as runs over the file
-  (`OverlayEdits`: stretches of the file, and the bytes editing added), about
-  the size of the changes, binary plist in `Edits/`. They are laid over the
-  file again at open (`PaneViewModel.applyKeptEdits`) only when the file is
-  the one they were made on; a file changed outside the project opens without
-  them, and the warning says so.
+- **Unsaved changes of files on disk** are kept as the log of the edits made
+  over the file, about the size of the changes; only when the log no longer
+  leads from what the file holds are they written as runs over the file
+  (`OverlayEdits`). They are laid over the file again at open
+  (`PaneViewModel.applyKeptContent`) only when the file is the one they were
+  made on; a file changed outside the project opens without them, and the
+  warning says so.
 - **Live.** While a project is open the recorder writes into it rather than
   into Application Support (`WorkspaceRecorder.switchTo(project:)`), always,
   whatever the restore switch says. Leaving a project — another project,

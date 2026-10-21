@@ -11,6 +11,9 @@ import Workspace
 struct RestoredPane {
     let pane: PaneViewModel
     let unchanged: Bool
+    /// The part had changes kept that could not be read: it opened as its
+    /// parent holds it.
+    var keptChangesLost = false
 }
 
 /// Names the panes of one snapshot, so a part can name its parent wherever in
@@ -35,7 +38,7 @@ extension MainViewController {
     /// The tab as it stands: File A and File B, the active pane, the split,
     /// the bookmarks, the minimap, the Find bar and the panels. Untitled
     /// documents are written down through `keeper`, and left out without one.
-    func workspaceTab(keeper: UntitledKeeper? = nil, ids: WorkspacePaneIDs = WorkspacePaneIDs()) -> TabState {
+    func workspaceTab(keeper: ContentKeeper? = nil, ids: WorkspacePaneIDs = WorkspacePaneIDs()) -> TabState {
         let panes = [windowModel.pane1, windowModel.pane2].map { workspacePane(of: $0, keeper: keeper, ids: ids) }
         let fraction = mode == .comparison ? comparisonView.map { Double($0.currentFraction) } : nil
         var state = TabState(
@@ -79,17 +82,17 @@ extension MainViewController {
     /// One with no parent, or with a parent closed since or a codec this
     /// cannot write, is written as untitled bytes: it comes back without its
     /// way home.
-    private func workspacePane(of pane: PaneViewModel, keeper: UntitledKeeper?,
+    private func workspacePane(of pane: PaneViewModel, keeper: ContentKeeper?,
                                ids: WorkspacePaneIDs) -> PaneState? {
         guard pane.isOpen, let document = pane.document else { return nil }
         let source: DocumentSource
-        var edits: String?
+        var kept: KeptContent?
         if !pane.isUntitled {
             var stamp = FileStamp(url: document.url)
                 ?? FileStamp(path: document.url.standardizedFileURL.path, size: pane.fileSize, modified: nil)
             stamp.relativePath = keeper?.relativeBase.flatMap { FileStamp.relativePath(of: stamp.path, to: $0) }
             source = .file(stamp)
-            edits = keeper?.editsStamp(for: pane)
+            kept = keeper?.keep(pane)
         } else if let origin = partOrigin(of: pane, keeper: keeper, ids: ids) {
             source = .part(origin)
         } else {
@@ -107,13 +110,13 @@ extension MainViewController {
             segments: pane.workspaceSegments(),
             uefiOpenRows: pane.uefiState.openUEFIRows.isEmpty
                 ? nil : pane.uefiState.openUEFIRows.map(\.path).sorted { $0.lexicographicallyPrecedes($1) },
-            edits: edits)
+            kept: kept)
     }
 
     /// A part whose parent is still open. Changes its parent has not got are
     /// kept as bytes beside it; without a keeper to keep them the part is
     /// still written, and comes back as its parent holds it.
-    private func partOrigin(of pane: PaneViewModel, keeper: UntitledKeeper?,
+    private func partOrigin(of pane: PaneViewModel, keeper: ContentKeeper?,
                             ids: WorkspacePaneIDs) -> PartOrigin? {
         guard let origin = pane.origin, origin.state != .parentClosed, let parent = origin.parent,
               let codec = PartCodecState(origin.codec).flatMap(PartCodecState.text) else { return nil }
@@ -140,7 +143,7 @@ extension MainViewController {
     /// A file is looked for at its path, then — inside a project — at its
     /// path relative to the project; its kept changes are laid over it again
     /// when it is the file they were made on.
-    func openWorkspaceDocument(_ state: PaneState, in pane: PaneViewModel, keeper: UntitledKeeper?,
+    func openWorkspaceDocument(_ state: PaneState, in pane: PaneViewModel, keeper: ContentKeeper?,
                                issues: inout [RestoreIssue]) -> Bool? {
         switch state.document {
         case let .file(stamp):
@@ -158,26 +161,24 @@ extension MainViewController {
             let unchanged = stamp.isUnchanged(comparedWith: current)
             if !unchanged {
                 issues.append(.changed(path: url.path))
-            } else if let id = state.edits, let edits = keeper?.edits(id) {
+            } else if let kept = state.kept, let keeper {
                 do {
-                    try pane.applyKeptEdits(edits)
-                    keeper?.adoptEdits(pane, as: id)
+                    try keeper.apply(kept, to: pane)
                 } catch {
-                    issues.append(.changed(path: url.path))
+                    issues.append(.unreadable(name: url.path))
                     return false
                 }
             }
             return unchanged
         case let .untitled(stamp):
-            guard let bytes = keeper?.bytes(for: stamp) else {
-                issues.append(.missing(path: stamp.name ?? L("Untitled")))
+            guard let bytes = try? keeper?.bytes(of: stamp.content) else {
+                issues.append(.unreadable(name: stamp.name ?? L("Untitled")))
                 return nil
             }
-            pane.openBytes([UInt8](bytes), named: stamp.name)
+            pane.openBytes(bytes, named: stamp.name)
             // Work nobody saved is still work nobody saved: closing it asks,
             // as it would have before the app went down.
-            if stamp.dirty { pane.document?.undoHistory.clearKeepingDirty() }
-            keeper?.adopt(pane, as: stamp)
+            keeper?.adopt(pane, content: stamp.content, dirty: stamp.dirty)
             return UInt64(bytes.count) == stamp.size
         case .part:
             return nil
@@ -189,7 +190,7 @@ extension MainViewController {
     /// laid over it. Nil when it could not be taken out: the parent changed on
     /// disk, no longer has room for it, or the codec refused.
     func openWorkspacePart(_ origin: PartOrigin, from parent: RestoredPane, into pane: PaneViewModel?,
-                           keeper: UntitledKeeper?) async -> RestoredPane? {
+                           keeper: ContentKeeper?) async -> RestoredPane? {
         guard parent.unchanged,
               let codec = PartCodecState.value(PartCodecState.self, from: origin.codec)?.codec,
               let layout = PartCodecState.value(UEFIRootLayout.self, from: origin.layout),
@@ -202,7 +203,7 @@ extension MainViewController {
         // What the parent gives is the part's baseline — what it is measured
         // against, and what Update in Parent compares with; the bytes shown
         // are the part's own, changes included.
-        let edited = origin.edits.flatMap { keeper?.bytes(for: $0) }.map { [UInt8]($0) }
+        let edited = origin.edits.flatMap { try? keeper?.bytes(of: $0.content) }
         let shown = edited ?? bytes
         let opened: PaneViewModel
         if let pane {
@@ -214,36 +215,34 @@ extension MainViewController {
             opened = panel
         }
         if let stamp = origin.edits, edited != nil {
-            if stamp.dirty { opened.document?.undoHistory.clearKeepingDirty() }
-            keeper?.adopt(opened, as: stamp)
+            keeper?.adopt(opened, content: stamp.content, dirty: stamp.dirty)
         }
-        return RestoredPane(pane: opened, unchanged: UInt64(shown.count) == origin.size)
+        return RestoredPane(pane: opened, unchanged: UInt64(shown.count) == origin.size,
+                            keptChangesLost: origin.edits != nil && edited == nil)
     }
 
     /// A part's own bytes when its parent did not come back: kept work is not
     /// thrown away for want of a way home, so it opens as untitled bytes —
     /// into `pane`, or as a panel when `pane` is nil.
     func openWorkspaceOrphan(_ origin: PartOrigin, into pane: PaneViewModel?,
-                             keeper: UntitledKeeper?) -> RestoredPane? {
+                             keeper: ContentKeeper?) -> RestoredPane? {
         guard var stamp = origin.edits else { return nil }
         if stamp.name == nil { stamp.name = origin.name }
         if let pane {
-            guard let bytes = keeper?.bytes(for: stamp) else { return nil }
-            pane.openBytes([UInt8](bytes), named: stamp.name)
-            if stamp.dirty { pane.document?.undoHistory.clearKeepingDirty() }
-            keeper?.adopt(pane, as: stamp)
+            guard let bytes = try? keeper?.bytes(of: stamp.content) else { return nil }
+            pane.openBytes(bytes, named: stamp.name)
+            keeper?.adopt(pane, content: stamp.content, dirty: stamp.dirty)
             return RestoredPane(pane: pane, unchanged: UInt64(bytes.count) == stamp.size)
         }
         return openWorkspaceLooseFragment(stamp, keeper: keeper)
     }
 
     /// Opens a panel of untitled bytes — one with no parent.
-    func openWorkspaceLooseFragment(_ stamp: UntitledStamp, keeper: UntitledKeeper?) -> RestoredPane? {
-        guard let bytes = keeper?.bytes(for: stamp),
-              let id = openFragment([UInt8](bytes), named: stamp.name ?? L("Untitled"), animated: false),
+    func openWorkspaceLooseFragment(_ stamp: UntitledStamp, keeper: ContentKeeper?) -> RestoredPane? {
+        guard let bytes = try? keeper?.bytes(of: stamp.content),
+              let id = openFragment(bytes, named: stamp.name ?? L("Untitled"), animated: false),
               let pane = fragments.pane(id) else { return nil }
-        if stamp.dirty { pane.document?.undoHistory.clearKeepingDirty() }
-        keeper?.adopt(pane, as: stamp)
+        keeper?.adopt(pane, content: stamp.content, dirty: stamp.dirty)
         return RestoredPane(pane: pane, unchanged: UInt64(bytes.count) == stamp.size)
     }
 

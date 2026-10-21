@@ -32,7 +32,7 @@ final class WorkspaceRestoreTests: XCTestCase {
     /// Restores `tabs` the way a launch does: every tab's files first, then
     /// the parts, wherever each one's parent is.
     private func restore(_ tabs: [(TabState, MainViewController)],
-                         keeper: UntitledKeeper? = nil) async -> [RestoreIssue] {
+                         keeper: ContentKeeper? = nil) async -> [RestoreIssue] {
         let restorer = WorkspaceRestorer(keeper: keeper)
         for (tab, controller) in tabs { restorer.openFiles(of: tab, in: controller) }
         await restorer.openParts()
@@ -198,7 +198,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         let keeperFolder = FileManager.default.temporaryDirectory
             .appendingPathComponent("WorkspaceRecorderTests-\(UUID().uuidString)")
         addTeardownBlock { try? FileManager.default.removeItem(at: keeperFolder) }
-        let keeper = UntitledKeeper(folder: WorkspaceFolder(url: keeperFolder))
+        let keeper = ContentKeeper(folder: WorkspaceFolder(url: keeperFolder))
         let tab = source.workspaceTab(keeper: keeper)
         func parent(_ index: Int) -> String? {
             if case let .part(origin) = tab.fragments[index].pane.document { origin.parent } else { nil }
@@ -290,7 +290,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         try part.pasteWrite([0xDE, 0xAD])
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("PartEdits-\(UUID().uuidString)")
         addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
-        let keeper = UntitledKeeper(folder: WorkspaceFolder(url: folder))
+        let keeper = ContentKeeper(folder: WorkspaceFolder(url: folder))
         let ids = WorkspacePaneIDs()
         let tabs = [partTab.workspaceTab(keeper: keeper, ids: ids), parentTab.workspaceTab(keeper: keeper, ids: ids)]
         guard case let .part(origin)? = tabs[0].panes[0]?.document else { return XCTFail("written as a part") }
@@ -405,8 +405,9 @@ final class WorkspaceRestoreTests: XCTestCase {
 
         recorder.record()
         XCTAssertEqual(try XCTUnwrap(recorder.savedWorkspace()).windows.count, 2)
-        let kept = folderURL.appendingPathComponent("Untitled")
-        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: kept.path).count, 1)
+        let kept = folderURL.appendingPathComponent("Kept")
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: kept.path)
+            .filter { $0.hasSuffix(".bin") }.count, 1, "its bytes, written whole once")
 
         untitled.mainViewController.windowModel.pane1.close()
         recorder.record()
@@ -459,29 +460,33 @@ final class WorkspaceRestoreTests: XCTestCase {
         recorder.record()
 
         let tab = try XCTUnwrap(recorder.savedWorkspace()?.windows.first?.tabs.first)
-        XCTAssertNotNil(tab.panes[0]?.edits, "the changes are kept")
+        XCTAssertNotNil(tab.panes[0]?.kept, "the changes are kept")
         guard case let .file(stamp)? = tab.panes[0]?.document else { return XCTFail("a file") }
         XCTAssertNil(stamp.relativePath, "the session finds its files by path alone")
         let kept: (PaneViewModel) -> Bool = { recorder.keeper.holdsCurrentBytes(of: $0) }
         XCTAssertEqual(controller.unsavedDocumentCount(keeping: kept), 0, "quitting asks nothing")
 
         let target = shownWindow().mainViewController
-        let issues = await restore([(tab, target)], keeper: UntitledKeeper(folder: WorkspaceFolder(url: folderURL)))
+        let issues = await restore([(tab, target)], keeper: ContentKeeper(folder: WorkspaceFolder(url: folderURL)))
         XCTAssertEqual(issues, [])
         let restored = target.windowModel.pane1
         XCTAssertEqual(try restored.document?.read(at: 0, length: 0x401), expected)
         XCTAssertTrue(restored.status.isDirty, "still unsaved")
         XCTAssertEqual(try Data(contentsOf: file).count, 0x400, "the file on disk is untouched")
 
-        let edits = folderURL.appendingPathComponent("Edits").path
-        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: edits).count, 1)
+        let edits = folderURL.appendingPathComponent("Kept").path
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: edits).map { ($0 as NSString).pathExtension },
+                       ["log"], "the file is the base: only the log of its changes is kept")
         pane.close()
         recorder.record()
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: edits), [],
                        "a closed file takes its changes with it")
     }
 
-    func testUnchangedUntitledBytesAreNotWrittenAgain() async throws {
+    /// Writing is incremental: a caret move writes nothing, an edit only
+    /// appends to the log, and only content that jumped with no transaction
+    /// to say how — a cleared history — is written whole again.
+    func testOnlyWhatChangedIsWritten() async throws {
         WorkspaceSettings.set(restoresWorkspace: true)
         let window = shownWindow()
         let pane = window.mainViewController.windowModel.pane1
@@ -489,17 +494,92 @@ final class WorkspaceRestoreTests: XCTestCase {
         window.mainViewController.refreshMode()
         let (recorder, folderURL) = recorder([window])
         recorder.record()
-        let kept = try XCTUnwrap(try FileManager.default.contentsOfDirectory(
-            at: folderURL.appendingPathComponent("Untitled"), includingPropertiesForKeys: nil).first)
-        try FileManager.default.removeItem(at: kept)
+        let keptFolder = folderURL.appendingPathComponent("Kept")
+        func files(_ suffix: String) throws -> [URL] {
+            try FileManager.default.contentsOfDirectory(at: keptFolder, includingPropertiesForKeys: nil)
+                .filter { $0.pathExtension == suffix }
+        }
+        func size(_ url: URL) throws -> Int { try Data(contentsOf: url).count }
+        let base = try XCTUnwrap(try files("bin").first)
+        let log = try XCTUnwrap(try files("log").first)
+        let logSize = try size(log)
+        try FileManager.default.removeItem(at: base)
 
         pane.select(range: 4..<8)
         recorder.record()
-        XCTAssertFalse(FileManager.default.fileExists(atPath: kept.path), "a caret move is not new bytes")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: base.path), "a caret move writes nothing")
+        XCTAssertEqual(try size(log), logSize)
+
+        pane.select(range: 4..<4)
+        try pane.pasteWrite([1, 2])
+        recorder.record()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: base.path), "an edit is not new content whole")
+        XCTAssertGreaterThan(try size(log), logSize, "it goes on the log")
+
+        try pane.undo()
+        let afterEdit = try size(log)
+        recorder.record()
+        XCTAssertEqual(try size(log), afterEdit, "an undo only moves which state is kept")
 
         pane.document?.undoHistory.clearKeepingDirty()
         recorder.record()
-        XCTAssertTrue(FileManager.default.fileExists(atPath: kept.path), "new content is written")
+        XCTAssertEqual(try files("bin").count, 1, "content that jumped is written whole, under a new name")
+        XCTAssertNotEqual(try files("bin").first?.lastPathComponent, base.lastPathComponent)
+    }
+
+    /// The content comes back as it was, from the base and the transactions
+    /// after it — an undo and a different edit after it included.
+    func testAnUntitledDocumentComesBackFromItsBaseAndLog() async throws {
+        WorkspaceSettings.set(restoresWorkspace: true)
+        let window = shownWindow()
+        let pane = window.mainViewController.windowModel.pane1
+        pane.openBytes([UInt8](0..<64), named: "scratch")
+        window.mainViewController.refreshMode()
+        let (recorder, folderURL) = recorder([window])
+        recorder.record()
+        pane.select(range: 8..<8)
+        try pane.pasteWrite([0xAA, 0xBB])
+        try pane.pasteInsert([0xCC])
+        recorder.record()
+        try pane.undo()
+        try pane.deleteBytes(in: 0..<4)
+        recorder.record()
+        let expected = try pane.document?.read(at: 0, length: Int(pane.fileSize))
+
+        let tab = try XCTUnwrap(recorder.savedWorkspace()?.windows.first?.tabs.first)
+        let target = shownWindow().mainViewController
+        let issues = await restore([(tab, target)], keeper: ContentKeeper(folder: WorkspaceFolder(url: folderURL)))
+        XCTAssertEqual(issues, [])
+        let restored = target.windowModel.pane1
+        XCTAssertEqual(try restored.document?.read(at: 0, length: Int(restored.fileSize)), expected)
+        XCTAssertTrue(restored.status.isDirty)
+    }
+
+    /// A damaged log is not laid over anything: the file opens as it is on
+    /// disk, and the warning says its kept changes could not be read.
+    func testADamagedLogIsReportedNotApplied() async throws {
+        WorkspaceSettings.set(restoresWorkspace: true)
+        let file = try dump(0x100, 0x11)
+        let window = shownWindow()
+        let controller = window.mainViewController
+        controller.openFiles([file])
+        let pane = controller.windowModel.pane1
+        pane.select(range: 0..<0)
+        try pane.pasteWrite([0x99, 0x98])
+        let (recorder, folderURL) = recorder([window])
+        recorder.record()
+        let log = try XCTUnwrap(try FileManager.default.contentsOfDirectory(
+            at: folderURL.appendingPathComponent("Kept"), includingPropertiesForKeys: nil).first)
+        var data = try Data(contentsOf: log)
+        data[data.count - 40] ^= 0xFF
+        try data.write(to: log)
+
+        let tab = try XCTUnwrap(recorder.savedWorkspace()?.windows.first?.tabs.first)
+        let target = shownWindow().mainViewController
+        let issues = await restore([(tab, target)], keeper: ContentKeeper(folder: WorkspaceFolder(url: folderURL)))
+        XCTAssertEqual(issues.count, 1)
+        guard case .unreadable? = issues.first else { return XCTFail("\(issues)") }
+        XCTAssertEqual(try target.windowModel.pane1.document?.read(at: 0, length: 2), [0x11, 0x11])
     }
 
     // MARK: - The recorder

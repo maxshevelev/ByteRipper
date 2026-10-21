@@ -678,18 +678,25 @@ final class PaneViewModel: HexViewDataSource {
         notifyCompanionContentFullyChanged()
     }
 
-    /// Lays the unsaved changes a project kept for this file over it, as they
-    /// were when the project was left (`Design/WORKSPACE_PLAN.md`, "Projects"):
-    /// the bytes read changed again, red against the file, and closing asks.
-    /// Throws when they do not fit the file — it changed since.
-    func applyKeptEdits(_ edits: OverlayEdits) throws {
+    /// Lays the content a workspace kept for this file over it, as it was
+    /// when the workspace was left (`Design/PERSISTENT_UNDO_PLAN.md`): runs
+    /// over the file when the base is those, then the transactions from the
+    /// base to the state kept. The bytes read changed again, red against the
+    /// file, and closing asks. Throws when they do not fit the file — it
+    /// changed since — leaving the file as it is on disk.
+    func applyKeptContent(edits: OverlayEdits?, ops: [UndoOperation]) throws {
         guard let doc = document, let overlay = doc.storage as? EditOverlayStorage else {
             throw StorageError.readFailed
         }
-        try overlay.applyEdits(edits)
-        // Changes nobody saved, with no history to undo them by: the state a
-        // join leaves a document in, and what makes a close ask.
-        doc.undoHistory.clearKeepingDirty()
+        do {
+            if let edits { try overlay.applyEdits(edits) }
+            try HistoryLog.apply(ops, to: overlay)
+        } catch {
+            // Half laid over is worse than not at all: back to the file.
+            try? doc.revert()
+            signalFullInvalidation()
+            throw error
+        }
         resetEditingState()
         resetSegments(for: doc)
         doc.setSelection(.empty(at: min(doc.selection.start, doc.size), fileSize: doc.size))

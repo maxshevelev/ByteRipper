@@ -339,6 +339,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             sections.append(L("Changed on disk since the last session. Opened without their unsaved changes, segments, parts and tool state:")
                             + "\n" + list(changed))
         }
+        let unreadable = issues.compactMap { if case let .unreadable(name) = $0 { name } else { nil } }
+        if !unreadable.isEmpty {
+            sections.append(L("Their kept changes could not be read. Files were opened as they are on disk and parts as their file holds them; documents with no file were not opened:")
+                            + "\n" + list(unreadable))
+        }
         let alert = NSAlert()
         alert.messageText = L("The workspace was not restored in full")
         alert.informativeText = sections.joined(separator: "\n\n")

@@ -156,17 +156,27 @@ extension WorkspaceTests {
 }
 
 extension WorkspaceTests {
-    func testUntitledBytesAreKeptUntilTheirDocumentGoes() throws {
+    func testKeptFilesStayUntilNoWorkspaceNamesThem() throws {
         let folder = WorkspaceFolder(url: FileManager.default.temporaryDirectory
             .appendingPathComponent("WorkspaceTests-\(UUID().uuidString)"))
         addTeardownBlock { folder.remove() }
-        try folder.writeUntitled("a", bytes: Data([1, 2, 3]))
-        try folder.writeUntitled("b", bytes: Data([4]))
-        XCTAssertEqual(folder.readUntitled("a"), Data([1, 2, 3]))
+        try folder.prepareKeptFolder()
+        try Data([1, 2, 3]).write(to: folder.keptURL("a-1.bin"))
+        try Data([4]).write(to: folder.keptURL("b-1.log"))
 
-        folder.removeUntitled(except: ["b"])
-        XCTAssertNil(folder.readUntitled("a"))
-        XCTAssertEqual(folder.readUntitled("b"), Data([4]))
+        folder.removeKept(except: ["b-1.log"])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: folder.keptURL("a-1.bin").path))
+        XCTAssertEqual(try Data(contentsOf: folder.keptURL("b-1.log")), Data([4]))
+    }
+
+    /// Kept content names the files it is read from, whatever its base.
+    func testKeptContentNamesItsFiles() {
+        let log = KeptLog(file: "d-2.log", length: 10, hash: "00")
+        XCTAssertEqual(KeptContent(id: "d", base: .file(serial: 3), head: 5, nextSerial: 6, saved: 3, log: log).files,
+                       ["d-2.log"])
+        XCTAssertEqual(KeptContent(id: "d", base: .bytes(file: "d-2.bin", serial: 3), head: 3, nextSerial: 4).files,
+                       ["d-2.bin"])
+        XCTAssertEqual(KeptBase.edits(file: "x", serial: 9).serial, 9)
     }
 }
 
@@ -190,16 +200,13 @@ extension WorkspaceTests {
         XCTAssertNil(stamp.locate(relativeTo: root.appendingPathComponent("elsewhere")))
     }
 
-    func testAProjectKeepsChangesBesideItsFile() throws {
+    func testAProjectIsItsOwnFolder() throws {
         let folder = WorkspaceFolder.project(at: FileManager.default.temporaryDirectory
             .appendingPathComponent("Job-\(UUID().uuidString).brp"))
         addTeardownBlock { folder.remove() }
         try folder.write(Workspace(windows: []))
         XCTAssertEqual(folder.fileURL.lastPathComponent, "Project.json")
-        try folder.writeEdits("e1", data: Data([1, 2]))
-        try folder.writeEdits("e2", data: Data([3]))
-        folder.removeEdits(except: ["e2"])
-        XCTAssertNil(folder.readEdits("e1"))
-        XCTAssertEqual(folder.readEdits("e2"), Data([3]))
+        XCTAssertEqual(folder.keptFolder.deletingLastPathComponent().standardizedFileURL,
+                       folder.url.standardizedFileURL)
     }
 }
