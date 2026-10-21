@@ -13,7 +13,12 @@ import Foundation
 ///   the sandboxed app always stood — the sibling temp file cannot be created,
 ///   and the content is written straight into the file instead.
 public enum StorageSaver {
-    public static func save(_ storage: EditOverlayStorage, to url: URL) throws {
+    /// Returns the SHA-256 of what was written when the whole content was —
+    /// made as it went out, so a workspace keeping content over the file
+    /// need not read it again (`Design/PERSISTENT_UNDO_PLAN.md`, "Integrity").
+    /// Nil after a patch in place, which writes only what changed.
+    @discardableResult
+    public static func save(_ storage: EditOverlayStorage, to url: URL) throws -> Data? {
         // The base file must still hold what the table's offsets were written
         // against. When it has shrunk since it was opened — truncated by another
         // process (§5.5) — the overlay can no longer read the missing bytes, and
@@ -28,8 +33,9 @@ public enum StorageSaver {
         let isOriginalFile = storage.originalURL.map { areSameFile($0, url) } ?? false
         if storage.canPatchInPlace && isOriginalFile {
             try patchInPlace(storage, to: url)
+            return nil
         } else {
-            try rewriteAtomically(storage, to: url)
+            return try rewriteAtomically(storage, to: url)
         }
     }
 
@@ -64,19 +70,19 @@ public enum StorageSaver {
     /// original. When the file is writable but its directory is not, the
     /// sibling temp file cannot be created — in that case the content is
     /// written straight into the file itself.
-    private static func rewriteAtomically(_ storage: EditOverlayStorage, to url: URL) throws {
+    private static func rewriteAtomically(_ storage: EditOverlayStorage, to url: URL) throws -> Data {
         do {
-            try rewriteViaSiblingTemp(storage, to: url)
+            return try rewriteViaSiblingTemp(storage, to: url)
         } catch let error as StorageError where error == .writeFailed {
             // The sibling temp file could not be created (the directory is not
             // writable). Fall back to a direct write.
-            try rewriteDirectly(storage, to: url)
+            return try rewriteDirectly(storage, to: url)
         }
     }
 
     /// Materializes the content in a temp file next to `url` and swaps it into
     /// place, so a failed save leaves the original untouched.
-    private static func rewriteViaSiblingTemp(_ storage: EditOverlayStorage, to url: URL) throws {
+    private static func rewriteViaSiblingTemp(_ storage: EditOverlayStorage, to url: URL) throws -> Data {
         let directory = url.deletingLastPathComponent()
         let temporaryURL = directory.appendingPathComponent(
             ".\(url.lastPathComponent).dc-\(UUID().uuidString).tmp"
@@ -88,7 +94,7 @@ public enum StorageSaver {
                 throw StorageError.writeFailed
             }
             let handle = try FileHandle(forWritingTo: temporaryURL)
-            try writeContent(of: storage, to: handle)
+            let digest = try writeContent(of: storage, to: handle)
             try handle.synchronize()
             try handle.close()
 
@@ -97,6 +103,7 @@ public enum StorageSaver {
             } else {
                 try fileManager.moveItem(at: temporaryURL, to: url)
             }
+            return digest
         } catch {
             try? fileManager.removeItem(at: temporaryURL)
             throw error
@@ -129,7 +136,7 @@ public enum StorageSaver {
     /// the content afterwards read a truncated base and wrote its zero padding
     /// over the user's dump. A three-byte file with one inserted byte was saved
     /// as `00 FF 00 00`.
-    private static func rewriteDirectly(_ storage: EditOverlayStorage, to url: URL) throws {
+    private static func rewriteDirectly(_ storage: EditOverlayStorage, to url: URL) throws -> Data {
         let fileManager = FileManager.default
         let staging = fileManager.temporaryDirectory
             .appendingPathComponent("ByteRipper-save-\(UUID().uuidString)")
@@ -139,8 +146,9 @@ public enum StorageSaver {
         defer { try? fileManager.removeItem(at: staging) }
 
         let staged = try FileHandle(forWritingTo: staging)
+        let digest: Data
         do {
-            try writeContent(of: storage, to: staged)
+            digest = try writeContent(of: storage, to: staged)
             try staged.synchronize()
             try staged.close()
         } catch {
@@ -163,12 +171,15 @@ public enum StorageSaver {
         if Darwin.fsync(fd) != 0 {
             throw StorageError.writeFailed
         }
+        return digest
     }
 
     // MARK: - Helpers
 
-    /// Streams the storage's full content to `handle` in bounded chunks.
-    private static func writeContent(of storage: EditOverlayStorage, to handle: FileHandle) throws {
+    /// Streams the storage's full content to `handle` in bounded chunks, and
+    /// returns its SHA-256, made from the same chunks.
+    private static func writeContent(of storage: EditOverlayStorage, to handle: FileHandle) throws -> Data {
+        var digest = FileDigest.Running()
         var offset: UInt64 = 0
         let size = storage.size
         while offset < size {
@@ -181,9 +192,11 @@ public enum StorageSaver {
             // staging-order bug in `rewriteDirectly` (5bbef2a). A save that cannot read what it is
             // saving must fail.
             guard bytes.count == Int(step) else { throw StorageError.readFailed }
+            digest.update(bytes)
             try handle.write(contentsOf: Data(bytes))
             offset += UInt64(bytes.count)
         }
+        return digest.finalize()
     }
 
     /// Loops `pwrite(2)` until all bytes are written, retrying on EINTR.

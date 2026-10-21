@@ -469,13 +469,33 @@ public final class BinaryDocument: @unchecked Sendable {
         guard let editable = storage as? EditOverlayStorage else {
             throw DocumentError.unsupportedStorage
         }
-        try StorageSaver.save(editable, to: destination)
+        let digest = try StorageSaver.save(editable, to: destination)
+        // With the date the file had once written: a file written again by
+        // something else since is not the one the digest was made of.
+        let modified = (try? FileManager.default.attributesOfItem(atPath: destination.path))?[.modificationDate] as? Date
+        savedDigest = digest.map {
+            SavedDigest(url: destination, size: editable.size,
+                        modified: modified.map { Date(timeIntervalSince1970: $0.timeIntervalSince1970.rounded(.down)) },
+                        digest: $0)
+        }
         editable.rebaseOriginalURL(destination)
         url = destination
         identity = FileIdentity(url: destination)
         readOnly = !FileManager.default.isWritableFile(atPath: destination.path)
         undoHistory.markSaved()
     }
+
+    /// The SHA-256 of the file the last save wrote whole, made as it was
+    /// written; nil when the last save patched the file in place.
+    public struct SavedDigest: Equatable, Sendable {
+        public let url: URL
+        public let size: UInt64
+        /// To the whole second, as a workspace's stamp has it.
+        public let modified: Date?
+        public let digest: Data
+    }
+
+    public private(set) var savedDigest: SavedDigest?
 
     /// Discards all in-memory edits and reloads the document from `url`.
     public func revert() throws {

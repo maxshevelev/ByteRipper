@@ -725,6 +725,28 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertNotEqual(stamp.content.log?.hash, "", "and the log's")
     }
 
+    /// A save that writes the file whole hashes it as it goes: the snapshot
+    /// after it has the hash at once, without reading the file again.
+    func testASaveWrittenWholeGivesTheHashAtOnce() async throws {
+        WorkspaceSettings.set(restoresWorkspace: true)
+        EditingSettings.set(warnsBeforeShiftingEdits: false)
+        addTeardownBlock { EditingSettings.resetToDefaults() }
+        let file = try dump(0x300, 0x41)
+        let window = shownWindow()
+        window.mainViewController.openFiles([file])
+        let pane = window.mainViewController.windowModel.pane1
+        pane.select(range: 0..<0)
+        try pane.pasteInsert([0x01])                    // a length change: written whole
+        try pane.save()
+        XCTAssertNotNil(pane.document?.savedDigest)
+        try pane.pasteWrite([0x02])
+        let (recorder, _) = recorder([window])
+        recorder.record(); recorder.flush()
+        guard case let .file(stamp)? = recorder.savedWorkspace()?.windows.first?.tabs.first?.panes[0]?.document
+        else { return XCTFail("a file") }
+        XCTAssertEqual(stamp.sha256, try FileDigest.sha256(of: file).hex, "in the first snapshot, not waited for")
+    }
+
     /// A copy or a `touch` moves the date, not the bytes: the changes still
     /// come back, and so does everything measured on the file.
     func testAMovedDateAloneDoesNotMakeAnotherFile() async throws {

@@ -120,9 +120,12 @@ reading of bases and logs.
     path, size and date): by reading it in the background the first time a
     snapshot keeps content over it — the snapshot goes without, the next one
     has it — and there and then for a snapshot that may be the last
-    (`record(final:)`: quitting, leaving or saving a project). After a Save
-    the file is read again rather than hashed from the bytes being written:
-    one more read, and StorageSaver stays as it is.
+    (`record(final:)`: quitting, leaving or saving a project). A save that
+    writes the file whole hashes it from the same slices it writes
+    (`StorageSaver.save` returns the digest, `BinaryDocument.savedDigest`
+    keeps it with the file's size and date), so it is not read a second
+    time. A save that patches the file in place writes only what changed; its
+    hash is then the one read of the whole file, in the background.
   - At open, checked in the second pass of the restore, before anything is
     laid over and before any part is taken out of it; all such files at
     once, off the main thread (`WorkspaceRestorer.settleKeptFiles`). From

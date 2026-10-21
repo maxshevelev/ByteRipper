@@ -121,7 +121,7 @@ extension MainViewController {
             kept = keeper?.keep(pane)
             // What the kept content is laid over is checked by its bytes at
             // restore, not only by its size and date.
-            if kept != nil { stamp.sha256 = keeper?.fileHash(for: stamp) }
+            if kept != nil { stamp.sha256 = keeper?.fileHash(for: stamp, savedDigest: document.savedDigest) }
             source = .file(stamp)
         } else if let origin = partOrigin(of: pane, keeper: keeper, ids: ids) {
             source = .part(origin)

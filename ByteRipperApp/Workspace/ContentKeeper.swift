@@ -305,9 +305,16 @@ final class ContentKeeper {
     /// time it is asked for, it is made in the background and the snapshot goes
     /// without it; the next one has it. A file that changed while it was read
     /// is not given one.
-    func fileHash(for stamp: FileStamp) -> String? {
+    func fileHash(for stamp: FileStamp, savedDigest: BinaryDocument.SavedDigest? = nil) -> String? {
         let key = FileKey(path: stamp.path, size: stamp.size, modified: stamp.modified)
         if let hash = fileHashes[key] { return hash }
+        // A save that wrote the file whole made its hash as it went: the file
+        // is not read a second time for it.
+        if let saved = savedDigest, saved.url.standardizedFileURL.path == stamp.path, saved.size == stamp.size,
+           saved.modified == stamp.modified {
+            fileHashes[key] = saved.digest.hex
+            return saved.digest.hex
+        }
         let url = URL(fileURLWithPath: stamp.path)
         if waitsForHashes {
             guard let digest = try? FileDigest.sha256(of: url), Self.stillIs(key, url) else { return nil }
