@@ -1082,11 +1082,7 @@ final class AnnotationPlaceLine: NSView {
     let text: String
 
     init(codecs: [String], place: NSControl, text: String) {
-        badges = codecs.map { codec in
-            let badge = PartBadgeView()
-            badge.text = codec
-            return badge
-        }
+        badges = codecs.map { PartBadgeView(text: $0, isTransform: true) }
         address = place
         self.text = (codecs + [text]).joined(separator: " ")
         super.init(frame: .zero)

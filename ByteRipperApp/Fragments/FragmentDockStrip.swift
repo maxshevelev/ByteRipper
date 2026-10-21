@@ -1,6 +1,7 @@
 import Cocoa
 import HelpUI
 import Localization
+import ToolModuleKit
 
 /// One pill in the dock: a folded fragment panel, or the one that is up
 /// (`Design/FRAGMENT_PANELS_PLAN.md`).
@@ -57,7 +58,7 @@ final class FragmentPillView: NSView {
 
     private let icon = NSImageView()
     private let label = NSTextField(labelWithString: "")
-    private let badge = PartBadgeView()
+    private let badge = PartBadgeView(isTransform: true)
     private lazy var badgeGap = badge.leadingAnchor.constraint(equalTo: label.trailingAnchor)
     /// A hidden badge still has its insets' width: without a part's codec it
     /// takes none, so the dot and the ✕ sit where they did.

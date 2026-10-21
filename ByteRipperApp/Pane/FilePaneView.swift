@@ -3,6 +3,7 @@ import ALSplitView
 import AppPalette
 import HelpUI
 import Localization
+import ToolModuleKit
 
 /// One file pane (§3.4, §15): a header (file name, `*` dirty, read-only lock,
 /// comparison-mode close button), the virtualized hex dump, and a status bar.
@@ -1700,6 +1701,7 @@ final class FilePaneView: NSView {
     private func updateCodecBadge() {
         let badge = viewModel.origin?.codec.badge
         codecBadge.text = badge?.text.text ?? ""
+        codecBadge.isTransform = viewModel.origin?.codec.transform != nil
         ControlHelp.describe(codecBadge, name: badge?.text.text ?? "", tooltip: badge?.explanation.text)
         codecBadge.isHidden = badge == nil || bounds.width < Self.trailingChromeMinWidth && !isHeaderHoisted
         badgeCollapsed?.isActive = badge == nil

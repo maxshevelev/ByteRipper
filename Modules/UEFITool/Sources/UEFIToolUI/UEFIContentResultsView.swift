@@ -446,53 +446,31 @@ import ToolModuleKit
     /// The badges, read in order, then the name.
     private(set) var badges: [String] = []
 
+    /// A selected row is filled, and the badge on it takes the selection's
+    /// ink, as a pill does when its panel is up.
+    override var backgroundStyle: NSView.BackgroundStyle {
+        didSet { updateBadgeInk() }
+    }
+
+    private func updateBadgeInk() {
+        let ink: NSColor? = backgroundStyle == .emphasized ? .alternateSelectedControlTextColor : nil
+        for case let badge as PartBadgeView in stack.arrangedSubviews {
+            badge.ink = ink
+        }
+    }
+
     func show(badges: [String], text: String) {
         self.badges = badges
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         for badge in badges {
-            let view = UEFICodecBadge(text: badge)
+            let view = PartBadgeView(text: badge, isTransform: true)
+            view.font = .systemFont(ofSize: max(ToolPanelFont.size - 3, 9), weight: .medium)
             view.setContentCompressionResistancePriority(.required, for: .horizontal)
             stack.addArrangedSubview(view)
         }
+        updateBadgeInk()
         label.font = ToolPanelFont.body()
         label.stringValue = text
         stack.addArrangedSubview(label)
-    }
-}
-
-/// A codec's name in a capsule — drawn as the fragment panel's header draws
-/// the badge of the codec its bytes went through.
-@MainActor final class UEFICodecBadge: NSView {
-    private let label: NSTextField
-    private static let inset = NSSize(width: 6, height: 1)
-
-    init(text: String) {
-        label = NSTextField(labelWithString: text)
-        super.init(frame: .zero)
-        label.font = .systemFont(ofSize: max(ToolPanelFont.size - 3, 9), weight: .medium)
-        label.textColor = .secondaryLabelColor
-        label.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(label)
-        NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.inset.width),
-            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.inset.width),
-            label.centerYAnchor.constraint(equalTo: centerYAnchor)
-        ])
-        setAccessibilityElement(true)
-        setAccessibilityRole(.staticText)
-        setAccessibilityValue(text)
-    }
-
-    required init?(coder: NSCoder) { fatalError("not used") }
-
-    override var intrinsicContentSize: NSSize {
-        let size = label.intrinsicContentSize
-        return NSSize(width: size.width + 2 * Self.inset.width, height: size.height + 2 * Self.inset.height)
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        let path = NSBezierPath(roundedRect: bounds, xRadius: bounds.height / 2, yRadius: bounds.height / 2)
-        NSColor.quaternaryLabelColor.setFill()
-        path.fill()
     }
 }
