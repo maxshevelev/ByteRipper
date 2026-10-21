@@ -540,6 +540,48 @@ public final class UndoHistory: @unchecked Sendable {
     /// command can still refine the selection after.
     public var newestTransaction: UndoTransaction? { undoSteps.last?.entries.last?.transaction }
 
+    /// The transactions recorded after the one `serial` names, oldest first —
+    /// what a kept history has not written yet. Serials only grow, so the undo
+    /// side is read from its newest end only as far as it is new: a snapshot
+    /// costs what changed, not how long the history is.
+    public func heldTransactions(after serial: UInt64) -> [KeptTransaction] {
+        var found: [KeptTransaction] = []
+        func kept(_ step: Step, _ entry: Entry) -> KeptTransaction {
+            KeptTransaction(transaction: entry.transaction, seriesID: step.seriesID, label: step.label)
+        }
+        outer: for step in undoSteps.reversed() {
+            for entry in step.entries.reversed() {
+                guard entry.serial > serial else { break outer }
+                found.append(kept(step, entry))
+            }
+        }
+        for step in redoSteps {
+            for entry in step.entries where entry.serial > serial { found.append(kept(step, entry)) }
+        }
+        return found.sorted { $0.transaction.serial < $1.transaction.serial }
+    }
+
+    /// The serial of the undo side's transaction `k` places from its newest
+    /// end, and of the redo side's `k` places from the next to redo — what a
+    /// pane's segment snapshots are paired with, read from the end that moves.
+    public func undoSideSerial(fromNewest k: Int) -> UInt64? {
+        var left = k
+        for step in undoSteps.reversed() {
+            if left < step.entries.count { return step.entries[step.entries.count - 1 - left].serial }
+            left -= step.entries.count
+        }
+        return nil
+    }
+
+    public func redoSideSerial(fromNewest k: Int) -> UInt64? {
+        var left = k
+        for step in redoSteps.reversed() {
+            if left < step.entries.count { return step.entries[step.entries.count - 1 - left].serial }
+            left -= step.entries.count
+        }
+        return nil
+    }
+
     /// The serials of the undo side, oldest first — what a pane pairs its
     /// segment snapshots with.
     public var undoSideSerials: [UInt64] { undoSteps.flatMap { $0.entries.map(\.serial) } }

@@ -36,6 +36,11 @@ final class ContentKeeper {
         var loggedBytes: UInt64 = 0
         /// The serials of the transactions in the log, each to its parent.
         var parents: [UInt64: UInt64] = [:]
+        /// The newest serial in the log: everything after it is new.
+        var newestLogged: UInt64 = 0
+        /// States the log is known to lead to from the base — so a snapshot
+        /// checks only the way from the new head to one of them.
+        var connected: Set<UInt64> = []
         /// The selection after each transaction as the log has it, so one a
         /// command refined after the snapshot wrote it is written again.
         var afters: [UInt64: SelectionModel] = [:]
@@ -135,20 +140,23 @@ final class ContentKeeper {
         } else {
             var records: [KeptTransaction] = []
             var selections: [(UInt64, SelectionModel)] = []
-            for kept in history.heldTransactions {
+            for kept in history.heldTransactions(after: entry.newestLogged) where entry.parents[kept.transaction.serial] == nil {
                 let txn = kept.transaction
-                if entry.parents[txn.serial] == nil {
-                    records.append(kept)
-                    entry.parents[txn.serial] = txn.parent
-                    entry.loggedBytes += txn.ops.reduce(0) { $0 + $1.heldBytes }
-                } else if entry.afters[txn.serial] != txn.selectionAfter {
-                    selections.append((txn.serial, txn.selectionAfter))
-                }
+                records.append(kept)
+                entry.parents[txn.serial] = txn.parent
                 entry.afters[txn.serial] = txn.selectionAfter
+                entry.newestLogged = max(entry.newestLogged, txn.serial)
+                entry.loggedBytes += txn.ops.reduce(0) { $0 + $1.heldBytes }
+            }
+            // Only the newest transaction can have its selection refined after
+            // it was recorded.
+            if let newest = history.newestTransaction, entry.afters[newest.serial] != newest.selectionAfter {
+                selections.append((newest.serial, newest.selectionAfter))
+                entry.afters[newest.serial] = newest.selectionAfter
             }
             let segments = segmentWrites(of: pane, history: history, entry: entry)
             let tooLong = entry.loggedBytes > max(compactionFloor, 2 * history.heldBytes)
-            if tooLong || !HistoryLog.connects(entry.base!.serial, history.headSerial, parents: entry.parents) {
+            if tooLong || !connects(entry, to: history.headSerial) {
                 guard rebase(entry, pane: pane, document: document, saved: saved) else { return failed(entry) }
             } else if !records.isEmpty || !selections.isEmpty || !segments.isEmpty || newBase != nil {
                 pending.append(.append(id: entry.id, records: records, selections: selections,
@@ -221,6 +229,8 @@ final class ContentKeeper {
         entry.base = base
         entry.logName = name + ".log"
         entry.parents = parents
+        entry.newestLogged = held.last?.transaction.serial ?? 0
+        entry.connected = [base.serial]
         entry.afters = afters
         entry.loggedBytes = history.heldBytes
         entry.segments = [:]
@@ -229,24 +239,50 @@ final class ContentKeeper {
         return true
     }
 
+    /// Whether the log leads from the base to `head`: the way up from `head`
+    /// is followed only until it meets a state already known to be reached.
+    private func connects(_ entry: Entry, to head: UInt64) -> Bool {
+        guard let base = entry.base?.serial else { return false }
+        if entry.connected.isEmpty { entry.connected = [base] }
+        var walked: [UInt64] = []
+        var at = head
+        while !entry.connected.contains(at) {
+            walked.append(at)
+            guard let parent = entry.parents[at], walked.count <= entry.parents.count else {
+                // Not upwards: the base may lie below `head`'s way, as after an
+                // undo past it. The full check settles that.
+                guard HistoryLog.connects(base, head, parents: entry.parents) else { return false }
+                entry.connected.formUnion(walked)
+                return true
+            }
+            at = parent
+        }
+        entry.connected.formUnion(walked)
+        return true
+    }
+
     /// The pane's segment snapshots, each paired with its step's serial — the
     /// undo side's before each step, the redo side's after each — that the log
-    /// has not got yet.
+    /// has not got yet. Read from the newest end of each side, as far as they
+    /// are new: below that the stacks do not change.
     private func segmentWrites(of pane: PaneViewModel, history: UndoHistory, entry: Entry) -> [SegmentWrite] {
         var writes: [SegmentWrite] = []
-        func pair(_ serials: [UInt64], _ stack: [Segmentation], after: Bool) {
-            let offset = serials.count - stack.count
-            guard offset >= 0 else { return }
-            for (i, snapshot) in stack.enumerated() {
-                let key = SegmentKey(serial: serials[offset + i], after: after)
-                guard entry.segments[key] != snapshot, let data = pane.encodedSegments(snapshot) else { continue }
-                writes.append(SegmentWrite(serial: key.serial, after: after, data: data))
-                entry.segments[key] = snapshot
+        func pair(_ stack: [Segmentation], after: Bool, serial: (Int) -> UInt64?) {
+            var k = 0
+            while k < stack.count, let paired = serial(k) {
+                let snapshot = stack[stack.count - 1 - k]
+                let key = SegmentKey(serial: paired, after: after)
+                if entry.segments[key] == snapshot { break }
+                if let data = pane.encodedSegments(snapshot) {
+                    writes.append(SegmentWrite(serial: key.serial, after: after, data: data))
+                    entry.segments[key] = snapshot
+                }
+                k += 1
             }
         }
-        pair(history.undoSideSerials, pane.segmentUndoStack, after: false)
-        pair(history.redoSideSerials, pane.segmentRedoStack, after: true)
-        return writes
+        pair(pane.segmentUndoStack, after: false, serial: history.undoSideSerial(fromNewest:))
+        pair(pane.segmentRedoStack, after: true, serial: history.redoSideSerial(fromNewest:))
+        return writes.reversed()
     }
 
     // MARK: - The files content is laid over
@@ -448,6 +484,7 @@ final class ContentKeeper {
         for record in records {
             entry.parents[record.transaction.serial] = record.transaction.parent
             entry.afters[record.transaction.serial] = record.transaction.selectionAfter
+            entry.newestLogged = max(entry.newestLogged, record.transaction.serial)
         }
         // What the log pairs with the steps is what the pane now holds.
         for (serial, snapshot) in zip(document.undoHistory.undoSideSerials.suffix(pane.segmentUndoStack.count),
