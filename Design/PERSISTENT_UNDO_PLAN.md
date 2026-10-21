@@ -146,8 +146,9 @@ relaunch.
    writes its ops into the journal as it collects them, so a join or a
    streamed replace does not hold its bytes until it closes either. A journal
    that cannot be made or written leaves the bytes in memory: the edit stays
-   undoable. Still in memory while an edit runs: a fill builds its before and
-   after whole before recording them.
+   undoable. A fill is worked in 1 MiB slices, and what it wrote is kept as
+   its pattern (`UndoBytes(pattern:count:)`), not as bytes: its history costs
+   the bytes it replaced.
 2. **Content from base + journal** — folds, compaction; `UntitledKeeper` and
    whole-file `Edits/` rewriting replaced; the manifest's journal length and
    chained hash.

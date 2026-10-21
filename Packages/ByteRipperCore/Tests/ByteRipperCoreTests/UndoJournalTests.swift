@@ -62,6 +62,41 @@ final class UndoJournalTests: XCTestCase {
         XCTAssertEqual(try doc.read(at: 0, length: Int(doc.size)), edited)
     }
 
+    // MARK: - A fill
+
+    /// A fill keeps the bytes it replaced and its pattern — not the bytes it
+    /// wrote — and works in slices that carry one repetition on across their
+    /// seams, a pattern that does not divide the slice included.
+    func testAFillKeepsItsPatternNotItsBytes() throws {
+        let size = BinaryDocument.fillChunkSize * 2 + 1000
+        let original = (0..<size).map { UInt8(truncatingIfNeeded: $0 &* 7) }
+        let doc = makeDocument(original)
+        let pattern: [UInt8] = [0xAA, 0xBB, 0xCC]
+        try doc.fill(pattern: pattern, in: 10..<UInt64(size - 10))
+
+        let filled = try doc.read(at: 0, length: size)
+        for i in 10..<(size - 10) {
+            guard filled[i] == pattern[(i - 10) % 3] else { return XCTFail("byte \(i)") }
+        }
+        XCTAssertEqual(Array(filled[0..<10]), Array(original[0..<10]))
+        let slices = UInt64((size - 20 + BinaryDocument.fillChunkSize - 1) / BinaryDocument.fillChunkSize)
+        XCTAssertEqual(doc.undoHistory.heldBytes, UInt64(size - 20) + 3 * slices,
+                       "what it replaced, and three bytes of pattern a slice")
+        XCTAssertEqual(doc.undoHistory.undoDepth, 1, "one fill, one step")
+
+        try doc.undo()
+        XCTAssertEqual(try doc.read(at: 0, length: size), original)
+        try doc.redo()
+        XCTAssertEqual(try doc.read(at: 0, length: size), filled)
+    }
+
+    /// A pattern's bytes read back as the pattern repeated and cut short.
+    func testPatternBytesReadBackRepeated() throws {
+        XCTAssertEqual(try UndoBytes(pattern: [1, 2, 3], count: 7).load(), [1, 2, 3, 1, 2, 3, 1])
+        XCTAssertEqual(try UndoBytes(pattern: [1, 2, 3], count: 2).load(), [1, 2])
+        XCTAssertEqual(UndoBytes(pattern: [9], count: 4), [9, 9, 9, 9])
+    }
+
     // MARK: - Bounds
 
     /// Past the bound on steps the oldest go; undoing all that is left does not

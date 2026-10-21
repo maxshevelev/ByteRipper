@@ -8,12 +8,17 @@ import Foundation
 /// RAM (`Design/PERSISTENT_UNDO_PLAN.md`). A 512 MB replace used to cost its
 /// size twice in memory for as long as it could be undone.
 ///
+/// A fill's bytes are not kept at all: they are its pattern repeated over the
+/// range, and that is what is held — a few bytes for a fill of a gigabyte.
+///
 /// Equality compares the bytes, wherever they are: a test's literal equals
 /// the same bytes read back from a journal.
 public struct UndoBytes: Equatable, Sendable, ExpressibleByArrayLiteral {
     enum Storage: Sendable {
         case inline([UInt8])
         case stored(UndoJournal, offset: UInt64, count: Int)
+        /// `count` bytes of `pattern` repeated, from its first byte.
+        case pattern([UInt8], count: Int)
     }
 
     let storage: Storage
@@ -26,6 +31,12 @@ public struct UndoBytes: Equatable, Sendable, ExpressibleByArrayLiteral {
         storage = .inline(elements)
     }
 
+    /// `count` bytes of `pattern` repeated from its first byte; the last
+    /// repetition is cut short where the count ends.
+    public init(pattern: [UInt8], count: Int) {
+        storage = pattern.isEmpty || count == 0 ? .inline([]) : .pattern(pattern, count: count)
+    }
+
     init(journal: UndoJournal, offset: UInt64, count: Int) {
         storage = .stored(journal, offset: offset, count: count)
     }
@@ -33,8 +44,14 @@ public struct UndoBytes: Equatable, Sendable, ExpressibleByArrayLiteral {
     public var count: Int {
         switch storage {
         case .inline(let bytes): return bytes.count
-        case .stored(_, _, let count): return count
+        case .stored(_, _, let count), .pattern(_, let count): return count
         }
+    }
+
+    /// What keeping these bytes costs: all of them, or a pattern's own length.
+    var heldCount: Int {
+        if case .pattern(let pattern, _) = storage { return pattern.count }
+        return count
     }
 
     /// The bytes, read from the journal when they are there.
@@ -42,6 +59,13 @@ public struct UndoBytes: Equatable, Sendable, ExpressibleByArrayLiteral {
         switch storage {
         case .inline(let bytes): return bytes
         case .stored(let journal, let offset, let count): return try journal.read(at: offset, count: count)
+        case .pattern(let pattern, let count):
+            var bytes = [UInt8]()
+            bytes.reserveCapacity(count)
+            while bytes.count < count {
+                bytes.append(contentsOf: pattern.prefix(count - bytes.count))
+            }
+            return bytes
         }
     }
 
@@ -149,6 +173,8 @@ final class UndoJournal: @unchecked Sendable {
         case .inline(let inline):
             guard !inline.isEmpty else { return bytes }
             return UndoBytes(journal: self, offset: try append(inline), count: inline.count)
+        case .pattern:
+            return bytes
         case .stored(let other, let offset, let count):
             if other === self { return bytes }
             let start = length

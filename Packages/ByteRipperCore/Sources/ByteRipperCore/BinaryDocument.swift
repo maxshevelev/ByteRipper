@@ -145,26 +145,48 @@ public final class BinaryDocument: @unchecked Sendable {
     /// Overwrites `range` by repeating `pattern` to cover it (§7.3 fill dialog).
     /// The final repetition is truncated when the range length isn't a multiple
     /// of the pattern length; a pattern longer than the range writes only its
-    /// prefix. Recorded as an `.overwrite` so undo restores the original bytes.
+    /// prefix. Recorded as overwrites so undo restores the original bytes.
     /// `caretAfter` overrides the caret position redo restores (a fill leaves
     /// the caret at the range start, not the upper bound).
+    ///
+    /// Worked in `fillChunkSize` slices, each one overwrite of the transaction:
+    /// a slice's old bytes go into the history's journal before the next is
+    /// read, and what the fill wrote is kept as its pattern, not as bytes — so a
+    /// fill of a gigabyte holds one slice in memory, and its history keeps the
+    /// gigabyte it replaced and a few bytes of pattern.
     public func fill(pattern: [UInt8], in range: Range<UInt64>, caretAfter: UInt64? = nil) throws {
         guard !pattern.isEmpty else { return }
         let start = min(range.lowerBound, storage.size)
         let end = min(range.upperBound, storage.size)
         guard end > start else { return }
-        let count = Int(end - start)
-        let before = try storage.read(at: start, length: count)
-        var after = [UInt8]()
-        after.reserveCapacity(count)
-        for i in 0..<count {
-            after.append(pattern[i % pattern.count])
+        var ops: [UndoOperation] = []
+        do {
+            var at = start
+            while at < end {
+                let count = Int(min(UInt64(Self.fillChunkSize), end - at))
+                // The pattern as it stands at this slice's first byte: the slices
+                // continue one repetition, they do not each start it again.
+                let phase = Int((at - start) % UInt64(pattern.count))
+                let slicePattern = Array(pattern[phase...] + pattern[..<phase])
+                let written = UndoBytes(pattern: slicePattern, count: count)
+                let before = try storage.read(at: at, length: count)
+                try storage.overwrite(range: at..<(at + UInt64(count)), with: try written.load())
+                ops += undoHistory.stored([.overwrite(range: at..<(at + UInt64(count)),
+                                                      before: UndoBytes(before), after: written)])
+                at += UInt64(count)
+            }
+        } catch {
+            // Put back what the slices already wrote: a fill is all or nothing.
+            for op in ops.reversed() { try? applyForward(op.inverted) }
+            throw error
         }
-        try storage.overwrite(range: start..<end, with: after)
-        record([.overwrite(range: start..<end, before: UndoBytes(before), after: UndoBytes(after))],
-               caretAfter: caretAfter)
+        record(ops, caretAfter: caretAfter)
         clampSelection()
     }
+
+    /// The slice a fill reads and writes at a time: the 1 MiB the segment
+    /// writer, the replacer and the join use.
+    static let fillChunkSize = 1024 * 1024
 
     /// Replaces `range` with `bytes`: writes `bytes` from the range start, then
     /// deletes the leftover tail when `bytes` is shorter than the range. This is
