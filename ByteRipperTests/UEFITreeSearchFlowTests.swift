@@ -107,8 +107,23 @@ final class UEFITreeSearchFlowTests: XCTestCase {
         try openTheBar()
     }
 
-    private func next() throws { try button("Go to the next node that matches").performClick(nil) }
-    private func previous() throws { try button("Go to the previous node that matches").performClick(nil) }
+    private func next() throws { try step(segment: 1) }
+    private func previous() throws { try step(segment: 0) }
+
+    /// Presses one of the joined ‹ › arrows the way a click does: the segment
+    /// clicked is what the action reads. The control is momentary and keeps
+    /// no selection outside a click, so it holds one for the press.
+    private func step(segment: Int) throws {
+        let arrows = try XCTUnwrap(descendants(of: try panel, NSSegmentedControl.self).first {
+            $0.segmentCount == 2 && $0.toolTip(forSegment: 1) == "Go to the next node that matches"
+        }, "the ‹ › arrows")
+        let tracking = arrows.trackingMode
+        arrows.trackingMode = .selectOne
+        defer { arrows.trackingMode = tracking }
+        arrows.selectedSegment = segment
+        XCTAssertEqual(arrows.selectedSegment, segment)
+        arrows.sendAction(arrows.action, to: arrows.target)
+    }
 
     /// Waits for the selection to stand on a driver, and the rows to settle.
     private func settle(_ outline: NSOutlineView, rows: Int, file: StaticString = #filePath, line: UInt = #line) {
