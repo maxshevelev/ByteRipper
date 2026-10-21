@@ -1,7 +1,8 @@
 import Cocoa
+import AppPalette
 import Localization
 
-/// A red dot on the corner of the toolbar's Agent button that blinks while an
+/// A dot on the corner of the toolbar's Agent button that blinks while an
 /// agent is at work (`AgentService.isActive`): the person sees that the
 /// program is being driven before a view moves under their hands.
 ///
@@ -35,7 +36,8 @@ final class AgentActivityBadge: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
     override func draw(_ dirtyRect: NSRect) {
-        NSColor.systemRed.setFill()
+        // Something mid-flight, in the palette's words: the agent is at work.
+        SemanticColors.caution.setFill()
         NSBezierPath(ovalIn: bounds).fill()
     }
 
