@@ -100,7 +100,12 @@ final class WorkspaceRecorder {
     /// documents, the parts' changes and the files' unsaved changes included,
     /// at quit as at every other time: quitting does not ask about them, they
     /// come back.
-    func record() {
+    /// `final` for the snapshot that may be the last before the app or the
+    /// project goes: what is still being worked out in the background — the
+    /// hash of a file kept content is laid over — is worked out now.
+    func record(final: Bool = false) {
+        keeper.waitsForHashes = final
+        defer { keeper.waitsForHashes = false }
         if let project {
             guard !isPaused else { return }
             keeper.beginSnapshot()

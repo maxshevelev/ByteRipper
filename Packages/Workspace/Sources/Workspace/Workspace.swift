@@ -11,7 +11,7 @@ public struct Workspace: Codable, Equatable, Sendable {
     /// The version this build writes. A file of another version is ignored
     /// rather than migrated: losing a workspace is an inconvenience, misreading
     /// one is not acceptable.
-    public static let currentVersion = 2
+    public static let currentVersion = 3
 
     public var version: Int
     /// Front to back, as `NSApp.orderedWindows` lists them.
@@ -283,7 +283,7 @@ public struct KeptContent: Codable, Equatable, Sendable {
         var files: [String] = []
         switch base {
         case .file: break
-        case .bytes(let file, _), .edits(let file, _): files.append(file)
+        case .bytes(let file, _, _), .edits(let file, _, _): files.append(file)
         }
         if let log { files.append(log.file) }
         return files
@@ -295,14 +295,15 @@ public enum KeptBase: Codable, Equatable, Sendable {
     /// The file on disk, which holds the state `serial` names.
     case file(serial: UInt64)
     /// The whole content, in `Kept/<file>`: an untitled document or a part.
-    case bytes(file: String, serial: UInt64)
+    /// `hash` is the file's SHA-256, hex: it is read only when it matches.
+    case bytes(file: String, serial: UInt64, hash: String)
     /// Runs over the file on disk (`OverlayEdits`), in `Kept/<file>`: a file
     /// whose saved state no transaction kept leads to.
-    case edits(file: String, serial: UInt64)
+    case edits(file: String, serial: UInt64, hash: String)
 
     public var serial: UInt64 {
         switch self {
-        case .file(let serial), .bytes(_, let serial), .edits(_, let serial): return serial
+        case .file(let serial), .bytes(_, let serial, _), .edits(_, let serial, _): return serial
         }
     }
 }
@@ -332,6 +333,10 @@ public struct FileStamp: Codable, Equatable, Sendable {
     public var size: UInt64
     /// The modification date, to the whole second.
     public var modified: Date?
+    /// The file's SHA-256, hex — written down only when something is laid over
+    /// the file at restore (`PaneState.kept`), and then what decides whether it
+    /// is still the file: a copy or a `touch` moves the date, not the bytes.
+    public var sha256: String?
 
     public init(path: String, size: UInt64, modified: Date?) {
         self.path = path

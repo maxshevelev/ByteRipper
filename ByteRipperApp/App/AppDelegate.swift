@@ -627,7 +627,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // The last snapshot, after every Save / Discard was answered: a file
         // saved under a new name in the quit's questions is in it by that name.
         workspaceRecorder?.stop()
-        workspaceRecorder?.record()
+        workspaceRecorder?.record(final: true)
         if let themeObserver {
             NotificationCenter.default.removeObserver(themeObserver)
         }
@@ -705,7 +705,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // on.
         guard let recorder = workspaceRecorder,
               recorder.project != nil || WorkspaceSettings.restoresWorkspace else { return { _ in false } }
-        recorder.record()
+        recorder.record(final: true)
         let keeper = recorder.keeper
         return { pane in keeper.holdsCurrentBytes(of: pane) }
     }

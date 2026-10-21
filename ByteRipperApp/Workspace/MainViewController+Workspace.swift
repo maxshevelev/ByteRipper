@@ -10,10 +10,34 @@ import Workspace
 /// workspace was written from.
 struct RestoredPane {
     let pane: PaneViewModel
-    let unchanged: Bool
+    var unchanged: Bool
     /// The part had changes kept that could not be read: it opened as its
     /// parent holds it.
     var keptChangesLost = false
+}
+
+/// A file opened in a restore's first pass with content kept to lay over it:
+/// whether it is still the file the content was made on is settled in the
+/// second (`WorkspaceRestorer.settleKeptFiles`).
+struct KeptFileCheck {
+    let pane: PaneViewModel
+    let kept: KeptContent
+    let stamp: FileStamp
+    let url: URL
+    let current: FileStamp
+    let id: String?
+
+    /// The file is the one written down: by its SHA-256 when the workspace has
+    /// it — a moved date alone does not make another file — by its size and
+    /// date when it has not. Read off the main thread.
+    func isTheSameFile() async -> Bool {
+        guard let expected = stamp.sha256 else { return stamp.isUnchanged(comparedWith: current) }
+        guard current.size == stamp.size else { return false }
+        let url = url
+        return await Task.detached(priority: .userInitiated) {
+            (try? FileDigest.sha256(of: url))?.hex == expected
+        }.value
+    }
 }
 
 /// Names the panes of one snapshot, so a part can name its parent wherever in
@@ -91,8 +115,11 @@ extension MainViewController {
             var stamp = FileStamp(url: document.url)
                 ?? FileStamp(path: document.url.standardizedFileURL.path, size: pane.fileSize, modified: nil)
             stamp.relativePath = keeper?.relativeBase.flatMap { FileStamp.relativePath(of: stamp.path, to: $0) }
-            source = .file(stamp)
             kept = keeper?.keep(pane)
+            // What the kept content is laid over is checked by its bytes at
+            // restore, not only by its size and date.
+            if kept != nil { stamp.sha256 = keeper?.fileHash(for: stamp) }
+            source = .file(stamp)
         } else if let origin = partOrigin(of: pane, keeper: keeper, ids: ids) {
             source = .part(origin)
         } else {
@@ -144,7 +171,7 @@ extension MainViewController {
     /// path relative to the project; its kept changes are laid over it again
     /// when it is the file they were made on.
     func openWorkspaceDocument(_ state: PaneState, in pane: PaneViewModel, keeper: ContentKeeper?,
-                               issues: inout [RestoreIssue]) -> Bool? {
+                               issues: inout [RestoreIssue], keptFiles: inout [KeptFileCheck]) -> Bool? {
         switch state.document {
         case let .file(stamp):
             guard let url = stamp.locate(relativeTo: keeper?.relativeBase),
@@ -159,16 +186,14 @@ extension MainViewController {
                 return nil
             }
             let unchanged = stamp.isUnchanged(comparedWith: current)
-            if !unchanged {
-                issues.append(.changed(path: url.path))
-            } else if let kept = state.kept, let keeper {
-                do {
-                    try keeper.apply(kept, to: pane)
-                } catch {
-                    issues.append(.unreadable(name: url.path))
-                    return false
-                }
+            if let kept = state.kept, keeper != nil {
+                // Settled in the second pass, before any part is taken out of
+                // it: the file is checked by its bytes there, off the main thread.
+                keptFiles.append(KeptFileCheck(pane: pane, kept: kept, stamp: stamp, url: url,
+                                               current: current, id: state.id))
+                return unchanged
             }
+            if !unchanged { issues.append(.changed(path: url.path)) }
             return unchanged
         case let .untitled(stamp):
             guard let bytes = try? keeper?.bytes(of: stamp.content) else {

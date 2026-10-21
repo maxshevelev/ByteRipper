@@ -56,7 +56,7 @@ extension AppDelegate {
     // help: menu.file.close-project
     @objc func closeProject(_ sender: Any?) {
         guard let recorder = workspaceRecorder, recorder.project != nil else { return }
-        recorder.record()
+        recorder.record(final: true)
         closeEverythingKept()
         recorder.switchTo(project: nil)
         RecentProjectsStore.lastProject = nil
@@ -73,12 +73,12 @@ extension AppDelegate {
         guard let recorder = workspaceRecorder else { return false }
         let wasProject = recorder.project != nil
         // The project being left keeps what it had up to now.
-        recorder.record()
+        recorder.record(final: true)
         if FileManager.default.fileExists(atPath: url.path) {
             try? FileManager.default.removeItem(at: url)
         }
         recorder.switchTo(project: WorkspaceFolder.project(at: url))
-        recorder.record()
+        recorder.record(final: true)
         guard FileManager.default.fileExists(atPath: WorkspaceFolder.project(at: url).fileURL.path) else {
             presentProjectError(L("The project could not be written."), url: url)
             return false
@@ -123,7 +123,7 @@ extension AppDelegate {
     private func leaveCurrentSession(then proceed: @escaping () -> Void) {
         guard let recorder = workspaceRecorder else { return }
         if recorder.project != nil {
-            recorder.record()
+            recorder.record(final: true)
             closeEverythingKept()
             proceed()
             return
@@ -140,7 +140,7 @@ extension AppDelegate {
             panel.nameFieldStringValue = L("Project")
             panel.canCreateDirectories = true
             guard panel.runModal() == .OK, let url = panel.url, saveSession(asProjectAt: url) else { return }
-            recorder.record()
+            recorder.record(final: true)
             closeEverythingKept()
             proceed()
         case .alertSecondButtonReturn:  // Don't Save

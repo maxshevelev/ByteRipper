@@ -149,12 +149,13 @@ final class ContentKeeper {
         } else if saved != nil {
             guard let edits = pane.exportKeptEdits() else { throw StorageError.readFailed }
             let file = name + ".plist"
-            try Self.editsEncoder.encode(edits).write(to: folder.keptURL(file), options: .atomic)
-            base = .edits(file: file, serial: head)
+            let data = try Self.editsEncoder.encode(edits)
+            try data.write(to: folder.keptURL(file), options: .atomic)
+            base = .edits(file: file, serial: head, hash: FileDigest.sha256(data).hex)
         } else {
             let file = name + ".bin"
-            try writeWhole(document, to: folder.keptURL(file))
-            base = .bytes(file: file, serial: head)
+            let hash = try writeWhole(document, to: folder.keptURL(file))
+            base = .bytes(file: file, serial: head, hash: hash.hex)
         }
         entry.base = base
         entry.log = log
@@ -170,20 +171,71 @@ final class ContentKeeper {
     }
 
     /// The document's content, in slices, into a new file put in place whole.
-    private func writeWhole(_ document: BinaryDocument, to url: URL) throws {
+    /// Returns its SHA-256, made as it was written.
+    private func writeWhole(_ document: BinaryDocument, to url: URL) throws -> Data {
         let partial = url.appendingPathExtension("partial")
         guard FileManager.default.createFile(atPath: partial.path, contents: nil),
               let handle = try? FileHandle(forWritingTo: partial) else { throw StorageError.writeFailed }
         defer { try? handle.close() }
+        var digest = FileDigest.Running()
         var at: UInt64 = 0
         let size = document.size
         while at < size {
             let count = Int(min(UInt64(1 << 20), size - at))
-            try handle.write(contentsOf: try document.read(at: at, length: count))
+            let slice = try document.read(at: at, length: count)
+            digest.update(slice)
+            try handle.write(contentsOf: slice)
             at += UInt64(count)
         }
         try handle.synchronize()
         _ = try FileManager.default.replaceItemAt(url, withItemAt: partial)
+        return digest.finalize()
+    }
+
+    // MARK: - The files content is laid over
+
+    private struct FileKey: Hashable {
+        let path: String
+        let size: UInt64
+        let modified: Date?
+    }
+
+    /// SHA-256 of files on disk, by what they were like when hashed.
+    private var fileHashes: [FileKey: String] = [:]
+    private var hashing: Set<FileKey> = []
+    /// Set for the snapshot that may be the last — quitting, leaving a
+    /// project: a hash still missing is made there and then, not in the
+    /// background, so the workspace written down has it.
+    var waitsForHashes = false
+
+    /// The SHA-256 of the file `stamp` describes, when it is known. The first
+    /// time it is asked for, it is made in the background and the snapshot goes
+    /// without it; the next one has it. A file that changed while it was read
+    /// is not given one.
+    func fileHash(for stamp: FileStamp) -> String? {
+        let key = FileKey(path: stamp.path, size: stamp.size, modified: stamp.modified)
+        if let hash = fileHashes[key] { return hash }
+        let url = URL(fileURLWithPath: stamp.path)
+        if waitsForHashes {
+            guard let digest = try? FileDigest.sha256(of: url), Self.stillIs(key, url) else { return nil }
+            fileHashes[key] = digest.hex
+            return digest.hex
+        }
+        guard hashing.insert(key).inserted else { return nil }
+        Task.detached(priority: .utility) { [weak self] in
+            let digest = try? FileDigest.sha256(of: url)
+            await MainActor.run {
+                guard let self else { return }
+                self.hashing.remove(key)
+                if let digest, Self.stillIs(key, url) { self.fileHashes[key] = digest.hex }
+            }
+        }
+        return nil
+    }
+
+    private nonisolated static func stillIs(_ key: FileKey, _ url: URL) -> Bool {
+        guard let now = FileStamp(url: url) else { return false }
+        return now.size == key.size && now.modified == key.modified
     }
 
     /// The untitled document or part in `pane`, kept: its content, its name,
@@ -235,11 +287,20 @@ final class ContentKeeper {
         return ops
     }
 
+    /// Reads nothing that is not what was written: a base whose hash does not
+    /// come out as kept is refused.
+    private func checked(_ file: String, _ hash: String) throws -> URL {
+        let url = folder.keptURL(file)
+        guard try FileDigest.sha256(of: url).hex == hash else { throw HistoryLogError.unreadable }
+        return url
+    }
+
     /// The content of an untitled document or a part as it was kept.
     func bytes(of content: KeptContent) throws -> [UInt8] {
-        guard case .bytes(let file, _) = content.base else { throw HistoryLogError.unreadable }
+        guard case .bytes(let file, _, let hash) = content.base else { throw HistoryLogError.unreadable }
+        let url = try checked(file, hash)
         let records = try records(of: content)
-        let storage = EditOverlayStorage(base: try FileBackedStorage(url: folder.keptURL(file)))
+        let storage = EditOverlayStorage(base: try FileBackedStorage(url: url))
         try HistoryLog.apply(try ops(of: content, records), to: storage)
         return try storage.read(at: 0, length: Int(storage.size))
     }
@@ -251,9 +312,9 @@ final class ContentKeeper {
         switch content.base {
         case .file:
             break
-        case .edits(let file, _):
+        case .edits(let file, _, let hash):
             edits = try PropertyListDecoder().decode(OverlayEdits.self,
-                                                     from: Data(contentsOf: folder.keptURL(file)))
+                                                     from: Data(contentsOf: try checked(file, hash)))
         case .bytes:
             throw HistoryLogError.unreadable
         }

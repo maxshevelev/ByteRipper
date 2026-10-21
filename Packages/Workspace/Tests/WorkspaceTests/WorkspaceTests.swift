@@ -174,9 +174,9 @@ extension WorkspaceTests {
         let log = KeptLog(file: "d-2.log", length: 10, hash: "00")
         XCTAssertEqual(KeptContent(id: "d", base: .file(serial: 3), head: 5, nextSerial: 6, saved: 3, log: log).files,
                        ["d-2.log"])
-        XCTAssertEqual(KeptContent(id: "d", base: .bytes(file: "d-2.bin", serial: 3), head: 3, nextSerial: 4).files,
+        XCTAssertEqual(KeptContent(id: "d", base: .bytes(file: "d-2.bin", serial: 3, hash: "00"), head: 3, nextSerial: 4).files,
                        ["d-2.bin"])
-        XCTAssertEqual(KeptBase.edits(file: "x", serial: 9).serial, 9)
+        XCTAssertEqual(KeptBase.edits(file: "x", serial: 9, hash: "00").serial, 9)
     }
 }
 

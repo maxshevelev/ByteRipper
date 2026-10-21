@@ -1,3 +1,4 @@
+import ByteRipperCore
 import PartCodec
 import ToolModuleKit
 import UEFIToolUI
@@ -481,6 +482,105 @@ final class WorkspaceRestoreTests: XCTestCase {
         recorder.record()
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: edits), [],
                        "a closed file takes its changes with it")
+    }
+
+    // MARK: - Integrity
+
+    /// A file with changes kept over it, recorded as the last snapshot is:
+    /// with its SHA-256.
+    private func keptFileWorkspace() async throws -> (file: URL, tab: TabState, folder: URL, expected: [UInt8]?) {
+        WorkspaceSettings.set(restoresWorkspace: true)
+        let file = try dump(0x200, 0x33)
+        let window = shownWindow()
+        window.mainViewController.openFiles([file])
+        let pane = window.mainViewController.windowModel.pane1
+        pane.select(range: 0x20..<0x20)
+        try pane.pasteWrite([0xC0, 0xDE])
+        let expected = try pane.document?.read(at: 0, length: 0x200)
+        let (recorder, folderURL) = recorder([window])
+        recorder.record(final: true)
+        let tab = try XCTUnwrap(recorder.savedWorkspace()?.windows.first?.tabs.first)
+        pane.close()
+        return (file, tab, folderURL, expected)
+    }
+
+    func testTheLastSnapshotHasTheHashOfAFileChangesAreKeptOver() async throws {
+        let (file, tab, _, _) = try await keptFileWorkspace()
+        guard case let .file(stamp)? = tab.panes[0]?.document else { return XCTFail("a file") }
+        XCTAssertEqual(stamp.sha256, try FileDigest.sha256(of: file).hex)
+    }
+
+    /// An ordinary snapshot does not wait for the hash: it is made in the
+    /// background and goes into a snapshot after it.
+    func testAHashMadeInTheBackgroundGoesIntoALaterSnapshot() async throws {
+        WorkspaceSettings.set(restoresWorkspace: true)
+        let file = try dump(0x200, 0x21)
+        let window = shownWindow()
+        window.mainViewController.openFiles([file])
+        let pane = window.mainViewController.windowModel.pane1
+        pane.select(range: 0..<0)
+        try pane.pasteWrite([0x01])
+        let (recorder, _) = recorder([window])
+        func hash() -> String? {
+            guard case let .file(stamp)? = recorder.savedWorkspace()?.windows.first?.tabs.first?.panes[0]?.document
+            else { return nil }
+            return stamp.sha256
+        }
+        recorder.record()
+        XCTAssertNil(hash(), "not waited for")
+        for _ in 0..<100 where hash() == nil {
+            try await Task.sleep(nanoseconds: 20_000_000)
+            recorder.record()
+        }
+        XCTAssertEqual(hash(), try FileDigest.sha256(of: file).hex)
+    }
+
+    /// A copy or a `touch` moves the date, not the bytes: the changes still
+    /// come back, and so does everything measured on the file.
+    func testAMovedDateAloneDoesNotMakeAnotherFile() async throws {
+        let (file, tab, folderURL, expected) = try await keptFileWorkspace()
+        try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(3600)],
+                                              ofItemAtPath: file.path)
+        let target = shownWindow().mainViewController
+        let issues = await restore([(tab, target)], keeper: ContentKeeper(folder: WorkspaceFolder(url: folderURL)))
+        XCTAssertEqual(issues, [])
+        XCTAssertEqual(try target.windowModel.pane1.document?.read(at: 0, length: 0x200), expected)
+    }
+
+    /// Other bytes under the same size and date are another file: nothing is
+    /// laid over it, and the warning says it changed.
+    func testOtherBytesUnderTheSameDateAreAnotherFile() async throws {
+        let (file, tab, folderURL, _) = try await keptFileWorkspace()
+        let date = try XCTUnwrap(try FileManager.default.attributesOfItem(atPath: file.path)[.modificationDate] as? Date)
+        try Data(repeating: 0x44, count: 0x200).write(to: file)
+        try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: file.path)
+        let target = shownWindow().mainViewController
+        let issues = await restore([(tab, target)], keeper: ContentKeeper(folder: WorkspaceFolder(url: folderURL)))
+        XCTAssertEqual(issues, [.changed(path: file.path)])
+        XCTAssertEqual(try target.windowModel.pane1.document?.read(at: 0x20, length: 2), [0x44, 0x44])
+    }
+
+    /// A kept base whose bytes are not the ones written is not read.
+    func testADamagedBaseIsNotRead() async throws {
+        WorkspaceSettings.set(restoresWorkspace: true)
+        let window = shownWindow()
+        let pane = window.mainViewController.windowModel.pane1
+        pane.openBytes([UInt8](repeating: 1, count: 128), named: "scratch")
+        window.mainViewController.refreshMode()
+        let (recorder, folderURL) = recorder([window])
+        recorder.record()
+        let base = try XCTUnwrap(try FileManager.default.contentsOfDirectory(
+            at: folderURL.appendingPathComponent("Kept"), includingPropertiesForKeys: nil)
+            .first { $0.pathExtension == "bin" })
+        var data = try Data(contentsOf: base)
+        data[5] = 0xEE
+        try data.write(to: base)
+
+        let tab = try XCTUnwrap(recorder.savedWorkspace()?.windows.first?.tabs.first)
+        let target = shownWindow().mainViewController
+        let issues = await restore([(tab, target)], keeper: ContentKeeper(folder: WorkspaceFolder(url: folderURL)))
+        XCTAssertEqual(issues, [.unreadable(name: "scratch")])
+        XCTAssertFalse(target.windowModel.pane1.isOpen)
     }
 
     /// Writing is incremental: a caret move writes nothing, an edit only

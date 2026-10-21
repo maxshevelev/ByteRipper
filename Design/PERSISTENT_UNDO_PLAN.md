@@ -106,13 +106,21 @@ already — is left for later.
   SHA-256 (CryptoKit) decides. Only a file something is laid over needs one —
   unsaved changes or history; a clean file keeps the stamp for caret, segments
   and tool state.
-  - Computed once per version of the base: when the document first becomes
-    dirty (its stamp still unchanged), and at Save, from the bytes being
-    written.
-  - At open, checked in the background before anything is laid over; a file of
-    gigabytes shows progress in the restore.
+  - Computed once per version of the file (`ContentKeeper.fileHash`, keyed by
+    path, size and date): by reading it in the background the first time a
+    snapshot keeps content over it — the snapshot goes without, the next one
+    has it — and there and then for a snapshot that may be the last
+    (`record(final:)`: quitting, leaving or saving a project). After a Save
+    the file is read again rather than hashed from the bytes being written:
+    one more read, and StorageSaver stays as it is.
+  - At open, checked in the second pass of the restore, before anything is
+    laid over and before any part is taken out of it; all such files at
+    once, off the main thread (`WorkspaceRestorer.settleKeptFiles`). No
+    progress is shown yet: a file of gigabytes takes a few seconds.
   - A file whose date moved but whose hash matches (copied, touched) keeps its
-    changes and history. Today it loses them.
+    changes, and everything measured on it. Other bytes under the same date
+    are a changed file. A workspace written without the hash falls back to
+    size and date.
 - **The project's own files.** The manifest carries each referenced file's
   hash; a base snapshot is written under a new name per version, never over
   the one the manifest names.
@@ -173,6 +181,9 @@ relaunch.
    the log directly.
 3. **Integrity** — SHA-256 of the base file, the background check at open,
    hashes of the project's own files, the restore warning's new lines.
+   *(done)* A kept base (`KeptBase.bytes`, `.edits`) carries its SHA-256,
+   made as it is written and checked before it is read; the logs had their
+   chained hash from phase 2. The workspace format goes to version 3.
 4. **History restored** — `head`, `savedSerial`, redo grouping, join marks;
    undo and redo after a relaunch, for files, untitled documents and parts.
 5. **Segments** — the paired snapshot stack, source ids re-minted at restore.

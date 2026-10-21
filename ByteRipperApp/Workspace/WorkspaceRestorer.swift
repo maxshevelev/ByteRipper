@@ -17,6 +17,8 @@ import Workspace
     /// Every pane opened so far, by the id it was written down with.
     private var panes: [String: RestoredPane] = [:]
     private(set) var issues: [RestoreIssue] = []
+    /// Files opened in the first pass whose kept content waits on a check.
+    private var keptFiles: [(check: KeptFileCheck, tab: Tab, slot: Int)] = []
 
     private final class Tab {
         let controller: MainViewController
@@ -51,9 +53,12 @@ import Workspace
                 continue
             }
             let pane = controller.workspaceSlot(slot)
+            var checks: [KeptFileCheck] = []
             guard let unchanged = controller.openWorkspaceDocument(saved, in: pane, keeper: keeper,
-                                                                    issues: &issues) else { continue }
+                                                                    issues: &issues, keptFiles: &checks)
+            else { continue }
             register(saved, RestoredPane(pane: pane, unchanged: unchanged), in: tab, slot: slot)
+            keptFiles += checks.map { (check: $0, tab: tab, slot: slot) }
         }
         tab.pendingFragments = Array(state.fragments.indices)
         tabs.append(tab)
@@ -70,6 +75,7 @@ import Workspace
     /// soon as its own panes are in. What is still waiting when nothing more
     /// can be opened had a parent that did not come back.
     func openParts() async {
+        await settleKeptFiles()
         var progress = true
         while progress {
             progress = false
@@ -153,6 +159,39 @@ import Workspace
             tab.pendingFragments = []
             let front = tab.state.expandedFragment.flatMap { tab.fragments[$0]?.pane }
             tab.controller.settleWorkspaceFragments(expanded: front)
+        }
+    }
+
+    /// Lays the kept content over the files the first pass opened, each once
+    /// it is known to be the file the content was made on — all of them
+    /// checked at once, off the main thread. One that is not opens as it is on
+    /// disk, as a file changed since does; one whose kept content cannot be
+    /// read opens as it is on disk too, and the warning says which.
+    private func settleKeptFiles() async {
+        let checks = keptFiles
+        keptFiles = []
+        guard !checks.isEmpty else { return }
+        let same = await withTaskGroup(of: (Int, Bool).self) { group in
+            for (index, entry) in checks.enumerated() {
+                let check = entry.check
+                group.addTask { (index, await check.isTheSameFile()) }
+            }
+            var same = [Bool](repeating: false, count: checks.count)
+            for await (index, result) in group { same[index] = result }
+            return same
+        }
+        for (index, (check, tab, slot)) in checks.enumerated() {
+            if same[index], let keeper {
+                do {
+                    try keeper.apply(check.kept, to: check.pane)
+                } catch {
+                    issues.append(.unreadable(name: check.url.path))
+                }
+            } else {
+                issues.append(.changed(path: check.url.path))
+            }
+            tab.opened[slot]?.unchanged = same[index]
+            if let id = check.id { panes[id]?.unchanged = same[index] }
         }
     }
 
