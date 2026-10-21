@@ -27,6 +27,8 @@ public struct AppleDMIArea: Equatable, Sendable {
     public static let serialName = "ssn"
     public static let configCodeName = "hwc"
     public static let orderNumberName = "son"
+    /// The variables of the store that hold a value of the area.
+    public static let identityNames: Set<String> = [serialName, configCodeName, orderNumberName]
     /// The length of the MLB on every board read from.
     public static let boardSerialLength = 17
 
@@ -38,6 +40,13 @@ public struct AppleDMIArea: Equatable, Sendable {
     public var boardSerial: String?
     /// The store marks the copy of the serial invalid, and keeps no current one.
     public var isDeleted: Bool
+    /// The entries of the store each value is read from — the copies that
+    /// stand, and for the MLB the first variable named by it — where the
+    /// store has them.
+    public var serialEntry: Range<UInt64>?
+    public var configCodeEntry: Range<UInt64>?
+    public var orderNumberEntry: Range<UInt64>?
+    public var boardSerialEntry: Range<UInt64>?
 
     public init(store: Range<UInt64>, serialNumber: String? = nil, configCode: String? = nil,
                 orderNumber: String? = nil, boardSerial: String? = nil, isDeleted: Bool = false) {
@@ -47,6 +56,17 @@ public struct AppleDMIArea: Equatable, Sendable {
         self.orderNumber = orderNumber
         self.boardSerial = boardSerial
         self.isDeleted = isDeleted
+    }
+
+    /// The values, in the order a Mac's own tools list them, each with the
+    /// entry it is read from.
+    public var values: [(name: LocalizedText, value: String?, entry: Range<UInt64>?)] {
+        [
+            (L("Serial number"), serialNumber, serialEntry),
+            (L("Configuration code"), configCode, configCodeEntry),
+            (L("Sales order number"), orderNumber, orderNumberEntry),
+            (L("MLB (board serial)"), boardSerial, boardSerialEntry),
+        ]
     }
 
     /// What a technician should know before trusting the fields.
@@ -72,6 +92,7 @@ public struct AppleDMIArea: Equatable, Sendable {
         var name: String
         var isValid: Bool
         var data: Range<UInt64>
+        var entry: Range<UInt64>
     }
 
     static func variables(in store: UEFINode, reader: ImageReader) -> [Variable] {
@@ -82,7 +103,8 @@ public struct AppleDMIArea: Equatable, Sendable {
                                                count: UInt64(flags & NVRAM.sysfNameLengthMask))
             else { return nil }
             let name = String(decoding: nameBytes.prefix(while: { $0 != 0 }), as: UTF8.self)
-            return Variable(name: name, isValid: flags & NVRAM.sysfInvalidFlag == 0, data: entry.body)
+            return Variable(name: name, isValid: flags & NVRAM.sysfInvalidFlag == 0, data: entry.body,
+                            entry: entry.range)
         }
     }
 
@@ -96,7 +118,19 @@ public struct AppleDMIArea: Equatable, Sendable {
     /// The text of a variable, to its first NUL; nil where it is empty or is
     /// not printable ASCII.
     private static func text(_ variable: Variable?, reader: ImageReader) -> String? {
-        guard let variable, let bytes = reader.bytes(variable.data) else { return nil }
+        guard let variable else { return nil }
+        return text(in: variable.data, reader: reader)
+    }
+
+    /// The text a SysF entry holds, the same way: what its row says beside
+    /// its name.
+    public static func text(of entry: UEFINode, reader: ImageReader) -> String? {
+        guard entry.kind == .sysFEntry else { return nil }
+        return text(in: entry.body, reader: reader)
+    }
+
+    private static func text(in data: Range<UInt64>, reader: ImageReader) -> String? {
+        guard let bytes = reader.bytes(data) else { return nil }
         let text = bytes.prefix(while: { $0 != 0 })
         guard !text.isEmpty, text.allSatisfy({ (0x20...0x7E).contains($0) }) else { return nil }
         return String(decoding: text, as: UTF8.self)
@@ -127,14 +161,21 @@ public struct AppleDMIArea: Equatable, Sendable {
         else { return nil }
         let variables = variables(in: store, reader: reader)
         let serial = standing(serialName, in: variables)
-        let area = AppleDMIArea(
+        let configCode = standing(configCodeName, in: variables)
+        let orderNumber = standing(orderNumberName, in: variables)
+        let board = boardSerial(in: variables)
+        var area = AppleDMIArea(
             store: store.range,
             serialNumber: text(serial, reader: reader),
-            configCode: text(standing(configCodeName, in: variables), reader: reader),
-            orderNumber: text(standing(orderNumberName, in: variables), reader: reader),
-            boardSerial: boardSerial(in: variables),
+            configCode: text(configCode, reader: reader),
+            orderNumber: text(orderNumber, reader: reader),
+            boardSerial: board,
             isDeleted: serial.map { !$0.isValid } ?? false
         )
+        area.serialEntry = serial?.entry
+        area.configCodeEntry = configCode?.entry
+        area.orderNumberEntry = orderNumber?.entry
+        area.boardSerialEntry = board.flatMap { prefix in variables.first { $0.name.hasPrefix(prefix) }?.entry }
         guard area.serialNumber != nil || area.configCode != nil || area.orderNumber != nil
                 || area.boardSerial != nil
         else { return nil }

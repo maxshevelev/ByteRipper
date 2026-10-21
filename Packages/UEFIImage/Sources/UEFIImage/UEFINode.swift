@@ -322,6 +322,11 @@ public enum UEFINodeKind: String, Equatable, Sendable, CaseIterable, Codable {
     /// region — no PDR, no fixed offset, found by its content. Padding to
     /// UEFITool, as a GPNV store is.
     case acerDMIStore
+    /// One value of a vendor's identity area kept as a field of the area's
+    /// bytes (`DMIField`): under Acer's DMI area, and under HP's `HP_MUD`
+    /// entry. Its subtype is how the value is written. Padding to UEFITool,
+    /// as the area is.
+    case dmiField
     /// The AMD PSP's map read out of padding (`AMDFirmware`): the Embedded
     /// Firmware Structure, a directory — the subtype is its
     /// `AMDFirmware.DirectoryKind` — and a blob a directory lists, whose

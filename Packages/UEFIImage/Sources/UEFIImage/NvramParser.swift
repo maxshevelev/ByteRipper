@@ -279,14 +279,14 @@ extension Parser {
         }
 
         let entries = vssVariables(in: headerEnd..<storeEnd, storeEnd: storeEnd, emptyByte: emptyByte)
-        return UEFINode(
+        return readingHPDMIFields(UEFINode(
             kind: .vssStore,
             name: name,
             header: offset..<headerEnd,
             body: headerEnd..<storeEnd,
             isFixed: true,
             children: entries
-        )
+        ))
     }
 
     /// How far a `$VSS` store reaches whose size field holds the "no size"
@@ -415,14 +415,14 @@ extension Parser {
         let headerEnd = offset + NVRAM.vss2StoreHeaderSize
 
         let entries = vss2Variables(in: headerEnd..<storeEnd, storeEnd: storeEnd, emptyByte: emptyByte)
-        return UEFINode(
+        return readingHPDMIFields(UEFINode(
             kind: .vss2Store,
             name: "VSS2 store",
             header: offset..<headerEnd,
             body: headerEnd..<storeEnd,
             isFixed: true,
             children: entries
-        )
+        ))
     }
 
     /// The variables of a VSS2 store, walked until the marker stops. Each

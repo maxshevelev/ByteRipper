@@ -15,10 +15,14 @@ import UEFITool
 /// which, and names the node — all at once: Find All, and the results panel
 /// under the tree (`UEFIContentResultsView`).
 ///
-/// Three lines: what to search — the switch, the box, and the note on the ME
-/// region, which neither search goes into; the text, with the arrows or with
-/// the pattern's kind and Find All; and the name search's type and subtype,
-/// with how the search went.
+/// Three lines: what to search — `Find`, the switch, the box, the note on
+/// the ME region, which neither search goes into, and `Done`, which shuts the
+/// bar; the text, with the arrows or with the pattern's kind and Find All;
+/// and the name search's type and subtype, with how the search went.
+///
+/// Its buttons are the dump's Find bar's (`FindBarView`): the arrows one
+/// joined ‹ › pair, Find All a quiet list glyph lit while its results are
+/// open, and `Done` a push button.
 ///
 /// It holds no query of its own. What it shows is `UEFISearchSettings`', and
 /// what the reader changes goes back there; the other pane's bar reads the
@@ -31,6 +35,14 @@ import UEFITool
     var onStop: (() -> Void)?
     /// The reader asked for every match of the Contents search.
     var onFindAll: (() -> Void)?
+    /// The reader shut the bar with `Done`.
+    var onClose: (() -> Void)?
+
+    /// Whether the Contents search's results are open under the tree: Find
+    /// All is lit while they are, as the Find bar's list glyph is.
+    var showsResults = false {
+        didSet { findAllButton.contentTintColor = showsResults ? .controlAccentColor : .secondaryLabelColor }
+    }
 
     private let field = NSSearchField()
     private let modeControl = NSSegmentedControl()
@@ -42,8 +54,10 @@ import UEFITool
     private var topRow: NSStackView?
     private let scopeCheck = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let scopeLabel = NSTextField(labelWithString: "")
-    private let previousButton = NSButton()
-    private let nextButton = NSButton()
+    private let findLabel = NSTextField(labelWithString: L("Find"))
+    /// The ‹ › pair, joined, as the Find bar's.
+    private var navControl = NSSegmentedControl()
+    private let doneButton = NSButton()
     private let typePopUp = NSPopUpButton(frame: .zero, pullsDown: false)
     private let subtypePopUp = NSPopUpButton(frame: .zero, pullsDown: false)
     private let statusLabel = NSTextField(labelWithString: "")
@@ -132,10 +146,13 @@ import UEFITool
         ControlHelp.describe(modeControl, name: L("What to search"),
                              tooltip: L("Search the nodes' names and GUIDs, or the bytes the nodes hold"))
 
-        findAllButton.title = L("Find All")
-        findAllButton.bezelStyle = .rounded
-        findAllButton.controlSize = .regular
-        findAllButton.font = ToolPanelFont.body()
+        // Borderless and grey, as the Find bar's: a list glyph, lit while the
+        // results it opens are open.
+        findAllButton.isBordered = false
+        findAllButton.imagePosition = .imageOnly
+        findAllButton.contentTintColor = .secondaryLabelColor
+        findAllButton.image = NSImage(systemSymbolName: "list.bullet", accessibilityDescription: L("Find All"))
+        findAllButton.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: Self.iconPointSize, weight: .regular)
         findAllButton.target = self
         findAllButton.action = #selector(findAllClicked)
         findAllButton.setContentHuggingPriority(.defaultHigh, for: .horizontal)
@@ -156,10 +173,29 @@ import UEFITool
         scopeLabel.setContentHuggingPriority(NSLayoutConstraint.Priority(1), for: .horizontal)
 
 
-        configure(previousButton, symbol: "chevron.left", name: L("Previous match"),
-                  tooltip: L("Go to the previous node that matches"), action: #selector(previousClicked))
-        configure(nextButton, symbol: "chevron.right", name: L("Next match"),
-                  tooltip: L("Go to the next node that matches"), action: #selector(nextClicked))
+        let chevron: (String, String) -> NSImage = { name, description in
+            NSImage(systemSymbolName: name, accessibilityDescription: description)?
+                .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: Self.iconPointSize, weight: .regular))
+                ?? NSImage()
+        }
+        navControl = NSSegmentedControl(
+            images: [chevron("chevron.left", L("Previous match")), chevron("chevron.right", L("Next match"))],
+            trackingMode: .momentary, target: self, action: #selector(navClicked(_:)))
+        navControl.segmentStyle = .automatic
+        navControl.setToolTip(L("Go to the previous node that matches"), forSegment: 0)
+        navControl.setToolTip(L("Go to the next node that matches"), forSegment: 1)
+        navControl.setAccessibilityLabel(L("Previous match / Next match"))
+        navControl.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+
+        findLabel.font = ToolPanelFont.body(weight: .semibold)
+        findLabel.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+
+        doneButton.title = L("Done")
+        doneButton.font = ToolPanelFont.body()
+        doneButton.target = self
+        doneButton.action = #selector(doneClicked)
+        doneButton.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+        ControlHelp.describe(doneButton, name: L("Done"), tooltip: L("Close the search bar"))
 
         typePopUp.controlSize = .regular
         subtypePopUp.controlSize = .regular
@@ -205,13 +241,19 @@ import UEFITool
         meNote.textColor = .tertiaryLabelColor
         meNote.isHidden = true
 
-        let head = NSStackView(views: [modeControl, scopeCheck, scopeLabel, meNote])
+        // What is between the switch and `Done` gives way; this takes what
+        // they leave, so `Done` stays at the end of the line.
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(NSLayoutConstraint.Priority(1), for: .horizontal)
+        spacer.setContentCompressionResistancePriority(NSLayoutConstraint.Priority(1), for: .horizontal)
+        let head = NSStackView(views: [findLabel, modeControl, scopeCheck, scopeLabel, meNote, spacer, doneButton])
         head.orientation = .horizontal
         head.spacing = 10
         head.alignment = .centerY
+        head.setCustomSpacing(8, after: findLabel)
         head.setCustomSpacing(4, after: scopeCheck)
 
-        let top = NSStackView(views: [field, previousButton, nextButton, findAllButton])
+        let top = NSStackView(views: [field, navControl, findAllButton])
         topRow = top
         top.orientation = .horizontal
         top.spacing = 8
@@ -241,9 +283,7 @@ import UEFITool
             head.widthAnchor.constraint(equalTo: column.widthAnchor),
             progressBar.widthAnchor.constraint(equalToConstant: 90),
             stopButton.widthAnchor.constraint(equalToConstant: 16),
-            stopButton.heightAnchor.constraint(equalToConstant: 16),
-            previousButton.widthAnchor.constraint(equalToConstant: 18),
-            nextButton.widthAnchor.constraint(equalToConstant: 18)
+            stopButton.heightAnchor.constraint(equalToConstant: 16)
         ])
         // The status line as the status says, from the start: `status` sets
         // it only when it changes, and until the first search the stop
@@ -251,10 +291,13 @@ import UEFITool
         updateStatus()
     }
 
+    /// The point size the bar's glyphs draw at — the Find bar's.
+    static let iconPointSize: CGFloat = 13
+
     private func configure(_ button: NSButton, symbol: String, name: String, tooltip: String,
                            action: Selector) {
         button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: name)
-        button.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)
+        button.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: Self.iconPointSize, weight: .regular)
         button.isBordered = false
         button.imagePosition = .imageOnly
         button.contentTintColor = .secondaryLabelColor
@@ -268,7 +311,8 @@ import UEFITool
     func applyFont() {
         field.font = ToolPanelFont.body()
         modeControl.font = ToolPanelFont.body()
-        findAllButton.font = ToolPanelFont.body()
+        findLabel.font = ToolPanelFont.body(weight: .semibold)
+        doneButton.font = ToolPanelFont.body()
         query?.applyFont(ToolPanelFont.body())
         scopeCheck.font = ToolPanelFont.body()
         scopeLabel.font = ToolPanelFont.body()
@@ -289,7 +333,7 @@ import UEFITool
         }
         let contents = mode == .contents
         modeControl.selectedSegment = contents ? 1 : 0
-        for view in [previousButton, nextButton, typePopUp, subtypePopUp] as [NSView] { view.isHidden = contents }
+        for view in [navControl, typePopUp, subtypePopUp] as [NSView] { view.isHidden = contents }
         for view in [findAllButton, scopeCheck] as [NSView] { view.isHidden = !contents }
         // The app's controls stand in for the field in Contents mode, and
         // leave the bar outside it: hidden in it, their row had no width to
@@ -325,8 +369,7 @@ import UEFITool
         fillTypes(selecting: query.type)
         fillSubtypes(of: query.type, selecting: query.subtype)
         let hasQuery = !query.isEmpty
-        previousButton.isEnabled = hasQuery
-        nextButton.isEnabled = hasQuery
+        navControl.isEnabled = hasQuery
         if !hasQuery { status = .none }
     }
 
@@ -527,7 +570,10 @@ import UEFITool
         store(subtype: .some(tag < 0 ? nil : UInt8(tag)))
     }
 
-    @objc private func previousClicked() { onSearch?(.backward) }
-    @objc private func nextClicked() { onSearch?(.forward) }
+    @objc private func navClicked(_ sender: NSSegmentedControl) {
+        onSearch?(sender.selectedSegment == 0 ? .backward : .forward)
+    }
+
+    @objc private func doneClicked() { onClose?() }
     @objc private func stopClicked() { onStop?() }
 }

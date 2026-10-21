@@ -110,7 +110,7 @@ final class UEFIContentSearchFlowTests: XCTestCase {
         XCTAssertFalse(tree.isReady, "the test asks while the tree is read")
         UEFISearchSettings.content = .init(text: "GH51G", wholeTree: true)
         let results = try results()
-        let button = try XCTUnwrap(descendants(of: try bar(), NSButton.self).first { $0.title == "Find All" })
+        let button = try XCTUnwrap(descendants(of: try bar(), NSButton.self).first { $0.accessibilityLabel() == "Find All" })
         button.performClick(nil)
         if case .searching = results.state {} else { XCTFail("the panel says it is searching: \(results.state)") }
         XCTAssertTrue(pumpUntil(10) { if case .done = results.state { return true }; return false }, "\(results.state)")
@@ -155,7 +155,7 @@ final class UEFIContentSearchFlowTests: XCTestCase {
     private func findAll(_ text: String, hex: Bool = false, wholeTree: Bool = true) throws -> UEFIContentResultsView {
         UEFISearchSettings.content = .init(text: text, wholeTree: wholeTree)
         let bar = try bar()
-        let button = try XCTUnwrap(descendants(of: bar, NSButton.self).first { $0.title == "Find All" })
+        let button = try XCTUnwrap(descendants(of: bar, NSButton.self).first { $0.accessibilityLabel() == "Find All" })
         XCTAssertFalse(button.isHiddenOrHasHiddenAncestor, "Find All is on screen in Contents mode")
         let results = try results()
         button.performClick(nil)
@@ -166,6 +166,36 @@ final class UEFIContentSearchFlowTests: XCTestCase {
         XCTAssertGreaterThan(results.frame.height, 50, "the panel is open under the tree")
         XCTAssertTrue(results.progressBar.isHidden)
         return results
+    }
+
+    /// The bar's first line starts with Find and ends with Done, which shuts
+    /// it; Find All is the Find bar's list glyph, lit while its results are
+    /// open, and the arrows are one joined pair.
+    func testTheBarWearsTheFindBarsButtons() throws {
+        try open(try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
+        let bar = try bar()
+        window?.layoutIfNeeded()
+        let label = try XCTUnwrap(descendants(of: bar, NSTextField.self).first { $0.stringValue == "Find" })
+        let done = try XCTUnwrap(descendants(of: bar, NSButton.self).first { $0.title == "Done" })
+        let mode = try XCTUnwrap(descendants(of: bar, NSSegmentedControl.self).first { $0.label(forSegment: 0) == "Names" })
+        func frame(_ view: NSView) -> NSRect { view.convert(view.bounds, to: bar) }
+        XCTAssertLessThan(frame(label).maxX, frame(mode).minX, "Find stands before the switch")
+        XCTAssertEqual(frame(done).maxX, bar.bounds.maxX, accuracy: 8, "Done is at the end of the line")
+        XCTAssertEqual(abs(frame(done).midY - frame(mode).midY), 0, accuracy: 2, "on the switch's line")
+
+        let button = try XCTUnwrap(descendants(of: bar, NSButton.self).first { $0.accessibilityLabel() == "Find All" })
+        XCTAssertFalse(button.isBordered)
+        XCTAssertEqual(button.contentTintColor, .secondaryLabelColor)
+        _ = try findAll("gh51g")
+        XCTAssertEqual(button.contentTintColor, .controlAccentColor, "lit while the results are open")
+
+        UEFISearchSettings.mode = .names
+        let arrows = try XCTUnwrap(descendants(of: bar, NSSegmentedControl.self).first { $0.segmentCount == 2 && $0.label(forSegment: 0) == nil })
+        XCTAssertEqual(arrows.trackingMode, .momentary, "one joined ‹ › pair")
+
+        done.performClick(nil)
+        XCTAssertFalse(UEFISearchSettings.isOpen, "Done shuts the bar")
+        XCTAssertTrue(bar.isHidden)
     }
 
     func testTextInACompressedSectionIsListedAndAClickGoesToIt() throws {

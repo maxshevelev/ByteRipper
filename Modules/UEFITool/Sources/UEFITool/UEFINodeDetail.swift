@@ -413,7 +413,8 @@ public enum UEFIDetail {
                         let contents = row.hasPrefix(record.name + " = ") ? String(row.dropFirst(record.name.count + 3)) : ""
                         return [.init(record.name), .init(hex(record.header.lowerBound)), .init(contents)]
                     },
-                    rowTargets: current.map { .node($0.id) }
+                    rowTargets: current.map { .node($0.id) },
+                    linkColumn: 0
                 ))
             }
         }
@@ -1252,6 +1253,13 @@ public enum UEFIDetail {
         case .acerDMIStore:
             break
 
+        // A field of an identity area: its value, read from its own bytes as
+        // the area writes it.
+        case .dmiField:
+            if let text = DMIField.text(of: node, reader: reader) {
+                fields.append(.init(L("Value", in: language), text.isEmpty ? "—" : text))
+            }
+
         // Its header is the table; the platform and the count are what the
         // blocks say of themselves. The table itself is read in `build`.
         case .biosGuardUpdate:
@@ -1741,6 +1749,7 @@ public enum UEFIDetail {
         case .lenvBlock: return L("LENV block", in: language)
         case .lenvEntry: return L("LENV entry", in: language)
         case .acerDMIStore: return L("Acer DMI", in: language)
+        case .dmiField: return L("DMI field", in: language)
         case .amdEFS: return L("Embedded Firmware Structure", in: language)
         case .amdDirectory: return L("AMD firmware directory", in: language)
         case .amdFirmwareEntry: return L("AMD firmware entry", in: language)

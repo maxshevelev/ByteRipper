@@ -2044,27 +2044,37 @@ final class MainViewController: NSViewController {
     /// name — is raised and selected in, not opened a second time: the UEFI
     /// panel's search results go to match after match in one body.
     ///
+    /// `focus`, in the part's own addresses, is the byte whose item the
+    /// panel's tool puts in focus once it is open — its node selected, its
+    /// zone outlined — rather than a selection of bytes. A panel of the same
+    /// part already open is raised and focused in, as with `selection`.
+    ///
     /// Returns the task decoding off the main actor, for whoever has to wait
     /// on it; nil when the panel opened on the spot or could not open.
     @discardableResult
     func openPart(
         named name: String, from pane: PaneViewModel, source: Range<UInt64>,
         layout: UEFIRootLayout = .image, codec: any PartCodec,
-        tool: String? = nil, selecting selection: Range<UInt64>? = nil
+        tool: String? = nil, selecting selection: Range<UInt64>? = nil, focusing focus: UInt64? = nil
     ) -> Task<Void, Never>? {
-        if let selection, let open = fragments.panelsLinked(to: pane).first(where: { id in
+        if selection != nil || focus != nil, let open = fragments.panelsLinked(to: pane).first(where: { id in
             guard let origin = fragments.pane(id)?.origin else { return false }
             return origin.sourceRange == source && origin.layout == layout
                 && type(of: origin.codec) == type(of: codec) && origin.partName == name
         }), let part = fragments.pane(open) {
             fragments.expand(open)
-            revealForTool(selection, in: part, select: true)
+            if let selection { revealForTool(selection, in: part, select: true) }
             // A tool asked for that the panel is not showing is put up first.
             if let tool, let tools = fragments.surface(open)?.tools, tools.activeIdentifier != tool {
                 part.uefiState.opensTopLevelUEFIRows = true
                 tools.activate(tool, animated: false)
             }
-            fragments.surface(open)?.tools.session?.showItem(at: selection.lowerBound)
+            let session = fragments.surface(open)?.tools.session
+            if let focus {
+                session?.focusItem(at: focus)
+            } else if let selection {
+                session?.showItem(at: selection.lowerBound)
+            }
             return nil
         }
         guard let document = pane.document,
@@ -2092,6 +2102,9 @@ final class MainViewController: NSViewController {
                 // The part's own tool shows its item for the match: the UEFI
                 // tree opens to the node that holds it.
                 self.fragments.surface(id)?.tools.session?.showItem(at: selection.lowerBound)
+            }
+            if let focus, let id {
+                self.fragments.surface(id)?.tools.session?.focusItem(at: focus)
             }
         }
         let fail: @MainActor (Error) -> Void = { [weak self] error in

@@ -19,4 +19,12 @@ import UEFIImage
     /// selected in rather than opened twice.
     func openPart(named name: String, linkedTo source: Range<UInt64>,
                   layout: UEFIRootLayout, codec: any PartCodec, selecting selection: Range<UInt64>?)
+
+    /// The same, with the panel's own item for the byte at `offset` — in the
+    /// part's own addresses — put in focus once it is open: its node opened
+    /// and selected in the tree, its zone outlined in the dump. An entry of
+    /// a LENV block opened as the block decoded. A panel of the same part
+    /// already open over the parent is raised and focused in.
+    func openPart(named name: String, linkedTo source: Range<UInt64>,
+                  layout: UEFIRootLayout, codec: any PartCodec, focusing offset: UInt64)
 }

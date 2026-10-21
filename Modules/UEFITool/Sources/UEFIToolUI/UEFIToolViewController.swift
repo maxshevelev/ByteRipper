@@ -38,6 +38,10 @@ import UEFITool
     /// The DMI button, or one of its menu's stores, was chosen: show that
     /// store, by its place in `showDMIStores`'s list.
     var onShowDMIStore: ((Int) -> Void)?
+    /// A link in the details to a node was clicked: unlike a click in the
+    /// tree, the row may be in a branch not yet open, or not the one the
+    /// outline has selected.
+    var onFollowNode: ((NodeID) -> Void)?
     /// A node's Open item was chosen: the node itself, or its body alone
     /// (`Design/FRAGMENT_PANELS_PLAN.md`).
     var onOpenNode: ((NodeID, Bool) -> Void)?
@@ -60,7 +64,8 @@ import UEFITool
     var onOpenContent: ((NodeID) -> Void)?
     /// The Open Decompressed item of a bzip2 variable was chosen.
     var onOpenUnpacked: ((NodeID) -> Void)?
-    /// The Open Decoded Block item of a LENV block or entry was chosen.
+    /// The item that opens a LENV block decoded — from the block or from an
+    /// entry in it — was chosen.
     var onOpenDecodedBlock: ((NodeID) -> Void)?
     /// Add Annotation… on a row: the node to annotate. Nil — no host that
     /// keeps annotations — leaves the item out.
@@ -446,6 +451,7 @@ import UEFITool
         searchBar.onSearch = { [weak self] direction in self?.search(direction) }
         searchBar.onStop = { [weak self] in self?.stopSearching() }
         searchBar.onFindAll = { [weak self] in self?.findAllContents() }
+        searchBar.onClose = { UEFISearchSettings.isOpen = false }
         contentResults.onChoose = { [weak self] index in self?.goToContentMatch(index) }
         contentResults.onOpen = { [weak self] index in self?.openContentMatch(index) }
         contentResults.onStop = { [weak self] in self?.stopSearching() }
@@ -1411,6 +1417,10 @@ import UEFITool
     var isDMIButtonShownForTesting: Bool { !dmiButton.isHidden }
     func clickDMIButtonForTesting() { dmiClicked() }
     var dmiButtonTitleForTesting: String { dmiButton.title }
+    /// For the tests: the titles of the tree's menu on the row of `id`.
+    func nodeMenuTitlesForTesting(_ id: NodeID) -> [String] {
+        tree?.node(id).map { nodeMenuItems(for: $0).map(\.title) } ?? []
+    }
 
     // MARK: - Searching the tree
 
@@ -1612,6 +1622,7 @@ import UEFITool
 
     /// Opens or shuts the results panel under the tree.
     private func showContentResults(_ shown: Bool) {
+        searchBar.showsResults = shown
         let height = shown ? min(UEFIContentResultsView.panelHeight, max(80, treeSplit.bounds.height / 2)) : 0
         if case .fixed(let now) = treeSplit.paneLayouts[1], (now > 0) == shown { return }
         contentResults.isHidden = !shown
@@ -2702,7 +2713,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         // is the dump or the tree, and the card would stand in front of both.
         detailPane.closeQuickLook()
         switch target {
-        case .node(let node): onSelect?(node)
+        case .node(let node): onFollowNode?(node)
         case .range(let range, let name): onOutlineRange?(range, name)
         }
     }
@@ -2738,21 +2749,37 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             item.representedObject = node.id
             items.append(item)
         }
+        // A LENV block, or an entry in one: the block it opens decoded, and
+        // whether the file holds it encoded — which is what tells the bytes
+        // as stored from the bytes decoded, in every item below.
+        let lenv = image.flatMap { image in
+            tree?.spaceReaders.reader(for: .file).flatMap {
+                UEFILenovoDMIDetail.decodableBlock(for: node, image: image, reader: $0)
+            }
+        }
+        let encoded = lenv?.block.encoding == .encoded
         // Every node can be taken out and read as a file of its own, and a
         // node with a header can have its body taken out without it.
         for body in [false, true] {
-            guard let title = UEFIPresenter.nodeOpenTitle(for: node, body: body),
+            guard let title = UEFIPresenter.nodeOpenTitle(for: node, body: body, encoded: encoded),
                   !body || !node.header.isEmpty
             else { continue }
             let item = NSMenuItem(title: title.text, action: #selector(openNodeClicked(_:)),
                                   keyEquivalent: "")
             item.target = self
             item.representedObject = NodeOpenTarget(id: node.id, body: body)
+            // A block stored in the clear is its bytes as they read: opening
+            // it is opening the block, which goes back with its checksum
+            // recomputed — one item, not two that open the same bytes.
+            if !body, node.kind == .lenvBlock, lenv != nil, !encoded {
+                item.action = #selector(openDecodedBlockClicked(_:))
+                item.representedObject = node.id
+            }
             items.append(item)
         }
         // The same bytes, saved to a file rather than opened.
         for body in [false, true] {
-            guard let title = UEFIPresenter.nodeSaveTitle(for: node, body: body),
+            guard let title = UEFIPresenter.nodeSaveTitle(for: node, body: body, encoded: encoded),
                   !body || !node.header.isEmpty
             else { continue }
             let item = NSMenuItem(title: title.text, action: #selector(saveNodeClicked(_:)), keyEquivalent: "")
@@ -2790,13 +2817,17 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             item.representedObject = node.id
             items.append(item)
         }
-        // A LENV block, or an entry in one, opens decoded: the entries read
-        // as text and can be typed over, and go back encoded.
+        // A LENV block encoded, or an entry in any block, opens the block
+        // decoded: the entries read as text and can be typed over, and go
+        // back encoded. From an entry the block opens on that entry.
         // help: panel.uefi.open-decoded-block
-        if let image, let reader = tree?.spaceReaders.reader(for: .file),
-           UEFILenovoDMIDetail.decodableBlock(for: node, image: image, reader: reader) != nil {
+        let decodedTitle: String? = lenv.flatMap { lenv in
+            if encoded { return L("Open Decoded “%1$@”", node.name) }
+            return node.kind == .lenvEntry ? L("Open “%1$@” in “%2$@”", node.name, lenv.name.text) : nil
+        }
+        if let decodedTitle {
             let open = NSMenuItem(
-                title: L("Open Decoded Block"),
+                title: decodedTitle,
                 action: #selector(openDecodedBlockClicked(_:)),
                 keyEquivalent: ""
             )
@@ -2826,7 +2857,28 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             item.representedObject = node.id
             items.append(item)
         }
+        // What a double click on the row opens comes first, so the reader
+        // sees which of the items that is (`UEFIToolSession.openNodeContent`).
+        if let first = items.firstIndex(where: { opensAsDoubleClick($0, node: node, decodable: lenv != nil) }),
+           first > 0 {
+            items.insert(items.remove(at: first), at: 0)
+        }
         return items
+    }
+
+    /// Whether `item` opens what a double click on `node`'s row opens: the
+    /// block decoded for a LENV block or entry, otherwise what the node's
+    /// content is (`UEFIPresenter.content(of:)`).
+    private func opensAsDoubleClick(_ item: NSMenuItem, node: UEFINode, decodable: Bool) -> Bool {
+        if decodable { return item.action == #selector(openDecodedBlockClicked(_:)) }
+        switch UEFIPresenter.content(of: node) {
+        case .decompressedBody:
+            return item.action == #selector(openDecompressedClicked(_:))
+        case .body:
+            return item.action == #selector(openNodeClicked(_:)) && (item.representedObject as? NodeOpenTarget)?.body == true
+        case .node:
+            return item.action == #selector(openNodeClicked(_:)) && (item.representedObject as? NodeOpenTarget)?.body == false
+        }
     }
 
     @objc private func compareWithUpdateClicked(_ sender: NSMenuItem) {

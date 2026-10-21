@@ -58,8 +58,12 @@ final class UEFIAcerDMIDetailTests: XCTestCase {
         return (image, node, ImageReader(bytes))
     }
 
+    /// A field of the detail, or a row of its Entries table, where the
+    /// area's values are.
     private func value(_ label: String, in detail: UEFINodeDetail) -> String? {
-        detail.fields.first { $0.label == label }?.value
+        if let field = detail.fields.first(where: { $0.label == label }) { return field.value }
+        let entries = detail.tables.first { $0.title == "Entries" }
+        return entries?.rows.first { $0.first?.text == label }.map { $0[1].text }
     }
 
     /// The detail lists the identity fields, in the order the bench asks them;
@@ -76,7 +80,27 @@ final class UEFIAcerDMIDetailTests: XCTestCase {
         XCTAssertNil(value("Asset tag", in: detail), "its padding is no asset tag")
         XCTAssertNil(value("Manufacturing code", in: detail), "not written in this block")
         XCTAssertEqual(detail.fields.filter { $0.isProblem }.count, 0)
-        XCTAssertEqual(detail.tables, [])
+        let entries = try XCTUnwrap(detail.tables.first { $0.title == "Entries" })
+        XCTAssertEqual(entries.rows.map { $0[0].text }, ["System serial", "MB Serial", "UUID", "Model", "Product name"])
+        XCTAssertEqual(entries.rowTargets, parsed.node.children.map { .node($0.id) },
+                       "each value is a way to its row under the block's")
+        XCTAssertEqual(entries.linkColumn, 0)
+    }
+
+    /// The block's fields are rows of their own, each saying what it holds
+    /// and outlining its bytes.
+    func testTheFieldsAreRowsUnderTheBlock() throws {
+        let parsed = try parsed()
+        let rows = parsed.node.children
+        XCTAssertEqual(rows.map(\.kind), Array(repeating: .dmiField, count: 5))
+        XCTAssertEqual(rows.first?.range, parsed.node.range.lowerBound..<parsed.node.range.lowerBound + 0x16)
+        let names = rows.map {
+            UEFITreeDisplay.name(for: $0, catalogue: .empty, in: parsed.image, reader: parsed.reader, language: .english)
+        }
+        XCTAssertEqual(names.first, "System serial = \(Self.serial)")
+        XCTAssertEqual(names[2], "UUID = 78563412-AB90-1788-89CD-EF0102030405")
+        let field = UEFIDetail.build(for: rows[3], image: parsed.image, reader: parsed.reader, in: .english)
+        XCTAssertEqual(value("Value", in: field), "TEST-1050")
     }
 
     /// The optional fields are rows where written, and no rows over their

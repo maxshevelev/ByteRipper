@@ -70,8 +70,12 @@ final class UEFIAppleDMIDetailTests: XCTestCase {
         return (image, node, reader)
     }
 
+    /// A field of the detail, or a row of its Entries table, where the
+    /// area's values are.
     private func value(_ label: String, in detail: UEFINodeDetail) -> String? {
-        detail.fields.first { $0.label == label }?.value
+        if let field = detail.fields.first(where: { $0.label == label }) { return field.value }
+        let entries = detail.tables.first { $0.title == "Entries" }
+        return entries?.rows.first { $0.first?.text == label }.map { $0[1].text }
     }
 
     /// The detail lists the four values; a Mac's own has nothing to note.
@@ -83,6 +87,24 @@ final class UEFIAppleDMIDetailTests: XCTestCase {
         XCTAssertEqual(value("Sales order number", in: detail), "MJVE2D/")
         XCTAssertEqual(value("MLB (board serial)", in: detail), Self.board)
         XCTAssertNil(value("Note", in: detail))
+    }
+
+    /// Each value leads to the variable it is read from — the MLB to the
+    /// first named by it — and those variables say what they hold.
+    func testTheTableLeadsToTheVariables() throws {
+        let parsed = try parsed()
+        let detail = UEFIDetail.build(for: parsed.node, image: parsed.image, reader: parsed.reader, in: .english)
+        let entries = try XCTUnwrap(detail.tables.first { $0.title == "Entries" })
+        func entry(_ named: (String) -> Bool) -> UEFIDetailTable.Target? {
+            parsed.node.children.first { named($0.name) }.map { .node($0.id) }
+        }
+        XCTAssertEqual(entries.rowTargets, [entry { $0 == "ssn" }, entry { $0 == "hwc" }, entry { $0 == "son" },
+                                            entry { $0.hasPrefix(Self.board) }])
+        XCTAssertTrue(entries.rowTargets.allSatisfy { $0 != nil })
+        let serial = try XCTUnwrap(parsed.node.children.first { $0.name == "ssn" })
+        XCTAssertEqual(UEFITreeDisplay.name(for: serial, catalogue: .empty, in: parsed.image,
+                                            reader: parsed.reader, language: .english),
+                       "ssn = C02TEST00G94")
     }
 
     /// A placeholder serial is noted twice: its code and its factory.

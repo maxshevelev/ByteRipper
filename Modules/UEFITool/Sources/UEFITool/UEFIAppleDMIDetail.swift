@@ -3,9 +3,9 @@ import Localization
 import UEFIImage
 
 /// What the details say of Apple's identity (`AppleDMIArea`), on the SysF
-/// store it is read from: the serial number, the configuration code, the
-/// sales order number and the board's serial, then what a technician should
-/// know before trusting them.
+/// store it is read from: what a technician should know before trusting it,
+/// then the serial number, the configuration code, the sales order number
+/// and the board's serial, each a way to the variable it is read from.
 ///
 /// A row keeps only its place, so the store's entries are read again from
 /// the file on each selection: a few dozen headers, read in microseconds.
@@ -16,21 +16,15 @@ public enum UEFIAppleDMIDetail {
         return AppleDMIArea.read(store: node, reader: reader)
     }
 
-    /// The fields, in the order a Mac's own tools list them, then the notes.
+    /// The notes, then the values, in the order a Mac's own tools list them.
     static func build(for node: UEFINode, reader: ImageReader, in language: AppLanguage)
         -> (fields: [UEFIDetailField], tables: [UEFIDetailTable]) {
         guard let area = area(for: node, reader: reader) else { return ([], []) }
-        func shown(_ text: String?) -> String { (text?.isEmpty ?? true) ? "—" : text! }
-        var fields: [UEFIDetailField] = [
-            .init(L("Serial number", in: language), shown(area.serialNumber)),
-            .init(L("Configuration code", in: language), shown(area.configCode)),
-            .init(L("Sales order number", in: language), shown(area.orderNumber)),
-            .init(L("MLB (board serial)", in: language), shown(area.boardSerial)),
-        ]
-        for finding in area.findings {
-            fields.append(.init(L("Note", in: language), finding.text.text(in: language)))
+        let fields = UEFIDMIEntries.findings(area.findings.map { ($0.text, false) }, in: language)
+        let rows = area.values.map { value in
+            UEFIDMIEntries.Row(name: value.name.text(in: language), value: value.value, source: value.entry)
         }
-        return (fields, [])
+        return (fields, [UEFIDMIEntries.table(rows, among: node.children, in: language)])
     }
 
     /// `Apple SysF store · C02QMDJVG940`: the store's name and the serial it

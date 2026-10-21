@@ -82,7 +82,9 @@ final class AcerDMIStoreTests: XCTestCase {
         XCTAssertEqual(store.range, 0x8000..<0xA000)
         XCTAssertEqual(store.name, "Acer DMI")
         XCTAssertTrue(store.isFixed, "the firmware finds it where the layout puts it")
-        XCTAssertTrue(store.children.isEmpty, "one blob, no rows of its own")
+        XCTAssertEqual(store.children.map(\.name), ["System serial", "MB Serial", "UUID", "Model", "Product name"],
+                       "a row for each field written")
+        XCTAssertTrue(store.children.allSatisfy { $0.kind == .dmiField && $0.isFixed })
         let outer = try XCTUnwrap(parsed.roots[0].children.first { $0.range.contains(0x8000) })
         XCTAssertEqual(outer.kind, .padding)
         XCTAssertEqual(outer.children.map(\.kind), [.padding, .acerDMIStore, .padding])

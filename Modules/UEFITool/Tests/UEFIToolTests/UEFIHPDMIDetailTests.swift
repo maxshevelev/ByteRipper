@@ -80,8 +80,33 @@ final class UEFIHPDMIDetailTests: XCTestCase {
         return (image, node, reader)
     }
 
+    /// A field of the detail, or a row of its Entries table, where the
+    /// area's values are.
     private func value(_ label: String, in detail: UEFINodeDetail) -> String? {
-        detail.fields.first { $0.label == label }?.value
+        if let field = detail.fields.first(where: { $0.label == label }) { return field.value }
+        let entries = detail.tables.first { $0.title == "Entries" }
+        return entries?.rows.first { $0.first?.text == label }.map { $0[1].text }
+    }
+
+    /// The fields of `HP_MUD` are rows under its entry, each saying what it
+    /// holds; the table's values lead to those rows, and the three read from
+    /// the variables beside it to those variables' entries.
+    func testTheFieldsAreRowsAndTheTableLeadsToThem() throws {
+        let parsed = try parsed()
+        let fields = parsed.node.children
+        XCTAssertEqual(fields.map(\.kind), Array(repeating: .dmiField, count: 6))
+        XCTAssertEqual(fields.map(\.name), ["Serial number", "SKU", "Product family", "CT number", "Product name", "UUID"])
+        XCTAssertEqual(UEFITreeDisplay.name(for: fields[0], catalogue: .empty, in: parsed.image,
+                                            reader: parsed.reader, language: .english),
+                       "Serial number = \(Self.serial)")
+        let detail = UEFIDetail.build(for: parsed.node, image: parsed.image, reader: parsed.reader, in: .english)
+        let entries = try XCTUnwrap(detail.tables.first { $0.title == "Entries" })
+        let store = try XCTUnwrap(parsed.image.node(NodeID(Array(parsed.node.id.path.dropLast()))))
+        func entry(_ name: String) -> UEFIDetailTable.Target? {
+            store.children.first { $0.name == name }.map { .node($0.id) }
+        }
+        XCTAssertEqual(entries.rowTargets, fields.map { .node($0.id) } + [entry("BuildId"), entry("FactoryConfig"), entry("HP_TAGS")])
+        XCTAssertTrue(entries.rowTargets.allSatisfy { $0 != nil })
     }
 
     /// The detail lists what BCU reports, in its order; a current copy whose

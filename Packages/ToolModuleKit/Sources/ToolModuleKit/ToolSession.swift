@@ -56,6 +56,12 @@ import AppKit
     /// decompressed body.
     func showItem(at offset: UInt64)
 
+    /// Puts the panel's own item for the byte at `offset` in focus, as a
+    /// click on it would: selected, and its zone published. What a panel that
+    /// opens on a part *for* one of its items is asked — an entry of a block
+    /// opened decoded — where `showItem` answers for a byte the reader chose.
+    func focusItem(at offset: UInt64)
+
     /// What this session wants handed back if the user returns to this
     /// tool-module on this file, or nil to start afresh every time.
     ///
@@ -122,6 +128,9 @@ public extension ToolSession {
     /// The default is to show nothing: a panel with no item per byte has
     /// nothing to point at.
     func showItem(at offset: UInt64) {}
+    /// The default is `showItem`: a panel with no zone of its own to publish
+    /// shows its item the one way it has.
+    func focusItem(at offset: UInt64) { showItem(at: offset) }
 }
 
 /// A tool-module's own state, kept by the host while that tool-module is not

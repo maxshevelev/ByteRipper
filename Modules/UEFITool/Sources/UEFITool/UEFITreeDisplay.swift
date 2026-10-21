@@ -254,6 +254,7 @@ public enum UEFITreeDisplay {
     public static func showsValue(_ node: UEFINode) -> Bool {
         node.kind == .dvarEntry || node.kind == .vssEntry || node.kind == .nvarEntry || node.kind == .gpnvRecord
             || node.kind == .lenvBlock || node.kind == .lenvEntry || node.kind == .ldbgEntry
+            || node.kind == .dmiField || node.kind == .sysFEntry && AppleDMIArea.identityNames.contains(node.name)
     }
 
     private static func kibibytes(_ length: UInt64) -> UInt64 {
@@ -311,6 +312,15 @@ public enum UEFITreeDisplay {
         // `store` is the row's parent — the block, or the log.
         if let reader, let text = lenovoDMIRow(node, parent: store, reader: reader, in: language) {
             return text
+        }
+        // A field of an identity area, and one of Apple's identity variables,
+        // say what they hold beside their name, as Lenovo's entries do.
+        if node.kind == .dmiField, let reader, let text = DMIField.text(of: node, reader: reader) {
+            return L("%1$@ = %2$@", in: language, node.displayName(in: language), text.isEmpty ? "—" : text)
+        }
+        if node.kind == .sysFEntry, AppleDMIArea.identityNames.contains(node.name), let reader,
+           let text = AppleDMIArea.text(of: node, reader: reader) {
+            return L("%1$@ = %2$@", in: language, node.displayName(in: language), text)
         }
         // Acer's DMI area says what it holds: the serial, the rest in the
         // detail.
@@ -561,6 +571,7 @@ public enum UEFITreeDisplay {
         case .lenvBlock: return L("LENV block", in: language)
         case .lenvEntry: return L("LENV entry", in: language)
         case .acerDMIStore: return L("Acer DMI", in: language)
+        case .dmiField: return L("DMI field", in: language)
         case .amdEFS: return L("Embedded Firmware Structure", in: language)
         case .amdDirectory: return L("AMD firmware directory", in: language)
         case .amdFirmwareEntry: return L("AMD firmware entry", in: language)

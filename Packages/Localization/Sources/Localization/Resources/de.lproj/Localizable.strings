@@ -333,6 +333,8 @@
 "Do not ask again" = "Nicht mehr fragen";
 "Do you want to save the changes you made?" = "Möchten Sie Ihre Änderungen sichern?";
 "Don't Save" = "Nicht sichern";
+"Close the search bar" = "Suchleiste schließen";
+"Previous match / Next match" = "Vorheriger Treffer / Nächster Treffer";
 "Done" = "Fertig";
 "Drag the highlighted band to scroll the file. Click elsewhere on the map to move the cursor to that byte." = "Ziehen des hervorgehobenen Bands scrollt die Datei. Ein Klick an anderer Stelle der Karte setzt den Cursor auf das betreffende Byte.";
 "Drop files here" = "Dateien hierher ziehen";
@@ -1199,6 +1201,7 @@
 "LENV block|In use" = "Verwendet";
 "Block in use" = "Verwendeter Block";
 "DMI" = "DMI";
+"DMI field" = "DMI-Feld";
 "Show DMI Area" = "DMI-Bereich zeigen";
 "Show in the tree where the image keeps the board's serial number, UUID and model" = "Im Baum zeigen, wo das Abbild Seriennummer, UUID und Modell der Platine hält";
 "Note" = "Hinweis";
@@ -1364,6 +1367,7 @@
 "The program the agent runs in, whose configuration is shown below" = "Das Programm, in dem der Agent läuft; seine Konfiguration steht darunter";
 "Configuration text" = "Konfigurationstext";
 "Copy the text above to the clipboard" = "Den Text oben in die Zwischenablage kopieren";
+"Log records" = "Ereignisse des Protokolls";
 "Log" = "Protokoll";
 "Show in UEFI Structure" = "In UEFI-Struktur zeigen";
 "The file is not open" = "Die Datei ist nicht geöffnet";
@@ -1485,6 +1489,12 @@
 "A structure of the image. Update in Parent lays the image out again around it, so its length may change." = "Eine Struktur des Images. Beim Aktualisieren in der Quelle wird das Image um sie herum neu angeordnet; ihre Länge kann sich daher ändern.";
 "Decompressed from the file. Update in Parent compresses it again the way the section was compressed." = "Aus der Datei entpackt. Beim Aktualisieren in der Quelle wird es so wieder gepackt, wie die Sektion gepackt war.";
 "Decoded from the file. Update in Parent encodes it again with the key in its header and recomputes the checksum." = "Aus der Datei dekodiert. Beim Aktualisieren in der Quelle wird der Block mit dem Schlüssel aus seinem Kopf wieder kodiert und die Prüfsumme neu berechnet.";
+"Open Encoded “%1$@”" = "„%1$@“ (kodiert) öffnen";
+"Open Encoded Body of “%1$@”" = "Rumpf von „%1$@“ (kodiert) öffnen";
+"Save Encoded “%1$@” as…" = "„%1$@“ (kodiert) sichern unter…";
+"Save Encoded Body of “%1$@” as…" = "Rumpf von „%1$@“ (kodiert) sichern unter…";
+"Open Decoded “%1$@”" = "„%1$@“ (dekodiert) öffnen";
+"Open “%1$@” in “%2$@”" = "„%1$@“ in „%2$@“ öffnen";
 "Open Decoded Block" = "Dekodierten Block öffnen";
 "The two LENV blocks hold different values for: %1$@. The firmware reads the block in use." = "Die beiden LENV-Blöcke enthalten abweichende Werte für: %1$@. Die Firmware liest den aktiven Block.";
 "These bytes were worked out of the file and cannot be put back into it." = "Diese Bytes wurden aus der Datei umgeformt und lassen sich nicht zurückschreiben.";

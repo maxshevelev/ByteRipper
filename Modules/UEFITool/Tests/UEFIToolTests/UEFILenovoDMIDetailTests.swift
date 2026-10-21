@@ -105,6 +105,19 @@ final class UEFILenovoDMIDetailTests: XCTestCase {
         XCTAssertEqual(value("Entry", in: write), "Baseboard serial number")
     }
 
+    /// The log's details list its records, each a link to its row.
+    func testTheLogListsItsRecordsAsLinks() throws {
+        let parsed = parsed
+        let log = try node(.ldbgLog, in: parsed.image)
+        let table = try XCTUnwrap(detail(log, parsed).tables.first { $0.title == "Log records" })
+        XCTAssertEqual(table.columns, ["Time", "Operation", "Entry", "Size"])
+        XCTAssertEqual(table.rows.map { $0.map(\.text) },
+                       [["2022-06-29 20:30:25", "Set", "Baseboard serial number", "8 bytes"]])
+        let record = try node(.ldbgEntry, in: parsed.image)
+        XCTAssertEqual(table.rowTargets, [.node(record.id)])
+        XCTAssertEqual(table.linkColumn, 0)
+    }
+
     /// A block stored encoded wears a lock; the same block opened decoded —
     /// in the clear under its key — an open one; the store and the entries
     /// wear neither.

@@ -44,16 +44,29 @@ public struct HPDMIArea: Equatable, Sendable {
     public var entry: Range<UInt64>
     /// Its value, `mudSize` bytes.
     public var mud: [UInt8]
+    /// Where the value lies in the file.
+    public var data: Range<UInt64>
     /// The store marks the entry deleted, and holds no current copy.
     public var isDeleted: Bool
     public var buildID: String?
     public var featureByte: String?
     public var assetTag: String?
+    /// The entries of the variables beside `HP_MUD` the last three are read
+    /// from — the copies that stand — where the store has them.
+    public var buildIDEntry: Range<UInt64>?
+    public var featureByteEntry: Range<UInt64>?
+    public var assetTagEntry: Range<UInt64>?
 
-    public init(entry: Range<UInt64>, mud: [UInt8], isDeleted: Bool,
-                buildID: String? = nil, featureByte: String? = nil, assetTag: String? = nil) {
+    public init(entry: Range<UInt64>, mud: [UInt8], data: Range<UInt64>? = nil, isDeleted: Bool,
+                buildID: String? = nil, featureByte: String? = nil, assetTag: String? = nil,
+                buildIDEntry: Range<UInt64>? = nil, featureByteEntry: Range<UInt64>? = nil,
+                assetTagEntry: Range<UInt64>? = nil) {
         self.entry = entry
         self.mud = mud
+        self.data = data ?? entry.upperBound - UInt64(mud.count)..<entry.upperBound
+        self.buildIDEntry = buildIDEntry
+        self.featureByteEntry = featureByteEntry
+        self.assetTagEntry = assetTagEntry
         self.isDeleted = isDeleted
         self.buildID = buildID
         self.featureByte = featureByte
@@ -79,6 +92,23 @@ public struct HPDMIArea: Equatable, Sendable {
     /// The UUID, spelled the way the bench spells it: the first three groups
     /// read back the way SMBIOS stores them, the rest as-is.
     public var uuidText: String { EFIGUID(bytes: Array(mud[Self.uuidField])).description }
+
+    /// The fields of `HP_MUD`, in the order BCU lists them, each where it
+    /// lies in the file: the rows under the entry's.
+    public var fields: [DMIField] {
+        func field(_ name: LocalizedText, _ window: Range<Int>, _ encoding: DMIField.Encoding = .utf16) -> DMIField {
+            DMIField(name, range: (data.lowerBound + UInt64(window.lowerBound))..<(data.lowerBound + UInt64(window.upperBound)),
+                     encoding: encoding)
+        }
+        return [
+            field(L("Serial number"), Self.serialField),
+            field(L("SKU"), Self.skuField),
+            field(L("Product family"), Self.familyField),
+            field(L("CT number"), Self.ctNumberField),
+            field(L("Product name"), Self.productNameField),
+            field(L("UUID"), Self.uuidField, .smbiosUUID),
+        ]
+    }
 
     /// What a technician should know before trusting the fields.
     public var findings: [HPDMIFinding] {
@@ -146,6 +176,9 @@ public struct HPDMIArea: Equatable, Sendable {
         guard let mud = standing(mudName, factoryGuid, in: copies),
               let value = reader.bytes(mud.variable.data), isMUD(value)
         else { return nil }
+        func entryOf(_ name: String, _ guid: EFIGUID) -> Range<UInt64>? {
+            standing(name, guid, in: copies)?.entry.range
+        }
         func textOf(_ name: String, _ guid: EFIGUID, field: Range<Int>? = nil) -> String? {
             guard let copy = standing(name, guid, in: copies),
                   let bytes = reader.bytes(copy.variable.data)
@@ -157,10 +190,14 @@ public struct HPDMIArea: Equatable, Sendable {
         return HPDMIArea(
             entry: mud.entry.range,
             mud: value,
+            data: mud.variable.data,
             isDeleted: !mud.variable.isValid,
             buildID: textOf("BuildId", factoryGuid),
             featureByte: textOf("FactoryConfig", factoryGuid),
-            assetTag: textOf("HP_TAGS", settingsGuid, field: 0..<0xA2)
+            assetTag: textOf("HP_TAGS", settingsGuid, field: 0..<0xA2),
+            buildIDEntry: entryOf("BuildId", factoryGuid),
+            featureByteEntry: entryOf("FactoryConfig", factoryGuid),
+            assetTagEntry: entryOf("HP_TAGS", settingsGuid)
         )
     }
 
@@ -168,6 +205,22 @@ public struct HPDMIArea: Equatable, Sendable {
     public static func isAreaEntry(_ entry: UEFINode, in store: UEFINode, reader: ImageReader) -> Bool {
         guard entry.kind == .vssEntry, entry.guid == factoryGuid else { return false }
         return read(store: store, reader: reader)?.entry == entry.range
+    }
+}
+
+extension Parser {
+    /// `store` with the fields of its `HP_MUD` read out as rows under the
+    /// entry the area is read from. A store with no entry under HP's factory
+    /// GUID is passed over without reading its names.
+    func readingHPDMIFields(_ store: UEFINode) -> UEFINode {
+        guard store.children.contains(where: { $0.kind == .vssEntry && $0.guid == HPDMIArea.factoryGuid }),
+              let area = HPDMIArea.read(store: store, reader: reader),
+              let index = store.children.firstIndex(where: { $0.kind == .vssEntry && $0.range == area.entry })
+        else { return store }
+        var read = store
+        let entry = read.children[index]
+        read.children[index].children = area.fields.map { $0.node(isFixed: entry.isFixed) }
+        return read
     }
 }
 

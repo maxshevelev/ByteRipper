@@ -148,9 +148,16 @@ public enum UEFIPresenter {
     /// A node inside a compressed section is read from the buffer the section
     /// decoded to, and its titles say so: there is no second item for "the
     /// bytes it decompressed to" — they are what opening it opens.
-    public static func nodeOpenTitle(for node: UEFINode, body: Bool) -> LocalizedText? {
+    ///
+    /// `encoded` is for a node whose bytes the file holds XOR-encoded — a
+    /// LENV block, or an entry in one: the titles say that what opens is the
+    /// bytes as stored, beside the item that opens them decoded.
+    public static func nodeOpenTitle(for node: UEFINode, body: Bool, encoded: Bool = false) -> LocalizedText? {
         let range = body ? node.body : node.range
         guard !range.isEmpty, !(body && range == node.range) else { return nil }
+        if encoded, !node.name.isEmpty {
+            return body ? L("Open Encoded Body of “%1$@”", node.name) : L("Open Encoded “%1$@”", node.name)
+        }
         let decompressed = node.space != .file
         guard !node.name.isEmpty else {
             switch (decompressed, body) {
@@ -171,9 +178,13 @@ public enum UEFIPresenter {
     }
 
     /// What the tree's menu calls saving `node` — or its body alone — to a
-    /// file: offered wherever opening it is, since it is the same bytes.
-    public static func nodeSaveTitle(for node: UEFINode, body: Bool) -> LocalizedText? {
+    /// file: offered wherever opening it is, since it is the same bytes, and
+    /// named `encoded` the same way.
+    public static func nodeSaveTitle(for node: UEFINode, body: Bool, encoded: Bool = false) -> LocalizedText? {
         guard nodeOpenTitle(for: node, body: body) != nil else { return nil }
+        if encoded, !node.name.isEmpty {
+            return body ? L("Save Encoded Body of “%1$@” as…", node.name) : L("Save Encoded “%1$@” as…", node.name)
+        }
         let decompressed = node.space != .file
         guard !node.name.isEmpty else {
             switch (decompressed, body) {

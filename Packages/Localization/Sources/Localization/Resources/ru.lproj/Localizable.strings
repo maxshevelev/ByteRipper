@@ -333,6 +333,8 @@
 "Do not ask again" = "Больше не спрашивать";
 "Do you want to save the changes you made?" = "Сохранить внесённые изменения?";
 "Don't Save" = "Не сохранять";
+"Close the search bar" = "Закрыть панель поиска";
+"Previous match / Next match" = "Предыдущее совпадение / Следующее совпадение";
 "Done" = "Готово";
 "Drag the highlighted band to scroll the file. Click elsewhere on the map to move the cursor to that byte." = "Перетаскивание подсвеченной полосы прокручивает файл. Клик в другом месте карты переводит курсор на соответствующий байт.";
 "Drop files here" = "Перетащите файлы сюда";
@@ -1199,6 +1201,7 @@
 "LENV block|In use" = "Используется";
 "Block in use" = "Действующий блок";
 "DMI" = "DMI";
+"DMI field" = "Поле DMI";
 "Show DMI Area" = "Показать зону DMI";
 "Show in the tree where the image keeps the board's serial number, UUID and model" = "Показать в дереве, где образ хранит серийный номер, UUID и модель платы";
 "Note" = "Примечание";
@@ -1364,6 +1367,7 @@
 "The program the agent runs in, whose configuration is shown below" = "Программа, в которой работает агент; её настройка показана ниже";
 "Configuration text" = "Текст настройки";
 "Copy the text above to the clipboard" = "Скопировать текст выше в буфер обмена";
+"Log records" = "События журнала";
 "Log" = "Журнал";
 "Show in UEFI Structure" = "Показать в Структуре UEFI";
 "The file is not open" = "Файл не открыт";
@@ -1485,6 +1489,12 @@
 "A structure of the image. Update in Parent lays the image out again around it, so its length may change." = "Структура образа. При записи в исходный файл образ перестраивается вокруг неё, поэтому её длина может измениться.";
 "Decompressed from the file. Update in Parent compresses it again the way the section was compressed." = "Распаковано из файла. При записи в исходный файл данные снова сжимаются так же, как была сжата секция.";
 "Decoded from the file. Update in Parent encodes it again with the key in its header and recomputes the checksum." = "Декодировано из файла. При записи в исходный файл блок снова кодируется ключом из его заголовка, а контрольная сумма пересчитывается.";
+"Open Encoded “%1$@”" = "Открыть «%1$@» (закодировано)";
+"Open Encoded Body of “%1$@”" = "Открыть тело «%1$@» (закодировано)";
+"Save Encoded “%1$@” as…" = "Сохранить «%1$@» (закодировано) как…";
+"Save Encoded Body of “%1$@” as…" = "Сохранить тело «%1$@» (закодировано) как…";
+"Open Decoded “%1$@”" = "Открыть «%1$@» (декодировано)";
+"Open “%1$@” in “%2$@”" = "Открыть «%1$@» в «%2$@»";
 "Open Decoded Block" = "Открыть декодированный блок";
 "The two LENV blocks hold different values for: %1$@. The firmware reads the block in use." = "Значения в двух блоках LENV различаются у записей: %1$@. Прошивка читает действующий блок.";
 "These bytes were worked out of the file and cannot be put back into it." = "Эти байты получены из файла преобразованием и записать их обратно нельзя.";

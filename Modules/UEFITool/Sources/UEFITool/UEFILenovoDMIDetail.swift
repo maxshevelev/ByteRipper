@@ -35,7 +35,7 @@ public enum UEFILenovoDMIDetail {
             return summary(area, store: node, in: language)
         case .ldbgLog:
             guard let log = found.area?.log else { return ([], []) }
-            return (logFields(log, in: language), [])
+            return (logFields(log, in: language), logTable(log, rows: node.children, in: language).map { [$0] } ?? [])
         case .ldbgEntry:
             guard let entry = found.area?.log.entries.first(where: { $0.offset == node.range.lowerBound })
             else { return ([], []) }
@@ -192,9 +192,34 @@ public enum UEFILenovoDMIDetail {
         return fields
     }
 
+    /// The log's records, one to a line in the order they were written,
+    /// each a way to its row: `rows` are the log's children, found by where
+    /// each record starts. Nil for a log with none.
+    private static func logTable(_ log: LDBGLog, rows: [UEFINode], in language: AppLanguage) -> UEFIDetailTable? {
+        guard !log.entries.isEmpty else { return nil }
+        return UEFIDetailTable(
+            title: L("Log records", in: language),
+            symbol: "clock.arrow.circlepath",
+            columns: [L("Time", in: language), L("Operation", in: language), L("Entry", in: language), L("Size", in: language)],
+            rows: log.entries.map { entry in
+                [.init(timeText(entry, in: language)), .init(operationName(entry, in: language)),
+                 .init(LenovoDMIValue.name(of: entry.key).text(in: language)),
+                 .init(L("%1$@ bytes", in: language, entry.size))]
+            },
+            rowTargets: log.entries.map { entry in
+                rows.first { $0.range.lowerBound == entry.offset }.map { .node($0.id) }
+            },
+            linkColumn: 0
+        )
+    }
+
+    private static func timeText(_ entry: LDBGEntry, in language: AppLanguage) -> String {
+        entry.timestampText ?? L("Not a date: %1$@", in: language, LenovoDMIValue.hex(entry.timestampBytes))
+    }
+
     private static func logEntryFields(_ entry: LDBGEntry, in language: AppLanguage) -> [UEFIDetailField] {
         [
-            .init(L("Time", in: language), entry.timestampText ?? L("Not a date: %1$@", in: language, LenovoDMIValue.hex(entry.timestampBytes))),
+            .init(L("Time", in: language), timeText(entry, in: language)),
             .init(L("Operation", in: language), operationName(entry, in: language)),
             .init(L("Entry", in: language), LenovoDMIValue.name(of: entry.key).text(in: language)),
             .init(L("Namespace", in: language), namespaceText(entry.key)),

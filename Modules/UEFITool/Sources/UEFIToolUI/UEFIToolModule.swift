@@ -336,6 +336,7 @@ private struct ChecksumPass: Sendable {
         controller.onSelectTop = { [weak self] in self?.showTopNode() }
         controller.onRevealAtCaret = { [weak self] in self?.revealNodeAtCaret() }
         controller.onShowDMIStore = { [weak self] index in self?.showDMIStore(index) }
+        controller.onFollowNode = { [weak self] nodeID in self?.followLink(to: nodeID) }
         controller.onFixChecksum = { [weak self] nodeID in
             self?.fixChecksum(for: nodeID)
         }
@@ -1462,6 +1463,23 @@ private struct ChecksumPass: Sendable {
         whenShown { [weak self] in self?.revealNode(at: offset) }
     }
 
+    /// The node holding the byte at `offset` made the focus, as a click on
+    /// its row would — opened, selected, and its zone published — as soon as
+    /// the tree is there (`ToolSession.focusItem`).
+    public func focusItem(at offset: UInt64) {
+        whenShown { [weak self] in
+            guard let self, let tree = self.tree, tree.isReady else { return }
+            tree.materialize(containing: offset) { [weak self] chain in
+                guard let self, let node = chain.last else { return }
+                self.focus = node.id
+                self.meFocus = nil
+                // A whole show: the outline opens the branches on the way to
+                // the row and selects it.
+                self.show(publish: true)
+            }
+        }
+    }
+
     /// Goes to `match` as a click on its row in the Contents search results
     /// does: the tree opened to its node, the node selected, and its bytes —
     /// or the compressed section they came out of — selected in the dump.
@@ -1629,6 +1647,18 @@ private struct ChecksumPass: Sendable {
             guard let twin = UEFITopSwap.twin(of: counterpart, in: chain) else { return }
             self.select(twin.id)
         }
+    }
+
+    /// A link in the details went to `id`: a whole show, not a selection's,
+    /// so the outline opens the branches on the way and selects the row —
+    /// the tree, the details and the dump's zone all on the one node.
+    /// Published, so the dump comes to its bytes.
+    private func followLink(to id: NodeID) {
+        guard currentImage?.node(id) != nil else { return }
+        host.noteNavigationStep()
+        focus = id
+        meFocus = nil
+        show(publish: true)
     }
 
     /// Shows the store of the board's identity at `index` of the tree's list
@@ -1899,8 +1929,15 @@ private struct ChecksumPass: Sendable {
             fail(L("There is no LENV block to decode here."))
             return
         }
-        openPart(named: found.name.text, linkedTo: found.block.range,
-                 layout: .image, codec: LenovoDMIBlockCodec(block: found.block))
+        let codec = LenovoDMIBlockCodec(block: found.block)
+        // From an entry, the panel opens on that entry: the same place in the
+        // block decoded, its row selected and its zone outlined.
+        guard node.kind == .lenvEntry, let opener = host as? any UEFIPartOpening else {
+            openPart(named: found.name.text, linkedTo: found.block.range, layout: .image, codec: codec)
+            return
+        }
+        opener.openPart(named: found.name.text, linkedTo: found.block.range, layout: .image, codec: codec,
+                        focusing: node.header.lowerBound - found.block.range.lowerBound)
     }
 
     /// What a double click on a node's row does: opens what the node holds as a

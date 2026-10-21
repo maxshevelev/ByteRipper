@@ -62,9 +62,12 @@ public struct AcerDMIArea: Equatable, Sendable {
 
     /// The UUID, spelled the way the bench spells it: the first three groups
     /// read back the way SMBIOS stores them, the rest as-is.
-    public var uuidText: String {
+    public var uuidText: String { Self.uuidText(uuid) }
+
+    /// `uuid`'s sixteen bytes spelled as Acer's are read.
+    static func uuidText(_ uuid: [UInt8]) -> String {
         func group(_ from: Int, _ count: Int, reversed: Bool) -> String {
-            let bytes = Array(stored[0x70 + from..<0x70 + from + count])
+            let bytes = Array(uuid[from..<from + count])
             let ordered = reversed ? bytes.reversed() : bytes
             return ordered.map { String(format: "%02X", $0) }.joined()
         }
@@ -92,6 +95,28 @@ public struct AcerDMIArea: Equatable, Sendable {
             if digits.count >= 4 { return String(decoding: digits, as: UTF8.self) }
         }
         return nil
+    }
+
+    /// The fields the block keeps, in the order the bench asks them, each
+    /// where it lies in the file: the rows under the block's.
+    public var fields: [DMIField] {
+        func field(_ name: LocalizedText, _ start: Int, _ end: Int, _ encoding: DMIField.Encoding = .ascii) -> DMIField {
+            DMIField(name, range: (offset + UInt64(start))..<(offset + UInt64(end)), encoding: encoding)
+        }
+        var fields = [
+            field(L("System serial"), 0x00, 0x16),
+            field(L("MB Serial"), 0x50, 0x66),
+            field(L("UUID"), 0x70, 0x80, .acerUUID),
+            field(L("Model"), 0x80, 0xA0),
+        ]
+        if assetTag != nil { fields.append(field(L("Asset tag"), 0xA0, 0xC0)) }
+        fields.append(field(L("Product name"), 0xC0, 0xE0))
+        if let code = manufacturingCode, let start = [0x690, 0x6A0].first(where: {
+            stored[$0...].starts(with: code.utf8)
+        }) {
+            fields.append(field(L("Manufacturing code"), start, start + code.utf8.count))
+        }
+        return fields
     }
 
     /// Whether `text` holds `pattern` at `start`, counting from the front;
@@ -275,27 +300,28 @@ extension Parser {
             guard !node.isErased else { return node }
             let body = node.body
             let step = AcerDMIArea.alignment
-            var found: [UInt64] = []
+            var found: [AcerDMIArea] = []
             var at = (body.lowerBound + step - 1) / step * step
             while at + AcerDMIArea.size <= body.upperBound {
                 let signatureAt = at + AcerDMIArea.signatureOffset
                 if reader.bytes(at: signatureAt, count: UInt64(AcerDMIArea.signature.count))
                     == AcerDMIArea.signature,
                    let stored = reader.bytes(at: at, count: AcerDMIArea.size),
-                   AcerDMIArea.found(stored: stored, offset: at) != nil {
-                    found.append(at)
+                   let area = AcerDMIArea.found(stored: stored, offset: at) {
+                    found.append(area)
                 }
                 at += step
             }
             guard !found.isEmpty else { return node }
             var rows: [UEFINode] = []
             var claimed = body.lowerBound
-            for start in found {
-                rows += padding(from: claimed, to: start, emptyByte: emptyByte)
-                var row = UEFINode(kind: .acerDMIStore, named: L("Acer DMI"), range: start..<(start + AcerDMIArea.size))
+            for area in found {
+                rows += padding(from: claimed, to: area.offset, emptyByte: emptyByte)
+                var row = UEFINode(kind: .acerDMIStore, named: L("Acer DMI"), range: area.range)
                 row.isFixed = true
+                row.children = area.fields.map { $0.node(isFixed: true) }
                 rows.append(row)
-                claimed = start + AcerDMIArea.size
+                claimed = area.range.upperBound
             }
             read.children = rows + padding(from: claimed, to: body.upperBound, emptyByte: emptyByte)
             return read

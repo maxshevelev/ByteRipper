@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 
 /// Where an image keeps the board's identity — the serial numbers, the UUID,
 /// the model, the Windows key — in a store the tree reads as a row of its
@@ -50,5 +51,68 @@ public struct DMIStore: Equatable, Sendable {
                 .map { DMIStore(kind: .sysFStore, range: $0.store) }
         } ?? []
         return (rows + hp + apple).sorted { $0.range.lowerBound < $1.range.lowerBound }
+    }
+}
+
+/// One value of a vendor's identity area where the area keeps it as a field
+/// of its own bytes — Acer's block, HP's `HP_MUD` — shown in the tree as a
+/// row under the area's (`UEFINodeKind.dmiField`), the way Lenovo's entries
+/// are under their block. The row's subtype is the field's `Encoding`, so
+/// the row reads its value from its own bytes.
+public struct DMIField: Equatable, Sendable {
+    /// How the value is written in the field's bytes.
+    public enum Encoding: UInt8, Sendable {
+        /// Printable ASCII, to the first NUL, FF or byte that is not.
+        case ascii
+        /// UTF-16 little-endian, to the first NUL.
+        case utf16
+        /// A UUID as SMBIOS stores one: the first three groups little-endian.
+        case smbiosUUID
+        /// A UUID as Acer stores one: the first two groups little-endian, the
+        /// third as it reads (`AcerDMIArea.uuidText`).
+        case acerUUID
+    }
+
+    public var name: LocalizedText
+    public var range: Range<UInt64>
+    public var encoding: Encoding
+
+    public init(_ name: LocalizedText, range: Range<UInt64>, encoding: Encoding) {
+        self.name = name
+        self.range = range
+        self.encoding = encoding
+    }
+
+    /// The field's row: all body, no header.
+    public func node(isFixed: Bool) -> UEFINode {
+        UEFINode(kind: .dmiField, subtype: encoding.rawValue, named: name,
+                 header: range.lowerBound..<range.lowerBound, body: range, isFixed: isFixed)
+    }
+
+    /// The value `bytes` hold, written as `encoding`; empty where nothing
+    /// readable is written.
+    public static func text(of bytes: [UInt8], as encoding: Encoding) -> String {
+        switch encoding {
+        case .ascii:
+            let text = bytes.prefix { (0x20...0x7E).contains($0) }
+            return String(decoding: text, as: UTF8.self)
+        case .utf16:
+            return HPDMIArea.text(bytes[...]) ?? ""
+        case .smbiosUUID:
+            guard bytes.count == 16 else { return "" }
+            return EFIGUID(bytes: bytes).description
+        case .acerUUID:
+            guard bytes.count == 16 else { return "" }
+            return AcerDMIArea.uuidText(bytes)
+        }
+    }
+
+    /// The value a `dmiField` row holds, read from its bytes; nil for any
+    /// other row, or one whose bytes are not there.
+    public static func text(of node: UEFINode, reader: ImageReader) -> String? {
+        guard node.kind == .dmiField, let encoding = node.subtype.flatMap(Encoding.init(rawValue:)),
+              let bytes = reader.bytes(node.body)
+        else { return nil }
+        return text(of: bytes, as: encoding)
     }
 }

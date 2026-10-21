@@ -215,6 +215,13 @@ extension PaneToolHost: UEFIPartOpening {
         owner.openPart(named: name, from: pane, source: source, layout: layout, codec: codec,
                        tool: tools?.activeIdentifier, selecting: selection)
     }
+
+    func openPart(named name: String, linkedTo source: Range<UInt64>,
+                  layout: UEFIRootLayout, codec: any PartCodec, focusing offset: UInt64) {
+        guard let pane, let owner else { return }
+        owner.openPart(named: name, from: pane, source: source, layout: layout, codec: codec,
+                       tool: tools?.activeIdentifier, focusing: offset)
+    }
 }
 
 /// The seam a UEFI-aware tool-module (`UEFITool`, `MEATool`) reaches through

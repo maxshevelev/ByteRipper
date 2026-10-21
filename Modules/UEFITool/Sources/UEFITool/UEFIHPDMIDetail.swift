@@ -3,11 +3,11 @@ import Localization
 import UEFIImage
 
 /// What the details say of HP's identity (`HPDMIArea`), on the `HP_MUD`
-/// entry it is read from: the fields BCU reports — the serial number, the
-/// SKU, the family, the CT number, the product name, the UUID — then the
-/// build ID, the feature byte and the asset tracking number from the
-/// variables beside it, and what a technician should know before trusting
-/// them.
+/// entry it is read from: what a technician should know before trusting it,
+/// then the fields BCU reports — the serial number, the SKU, the family, the
+/// CT number, the product name, the UUID, each a way to its row under the
+/// entry's — and the build ID, the feature byte and the asset tracking
+/// number, each a way to the variable beside it they are read from.
 ///
 /// A row keeps only its place, so the store's entries are read again from
 /// the file on each selection: a few hundred headers, read in microseconds.
@@ -35,26 +35,18 @@ public enum UEFIHPDMIDetail {
         return area
     }
 
-    /// The fields, in the order BCU lists them, then the notes.
+    /// The notes, then the fields, in the order BCU lists them.
     static func build(for node: UEFINode, image: UEFIImage, reader: ImageReader, in language: AppLanguage)
         -> (fields: [UEFIDetailField], tables: [UEFIDetailTable]) {
-        guard let area = area(for: node, image: image, reader: reader) else { return ([], []) }
-        func shown(_ text: String?) -> String { (text?.isEmpty ?? true) ? "—" : text! }
-        var fields: [UEFIDetailField] = [
-            .init(L("Serial number", in: language), shown(area.serialNumber)),
-            .init(L("SKU", in: language), shown(area.sku)),
-            .init(L("Product family", in: language), shown(area.productFamily)),
-            .init(L("CT number", in: language), shown(area.ctNumber)),
-            .init(L("Product name", in: language), shown(area.productName)),
-            .init(L("UUID", in: language), area.uuidText),
-            .init(L("Build ID", in: language), shown(area.buildID)),
-            .init(L("Feature byte", in: language), shown(area.featureByte)),
-            .init(L("Asset tracking number", in: language), shown(area.assetTag)),
+        guard let store = store(of: node, in: image), let area = area(for: node, store: store, reader: reader)
+        else { return ([], []) }
+        let fields = UEFIDMIEntries.findings(area.findings.map { ($0.text, false) }, in: language)
+        let rows = UEFIDMIEntries.rows(area.fields, reader: reader, in: language) + [
+            .init(name: L("Build ID", in: language), value: area.buildID, source: area.buildIDEntry),
+            .init(name: L("Feature byte", in: language), value: area.featureByte, source: area.featureByteEntry),
+            .init(name: L("Asset tracking number", in: language), value: area.assetTag, source: area.assetTagEntry),
         ]
-        for finding in area.findings {
-            fields.append(.init(L("Note", in: language), finding.text.text(in: language)))
-        }
-        return (fields, [])
+        return (fields, [UEFIDMIEntries.table(rows, among: node.children + store.children, in: language)])
     }
 
     /// `HP_MUD · 5CD4432P9B`: the variable's name and the serial number it

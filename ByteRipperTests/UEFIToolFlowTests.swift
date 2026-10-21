@@ -754,6 +754,100 @@ final class UEFIToolFlowTests: XCTestCase {
                        "the dump is given the store to show")
     }
 
+    /// A link in the details goes where a click in the tree would: the
+    /// linked row is opened and selected in the tree, and the dump's zone is
+    /// that row's — not the row the link was clicked from.
+    func testALinkInTheDetailsSelectsItsRowInTheTree() throws {
+        let controller = try open(LenovoTestImage.make())
+        let vc = try XCTUnwrap(session().viewController as? UEFIToolViewController)
+        let panel = try XCTUnwrap(controller.tools.panel)
+        XCTAssertTrue(pumpUntil(5) { vc.isDMIButtonShownForTesting }, "the image has a store")
+        vc.clickDMIButtonForTesting()
+        let tree = try outline()
+        XCTAssertTrue(pumpUntil(5) {
+            tree.selectedRow >= 0 && (try? self.node(atRow: tree.selectedRow))?.kind == .lenovoDMIStore
+        }, "the store's row is selected")
+        window?.layoutIfNeeded()
+
+        let link = try XCTUnwrap(descendants(of: panel, DetailTableRow.self).first { $0.target != nil },
+                                 "Entries in use links its entries")
+        guard case .node(let target)? = link.target else { return XCTFail("a link to a node") }
+        let zone = try XCTUnwrap(link.linkZone)
+        XCTAssertTrue(link.follow(at: NSPoint(x: zone.midX, y: zone.midY)))
+        XCTAssertTrue(pumpUntil(5) {
+            tree.selectedRow >= 0 && (try? self.node(atRow: tree.selectedRow))?.id == target
+        }, "the linked entry's row is selected in the tree")
+        let entry = try node(atRow: tree.selectedRow)
+        XCTAssertEqual(entry.kind, .lenvEntry)
+        let zones = controller.windowModel.pane1.zones
+        let focused = try XCTUnwrap(zones.zones.first { $0.id == zones.focus }?.range)
+        XCTAssertTrue(focused.lowerBound >= entry.range.lowerBound && focused.upperBound <= entry.range.upperBound
+                      || focused == entry.header.lowerBound..<entry.range.upperBound,
+                      "the dump outlines the entry the tree selects: \(focused) for \(entry.range)")
+    }
+
+    /// The tree's menu starts with what a double click on the row opens, and
+    /// on a block stored encoded tells the bytes as stored from the block
+    /// decoded.
+    func testTheMenuStartsWithWhatADoubleClickOpens() throws {
+        let controller = try open(LenovoTestImage.make())
+        let vc = try XCTUnwrap(session().viewController as? UEFIToolViewController)
+        let tree = try XCTUnwrap(controller.windowModel.pane1.uefiState.tree)
+        var chain: [UEFINode] = []
+        let reached = expectation(description: "the way to block 2's serial is opened")
+        tree.materialize(containing: UInt64(LenovoTestImage.serialInBlock2)) { chain = $0; reached.fulfill() }
+        wait(for: [reached], timeout: 5)
+        let block = try XCTUnwrap(chain.last { $0.kind == .lenvBlock })
+        let entry = try XCTUnwrap(chain.last { $0.kind == .lenvEntry })
+
+        let blockMenu = vc.nodeMenuTitlesForTesting(block.id)
+        XCTAssertEqual(blockMenu.first, "Open Decoded “\(block.name)”", "\(blockMenu)")
+        XCTAssertTrue(blockMenu.contains("Open Encoded “\(block.name)”"), "\(blockMenu)")
+        XCTAssertFalse(blockMenu.contains("Open “\(block.name)”"), "no item that only says Open: \(blockMenu)")
+        let entryMenu = vc.nodeMenuTitlesForTesting(entry.id)
+        XCTAssertEqual(entryMenu.first, "Open Decoded “\(entry.name)”", "\(entryMenu)")
+
+        let store = try XCTUnwrap(chain.first { $0.kind == .lenovoDMIStore })
+        XCTAssertEqual(vc.nodeMenuTitlesForTesting(store.id).first, "Open “\(store.name)”",
+                       "a node with rows opens whole, and that comes first")
+    }
+
+    /// An entry of a LENV block opens the block decoded on that entry: the
+    /// panel's tree opens to the entry's row and selects it, and the panel's
+    /// dump outlines the entry.
+    func testAnEntryOpensItsBlockOnTheEntry() throws {
+        let controller = try open(LenovoTestImage.make())
+        let tree = try XCTUnwrap(controller.windowModel.pane1.uefiState.tree)
+        var entry: UEFINode?
+        let reached = expectation(description: "the way to block 2's serial is opened")
+        tree.materialize(containing: UInt64(LenovoTestImage.serialInBlock2)) { chain in
+            entry = chain.last { $0.kind == .lenvEntry }
+            reached.fulfill()
+        }
+        wait(for: [reached], timeout: 5)
+        let opened = try XCTUnwrap(entry)
+        let blockStart = UInt64(LenovoTestImage.area + 0x3000)
+        try session().openNodeContent(for: opened.id)
+
+        let id = try XCTUnwrap(controller.fragments.expanded, "the block opens in a panel")
+        let part = try XCTUnwrap(controller.fragments.pane(id))
+        let surface = try XCTUnwrap(controller.fragments.surface(id))
+        let outline = try XCTUnwrap(descendants(of: surface.tools.panel, NSOutlineView.self).first)
+        func selected() -> UEFINode? {
+            guard outline.selectedRow >= 0, let row = outline.item(atRow: outline.selectedRow) as? UEFITreeRow
+            else { return nil }
+            return part.uefiState.tree?.node(row.id)
+        }
+        XCTAssertTrue(pumpUntil(5) {
+            selected()?.kind == .lenvEntry && selected()?.header.lowerBound == opened.header.lowerBound - blockStart
+        }, "the panel's tree is open to the entry and selects it: \(String(describing: selected()))")
+        let shown = try XCTUnwrap(selected())
+        let zones = part.zones
+        let focused = try XCTUnwrap(zones.zones.first { $0.id == zones.focus }?.range, "a zone is in focus")
+        XCTAssertTrue(focused.lowerBound >= shown.header.lowerBound && focused.upperBound <= shown.range.upperBound,
+                      "the panel's dump outlines the entry: \(focused) for \(shown.header)..\(shown.range)")
+    }
+
     /// A LENV block opens in the clear in a fragment panel; a value typed
     /// there goes back into the dump encoded, with a checksum that adds up.
     func testADecodedBlockGoesBackEncoded() throws {
