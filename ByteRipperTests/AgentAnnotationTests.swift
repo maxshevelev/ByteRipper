@@ -273,7 +273,7 @@ final class AgentAnnotationTests: XCTestCase {
         addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
         let recorder = WorkspaceRecorder(folder: WorkspaceFolder(url: folder), controllers: { [] })
 
-        recorder.record()
+        recorder.record(); recorder.flush()
         let saved = try XCTUnwrap(recorder.savedWorkspace())
         XCTAssertEqual(saved.windows.map(\.notes), [NotesState(position: 0, isSelected: true, selected: ["a2"])],
                        "the notes alone are a workspace worth keeping")

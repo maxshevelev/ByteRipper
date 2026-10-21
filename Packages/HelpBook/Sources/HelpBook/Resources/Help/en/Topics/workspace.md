@@ -4,6 +4,7 @@
 
 @covers settings.general.restore-workspace
 @covers workspace.restore-warning
+@covers workspace.restore-check
 
 The switch is **Reopen the workspace at launch** in [[topic:settings|Settings ▸ General]]. It is off after installation: on a repair bench each job is a different board, and dumps from an earlier job opening by themselves would be in the way.
 
@@ -34,7 +35,7 @@ The workspace is stored in `~/Library/Application Support/ByteRipper/Workspace` 
 
 ## Files that changed or are missing
 
-At launch, each file is compared with its size and modification date at the time the workspace was written. A file with unsaved changes kept over it is compared by its contents as well (SHA-256): a copy or a backup moves the date of a file without changing a byte, so a file whose date alone has moved keeps its changes, and a file whose bytes differ is a changed file even when its date is the same.
+At launch, each file is compared with its size and modification date at the time the workspace was written. A file with unsaved changes kept over it is compared by its contents as well (SHA-256): a copy or a backup moves the date of a file without changing a byte, so a file whose date alone has moved keeps its changes, and a file whose bytes differ is a changed file even when its date is the same. Reading a file of several gigabytes takes a few seconds; meanwhile its window shows how far the check has got and cannot be edited, since the changes are laid over the file only once it has been checked.
 
 - A file that is no longer at its path is not opened.
 - A file that has changed is opened. If it became shorter, the caret and the screen move to its last address, and bookmarks beyond its end are removed. Its unsaved changes, its segments, its parts and the state of its tool panel are not restored: they were made on other bytes and would point to wrong places.

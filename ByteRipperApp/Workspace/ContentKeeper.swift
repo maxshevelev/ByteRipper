@@ -27,8 +27,13 @@ final class ContentKeeper {
     private final class Entry {
         weak var document: BinaryDocument?
         let id: String
+        /// The base as decided: its kind, file and serial. Its hash is the
+        /// writer's to fill in.
         var base: KeptBase?
-        var log: HistoryLogWriter?
+        /// The log the writes go to.
+        var logName: String?
+        /// About what the log holds, to know when to start it afresh.
+        var loggedBytes: UInt64 = 0
         /// The serials of the transactions in the log, each to its parent.
         var parents: [UInt64: UInt64] = [:]
         /// The selection after each transaction as the log has it, so one a
@@ -37,7 +42,8 @@ final class ContentKeeper {
         /// The segments the log pairs with each transaction, before it and
         /// after it, so a snapshot paired anew is written again.
         var segments: [SegmentKey: Segmentation] = [:]
-        /// What the last snapshot wrote down for this document.
+        /// What the last snapshot wrote down for this document — its base and
+        /// log as decided; the writer fills in what the bytes came out as.
         var kept: KeptContent?
         /// The content's version and the saved state when it was.
         var version: UndoHistory.Version?
@@ -60,6 +66,11 @@ final class ContentKeeper {
     private var named: Set<String> = []
     /// The documents it kept, by their ids.
     private var namedIDs: Set<String> = []
+    /// What the snapshot being taken has for the writer.
+    private var pending: [KeptWrite] = []
+
+    /// Writes off the main thread what the snapshots decide.
+    let writer: KeptWriter
 
     /// A log larger than this is let grow until it is twice what the history
     /// holds; then the content is written whole again and the log begins anew.
@@ -68,6 +79,7 @@ final class ContentKeeper {
     init(folder: WorkspaceFolder, isProject: Bool = false) {
         self.folder = folder
         self.isProject = isProject
+        self.writer = KeptWriter(folder: folder)
     }
 
     private static let editsEncoder: PropertyListEncoder = {
@@ -80,10 +92,9 @@ final class ContentKeeper {
     // MARK: - Writing
 
     /// The content of `pane`'s document as it now stands, written down: what
-    /// changed since the last snapshot appended, the rest as it was. Nil for
-    /// a file with nothing beyond what is on disk. When writing fails, what the
-    /// last snapshot kept — still whole on disk — is kept again, and quitting
-    /// asks about the document (`holdsCurrentBytes`).
+    /// changed since the last snapshot handed to the writer to append, the
+    /// rest as it was. Nil for a file with nothing beyond what is on disk.
+    /// Nothing is written here: `commit` hands the snapshot over.
     func keep(_ pane: PaneViewModel) -> KeptContent? {
         guard let document = pane.document else { return nil }
         let history = document.undoHistory
@@ -98,11 +109,7 @@ final class ContentKeeper {
         let saved = pane.isUntitled ? nil : history.savedStateSerial
         let refined = history.newestTransaction.map { entry.afters[$0.serial].map { $0 } != $0.selectionAfter } ?? false
         if entry.version != history.version || entry.saved != saved || entry.kept == nil || refined {
-            do {
-                try update(entry, pane: pane, document: document, saved: saved)
-            } catch {
-                // The log was cut back to what the last snapshot pinned.
-            }
+            update(entry, pane: pane, document: document, saved: saved)
         }
         if let kept = entry.kept {
             named.formUnion(kept.files)
@@ -111,27 +118,43 @@ final class ContentKeeper {
         return entry.kept
     }
 
-    private func update(_ entry: Entry, pane: PaneViewModel, document: BinaryDocument, saved: UInt64?) throws {
+    private func update(_ entry: Entry, pane: PaneViewModel, document: BinaryDocument, saved: UInt64?) {
         let history = document.undoHistory
         let epochMoved = entry.version.map { $0.epoch != history.version.epoch } ?? false
-        var needsBase = entry.base == nil || entry.log == nil || epochMoved
+        var needsBase = entry.base == nil || entry.logName == nil || epochMoved
         if case .file = entry.base, pane.isUntitled { needsBase = true }
+        var newBase: KeptBase?
         if !needsBase, let saved, saved != entry.saved {
             // Saved: the file on disk now holds the saved state, which the log
             // leads to — or the document was saved for the first time.
-            entry.base = .file(serial: saved)
+            newBase = .file(serial: saved)
+            entry.base = newBase
         }
         if needsBase {
-            try rebase(entry, pane: pane, document: document, saved: saved)
+            guard rebase(entry, pane: pane, document: document, saved: saved) else { return failed(entry) }
         } else {
-            try append(history.heldTransactions, to: entry)
-            try appendSegments(of: pane, history: history, to: entry)
-            let tooLong = (entry.log?.length ?? 0) > max(compactionFloor, 2 * history.heldBytes)
+            var records: [KeptTransaction] = []
+            var selections: [(UInt64, SelectionModel)] = []
+            for kept in history.heldTransactions {
+                let txn = kept.transaction
+                if entry.parents[txn.serial] == nil {
+                    records.append(kept)
+                    entry.parents[txn.serial] = txn.parent
+                    entry.loggedBytes += txn.ops.reduce(0) { $0 + $1.heldBytes }
+                } else if entry.afters[txn.serial] != txn.selectionAfter {
+                    selections.append((txn.serial, txn.selectionAfter))
+                }
+                entry.afters[txn.serial] = txn.selectionAfter
+            }
+            let segments = segmentWrites(of: pane, history: history, entry: entry)
+            let tooLong = entry.loggedBytes > max(compactionFloor, 2 * history.heldBytes)
             if tooLong || !HistoryLog.connects(entry.base!.serial, history.headSerial, parents: entry.parents) {
-                try rebase(entry, pane: pane, document: document, saved: saved)
+                guard rebase(entry, pane: pane, document: document, saved: saved) else { return failed(entry) }
+            } else if !records.isEmpty || !selections.isEmpty || !segments.isEmpty || newBase != nil {
+                pending.append(.append(id: entry.id, records: records, selections: selections,
+                                       segments: segments, base: newBase))
             }
         }
-        entry.log?.synchronize()
         let joins = document.keptJoins
         func kept(_ join: BinaryDocument.KeptJoin) -> KeptJoin {
             KeptJoin(serial: join.serial, path: join.url.path, readOnly: join.readOnly)
@@ -139,7 +162,7 @@ final class ContentKeeper {
         entry.kept = KeptContent(
             id: entry.id, base: entry.base!, head: history.headSerial, nextSerial: history.upcomingSerial,
             saved: saved,
-            log: entry.log.map { KeptLog(file: $0.url.lastPathComponent, length: $0.length, hash: $0.hash.hex) },
+            log: entry.logName.map { KeptLog(file: $0, length: 0, hash: "") },
             history: KeptHistory(undoBase: history.undoBaseSerial, redoTip: history.redoTipSerial,
                                  redoSteps: history.redoStepSizes, savedState: history.savedStateSerial,
                                  dirtyRegardless: history.isDirtyRegardless,
@@ -151,96 +174,79 @@ final class ContentKeeper {
     /// Starts the document's content afresh: a new base, and a new log holding
     /// every transaction the history has. A file's base is the file itself when
     /// the history leads from its saved state; otherwise the content is written
-    /// — whole for a document with no file, as runs over the file for one.
-    private func rebase(_ entry: Entry, pane: PaneViewModel, document: BinaryDocument, saved: UInt64?) throws {
+    /// — whole for a document with no file, from a snapshot of it taken now;
+    /// as runs over the file for one.
+    /// A content that could not be taken afresh: the snapshot keeps what the
+    /// last one kept, and the next one tries again from the start.
+    private func failed(_ entry: Entry) {
+        entry.base = nil
+        entry.version = nil
+    }
+
+    @discardableResult
+    private func rebase(_ entry: Entry, pane: PaneViewModel, document: BinaryDocument, saved: UInt64?) -> Bool {
         let history = document.undoHistory
         let name = "\(entry.id)-\(UUID().uuidString.prefix(8))"
-        try folder.prepareKeptFolder()
-        let log = try HistoryLogWriter(creating: folder.keptURL(name + ".log"))
         let held = history.heldTransactions
         var parents: [UInt64: UInt64] = [:]
         var afters: [UInt64: SelectionModel] = [:]
         for kept in held {
-            try log.append(kept)
             parents[kept.transaction.serial] = kept.transaction.parent
             afters[kept.transaction.serial] = kept.transaction.selectionAfter
         }
         let head = history.headSerial
+        let pendingBase: PendingBase
         let base: KeptBase
         if let saved, HistoryLog.connects(saved, head, parents: parents) {
+            pendingBase = .file(serial: saved)
             base = .file(serial: saved)
         } else if saved != nil {
-            guard let edits = pane.exportKeptEdits() else { throw StorageError.readFailed }
-            let file = name + ".plist"
-            let data = try Self.editsEncoder.encode(edits)
-            try data.write(to: folder.keptURL(file), options: .atomic)
-            base = .edits(file: file, serial: head, hash: FileDigest.sha256(data).hex)
+            guard let edits = pane.exportKeptEdits(), let data = try? Self.editsEncoder.encode(edits) else { return false }
+            pendingBase = .edits(file: name + ".plist", serial: head, data: data)
+            base = .edits(file: name + ".plist", serial: head, hash: "")
         } else {
-            let file = name + ".bin"
-            let hash = try writeWhole(document, to: folder.keptURL(file))
-            base = .bytes(file: file, serial: head, hash: hash.hex)
+            let store = TemporaryFileStore()
+            let content: any ByteStorage
+            if let overlay = document.storage as? EditOverlayStorage,
+               let snapshot = try? overlay.contentSnapshot(scratch: store) {
+                content = snapshot
+            } else if let bytes = try? document.read(at: 0, length: Int(document.size)) {
+                content = MemoryBackedStorage(bytes: bytes)
+            } else {
+                return false
+            }
+            pendingBase = .bytes(file: name + ".bin", serial: head, content: content, store: store)
+            base = .bytes(file: name + ".bin", serial: head, hash: "")
         }
         entry.base = base
-        entry.log = log
+        entry.logName = name + ".log"
         entry.parents = parents
         entry.afters = afters
+        entry.loggedBytes = history.heldBytes
         entry.segments = [:]
-        try appendSegments(of: pane, history: history, to: entry)
+        let segments = segmentWrites(of: pane, history: history, entry: entry)
+        pending.append(.rebase(id: entry.id, name: name, base: pendingBase, held: held, segments: segments))
+        return true
     }
 
-    /// The pane's segment snapshots, each paired with its step's serial: the
-    /// undo side's before each step, the redo side's after each. Written when
-    /// the log has not got that one yet.
-    private func appendSegments(of pane: PaneViewModel, history: UndoHistory, to entry: Entry) throws {
-        guard let log = entry.log else { return }
-        func pair(_ serials: [UInt64], _ stack: [Segmentation], after: Bool) throws {
+    /// The pane's segment snapshots, each paired with its step's serial — the
+    /// undo side's before each step, the redo side's after each — that the log
+    /// has not got yet.
+    private func segmentWrites(of pane: PaneViewModel, history: UndoHistory, entry: Entry) -> [SegmentWrite] {
+        var writes: [SegmentWrite] = []
+        func pair(_ serials: [UInt64], _ stack: [Segmentation], after: Bool) {
             let offset = serials.count - stack.count
             guard offset >= 0 else { return }
             for (i, snapshot) in stack.enumerated() {
                 let key = SegmentKey(serial: serials[offset + i], after: after)
                 guard entry.segments[key] != snapshot, let data = pane.encodedSegments(snapshot) else { continue }
-                try log.appendSegments(of: key.serial, after: after, data)
+                writes.append(SegmentWrite(serial: key.serial, after: after, data: data))
                 entry.segments[key] = snapshot
             }
         }
-        try pair(history.undoSideSerials, pane.segmentUndoStack, after: false)
-        try pair(history.redoSideSerials, pane.segmentRedoStack, after: true)
-    }
-
-    private func append(_ held: [KeptTransaction], to entry: Entry) throws {
-        guard let log = entry.log else { return }
-        for kept in held {
-            let txn = kept.transaction
-            if entry.parents[txn.serial] == nil {
-                try log.append(kept)
-                entry.parents[txn.serial] = txn.parent
-            } else if entry.afters[txn.serial] != txn.selectionAfter {
-                try log.appendSelection(after: txn.serial, txn.selectionAfter)
-            }
-            entry.afters[txn.serial] = txn.selectionAfter
-        }
-    }
-
-    /// The document's content, in slices, into a new file put in place whole.
-    /// Returns its SHA-256, made as it was written.
-    private func writeWhole(_ document: BinaryDocument, to url: URL) throws -> Data {
-        let partial = url.appendingPathExtension("partial")
-        guard FileManager.default.createFile(atPath: partial.path, contents: nil),
-              let handle = try? FileHandle(forWritingTo: partial) else { throw StorageError.writeFailed }
-        defer { try? handle.close() }
-        var digest = FileDigest.Running()
-        var at: UInt64 = 0
-        let size = document.size
-        while at < size {
-            let count = Int(min(UInt64(1 << 20), size - at))
-            let slice = try document.read(at: at, length: count)
-            digest.update(slice)
-            try handle.write(contentsOf: slice)
-            at += UInt64(count)
-        }
-        try handle.synchronize()
-        _ = try FileManager.default.replaceItemAt(url, withItemAt: partial)
-        return digest.finalize()
+        pair(history.undoSideSerials, pane.segmentUndoStack, after: false)
+        pair(history.redoSideSerials, pane.segmentRedoStack, after: true)
+        return writes
     }
 
     // MARK: - The files content is laid over
@@ -297,27 +303,50 @@ final class ContentKeeper {
                              dirty: pane.status.isDirty)
     }
 
-    /// Whether what `pane` holds now is what the last snapshot kept — what
-    /// lets quitting leave it unasked: it comes back at the next launch as it
-    /// is.
+    /// Whether what `pane` holds now is what the last snapshot kept and the
+    /// writer wrote — what lets quitting leave it unasked: it comes back at the
+    /// next launch as it is. Asked after a final snapshot, which waits for the
+    /// writer.
     func holdsCurrentBytes(of pane: PaneViewModel) -> Bool {
         guard let document = pane.document,
               let entry = entries[ObjectIdentifier(document)], entry.document === document,
               entry.kept != nil else { return false }
         return entry.version == document.undoHistory.version
+            && !writer.hasFailed(entry.id) && writer.lastSnapshotWasWritten
     }
 
-    /// A snapshot is about to be taken.
+    /// A snapshot is about to be taken. A document whose last writes failed is
+    /// started afresh.
     func beginSnapshot() {
         named = []
         namedIDs = []
+        pending = []
+        let failed = writer.takeFailures()
+        guard !failed.isEmpty else { return }
+        for entry in entries.values where failed.contains(entry.id) {
+            entry.base = nil
+            entry.version = nil
+        }
     }
 
-    /// The snapshot was written: the kept files it did not name belong to
-    /// documents saved, closed or discarded, or were replaced by newer ones.
-    func endSnapshot() {
-        folder.removeKept(except: named)
+    /// The snapshot is taken: hands it to the writer, which writes what it
+    /// decided, then `workspace`, then removes the kept files it no longer
+    /// names. `wait` for a snapshot that may be the last.
+    func commit(_ workspace: Workspace, wait: Bool) {
+        writer.commit(pending, workspace: workspace, named: named, ids: namedIDs)
+        pending = []
         entries = entries.filter { $0.value.document != nil && namedIDs.contains($0.value.id) }
+        if wait { writer.flush() }
+    }
+
+    /// Tabs written down through this keeper outside a recorder, as the
+    /// workspace file would have them: their kept content written, with its
+    /// base and log as they came out.
+    func settled(_ tabs: [TabState]) -> [TabState] {
+        let workspace = Workspace(windows: [WindowState(frame: Rect(x: 0, y: 0, width: 0, height: 0),
+                                                        tabs: tabs, selectedTab: 0)])
+        commit(workspace, wait: true)
+        return writer.filled(workspace).windows[0].tabs
     }
 
     // MARK: - Reading back
@@ -413,9 +442,9 @@ final class ContentKeeper {
         }
         let entry = Entry(document: document, id: content.id)
         entry.base = content.base
-        if let log = content.log, let hash = Data(hex: log.hash) {
-            entry.log = try? HistoryLogWriter(appendingTo: folder.keptURL(log.file), length: log.length, hash: hash)
-        }
+        entry.logName = content.log?.file
+        entry.loggedBytes = content.log?.length ?? 0
+        writer.submit([.resume(id: content.id, base: content.base, log: content.log)])
         for record in records {
             entry.parents[record.transaction.serial] = record.transaction.parent
             entry.afters[record.transaction.serial] = record.transaction.selectionAfter

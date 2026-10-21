@@ -46,6 +46,41 @@ public struct WindowState: Codable, Equatable, Sendable {
     }
 }
 
+extension Workspace {
+    /// The workspace with every kept content in it — a file's, an untitled
+    /// document's, a part's, in a tab or a panel — passed through `transform`:
+    /// what fills in a content's base and log once they are written.
+    public func updatingKept(_ transform: (KeptContent) -> KeptContent) -> Workspace {
+        func pane(_ state: PaneState) -> PaneState {
+            var state = state
+            state.kept = state.kept.map(transform)
+            switch state.document {
+            case .file: break
+            case .untitled(var stamp):
+                stamp.content = transform(stamp.content)
+                state.document = .untitled(stamp)
+            case .part(var origin):
+                if var edits = origin.edits {
+                    edits.content = transform(edits.content)
+                    origin.edits = edits
+                }
+                state.document = .part(origin)
+            }
+            return state
+        }
+        var copy = self
+        for w in copy.windows.indices {
+            for t in copy.windows[w].tabs.indices {
+                copy.windows[w].tabs[t].panes = copy.windows[w].tabs[t].panes.map { $0.map(pane) }
+                for f in copy.windows[w].tabs[t].fragments.indices {
+                    copy.windows[w].tabs[t].fragments[f].pane = pane(copy.windows[w].tabs[t].fragments[f].pane)
+                }
+            }
+        }
+        return copy
+    }
+}
+
 /// The Annotations window: where it stands among the window's tabs, and which
 /// cards were selected. The annotations themselves are kept in a file of
 /// their own, with ids that last from one launch to the next.

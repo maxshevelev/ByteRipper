@@ -57,6 +57,7 @@ final class WorkspaceRecorder {
     /// app keeps by itself. The keeper starts afresh: what it knows was
     /// written is in the folder it leaves.
     func switchTo(project: WorkspaceFolder?) {
+        keeper.writer.flush()
         self.project = project
         keeper = project.map { ContentKeeper(folder: $0, isProject: true) }
             ?? ContentKeeper(folder: folder)
@@ -66,12 +67,14 @@ final class WorkspaceRecorder {
     /// Forgets the session the app keeps by itself: it was saved as a
     /// project, or discarded for one.
     func discardSession() {
+        keeper.writer.flush()
         folder.remove()
     }
 
     /// The workspace written last, if the switch is on and there is one.
     func savedWorkspace() -> Workspace? {
         guard WorkspaceSettings.restoresWorkspace else { return nil }
+        keeper.writer.flush()
         return folder.read()
     }
 
@@ -106,24 +109,29 @@ final class WorkspaceRecorder {
     func record(final: Bool = false) {
         keeper.waitsForHashes = final
         defer { keeper.waitsForHashes = false }
-        if let project {
+        if project != nil {
             guard !isPaused else { return }
             keeper.beginSnapshot()
-            guard (try? project.write(snapshot())) != nil else { return }
-            keeper.endSnapshot()
+            keeper.commit(snapshot(), wait: final)
             return
         }
         guard WorkspaceSettings.restoresWorkspace else {
-            if !removedWhileOff { folder.remove() }
+            if !removedWhileOff {
+                keeper.writer.enqueue { $0.remove() }
+                keeper.writer.flush()
+            }
             removedWhileOff = true
             return
         }
         removedWhileOff = false
         guard !isPaused else { return }
         keeper.beginSnapshot()
-        let workspace = snapshot()
-        guard (try? folder.write(workspace)) != nil else { return }
-        keeper.endSnapshot()
+        keeper.commit(snapshot(), wait: final)
+    }
+
+    /// Waits until every snapshot taken so far is on disk.
+    func flush() {
+        keeper.writer.flush()
     }
 
     /// Quitting has begun: keep the window order as it is now.

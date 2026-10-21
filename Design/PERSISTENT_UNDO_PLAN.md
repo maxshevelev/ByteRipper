@@ -94,10 +94,21 @@ With the journal holding every change, the content is not written again:
 - `UntitledKeeper` — whole bytes by `version` — is gone; `ContentKeeper`
   keeps every document's content this way.
 
-Still on the main thread: the appends, and a base written whole. An edit of a
-gigabyte is appended once, by the snapshot after it. Moving the writing to a
-background queue — the timer collecting the new records, which are values
-already — is left for later.
+The writing is off the main thread (`KeptWriter`). A snapshot decides on the
+main thread, as before, what each document needs — which transactions,
+refined selections and segment pairings are new, whether the base must be
+written afresh — and hands that over as values: the transactions (their
+bytes read from wherever they lie), the segments encoded, and for a base
+written whole an O(1) snapshot of the content (`contentSnapshot`). One serial
+queue appends, writes the bases, and then writes the workspace file with each
+content's base and log as they came out — the lengths and hashes the main
+thread cannot know. A snapshot whose writes all went through is written
+down, and the kept files it does not name go after it; one that failed is
+not, the workspace on disk stays the last whole one, and the document that
+failed is started afresh by the next snapshot. A snapshot that may be the last
+(`record(final:)`) waits for the queue. Still on the main thread: runs over a
+file (`OverlayEdits`) when that base is needed — rare — and, at restore, the
+reading of bases and logs.
 
 ## Integrity
 
@@ -114,8 +125,10 @@ already — is left for later.
     one more read, and StorageSaver stays as it is.
   - At open, checked in the second pass of the restore, before anything is
     laid over and before any part is taken out of it; all such files at
-    once, off the main thread (`WorkspaceRestorer.settleKeptFiles`). No
-    progress is shown yet: a file of gigabytes takes a few seconds.
+    once, off the main thread (`WorkspaceRestorer.settleKeptFiles`). From
+    256 MB to read on, each window with such a file shows a sheet with the
+    check's progress and no Cancel — cancelling could only mean dropping the
+    kept work — and nothing in it is edited before the changes are on.
   - A file whose date moved but whose hash matches (copied, touched) keeps its
     changes, and everything measured on it. Other bytes under the same date
     are a changed file. A workspace written without the hash falls back to

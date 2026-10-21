@@ -1,4 +1,4 @@
-@source-sha 402f966c2946e3c0c3e4f19c472ad968b01284d830f37957aac08a7b33fd2679
+@source-sha 709a14786b4b7a0a9f43daff66383847eaba7fef1d48958857227a9b9bcabea0
 # Der Arbeitsbereich
 
 > Bei eingeschalteter Einstellung öffnet ByteRipper beim Start, was beim Beenden geöffnet war.
@@ -32,7 +32,7 @@ Der Arbeitsbereich liegt in `~/Library/Application Support/ByteRipper/Workspace`
 
 ## Geänderte und fehlende Dateien
 
-Beim Start wird jede Datei mit der Größe und dem Änderungsdatum verglichen, die sie hatte, als der Arbeitsbereich geschrieben wurde. Eine Datei, über der ungesicherte Änderungen aufbewahrt werden, wird zusätzlich nach ihrem Inhalt verglichen (SHA-256): Ein Kopieren oder eine Datensicherung ändert das Datum einer Datei, ohne ein Byte zu ändern. Eine Datei, bei der sich nur das Datum geändert hat, behält daher ihre Änderungen, und eine Datei mit anderen Bytes gilt als geändert, auch wenn ihr Datum gleich geblieben ist.
+Beim Start wird jede Datei mit der Größe und dem Änderungsdatum verglichen, die sie hatte, als der Arbeitsbereich geschrieben wurde. Eine Datei, über der ungesicherte Änderungen aufbewahrt werden, wird zusätzlich nach ihrem Inhalt verglichen (SHA-256): Ein Kopieren oder eine Datensicherung ändert das Datum einer Datei, ohne ein Byte zu ändern. Eine Datei, bei der sich nur das Datum geändert hat, behält daher ihre Änderungen, und eine Datei mit anderen Bytes gilt als geändert, auch wenn ihr Datum gleich geblieben ist. Das Lesen einer Datei von mehreren Gigabyte dauert einige Sekunden; währenddessen zeigt ihr Fenster den Fortschritt der Prüfung und lässt sich nicht bearbeiten, denn die Änderungen werden erst auf die Datei gelegt, wenn sie geprüft ist.
 
 - Eine Datei, die nicht mehr unter ihrem Pfad liegt, wird nicht geöffnet.
 - Eine geänderte Datei wird geöffnet. Ist sie kürzer geworden, gehen Cursor und Bildschirm auf ihre letzte Adresse, und Lesezeichen hinter ihrem Ende werden entfernt. Ihre ungesicherten Änderungen, ihre Segmente, ihre Teile und der Zustand ihres Werkzeugbereichs werden nicht wiederhergestellt: Sie beziehen sich auf andere Bytes und würden auf falsche Stellen zeigen.

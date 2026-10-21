@@ -38,7 +38,7 @@ public enum UndoOperation: Equatable, Sendable {
     /// The bytes the op carries, before and after alike — what it costs the
     /// history to keep (`UndoLimits.bytes`). A fill's bytes count as its
     /// pattern.
-    var heldBytes: UInt64 {
+    public var heldBytes: UInt64 {
         switch self {
         case .overwrite(_, let before, let after): return UInt64(before.heldCount + after.heldCount)
         case .insert(_, let bytes), .delete(_, let bytes): return UInt64(bytes.heldCount)

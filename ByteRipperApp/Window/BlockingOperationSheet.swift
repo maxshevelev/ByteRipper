@@ -22,11 +22,14 @@ import Localization
     let progressBar = NSProgressIndicator()
     let cancelButton = NSButton(title: L("Cancel"), target: nil, action: nil)
     let operation: BackgroundOperation
+    /// False for work that must run to its end: no Cancel is offered.
+    let isCancellable: Bool
 
     private static let width: CGFloat = 380
 
-    init(title: String, operation: BackgroundOperation) {
+    init(title: String, operation: BackgroundOperation, cancellable: Bool = true) {
         self.operation = operation
+        self.isCancellable = cancellable
         super.init(nibName: nil, bundle: nil)
         titleLabel.stringValue = title
         phaseLabel.stringValue = operation.name
@@ -39,8 +42,8 @@ import Localization
     /// sheet back. The sheet closes itself when the operation finishes.
     @discardableResult
     static func present(_ operation: BackgroundOperation, title: String,
-                        from controller: NSViewController) -> BlockingOperationSheet {
-        let sheet = BlockingOperationSheet(title: title, operation: operation)
+                        from controller: NSViewController, cancellable: Bool = true) -> BlockingOperationSheet {
+        let sheet = BlockingOperationSheet(title: title, operation: operation, cancellable: cancellable)
         controller.presentAsSheet(sheet)
         return sheet
     }
@@ -69,6 +72,7 @@ import Localization
 
         let buttons = NSStackView(views: [NSView(), cancelButton])
         buttons.orientation = .horizontal
+        buttons.isHidden = !isCancellable
 
         let stack = NSStackView(views: [titleLabel, phaseLabel, progressBar, buttons])
         stack.orientation = .vertical

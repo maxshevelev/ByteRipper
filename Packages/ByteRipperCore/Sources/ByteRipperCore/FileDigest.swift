@@ -7,12 +7,14 @@ import Foundation
 /// first look; this is what decides.
 public enum FileDigest {
     /// The digest of the file at `url`, read in slices, never whole.
-    public static func sha256(of url: URL) throws -> Data {
+    /// `progress` is told the bytes read with each slice.
+    public static func sha256(of url: URL, progress: ((Int) -> Void)? = nil) throws -> Data {
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
         var hasher = SHA256()
         while let slice = try handle.read(upToCount: 1 << 20), !slice.isEmpty {
             hasher.update(data: slice)
+            progress?(slice.count)
         }
         return Data(hasher.finalize())
     }

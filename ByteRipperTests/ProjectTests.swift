@@ -33,7 +33,7 @@ final class ProjectTests: XCTestCase {
         let recorder = WorkspaceRecorder(folder: WorkspaceFolder(url: session), controllers: { windows },
                                          notes: { nil })
         recorder.switchTo(project: WorkspaceFolder.project(at: project))
-        recorder.record()
+        recorder.record(); recorder.flush()
         return recorder
     }
 

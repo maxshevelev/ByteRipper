@@ -209,4 +209,40 @@ extension WorkspaceTests {
         XCTAssertEqual(folder.keptFolder.deletingLastPathComponent().standardizedFileURL,
                        folder.url.standardizedFileURL)
     }
+
+    /// Every kept content in a workspace is reached — a file's, an untitled
+    /// document's, a part's, in a tab and in a panel.
+    func testEveryKeptContentIsReached() {
+        func content(_ id: String) -> KeptContent {
+            KeptContent(id: id, base: .file(serial: 0), head: 1, nextSerial: 2)
+        }
+        let file = PaneState(document: .file(FileStamp(path: "/a", size: 1, modified: nil)),
+                             selectionStart: 0, selectionEnd: 0, topOffset: 0, kept: content("file"))
+        let untitled = PaneState(document: .untitled(UntitledStamp(content: content("untitled"), name: nil,
+                                                                   size: 1, dirty: true)),
+                                 selectionStart: 0, selectionEnd: 0, topOffset: 0)
+        let part = PaneState(document: .part(PartOrigin(parent: "p1", sourceStart: 0, sourceEnd: 1, name: "zone",
+                                                        layout: nil, codec: nil, size: 1,
+                                                        edits: UntitledStamp(content: content("part"), name: nil,
+                                                                             size: 1, dirty: true))),
+                             selectionStart: 0, selectionEnd: 0, topOffset: 0)
+        let tab = TabState(panes: [file, untitled], activePane: 0,
+                           fragments: [FragmentState(pane: part, surface: SurfaceState())])
+        let workspace = Workspace(windows: [WindowState(frame: Rect(x: 0, y: 0, width: 1, height: 1),
+                                                        tabs: [tab], selectedTab: 0)])
+        var seen: [String] = []
+        let updated = workspace.updatingKept { kept in
+            seen.append(kept.id)
+            var kept = kept
+            kept.head = 9
+            return kept
+        }
+        XCTAssertEqual(Set(seen), ["file", "untitled", "part"])
+        let panes = updated.windows[0].tabs[0]
+        XCTAssertEqual(panes.panes[0]?.kept?.head, 9)
+        guard case let .untitled(stamp)? = panes.panes[1]?.document,
+              case let .part(origin) = panes.fragments[0].pane.document else { return XCTFail() }
+        XCTAssertEqual(stamp.content.head, 9)
+        XCTAssertEqual(origin.edits?.content.head, 9)
+    }
 }

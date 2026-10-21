@@ -171,10 +171,14 @@ import Workspace
         let checks = keptFiles
         keptFiles = []
         guard !checks.isEmpty else { return }
+        let progress = CheckProgress(checks: checks.map { ($0.check, $0.tab.controller) },
+                                     threshold: Self.progressThreshold)
+        defer { progress.finish() }
         let same = await withTaskGroup(of: (Int, Bool).self) { group in
             for (index, entry) in checks.enumerated() {
                 let check = entry.check
-                group.addTask { (index, await check.isTheSameFile()) }
+                let report = progress.reporter(for: check)
+                group.addTask { (index, await check.isTheSameFile(progress: report)) }
             }
             var same = [Bool](repeating: false, count: checks.count)
             for await (index, result) in group { same[index] = result }
@@ -194,6 +198,10 @@ import Workspace
             if let id = check.id { panes[id]?.unchanged = same[index] }
         }
     }
+
+    /// How many bytes of files to check before their windows show how far
+    /// the check has got; below it the check is over before a sheet would be.
+    static var progressThreshold: UInt64 = 256 << 20
 
     /// The tabs in which nothing at all could be opened.
     var emptyTabs: [MainViewController] {
@@ -220,5 +228,59 @@ import Workspace
             model.swapPanes()
         }
         tab.controller.finishWorkspaceTab(tab.state, opened: tab.opened)
+    }
+}
+
+/// How far the check of the files kept changes are laid over has got, shown
+/// on each window that has one of them — a sheet, so nothing is edited there
+/// before the changes are laid over (`Design/PERSISTENT_UNDO_PLAN.md`,
+/// "Integrity"). Only when there is enough to read for it to matter.
+@MainActor private final class CheckProgress {
+    private var operations: [BackgroundOperation] = []
+    private let total: UInt64
+    private let counter = Counter()
+
+    /// Bytes read so far, from any thread.
+    private final class Counter: @unchecked Sendable {
+        private let lock = NSLock()
+        private var read: UInt64 = 0
+        func add(_ count: Int) -> UInt64 { lock.withLock { read += UInt64(count); return read } }
+    }
+
+    // help: workspace.restore-check
+    init(checks: [(KeptFileCheck, MainViewController)], threshold: UInt64) {
+        let reading = checks.filter { $0.0.readsTheFile }
+        total = reading.reduce(0) { $0 + $1.0.stamp.size }
+        guard total >= threshold, total > 0, let first = reading.first?.0 else { return }
+        var seen = Set<ObjectIdentifier>()
+        for (_, controller) in reading where seen.insert(ObjectIdentifier(controller)).inserted {
+            guard controller.view.window != nil else { continue }
+            let operation = BackgroundOperation(name: Self.name(of: first)) {}
+            BlockingOperationSheet.present(operation, title: L("Checking the files changes are kept for"),
+                                           from: controller, cancellable: false)
+            operations.append(operation)
+        }
+    }
+
+    private static func name(of check: KeptFileCheck) -> String {
+        L("Checking “%1$@”", check.url.lastPathComponent)
+    }
+
+    /// What `check` reports the bytes it read through.
+    func reporter(for check: KeptFileCheck) -> (@Sendable (Int) -> Void)? {
+        guard !operations.isEmpty else { return nil }
+        let operations = operations, counter = counter, total = Double(total)
+        let name = Self.name(of: check)
+        return { count in
+            let read = counter.add(count)
+            for operation in operations {
+                operation.rename(name)
+                operation.report(Double(read) / total)
+            }
+        }
+    }
+
+    func finish() {
+        for operation in operations { operation.finish() }
     }
 }

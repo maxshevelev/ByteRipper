@@ -30,14 +30,17 @@ struct KeptFileCheck {
     /// The file is the one written down: by its SHA-256 when the workspace has
     /// it — a moved date alone does not make another file — by its size and
     /// date when it has not. Read off the main thread.
-    func isTheSameFile() async -> Bool {
+    func isTheSameFile(progress: (@Sendable (Int) -> Void)? = nil) async -> Bool {
         guard let expected = stamp.sha256 else { return stamp.isUnchanged(comparedWith: current) }
         guard current.size == stamp.size else { return false }
         let url = url
         return await Task.detached(priority: .userInitiated) {
-            (try? FileDigest.sha256(of: url))?.hex == expected
+            (try? FileDigest.sha256(of: url, progress: progress))?.hex == expected
         }.value
     }
+
+    /// Whether finding out reads the whole file.
+    var readsTheFile: Bool { stamp.sha256 != nil && current.size == stamp.size }
 }
 
 /// Names the panes of one snapshot, so a part can name its parent wherever in
