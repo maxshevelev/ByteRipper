@@ -215,6 +215,8 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertEqual(issues, [])
         let panes = target.fragments.dock.panels.compactMap { target.fragments.pane($0) }
         XCTAssertEqual(panes.map(\.status.fileName), ["zone", "inner", "loose"])
+        // A panel missing is a failure, not a crash of the test host.
+        guard panes.count == 3 else { return }
         XCTAssertEqual(try panes[0].document?.read(at: 0, length: 0x200), Array(bytes[0x100..<0x300]))
         XCTAssertEqual(try panes[1].document?.read(at: 0, length: 0x40), Array(bytes[0x140..<0x180]))
         XCTAssertIdentical(panes[0].origin?.parent, target.windowModel.pane1, "the part knows its way home")
