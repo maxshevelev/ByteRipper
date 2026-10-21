@@ -77,10 +77,12 @@ final class ContentKeeper {
     /// Writes off the main thread what the snapshots decide.
     let writer: KeptWriter
 
-    init(folder: WorkspaceFolder, isProject: Bool = false) {
+    /// `writer`, when given, is one the keepers of a folder share in turn, so
+    /// what one still writes is queued ahead of the next.
+    init(folder: WorkspaceFolder, isProject: Bool = false, writer: KeptWriter? = nil) {
         self.folder = folder
         self.isProject = isProject
-        self.writer = KeptWriter(folder: folder)
+        self.writer = writer ?? KeptWriter(folder: folder)
     }
 
     private static let editsEncoder: PropertyListEncoder = {
@@ -400,15 +402,11 @@ final class ContentKeeper {
     /// SHA-256 of files on disk, by what they were like when hashed.
     private var fileHashes: [FileKey: String] = [:]
     private var hashing: Set<FileKey> = []
-    /// Set for the snapshot that may be the last — quitting, leaving a
-    /// project: a hash still missing is made there and then, not in the
-    /// background, so the workspace written down has it.
-    var waitsForHashes = false
-
     /// The SHA-256 of the file `stamp` describes, when it is known. The first
     /// time it is asked for, it is made in the background and the snapshot goes
-    /// without it; the next one has it. A file that changed while it was read
-    /// is not given one.
+    /// without it; the next one has it — and a last snapshot has the writer
+    /// make it before writing (`KeptWriter.commit(hashingFiles:)`). A file that
+    /// changed while it was read is not given one.
     func fileHash(for stamp: FileStamp, savedDigest: BinaryDocument.SavedDigest? = nil) -> String? {
         let key = FileKey(path: stamp.path, size: stamp.size, modified: stamp.modified)
         if let hash = fileHashes[key] { return hash }
@@ -420,11 +418,6 @@ final class ContentKeeper {
             return saved.digest.hex
         }
         let url = URL(fileURLWithPath: stamp.path)
-        if waitsForHashes {
-            guard let digest = try? FileDigest.sha256(of: url), Self.stillIs(key, url) else { return nil }
-            fileHashes[key] = digest.hex
-            return digest.hex
-        }
         guard hashing.insert(key).inserted else { return nil }
         Task.detached(priority: .utility) { [weak self] in
             let digest = try? FileDigest.sha256(of: url)
@@ -480,11 +473,10 @@ final class ContentKeeper {
     /// The snapshot is taken: hands it to the writer, which writes what it
     /// decided, then `workspace`, then removes the kept files it no longer
     /// names. `wait` for a snapshot that may be the last.
-    func commit(_ workspace: Workspace, wait: Bool) {
-        writer.commit(pending, workspace: workspace, named: named, ids: namedIDs)
+    func commit(_ workspace: Workspace, final: Bool = false) {
+        writer.commit(pending, workspace: workspace, named: named, ids: namedIDs, hashingFiles: final)
         pending = []
         entries = entries.filter { $0.value.document != nil && namedIDs.contains($0.value.id) }
-        if wait { writer.flush() }
     }
 
     /// Tabs written down through this keeper outside a recorder, as the
@@ -493,7 +485,8 @@ final class ContentKeeper {
     func settled(_ tabs: [TabState]) -> [TabState] {
         let workspace = Workspace(windows: [WindowState(frame: Rect(x: 0, y: 0, width: 0, height: 0),
                                                         tabs: tabs, selectedTab: 0)])
-        commit(workspace, wait: true)
+        commit(workspace)
+        writer.flush()
         return writer.filled(workspace).windows[0].tabs
     }
 

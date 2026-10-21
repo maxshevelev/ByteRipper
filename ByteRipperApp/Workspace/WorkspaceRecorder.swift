@@ -1,5 +1,6 @@
 import ByteRipperCore
 import Cocoa
+import Localization
 import Workspace
 
 /// Keeps the workspace on disk up to date while the app runs
@@ -43,7 +44,9 @@ final class WorkspaceRecorder {
         self.folder = folder
         self.controllers = controllers
         self.notes = notes
-        self.keeper = ContentKeeper(folder: folder)
+        let writer = KeptWriter(folder: folder)
+        self.sessionWriter = writer
+        self.keeper = ContentKeeper(folder: folder, writer: writer)
     }
 
     /// The folder under Application Support, beside the annotations. Nil under
@@ -58,10 +61,11 @@ final class WorkspaceRecorder {
     /// app keeps by itself. The keeper starts afresh: what it knows was
     /// written is in the folder it leaves.
     func switchTo(project: WorkspaceFolder?) {
-        keeper.writer.flush()
+        // What the keeper being left still writes goes on in its own queue,
+        // into its own folder.
         self.project = project
         keeper = project.map { ContentKeeper(folder: $0, isProject: true) }
-            ?? ContentKeeper(folder: folder)
+            ?? ContentKeeper(folder: folder, writer: sessionWriter)
         removedWhileOff = false
         updateJournalDirectory()
     }
@@ -69,14 +73,18 @@ final class WorkspaceRecorder {
     /// Forgets the session the app keeps by itself: it was saved as a
     /// project, or discarded for one.
     func discardSession() {
-        keeper.writer.flush()
-        folder.remove()
+        // After whatever was still being written into it.
+        sessionWriter.enqueue { $0.remove() }
     }
+
+    /// The writer of the session without a project, one for the recorder's
+    /// life: the session's keepers take turns with it, so whatever one still
+    /// writes is queued ahead of the next and of removing the folder.
+    private let sessionWriter: KeptWriter
 
     /// The workspace written last, if the switch is on and there is one.
     func savedWorkspace() -> Workspace? {
         guard WorkspaceSettings.restoresWorkspace else { return nil }
-        keeper.writer.flush()
         return folder.read()
     }
 
@@ -122,33 +130,54 @@ final class WorkspaceRecorder {
     /// at quit as at every other time: quitting does not ask about them, they
     /// come back.
     /// `final` for the snapshot that may be the last before the app or the
-    /// project goes: what is still being worked out in the background — the
-    /// hash of a file kept content is laid over — is worked out now.
+    /// project goes: a file kept content is laid over whose hash the
+    /// background has not made yet is hashed by the writer before it writes.
     func record(final: Bool = false) {
         updateJournalDirectory()
-        keeper.waitsForHashes = final
-        defer { keeper.waitsForHashes = false }
         if project != nil {
             guard !isPaused else { return }
             keeper.beginSnapshot()
-            keeper.commit(snapshot(), wait: final)
+            keeper.commit(snapshot(), final: final)
             return
         }
         guard WorkspaceSettings.restoresWorkspace else {
-            if !removedWhileOff {
-                keeper.writer.enqueue { $0.remove() }
-                keeper.writer.flush()
-            }
+            if !removedWhileOff { keeper.writer.enqueue { $0.remove() } }
             removedWhileOff = true
             return
         }
         removedWhileOff = false
         guard !isPaused else { return }
         keeper.beginSnapshot()
-        keeper.commit(snapshot(), wait: final)
+        keeper.commit(snapshot(), final: final)
     }
 
-    /// Waits until every snapshot taken so far is on disk.
+    /// The snapshot that may be the last — quitting, leaving a project — and
+    /// `then`, once it is on disk. The main thread does not wait for it: the
+    /// writer calls back. Should the writing take longer than a moment, the
+    /// window in front shows a sheet meanwhile, so nothing is changed that
+    /// the snapshot would not have.
+    // help: workspace.final-write
+    func recordFinal(then done: @escaping @MainActor () -> Void) {
+        record(final: true)
+        let operation = BackgroundOperation(name: L("Writing the changes kept beside it"), indeterminate: true) {}
+        let presenter = (NSApp.keyWindow ?? controllers().first?.window)?.contentViewController
+        let title = project != nil ? L("Writing the project") : L("Writing the workspace")
+        let sheet = Task { @MainActor in
+            try? await Task.sleep(for: Self.finalSheetDelay)
+            guard !Task.isCancelled, operation.isActive, let presenter, presenter.view.window != nil else { return }
+            BlockingOperationSheet.present(operation, title: title, from: presenter, cancellable: false)
+        }
+        keeper.writer.whenWritten {
+            sheet.cancel()
+            operation.finish()
+            done()
+        }
+    }
+
+    /// How long a last snapshot may take before its sheet shows.
+    static var finalSheetDelay: Duration = .milliseconds(200)
+
+    /// Waits until every snapshot taken so far is on disk — for a test.
     func flush() {
         keeper.writer.flush()
     }

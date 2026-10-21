@@ -5,6 +5,7 @@
 @covers settings.general.restore-workspace
 @covers workspace.restore-warning
 @covers workspace.restore-check
+@covers workspace.final-write
 
 The switch is **Reopen the workspace at launch** in [[topic:settings|Settings ▸ General]]. It is off after installation: on a repair bench each job is a different board, and dumps from an earlier job opening by themselves would be in the way.
 
@@ -29,7 +30,7 @@ The switch is **Reopen the workspace at launch** in [[topic:settings|Settings �
 
 ## When the workspace is written
 
-Continuously: every few seconds while the program is in front, when it goes to the background, when a window is closed, and at quit. Closing the last window quits ByteRipper exactly as **⌘Q** does, and the workspace keeps that window. Switching the setting off deletes the stored workspace.
+Continuously: every few seconds while the program is in front, when it goes to the background, when a window is closed, and at quit. Closing the last window quits ByteRipper exactly as **⌘Q** does, and the workspace keeps that window. Switching the setting off deletes the stored workspace. The writing goes on in the background and never holds the program up; quitting, and closing or saving a project, go ahead once the workspace is written. Should that take longer than a moment, the window in front shows it meanwhile.
 
 The workspace is stored in `~/Library/Application Support/ByteRipper/Workspace` and does not leave this Mac.
 

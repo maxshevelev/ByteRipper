@@ -38,7 +38,7 @@ extension AppDelegate {
         panel.nameFieldStringValue = currentProjectName ?? L("Project")
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        saveSession(asProjectAt: url)
+        saveSession(asProjectAt: url) { _ in }
     }
 
     /// File ▸ Open Recent Project ▸ a project.
@@ -56,37 +56,45 @@ extension AppDelegate {
     // help: menu.file.close-project
     @objc func closeProject(_ sender: Any?) {
         guard let recorder = workspaceRecorder, recorder.project != nil else { return }
-        recorder.record(final: true)
-        closeEverythingKept()
-        recorder.switchTo(project: nil)
-        RecentProjectsStore.lastProject = nil
-        makeWindow()
-        refreshProjectName()
+        // Written first — off the main thread — then closed.
+        recorder.recordFinal { [weak self] in
+            guard let self else { return }
+            self.closeEverythingKept()
+            recorder.switchTo(project: nil)
+            RecentProjectsStore.lastProject = nil
+            self.makeWindow()
+            self.refreshProjectName()
+        }
     }
 
     // MARK: - Saving
 
     /// Writes the current windows into a project at `url` and makes it the
-    /// open one. A package already there is replaced: the save panel asked.
-    @discardableResult
-    func saveSession(asProjectAt url: URL) -> Bool {
-        guard let recorder = workspaceRecorder else { return false }
+    /// open one, then tells `done` whether it worked. A package already there
+    /// is replaced: the save panel asked. Nothing waits on the main thread:
+    /// each snapshot calls back once it is on disk.
+    func saveSession(asProjectAt url: URL, then done: @escaping @MainActor (Bool) -> Void) {
+        guard let recorder = workspaceRecorder else { return done(false) }
         let wasProject = recorder.project != nil
         // The project being left keeps what it had up to now.
-        recorder.record(final: true)
-        if FileManager.default.fileExists(atPath: url.path) {
-            try? FileManager.default.removeItem(at: url)
+        recorder.recordFinal { [weak self] in
+            guard let self else { return done(false) }
+            if FileManager.default.fileExists(atPath: url.path) {
+                try? FileManager.default.removeItem(at: url)
+            }
+            recorder.switchTo(project: WorkspaceFolder.project(at: url))
+            recorder.recordFinal { [weak self] in
+                guard let self else { return done(false) }
+                guard FileManager.default.fileExists(atPath: WorkspaceFolder.project(at: url).fileURL.path) else {
+                    self.presentProjectError(L("The project could not be written."), url: url)
+                    return done(false)
+                }
+                // The session without a project is this project now.
+                if !wasProject { recorder.discardSession() }
+                self.projectOpened(url)
+                done(true)
+            }
         }
-        recorder.switchTo(project: WorkspaceFolder.project(at: url))
-        recorder.record(final: true)
-        guard FileManager.default.fileExists(atPath: WorkspaceFolder.project(at: url).fileURL.path) else {
-            presentProjectError(L("The project could not be written."), url: url)
-            return false
-        }
-        // The session without a project is this project now.
-        if !wasProject { recorder.discardSession() }
-        projectOpened(url)
-        return true
     }
 
     // MARK: - Opening
@@ -123,9 +131,10 @@ extension AppDelegate {
     private func leaveCurrentSession(then proceed: @escaping () -> Void) {
         guard let recorder = workspaceRecorder else { return }
         if recorder.project != nil {
-            recorder.record(final: true)
-            closeEverythingKept()
-            proceed()
+            recorder.recordFinal { [weak self] in
+                self?.closeEverythingKept()
+                proceed()
+            }
             return
         }
         guard sessionHoldsAnything else {
@@ -139,10 +148,12 @@ extension AppDelegate {
             panel.allowedContentTypes = [.byteRipperProject]
             panel.nameFieldStringValue = L("Project")
             panel.canCreateDirectories = true
-            guard panel.runModal() == .OK, let url = panel.url, saveSession(asProjectAt: url) else { return }
-            recorder.record(final: true)
-            closeEverythingKept()
-            proceed()
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+            saveSession(asProjectAt: url) { [weak self] saved in
+                guard saved else { return }
+                self?.closeEverythingKept()
+                proceed()
+            }
         case .alertSecondButtonReturn:  // Don't Save
             askToClose(windowControllers, keeping: { _ in false }) { [weak self] agreed in
                 guard agreed, let self else { return }

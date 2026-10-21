@@ -681,6 +681,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         let (recorder, folderURL) = recorder([window])
         await recorder.recordSettled()
         recorder.record(final: true)
+        recorder.flush()
         let tab = try XCTUnwrap(recorder.savedWorkspace()?.windows.first?.tabs.first)
         pane.close()
         return (file, tab, folderURL, expected)
@@ -967,6 +968,39 @@ final class WorkspaceRestoreTests: XCTestCase {
             try await Task.sleep(nanoseconds: 20_000_000)
         }
         XCTAssertEqual(controller.presentedViewControllers ?? [], [], "the sheet goes once it is there")
+    }
+
+    /// The last snapshot never waits on the main thread: it returns at once,
+    /// and its continuation runs once the writer has written it. Writing that
+    /// takes long shows a sheet on the window in front meanwhile, gone when
+    /// it is done.
+    func testTheLastSnapshotCallsBackInsteadOfWaiting() async throws {
+        WorkspaceSettings.set(restoresWorkspace: true)
+        let window = shownWindow()
+        window.window?.makeKeyAndOrderFront(nil)
+        let controller = window.mainViewController
+        controller.windowModel.pane1.openBytes([1, 2, 3], named: "last")
+        controller.refreshMode()
+        let (recorder, folderURL) = recorder([window])
+        let delay = WorkspaceRecorder.finalSheetDelay
+        WorkspaceRecorder.finalSheetDelay = .milliseconds(10)
+        addTeardownBlock { await MainActor.run { WorkspaceRecorder.finalSheetDelay = delay } }
+        recorder.keeper.writer.enqueue { _ in Thread.sleep(forTimeInterval: 0.4) }
+
+        var written = false
+        recorder.recordFinal { written = true }
+        XCTAssertFalse(written, "returned before the writing")
+        try await Task.sleep(nanoseconds: 150_000_000)
+        XCTAssertFalse(written)
+        XCTAssertFalse((window.window?.contentViewController?.presentedViewControllers ?? []).isEmpty,
+                       "the window in front shows the writing")
+        for _ in 0..<100 where !written { try await Task.sleep(nanoseconds: 20_000_000) }
+        XCTAssertTrue(written)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: folderURL.appendingPathComponent("Workspace.json").path))
+        for _ in 0..<100 where !(window.window?.contentViewController?.presentedViewControllers ?? []).isEmpty {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertEqual(window.window?.contentViewController?.presentedViewControllers ?? [], [])
     }
 
     /// The content comes back as it was, from the base and the transactions

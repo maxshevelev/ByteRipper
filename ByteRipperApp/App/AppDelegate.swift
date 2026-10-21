@@ -631,10 +631,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // A change made a moment ago is written now, not on a turn of the run
         // loop that will not come.
         agentService.annotationTools.saveNow()
-        // The last snapshot, after every Save / Discard was answered: a file
-        // saved under a new name in the quit's questions is in it by that name.
+        // The last snapshot was taken and written before the quit was
+        // agreed to (`applicationShouldTerminate`): nothing is written here,
+        // where nothing could be waited for without stopping the main thread.
         workspaceRecorder?.stop()
-        workspaceRecorder?.record(final: true)
         if let themeObserver {
             NotificationCenter.default.removeObserver(themeObserver)
         }
@@ -669,11 +669,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// is why the flows it goes through report a backed-out sheet as an answer
     /// rather than saying nothing.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        // More than one thing to answer for, and the answers are a queue of
-        // dialogs the reader is about to be walked through. Say so first, and
-        // say how many — the way every document-based app on the system does.
-        // One is not a queue: it is asked directly, with no preamble.
-        let kept = keptAtQuit()
+        // A project keeps everything, the switch or not: it is a file the
+        // person made to keep. The session keeps the same while the switch is
+        // on. What it keeps is written first, off the main thread, and the
+        // quit goes on once it is on disk.
+        guard let recorder = workspaceRecorder,
+              recorder.project != nil || WorkspaceSettings.restoresWorkspace else {
+            return askBeforeQuitting(sender, keeping: { _ in false })
+        }
+        recorder.recordFinal { [weak self, weak sender] in
+            guard let self, let sender else { return }
+            let keeper = recorder.keeper
+            let reply = self.askBeforeQuitting(sender, keeping: { keeper.holdsCurrentBytes(of: $0) })
+            if reply != .terminateLater { sender.reply(toApplicationShouldTerminate: reply == .terminateNow) }
+        }
+        return .terminateLater
+    }
+
+    /// What quitting does not ask about: with the workspace on, an untitled
+    /// document, a part or a file's unsaved changes the workspace holds as
+    /// they are now come back at the next launch, still unsaved
+    /// (`Design/WORKSPACE_PLAN.md`, "Untitled documents"); `kept` says which,
+    /// after a snapshot taken for it. Every window is then asked the rest.
+    /// Agreed, the quit waits for one more snapshot — a file saved under a
+    /// new name in the questions is in it by that name — and goes once it is
+    /// written: the reply comes from there, never from a wait on the main
+    /// thread.
+    private func askBeforeQuitting(_ sender: NSApplication,
+                                   keeping kept: @escaping (PaneViewModel) -> Bool) -> NSApplication.TerminateReply {
         let unsaved = windowControllers.reduce(0) { $0 + $1.mainViewController.unsavedDocumentCount(keeping: kept) }
         // The questions below bring each window to the front in turn; the
         // workspace keeps the order the person left.
@@ -681,7 +704,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         if unsaved > 1 {
             switch confirmReviewingChanges(unsaved) {
             case .alertSecondButtonReturn:  // Discard Changes
-                return .terminateNow
+                return quitAfterLastSnapshot(sender)
             case .alertThirdButtonReturn:  // Cancel
                 workspaceRecorder?.thawOrder()
                 return .terminateCancel
@@ -692,29 +715,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         var inThisCall = true
         var answer: NSApplication.TerminateReply?
         askToClose(windowControllers, keeping: kept) { [weak sender, weak self] agreed in
-            answer = agreed ? .terminateNow : .terminateCancel
-            if !agreed { self?.workspaceRecorder?.thawOrder() }
-            if !inThisCall { sender?.reply(toApplicationShouldTerminate: agreed) }
+            guard let self, let sender else { return }
+            if !agreed { self.workspaceRecorder?.thawOrder() }
+            let reply = agreed ? self.quitAfterLastSnapshot(sender) : .terminateCancel
+            if inThisCall {
+                answer = reply
+            } else if !agreed {
+                sender.reply(toApplicationShouldTerminate: false)
+            }
         }
         inThisCall = false
         return answer ?? .terminateLater
     }
 
-    /// What quitting does not ask about: with the workspace on, an untitled
-    /// document, a part or a file's unsaved changes the workspace holds as
-    /// they are now come back at the next launch, still unsaved
-    /// (`Design/WORKSPACE_PLAN.md`, "Untitled documents"). A snapshot is taken
-    /// first, so "as they are now" is true; a document whose bytes could not
-    /// be written is asked about as before.
-    private func keptAtQuit() -> (PaneViewModel) -> Bool {
-        // A project keeps everything, the switch or not: it is a file the
-        // person made to keep. The session keeps the same while the switch is
-        // on.
-        guard let recorder = workspaceRecorder,
-              recorder.project != nil || WorkspaceSettings.restoresWorkspace else { return { _ in false } }
-        recorder.record(final: true)
-        let keeper = recorder.keeper
-        return { pane in keeper.holdsCurrentBytes(of: pane) }
+    /// The last snapshot, written before the app goes; the quit is answered
+    /// once it is on disk.
+    private func quitAfterLastSnapshot(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let recorder = workspaceRecorder else { return .terminateNow }
+        recorder.recordFinal { [weak sender] in sender?.reply(toApplicationShouldTerminate: true) }
+        return .terminateLater
     }
 
     /// The one question asked before the queue of them: review, throw it all

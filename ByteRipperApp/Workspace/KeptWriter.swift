@@ -81,7 +81,8 @@ final class KeptWriter: @unchecked Sendable {
     /// Writes `writes`, then `workspace` with its kept content filled in, then
     /// removes the kept files `named` does not list. Documents not in `ids` are
     /// forgotten. Returns at once.
-    func commit(_ writes: [KeptWrite], workspace: Workspace, named: Set<String>, ids: Set<String>) {
+    func commit(_ writes: [KeptWrite], workspace: Workspace, named: Set<String>, ids: Set<String>,
+                hashingFiles: Bool = false) {
         queue.async { [self] in
             var whole = true
             for write in writes {
@@ -94,7 +95,21 @@ final class KeptWriter: @unchecked Sendable {
             }
             for id in Set(writes.map(\.id)) { kept[id]?.log?.synchronize() }
             guard whole else { return setWritten(false) }
-            let filled = fill(workspace)
+            var filled = fill(workspace)
+            if hashingFiles {
+                // The last snapshot: a file whose hash the background had not
+                // made yet is hashed here, off the main thread, so the
+                // workspace written down has it.
+                filled = filled.updatingKeptFileStamps { stamp in
+                    guard stamp.sha256 == nil else { return stamp }
+                    let url = URL(fileURLWithPath: stamp.path)
+                    guard let digest = try? FileDigest.sha256(of: url), let now = FileStamp(url: url),
+                          now.size == stamp.size, now.modified == stamp.modified else { return stamp }
+                    var stamp = stamp
+                    stamp.sha256 = digest.hex
+                    return stamp
+                }
+            }
             do {
                 try folder.write(filled)
             } catch {
@@ -142,9 +157,18 @@ final class KeptWriter: @unchecked Sendable {
         }
     }
 
-    /// Waits until everything submitted so far is written.
+    /// Waits until everything submitted so far is written — for a test, and
+    /// for nothing on the main thread of the app.
     func flush() {
         queue.sync {}
+    }
+
+    /// Calls `done` on the main thread once everything submitted so far is
+    /// written. Returns at once.
+    func whenWritten(_ done: @escaping @MainActor () -> Void) {
+        queue.async {
+            DispatchQueue.main.async { MainActor.assumeIsolated { done() } }
+        }
     }
 
     /// The documents whose writes failed since the last call — to be started

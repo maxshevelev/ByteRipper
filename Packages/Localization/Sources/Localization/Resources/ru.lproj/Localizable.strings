@@ -1638,3 +1638,6 @@
 "Their changes came back, but not the steps to undo them: the kept history no longer led back:" = "Правки восстановлены, но шаги для их отмены — нет: сохранённая история больше не ведёт назад:";
 "Copying the bytes of the changes" = "Копируются байты правок";
 "Moving the undo history of “%1$@” beside the workspace" = "История отмены «%1$@» переносится к рабочей сессии";
+"Writing the changes kept beside it" = "Записываются сохраняемые рядом правки";
+"Writing the project" = "Запись проекта";
+"Writing the workspace" = "Запись рабочей сессии";

@@ -47,6 +47,28 @@ public struct WindowState: Codable, Equatable, Sendable {
 }
 
 extension Workspace {
+    /// The workspace with the stamp of every file kept content is laid over
+    /// passed through `transform`: what fills in a hash made off the main
+    /// thread.
+    public func updatingKeptFileStamps(_ transform: (FileStamp) -> FileStamp) -> Workspace {
+        func pane(_ state: PaneState) -> PaneState {
+            guard state.kept != nil, case .file(let stamp) = state.document else { return state }
+            var state = state
+            state.document = .file(transform(stamp))
+            return state
+        }
+        var copy = self
+        for w in copy.windows.indices {
+            for t in copy.windows[w].tabs.indices {
+                copy.windows[w].tabs[t].panes = copy.windows[w].tabs[t].panes.map { $0.map(pane) }
+                for f in copy.windows[w].tabs[t].fragments.indices {
+                    copy.windows[w].tabs[t].fragments[f].pane = pane(copy.windows[w].tabs[t].fragments[f].pane)
+                }
+            }
+        }
+        return copy
+    }
+
     /// The workspace with every kept content in it — a file's, an untitled
     /// document's, a part's, in a tab or a panel — passed through `transform`:
     /// what fills in a content's base and log once they are written.

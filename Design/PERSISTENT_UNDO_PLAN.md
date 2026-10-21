@@ -148,8 +148,16 @@ content's base and log as they came out — the lengths and hashes the main
 thread cannot know. A snapshot whose writes all went through is written
 down, and the kept files it does not name go after it; one that failed is
 not, the workspace on disk stays the last whole one, and the document that
-failed is started afresh by the next snapshot. A snapshot that may be the last
-(`record(final:)`) waits for the queue. Still on the main thread: runs over a
+failed is started afresh by the next snapshot. Nothing on the main thread waits
+for the queue: a snapshot that may be the last (`WorkspaceRecorder.recordFinal`)
+goes on in a continuation the writer calls once it is written — quitting
+answers `terminateLater` and replies from there, closing, saving and leaving
+a project continue from there — and a writing that takes longer than 200 ms
+shows a sheet on the window in front meanwhile. The hash of a file kept
+content is laid over, when the background has not made it yet, the writer
+makes before it writes. The session's keepers share one writer, so removing
+the session's folder is queued behind whatever is still being written into
+it. Still on the main thread: runs over a
 file (`OverlayEdits`) when that base is needed — rare.
 
 At restore the kept content is read back off the main thread too
