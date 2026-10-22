@@ -66,6 +66,7 @@ public enum UEFIHelpTerms {
         case .gpnvStore, .gpnvRecord: return HelpTermID("gpnv")
         case .lenovoDMIStore: return HelpTermID("dmi")
         case .acerDMIStore: return HelpTermID("acer-dmi")
+        case .panasonicDMIStore, .panasonicDMIRecord: return HelpTermID("panasonic-dmi")
         // A field of Acer's area or of HP's `HP_MUD`: what the bench reads
         // these areas for is the page about DMI.
         case .dmiField: return HelpTermID("dmi")

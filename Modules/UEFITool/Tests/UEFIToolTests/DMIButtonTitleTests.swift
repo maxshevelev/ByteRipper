@@ -16,6 +16,7 @@ final class DMIButtonTitleTests: XCTestCase {
         XCTAssertEqual(Self.title(.lenovoDMIStore), "Lenovo DMI")
         XCTAssertEqual(Self.title(.gpnvStore), "ASUS DMI")
         XCTAssertEqual(Self.title(.acerDMIStore), "Acer DMI")
+        XCTAssertEqual(Self.title(.panasonicDMIStore), "Panasonic DMI")
         XCTAssertEqual(Self.title(.vssEntry), "HP DMI")
         XCTAssertEqual(Self.title(.sysFStore), "Apple DMI")
     }

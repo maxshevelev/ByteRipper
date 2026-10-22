@@ -1715,6 +1715,57 @@ is an `acerDMIStore`, fixed, named `Acer DMI` with the serial its row carries,
 classified as UEFITool's padding. A wiped block is all `FF`, its signature is
 not there, and it leaves no row.
 
+**Panasonic's DMI area** (`PanasonicDMIStore.swift`) is where the firmware
+of a Toughbook keeps what the factory wrote of the machine. In the padding
+inside the BIOS region, on a 4 KiB boundary, declared nowhere. The layout is
+read off one dump — an FZ-55 mk2, 32 MB, the area at `0x1400000` in a
+512 KiB stretch of padding — and nothing is published; no public description
+was found either (searched 2026-10-22).
+
+| Offset | Field |
+|---|---|
+| `0x00` | `MEI_` and the model, `MEI_FZ55-2` (Matsushita Electric Industrial) |
+| `0x28` | a model code, `FZ55FZ-52M4` |
+| `0x3A` | `MEI___CF` |
+| `0x80` | u16, u16 — both `0x0F` on the dump, 14 records listed; meaning unknown |
+| `0x88` | `{u32 ID, u32 address}` per record, to an ID of 0 |
+
+An address is the record's place in the CPU's view of the flash — file
+offset + `0xFE000000` on the 32 MB chip — so the area's own address is the
+first record's rounded down to 4 KiB, which holds as long as the directory
+and the first record fit in the area's first 4 KiB. A record is
+`{length, value}` then data: u16 + u16 in records `0x02`, `0x03`, `0x05`,
+`0x0D`, `0x0F`, `0x14`; u32 + u32 in `0x15`, `0x16`, `0x1A`, `0x1B`, `0x1C`,
+`0x1D`, `0x1E`, `0x1F`. The length counts the header; the next record starts
+at the next 16-byte boundary (`0x15`: `0x108` long, the next at `+0x110`).
+Which form a record has is told by where the next record starts, not by its
+ID: the u32 reading of a short header is `length | value << 16`, far past
+the next record. The last record has no next, and takes the u32 form when
+that fits before the padding ends.
+
+The value after the length is not a sum8/sum16/word sum/CRC32 of the data
+or of the record, and records of all-zero data carry different values — a
+tag, or a checksum seeded with something else; unknown.
+
+| ID | Holds |
+|---|---|
+| `0x02` | the asset tag, `No Asset Tag` |
+| `0x03` | a 15-character serial and CR LF — the board's or the machine's, not known |
+| `0x16` | four u32s (`1, 0, 1, 0`), u32 `29`, the Windows product key |
+| `0x1E` | 32 bytes that read as random — a hash or a key |
+| `0x1B` | `0x68000` bytes, all zero after the header |
+| `0x1F` | `0x1000` bytes, high-entropy after a short header |
+| others | unknown |
+
+A block is one when `MEI_` is at a 4 KiB boundary of written padding and its
+directory lists at least two records that chain as above, at rising
+addresses, the last ending before the padding does. The node is a
+`panasonicDMIStore`, fixed, named `Panasonic DMI`, from the header to the end
+of the last record; its children are `dmiField`s for the model and the model
+code, then a `panasonicDMIRecord` per record (subtype = ID, header 4 or 8
+bytes) with a `dmiField` under the three whose content is known. All are
+classified as UEFITool's padding.
+
 **HP's identity** (`HPDMIArea.swift`) is not a block of its own: it is
 NVRAM variables in the main VSS2 store, which HP BIOS Configuration Utility
 (BCU) reads and writes through the firmware. A driver of the firmware lists

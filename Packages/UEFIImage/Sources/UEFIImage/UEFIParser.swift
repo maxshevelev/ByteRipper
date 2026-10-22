@@ -271,6 +271,7 @@ final class Parser {
         read = readingHPSignatureBlocks(read, emptyByte: emptyByte)
         read = readingGPNVStores(read, emptyByte: emptyByte)
         read = readingAcerDMIStores(read, emptyByte: emptyByte)
+        read = readingPanasonicDMIStores(read, emptyByte: emptyByte)
         read = readingAMDMicrocode(read, emptyByte: emptyByte)
         // After the microcode: a patch the directories list is already its
         // row, and keeps it.

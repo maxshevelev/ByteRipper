@@ -1520,6 +1520,13 @@
 "block header|Signature" = "Сигнатура";
 "Acer DMI" = "Acer DMI";
 "ASUS DMI" = "ASUS DMI";
+"Panasonic DMI" = "Panasonic DMI";
+"Panasonic DMI record" = "Запись Panasonic DMI";
+"Record %1$@" = "Запись %1$@";
+"Model code" = "Код модели";
+"Serial" = "Серийный номер";
+"ID" = "ID";
+"Unknown value" = "Неизвестное значение";
 "System serial" = "Серийный номер системы";
 "MB Serial" = "Серийный номер платы";
 "Asset tag" = "Инвентарный номер";

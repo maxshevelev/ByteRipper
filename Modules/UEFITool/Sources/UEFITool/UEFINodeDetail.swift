@@ -358,6 +358,13 @@ public enum UEFIDetail {
             fields += acer.fields
             tables += acer.tables
         }
+        // Panasonic's, read the same way: the identity fields, then the
+        // records its directory lists.
+        if UEFIPanasonicDMIDetail.reads(node.kind) {
+            let panasonic = UEFIPanasonicDMIDetail.build(for: node, reader: reader, in: language)
+            fields += panasonic.fields
+            tables += panasonic.tables
+        }
         // HP's identity, on the `HP_MUD` entry: its fields and the variables
         // beside it in the store, as BCU reports them.
         if node.kind == .vssEntry {
@@ -1253,6 +1260,13 @@ public enum UEFIDetail {
         case .acerDMIStore:
             break
 
+        // Panasonic's DMI area is read in `build` (`UEFIPanasonicDMIDetail`);
+        // a record's header is its length and a value nobody has explained.
+        case .panasonicDMIStore:
+            break
+        case .panasonicDMIRecord:
+            fields += UEFIPanasonicDMIDetail.recordFields(for: node, reader: reader, in: language)
+
         // A field of an identity area: its value, read from its own bytes as
         // the area writes it.
         case .dmiField:
@@ -1749,6 +1763,8 @@ public enum UEFIDetail {
         case .lenvBlock: return L("LENV block", in: language)
         case .lenvEntry: return L("LENV entry", in: language)
         case .acerDMIStore: return L("Acer DMI", in: language)
+        case .panasonicDMIStore: return L("Panasonic DMI", in: language)
+        case .panasonicDMIRecord: return L("Panasonic DMI record", in: language)
         case .dmiField: return L("DMI field", in: language)
         case .amdEFS: return L("Embedded Firmware Structure", in: language)
         case .amdDirectory: return L("AMD firmware directory", in: language)

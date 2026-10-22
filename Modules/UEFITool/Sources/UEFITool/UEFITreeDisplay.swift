@@ -327,6 +327,14 @@ public enum UEFITreeDisplay {
         if node.kind == .acerDMIStore, let reader {
             return acerDMIRow(node, reader: reader, in: language)
         }
+        // Panasonic's says the model and the serial; a record what it holds,
+        // where that is known.
+        if node.kind == .panasonicDMIStore, let reader {
+            return UEFIPanasonicDMIDetail.row(node, reader: reader, in: language)
+        }
+        if node.kind == .panasonicDMIRecord {
+            return UEFIPanasonicDMIDetail.recordRow(node, in: language)
+        }
         // HP's `HP_MUD` says whose it is: the serial, the rest in the detail —
         // on a copy the store marks deleted as well, which is where most HP
         // boards keep it.
@@ -413,6 +421,7 @@ public enum UEFITreeDisplay {
         case .lenovoDMIStore: return L("Lenovo DMI", in: language)
         case .gpnvStore: return L("ASUS DMI", in: language)
         case .acerDMIStore: return L("Acer DMI", in: language)
+        case .panasonicDMIStore: return L("Panasonic DMI", in: language)
         case .vssEntry: return L("HP DMI", in: language)
         case .sysFStore: return L("Apple DMI", in: language)
         default: return nil
@@ -571,6 +580,8 @@ public enum UEFITreeDisplay {
         case .lenvBlock: return L("LENV block", in: language)
         case .lenvEntry: return L("LENV entry", in: language)
         case .acerDMIStore: return L("Acer DMI", in: language)
+        case .panasonicDMIStore: return L("Panasonic DMI", in: language)
+        case .panasonicDMIRecord: return L("Panasonic DMI record", in: language)
         case .dmiField: return L("DMI field", in: language)
         case .amdEFS: return L("Embedded Firmware Structure", in: language)
         case .amdDirectory: return L("AMD firmware directory", in: language)

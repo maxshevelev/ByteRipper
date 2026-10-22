@@ -1520,6 +1520,13 @@
 "block header|Signature" = "Signatur";
 "Acer DMI" = "Acer DMI";
 "ASUS DMI" = "ASUS DMI";
+"Panasonic DMI" = "Panasonic DMI";
+"Panasonic DMI record" = "Panasonic-DMI-Datensatz";
+"Record %1$@" = "Datensatz %1$@";
+"Model code" = "Modellcode";
+"Serial" = "Seriennummer";
+"ID" = "ID";
+"Unknown value" = "Unbekannter Wert";
 "System serial" = "System-Seriennummer";
 "MB Serial" = "Platine-Seriennummer";
 "Asset tag" = "Inventarnummer";

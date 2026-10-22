@@ -1,4 +1,4 @@
-@source-sha 6030625b0c8e3f2f022243789e4f3a107973b10ae5ba3c20bc346b848a4573d3
+@source-sha 2046fbaf64e4e15ea75902a2cab8161436f81170d74a73ec524f9458f8061d0e
 @term flash-descriptor
 @name Flash Descriptor
 @short Die ersten `0x1000` Bytes eines Intel-Flash-Images: die Karte des Chips.
@@ -464,7 +464,7 @@ Verlorene Felder sind nicht immer endgültig verloren. Einige Hersteller — dar
 
 Wo diese Felder im Abbild stehen, ist nicht standardisiert. Jeder Hersteller legt sie dorthin, wo er will, und die Aufteilung wandert von Generation zu Generation; im Allgemeinen läuft das Übertragen deshalb auf den Vergleich zweier Abbilder hinaus.
 
-Fünf Aufteilungen sind die Ausnahmen, die das Programm lesen kann. Die Firmware Lenovo InsydeH2O hält diese Felder in einem eigenen, kodierten Speicher, den [[term:lenv|LENV]]-Blöcken ([[topic:lenovo-dmi|Lenovo DMI]]). ASUS-Notebooks mit AMI-Firmware halten sie in einem [[term:gpnv|GPNV]]-Speicher. Acer hält sie in einem 8-KiB-Block im [[term:padding|Padding]] des BIOS-Regions, dem Bereich [[term:acer-dmi|Acer DMI]]. HP hält sie in NVRAM-Variablen des Hauptspeichers [[term:vss|VSS2]], siehe [[term:hp-dmi|HP DMI]]. Apple hält sie im SysF-Speicher des NVRAM, siehe [[term:apple-dmi|Apple DMI]]. Jede Aufteilung wurde aus den Dumps der Maschinen dieses Herstellers erschlossen; keiner der fünf hat sie veröffentlicht.
+Sechs Aufteilungen sind die Ausnahmen, die das Programm lesen kann. Die Firmware Lenovo InsydeH2O hält diese Felder in einem eigenen, kodierten Speicher, den [[term:lenv|LENV]]-Blöcken ([[topic:lenovo-dmi|Lenovo DMI]]). ASUS-Notebooks mit AMI-Firmware halten sie in einem [[term:gpnv|GPNV]]-Speicher. Acer hält sie in einem 8-KiB-Block im [[term:padding|Padding]] des BIOS-Regions, dem Bereich [[term:acer-dmi|Acer DMI]]. HP hält sie in NVRAM-Variablen des Hauptspeichers [[term:vss|VSS2]], siehe [[term:hp-dmi|HP DMI]]. Apple hält sie im SysF-Speicher des NVRAM, siehe [[term:apple-dmi|Apple DMI]]. Panasonic hält sie in einem Bereich mit einem Verzeichnis von Datensätzen im Padding des BIOS-Regions, siehe [[term:panasonic-dmi|Panasonic DMI]]. Jede Aufteilung wurde aus den Dumps der Maschinen dieses Herstellers erschlossen; keiner der sechs hat sie veröffentlicht.
 
 Im Baum von **Werkzeuge ▸ UEFI-Struktur** erscheint dieser Speicher als ein Knoten, **Lenovo DMI**, gleich wo er im Abbild liegt: anstelle der drei Regionen, die die Insyde-Flash-Device-Map als „Unknown" deklariert, oder innerhalb von Padding, wenn es keine Map gibt. Seine Beschreibung nennt den Block, den die Firmware liest, und führt dessen Einträge dekodiert auf, darunter Seriennummer und UUID; ein Klick auf einen Eintrag öffnet seinen Knoten. Unter dem Knoten liegen das Änderungsprotokoll und beide Blöcke, jeder Eintrag mit seinem Wert neben dem Namen.
 
@@ -474,6 +474,7 @@ Im Baum von **Werkzeuge ▸ UEFI-Struktur** erscheint dieser Speicher als ein Kn
 @see term:acer-dmi
 @see term:hp-dmi
 @see term:apple-dmi
+@see term:panasonic-dmi
 @see topic:recipe-board-data
 
 @term acer-dmi
@@ -487,6 +488,23 @@ Das [[topic:tool-uefi|UEFI-Werkzeug]] findet ihn am Inhalt: die Signatur `06 FF 
 Die Details führen die Identitätsfelder unter **Einträge** in der Reihenfolge auf, in der sie im Block stehen, jedes als Verweis auf seine Zeile: die System-Seriennummer, die Platine-Seriennummer, die UUID, das Modell und, wo geschrieben, die Inventarnummer, der Produktname und der Fertigungscode. Über der Tabelle steht, was die Integritätsprüfungen in den Feldern gefunden haben: Seriennummer und Platine-Seriennummer, die das Werksmuster nicht mehr halten — die Werksnummern des Systems lesen `00` an Offset 7 und `3400` am Ende, die der Platinen `1100` an Offset 5 —, eine UUID, die keine Version 1 ist oder deren Varianten-Bit nicht gesetzt ist. Der Block hält auch eine Kopie der letzten sechs Bytes der UUID; wo die Kopie nicht mehr wie die UUID liest, ist sie veraltet — die UUID wurde nach der Kopie geschrieben. Der Block hält keine Prüfsummen, deshalb lässt eine Änderung keine fehlerhafte Prüfsumme zurück, die auf den Block wies; was die Prüfungen melden, ist alles, was das Abbild von der Änderung sagt.
 
 Acer hat den Aufbau nicht veröffentlicht; er wurde aus den Dumps der vorliegenden Acer-Notebooks erschlossen. Es ist eine Methode der Acer-Firmware, nicht von DMI: andere Hersteller legen dieselben Felder anderswo ab, und was das Programm davon liest, steht unter [[term:dmi|DMI]]. Um den Bereich in einen anderen Dump zu übernehmen, kopiert man den ganzen Block an dieselbe Adresse.
+
+@see term:dmi
+@see term:padding
+
+@term panasonic-dmi
+@name Panasonic DMI
+@short Der Bereich, in dem die Firmware eines Panasonic Toughbook die im Werk geschriebenen Angaben zur Maschine hält — Inventarnummer, eine Seriennummer, den Windows-Produktschlüssel — im Padding des BIOS-Regions.
+
+Die Firmware eines Panasonic Toughbook hält die Identität der Maschine in einem eigenen Bereich im [[term:padding|Padding]] des BIOS-Regions. Für UEFITool und jeden anderen UEFI-Parser ist er nicht leeres Padding: der Bereich ist nirgends deklariert, und keine UEFI-Struktur verweist auf ihn.
+
+Der Bereich beginnt mit einem Kopf: `MEI_` und das Modell, zum Beispiel `MEI_FZ55-2` (MEI steht für Matsushita Electric Industrial), ein Modellcode wie `FZ55FZ-52M4` und eine zweite Signatur, `MEI___CF`. Ab `+0x80` folgt ein Verzeichnis: für jeden Datensatz seine ID und seine Adresse, wobei die Adresse so angegeben ist, wie der Prozessor den Flash-Speicher sieht — bei einem 32-MB-Chip der Offset in der Datei plus `0xFE000000`. Jeder Datensatz beginnt mit seiner Länge einschließlich Kopf und einem Wert unbekannter Bedeutung: in einigen Datensätzen zwei 16-Bit-Wörter, in den übrigen zwei 32-Bit-Wörter. Der nächste Datensatz beginnt an der nächsten 16-Byte-Grenze.
+
+Das [[topic:tool-uefi|UEFI-Werkzeug]] findet den Bereich am Inhalt: `MEI_` an einer 4-KB-Grenze und ein Verzeichnis, dessen Datensätze genau an den angegebenen Adressen liegen und jeweils dort enden, wo der nächste beginnt. Wo dies stimmt, zeigt der Baum den Bereich als Zeile **Panasonic DMI** mit Modell und Seriennummer neben dem Namen; darunter das Modell, den Modellcode und eine Zeile je Datensatz, unter einem Datensatz bekannten Inhalts eine Zeile für seinen Wert. Die Details führen die Werte unter **Einträge** und die Datensätze unter **Verzeichnis** auf, jeden mit ID, Adresse, Länge und, wo bekannt, seinem Inhalt; ein Klick auf eine Zeile einer der beiden Tabellen öffnet den zugehörigen Knoten im Baum.
+
+Drei Datensätze sind verstanden: `0x02` hält die Inventarnummer, `0x03` eine Seriennummer — ob die der Platine oder die der Maschine, ist nicht bekannt — und `0x16` den Windows-Produktschlüssel. Was die übrigen Datensätze halten und ob der Wert nach der Länge eine Prüfsumme oder eine Kennung ist, ist nicht bekannt; die Details nennen sie unbekannt. Im Dump, aus dem der Aufbau erschlossen wurde, enthält der Datensatz `0x1B` (416 KB) nur Nullen, der Datensatz `0x1F` Daten, die komprimiert oder verschlüsselt wirken.
+
+Panasonic hat den Aufbau nicht veröffentlicht, und eine öffentliche Beschreibung wurde nicht gefunden; er wurde aus einem einzigen Dump eines Toughbook FZ-55 mk2 erschlossen. Andere Modelle und Generationen können abweichen. Der Bereich gehört zur jeweiligen Maschine: wird ein sauberes BIOS oder das einer anderen Maschine auf den Chip geschrieben, ist der Bereich aus dem alten Dump zu übernehmen — vollständig und an dieselbe Adresse —, sonst gehen Seriennummer und Windows-Lizenz verloren.
 
 @see term:dmi
 @see term:padding
