@@ -60,7 +60,9 @@ final class FindFlowTests: XCTestCase {
         throws -> (MainViewController, NSWindow, URL) {
         let url = try tempFile(bytes)
         let controller = MainViewController()
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: height),
+        // The app's window class: an Escape the dump lets through reaches
+        // the bar as it does on screen (`AppWindow`).
+        let window = AppWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: height),
                               styleMask: [.titled, .resizable], backing: .buffered, defer: false)
         window.contentViewController = controller
         window.makeKeyAndOrderFront(nil)

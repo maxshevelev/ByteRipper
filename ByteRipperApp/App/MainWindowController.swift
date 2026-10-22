@@ -70,7 +70,7 @@ final class MainWindowController: NSWindowController {
         // (§3.1); the height is the standard default. The frame
         // is autosaved, so a subsequent launch restores the user's latest size
         // and position — but `showWindow` re-fits the width to the settings.
-        let window = NSWindow(
+        let window = AppWindow(
             contentRect: NSRect(x: 0, y: 0, width: MainViewController.launchContentWidth(), height: 720),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,

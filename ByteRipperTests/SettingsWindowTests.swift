@@ -23,6 +23,23 @@ final class SettingsWindowTests: XCTestCase {
         XCTAssertFalse(window.isVisible, "Escape must close the Settings window")
     }
 
+    /// The key itself, not the command: an Escape no control takes reaches
+    /// the window as a bare key from macOS 27, and the window sends it on as
+    /// `cancelOperation:` (`AppWindow`).
+    func testTheEscapeKeyClosesTheSettingsWindow() throws {
+        let settings = SettingsWindowController()
+        let window = try XCTUnwrap(settings.window)
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        window.makeFirstResponder(window.contentView)
+        let escape = try XCTUnwrap(NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+            windowNumber: window.windowNumber, context: nil, characters: "\u{1B}",
+            charactersIgnoringModifiers: "\u{1B}", isARepeat: false, keyCode: 53))
+        window.sendEvent(escape)
+        XCTAssertFalse(window.isVisible, "Escape must close the Settings window")
+    }
+
     /// The window is the `SettingsWindow` subclass (the one that overrides
     /// `cancelOperation`), not a plain `NSWindow` whose default no-ops.
     func testTheWindowIsTheEscClosableSubclass() throws {

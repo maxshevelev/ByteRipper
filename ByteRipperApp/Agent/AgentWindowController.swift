@@ -67,7 +67,7 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     static let initialSize = NSSize(width: 720, height: 720)
 
     init(service: AgentService?) {
-        let window = NSWindow(
+        let window = AppWindow(
             contentRect: NSRect(origin: .zero, size: Self.initialSize),
             styleMask: [.titled, .closable, .resizable, .miniaturizable],
             backing: .buffered, defer: false)

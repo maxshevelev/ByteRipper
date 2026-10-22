@@ -184,10 +184,11 @@ func discardIsolatedFavoritesFile(_ url: URL) {
 
 /// A window a test can put views in and be sure it will not be released under
 /// ARC while the test still holds it — the crash that headless AppKit tests hit
-/// when a window closes itself.
+/// when a window closes itself. The app's own window class, so a key the
+/// views let through goes where it goes on screen (`AppWindow`).
 @MainActor
 func makeTestWindow(width: CGFloat = 800, height: CGFloat = 600) -> NSWindow {
-    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: width, height: height),
+    let window = AppWindow(contentRect: NSRect(x: 0, y: 0, width: width, height: height),
                           styleMask: [.titled, .resizable], backing: .buffered, defer: false)
     window.isReleasedWhenClosed = false
     return window

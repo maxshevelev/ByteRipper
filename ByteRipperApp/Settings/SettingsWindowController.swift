@@ -207,7 +207,7 @@ final class AppearanceSettingsViewController: NSViewController {
 /// applied and persisted live the moment it changes, so there is nothing to
 /// confirm or lose — Esc is simply "I'm done" (the same `cancelOperation`
 /// hook the Find bar uses for its own Esc-to-dismiss).
-final class SettingsWindow: NSWindow {
+final class SettingsWindow: AppWindow {
     override func cancelOperation(_ sender: Any?) {
         performClose(sender)
     }

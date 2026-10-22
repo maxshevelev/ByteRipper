@@ -90,7 +90,7 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
     private var zoomObserver: NSObjectProtocol?
 
     private init() {
-        let window = NSWindow(
+        let window = AppWindow(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered, defer: false)
