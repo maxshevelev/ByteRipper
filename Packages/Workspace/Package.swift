@@ -23,6 +23,6 @@ let package = Package(
     ],
     targets: [
         .target(name: "Workspace"),
-        .testTarget(name: "WorkspaceTests", dependencies: ["Workspace"])
+        .testTarget(name: "WorkspaceTests", dependencies: ["Workspace"], resources: [.copy("Fixtures")])
     ]
 )

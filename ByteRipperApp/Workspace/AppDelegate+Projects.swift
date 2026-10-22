@@ -109,7 +109,17 @@ extension AppDelegate {
             return
         }
         let folder = WorkspaceFolder.project(at: url)
-        guard let workspace = folder.read() else {
+        let workspace: Workspace
+        switch folder.load() {
+        case .success(let read):
+            workspace = read
+        case .failure(.newer):
+            presentProjectError(L("The project was saved by a newer version of ByteRipper. Open it in that version."), url: url)
+            return
+        case .failure(.tooOld):
+            presentProjectError(L("The project was saved by an early version of ByteRipper that this one cannot read."), url: url)
+            return
+        case .failure(.unreadable):
             presentProjectError(L("The project could not be read."), url: url)
             return
         }

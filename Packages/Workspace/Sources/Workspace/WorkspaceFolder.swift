@@ -48,14 +48,31 @@ public final class WorkspaceFolder {
         return decoder
     }()
 
-    /// The workspace written last, or nil when there is none, it does not
-    /// read, or it is of another version.
+    /// The workspace written last, or nil when there is none or it cannot be
+    /// read (`load()` says why).
     public func read() -> Workspace? {
-        guard let data = try? Data(contentsOf: fileURL),
-              let workspace = try? Self.decoder.decode(Workspace.self, from: data),
-              workspace.version == Workspace.currentVersion else { return nil }
+        try? load().get()
+    }
+
+    /// The workspace written last — by this build, or by an earlier one and
+    /// migrated (`WorkspaceMigration`) — or why there is none to read.
+    public func load() -> Result<Workspace, WorkspaceMigration.Failure> {
+        guard let data = try? Data(contentsOf: fileURL) else { return .failure(.unreadable) }
+        let current: Data
+        do {
+            current = try WorkspaceMigration.migrate(data)
+        } catch let failure as WorkspaceMigration.Failure {
+            return .failure(failure)
+        } catch {
+            return .failure(.unreadable)
+        }
+        guard let workspace = try? Self.decoder.decode(Workspace.self, from: current) else {
+            return .failure(.unreadable)
+        }
+        // A migrated file is not what the next write would put there, so the
+        // first snapshot writes it in this build's version.
         lastWritten = data
-        return workspace
+        return .success(workspace)
     }
 
     /// Writes `workspace` unless it is what the file already holds. Returns

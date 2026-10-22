@@ -110,9 +110,41 @@ Workspace/
     77D0…3A-15E2C0FF.log     the edits over a file on disk
 ```
 
-`Workspace.json` carries a `version`. A file of an unknown version is ignored,
-not migrated: losing a workspace is an inconvenience, misreading one is not
-acceptable.
+`Workspace.json` carries a `version`. See "Versions" below for what a build
+does with a file of another one.
+
+## Versions
+
+A project and the session are both the person's work — the session is work
+not yet saved under a name — so a build opens what the builds before it wrote.
+The promise starts at version 4 (`WorkspaceMigration.oldestReadable`); files
+of versions 1–3 were written before it and are refused.
+
+- **Earlier version** — read through `WorkspaceMigration`: the file's JSON is
+  taken one version at a time (`steps[n]` makes n + 1 out of n) up to
+  `Workspace.currentVersion`, then decoded. The steps work on the JSON, not on
+  the types, which describe only the newest version. The next snapshot writes
+  the file in the current version.
+- **Newer version** — refused, with a message for a project that says so. A
+  build cannot know what a newer one meant, and misreading is worse than not
+  reading.
+
+What may change without raising the version: an added optional field (an
+earlier file has not got it and reads as nil). What raises it, with a step: a
+required field added, a field renamed, removed or given another meaning, a
+case taken out of an enum or its payload changed.
+
+`Kept/` follows the same promise without a version of its own. A log record's
+kind carries its format in its tag (`BRT1`, `BRS1`, `BRP1`, `BRB1`): a record
+whose body changes gets a new tag, and the reader goes on reading the old
+one. A file's edits (`OverlayEdits`, a binary property list) and the segments
+in a log follow the `Codable` rule above.
+
+Each readable version is kept as a fixture that is never rewritten:
+`Packages/Workspace/Tests/WorkspaceTests/Fixtures/v<N>` for the JSON,
+`Packages/ByteRipperCore/Tests/ByteRipperCoreTests/Fixtures/v<N>` for `Kept/`.
+Raising the version adds the new version's fixtures; the old ones' tests then
+check that the migration arrives at what the new types describe.
 
 ## The model
 

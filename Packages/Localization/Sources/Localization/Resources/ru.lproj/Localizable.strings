@@ -199,6 +199,8 @@
 "Save…" = "Сохранить…";
 "The project could not be read." = "Не удалось прочитать проект.";
 "The project could not be written." = "Не удалось записать проект.";
+"The project was saved by a newer version of ByteRipper. Open it in that version." = "Проект сохранён более новой версией ByteRipper. Откройте его в этой версии.";
+"The project was saved by an early version of ByteRipper that this one cannot read." = "Проект сохранён одной из первых версий ByteRipper, и эта версия не может его прочитать.";
 "The tabs and the files in them come back as they were at quit: addresses on screen, cursor and selection, bookmarks, segments and tool panels. Documents never saved come back unsaved, and quitting does not ask about them; changes to files on disk are asked about as before." = "Вкладки и открытые в них файлы возвращаются такими, какими были при выходе: адрес на экране, курсор и выделение, закладки, сегменты и панели инструментов. Ни разу не сохранённые документы возвращаются несохранёнными, и при выходе программа о них не спрашивает; о правках в файлах на диске она спрашивает, как и прежде.";
 "The variable does not decompress." = "Переменная не распаковывается.";
 "The workspace was not restored in full" = "Рабочая сессия восстановлена не полностью";

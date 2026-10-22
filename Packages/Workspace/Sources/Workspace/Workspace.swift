@@ -8,9 +8,12 @@ import Foundation
 /// (`FileStamp`), so the restore can tell a file that is still the same from
 /// one that was rewritten in between.
 public struct Workspace: Codable, Equatable, Sendable {
-    /// The version this build writes. A file of another version is ignored
-    /// rather than migrated: losing a workspace is an inconvenience, misreading
-    /// one is not acceptable.
+    /// The version this build writes. A file of an earlier version, back to
+    /// `WorkspaceMigration.oldestReadable`, is migrated to it; a newer one is
+    /// refused — misreading a workspace is worse than not reading it.
+    ///
+    /// Raising it takes a step in `WorkspaceMigration.steps` and a fixture of
+    /// the version left behind in the tests (`Tests/WorkspaceTests/Fixtures`).
     public static let currentVersion = 4
 
     public var version: Int

@@ -1,0 +1,250 @@
+{
+  "version" : 4,
+  "windows" : [
+    {
+      "frame" : {
+        "height" : 800,
+        "width" : 1200,
+        "x" : 10,
+        "y" : 20
+      },
+      "notes" : {
+        "isSelected" : false,
+        "position" : 2,
+        "selected" : [
+          "n3"
+        ]
+      },
+      "selectedTab" : 0,
+      "tabs" : [
+        {
+          "activePane" : 1,
+          "bookmarks" : [
+            {
+              "name" : "ME start",
+              "row" : 4096
+            }
+          ],
+          "dividerFraction" : 0.4,
+          "expandedFragment" : 0,
+          "fragments" : [
+            {
+              "pane" : {
+                "document" : {
+                  "part" : {
+                    "_0" : {
+                      "codec" : "{\"lzma\":{}}",
+                      "edits" : {
+                        "content" : {
+                          "base" : {
+                            "bytes" : {
+                              "file" : "P1-2.bin",
+                              "hash" : "2323232323232323232323232323232323232323232323232323232323232323",
+                              "serial" : 2
+                            }
+                          },
+                          "head" : 2,
+                          "id" : "P1",
+                          "nextSerial" : 3
+                        },
+                        "dirty" : true,
+                        "size" : 2048
+                      },
+                      "layout" : "{\"kind\":\"lzma\"}",
+                      "name" : "Setup",
+                      "parent" : "p1",
+                      "size" : 2048,
+                      "sourceEnd" : 4195328,
+                      "sourceStart" : 4194304
+                    }
+                  }
+                },
+                "id" : "p2",
+                "inputRegion" : "hex",
+                "insertMode" : false,
+                "selectionEnd" : 8,
+                "selectionStart" : 0,
+                "topOffset" : 0
+              },
+              "surface" : {
+                "minimapVisible" : false,
+                "tool" : {
+                  "identifier" : "uefi"
+                }
+              }
+            }
+          ],
+          "panes" : [
+            {
+              "document" : {
+                "file" : {
+                  "_0" : {
+                    "modified" : "2025-10-09T08:53:20Z",
+                    "path" : "\/Jobs\/T480\/bios.bin",
+                    "relativePath" : "bios.bin",
+                    "sha256" : "abababababababababababababababababababababababababababababababab",
+                    "size" : 16777216
+                  }
+                }
+              },
+              "id" : "p1",
+              "inputRegion" : "text",
+              "insertMode" : true,
+              "kept" : {
+                "base" : {
+                  "file" : {
+                    "serial" : 1
+                  }
+                },
+                "head" : 6,
+                "history" : {
+                  "dirtyRegardless" : false,
+                  "joins" : [
+                    {
+                      "path" : "\/Jobs\/T480\/ec.bin",
+                      "readOnly" : true,
+                      "serial" : 5
+                    }
+                  ],
+                  "redoSteps" : [
+                    2,
+                    1
+                  ],
+                  "redoTip" : 9,
+                  "savedState" : 1,
+                  "undoBase" : 1,
+                  "undoneJoins" : [
+
+                  ]
+                },
+                "id" : "A1",
+                "log" : {
+                  "file" : "A1-1.log",
+                  "hash" : "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+                  "length" : 812
+                },
+                "nextSerial" : 10,
+                "saved" : 1
+              },
+              "segments" : {
+                "contentSize" : 16777216,
+                "pieces" : [
+                  {
+                    "name" : "Descriptor",
+                    "start" : 0
+                  },
+                  {
+                    "link" : {
+                      "path" : "\/Jobs\/T480\/me.bin",
+                      "sourceEnd" : 20480,
+                      "sourceStart" : 0
+                    },
+                    "name" : "ME",
+                    "start" : 4096
+                  }
+                ]
+              },
+              "selectionEnd" : 32,
+              "selectionStart" : 16,
+              "topOffset" : 4096,
+              "uefiOpenRows" : [
+                [
+                  0
+                ],
+                [
+                  0,
+                  2,
+                  1
+                ]
+              ]
+            },
+            {
+              "document" : {
+                "file" : {
+                  "_0" : {
+                    "modified" : "2025-10-09T08:53:20Z",
+                    "path" : "\/Jobs\/T480\/donor.bin",
+                    "size" : 16777216
+                  }
+                }
+              },
+              "inputRegion" : "hex",
+              "insertMode" : false,
+              "kept" : {
+                "base" : {
+                  "edits" : {
+                    "file" : "A2-3.edits",
+                    "hash" : "0101010101010101010101010101010101010101010101010101010101010101",
+                    "serial" : 3
+                  }
+                },
+                "head" : 3,
+                "id" : "A2",
+                "nextSerial" : 4
+              },
+              "selectionEnd" : 0,
+              "selectionStart" : 0,
+              "topOffset" : 0
+            }
+          ],
+          "surface" : {
+            "findPattern" : {
+              "encoding" : "ascii",
+              "text" : "$FPT"
+            },
+            "minimapMode" : "overview",
+            "minimapVisible" : true,
+            "tool" : {
+              "identifier" : "uefi",
+              "pane" : 0,
+              "state" : "AQID"
+            }
+          }
+        },
+        {
+          "activePane" : 0,
+          "bookmarks" : [
+
+          ],
+          "fragments" : [
+
+          ],
+          "panes" : [
+            {
+              "document" : {
+                "untitled" : {
+                  "_0" : {
+                    "content" : {
+                      "base" : {
+                        "bytes" : {
+                          "file" : "U1-0.bin",
+                          "hash" : "efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef",
+                          "serial" : 0
+                        }
+                      },
+                      "head" : 0,
+                      "id" : "U1",
+                      "nextSerial" : 1
+                    },
+                    "dirty" : true,
+                    "name" : "Join",
+                    "size" : 8192
+                  }
+                }
+              },
+              "inputRegion" : "hex",
+              "insertMode" : false,
+              "selectionEnd" : 4,
+              "selectionStart" : 4,
+              "topOffset" : 0
+            },
+            null
+          ],
+          "surface" : {
+            "minimapVisible" : false
+          }
+        }
+      ]
+    }
+  ]
+}

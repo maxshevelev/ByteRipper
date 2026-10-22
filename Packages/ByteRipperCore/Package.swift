@@ -34,7 +34,8 @@ let package = Package(
             dependencies: [
                 "ByteRipperCore",
                 .product(name: "Localization", package: "Localization"),
-            ]
+            ],
+            resources: [.copy("Fixtures")]
         )
     ]
 )

@@ -129,6 +129,16 @@ Running the tests:
   session, and the tests that wait on a window, an animation or a panel then
   fail for reasons that are not bugs.
 
+Workspace and project format (`Design/WORKSPACE_PLAN.md`, "Versions"):
+- A build opens the session and projects every earlier build wrote, from
+  version 4 on. A newer version is refused, never guessed at.
+- An added optional field needs nothing. Anything else an earlier file cannot
+  be read through — a required field, a rename, a changed meaning — raises
+  `Workspace.currentVersion`, adds a step to `WorkspaceMigration.steps`, and
+  adds the new version's fixtures. Fixtures already there are never rewritten.
+- A `Kept/` log record whose body changes gets a new tag; the old tag stays
+  readable.
+
 Important rules:
 - Domain code must be pure Swift, modular, and unit-testable.
 - Every split view is `ALSplitView`. Never `NSSplitView`: it sizes its panes
