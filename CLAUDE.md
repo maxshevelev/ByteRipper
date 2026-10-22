@@ -5,6 +5,10 @@ Project: macOS GUI tool to visually compare and edit two binary files.
 Stack:
 - Xcode project written in Swift.
 - macOS 14+.
+- Built with Xcode 27 on macOS 27 and with Xcode 26.3 on older Macs: the
+  project must build with both. Nothing newer than Xcode 26.3 ships — a
+  language feature, an SDK API, a build setting, a raised project format —
+  unless guarded (`#available`, `#if compiler(>=…)`) with a path 26.3 builds.
 - No third-party dependencies unless absolutely unavoidable. The one exception
   is decoders and encoders for published formats
   (`Packages/FirmwareCompression`): the
