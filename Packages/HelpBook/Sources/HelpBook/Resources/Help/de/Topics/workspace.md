@@ -1,4 +1,4 @@
-@source-sha 16a6d12d04103209506aa25fa458e4aee32c3f2a348bb5069e0200e9ad60eb44
+@source-sha 08dcdfe92bfa1e02e965904f73a390c5d57b1670528b624ceee824465cfc2126
 # Der Arbeitsbereich
 
 > Bei eingeschalteter Einstellung öffnet ByteRipper beim Start, was beim Beenden geöffnet war.
@@ -40,6 +40,12 @@ Beim Start wird jede Datei mit der Größe und dem Änderungsdatum verglichen, d
 In beiden Fällen nennt eine Meldung nach der Wiederherstellung die betroffenen Dateien.
 
 Ebenso werden die Änderungen geprüft, die ByteRipper neben dem Arbeitsbereich aufbewahrt. Änderungen, die sich nicht genau so zurücklesen lassen, wie sie geschrieben wurden – die Dateien neben dem Arbeitsbereich sind beschädigt –, werden nicht angewendet: Die Datei öffnet sich so, wie sie auf dem Datenträger liegt, ein Teil so, wie seine Datei ihn enthält, und ein Dokument ohne Datei wird nicht geöffnet. Die Meldung nach der Wiederherstellung nennt sie. Führt der aufbewahrte Verlauf nicht mehr bis zu seinem Anfang zurück, kehrt der Inhalt so zurück, wie er war, jedoch ohne die Schritte, ihn zu widerrufen, und auch das sagt die Meldung.
+
+## Andere Versionen von ByteRipper
+
+Eine Version von ByteRipper stellt den Arbeitsbereich wieder her, den eine frühere Version geschrieben hat; was in ihr neu hinzugekommen ist, beginnt einfach leer.
+
+Einen Arbeitsbereich, den eine neuere Version geschrieben hat, lässt das Programm unberührt: Lesen kann es ihn nicht, und ihn zu überschreiben würde diese Arbeit vernichten. Beim Start weist eine Meldung darauf hin, und bis zum Beenden wird kein Arbeitsbereich gespeichert: Das Programm öffnet sich mit einem leeren Fenster und fragt beim Beenden nach ungesicherten Änderungen wie bei ausgeschalteter Einstellung. Beim nächsten Start findet die neuere Version ihren Arbeitsbereich unverändert vor.
 
 ## Eine Datei aus dem Finder öffnen
 

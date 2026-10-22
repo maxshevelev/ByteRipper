@@ -369,6 +369,39 @@ final class WorkspaceRestoreTests: XCTestCase {
         return (WorkspaceRecorder(folder: WorkspaceFolder(url: folderURL), controllers: { controllers }), folderURL)
     }
 
+    /// A session a newer build wrote is neither read, nor written over, nor
+    /// deleted — the switch on or off — and the session is not kept meanwhile.
+    func testASessionOfANewerVersionIsLeftAlone() throws {
+        WorkspaceSettings.set(restoresWorkspace: true)
+        let folderURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WorkspaceRecorderTests-\(UUID().uuidString)")
+        addTeardownBlock { try? FileManager.default.removeItem(at: folderURL) }
+        let folder = WorkspaceFolder(url: folderURL)
+        var newer = Workspace(windows: [])
+        newer.version = Workspace.currentVersion + 1
+        try folder.write(newer)
+        try folder.prepareKeptFolder()
+        let kept = folder.keptURL("newer.log")
+        try Data([1, 2, 3]).write(to: kept)
+        let written = try Data(contentsOf: folder.fileURL)
+
+        let window = shownWindow()
+        window.mainViewController.windowModel.pane1.openBytes([0xAA, 0xBB], named: "work")
+        let recorder = WorkspaceRecorder(folder: WorkspaceFolder(url: folderURL), controllers: { [window] })
+        XCTAssertTrue(recorder.isSessionNewer)
+        XCTAssertFalse(recorder.keepsSession)
+        XCTAssertNil(recorder.savedWorkspace())
+
+        recorder.record(final: true)
+        recorder.flush()
+        WorkspaceSettings.set(restoresWorkspace: false)
+        recorder.record()
+        recorder.discardSession()
+        recorder.flush()
+        XCTAssertEqual(try Data(contentsOf: folder.fileURL), written)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: kept.path))
+    }
+
     func testAnUntitledDocumentComesBackWithItsBytesAndStillUnsaved() async throws {
         WorkspaceSettings.set(restoresWorkspace: true)
         let window = shownWindow()

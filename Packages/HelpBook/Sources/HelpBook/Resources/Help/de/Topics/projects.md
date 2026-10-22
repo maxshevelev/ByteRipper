@@ -1,4 +1,4 @@
-@source-sha 584fedeae5e8a2c1cc457d4d04a6c4d4f102b98a5300ec87280a9d3c538ecd7e
+@source-sha 92bb5f281eaf7318ac0dc9dd7044f072063951a987dc5953d1dfd8fbcbdeb4a8
 # Projekte
 
 > Ein Projekt ist ein Arbeitsbereich in einer eigenen Datei: alles, was für einen Auftrag geöffnet ist, wird als Ganzes wieder geöffnet, und zwischen Projekten lässt sich wechseln.
@@ -25,6 +25,8 @@ Ist [[topic:workspace|Arbeitsbereich beim Start wiederherstellen]] eingeschaltet
 ## Was eine Projektdatei ist
 
 Eine `.brp`-Datei ist ein Paket: ein Ordner, den der Finder als eine Datei zeigt und kopiert. Es enthält `Project.json` — einige Kilobyte, die die Fenster beschreiben — und, nur solange es sie gibt, die Bytes, die sonst nirgends auf dem Datenträger liegen: unbenannte Dokumente und ungesicherte Änderungen. Ein Projekt ohne ungesicherte Arbeit bleibt klein. Um ein Projekt per Mail oder Messenger zu verschicken, wird es zuvor im Finder mit **Komprimieren** gepackt.
+
+Eine Version von ByteRipper öffnet die Projekte, die frühere Versionen gespeichert haben. Ein Projekt, das eine neuere Version gespeichert hat, wird nicht geöffnet: Eine Meldung nennt den Grund, und das Projekt bleibt für jene Version unverändert.
 
 ## Geänderte und fehlende Dateien
 

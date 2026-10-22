@@ -128,6 +128,13 @@ of versions 1–3 were written before it and are refused.
 - **Newer version** — refused, with a message for a project that says so. A
   build cannot know what a newer one meant, and misreading is worse than not
   reading.
+- **A newer session on an older build** — left untouched for the rest of the
+  launch (`WorkspaceRecorder.isSessionNewer`): neither restored, nor written
+  over, nor deleted, whatever the switch says. The launch says so once, and
+  until quit the session is kept no more than with the switch off — quitting
+  asks about unsaved work. The newer build finds its session as it left it.
+  A project needs no such care: an older build refuses to open it, so never
+  writes it.
 
 What may change without raising the version: an added optional field (an
 earlier file has not got it and reads as nil). What raises it, with a step: a

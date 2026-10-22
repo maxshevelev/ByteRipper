@@ -196,6 +196,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         if !restored {
             makeWindow()
         }
+        if let recorder = workspaceRecorder, recorder.isSessionNewer, WorkspaceSettings.restoresWorkspace {
+            presentNewerSessionNotice()
+        }
         workspaceRecorder?.start()
         NSApp.activate(ignoringOtherApps: true)
         // The window is up; drain any files Launch Services handed us first.
@@ -224,6 +227,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         guard let recorder = workspaceRecorder, let workspace = recorder.savedWorkspace(),
               !workspace.isEmpty else { return false }
         return rebuild(workspace, with: recorder)
+    }
+
+    /// Says once, at launch, that the session on disk is a newer build's and
+    /// is left for it (`WorkspaceRecorder.isSessionNewer`).
+    // help: workspace.newer-version
+    private func presentNewerSessionNotice() {
+        let alert = NSAlert()
+        alert.messageText = L("The workspace was saved by a newer version of ByteRipper.")
+        alert.informativeText = L("It is left as it is, for that version to reopen. Until you quit, this version does not keep the workspace: quitting asks about unsaved changes.")
+        alert.addButton(withTitle: L("OK"))
+        _ = MainViewController.presentModal(alert, defaultInTest: .alertFirstButtonReturn)
     }
 
     /// Builds the windows of `workspace` — the session's at launch, or a
@@ -674,7 +688,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // on. What it keeps is written first, off the main thread, and the
         // quit goes on once it is on disk.
         guard let recorder = workspaceRecorder,
-              recorder.project != nil || WorkspaceSettings.restoresWorkspace else {
+              recorder.project != nil || recorder.keepsSession else {
             return askBeforeQuitting(sender, keeping: { _ in false })
         }
         recorder.recordFinal { [weak self, weak sender] in

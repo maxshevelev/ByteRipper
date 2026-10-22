@@ -16,6 +16,11 @@ import Workspace
 /// workspace from months ago never comes back. A project is recorded always:
 /// it is a file the person made to keep (`Design/WORKSPACE_PLAN.md`,
 /// "Projects").
+///
+/// A session a newer build wrote is left alone (`isSessionNewer`): this build
+/// cannot read it, and writing over it would lose that build's work. Until
+/// the app quits, the session without a project is then kept no more than
+/// with the switch off.
 @MainActor
 final class WorkspaceRecorder {
     /// The session the app keeps by itself, under Application Support.
@@ -47,6 +52,17 @@ final class WorkspaceRecorder {
         let writer = KeptWriter(folder: folder)
         self.sessionWriter = writer
         self.keeper = ContentKeeper(folder: folder, writer: writer)
+        if case .failure(.newer) = folder.load() { isSessionNewer = true }
+    }
+
+    /// Whether the session on disk was written by a newer build. Read once,
+    /// at launch: it stays out of reach until the app quits.
+    private(set) var isSessionNewer = false
+
+    /// Whether the session without a project is being kept: the switch is
+    /// on, and the session on disk is this build's to write.
+    var keepsSession: Bool {
+        WorkspaceSettings.restoresWorkspace && !isSessionNewer
     }
 
     /// The folder under Application Support, beside the annotations. Nil under
@@ -73,6 +89,7 @@ final class WorkspaceRecorder {
     /// Forgets the session the app keeps by itself: it was saved as a
     /// project, or discarded for one.
     func discardSession() {
+        guard !isSessionNewer else { return }
         // After whatever was still being written into it.
         sessionWriter.enqueue { $0.remove() }
     }
@@ -82,9 +99,10 @@ final class WorkspaceRecorder {
     /// writes is queued ahead of the next and of removing the folder.
     private let sessionWriter: KeptWriter
 
-    /// The workspace written last, if the switch is on and there is one.
+    /// The workspace written last, if the switch is on and there is one this
+    /// build can read.
     func savedWorkspace() -> Workspace? {
-        guard WorkspaceSettings.restoresWorkspace else { return nil }
+        guard keepsSession else { return nil }
         return folder.read()
     }
 
@@ -99,7 +117,7 @@ final class WorkspaceRecorder {
     private func updateJournalDirectory() {
         guard providesJournalDirectory else { return }
         let directory = project?.keptFolder
-            ?? (WorkspaceSettings.restoresWorkspace ? folder.keptFolder : nil)
+            ?? (keepsSession ? folder.keptFolder : nil)
         UndoJournal.directoryProvider = { directory }
     }
 
@@ -140,6 +158,8 @@ final class WorkspaceRecorder {
             keeper.commit(snapshot(), final: final)
             return
         }
+        // Neither written nor deleted: it is a newer build's.
+        guard !isSessionNewer else { return }
         guard WorkspaceSettings.restoresWorkspace else {
             if !removedWhileOff { keeper.writer.enqueue { $0.remove() } }
             removedWhileOff = true

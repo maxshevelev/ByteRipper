@@ -6,6 +6,7 @@
 @covers workspace.restore-warning
 @covers workspace.restore-check
 @covers workspace.final-write
+@covers workspace.newer-version
 
 The switch is **Reopen the workspace at launch** in [[topic:settings|Settings ▸ General]]. It is off after installation: on a repair bench each job is a different board, and dumps from an earlier job opening by themselves would be in the way.
 
@@ -44,6 +45,12 @@ At launch, each file is compared with its size and modification date at the time
 When either happens, one message after the restore lists the files concerned.
 
 The changes ByteRipper keeps beside the workspace are checked the same way. Changes that cannot be read back exactly as they were written — the files beside the workspace were damaged — are not applied: the file opens as it is on disk, a part as its file holds it, and a document with no file is not opened. The message after the restore names them. When the kept history no longer leads back to its beginning, the content comes back as it was but without the steps to undo it, and the message says that too.
+
+## Other versions of ByteRipper
+
+A version of ByteRipper restores the workspace that an earlier version wrote: what is new in it simply starts empty.
+
+A workspace written by a newer version is left untouched — the older version cannot read it, and writing over it would lose that work. At launch a message says so, and until the program is quit it keeps no workspace: it opens with an empty window, and quitting asks about unsaved changes as it does with the switch off. The next launch of the newer version finds its workspace as it was.
 
 ## Opening a file from the Finder
 

@@ -29,6 +29,8 @@ With [[topic:workspace|Reopen the workspace at launch]] on, the project open whe
 
 A `.brp` file is a package: a folder that the Finder shows and copies as one file. It holds `Project.json` — a few kilobytes describing the windows — and, only while there are any, the bytes nothing else on disk has: untitled documents and unsaved changes. A project without unsaved work stays small. To send a project by mail or message, compress it first with **Compress** in the Finder.
 
+A version of ByteRipper opens the projects that earlier versions saved. A project saved by a newer version is not opened: a message names the reason, and the project stays as it is for that version.
+
 ## Files that changed or are missing
 
 A file not found at its path or relative to the project is not opened. A file that changed on disk while the project was closed opens without the project's unsaved changes to it, since those changes were made on other bytes. One message after opening lists both, as it does for the workspace.

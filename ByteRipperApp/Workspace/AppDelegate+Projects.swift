@@ -19,7 +19,8 @@ extension AppDelegate {
     /// always, the session when it is restored — and closing the last window
     /// is therefore a quit rather than an emptying.
     var keepsWindowsAtQuit: Bool {
-        workspaceRecorder != nil && (currentProject != nil || WorkspaceSettings.restoresWorkspace)
+        guard let recorder = workspaceRecorder else { return false }
+        return currentProject != nil || recorder.keepsSession
     }
 
     /// The project's name as windows show it.
