@@ -1716,55 +1716,70 @@ classified as UEFITool's padding. A wiped block is all `FF`, its signature is
 not there, and it leaves no row.
 
 **Panasonic's DMI area** (`PanasonicDMIStore.swift`) is where the firmware
-of a Toughbook keeps what the factory wrote of the machine. In the padding
-inside the BIOS region, on a 4 KiB boundary, declared nowhere. The layout is
-read off one dump — an FZ-55 mk2, 32 MB, the area at `0x1400000` in a
-512 KiB stretch of padding — and nothing is published; no public description
-was found either (searched 2026-10-22).
+of a Toughbook or Let's note keeps what the factory wrote of the machine. In
+the padding inside the BIOS region, on a 4 KiB boundary, declared nowhere.
+Nothing is published and no public description was found (searched
+2026-10-22). The layout is read off four dumps:
+
+| Machine | Chip | Area | Records (directory order) |
+|---|---|---|---|
+| FZ-55 mk2 | 32 MB | `0x1400000–0x1469DA0` | 02 03 05 14 0D 15 16 1A 1C 1D 1E 0F 1B 1F |
+| CF-53 mk1 | 8 MB | `0x580000–0x582020` | 02 03 05 08 09 12 14 0D 0E 0F 0B 04 |
+| CF-AX2 | 16 MB | `0xA80000–0xA82020` | 02 03 05 08 09 14 0D 0E 15 16 0F 0B 04 |
+| FZ-G1 mk3 | 16 MB | `0xA00000–0xA0087F` | 02 03 05 09 14 0D 0E 15 16 0F 04 |
 
 | Offset | Field |
 |---|---|
 | `0x00` | `MEI_` and the model, `MEI_FZ55-2` (Matsushita Electric Industrial) |
 | `0x28` | a model code, `FZ55FZ-52M4` |
 | `0x3A` | `MEI___CF` |
-| `0x80` | u16, u16 — both `0x0F` on the dump, 14 records listed; meaning unknown |
-| `0x88` | `{u32 ID, u32 address}` per record, to an ID of 0 |
+| `0x80` | u16 the directory's length in 8-byte units, these eight included; u16 its checksum (high byte 0); u32 0 |
+| `0x88` | `{u32 ID, u32 address}` per record — length − 1 of them |
 
 An address is the record's place in the CPU's view of the flash — file
-offset + `0xFE000000` on the 32 MB chip — so the area's own address is the
+offset + `0x1_0000_0000` − chip size — so the area's own address is the
 first record's rounded down to 4 KiB, which holds as long as the directory
-and the first record fit in the area's first 4 KiB. A record is
-`{length, value}` then data: u16 + u16 in records `0x02`, `0x03`, `0x05`,
-`0x0D`, `0x0F`, `0x14`; u32 + u32 in `0x15`, `0x16`, `0x1A`, `0x1B`, `0x1C`,
-`0x1D`, `0x1E`, `0x1F`. The length counts the header; the next record starts
-at the next 16-byte boundary (`0x15`: `0x108` long, the next at `+0x110`).
-Which form a record has is told by where the next record starts, not by its
-ID: the u32 reading of a short header is `length | value << 16`, far past
-the next record. The last record has no next, and takes the u32 form when
-that fits before the padding ends.
+and the first record fit in the area's first 4 KiB. A record is a header and
+data: `{u16 length, u8 checksum}`, or `{u32 length, u8 checksum, 3 bytes}`
+whose fifth byte reads `01`, `20`, `40`, `41`, `42`, `80` or `81` and whose
+last two are 0. The length counts the header. Records sit at the directory's
+addresses, back to back or with a gap (CF-53: `0x0F` ends at `+0x760`, `0x0B`
+starts at `+0x1000`); FZ-55's records happen to start on 16-byte boundaries,
+the others' do not. On the dumps, records `0x15` and up have the long header
+and the rest the short one, but the parser does not go by the ID: it takes the
+form whose length fits before the next record and whose checksum holds.
 
-The value after the length is not a sum8/sum16/word sum/CRC32 of the data
-or of the record, and records of all-zero data carry different values — a
-tag, or a checksum seeded with something else; unknown.
+**Checksums.** Every part sums to 0 modulo 256: the header's `0x00–0x7F`
+(which byte is the checksum is not known; `+0x16` and `+0x56–0x5A` are the
+bytes that differ between copies), the directory `0x80` to its end, and each
+record over its length. All four headers, all four directories and all 50
+records hold. A failing sum is reported, not a reason to skip the area.
+
+The firmware keeps copies of the header's `0x00–0x7F` in the NVRAM variable
+`MiscTableBackup` (NVAR, 0x9B bytes) — on the FZ-55, CF-53 and CF-AX2 dumps,
+each copy summing to 0; older copies differ at `+0x16` and `+0x56–0x5A`.
 
 | ID | Holds |
 |---|---|
-| `0x02` | the asset tag, `No Asset Tag` |
-| `0x03` | a 15-character serial and CR LF — the board's or the machine's, not known |
+| `0x02` | the asset tag from `+3`, `No Asset Tag` on all four |
+| `0x03` | `01`, then a serial and CR LF (15 characters on the FZ-55, 8 on the CF-AX2); all zero on the CF-53 — the board's or the machine's, not known |
 | `0x16` | four u32s (`1, 0, 1, 0`), u32 `29`, the Windows product key |
+| `0x09` | three NUL-separated strings of base64 characters — not known |
+| `0x0B` | `0x1000` bytes; from `+0x14` what reads as ATA IDENTIFY data (words `0040 3FFF C837 0010`) and a drive's serial — not known |
 | `0x1E` | 32 bytes that read as random — a hash or a key |
-| `0x1B` | `0x68000` bytes, all zero after the header |
-| `0x1F` | `0x1000` bytes, high-entropy after a short header |
+| `0x1B` | `0x68000` bytes, all zero after the header (FZ-55) |
+| `0x1F` | `0x1000` bytes, high-entropy after a short header (FZ-55) |
 | others | unknown |
 
 A block is one when `MEI_` is at a 4 KiB boundary of written padding and its
-directory lists at least two records that chain as above, at rising
-addresses, the last ending before the padding does. The node is a
+directory lists at least two records at rising addresses, each ending no
+later than the next starts, the last before the padding ends. The node is a
 `panasonicDMIStore`, fixed, named `Panasonic DMI`, from the header to the end
 of the last record; its children are `dmiField`s for the model and the model
-code, then a `panasonicDMIRecord` per record (subtype = ID, header 4 or 8
+code, then a `panasonicDMIRecord` per record (subtype = ID, header 3 or 8
 bytes) with a `dmiField` under the three whose content is known. All are
-classified as UEFITool's padding.
+classified as UEFITool's padding. The checksums are reported in the details;
+they are not yet among the ones `uefi_checksums` repairs.
 
 **HP's identity** (`HPDMIArea.swift`) is not a block of its own: it is
 NVRAM variables in the main VSS2 store, which HP BIOS Configuration Utility

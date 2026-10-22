@@ -3,9 +3,10 @@ import XCTest
 
 /// Panasonic's DMI area (`PanasonicDMIStore`): a header, a directory and the
 /// records it lists, read out of the padding it lies in. The format is read
-/// off one dump of an FZ-55 mk2, so the tests carry a synthetic block of the
-/// same shape: short and long record headers, a record whose length leaves a
-/// gap to the next 16-byte boundary, and no real serial or key.
+/// off dumps of an FZ-55 mk2, a CF-53 mk1 and a CF-AX2, so the tests carry a
+/// synthetic block of the same shape: short and long record headers, records
+/// back to back and with a gap, every part summing to 0, and no real serial
+/// or key.
 final class PanasonicDMIStoreTests: XCTestCase {
     private static let size: UInt64 = 0x10000
     /// Where a 64 KiB chip's file offset 0 is in the CPU's view of it.
@@ -13,41 +14,51 @@ final class PanasonicDMIStoreTests: XCTestCase {
     private static let serial = "TEST0000SERIAL1"
     private static let key = "AAAAA-BBBBB-CCCCC-DDDDD-EEEEE"
 
-    private static func put(_ bytes: inout [UInt8], _ data: [UInt8], at offset: Int) {
+    static func put(_ bytes: inout [UInt8], _ data: [UInt8], at offset: Int) {
         bytes.replaceSubrange(offset..<(offset + data.count), with: data)
     }
 
-    private static func le16(_ value: UInt16) -> [UInt8] { [UInt8(value & 0xFF), UInt8(value >> 8)] }
-    private static func le32(_ value: UInt32) -> [UInt8] { (0..<4).map { UInt8((value >> ($0 * 8)) & 0xFF) } }
+    static func le16(_ value: UInt16) -> [UInt8] { [UInt8(value & 0xFF), UInt8(value >> 8)] }
+    static func le32(_ value: UInt32) -> [UInt8] { (0..<4).map { UInt8((value >> ($0 * 8)) & 0xFF) } }
 
     /// The records, each `(id, offset in the block, length, long header?)`.
     private static let records: [(id: UInt32, at: Int, length: Int, long: Bool)] = [
         (0x02, 0x100, 0x80, false),
         (0x03, 0x180, 0x40, false),
-        (0x15, 0x1C0, 0x108, true),   // ends at 0x2C8; the next starts at 0x2D0
-        (0x16, 0x2D0, 0x39, true),
-        (0x1F, 0x310, 0x100, true)
+        (0x15, 0x1C0, 0x108, true),   // ends at 0x2C8, the next starts at 0x2D0
+        (0x16, 0x2D0, 0x39, true),    // the next starts right after it
+        (0x1F, 0x309, 0x107, true)
     ]
     private static let areaLength: UInt64 = 0x410
 
+    /// Makes the bytes of `range` sum to 0 by the byte at `at`.
+    static func fix(_ bytes: inout [UInt8], _ range: Range<Int>, at: Int) {
+        bytes[at] = 0
+        bytes[at] = 0 &- bytes[range].reduce(0, &+)
+    }
+
     /// The block at `offset` in the file: zero where nothing is written, as
-    /// the dump has it.
+    /// the dumps have it, every checksum holding.
     private static func block(at offset: Int) -> [UInt8] {
         var bytes = [UInt8](repeating: 0, count: Int(areaLength))
         put(&bytes, Array("MEI_FZ55-2".utf8), at: 0)
         put(&bytes, Array("FZ55FZ-52M4".utf8), at: 0x28)
         put(&bytes, Array("MEI___CF".utf8), at: 0x3A)
-        put(&bytes, le16(0x0F) + le16(0x0F), at: 0x80)
+        // The directory's length in 8-byte units counts its own first eight.
+        put(&bytes, le16(UInt16(records.count + 1)), at: 0x80)
         for (index, record) in records.enumerated() {
             put(&bytes, le32(record.id) + le32(base + UInt32(offset + record.at)), at: 0x88 + index * 8)
-            let header = record.long
-                ? le32(UInt32(record.length)) + le32(0x40E2)
-                : le16(UInt16(record.length)) + le16(0x4E67)
-            put(&bytes, header, at: record.at)
+            put(&bytes, record.long ? le32(UInt32(record.length)) + [0, 0x40, 0, 0] : le16(UInt16(record.length)) + [0],
+                at: record.at)
         }
-        put(&bytes, Array("No Asset Tag".utf8), at: 0x104)
-        put(&bytes, Array((serial + "\r\n").utf8), at: 0x184)
+        put(&bytes, Array("No Asset Tag".utf8), at: 0x103)
+        put(&bytes, [0x01] + Array((serial + "\r\n").utf8), at: 0x183)
         put(&bytes, le32(1) + le32(0) + le32(1) + le32(0) + le32(29) + Array(key.utf8), at: 0x2D8)
+        fix(&bytes, 0..<0x80, at: 0x16)
+        fix(&bytes, 0x80..<(0x88 + records.count * 8), at: 0x82)
+        for record in records {
+            fix(&bytes, record.at..<(record.at + record.length), at: record.at + (record.long ? 4 : 2))
+        }
         return bytes
     }
 
@@ -78,8 +89,8 @@ final class PanasonicDMIStoreTests: XCTestCase {
                        ["Model", "Model code", "Record 0x02", "Record 0x03", "Record 0x15", "Record 0x16", "Record 0x1F"])
         let records = store.children.filter { $0.kind == .panasonicDMIRecord }
         XCTAssertEqual(records.map(\.subtype), [0x02, 0x03, 0x15, 0x16, 0x1F])
-        XCTAssertEqual(records.map(\.header), [0x8100..<0x8104, 0x8180..<0x8184, 0x81C0..<0x81C8,
-                                               0x82D0..<0x82D8, 0x8310..<0x8318])
+        XCTAssertEqual(records.map(\.header), [0x8100..<0x8103, 0x8180..<0x8183, 0x81C0..<0x81C8,
+                                               0x82D0..<0x82D8, 0x8309..<0x8311])
         XCTAssertEqual(records.map(\.range.upperBound), [0x8180, 0x81C0, 0x82C8, 0x8309, 0x8410])
         XCTAssertEqual(records.map { $0.children.map(\.name) },
                        [["Asset tag"], ["Serial"], [], ["Windows product key"], []])
@@ -96,8 +107,10 @@ final class PanasonicDMIStoreTests: XCTestCase {
         XCTAssertEqual(area.assetTag, "No Asset Tag")
         XCTAssertEqual(area.serial, Self.serial, "to the line end")
         XCTAssertEqual(area.productKey, Self.key)
-        XCTAssertEqual(area.records.map(\.headerSize), [4, 4, 8, 8, 8])
-        XCTAssertEqual(area.records.first?.tag, 0x4E67)
+        XCTAssertEqual(area.records.map(\.headerSize), [3, 3, 8, 8, 8])
+        XCTAssertTrue(area.headerChecksumIsValid)
+        XCTAssertTrue(area.directoryChecksumIsValid)
+        XCTAssertTrue(area.records.allSatisfy(\.checksumIsValid))
         let parsed = UEFIParser.parse(bytes)
         let reader = ImageReader(bytes)
         let values = parsed.allNodes.filter { $0.kind == .dmiField }.compactMap { DMIField.text(of: $0, reader: reader) }
@@ -132,7 +145,7 @@ final class PanasonicDMIStoreTests: XCTestCase {
         XCTAssertTrue(stores(parsed).isEmpty, "a length that does not end where the next starts")
         parsed = parse { Self.put(&$0, Self.le32(Self.base + 0x8100), at: 0x8094) } // two records at one place
         XCTAssertTrue(stores(parsed).isEmpty, "addresses that do not rise")
-        parsed = parse { Self.put(&$0, Self.le32(0), at: 0x8090) } // one record listed
+        parsed = parse { Self.put(&$0, Self.le16(2), at: 0x8080) } // one record listed
         XCTAssertTrue(stores(parsed).isEmpty, "a directory of one")
         parsed = parse { $0[0x8000] = 0x4E } // "NEI_"
         XCTAssertTrue(stores(parsed).isEmpty, "no signature")
@@ -152,5 +165,21 @@ final class PanasonicDMIStoreTests: XCTestCase {
         let area = try XCTUnwrap(PanasonicDMIArea.read(at: 0x8000, end: 0xF000, reader: ImageReader(bytes)))
         XCTAssertNil(area.productKey)
         XCTAssertEqual(area.records.count, 5)
+    }
+
+    /// A checksum that fails does not hide the block: it is read, and says
+    /// which sum fails and what the byte should be.
+    func testAFailingChecksumIsReadAndSaid() throws {
+        var bytes = Self.image()
+        bytes[0x8183 + 1] = 0x58 // the serial's first character, its sum left as it was
+        bytes[0x8084] = 0x01     // the directory's reserved word, its sum left as it was
+        let area = try XCTUnwrap(PanasonicDMIArea.read(at: 0x8000, end: 0xF000, reader: ImageReader(bytes)))
+        XCTAssertTrue(area.headerChecksumIsValid)
+        XCTAssertFalse(area.directoryChecksumIsValid)
+        XCTAssertEqual(area.expectedDirectoryChecksum, area.directoryChecksum &- 1)
+        let serial = try XCTUnwrap(area.record(0x03))
+        XCTAssertFalse(serial.checksumIsValid)
+        XCTAssertEqual(serial.expectedChecksum, serial.checksum &- (0x58 &- 0x54))
+        XCTAssertEqual(area.records.filter { !$0.checksumIsValid }.map(\.id), [0x03])
     }
 }
