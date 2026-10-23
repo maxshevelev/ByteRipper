@@ -1,4 +1,4 @@
-@source-sha d44c1c42f30d555664f4e0986559f5118306352e062afb4758dc2646771d3787
+@source-sha 44e28a65e3629ed6624efffd9cb67afa5a6bad11fd2b0243b3f6b6aea4778f58
 @term flash-descriptor
 @name Flash Descriptor
 @short Die ersten `0x1000` Bytes eines Intel-Flash-Images: die Karte des Chips.
@@ -304,15 +304,15 @@ Die Details der Map und jedes ihrer Einträge enthalten die Tabelle **Regionen d
 @name BIOS Version Data Table
 @short Der Eintrag von Insyde über die BIOS-Version, das Produkt, für das die Firmware erstellt wurde, und den zugrunde liegenden Insyde-Kernel.
 
-Insyde-Firmware enthält eine kleine Tabelle, die mit der Signatur `$BVDT$` beginnt. Die [[term:flash-device-map|Flash Device Map]] bezeichnet ihre Region als **BIOS Version Data Table**, und die Detailliste gibt wieder, was die Tabelle angibt:
+Insyde-Firmware enthält eine kleine Tabelle, die mit der Signatur `$BVDT$` beginnt. Die [[term:flash-device-map|Flash Device Map]] bezeichnet ihre Region als **BIOS Version Data Table**, und die Details geben in der Tabelle **Einträge** wieder, was die Tabelle angibt, wie bei einem DMI-Bereich. Der Name jedes Eintrags ist ein Link: Ein Klick darauf umrandet im Dump die Bytes, aus denen der Wert gelesen wird.
 
-- **BIOS version** — die Version in der Zählung des Herstellers, etwa `J2CN57WW` auf einem Lenovo-Board.
-- **Product name** — das Modell oder das Board, etwa `Legion 570 Series Intel`.
-- **Kernel version** — die Version des InsydeH2O-Kernels, auf dem die Firmware aufbaut, etwa `05.43.44`.
-- **Release date** — das Datum aus dem Eintrag `$RDATE` der Tabelle.
+- **BIOS-Version** — die Version in der Zählung des Herstellers, etwa `J2CN57WW` auf einem Lenovo-Board.
+- **Produktname** — das Modell oder das Board, etwa `Legion 570 Series Intel`.
+- **Kernel-Version** — die Version des InsydeH2O-Kernels, auf dem die Firmware aufbaut, etwa `05.43.44`.
+- **Veröffentlichungsdatum** — das Datum aus dem Eintrag `$RDATE` der Tabelle.
 - **Compiler** — die Version des Microsoft-Compilers, mit dem die Firmware erstellt wurde, aus dem Eintrag `$_MSC_VER=`, und die zugehörige Version von Visual Studio.
-- **ESRT firmware class** — die GUID, unter der das Betriebssystem die System-Firmware des Boards in der EFI System Resource Table führt. Windows zeigt sie als Hardware-ID `UEFI\RES_{…}` des Geräts „System Firmware“ an und ordnet ihr BIOS-Updatepakete zu; zwei Dumps mit unterschiedlicher GUID enthalten daher Firmware für unterschiedliche Boards.
-- **ESRT version** — die neben dieser GUID gespeicherte Firmware-Version. Auf den meisten untersuchten Dumps entspricht ihr niedrigstes Byte der Build-Nummer in der BIOS-Version.
+- **ESRT-Firmwareklasse** — die GUID, unter der das Betriebssystem die System-Firmware des Boards in der EFI System Resource Table führt. Windows zeigt sie als Hardware-ID `UEFI\RES_{…}` des Geräts „System Firmware“ an und ordnet ihr BIOS-Updatepakete zu; zwei Dumps mit unterschiedlicher GUID enthalten daher Firmware für unterschiedliche Boards.
+- **ESRT-Version** — die neben dieser GUID gespeicherte Firmware-Version. Auf den meisten untersuchten Dumps entspricht ihr niedrigstes Byte der Build-Nummer in der BIOS-Version.
 
 Der Eintrag `$BME$` listet Bereiche der BIOS-Region auf; die Tabelle **Bereiche in $BME$** gibt ihre Adressen im Dump an und nennt, was genau in diesen Grenzen liegt. Auf den untersuchten Dumps sind das die eigene Region der Tabelle, das Microcode-Volume und auf zwei Boards die Region der EC-Firmware. Der Anfang eines Bereichs, der im Dump liegt, ist ein Link: Ein Klick darauf umrandet diesen Bereich im Dump. Was die Firmware oder ihr Flash-Werkzeug mit diesen Bereichen macht, ist nicht dokumentiert.
 

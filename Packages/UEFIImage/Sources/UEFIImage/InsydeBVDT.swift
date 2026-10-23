@@ -40,6 +40,15 @@ public struct InsydeBVDT: Equatable, Sendable {
     /// The `$BME$` record's ranges, as offsets into the BIOS region.
     public var listedRanges: [Range<UInt64>] = []
 
+    /// A value the table states.
+    public enum Value: CaseIterable, Sendable {
+        case biosVersion, productName, kernelVersion, releaseDate, compilerVersion, esrtClass, esrtVersion
+    }
+
+    /// Where each value read is in the file: a string's text, a record's
+    /// bytes after its tag.
+    public var sources: [Value: Range<UInt64>] = [:]
+
     static let signature = Array("$BVDT$".utf8)
     static let end = Array("$ENDOFBVDT".utf8)
     static let dateTag = Array("$RDATE".utf8)
@@ -66,23 +75,38 @@ public struct InsydeBVDT: Equatable, Sendable {
         else { return nil }
 
         var table = InsydeBVDT()
-        table.biosVersion = string(bytes, biosVersionField)
-        table.productName = string(bytes, productNameField)
-        table.kernelVersion = string(bytes, kernelVersionField)
+        let base = range.lowerBound
+        func place(_ value: Value, _ at: Int, _ count: Int) {
+            table.sources[value] = (base + UInt64(at))..<(base + UInt64(at + count))
+        }
+        for (value, field) in [(Value.biosVersion, biosVersionField), (.productName, productNameField),
+                               (.kernelVersion, kernelVersionField)] {
+            guard let text = string(bytes, field) else { continue }
+            switch value {
+            case .biosVersion: table.biosVersion = text
+            case .productName: table.productName = text
+            default: table.kernelVersion = text
+            }
+            place(value, field.lowerBound + 1, textLength(bytes, field))
+        }
 
         let records = bytes.firstRange(of: end).map { bytes[..<$0.lowerBound] } ?? bytes[...]
         if let tag = records.firstRange(of: dateTag), tag.upperBound + 3 <= records.endIndex {
             let date = Array(records[tag.upperBound..<(tag.upperBound + 3)])
             if date.allSatisfy(isBCD), (1...12).contains(bcd(date[1])), (1...31).contains(bcd(date[2])) {
                 table.releaseDate = String(format: "20%02X-%02X-%02X", date[0], date[1], date[2])
+                place(.releaseDate, tag.upperBound, 3)
             }
         }
-        if let value = value(after: compilerTag, count: 2, in: records) {
+        if let (at, value) = value(after: compilerTag, count: 2, in: records) {
             table.compilerVersion = UInt16(value[0]) | UInt16(value[1]) << 8
+            place(.compilerVersion, at, 2)
         }
-        if let value = value(after: esrtTag, count: 20, in: records) {
+        if let (at, value) = value(after: esrtTag, count: 20, in: records) {
             table.esrtVersion = value[0..<4].reversed().reduce(0) { $0 << 8 | UInt32($1) }
             table.esrtClass = EFIGUID(bytes: Array(value[4..<20]))
+            place(.esrtVersion, at, 4)
+            place(.esrtClass, at + 4, 16)
         }
         if let tag = records.firstRange(of: rangesTag) {
             table.listedRanges = ranges(from: tag.upperBound, in: records)
@@ -90,10 +114,12 @@ public struct InsydeBVDT: Equatable, Sendable {
         return table
     }
 
-    /// The `count` bytes after `tag` among the records, if they are there.
-    private static func value(after tag: [UInt8], count: Int, in records: ArraySlice<UInt8>) -> [UInt8]? {
+    /// The `count` bytes after `tag` among the records, and where they
+    /// start, if they are there.
+    private static func value(after tag: [UInt8], count: Int,
+                              in records: ArraySlice<UInt8>) -> (at: Int, bytes: [UInt8])? {
         guard let found = records.firstRange(of: tag), found.upperBound + count <= records.endIndex else { return nil }
-        return Array(records[found.upperBound..<(found.upperBound + count)])
+        return (found.upperBound, Array(records[found.upperBound..<(found.upperBound + count)]))
     }
 
     /// `$BME$`'s pairs: a 32-bit offset and size, then a `$` when another
@@ -123,6 +149,11 @@ public struct InsydeBVDT: Equatable, Sendable {
         let text = bytes[(field.lowerBound + 1)..<field.upperBound].prefix { $0 != 0 }
         guard !text.isEmpty, text.allSatisfy({ (0x20..<0x7F).contains($0) }) else { return nil }
         return String(decoding: text, as: UTF8.self).trimmingCharacters(in: .whitespaces)
+    }
+
+    /// How long a string field's text is, before its terminator.
+    private static func textLength(_ bytes: [UInt8], _ field: Range<Int>) -> Int {
+        bytes[(field.lowerBound + 1)..<field.upperBound].prefix { $0 != 0 }.count
     }
 
     private static func isBCD(_ byte: UInt8) -> Bool {

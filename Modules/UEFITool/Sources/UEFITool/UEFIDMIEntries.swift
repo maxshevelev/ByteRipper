@@ -6,7 +6,8 @@ import UEFIImage
 /// HP's `HP_MUD`, Apple's SysF store — each a way to the row it is read
 /// from, as Lenovo's store lists its entries in use
 /// (`UEFILenovoDMIDetail`). One table for every vendor, so the areas read
-/// alike whatever layout is under them.
+/// alike whatever layout is under them — and for Insyde's version table,
+/// whose values are the same kind of thing.
 enum UEFIDMIEntries {
     struct Row {
         var name: String
@@ -15,6 +16,9 @@ enum UEFIDMIEntries {
         /// Where the row the value is read from lies; nil for a value no row
         /// holds.
         var source: Range<UInt64>?
+        /// Where a click goes when no node is the row: the value's bytes
+        /// outlined in the dump. Nil to go to the node at `source`.
+        var target: UEFIDetailTable.Target? = nil
     }
 
     /// The table, a row's link going to the one of `nodes` that lies where
@@ -28,7 +32,7 @@ enum UEFIDMIEntries {
                 [.init(row.name), .init((row.value ?? "").isEmpty ? "—" : row.value!)]
             },
             rowTargets: rows.map { row in
-                row.source.flatMap { source in nodes.first { $0.range == source } }.map { .node($0.id) }
+                row.target ?? row.source.flatMap { source in nodes.first { $0.range == source } }.map { .node($0.id) }
             },
             linkColumn: 0
         )

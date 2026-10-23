@@ -303,7 +303,7 @@ The detail list of the map, and of each of its entries, contains the table **Reg
 @name BIOS Version Data Table
 @short Insyde's record of the BIOS version, the product the firmware was built for, and the Insyde kernel it is based on.
 
-Insyde firmware keeps a small table that begins with the signature `$BVDT$`. The [[term:flash-device-map|flash device map]] names its region **BIOS Version Data Table**, and the detail list shows what the table states:
+Insyde firmware keeps a small table that begins with the signature `$BVDT$`. The [[term:flash-device-map|flash device map]] names its region **BIOS Version Data Table**, and the details list what the table states in the table **Entries**, as for a DMI area. The name of each entry is a link: a click on it outlines in the dump the bytes the value is read from.
 
 - **BIOS version** — the version in the vendor's numbering, for example `J2CN57WW` on a Lenovo board.
 - **Product name** — the model or the board, for example `Legion 570 Series Intel`.

@@ -769,19 +769,37 @@ final class UEFIDetailTests: XCTestCase {
         XCTAssertEqual(field(detail, "Setup help"), "Lets an older BIOS be flashed.")
     }
 
-    /// The version table's region shows what the table states.
-    func testABVDTRegionShowsTheVersionsTheTableStates() {
+    /// The version table's region lists what the table states as its
+    /// Entries, as an identity area does, each row a link to the bytes the
+    /// value is read from.
+    func testABVDTRegionListsWhatTheTableStatesAsEntries() throws {
         let built = TestUEFI.bvdtRegion()
         let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         XCTAssertEqual(field(detail, "Kind"), "Flash device map region")
-        XCTAssertEqual(field(detail, "BIOS version"), "JKCN31WW")
-        XCTAssertEqual(field(detail, "Product name"), "S370-IAU")
-        XCTAssertEqual(field(detail, "Kernel version"), "05.44.02")
-        XCTAssertEqual(field(detail, "Release date"), "2022-07-21")
-        XCTAssertEqual(field(detail, "Compiler"), "MSC 1600 (Visual Studio 2010)")
-        XCTAssertEqual(field(detail, "ESRT firmware class"), "F102E4FC-EB52-4FD9-8098-E51308E275F7")
-        XCTAssertEqual(field(detail, "ESRT version"), "0x52440031")
+        XCTAssertNil(field(detail, "BIOS version"), "a value is a row of the table, not a field")
+        let entries = try XCTUnwrap(detail.tables.first { $0.title == "Entries" })
+        XCTAssertEqual(entries.columns, ["Entry", "Value"])
+        XCTAssertEqual(entries.rows.map { $0.map(\.text) }, [
+            ["BIOS version", "JKCN31WW"],
+            ["Product name", "S370-IAU"],
+            ["Kernel version", "05.44.02"],
+            ["Release date", "2022-07-21"],
+            ["Compiler", "MSC 1600 (Visual Studio 2010)"],
+            ["ESRT firmware class", "F102E4FC-EB52-4FD9-8098-E51308E275F7"],
+            ["ESRT version", "0x52440031"],
+        ])
+        XCTAssertEqual(entries.linkColumn, 0)
+        XCTAssertEqual(entries.rowTargets, [
+            .range(0x0E..<0x16, name: "BIOS version"),
+            .range(0x27..<0x2F, name: "Product name"),
+            .range(0x41..<0x49, name: "Kernel version"),
+            .range(0x8F..<0x92, name: "Release date"),
+            .range(0x87..<0x89, name: "Compiler"),
+            .range(0x9B..<0xAB, name: "ESRT firmware class"),
+            .range(0x97..<0x9B, name: "ESRT version"),
+        ])
+        XCTAssertEqual(detail.tables.first?.title, "Entries", "before the ranges $BME$ lists")
     }
 
     /// The ranges `$BME$` lists, placed in the file, each with what is exactly

@@ -51,7 +51,10 @@ final class InsydeBVDTTests: XCTestCase {
             productName: "Legion 570 Series Intel",
             kernelVersion: "05.43.44",
             releaseDate: "2024-01-08",
-            listedRanges: [0xAA000..<0xAB000, 0xC4_0000..<0xD0_0000]
+            listedRanges: [0xAA000..<0xAB000, 0xC4_0000..<0xD0_0000],
+            // Each string's text after its `$`, and the date after `$RDATE`.
+            sources: [.biosVersion: 0x0E..<0x16, .productName: 0x27..<0x3E,
+                      .kernelVersion: 0x41..<0x49, .releaseDate: 0x155..<0x158]
         ))
     }
 

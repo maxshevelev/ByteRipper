@@ -200,10 +200,14 @@ public enum UEFIDetail {
             fields.insert(.init(L("Name in the catalogue", in: language), listed), at: at)
         }
 
-        // What the BVDT's `$BME$` record lists, placed in the file.
+        // What the BVDT states, then what its `$BME$` record lists, placed
+        // in the file.
         if node.kind == .flashDeviceMapRegion, node.guid == FlashDeviceMap.biosVersionDataTable,
-           let table = InsydeBVDT.read(node.body, in: reader), !table.listedRanges.isEmpty {
-            tables.append(listedRangesTable(table.listedRanges, near: node, in: image, in: language))
+           let table = InsydeBVDT.read(node.body, in: reader) {
+            if let entries = bvdtEntriesTable(table, in: language) { tables.append(entries) }
+            if !table.listedRanges.isEmpty {
+                tables.append(listedRangesTable(table.listedRanges, near: node, in: image, in: language))
+            }
         }
 
         // Where the regions an Insyde map names lie in the file — the whole
@@ -525,6 +529,33 @@ public enum UEFIDetail {
     /// a volume — where one is. What the list is for is not known, so the
     /// table says where and not why. A click on a range in the file outlines
     /// it in the dump, named by what is there, as the map's table does.
+    /// The values a BVDT states, one row each, in the table an identity
+    /// area lists its values in (`UEFIDMIEntries`). A row's link outlines the
+    /// bytes its value is read from: the records are not nodes of their own.
+    /// Nil when the table states nothing.
+    private static func bvdtEntriesTable(_ table: InsydeBVDT, in language: AppLanguage) -> UEFIDetailTable? {
+        var rows: [UEFIDMIEntries.Row] = []
+        for value in InsydeBVDT.Value.allCases {
+            let entry: (name: String, text: String?)
+            switch value {
+            case .biosVersion: entry = (L("BIOS version", in: language), table.biosVersion)
+            case .productName: entry = (L("Product name", in: language), table.productName)
+            case .kernelVersion: entry = (L("Kernel version", in: language), table.kernelVersion)
+            case .releaseDate: entry = (L("Release date", in: language), table.releaseDate)
+            case .compilerVersion: entry = (L("Compiler", in: language), table.compilerVersion.map(compilerText))
+            // The board's identity to a capsule update, and the version it
+            // would be compared with.
+            case .esrtClass: entry = (L("ESRT firmware class", in: language), table.esrtClass?.description)
+            case .esrtVersion: entry = (L("ESRT version", in: language), table.esrtVersion.map { hex($0) })
+            }
+            guard let text = entry.text else { continue }
+            let source = table.sources[value]
+            rows.append(.init(name: entry.name, value: text, source: source,
+                              target: source.map { .range($0, name: entry.name) }))
+        }
+        return rows.isEmpty ? nil : UEFIDMIEntries.table(rows, among: [], in: language)
+    }
+
     private static func listedRangesTable(_ ranges: [Range<UInt64>], near node: UEFINode, in image: UEFIImage, in language: AppLanguage) -> UEFIDetailTable {
         // A dump of the BIOS region alone starts with it.
         let bios = image.nodes(containing: node.range.lowerBound).first {
@@ -1130,18 +1161,8 @@ public enum UEFIDetail {
         // it is, and the type is the common "GUID" field. What the region
         // holds is read where its type is understood.
         case .flashDeviceMapRegion:
-            if node.guid == FlashDeviceMap.biosVersionDataTable,
-               let table = InsydeBVDT.read(node.body, in: reader) {
-                if let version = table.biosVersion { fields.append(.init("BIOS version", version)) }
-                if let product = table.productName { fields.append(.init("Product name", product)) }
-                if let kernel = table.kernelVersion { fields.append(.init("Kernel version", kernel)) }
-                if let date = table.releaseDate { fields.append(.init("Release date", date)) }
-                if let compiler = table.compilerVersion { fields.append(.init("Compiler", compilerText(compiler))) }
-                // The board's identity to a capsule update, and the version
-                // it would be compared with.
-                if let esrtClass = table.esrtClass { fields.append(.init("ESRT firmware class", esrtClass.description)) }
-                if let esrtVersion = table.esrtVersion { fields.append(.init("ESRT version", hex(esrtVersion))) }
-            }
+            // A version table's values are its Entries table, as an identity
+            // area's are (`bvdtEntriesTable`).
             if node.guid == FlashDeviceMap.ecFirmware, !node.children.contains(where: { $0.kind == .ecImage }) {
                 fields += iteFields(node, reader: reader)
             }
