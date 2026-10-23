@@ -80,6 +80,11 @@ import ToolModuleKit
         // same question ⌘W does about bytes the parent has not got back.
         strip.onClose = { [weak self] id in self?.host?.closeFragment(id) }
         strip.onTearOff = { [weak self] id in self?.host?.tearOffFragment(id) }
+        // The pill carries off the panel's pane exactly as its header does:
+        // the same session, so every destination already knows what it is.
+        strip.onDrag = { [weak self] id, event, pill in
+            self?.entries[id]?.paneView.beginPaneDrag(with: event, from: pill)
+        }
         refreshDock()
     }
 

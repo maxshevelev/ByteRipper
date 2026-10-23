@@ -1491,22 +1491,28 @@ final class FilePaneView: NSView {
 
     /// Picks the pane up: a dragging session carrying nothing but this pane's
     /// identity (`Design/PANE_DRAG_PLAN.md`).
-    private func beginPaneDrag(with event: NSEvent) {
+    ///
+    /// `origin` is the view the press was on: the header by default, or a
+    /// fragment panel's pill in the dock — a folded panel's pane is off
+    /// screen, but it is the same pane, carried the same way, so every
+    /// destination takes it as it takes the header's drag.
+    func beginPaneDrag(with event: NSEvent, from origin: NSView? = nil) {
+        let origin = origin ?? self
         let item = NSPasteboardItem()
         item.setString(viewModel.dragID.uuidString, forType: .pane)
         let dragItem = NSDraggingItem(pasteboardWriter: item)
 
-        let image = paneDragPill()
+        let image = paneDragPill(appearance: origin.effectiveAppearance)
         let size = image.size
         // Centred on the pointer, so the pill goes where the hand goes rather
         // than trailing from wherever in the header the press landed.
-        let point = convert(event.locationInWindow, from: nil)
+        let point = origin.convert(event.locationInWindow, from: nil)
         dragItem.setDraggingFrame(
             NSRect(x: point.x - size.width / 2, y: point.y - size.height / 2,
                    width: size.width, height: size.height),
             contents: image)
 
-        let session = beginDraggingSession(with: [dragItem], event: event, source: self)
+        let session = origin.beginDraggingSession(with: [dragItem], event: event, source: self)
         // One item, and it is already where it should be: without this AppKit
         // is free to re-arrange the drag's contents into a formation of its own.
         session.draggingFormation = .none
@@ -1541,7 +1547,7 @@ final class FilePaneView: NSView {
     /// behind them, and there is nothing to see the edge of when it crosses into
     /// another pane. The glyph is the header's own, so a modified or untitled
     /// pane is still recognisable as itself while it is in flight.
-    private func paneDragPill() -> NSImage {
+    private func paneDragPill(appearance: NSAppearance) -> NSImage {
         let name = viewModel.status.fileName
         let paragraph = NSMutableParagraphStyle()
         // Middle truncation: the tail of a dump's name is what tells two apart
@@ -1566,7 +1572,7 @@ final class FilePaneView: NSView {
         // The window's appearance, not whatever is current: the pill is drawn
         // once and carried, so its colours have to be resolved against the theme
         // it was picked up in (§3.2).
-        effectiveAppearance.performAsCurrentDrawingAppearance {
+        appearance.performAsCurrentDrawingAppearance {
             let rect = NSRect(origin: .zero, size: size).insetBy(dx: 0.5, dy: 0.5)
             let pill = NSBezierPath(roundedRect: rect,
                                     xRadius: rect.height / 2, yRadius: rect.height / 2)

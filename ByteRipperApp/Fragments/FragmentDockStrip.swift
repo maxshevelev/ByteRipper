@@ -50,9 +50,15 @@ final class FragmentPillView: NSView {
 
     var onSelect: (() -> Void)?
     var onClose: (() -> Void)?
-    /// Right-click ▸ Open in New Tab. The only way a *folded* panel leaves for
-    /// a tab: a pill has no header to drag onto the New Tab strip.
+    /// Right-click ▸ Open in New Tab, the menu's way out to a tab.
     var onTearOff: (() -> Void)?
+    /// The pill has been dragged past the threshold: the panel's pane is
+    /// carried off as its header carries it — onto the New Tab strip, into
+    /// another window or tab — with the event that began the drag and the
+    /// pill it began on.
+    var onDrag: ((NSEvent, NSView) -> Void)?
+    /// Where the press that may become a drag began; nil once it has.
+    private var pressOrigin: NSPoint?
     /// Whether there is a window to put a tab beside.
     var canTearOff = true
 
@@ -177,7 +183,25 @@ final class FragmentPillView: NSView {
     @objc private func closeTapped() { onClose?() }
     @objc private func tearOffTapped() { onTearOff?() }
 
+    /// A press is a click until it moves: the pill is chosen when the button
+    /// comes up, so a drag never folds or raises a panel on its way out.
     override func mouseDown(with event: NSEvent) {
+        pressOrigin = event.locationInWindow
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let origin = pressOrigin, let onDrag else { return }
+        let dx = event.locationInWindow.x - origin.x
+        let dy = event.locationInWindow.y - origin.y
+        guard hypot(dx, dy) >= PaneHeaderView.dragThreshold else { return }
+        // One drag per press: the session takes the mouse from here.
+        pressOrigin = nil
+        onDrag(event, self)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard pressOrigin != nil else { return }
+        pressOrigin = nil
         onSelect?()
     }
 
@@ -269,6 +293,7 @@ final class FragmentDockStrip: NSView {
     var onSelect: ((FragmentDock.PanelID) -> Void)?
     var onClose: ((FragmentDock.PanelID) -> Void)?
     var onTearOff: ((FragmentDock.PanelID) -> Void)?
+    var onDrag: ((FragmentDock.PanelID, NSEvent, NSView) -> Void)?
 
     private let row = NSStackView()
     private var pills: [FragmentDock.PanelID: FragmentPillView] = [:]
@@ -380,6 +405,7 @@ final class FragmentDockStrip: NSView {
         pill.onSelect = { [weak self] in self?.onSelect?(item.id) }
         pill.onClose = { [weak self] in self?.onClose?(item.id) }
         pill.onTearOff = { [weak self] in self?.onTearOff?(item.id) }
+        pill.onDrag = { [weak self] event, pill in self?.onDrag?(item.id, event, pill) }
         pills[item.id] = pill
         return pill
     }

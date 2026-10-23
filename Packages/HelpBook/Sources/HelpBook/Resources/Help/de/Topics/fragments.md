@@ -1,4 +1,4 @@
-@source-sha e4d5a22704962d717d9ce77e0466df4a25b1fa6aed0f9baffdfc5879f529d98a
+@source-sha 248463455d4a4021c42837bb62139e8b2a93b979641dc38bb4d77227faa83bd0
 # Fragment-Bereiche: ein Stück eines Dumps als eigene Datei
 
 > Einen Teil eines Images entnehmen, als eigene Datei bearbeiten und zurückschreiben.
@@ -57,7 +57,7 @@ Hier ist es nützlich, eine komprimierte Sektion entpackt zu öffnen. Im Bereich
 
 ## Ein Fragment in einem eigenen Tab
 
-**In neuem Tab öffnen** im Menü der Kopfzeile oder im Menü der Pille im Dock, oder das Ziehen des Bereichs an seiner Kopfzeile auf den Streifen für einen neuen Tab, verschiebt das Fragment in einen eigenen Tab. Dort ist es kein Fragment-Bereich mehr, sondern die Datei des Tabs, und daneben lässt sich eine zweite Datei zum Vergleich öffnen, auch ein anderes Fragment: Dessen Bereich wird an der Kopfzeile auf den Tab gezogen und über **Als zweite Datei öffnen** losgelassen. Der Bereich verlässt das Dock und wird die zweite Datei des Tabs; mit gedrückter ⌥-Taste wird das Fragment kopiert und bleibt im Dock. Die Streifen zum Anfügen nehmen ein Fragment nicht an: Seine Bytes gelangen über **In der Quelle aktualisieren** in die Quelle zurück.
+**In neuem Tab öffnen** im Menü der Kopfzeile oder im Menü der Pille im Dock, oder das Ziehen des Bereichs an seiner Kopfzeile oder an seiner Pille im Dock auf den Streifen für einen neuen Tab, verschiebt das Fragment in einen eigenen Tab. Die Pille zieht ein eingeklapptes Fragment so, wie die Kopfzeile ein aufgeklapptes zieht. Dort ist es kein Fragment-Bereich mehr, sondern die Datei des Tabs, und daneben lässt sich eine zweite Datei zum Vergleich öffnen, auch ein anderes Fragment: Dessen Bereich wird an der Kopfzeile oder an der Pille auf den Tab gezogen und über **Als zweite Datei öffnen** losgelassen. Der Bereich verlässt das Dock und wird die zweite Datei des Tabs; mit gedrückter ⌥-Taste wird das Fragment kopiert und bleibt im Dock. Die Streifen zum Anfügen nehmen ein Fragment nicht an: Seine Bytes gelangen über **In der Quelle aktualisieren** in die Quelle zurück.
 
 ## Lesezeichen zwischen Quelle und Fragmenten
 

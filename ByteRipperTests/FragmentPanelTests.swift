@@ -894,6 +894,51 @@ final class FragmentPanelTests: XCTestCase {
         XCTAssertFalse(item.isEnabled)
     }
 
+    private func mouse(_ type: NSEvent.EventType, at point: NSPoint) throws -> NSEvent {
+        try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
+                                         timestamp: ProcessInfo.processInfo.systemUptime,
+                                         windowNumber: 0, context: nil,
+                                         eventNumber: 0, clickCount: 1, pressure: 1))
+    }
+
+    /// A press on a pill that does not move is a click, and the panel comes
+    /// up when the button does — not on the press, which may yet be a drag.
+    func testAPillIsChosenWhenTheButtonComesUp() throws {
+        let (controller, _) = makeController()
+        defer { cleanup(controller) }
+        let id = try XCTUnwrap(controller.openFragment([0x01], named: "part", animated: false))
+        controller.fragments.collapse(animated: false)
+        let pill = try XCTUnwrap(strip(of: controller).pillsForTesting.first)
+
+        pill.mouseDown(with: try mouse(.leftMouseDown, at: NSPoint(x: 10, y: 10)))
+        XCTAssertNil(controller.fragments.expanded, "a press alone chooses nothing")
+        pill.mouseUp(with: try mouse(.leftMouseUp, at: NSPoint(x: 10, y: 10)))
+        XCTAssertEqual(controller.fragments.expanded, id)
+    }
+
+    /// Past the header's threshold a pill is carried off as the header is,
+    /// and the press is then not a click as well.
+    func testAPillDraggedPastTheThresholdIsCarriedOffNotChosen() throws {
+        let (controller, _) = makeController()
+        defer { cleanup(controller) }
+        _ = try XCTUnwrap(controller.openFragment([0x01], named: "part", animated: false))
+        controller.fragments.collapse(animated: false)
+        let pill = try XCTUnwrap(strip(of: controller).pillsForTesting.first)
+        XCTAssertNotNil(pill.onDrag, "the dock hands the drag to the panel's pane")
+        var carried: [NSView] = []
+        pill.onDrag = { _, view in carried.append(view) }
+
+        pill.mouseDown(with: try mouse(.leftMouseDown, at: NSPoint(x: 10, y: 10)))
+        pill.mouseDragged(with: try mouse(.leftMouseDragged, at: NSPoint(x: 12, y: 11)))
+        XCTAssertTrue(carried.isEmpty, "a tremble is not a drag")
+        pill.mouseDragged(with: try mouse(.leftMouseDragged, at: NSPoint(x: 10, y: 10 + PaneHeaderView.dragThreshold)))
+        pill.mouseDragged(with: try mouse(.leftMouseDragged, at: NSPoint(x: 40, y: 60)))
+        pill.mouseUp(with: try mouse(.leftMouseUp, at: NSPoint(x: 40, y: 60)))
+
+        XCTAssertEqual(carried, [pill], "one drag per press")
+        XCTAssertNil(controller.fragments.expanded, "a drag does not raise the panel")
+    }
+
     // MARK: - What a panel keeps to itself
 
     /// The list is the window's, and a panel reads it at the part's own offsets

@@ -187,8 +187,13 @@ saying why rather than looking merely empty.
 A fragment panel that is up is dragged by its header onto the New Tab strip and
 leaves for a tab of its own — the same gesture, the same strip and the same
 handle a pane is torn off by, because a panel's header *is* a pane's. A folded
-one has no header on screen, so its pill carries **Open in New Tab** in its own
-menu, and the header's menu carries the same item for the panel that is up. The
+one has no header on screen, so its pill is dragged instead: past the header's
+threshold it begins the very session the header begins — the panel's pane as
+the source, its `dragID` on the pasteboard — so the New Tab strip, another
+window and another tab take it exactly as they take the header's drag. A press
+on a pill that does not move is a click, chosen on the button coming up. The
+pill also carries **Open in New Tab** in its own menu, and the header's menu
+carries the same item for the panel that is up. The
 mechanism underneath all three is the one that already exists, and is the right
 one: `releasePane(at:)` / `adoptPane(_:bookmarks:)` **move** the
 `PaneViewModel` object, so the document, the unsaved edits, the undo history, the
