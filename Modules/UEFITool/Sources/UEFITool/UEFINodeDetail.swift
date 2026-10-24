@@ -165,6 +165,10 @@ public enum UEFIDetail {
             fields += ecImageFields(node, image: image, reader: reader, in: language)
         }
         var tables: [UEFIDetailTable] = []
+        if let dependencies = dependencyDetail(for: node, reader: reader, catalogue: catalogue, in: language) {
+            fields += dependencies.fields
+            tables += dependencies.tables
+        }
         // The variable history of a GPNV record, kept for the end of the card.
         var gpnvHistory: UEFIDetailTable?
         if node.kind == .vssEntry, let variable = VSSVariable.read(node, in: image, reader: reader) {
@@ -1824,6 +1828,80 @@ public enum UEFIDetail {
             return UEFITypes.subtypeName(type: node.uefiItemType, subtype) ?? hex(subtype)
         default: return hex(subtype)
         }
+    }
+
+    /// The dependency expression a module carries — its own if it is a
+    /// dependency section, otherwise the dependency section among a file's
+    /// children. Nil when the node has none.
+    ///
+    /// The expression is shown in words; the table below it keeps every
+    /// opcode with its offset and, for a `PUSH`, both the GUID and the name
+    /// the catalogue has for it, so a long expression is still checkable
+    /// against the bytes.
+    private static func dependencyDetail(
+        for node: UEFINode, reader: ImageReader,
+        catalogue: GuidsCatalogue, in language: AppLanguage
+    ) -> (fields: [UEFIDetailField], tables: [UEFIDetailTable])? {
+        let section: UEFINode?
+        if node.kind == .section,
+           let type = node.subtype, DependencyExpression.Kind(sectionType: type) != nil {
+            section = node
+        } else if node.kind == .file {
+            section = node.children.first { child in
+                child.kind == .section
+                    && child.subtype.flatMap { DependencyExpression.Kind(sectionType: $0) } != nil
+            }
+        } else {
+            section = nil
+        }
+        guard let section,
+              let type = section.subtype,
+              let kind = DependencyExpression.Kind(sectionType: type),
+              let bytes = reader.bytes(section.body)
+        else { return nil }
+
+        let expression = DependencyExpression(
+            kind: kind, bytes: bytes, offset: section.body.lowerBound)
+        let name: (EFIGUID) -> String? = { catalogue.name(of: $0) }
+        var fields: [UEFIDetailField] = []
+        let text = expression.text(name: name)
+        if let text {
+            fields.append(.init(L("Dependencies", in: language), text,
+                                tone: expression.isMalformed ? .bad : .standard))
+        } else {
+            let problem = expression.problems.first(where: { $0.isStructural })
+                .map { $0.text(in: language) }
+                ?? L("Not a valid expression", in: language)
+            fields.append(.init(L("Dependencies", in: language), problem, tone: .bad))
+        }
+        if let problem = expression.problems.first(where: { $0.isStructural }), text != nil {
+            fields.append(.init(L("Dependency problem", in: language),
+                                problem.text(in: language), tone: .bad))
+        } else if let warning = expression.problems.first(where: { !$0.isStructural }) {
+            fields.append(.init(L("Dependency problem", in: language),
+                                warning.text(in: language), tone: .caution))
+        }
+
+        var tables: [UEFIDetailTable] = []
+        if !expression.tokens.isEmpty {
+            let rows = expression.tokens.map { token -> [UEFIDetailTable.Cell] in
+                let guid = token.operation.guid
+                return [
+                    .init(hex(token.offset)),
+                    .init(token.operation.name),
+                    .init(guid?.description ?? ""),
+                    .init(guid.flatMap { catalogue.name(of: $0) } ?? "")
+                ]
+            }
+            tables.append(UEFIDetailTable(
+                title: L("Dependency expression", in: language),
+                symbol: "arrow.triangle.branch",
+                columns: [L("Offset", in: language), L("Operation", in: language),
+                          "GUID", L("Name", in: language)],
+                rows: rows
+            ))
+        }
+        return (fields, tables)
     }
 
     private static func guidText(_ guid: EFIGUID) -> String {

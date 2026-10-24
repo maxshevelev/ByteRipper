@@ -110,7 +110,8 @@ public enum UEFIAgentQueries {
             Everything the UEFI Structure panel's detail says about one node: its fields (header values, \
             sizes, attributes, checksums — a wrong checksum is marked `problem`), its tables, the path of \
             names down to it, and the parser's diagnostics inside its bytes. NVRAM variables come with their \
-            value decoded.
+            value decoded. A module with a dependency expression adds `dependencies`: the expression in \
+            words, the GUIDs it pushes, every opcode with its offset, and what does not parse.
             """,
         properties: ["node": AgentSchema.string("The node's id, e.g. \"0.2.5\".")],
         required: ["node"]
@@ -123,21 +124,32 @@ public enum UEFIAgentQueries {
         let image = tree.image()
         let readers = tree.spaceReaders
         let repairs = UEFIChecksumCheck.repairs(in: image, only: [id], readers: readers)[id] ?? []
+        // A file's sections are its children; make sure they are read before
+        // the detail looks for a dependency section among them.
+        if node.kind == .file {
+            _ = await expanded(id, in: tree)
+        }
+        let subject = tree.node(id) ?? node
         // What the panel's detail is built with: the catalogue's name for a
-        // file, and for Lenovo's DMI store the drivers that read it.
-        let names = node.kind == .file && node.guid != nil ? await catalogue() : .empty
-        let lenovo = await lenovoDMIReaders(for: node, in: tree)
+        // file or a dependency's GUIDs, and for Lenovo's DMI store the drivers
+        // that read it.
+        let needsCatalogue = subject.kind == .file || dependencySection(of: subject) != nil
+        let names = needsCatalogue ? await catalogue() : .empty
+        let lenovo = await lenovoDMIReaders(for: subject, in: tree)
         let detail = UEFIDetail.build(
-            for: node, image: image,
-            reader: readers.reader(for: node.space) ?? ImageReader([UInt8]()),
+            for: subject, image: image,
+            reader: readers.reader(for: subject.space) ?? ImageReader([UInt8]()),
             repairs: repairs,
             catalogue: names,
             lenovoDMIReaders: lenovo, in: .english)
 
         var answer: [String: JSONValue] = [
-            "node": summary(of: node, in: tree),
+            "node": summary(of: subject, in: tree),
             "path": .array(path(to: id, in: tree).map { .string($0) })
         ].merging(detailMembers(detail)) { first, _ in first }
+        if let dependencies = dependencyAnswer(for: subject, in: tree, catalogue: names) {
+            answer["dependencies"] = dependencies
+        }
         if let range = node.fileRange {
             let inside = image.diagnostics.filter { range.contains($0.offset) && $0.inside == nil }
             if !inside.isEmpty {
@@ -196,6 +208,75 @@ public enum UEFIAgentQueries {
         return members
     }
 
+    // MARK: - Dependency expressions
+
+    /// The section that carries a dependency expression: the node itself when
+    /// it is one, otherwise the dependency section among a file's children.
+    nonisolated static func dependencySection(of node: UEFINode) -> UEFINode? {
+        if node.kind == .section, let type = node.subtype,
+           DependencyExpression.Kind(sectionType: type) != nil {
+            return node
+        }
+        guard node.kind == .file else { return nil }
+        return node.children.first { child in
+            child.kind == .section
+                && child.subtype.flatMap { DependencyExpression.Kind(sectionType: $0) } != nil
+        }
+    }
+
+    /// A module's dependency expression, as an agent reads it: the kind, the
+    /// text, the GUIDs it pushes, every opcode with its offset, and what does
+    /// not parse. Nil when the node has no dependency expression.
+    static func dependencyAnswer(
+        for node: UEFINode, in tree: LazyUEFITree, catalogue: GuidsCatalogue
+    ) -> JSONValue? {
+        guard let section = dependencySection(of: node),
+              let type = section.subtype,
+              let kind = DependencyExpression.Kind(sectionType: type),
+              let reader = tree.spaceReaders.reader(for: section.space),
+              let bytes = reader.bytes(section.body)
+        else { return nil }
+        let expression = DependencyExpression(
+            kind: kind, bytes: bytes, offset: section.body.lowerBound)
+        let name: (EFIGUID) -> String? = { catalogue.name(of: $0) }
+        let tokens: [JSONValue] = expression.tokens.map { token in
+            var entry: [String: JSONValue] = [
+                "offset": .string(hex(token.offset)),
+                "operation": .string(token.operation.name)
+            ]
+            if let guid = token.operation.guid {
+                entry["guid"] = .string(guid.description)
+                if let name = catalogue.name(of: guid) { entry["name"] = .string(name) }
+            }
+            return .object(entry)
+        }
+        return .object([
+            "kind": .string(kind.title),
+            "section": summary(of: section, in: tree),
+            "expression": expression.text(name: name).map { .string($0) } ?? .null,
+            "always": .bool(expression.isAlways),
+            "never": .bool(expression.isNever),
+            "malformed": .bool(expression.isMalformed),
+            "guids": .array(expression.pushedGUIDs.map { .string($0.description) }),
+            "tokens": .array(tokens),
+            "problems": .array(expression.problems.map { .string($0.text(in: .english)) })
+        ])
+    }
+
+    /// Whether `node`'s dependency expression asks for `guid`. False for a
+    /// node without one.
+    nonisolated static func dependencyPushes(
+        _ guid: EFIGUID, in node: UEFINode, in tree: LazyUEFITree
+    ) -> Bool {
+        guard let section = dependencySection(of: node),
+              let type = section.subtype,
+              let kind = DependencyExpression.Kind(sectionType: type),
+              let reader = tree.spaceReaders.reader(for: section.space),
+              let bytes = reader.bytes(section.body)
+        else { return false }
+        return DependencyExpression(kind: kind, bytes: bytes).pushedGUIDs.contains(guid)
+    }
+
     // MARK: - uefi_find
 
     nonisolated static let find = ToolAgentQuery(
@@ -205,8 +286,9 @@ public enum UEFIAgentQueries {
             Finds nodes anywhere in the image — opening every volume and decompressing every section it \
             can, which takes a few seconds on a large image the first time. Give any of: `name` (part of the \
             name, any case; the whole name with `exact`), `guid` (exact), `type` (the Type column, e.g. \
-            "File", "Section", "Volume", "VSS entry", "NVAR entry"). All given must match. Each match has its \
-            id and the path of names to it; `total` counts them all. Pages: `limit` is a ceiling — a page \
+            "File", "Section", "Volume", "VSS entry", "NVAR entry"), `depends_on` (a PPI or protocol GUID — \
+            the files whose dependency expression pushes it, and only files). All given must match. Each \
+            match has its id and the path of names to it; `total` counts them all. Pages: `limit` is a ceiling — a page \
             also stops before the answer passes the size bound and then says `truncated: "size"`; pass \
             `next` back as `after` until it is null.
             """,
@@ -215,6 +297,7 @@ public enum UEFIAgentQueries {
             "exact": AgentSchema.boolean("Match the whole name rather than a part of it. Default false."),
             "guid": AgentSchema.string("A GUID, e.g. \"8C8CE578-8A3D-4F1C-9935-896185C32DD3\"."),
             "type": AgentSchema.string("The node type as the Type column shows it."),
+            "depends_on": AgentSchema.string("A PPI or protocol GUID a module's dependency expression pushes."),
             "limit": AgentSchema.limit(default: 50, maximum: 200),
             "after": AgentSchema.after
         ]
@@ -223,11 +306,22 @@ public enum UEFIAgentQueries {
         let guid = try arguments.optionalString("guid")?.uppercased()
         let type = try arguments.optionalString("type")?.lowercased()
         let exact = try arguments.bool("exact", default: false)
-        guard name != nil || guid != nil || type != nil else {
-            throw AgentToolError("Give at least one of `name`, `guid` or `type`.")
+        let dependsOn: EFIGUID?
+        if let text = try arguments.optionalString("depends_on") {
+            guard let parsed = EFIGUID(text) else {
+                throw AgentToolError("`depends_on`: \(text) is not a GUID.")
+            }
+            dependsOn = parsed
+        } else {
+            dependsOn = nil
+        }
+        guard name != nil || guid != nil || type != nil || dependsOn != nil else {
+            throw AgentToolError("Give at least one of `name`, `guid`, `type` or `depends_on`.")
         }
         let limit = try arguments.limit(default: 50, maximum: 200)
-        let paging = try AgentPage(arguments, fingerprint: AgentPage.fingerprint([host.contentVersion, name, guid, type, exact]))
+        let paging = try AgentPage(arguments, fingerprint: AgentPage.fingerprint([
+            host.contentVersion, name, guid, type, dependsOn?.description, exact
+        ]))
         let tree = try await readyTree(host)
         await openEverything(in: tree)
 
@@ -241,6 +335,9 @@ public enum UEFIAgentQueries {
             }
             if let guid, node.guid?.description.uppercased() != guid { continue }
             if let type, UEFITreeDisplay.typeText(for: node).lowercased() != type { continue }
+            if let dependsOn {
+                guard node.kind == .file, dependencyPushes(dependsOn, in: node, in: tree) else { continue }
+            }
             total += 1
             if total > paging.first, matches.count < limit {
                 matches.append(merged(summary(of: node, in: tree),
