@@ -1,3 +1,4 @@
+import ALSplitView
 import ByteRipperCore
 import XCTest
 @testable import ByteRipper
@@ -86,14 +87,22 @@ final class HeaderFitWidthTests: XCTestCase {
         window.layoutIfNeeded()
     }
 
-    private func doubleClick(header: PaneHeaderView, window: NSWindow) {
+    private func doubleClick(header: PaneHeaderView, splitView: ALSplitView, window: NSWindow) {
         let p = windowPoint(header)
         header.mouseDown(with: mouse(.leftMouseDown, at: p, window: window, clickCount: 1))
         header.mouseUp(with: mouse(.leftMouseUp, at: p, window: window, clickCount: 1))
         header.mouseDown(with: mouse(.leftMouseDown, at: p, window: window, clickCount: 2))
         header.mouseUp(with: mouse(.leftMouseUp, at: p, window: window, clickCount: 2))
-        // Let the 0.2s divider animation finish.
-        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.35))
+        // Let the 0.2 s divider animation finish. A fixed 0.35 s wait was not
+        // enough in a full run on a loaded machine: the pane was read still at
+        // its 50/50 width. Wait for the animation itself, with a deadline.
+        let deadline = Date(timeIntervalSinceNow: 3)
+        while splitView.isAnimatingDivider, Date() < deadline {
+            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.02))
+        }
+        // The split view places the bands; the pane inside a band follows in
+        // the next layout pass (see `dragDivider`).
+        window.layoutIfNeeded()
     }
 
     func testDoubleClickPane1HeaderExpandsItToContentWidth() throws {
@@ -102,7 +111,7 @@ final class HeaderFitWidthTests: XCTestCase {
         // 50/50 pane width is below the content width, so the content cannot fit.
         XCTAssertLessThan(cv.paneView1.frame.width, cv.paneView1.hexContentWidth)
 
-        doubleClick(header: try header(of: cv.paneView1), window: window)
+        doubleClick(header: try header(of: cv.paneView1), splitView: cv.splitView, window: window)
 
         XCTAssertEqual(cv.paneView1.frame.width, cv.paneView1.contentFitWidth, accuracy: 1)
         // The panes still tile the split view; the second pane takes the rest.
@@ -114,7 +123,7 @@ final class HeaderFitWidthTests: XCTestCase {
         let (cv, window) = try makeComparisonView(width: 800)
         XCTAssertLessThan(cv.paneView2.frame.width, cv.paneView2.hexContentWidth)
 
-        doubleClick(header: try header(of: cv.paneView2), window: window)
+        doubleClick(header: try header(of: cv.paneView2), splitView: cv.splitView, window: window)
 
         XCTAssertEqual(cv.paneView2.frame.width, cv.paneView2.contentFitWidth, accuracy: 1)
         XCTAssertEqual(cv.paneView1.frame.width + cv.paneView2.frame.width + cv.splitView.dividerThickness,
@@ -133,7 +142,7 @@ final class HeaderFitWidthTests: XCTestCase {
                        "premise: the drag landed where it was aimed")
         XCTAssertGreaterThan(cv.paneView1.frame.width, cv.paneView1.contentFitWidth)
 
-        doubleClick(header: try header(of: cv.paneView1), window: window)
+        doubleClick(header: try header(of: cv.paneView1), splitView: cv.splitView, window: window)
 
         XCTAssertEqual(cv.paneView1.frame.width, wide, accuracy: 1)
     }
@@ -158,7 +167,7 @@ final class HeaderFitWidthTests: XCTestCase {
         XCTAssertLessThan(cv.paneView2.frame.width, cv.paneView2.contentFitWidth,
                           "premise: a full-width stacked pane is still narrower than its grid")
 
-        doubleClick(header: try header(of: cv.paneView2), window: window)
+        doubleClick(header: try header(of: cv.paneView2), splitView: cv.splitView, window: window)
 
         XCTAssertEqual(cv.paneView1.frame.height, heightBefore, accuracy: 1,
                        "a stacked header double-click must not move the divider")
