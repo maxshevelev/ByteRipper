@@ -1672,3 +1672,5 @@
 "The dependency expression has bytes after END (%1$@)." = "Nach END folgen im Abhängigkeitsausdruck noch Bytes (%1$@).";
 "The dependency expression uses %1$@ at %2$@; it belongs only at its start." = "Der Abhängigkeitsausdruck verwendet %1$@ bei %2$@; die Operation ist nur am Anfang zulässig.";
 "A PEI dependency expression cannot use %1$@ (at %2$@)." = "Ein PEI-Abhängigkeitsausdruck darf %1$@ nicht verwenden (bei %2$@).";
+"PPI GUID" = "PPI-GUID";
+"Protocol GUID" = "Protokoll-GUID";

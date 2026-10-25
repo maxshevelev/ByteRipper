@@ -1893,11 +1893,18 @@ public enum UEFIDetail {
                     .init(guid.flatMap { catalogue.name(of: $0) } ?? "")
                 ]
             }
+            // The GUID is a PPI in PEI and a protocol in DXE; the column says
+            // which, so it is not mistaken for the GUID of a node.
+            let guidColumn: String
+            switch kind {
+            case .pei: guidColumn = L("PPI GUID", in: language)
+            case .dxe, .mm: guidColumn = L("Protocol GUID", in: language)
+            }
             tables.append(UEFIDetailTable(
                 title: L("Dependency expression", in: language),
                 symbol: "arrow.triangle.branch",
                 columns: [L("Offset", in: language), L("Operation", in: language),
-                          "GUID", L("Name", in: language)],
+                          guidColumn, L("Name", in: language)],
                 rows: rows
             ))
         }

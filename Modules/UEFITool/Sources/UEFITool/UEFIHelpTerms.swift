@@ -40,9 +40,24 @@ public enum UEFIHelpTerms {
         case .volume: return HelpTermID("volume")
         // A pad file is a file only in the sense that every slot in a volume
         // has a header. Naming it as one would send the reader to the page
-        // about files, which is not what they are looking at.
-        case .file: return node.subtype == 0xF0 ? HelpTermID("pad-file") : HelpTermID("ffs-file")
-        case .section: return HelpTermID("section")
+        // about files, which is not what they are looking at. A module is a
+        // file too, but what a reader asks of it is what kind of module it is
+        // and how it is dispatched.
+        case .file:
+            switch node.subtype {
+            case 0xF0: return HelpTermID("pad-file")
+            case 0x04: return HelpTermID("pei")
+            case 0x05: return HelpTermID("dxe")
+            case 0x06, 0x08: return HelpTermID("peim")
+            case 0x07: return HelpTermID("dxe-driver")
+            default: return HelpTermID("ffs-file")
+            }
+        case .section:
+            if let subtype = node.subtype,
+               DependencyExpression.Kind(sectionType: subtype) != nil {
+                return HelpTermID("depex")
+            }
+            return HelpTermID("section")
         case .microcode, .amdMicrocode: return HelpTermID("microcode")
         // The Startup AP data lives in a pad file and is why that pad file
         // must stay where it is; the page about pad files says so.

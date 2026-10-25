@@ -46,8 +46,34 @@ final class UEFIHelpTermsTests: XCTestCase {
     func testAPadFileIsNotAFile() {
         XCTAssertEqual(UEFIHelpTerms.term(for: node(.file, subtype: 0xF0)),
                        HelpTermID("pad-file"))
+    }
+
+    /// A module is a file, but the question a reader asks of it is what kind
+    /// of module it is: a PEIM, a DXE driver, or one of the cores.
+    func testAModuleGoesToItsKind() {
+        XCTAssertEqual(UEFIHelpTerms.term(for: node(.file, subtype: 0x04)),
+                       HelpTermID("pei"))
+        XCTAssertEqual(UEFIHelpTerms.term(for: node(.file, subtype: 0x05)),
+                       HelpTermID("dxe"))
+        XCTAssertEqual(UEFIHelpTerms.term(for: node(.file, subtype: 0x06)),
+                       HelpTermID("peim"))
         XCTAssertEqual(UEFIHelpTerms.term(for: node(.file, subtype: 0x07)),
+                       HelpTermID("dxe-driver"))
+        XCTAssertEqual(UEFIHelpTerms.term(for: node(.file, subtype: 0x08)),
+                       HelpTermID("peim"))
+        XCTAssertEqual(UEFIHelpTerms.term(for: node(.file, subtype: 0x09)),
                        HelpTermID("ffs-file"))
+    }
+
+    /// A dependency section is the thing a reader most often wants explained,
+    /// in every dispatcher's flavour.
+    func testADependencySectionGoesToItsEntry() {
+        for subtype: UInt8 in [0x13, 0x1B, 0x1C] {
+            XCTAssertEqual(UEFIHelpTerms.term(for: node(.section, subtype: subtype)),
+                           HelpTermID("depex"), "\(subtype)")
+        }
+        XCTAssertEqual(UEFIHelpTerms.term(for: node(.section, subtype: 0x19)),
+                       HelpTermID("section"))
     }
 
     /// Every NVRAM store and entry answers the same two questions, so they

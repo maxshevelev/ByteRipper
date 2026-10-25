@@ -1,4 +1,4 @@
-@source-sha 44e28a65e3629ed6624efffd9cb67afa5a6bad11fd2b0243b3f6b6aea4778f58
+@source-sha 0cc6d95fb0f0713297b1278eef25373794b371bbebccbabb251dab61bb66767e
 @term flash-descriptor
 @name Flash Descriptor
 @short Die ersten `0x1000` Bytes eines Intel-Flash-Images: die Karte des Chips.
@@ -815,3 +815,76 @@ Eine Region, die aus Volumes bestehen sollte und sich als Nicht-UEFI-Daten liest
 
 Denselben Namen trägt der Rest des Datenteils einer Datei, sobald er sich nicht mehr als [[term:section|Sections]] liest — eine Section-Größe von null oder eine größere als der Rest —, und der Rest eines Volumes, sobald ein Datei-Header mehr angibt, als das Volume noch enthält. UEFITool liest beides ebenso. Eine [[term:sound|Audiodatei]], die dort liegt, wo die Sections einer Datei stünden, erscheint als Zeile innerhalb solcher Daten.
 
+
+@term pei
+@name PEI
+@short Pre-EFI Initialization: die Firmware-Phase nach SEC, in der der Speicher eingerichtet wird und PEIMs laufen.
+
+PEI ist eine kleine Umgebung: Dauerhafter Speicher ist zu Beginn noch nicht vorhanden. Der PEI Core veröffentlicht die Dienste, die ein [[term:peim|PEIM]] nutzt, führt die PEIMs jedes Firmware-Volumes aus und installiert einige PPIs selbst. [[topic:pei-dxe]] erklärt die Phasen und die Ausführung.
+
+@see term:peim
+@see term:ppi
+@see topic:pei-dxe
+
+@term peim
+@name PEIM
+@short PEI Module: ein FFS-File vom Typ PEIM (0x06), das in der PEI-Phase läuft.
+
+Ein PEIM ist eine Datei in einem Firmware-Volume; ihr Rumpf besteht aus [[term:section|Sections]]: ein Abhängigkeitsausdruck (`0x1B`), ein TE- oder PE32-Image, eine Name-Section und oft eine Version-Section. Der Einstiegspunkt erhält das Datei-Handle und die PEI-Services-Tabelle. Der PEIM kann PPIs installieren und HOBs anlegen; der PEI Core ruft ihn auf, wenn sein Abhängigkeitsausdruck für die bisher installierten PPIs wahr ist. Ein kombinierter PEIM und DXE-Treiber (Typ `0x08`) enthält Bilder beider Arten.
+
+@see term:pei
+@see term:ppi
+@see term:depex
+@see topic:pei-dxe
+
+@term ppi
+@name PPI
+@short PEIM-to-PEIM Interface: eine GUID und eine Tabelle von Funktionen oder ein Datenstück, das ein PEIM für die anderen veröffentlicht.
+
+Ein PPI wird mit `InstallPpi` installiert und mit `LocatePpi` gefunden; ein PEIM kann sein Erscheinen mit `NotifyPpi` abonnieren. Mehrere Module können dieselbe GUID installieren, und dem Dispatcher genügt eine beliebige Instanz. Ein Abhängigkeitsausdruck nennt daher die Schnittstelle, nicht ein Modul. In DXE heißt dieselbe Idee [[term:protocol|Protokoll]].
+
+@see term:peim
+@see term:protocol
+@see term:depex
+
+@term depex
+@name DEPEX
+@short Abhängigkeitsausdruck: der Bytecode, der die PPIs oder Protokolle nennt, die ein Modul zum Ausführen braucht.
+
+Der Rumpf ist ein Postfix-Ausdruck: `PUSH` einer GUID, dann verbinden `AND`, `OR` und `NOT` die Werte, `END` schließt ab; `TRUE` und `FALSE` sind Literale. Ein DXE-Ausdruck darf mit `BEFORE`, `AFTER` oder `SOR` beginnen; sie sagen, wann der Treiber ausgeführt wird. Der Section-Typ ist `0x1B` für PEI, `0x13` für DXE und `0x1C` für MM. Die Anzeige zeigt ihn unter **Abhängigkeiten**. Der Ausdruck nennt eine Schnittstelle: Das Modul, das die GUID installiert, steht nicht im Image, und es können mehrere sein. [[topic:pei-dxe]] erklärt, wie man einen Installierer sucht.
+
+@see term:pei
+@see term:dxe
+@see term:ppi
+@see topic:pei-dxe
+
+@term dxe
+@name DXE
+@short Driver Execution Environment: die Phase nach PEI, in der DXE-Treiber Protokolle installieren und die Boot-Services entstehen.
+
+Der DXE Core ist selbst ein Treiber. Der Dispatcher geht das DXE-Firmware-Volume durch, wertet den Abhängigkeitsausdruck jedes Treibers gegen die bisher installierten Protokolle aus und ruft den Treiber auf, wenn er wahr ist. Was ein Treiber veröffentlicht, ist ein Protokoll: eine GUID und eine Tabelle von Funktionen, das DXE-Gegenstück zu einem PPI. [[topic:pei-dxe]] beschreibt die ganze Kette.
+
+@see term:dxe-driver
+@see term:protocol
+@see topic:pei-dxe
+
+@term dxe-driver
+@name DXE-Treiber
+@short Ein Firmware-Volume-File vom Typ DRIVER (0x07), das in der DXE-Phase läuft.
+
+Ein DXE-Treiber ist ein PE32- oder TE-Image. Sein Abhängigkeitsausdruck (Section `0x13`) nennt Protokolle; der DXE Core ruft seinen Einstiegspunkt auf, der das Image-Handle und die Systemtabelle erhält, und der Treiber installiert seine Protokolle. Eine UEFI-Anwendung (Typ `0x09`) ist kein Treiber: Sie wird auf Anfrage gestartet und beendet sich. Ein PEIM läuft früher, in PEI.
+
+@see term:dxe
+@see term:protocol
+@see term:depex
+@see topic:pei-dxe
+
+@term protocol
+@name Protokoll
+@short Die Schnittstelle von DXE: eine GUID und eine Tabelle von Funktionen, das DXE-Gegenstück zu einem PPI.
+
+Ein Treiber installiert ein Protokoll, ein anderer Treiber findet es über die Boot-Services. Mehrere Treiber können dieselbe GUID installieren; dem Dispatcher genügt ein beliebiger. Ein Abhängigkeitsausdruck nennt das Protokoll, nicht den Treiber, der es installiert. Das Gegenstück in PEI ist ein [[term:ppi|PPI]].
+
+@see term:dxe
+@see term:ppi
+@see topic:pei-dxe

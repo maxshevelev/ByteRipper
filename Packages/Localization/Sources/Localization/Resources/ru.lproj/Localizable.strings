@@ -1672,3 +1672,5 @@
 "The dependency expression has bytes after END (%1$@)." = "После END в выражении зависимостей остаются байты (%1$@).";
 "The dependency expression uses %1$@ at %2$@; it belongs only at its start." = "Выражение зависимостей использует %1$@ по адресу %2$@; эта операция допустима только в начале.";
 "A PEI dependency expression cannot use %1$@ (at %2$@)." = "Выражение зависимостей PEI не может использовать %1$@ (адрес %2$@).";
+"PPI GUID" = "GUID PPI";
+"Protocol GUID" = "GUID протокола";

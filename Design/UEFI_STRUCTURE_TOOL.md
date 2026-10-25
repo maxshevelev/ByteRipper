@@ -89,8 +89,8 @@ Beyond its header, a file and a dependency section (`0x13` DXE, `0x1B` PEI,
 `0x1C` MM) show the expression itself: **Dependencies** reads the postfix
 bytecode as a formula over the PPIs or protocols it pushes — `PUSH`, `AND`,
 `OR`, `NOT`, `TRUE`, `FALSE`, `END`, and for DXE `BEFORE`, `AFTER` and `SOR` —
-and the table under it lists every operation with its offset, its GUID and the
-catalogue's name. A malformed expression keeps its tokens and reports what does
+and the table under it lists every operation with its offset, its PPI or
+protocol GUID and the catalogue's name. A malformed expression keeps its tokens and reports what does
 not parse; bytes after `END` are a warning, not a verdict. The reading is
 `DependencyExpression` in `UEFIImage`.
 

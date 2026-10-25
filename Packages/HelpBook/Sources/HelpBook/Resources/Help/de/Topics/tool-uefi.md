@@ -1,4 +1,4 @@
-@source-sha 365b7d51eee81d01e324e9b4cf3b04407639fadcd72533e390d420d5e1ff6a99
+@source-sha f1a83faa10dd2b1b5cfbe7c16f777e0a17fcf25e67db0cdabf72e435056ed4aa
 # UEFI-Struktur
 
 > Die Karte eines Firmware-Images: welche Region, welches Volume, welche Datei und wo.
@@ -19,7 +19,7 @@ Die Zeile der **ME-Region** öffnet sich in dieselbe Analyse, die der [[topic:to
 
 Eine lange Tabelle in den Details — **PCH-Straps** in den Details des [[term:flash-descriptor|Flash Descriptors]] — ist zunächst unter ihrer Überschrift eingeklappt, damit der Rest der Details sichtbar bleibt. Ein Klick auf das Dreieck oder die Überschrift klappt sie auf; sie bleibt danach auch bei anderen Knoten aufgeklappt, bis das Programm beendet wird. In einer Tabelle führt nur ein Link weiter, und nur ein Klick auf den Link selbst. Der Text der Details — die Felder eines Knotens ebenso wie die Tabellen — wird wie jeder Text markiert: durch Ziehen über die Zeilen, ein Wort per Doppelklick, eine Zeile per Dreifachklick, die ganze Feldliste oder die ganze Tabelle mit ⌘A. ⌘C kopiert die Markierung mit einem Tabulator zwischen dem Namen eines Felds und seinem Wert oder zwischen den Zellen und einer Zeile je Zeile, sodass eine Tabellenkalkulation eine Tabelle als Tabelle übernimmt. **Kopieren** im Kontextmenü einer Zeile kopiert die Markierung oder, wenn nichts markiert ist, den Namen, den Wert oder die Zelle unter dem Zeiger. Ein Feldname, der nicht in seine Spalte passt, wird in der nächsten Zeile fortgesetzt.
 
-Bei einem Modul, das einen Abhängigkeitsausdruck trägt — ein PEI-, DXE- oder MM-Modul —, steht er unter **Abhängigkeiten**: der Ausdruck als Formel über die genannten PPIs oder Protokolle, darunter eine Tabelle aller Operationen, ihrer Adresse und des GUID-Namens, wenn der Katalog einen hat. Die Details der Abhängigkeitssektion selbst lesen sich genauso. Ein Ausdruck, der sich nicht zerlegen lässt, nennt den Fehler, statt als ganzer gezeigt zu werden.
+Bei einem Modul, das einen Abhängigkeitsausdruck trägt — ein PEI-, DXE- oder MM-Modul —, steht er unter **Abhängigkeiten**: der Ausdruck als Formel über die genannten PPIs oder Protokolle, darunter eine Tabelle aller Operationen, ihrer Adresse und des GUID-Namens, wenn der Katalog einen hat. Die Details der Abhängigkeitssektion selbst lesen sich genauso. Ein Ausdruck, der sich nicht zerlegen lässt, nennt den Fehler, statt als ganzer gezeigt zu werden. Wie ein PEIM oder ein DXE-Treiber ausgeführt wird und was der Ausdruck bedeutet, steht unter [[topic:pei-dxe|PEIMs und DXE-Treiber]].
 
 ## Suche im Baum
 

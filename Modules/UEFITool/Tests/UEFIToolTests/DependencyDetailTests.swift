@@ -15,7 +15,8 @@ final class DependencyDetailTests: XCTestCase {
         let reader: ImageReader
     }
 
-    private func built(_ depex: [UInt8]) -> Built {
+    private func built(_ depex: [UInt8], fileType: UInt8 = 0x06,
+                       sectionType: UInt8 = 0x1B) -> Built {
         var bytes = [UInt8](repeating: 0, count: 0x100)
         let sectionStart = 0x18
         let bodyStart = 0x1C
@@ -23,16 +24,17 @@ final class DependencyDetailTests: XCTestCase {
         bytes[sectionStart] = UInt8(size & 0xFF)
         bytes[sectionStart + 1] = UInt8((size >> 8) & 0xFF)
         bytes[sectionStart + 2] = UInt8((size >> 16) & 0xFF)
-        bytes[sectionStart + 3] = 0x1B
+        bytes[sectionStart + 3] = sectionType
         bytes.replaceSubrange(bodyStart..<(bodyStart + depex.count), with: depex)
 
         let section = UEFINode(
-            id: .root.child(0).child(0), kind: .section, subtype: 0x1B,
-            name: "PEI dependency",
+            id: .root.child(0).child(0), kind: .section, subtype: sectionType,
+            name: sectionType == 0x13 ? "DXE dependency" : "PEI dependency",
             header: UInt64(sectionStart)..<UInt64(bodyStart),
             body: UInt64(bodyStart)..<UInt64(bodyStart + depex.count))
         let file = UEFINode(
-            id: .root.child(0), kind: .file, subtype: 0x06, name: "A PEIM",
+            id: .root.child(0), kind: .file, subtype: fileType,
+            name: fileType == 0x07 ? "A DXE driver" : "A PEIM",
             header: 0..<0x18, body: 0x18..<0x60, children: [section])
         let image = UEFIImage(size: 0x100, roots: [file])
         return Built(image: image, file: file, section: section, reader: ImageReader(bytes))
@@ -60,7 +62,7 @@ final class DependencyDetailTests: XCTestCase {
         XCTAssertEqual(fields["Dependencies"]?.tone, .standard)
 
         let table = detail.tables.first { $0.title == "Dependency expression" }
-        XCTAssertEqual(table?.columns, ["Offset", "Operation", "GUID", "Name"])
+        XCTAssertEqual(table?.columns, ["Offset", "Operation", "PPI GUID", "Name"])
         XCTAssertEqual(table?.rows.map { $0.map(\.text) }, [
             ["0x1C", "PUSH", first.description, "First PPI"],
             ["0x2D", "PUSH", second.description, "Second PPI"],
@@ -74,6 +76,21 @@ final class DependencyDetailTests: XCTestCase {
         let (_, fields) = fields(built, node: built.section,
                                  names: [first: "First PPI", second: "Second PPI"])
         XCTAssertEqual(fields["Dependencies"]?.value, "First PPI AND Second PPI")
+    }
+
+    func testADXEDriverShowsItsDependencies() {
+        let depex: [UInt8] = [0x00, 0x02] + first.bytes + [0x08]
+        let built = built(depex, fileType: 0x07, sectionType: 0x13)
+        let (detail, fields) = fields(built, names: [first: "EfiSomeProtocolGuid"])
+        XCTAssertEqual(fields["Dependencies"]?.value, "BEFORE EfiSomeProtocolGuid")
+
+        let table = detail.tables.first { $0.title == "Dependency expression" }
+        XCTAssertEqual(table?.columns, ["Offset", "Operation", "Protocol GUID", "Name"])
+        XCTAssertEqual(table?.rows.map { $0.map(\.text) }, [
+            ["0x1C", "BEFORE", "", ""],
+            ["0x1D", "PUSH", first.description, "EfiSomeProtocolGuid"],
+            ["0x2E", "END", "", ""],
+        ])
     }
 
     func testAFilesWithoutADependencyHasNoDependencyRow() {

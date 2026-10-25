@@ -67,6 +67,32 @@ final class DependencyAgentTests: XCTestCase {
         return tree
     }
 
+    private func dxeTree() async -> LazyUEFITree {
+        let depex: [UInt8] = [0x00, 0x02] + first.bytes + [0x08]
+        let driver = file(guid: 0x55, type: 0x07, body: section(type: 0x13, body: depex))
+        let bytes = volume(length: 0x1000, files: [driver])
+        let tree = LazyUEFITree(bytes)
+        await withCheckedContinuation { continuation in tree.whenReady { continuation.resume() } }
+        await UEFIAgentQueries.openEverything(in: tree)
+        return tree
+    }
+
+    func testADXEDriverAnswerSaysDXE() async throws {
+        let tree = await dxeTree()
+        let node = try XCTUnwrap(tree.image().allNodes.first { $0.kind == .file && $0.subtype == 0x07 })
+        let answer = try XCTUnwrap(UEFIAgentQueries.dependencyAnswer(
+            for: node, in: tree,
+            catalogue: GuidsCatalogue(names: [first: "First Protocol"])))
+        XCTAssertEqual(answer["kind"]?.stringValue, "DXE")
+        XCTAssertEqual(answer["expression"]?.stringValue, "BEFORE First Protocol")
+        XCTAssertEqual(answer["problems"], .array([]))
+
+        let tokens = try XCTUnwrap(answer["tokens"]?.arrayValue)
+        XCTAssertEqual(tokens.first?["operation"]?.stringValue, "BEFORE")
+        XCTAssertEqual(tokens[1]["operation"]?.stringValue, "PUSH")
+        XCTAssertEqual(tokens[1]["name"]?.stringValue, "First Protocol")
+    }
+
     func testTheNodeAnswerCarriesTheExpression() async throws {
         let tree = await tree()
         let node = try XCTUnwrap(tree.image().allNodes.first { $0.kind == .file && $0.subtype == 0x06 })

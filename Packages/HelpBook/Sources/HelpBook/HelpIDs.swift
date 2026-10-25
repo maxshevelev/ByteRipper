@@ -70,6 +70,7 @@ extension HelpTopicID {
     // The firmware panels
     public static let toolsOverview = HelpTopicID("tools-overview")
     public static let toolUEFI = HelpTopicID("tool-uefi")
+    public static let peiDXE = HelpTopicID("pei-dxe")
     public static let toolME = HelpTopicID("tool-me")
     public static let toolFIT = HelpTopicID("tool-fit")
     public static let lenovoDMI = HelpTopicID("lenovo-dmi")

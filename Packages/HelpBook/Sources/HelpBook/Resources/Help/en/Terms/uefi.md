@@ -814,3 +814,76 @@ A region that should consist of volumes and reads as non-UEFI data is, however, 
 
 The same name is given to what is left of a file's body once it stops reading as [[term:section|sections]] — a section size of zero, or one larger than what is left — and to what is left of a volume once a file header declares more than the volume holds. UEFITool reads both the same way. A [[term:sound|sound]] kept where a file's sections would be is shown as a row inside such data.
 
+
+@term pei
+@name PEI
+@short Pre-EFI Initialization: the firmware phase after SEC, in which memory is set up and PEIMs run.
+
+PEI is a small environment: permanent memory is not there yet when it begins. The PEI Core publishes the services a [[term:peim|PEIM]] uses, dispatches the PEIMs of each firmware volume, and installs some PPIs itself. [[topic:pei-dxe]] explains the phases and the dispatch.
+
+@see term:peim
+@see term:ppi
+@see topic:pei-dxe
+
+@term peim
+@name PEIM
+@short PEI Module: an FFS file of type PEIM (0x06) that runs in the PEI phase.
+
+A PEIM is a file in a firmware volume whose body is a run of [[term:section|sections]]: a dependency expression (`0x1B`), a TE or PE32 image, a Name section and often a Version. Its entry point is called with the file handle and the PEI services table. The PEIM may install PPIs and create HOBs; the PEI Core calls it when its dependency expression is true for the PPIs installed so far. A combined PEIM and DXE driver (type `0x08`) holds both kinds of image.
+
+@see term:pei
+@see term:ppi
+@see term:depex
+@see topic:pei-dxe
+
+@term ppi
+@name PPI
+@short PEIM-to-PEIM Interface: a GUID and a table of functions, or a piece of data, that one PEIM publishes for the others.
+
+A PPI is installed with `InstallPpi` and found with `LocatePpi`; a PEIM can subscribe to its appearance with `NotifyPpi`. Several modules may install the same GUID, and the dispatcher is satisfied by any one instance. A dependency expression therefore names the interface, not a module. In DXE the same idea is a [[term:protocol|protocol]].
+
+@see term:peim
+@see term:protocol
+@see term:depex
+
+@term depex
+@name DEPEX
+@short Dependency expression: the bytecode that names the PPIs or protocols a module needs before it may run.
+
+The body is a postfix expression: `PUSH` a GUID, combine the values with `AND`, `OR` and `NOT`, finish with `END`; `TRUE` and `FALSE` are literals. A DXE expression may begin with `BEFORE`, `AFTER` or `SOR`, which say when the driver is dispatched. The section type is `0x1B` for PEI, `0x13` for DXE and `0x1C` for MM. The panel shows it under **Dependencies**. The expression names an interface: the module that installs the GUID is not stored in the image, and several may install it. [[topic:pei-dxe]] explains how to look for an installer.
+
+@see term:pei
+@see term:dxe
+@see term:ppi
+@see topic:pei-dxe
+
+@term dxe
+@name DXE
+@short Driver Execution Environment: the phase after PEI in which DXE drivers install protocols and the boot services come up.
+
+The DXE Core is a driver itself. The dispatcher walks the DXE firmware volume, evaluates each driver's dependency expression against the protocols installed so far, and calls the driver when it is true. What a driver publishes is a protocol: a GUID and a table of functions, the DXE counterpart of a PPI. [[topic:pei-dxe]] has the whole chain.
+
+@see term:dxe-driver
+@see term:protocol
+@see topic:pei-dxe
+
+@term dxe-driver
+@name DXE driver
+@short A firmware volume file of type DRIVER (0x07) that runs in the DXE phase.
+
+A DXE driver is a PE32 or TE image. Its dependency expression (section `0x13`) names protocols; the DXE Core calls its entry point, which receives the image handle and the system table, and the driver installs the protocols it provides. A UEFI application (type `0x09`) is not a driver: it is started on request and exits. A PEIM runs earlier, in PEI.
+
+@see term:dxe
+@see term:protocol
+@see term:depex
+@see topic:pei-dxe
+
+@term protocol
+@name Protocol
+@short DXE's interface: a GUID and a table of functions, the DXE counterpart of a PPI.
+
+A driver installs a protocol and another driver locates it through the boot services. Several drivers may install the same GUID; the dispatcher is satisfied by any one. A dependency expression names the protocol, not the driver that installs it. The PEI counterpart is a [[term:ppi|PPI]].
+
+@see term:dxe
+@see term:ppi
+@see topic:pei-dxe
