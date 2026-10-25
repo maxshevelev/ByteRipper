@@ -1,5 +1,6 @@
 import AgentKit
 import AppKit
+import CodeAnalysis
 import HelpBook
 import LenovoDMI
 import Localization
@@ -28,6 +29,18 @@ public enum UEFIToolModule: ToolModule {
     /// Three columns — name, type, subtype — and a list of label/value fields:
     /// the same room the FIT table takes, more than the minimap's 120.
     public static let preferredPanelWidth: CGFloat = 480
+
+    /// Where stored code analyses are read from. Nil until the app configures
+    /// it, or a test points it at a temporary store: a panel with no store is a
+    /// panel with no code badges, not an error. The app sets it to the skill's
+    /// own Application Support folder at launch.
+    public static var codeAnalysisRoot: URL?
+
+    /// Use the local store the Ghidra skill writes to
+    /// (`~/Library/Application Support/ByteRipper/Analysis`).
+    public static func useDefaultCodeAnalysisStore() {
+        codeAnalysisRoot = CodeAnalysisPaths.defaultRoot
+    }
 
     /// How long a branch may take to be read before the row waiting on it says
     /// "Loading…". Under this the row simply opens when it is ready, and no
@@ -198,6 +211,25 @@ private struct ChecksumPass: Sendable {
     /// The same passes' repairs, keyed by node id — what a wrong field should
     /// read, carried so the detail can quote it without re-reading the body.
     private var nodeRepairs: [NodeID: [ChecksumRepair]] = [:]
+
+    /// The analyses the store holds, and what has been hashed against them.
+    /// The index is a value reloaded when the tree or the store may have
+    /// changed; `checked` keeps a branch from being hashed again, and `nodes`
+    /// is what the tree dresses.
+    private var codeAnalysisIndex = CodeAnalysisIndex.empty
+    private var codeAnalysisChecked: Set<NodeID> = []
+    /// The image nodes with a usable analysis, readable so the app's tests can
+    /// assert on the badge's input without reaching into a view.
+    public private(set) var codeAnalysisNodes: Set<NodeID> = []
+    private var codeAnalysisRequest: Task<Void, Never>?
+    /// Which scan is current; a result from an older reading is dropped.
+    private var codeAnalysisGeneration = 0
+    /// Re-reads the store while the panel is up. The store is written by the
+    /// Ghidra skill, not by this app, so there is no change notification to
+    /// subscribe to; a small poll is what makes a new analysis appear without
+    /// the reader having to reopen the panel. The index comparison makes an
+    /// unchanged store cost one directory walk and no hashing.
+    private var codeAnalysisWatch: Task<Void, Never>?
     /// The node the user is looking at. Nil before a choice, and after an edit
     /// that lost it.
     private var focus: NodeID?
@@ -393,6 +425,7 @@ private struct ChecksumPass: Sendable {
         refreshGuids()
         watchTheGuids()
         watchTheDatabase()
+        watchCodeAnalysis()
     }
 
     /// A firmware database that has been replaced makes the names the presented
@@ -418,13 +451,30 @@ private struct ChecksumPass: Sendable {
         }
     }
 
+    /// The local store is written by the Ghidra skill, outside this app, and
+    /// has no change notification of its own. While the panel is up, a small
+    /// poll reloads the index; an unchanged store is one directory walk, and
+    /// only a changed index resets what was already hashed.
+    private func watchCodeAnalysis() {
+        guard codeAnalysisWatch == nil else { return }
+        codeAnalysisWatch = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled, let self else { return }
+                guard self.tree != nil, UEFIToolModule.codeAnalysisRoot != nil else {
+                    continue
+                }
+                self.refreshCodeAnalysis()
+            }
+        }
+    }
+
     /// `guids.csv` is re-checked once a day, behind whatever is being read at
     /// the time, so the names a tree is drawn with can be superseded while it
     /// is on screen. When that happens the tree is drawn again — the same thing
     /// `refreshGuids` does when the first download lands, and for the same
     /// reason: a better name is worth showing the moment it exists.
-    private func watchTheGuids() {
-        guard guidsWatch == nil else { return }
+    private func watchTheGuids() {        guard guidsWatch == nil else { return }
         let source = Self.guidsSource
         guidsWatch = Task { [weak self] in
             for await fresh in await source.guidsChanges() {
@@ -517,6 +567,10 @@ private struct ChecksumPass: Sendable {
         meFileTableTask = nil
         meChecksumsTask?.cancel()
         meChecksumsTask = nil
+        codeAnalysisRequest?.cancel()
+        codeAnalysisRequest = nil
+        codeAnalysisWatch?.cancel()
+        codeAnalysisWatch = nil
     }
 
     public var parkedState: (any ToolSessionState)? {
@@ -589,6 +643,13 @@ private struct ChecksumPass: Sendable {
         checkedIDs = []
         nodeRepairs = [:]
         checksumProblems = [:]
+        // A new reading is a new tree; every module must be hashed again.
+        codeAnalysisGeneration += 1
+        codeAnalysisRequest?.cancel()
+        codeAnalysisRequest = nil
+        codeAnalysisIndex = .empty
+        codeAnalysisChecked = []
+        codeAnalysisNodes = []
         // A new reading is a new sub-tree; the presented roots of the last one
         // mean nothing here, and neither do the names and digests the last
         // one's rows were filled with. The ME focus is kept — it may be a
@@ -663,6 +724,7 @@ private struct ChecksumPass: Sendable {
                 }
                 self.onDisplay?(self.currentImage)
             }
+            self.refreshCodeAnalysis()
         }
     }
 
@@ -690,6 +752,13 @@ private struct ChecksumPass: Sendable {
                 nodeRepairs = [:]
                 checksumProblems = [:]
                 askedForAddresses = false
+                // Every module's bytes may have moved or changed.
+                codeAnalysisGeneration += 1
+                codeAnalysisRequest?.cancel()
+                codeAnalysisRequest = nil
+                codeAnalysisIndex = .empty
+                codeAnalysisChecked = []
+                codeAnalysisNodes = []
                 // Not on every keystroke: a reading opens every volume's files.
                 requestProtectedRanges(after: 0.5)
                 // The stores went with the edit; the button waits for them.
@@ -706,6 +775,7 @@ private struct ChecksumPass: Sendable {
             } else {
                 show(publish: true, rowsChanged: true)
             }
+            refreshCodeAnalysis()
         case .dmiStoresRead:
             controller.showDMIStores(tree?.dmiStores ?? [])
             // Lenovo's store names its entries by key; which drivers read
@@ -716,10 +786,15 @@ private struct ChecksumPass: Sendable {
             }
         case .lenovoDMIReadersRead:
             show(rowsChanged: false)
-        case .expanded, .addressesResolved, .protectedRangesRead, .dvarSettingsRead:
+        case .expanded:
             // A branch appearing does not move the rows on screen: the panel
             // opens the row it was asked to open, itself, when the branch is
-            // there. What changes here is what the rows *say*.
+            // there. What changes here is what the rows *say* — including the
+            // code badge a newly materialized image may wear.
+            verifyNewChecksums()
+            show(rowsChanged: false)
+            refreshCodeAnalysis()
+        case .addressesResolved, .protectedRangesRead, .dvarSettingsRead:
             verifyNewChecksums()
             show(rowsChanged: false)
         }
@@ -830,6 +905,93 @@ private struct ChecksumPass: Sendable {
         for waiter in waiting { waiter() }
     }
 
+    // MARK: - Code analyses
+
+    /// Finds the image nodes whose bytes have a usable analysis. The store is
+    /// read off the main actor, and only bodies whose length an analysis was
+    /// made from are read and hashed.
+    ///
+    /// Called when the tree is ready, when a branch is materialized, and after
+    /// an edit. A branch added while a scan is in flight starts a new scan; the
+    /// older result is dropped by `codeAnalysisGeneration`.
+    private func refreshCodeAnalysis() {
+        codeAnalysisRequest?.cancel()
+        codeAnalysisRequest = nil
+        guard let tree, tree.isReady, let root = UEFIToolModule.codeAnalysisRoot else {
+            clearCodeAnalysis()
+            return
+        }
+
+        codeAnalysisGeneration += 1
+        let generation = codeAnalysisGeneration
+        let image = tree.image()
+        let readers = tree.spaceReaders
+        let treeGeneration = tree.generation
+        let previousIndex = codeAnalysisIndex
+        let checked = codeAnalysisChecked
+
+        codeAnalysisRequest = Task { [weak self] in
+            let index = await Task.detached(priority: .utility) {
+                CodeAnalysisIndex.load(from: root)
+            }.value
+            guard !Task.isCancelled, let self,
+                  self.codeAnalysisGeneration == generation,
+                  self.tree === tree
+            else { return }
+
+            let changed = index != previousIndex
+            let alreadyChecked: Set<NodeID> = changed ? [] : checked
+            self.codeAnalysisIndex = index
+            self.codeAnalysisChecked = alreadyChecked
+
+            let candidates = image.allNodes.filter {
+                UEFICodeCandidates.isCandidate($0) && !alreadyChecked.contains($0.id)
+            }
+            guard !candidates.isEmpty else {
+                if changed {
+                    self.codeAnalysisNodes = []
+                    self.show(rowsChanged: false)
+                }
+                return
+            }
+
+            let only = Set(candidates.map(\.id))
+            let bytesOf: @Sendable (UEFINode) -> Data? = { node in
+                guard let reader = readers.reader(for: node.space),
+                      let bytes = reader.bytes(node.body)
+                else { return nil }
+                return Data(bytes)
+            }
+            let found = await Task.detached(priority: .utility) {
+                UEFICodeScan.scan(in: image, index: index, only: only, bytesOf: bytesOf)
+            }.value
+            guard !Task.isCancelled,
+                  self.codeAnalysisGeneration == generation,
+                  self.tree === tree, tree.generation == treeGeneration
+            else { return }
+
+            self.codeAnalysisChecked.formUnion(only)
+            if changed {
+                self.codeAnalysisNodes = found
+            } else {
+                self.codeAnalysisNodes.formUnion(found)
+            }
+            self.show(rowsChanged: false)
+        }
+    }
+
+    /// No store, or no tree: the rows wear no code badge. Calling this when
+    /// there is nothing to clear keeps a bind from causing a second show.
+    private func clearCodeAnalysis() {
+        guard !codeAnalysisNodes.isEmpty || !codeAnalysisChecked.isEmpty
+                || !codeAnalysisIndex.isEmpty else { return }
+        codeAnalysisGeneration += 1
+        codeAnalysisIndex = .empty
+        codeAnalysisChecked = []
+        codeAnalysisNodes = []
+        show(rowsChanged: false)
+    }
+
     /// Off the main actor: the pass reads every file body it covers.
     private nonisolated static func checksums(
         in image: UEFIImage,
@@ -868,7 +1030,8 @@ private struct ChecksumPass: Sendable {
         guard let tree, tree.isReady else {
             controller.show(
                 image: nil, tree: tree, focus: nil, detail: .empty, catalogue: guids,
-                badChecksums: checksumProblems, canWrite: !host.isReadOnly,
+                badChecksums: checksumProblems, codeAnalysis: codeAnalysisNodes,
+                canWrite: !host.isReadOnly,
                 isBuilding: tree != nil, rowsChanged: true,
                 meRoots: meRoots, meFocus: meFocus
             )
@@ -933,7 +1096,8 @@ private struct ChecksumPass: Sendable {
                 image: image, tree: tree, focus: focus, detail: detail,
                 helpTerm: helpTerm,
                 catalogue: guids,
-                badChecksums: checksumProblems, canWrite: !host.isReadOnly, isBuilding: false,
+                badChecksums: checksumProblems, codeAnalysis: codeAnalysisNodes,
+                canWrite: !host.isReadOnly, isBuilding: false,
                 rowsChanged: rowsChanged,
                 meRoots: meRoots, meFocus: meFocus
             )

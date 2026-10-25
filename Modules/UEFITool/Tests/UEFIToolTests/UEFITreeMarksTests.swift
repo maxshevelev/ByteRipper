@@ -107,4 +107,28 @@ final class UEFITreeMarksTests: XCTestCase {
         XCTAssertNil(marks.problem)
         XCTAssertFalse(marks.hasRail)
     }
+
+    // MARK: - The code badge
+
+    func testAnAnalyzedImageWearsTheCodeBadge() {
+        let node = UEFINode(kind: .section, subtype: 0x10, name: "PE32 image",
+                            header: 0..<4, body: 4..<0x100)
+        let image = UEFIImage(size: 0x100, roots: [node])
+
+        let marks = UEFITreeMarks.marks(for: node, in: image, hasCode: true, in: .english)
+        XCTAssertEqual(marks.roles, [.codeAnalysis])
+        XCTAssertNil(marks.problem)
+        XCTAssertEqual(ToolRowMark.codeAnalysis.channel, .role)
+        XCTAssertEqual(ToolRowMark.codeAnalysis.symbol,
+                       "chevron.left.forwardslash.chevron.right")
+        XCTAssertTrue(UEFITreeMarks.legendMarks.contains(.codeAnalysis))
+    }
+
+    func testAnImageWithoutAnAnalysisWearsNoCodeBadge() {
+        let node = UEFINode(kind: .section, subtype: 0x12, name: "TE image",
+                            header: 0..<4, body: 4..<0x100)
+        let image = UEFIImage(size: 0x100, roots: [node])
+
+        XCTAssertTrue(UEFITreeMarks.marks(for: node, in: image, in: .english).roles.isEmpty)
+    }
 }

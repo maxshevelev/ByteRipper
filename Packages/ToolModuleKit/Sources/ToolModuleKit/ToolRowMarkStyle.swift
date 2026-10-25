@@ -18,6 +18,7 @@ public extension ToolRowMark {
         case .newerMaybe: return "questionmark.circle"
         case .error: return "exclamationmark.octagon.fill"
         case .caution: return "exclamationmark.circle.fill"
+        case .codeAnalysis: return "chevron.left.forwardslash.chevron.right"
         case .compressed, .compressedUndecoded: return "zipper.page"
         case .holdsChecks: return "lock.shield"
         case .partlyProtected: return "shield.lefthalf.filled"
@@ -37,7 +38,8 @@ public extension ToolRowMark {
         case .newerListed, .newerMaybe: return SemanticColors.caution
         case .error: return SemanticColors.bad
         case .caution: return SemanticColors.caution
-        case .compressedUndecoded, .holdsChecks, .partlyProtected, .encoded, .decoded:
+        case .codeAnalysis, .compressedUndecoded, .holdsChecks, .partlyProtected,
+             .encoded, .decoded:
             return .secondaryLabelColor
         }
     }
@@ -46,6 +48,7 @@ public extension ToolRowMark {
 extension ToolRowMarks.Role {
     var mark: ToolRowMark {
         switch self {
+        case .codeAnalysis: return .codeAnalysis
         case .compressed(_, let decoded): return decoded ? .compressed : .compressedUndecoded
         case .holdsChecks: return .holdsChecks
         case .partlyProtected: return .partlyProtected
@@ -56,6 +59,7 @@ extension ToolRowMarks.Role {
     /// What the pointer reads on the badge.
     var toolTip: String {
         switch self {
+        case .codeAnalysis: return ToolRowMark.codeAnalysis.meaning
         case .compressed(let algorithm, let decoded):
             return decoded
                 ? L("%1$@ compressed data that opens here", algorithm)

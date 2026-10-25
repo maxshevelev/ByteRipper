@@ -17,8 +17,8 @@ public enum UEFITreeMarks {
     /// Every mark this tree draws — what its legend lists.
     public static let legendMarks: [ToolRowMark] = [
         .protectedIBB, .protectedFirmware, .decompressed, .error, .caution,
-        .compressed, .compressedUndecoded, .holdsChecks, .partlyProtected,
-        .encoded, .decoded
+        .codeAnalysis, .compressed, .compressedUndecoded, .holdsChecks,
+        .partlyProtected, .encoded, .decoded
     ]
 
     /// - Parameters:
@@ -27,12 +27,16 @@ public enum UEFITreeMarks {
     ///     not of the tree, which keeps a branch it has read after the row shuts.
     ///   - reader: the bytes of the node's space, for the marks read off them —
     ///     whether a LENV block is stored encoded. Without it those are left off.
+    ///   - hasCode: a usable code analysis is stored for this image node
+    ///     (`Design/CODE_PANEL_PLAN.md`).
     public static func marks(
         for node: UEFINode,
         in image: UEFIImage,
         badChecksums: Set<UEFIChecksumField> = [],
         isOpen: Bool = false,
-        reader: ImageReader? = nil, in language: AppLanguage
+        reader: ImageReader? = nil,
+        hasCode: Bool = false,
+        in language: AppLanguage
     ) -> ToolRowMarks {
         var errors: [String] = []
         var cautions: [String] = []
@@ -79,6 +83,12 @@ public enum UEFITreeMarks {
             let hashes = hashProblems(of: node, in: image, ranges: ranges, in: language)
             errors += hashes.errors
             cautions += hashes.cautions
+        }
+
+        // The badge the reader can act on leads. An image node normally wears
+        // no other role badge, so this only matters if a future mark joins one.
+        if hasCode {
+            roles.insert(.codeAnalysis, at: 0)
         }
 
         return ToolRowMarks(

@@ -3,6 +3,7 @@ import HelpBook
 import HelpUI
 import Localization
 import ToolModuleKit
+import UEFIToolUI
 import Workspace
 
 @MainActor
@@ -121,6 +122,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // testing.
         if !MainViewController.isRunningTests {
             FavoritePatternStore.start()
+            // Stored code analyses, where the Ghidra skill writes them. The
+            // test host reads none: a suite must not inherit the developer's
+            // store and the badges it would put on a fixture image.
+            UEFIToolModule.useDefaultCodeAnalysisStore()
             // The agent socket opens only if the person switched it on, and
             // never in the test host: a suite has no business taking the
             // socket a running copy of the app is serving its agent on.

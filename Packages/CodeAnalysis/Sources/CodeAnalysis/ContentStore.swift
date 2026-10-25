@@ -56,7 +56,10 @@ public struct ContentStore: Sendable {
     // MARK: - Objects
 
     public func hasObject(_ digest: SHA256Digest) -> Bool {
-        FileManager.default.fileExists(atPath: objectURL(digest).path)
+        var isDirectory: ObjCBool = false
+        return FileManager.default.fileExists(atPath: objectURL(digest).path,
+                                              isDirectory: &isDirectory)
+            && !isDirectory.boolValue
     }
 
     @discardableResult
@@ -160,6 +163,16 @@ public struct ContentStore: Sendable {
             if $0.module.sha256 == $1.module.sha256 { return $0.recipe.id < $1.recipe.id }
             return $0.module.sha256 < $1.module.sha256
         }
+    }
+
+    /// The analyses the panel may offer: a readable manifest whose artifact
+    /// object is present. An object whose bytes are corrupt is still present;
+    /// opening it reports that, and `verify` names it before then.
+    ///
+    /// This is the one walk the code-analysis index makes. It never reads an
+    /// artifact body, so an empty or missing store costs no hashing.
+    public func usableAnalyses() -> [AnalysisManifest] {
+        analyses().filter { hasObject($0.artifact.sha256) }
     }
 
     public func key(of manifest: AnalysisManifest) -> AnalysisKey? { manifest.key }

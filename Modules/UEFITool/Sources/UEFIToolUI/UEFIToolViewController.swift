@@ -186,6 +186,10 @@ import UEFITool
     /// The red triangle before a name and the Fix Checksum menu item both ask
     /// it.
     private var badChecksums: [NodeID: Set<UEFIChecksumField>] = [:]
+    /// The image nodes whose bytes have a usable stored code analysis
+    /// (`Design/CODE_PANEL_PLAN.md`). The session fills it in the background;
+    /// the tree only reads it while dressing a row.
+    private var codeAnalysis: Set<NodeID> = []
     /// Whether the file is open for writing. Without it the Fix Checksum menu
     /// item stands down — the module would refuse anyway, but a greyed item
     /// says so before the click.
@@ -741,6 +745,7 @@ import UEFITool
         helpTerm: HelpTermID? = nil,
         catalogue: GuidsCatalogue,
         badChecksums: [NodeID: Set<UEFIChecksumField>],
+        codeAnalysis: Set<NodeID> = [],
         canWrite: Bool,
         isBuilding: Bool,
         rowsChanged: Bool,
@@ -773,6 +778,7 @@ import UEFITool
         self.focus = focus
         self.catalogue = catalogue
         self.badChecksums = badChecksums
+        self.codeAnalysis = codeAnalysis
         self.canWrite = canWrite
         self.isBuilding = isBuilding
         self.meRoots = meRoots
@@ -2586,7 +2592,9 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         // The bytes, only for a row whose marks are read off them.
         let reader = node.kind == .lenvBlock ? tree?.spaceReaders.reader(for: node.space) : nil
         return UEFITreeMarks.marks(for: node, in: image, badChecksums: badChecksums[node.id] ?? [],
-                                   isOpen: outline.isItemExpanded(row(node.id)), reader: reader, in: Localization.appLanguage)
+                                   isOpen: outline.isItemExpanded(row(node.id)), reader: reader,
+                                   hasCode: codeAnalysis.contains(node.id),
+                                   in: Localization.appLanguage)
     }
 
     /// One row's marks again, on its row view and its Name cell — what a row

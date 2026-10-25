@@ -45,6 +45,9 @@ public struct ToolRowMarks: Hashable, Sendable {
 
     /// A badge: what the row is to the others.
     public enum Role: Hashable, Sendable {
+        /// A usable code analysis is stored for this module
+        /// (`Design/CODE_PANEL_PLAN.md`).
+        case codeAnalysis
         /// Holds compressed data — `decoded` when this project opens it.
         case compressed(algorithm: String, decoded: Bool)
         /// Holds what other structures are checked against: protected ranges,
@@ -120,6 +123,7 @@ public enum ToolRowMark: CaseIterable, Hashable, Sendable {
     case newerMaybe
     case error
     case caution
+    case codeAnalysis
     case compressed
     case compressedUndecoded
     case holdsChecks
@@ -140,8 +144,8 @@ public enum ToolRowMark: CaseIterable, Hashable, Sendable {
         case .decompressed: return .rail
         case .newest, .newerListed, .newerMaybe: return .verdict
         case .error, .caution: return .problem
-        case .compressed, .compressedUndecoded, .holdsChecks, .partlyProtected,
-             .encoded, .decoded: return .role
+        case .codeAnalysis, .compressed, .compressedUndecoded, .holdsChecks,
+             .partlyProtected, .encoded, .decoded: return .role
         }
     }
 
@@ -164,6 +168,8 @@ public enum ToolRowMark: CaseIterable, Hashable, Sendable {
             return L("Something is wrong: the pointer says what")
         case .caution:
             return L("Could not be checked, or wants a second look")
+        case .codeAnalysis:
+            return L("A code analysis is stored for this module")
         case .compressed:
             return L("Holds compressed data that opens here")
         case .compressedUndecoded:

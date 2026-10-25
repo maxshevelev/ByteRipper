@@ -106,6 +106,7 @@
 "4 Bytes" = "4 байта";
 "64 bytes (4 rows)" = "64 байта (4 строки)";
 "8 Bytes" = "8 байт";
+"A code analysis is stored for this module" = "Для этого модуля сохранён разбор кода";
 "A FIT needs at least one microcode entry." = "В FIT должна быть хотя бы одна запись микрокода.";
 "A file is open in one place at a time, so it cannot be opened here as well. Show it where it is, or move that pane into this tab." = "Файл открыт в одном месте за раз, поэтому открыть его ещё и здесь нельзя. Покажите его там, где он есть, или перенесите ту файловую панель в эту вкладку.";
 "A second header entry, where there may be only one" = "Вторая запись-заголовок, хотя она может быть только одна";
