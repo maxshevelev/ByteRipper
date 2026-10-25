@@ -80,7 +80,8 @@ manifest's artifact and module, and every reference's analysis.
 each object's hash, stores it, and writes the manifest if the same analysis is
 not already present with another artifact. A project can carry a bundle with
 it, or the store can be shared by putting the same directory on a synced
-folder.
+folder. Entries are written stored, not deflated, so the Swift store in
+`Packages/CodeAnalysis` reads them without linking a decompressor.
 
 ## Commands
 

@@ -402,7 +402,10 @@ class Store:
         out.parent.mkdir(parents=True, exist_ok=True)
         bundle = {"schema": SCHEMA, "created_at": _now(),
                   "analyses": [self.key(m) for m in manifests]}
-        with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as archive:
+        # Stored, not deflated: a bundle is a carrier, not a format to
+        # compress. The Swift store in Packages/CodeAnalysis reads stored
+        # entries only, without linking a decompressor.
+        with zipfile.ZipFile(out, "w", zipfile.ZIP_STORED) as archive:
             archive.writestr("bundle.json", json.dumps(bundle, indent=2) + "\n")
             for manifest in manifests:
                 key = self.key(manifest)
