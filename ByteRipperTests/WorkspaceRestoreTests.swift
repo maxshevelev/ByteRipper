@@ -46,6 +46,14 @@ final class WorkspaceRestoreTests: XCTestCase {
         try tempFile([UInt8](repeating: fill, count: size), "\(fill)")
     }
 
+    private func firstDescendant<T: NSView>(_ type: T.Type, in view: NSView) -> T? {
+        if let view = view as? T { return view }
+        for subview in view.subviews {
+            if let found = firstDescendant(type, in: subview) { return found }
+        }
+        return nil
+    }
+
     func testAComparisonComesBackAsItWas() async throws {
         let a = try dump(0x10000, 0xAA)
         let b = try dump(0x10000, 0xBB)
@@ -280,6 +288,16 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertEqual(restored.selectedFunction?.name, "entry")
         XCTAssertFalse(target.toolSelectionAllowed)
         XCTAssertFalse(target.minimapAllowed)
+        // The panel is a panel like any other: it stops at the dock, rather
+        // than standing over it.
+        target.view.layoutSubtreeIfNeeded()
+        let host = try XCTUnwrap(firstDescendant(FragmentPanelHost.self, in: target.view))
+        let strip = try XCTUnwrap(firstDescendant(FragmentDockStrip.self, in: target.view))
+        XCTAssertEqual(host.frame.minY, strip.frame.height, accuracy: 0.5,
+                       "the stage starts above the dock")
+        XCTAssertEqual(try XCTUnwrap(target.fragments.panelView(restoredID)).frame,
+                       FragmentPanelView.restingFrame(in: host),
+                       "the restored panel stands where every panel stands")
     }
 
     /// A tab torn off from the dock is a code screen too, and comes back as

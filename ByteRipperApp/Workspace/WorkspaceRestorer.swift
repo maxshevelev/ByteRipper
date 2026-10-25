@@ -117,7 +117,8 @@ import Workspace
                         tab.pendingFragments.removeAll { $0 == index }
                         progress = true
                         guard let opened = await tab.controller.openWorkspacePart(origin, from: parent, into: nil,
-                                                                                  keeper: keeper)
+                                                                                  keeper: keeper,
+                                                                                  code: saved.code)
                                 ?? tab.controller.openWorkspaceOrphan(origin, into: nil, keeper: keeper)
                         else {
                             issues.append(notOpened(origin))

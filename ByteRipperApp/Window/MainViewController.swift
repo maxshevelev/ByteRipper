@@ -2385,7 +2385,18 @@ final class MainViewController: NSViewController {
     func openFragment(_ bytes: [UInt8], named name: String,
                       origin: DocumentOrigin? = nil,
                       animated: Bool = true) -> FragmentDock.PanelID? {
-        fragments.open(bytes, named: name, origin: origin, animated: animated)
+        openFragment(bytes, named: name, origin: origin, code: nil, animated: animated)
+    }
+
+    /// Opens a panel that is a code screen from the first frame, the way a
+    /// workspace restore brings one back: the same route every panel takes,
+    /// not a plain part turned into Code after it is up.
+    @discardableResult
+    func openFragment(_ bytes: [UInt8], named name: String,
+                      origin: DocumentOrigin? = nil,
+                      code: CodeScreen?,
+                      animated: Bool = true) -> FragmentDock.PanelID? {
+        fragments.open(bytes, named: name, origin: origin, code: code, animated: animated)
     }
 
     /// What the question a panel with something to put back asks answers with.

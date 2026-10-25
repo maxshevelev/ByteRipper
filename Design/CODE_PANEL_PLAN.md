@@ -242,9 +242,11 @@ in the menu, so an agent or a restored workspace cannot put one there.
 **The workspace remembers the screen.** `FragmentState.code` and `TabState.code`
 are optional and carry the analysis manifest as text plus the function,
 instruction and `ASM`/`C` side. The session and a project both go through the
-same workspace value, so both bring a Code panel back as Code. The artifact is
-read from the store the manifest names; if it is gone, the part opens as the
-bytes it holds rather than not at all.
+same workspace value, so both bring a Code panel back as Code. The panel is
+opened as Code on its first route through the dock — not turned into one after
+it is up — so it is measured and animated by the same panel mechanics as every
+other panel. The artifact is read from the store the manifest names; if it is
+gone, the part opens as the bytes it holds rather than not at all.
 
 ### Selection and addresses
 

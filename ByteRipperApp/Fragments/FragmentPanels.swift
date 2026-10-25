@@ -154,9 +154,24 @@ import ToolModuleKit
     @discardableResult
     func open(_ bytes: [UInt8], named name: String, origin: DocumentOrigin? = nil,
               animated: Bool = true) -> FragmentDock.PanelID? {
+        open(bytes, named: name, origin: origin, code: nil, animated: animated)
+    }
+
+    func open(_ bytes: [UInt8], named name: String, origin: DocumentOrigin? = nil,
+              code: CodeScreen?, animated: Bool = true) -> FragmentDock.PanelID? {
         let pane = PaneViewModel()
         pane.openBytes(bytes, named: name, origin: origin)
-        return adopt(pane, animated: animated)
+        guard let code else { return adopt(pane, animated: animated) }
+        // The bytes being opened are the panel's own: keep the analysis and
+        // the reader's place, but lay them over these bytes.
+        return adopt(pane,
+                     screen: .code(CodeScreen(manifest: code.manifest,
+                                              artifact: code.artifact,
+                                              bytes: Data(bytes),
+                                              selectedFunction: code.selectedFunction,
+                                              selectedInstruction: code.selectedInstruction,
+                                              showsC: code.showsC)),
+                     animated: animated)
     }
 
     /// Opens a module's bytes with the code pane beside them — the panel
@@ -167,12 +182,9 @@ import ToolModuleKit
     func openCode(_ bytes: [UInt8], named name: String, origin: DocumentOrigin,
                   manifest: AnalysisManifest, artifact: CodeArtifact,
                   animated: Bool = true) -> FragmentDock.PanelID? {
-        let pane = PaneViewModel()
-        pane.openBytes(bytes, named: name, origin: origin)
-        return adopt(pane,
-                     screen: .code(CodeScreen(manifest: manifest, artifact: artifact,
-                                              bytes: Data(bytes))),
-                     animated: animated)
+        open(bytes, named: name, origin: origin,
+             code: CodeScreen(manifest: manifest, artifact: artifact, bytes: Data(bytes)),
+             animated: animated)
     }
 
     /// Takes a pane that already exists as a panel of its own and raises it —

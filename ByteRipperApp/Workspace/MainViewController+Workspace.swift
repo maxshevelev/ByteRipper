@@ -120,6 +120,16 @@ extension MainViewController {
     @MainActor
     func restoredCodeScreen(_ state: CodeScreenState,
                             pane: PaneViewModel) async -> CodeScreen? {
+        guard let document = pane.document,
+              let bytes = try? document.read(at: 0, length: Int(document.size))
+        else { return nil }
+        return await restoredCodeScreen(state, bytes: bytes)
+    }
+
+    /// The same screen for bytes that are not in a pane yet — a part being
+    /// opened for the first time by a restore.
+    @MainActor
+    func restoredCodeScreen(_ state: CodeScreenState, bytes: [UInt8]) async -> CodeScreen? {
         guard let text = state.manifest.data(using: .utf8),
               let manifest = try? JSONDecoder().decode(AnalysisManifest.self, from: text)
         else { return nil }
@@ -131,10 +141,7 @@ extension MainViewController {
             else { return nil }
             return artifact
         }.value
-        guard let artifact,
-              let document = pane.document,
-              let bytes = try? document.read(at: 0, length: Int(document.size))
-        else { return nil }
+        guard let artifact else { return nil }
         return CodeScreen(manifest: manifest, artifact: artifact, bytes: Data(bytes),
                           selectedFunction: state.selectedFunction,
                           selectedInstruction: state.selectedInstruction,
@@ -266,7 +273,8 @@ extension MainViewController {
     /// laid over it. Nil when it could not be taken out: the parent changed on
     /// disk, no longer has room for it, or the codec refused.
     func openWorkspacePart(_ origin: PartOrigin, from parent: RestoredPane, into pane: PaneViewModel?,
-                           keeper: ContentKeeper?) async -> RestoredPane? {
+                           keeper: ContentKeeper?,
+                           code: CodeScreenState? = nil) async -> RestoredPane? {
         guard parent.unchanged,
               let codec = PartCodecState.value(PartCodecState.self, from: origin.codec)?.codec,
               let layout = PartCodecState.value(UEFIRootLayout.self, from: origin.layout),
@@ -286,7 +294,17 @@ extension MainViewController {
             pane.openBytes(shown, named: origin.name, origin: link)
             opened = pane
         } else {
-            guard let id = openFragment(shown, named: origin.name, origin: link, animated: false),
+            // A panel opens as the screen it was, not as a part converted
+            // afterwards: one route through the dock for every panel, and the
+            // stage measures it the way it measures any other.
+            let restored: CodeScreen?
+            if let saved = code {
+                restored = await restoredCodeScreen(saved, bytes: shown)
+            } else {
+                restored = nil
+            }
+            guard let id = openFragment(shown, named: origin.name, origin: link,
+                                        code: restored, animated: false),
                   let panel = fragments.pane(id) else { return nil }
             opened = panel
         }
@@ -382,8 +400,13 @@ extension MainViewController {
     /// it the code screen again when the workspace says it was one.
     func finishWorkspaceFragment(_ state: FragmentState, opened: RestoredPane) async {
         apply(state.pane, to: opened.pane, unchanged: opened.unchanged)
-        let restoresCode = state.code != nil
-        if !restoresCode, let surface = fragments.surface(holding: opened.pane) {
+        // A part with a parent opens as the code screen in `openWorkspacePart`;
+        // one that had to come back as loose bytes is still a plain panel here
+        // and is made Code once its place is laid down.
+        let panelID = fragments.panel(holding: opened.pane)
+        let needsCode = state.code != nil
+            && (panelID == nil || fragments.codePane(panelID!) == nil)
+        if !needsCode, let surface = fragments.surface(holding: opened.pane) {
             apply(state.surface, to: surface)
             if let tool = state.surface.tool {
                 restoreTool(tool, on: surface.tools, pane: opened)
@@ -391,10 +414,8 @@ extension MainViewController {
         }
         view.layoutSubtreeIfNeeded()
         scroll(opened.pane, to: state.pane, unchanged: opened.unchanged)
-        if let saved = state.code, let id = fragments.panel(holding: opened.pane),
+        if needsCode, let saved = state.code, let id = panelID,
            let screen = await restoredCodeScreen(saved, pane: opened.pane) {
-            // The pane's place is laid down first: the restored screen then
-            // puts its own function and instruction back over it.
             fragments.reopenAsCode(id, screen: screen, animated: false)
             if let surface = fragments.surface(holding: opened.pane) {
                 apply(state.surface, to: surface)
