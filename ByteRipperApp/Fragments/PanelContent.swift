@@ -19,6 +19,11 @@ struct PanelContent {
         /// The read-only code screen: the module's bytes and the analysis
         /// stored for them.
         case code(CodeScreen)
+
+        var isCode: Bool {
+            if case .code = self { return true }
+            return false
+        }
     }
 
     var code: CodeScreen? {

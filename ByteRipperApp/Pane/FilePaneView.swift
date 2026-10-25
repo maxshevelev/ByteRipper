@@ -1258,7 +1258,8 @@ final class FilePaneView: NSView {
         collapseButton.isHidden = !headerFits || onCollapse == nil
         lockLabel.isHidden = !headerFits
         linkButton.isHidden = !headerFits || viewModel.origin == nil
-        codecBadge.isHidden = !headerFits || viewModel.origin?.codec.badge == nil
+        codecBadge.isHidden = !headerFits
+            || (viewModel.panelBadge == nil && viewModel.origin?.codec.badge == nil)
         updateButton.isHidden = !headerFits || !updateOffered
         // Both halves of the bar's own chrome go together: the indicator is
         // pinned to the bar rather than arranged in the stack, so hiding the
@@ -1705,9 +1706,11 @@ final class FilePaneView: NSView {
     /// nothing to say about its bytes, and a pane with no parent is no part.
     // help: pane.header.codec-badge
     private func updateCodecBadge() {
-        let badge = viewModel.origin?.codec.badge
+        let badge = viewModel.panelBadge ?? viewModel.origin?.codec.badge
         codecBadge.text = badge?.text.text ?? ""
-        codecBadge.isTransform = viewModel.origin?.codec.transform != nil
+        codecBadge.isTransform = viewModel.panelBadge == nil
+            && viewModel.origin?.codec.transform != nil
+        codecBadge.symbolName = badge?.symbolName
         ControlHelp.describe(codecBadge, name: badge?.text.text ?? "", tooltip: badge?.explanation.text)
         codecBadge.isHidden = badge == nil || bounds.width < Self.trailingChromeMinWidth && !isHeaderHoisted
         badgeCollapsed?.isActive = badge == nil

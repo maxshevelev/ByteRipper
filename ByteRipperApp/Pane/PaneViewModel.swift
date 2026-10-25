@@ -1,6 +1,7 @@
 import ByteRipperCore
 import Foundation
 import Localization
+import PartCodec
 import ToolModuleKit
 
 /// The visual state of a single byte in the hex grid (§6).
@@ -87,6 +88,16 @@ final class PaneViewModel: HexViewDataSource {
     /// document (`DocumentOrigin`, `Design/UEFI/UPDATE_IN_PARENT.md` §2); nil
     /// for a file of its own.
     private(set) var origin: DocumentOrigin?
+    /// What kind of panel this pane is, when that is worth a badge of its own
+    /// — `Code` for a code screen. It sits over the codec's badge: the bytes
+    /// are a read-only snapshot, but the reader first needs to know the panel
+    /// is the code reader. Nil for every ordinary pane.
+    var panelBadge: PartBadge? {
+        didSet {
+            guard panelBadge != oldValue else { return }
+            onChange?(.stay)
+        }
+    }
     /// Bumped by every change to the bytes — an edit, an undo, a revert — so a
     /// tab linked to this pane hashes its source again only when something
     /// could have changed it.

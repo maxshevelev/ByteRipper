@@ -219,9 +219,20 @@ surface. It is a reader: no tool strip, no minimap, and the Tools menu and its
 toolbar popup are disabled while it is in front — the function list is the
 screen's structure.
 
+**`Code` is the panel's badge.** The panel header and its pill in the dock wear
+a `Code` capsule with the code glyph (`ellipsis.curlybraces`), not the codec's
+`Read-only` capsule: Code is what the panel is, not a transform its bytes went
+through. The read-only codec still refuses Update in Parent and its sentence is
+still the codec's; the badge says which reader the reader is in.
+
 The code pane has:
 
 - the whole function list, with the selected function's code beside it;
+- a four-way navigator — Functions, Strings, POST writes, Status codes — and a
+  search field that narrows the list in front; a function also matches the text
+  of its instructions, so `MOV` finds the functions that contain one;
+- the selected function's callers and callees as short menus, each target one
+  click away;
 - a disassembly listing: address, instruction bytes, mnemonic and operands;
 - an `ASM`/`C` switch for the selected function's decompiled text;
 - strings, POST writes and `ReportStatusCode` candidates as selectable lists;
@@ -250,6 +261,11 @@ gone, the part opens as the bytes it holds rather than not at all.
 
 ### Selection and addresses
 
+- The ASM listing's first column is the instruction's **offset in the module
+  bytes**, the same number the hex view's Offset column shows. Ghidra's virtual
+  address is what the code and its branch operands use, but it is not the row
+  address: `0x220` in Ghidra can be `0x68` in the dump, and a reader looking for
+  those bytes needs the latter.
 - Selecting a function marks its whole stored range as the dump's **main zone**
   (the focused zone), not as a selection: the reader keeps the selection for
   reading bytes.
@@ -257,10 +273,10 @@ gone, the part opens as the bytes it holds rather than not at all.
 - Selecting bytes in the hex shows the containing instruction and function.
 - Following a reference goes to its target address when it is inside the
   module; an external target says so and goes nowhere.
-- The hex pane's address column is **module-relative**, because Ghidra's
-  addresses are. Where the module lies in the file, the header says the file
-  offset of module offset 0; a module inside a decompressed buffer has no file
-  address and says that instead.
+- The hex view shows the part's own bytes, so its Offset column is the module
+  offset from 0. Where the module lies in the parent file, the header says the
+  file offset of module offset 0; a module inside a decompressed buffer has no
+  file address and says that instead.
 
 The address map comes from the **original** module's TE/PE headers, not the PE
 rebuilt for Ghidra. `te_to_pe.py` may move section data when it expands the
@@ -421,10 +437,16 @@ Each stage builds, tests and is committable on its own.
    listing, C, selection sync and the stale banner. Tests over a real artifact
    (`CpuPei`: 13 functions, 508 instructions, the status candidate at `0x535`)
    and over malformed artifacts.
-5. **The rest of the reader.** Strings, POST writes, status candidates,
-   callers/callees, search, recipe choice, and the agent/MCP queries over the
-   same model. Project references and bundles decide which analyses a project
-   keeps; viewing alone does not create a reference.
+5. **The rest of the reader.** In four parts, each shippable on its own:
+   - **5a, the navigator:** Strings, POST writes and Status codes beside
+     Functions, the search field over the list in front, and callers/callees as
+     menus that lead to their functions. Done.
+   - **5b, recipes:** the other readable analyses of the same module in the
+     header; choosing one loads its artifact without guessing at another.
+   - **5c, the agent:** MCP queries over the same typed model — functions,
+     instructions, strings, references.
+   - **5d, projects:** references and bundles decide which analyses a project
+     keeps; viewing alone does not create a reference.
 
 ## Verification
 

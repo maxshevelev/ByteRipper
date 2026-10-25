@@ -1685,3 +1685,14 @@
 "A PEI dependency expression cannot use %1$@ (at %2$@)." = "Выражение зависимостей PEI не может использовать %1$@ (адрес %2$@).";
 "PPI GUID" = "GUID PPI";
 "Protocol GUID" = "GUID протокола";
+"Callees" = "Вызываемые";
+"Callers" = "Вызывающие";
+"Functions that call this one" = "Функции, которые вызывают эту";
+"Functions this one calls" = "Функции, которые вызывает эта";
+"POST" = "POST";
+"POST writes" = "Записи POST";
+"Status" = "Статус";
+"Status codes" = "Коды состояния";
+"Strings" = "Строки";
+"Code" = "Код";
+"This panel reads the module's stored code analysis. Its bytes are a read-only snapshot." = "Панель показывает сохранённый анализ кода модуля. Её байты — снимок только для чтения.";

@@ -38,9 +38,14 @@ final class FragmentPillView: NSView {
     /// capsule after the name, and the sentence under the pointer; nil for a
     /// part that holds the file's own bytes. What the name used to say with
     /// `decompressed` or `(decoded)`, said once for every kind of part.
-    var transform: (text: String, explanation: String?)? {
+    /// The badge after the name: a codec's transform, or the panel's kind
+    /// (`Code`), with the sentence under the pointer.
+    var transform: (text: String, explanation: String?, symbolName: String?,
+                    isTransform: Bool)? {
         didSet {
             badge.text = transform?.text ?? ""
+            badge.symbolName = transform?.symbolName
+            badge.isTransform = transform?.isTransform ?? false
             ControlHelp.describe(badge, name: transform?.text ?? "", tooltip: transform?.explanation)
             badge.isHidden = transform == nil
             badgeCollapsed.isActive = transform == nil
@@ -284,10 +289,12 @@ final class FragmentDockStrip: NSView {
         var isUp: Bool
         var hasChanges: Bool
         var canTearOff: Bool
-        /// The codec's word for what the bytes went through, and its badge's
-        /// sentence; nil for the file's own bytes.
+        /// The word for what the panel is — a codec's transform, or `Code` —
+        /// and its badge's sentence; nil for the file's own bytes.
         var transform: String? = nil
         var transformExplanation: String? = nil
+        var transformSymbol: String? = nil
+        var transformIsTransform = true
     }
 
     var onSelect: ((FragmentDock.PanelID) -> Void)?
@@ -389,9 +396,16 @@ final class FragmentDockStrip: NSView {
             pill.title = item.title
             pill.isUp = item.isUp
             pill.hasChanges = item.hasChanges
-            let transform = item.transform.map { (text: $0, explanation: item.transformExplanation) }
-            if pill.transform?.text != transform?.text || pill.transform?.explanation != transform?.explanation {
-                pill.transform = transform
+            let wantedTransform = item.transform.map {
+                (text: $0, explanation: item.transformExplanation,
+                 symbolName: item.transformSymbol,
+                 isTransform: item.transformIsTransform)
+            }
+            if pill.transform?.text != wantedTransform?.text
+                || pill.transform?.explanation != wantedTransform?.explanation
+                || pill.transform?.symbolName != wantedTransform?.symbolName
+                || pill.transform?.isTransform != wantedTransform?.isTransform {
+                pill.transform = wantedTransform
             }
             pill.canTearOff = item.canTearOff
             if row.arrangedSubviews.firstIndex(of: pill) != index {

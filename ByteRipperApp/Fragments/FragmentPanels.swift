@@ -199,6 +199,7 @@ import ToolModuleKit
                animated: Bool) -> FragmentDock.PanelID? {
         guard let host else { return nil }
         pane.bookmarks = bookmarkSpace(for: pane, in: host)
+        pane.panelBadge = screen.isCode ? .code : nil
         let surface = DocumentSurface(host: host)
         // The panel's tool-module reads the part, not whatever the tab's active
         // pane is — the panel is a surface with exactly one pane.
@@ -814,7 +815,8 @@ import ToolModuleKit
     func refreshDock() {
         strip.setItems(dock.panels.compactMap { id in
             guard let entry = entries[id] else { return nil }
-            let transform = Self.transform(of: entry.pane)
+            let panel = entry.pane.panelBadge
+            let transform = panel == nil ? Self.transform(of: entry.pane) : nil
             return FragmentDockStrip.Item(
                 id: id,
                 title: entry.pane.status.fileName,
@@ -822,8 +824,11 @@ import ToolModuleKit
                 hasChanges: entry.pane.origin?.hasChanges(in: entry.pane)
                     ?? entry.pane.status.isDirty,
                 canTearOff: host?.canTearOffFragment ?? false,
-                transform: transform?.text,
-                transformExplanation: transform?.explanation
+                transform: panel?.text.text ?? transform?.text,
+                transformExplanation: panel?.explanation.text ?? transform?.explanation,
+                transformSymbol: panel?.symbolName,
+                transformIsTransform: panel?.text.text == nil
+                    && entry.pane.origin?.codec.transform != nil
             )
         })
         host?.setFragmentDockVisible(!dock.isEmpty)

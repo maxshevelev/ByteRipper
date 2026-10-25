@@ -20,10 +20,21 @@ public final class PartBadgeView: NSView {
 
     /// Whether the word is a conversion the bytes went through — `LZMA`,
     /// `XOR 77` — rather than something else about them, `Read-only` or
-    /// `Structure`. A conversion carries ⇄ before the word.
+    /// `Code`. A conversion carries ⇄ before the word.
     public var isTransform = false {
         didSet {
             guard isTransform != oldValue else { return }
+            placeSymbol()
+            invalidateIntrinsicContentSize()
+        }
+    }
+
+    /// A symbol before the word, for a badge that is a kind rather than a
+    /// conversion — the code glyph on a `Code` badge. Ignored while
+    /// `isTransform` draws its own ⇄.
+    public var symbolName: String? {
+        didSet {
+            guard symbolName != oldValue else { return }
             placeSymbol()
             invalidateIntrinsicContentSize()
         }
@@ -61,7 +72,8 @@ public final class PartBadgeView: NSView {
         NSImage.SymbolConfiguration(pointSize: font.pointSize - 2, weight: .semibold)
     }
 
-    public init(text: String = "", isTransform: Bool = false) {
+    public init(text: String = "", isTransform: Bool = false,
+                symbolName: String? = nil) {
         super.init(frame: .zero)
         label.font = font
         label.textColor = .labelColor
@@ -74,6 +86,7 @@ public final class PartBadgeView: NSView {
         symbolView.isHidden = true
         symbolView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(symbolView)
+        self.symbolName = symbolName
         // Breakable: a header with no badge collapses this view to no width,
         // and two required insets inside nothing are a conflict the engine
         // resolves by breaking something of the window's instead.
@@ -97,16 +110,27 @@ public final class PartBadgeView: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// Shows ⇄ and moves the word after it, or hides it and moves the word back.
+    private var hasSymbol: Bool { isTransform || symbolName != nil }
+
+    /// Shows the symbol and moves the word after it, or hides it and moves the
+    /// word back.
     private func placeSymbol() {
-        symbolView.isHidden = !isTransform
-        labelAtInset.isActive = !isTransform
-        labelAfterSymbol.isActive = isTransform
+        if isTransform {
+            symbolView.image = NSImage(systemSymbolName: "arrow.left.arrow.right",
+                                       accessibilityDescription: nil)
+        } else if let symbolName {
+            symbolView.image = NSImage(systemSymbolName: symbolName,
+                                       accessibilityDescription: nil)
+        }
+        symbolView.symbolConfiguration = Self.symbolConfiguration(for: font)
+        symbolView.isHidden = !hasSymbol
+        labelAtInset.isActive = !hasSymbol
+        labelAfterSymbol.isActive = hasSymbol
     }
 
     public override var intrinsicContentSize: NSSize {
         let size = label.intrinsicContentSize
-        let symbolWidth = isTransform ? symbolView.intrinsicContentSize.width + Self.symbolGap : 0
+        let symbolWidth = hasSymbol ? symbolView.intrinsicContentSize.width + Self.symbolGap : 0
         return NSSize(width: size.width + symbolWidth + 2 * Self.inset.width, height: size.height + 2 * Self.inset.height)
     }
 

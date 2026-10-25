@@ -1685,3 +1685,14 @@
 "A PEI dependency expression cannot use %1$@ (at %2$@)." = "Ein PEI-Abhängigkeitsausdruck darf %1$@ nicht verwenden (bei %2$@).";
 "PPI GUID" = "PPI-GUID";
 "Protocol GUID" = "Protokoll-GUID";
+"Callees" = "Aufgerufene";
+"Callers" = "Aufrufer";
+"Functions that call this one" = "Funktionen, die diese aufrufen";
+"Functions this one calls" = "Funktionen, die diese aufruft";
+"POST" = "POST";
+"POST writes" = "POST-Schreibzugriffe";
+"Status" = "Status";
+"Status codes" = "Statuscodes";
+"Strings" = "Zeichenketten";
+"Code" = "Code";
+"This panel reads the module's stored code analysis. Its bytes are a read-only snapshot." = "Diese Palette zeigt die gespeicherte Codeanalyse des Moduls. Ihre Bytes sind eine schreibgeschützte Momentaufnahme.";

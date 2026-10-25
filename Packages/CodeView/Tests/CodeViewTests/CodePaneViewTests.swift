@@ -26,8 +26,11 @@ final class CodePaneViewTests: XCTestCase {
     private func artifact() throws -> CodeArtifact {
         try JSONDecoder().decode(CodeArtifact.self, from: Data("""
         {"script_version":2,"ghidra":"12.1.2","program":{"image_base":"0x0"},
+         "strings":[{"address":"0x220","type":"string","value":"ABC"}],
+         "post_codes":[{"address":"0x221","function":"0x220","port":"0x80","text":"OUT 0x80, AL"}],
+         "status_code_calls":[{"address":"0x222","function":"0x220","text":"call [ebx+0x10]","context":["ReportStatusCode"]}],
          "functions":[
-          {"entry":"0x220","name":"FUN_00000220","instructions":[
+          {"entry":"0x220","name":"FUN_00000220","callers":["0x355"],"callees":["0x355"],"instructions":[
             {"address":"0x220","bytes":"56","mnemonic":"PUSH","text":"PUSH ESI"},
             {"address":"0x221","bytes":"57","mnemonic":"PUSH","text":"PUSH EDI"}]},
           {"entry":"0x355","name":"entry","c":"return 0;","instructions":[
@@ -65,7 +68,9 @@ final class CodePaneViewTests: XCTestCase {
         view.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
         view.layoutSubtreeIfNeeded()
 
-        let mode = try XCTUnwrap(first(NSSegmentedControl.self, in: view) { _ in true })
+        let mode = try XCTUnwrap(first(NSSegmentedControl.self, in: view) {
+            $0.label(forSegment: 0) == "ASM"
+        })
         XCTAssertEqual((0..<mode.segmentCount).map { mode.label(forSegment: $0) ?? "" },
                        ["ASM", "C"])
         let modeRect = view.convert(mode.bounds, from: mode)
@@ -101,11 +106,25 @@ final class CodePaneViewTests: XCTestCase {
             first(NSTableView.self, in: view) {
                 $0.tableColumns.first?.identifier.rawValue == "function"
             })
+        let cell = try XCTUnwrap(list.view(atColumn: 0, row: 0, makeIfNecessary: true)
+                                    as? NSTableCellView)
+        let field = try XCTUnwrap(cell.textField)
         let headingLeft = view.convert(heading.alignmentRect(forFrame: heading.bounds),
                                        from: heading).minX
-        let listLeft = view.convert(list.bounds, from: list).minX
-        XCTAssertEqual(headingLeft, listLeft, accuracy: 0.5,
-                       "and starts where the list does")
+        let rowTextLeft = view.convert(field.alignmentRect(forFrame: field.bounds),
+                                       from: field).minX
+        XCTAssertEqual(headingLeft, rowTextLeft, accuracy: 0.5,
+                       "and starts where the row text does")
+
+        let codeTitle = try XCTUnwrap(first(NSTextField.self, in: view) {
+            $0.stringValue == "Code analysis"
+        })
+        let headingY = view.convert(heading.alignmentRect(forFrame: heading.bounds),
+                                    from: heading).midY
+        let codeTitleY = view.convert(codeTitle.alignmentRect(forFrame: codeTitle.bounds),
+                                      from: codeTitle).midY
+        XCTAssertEqual(headingY, codeTitleY, accuracy: 0.5,
+                       "and reads on the same line as the code title")
     }
 
     /// A screen that moved container opens where it was left: the function,
@@ -150,6 +169,87 @@ final class CodePaneViewTests: XCTestCase {
                              "the code is above the hex view")
         XCTAssertEqual(hexRect.height, 220, accuracy: 0.5,
                        "the hex view is the reference strip below")
+    }
+
+
+    /// The navigator's other lists read the same artifact: strings, POST
+    /// writes and status candidates, each selectable into the bytes.
+    func testTheNavigatorListsStringsPostAndStatus() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 480, height: 320)
+        view.layoutSubtreeIfNeeded()
+        var ranges: [Range<UInt64>] = []
+        view.onSelectRange = { ranges.append($0) }
+
+        view.selectList(.strings)
+        XCTAssertEqual(view.listedStringCount, 1)
+        XCTAssertEqual(view.selectedString?.value, "ABC")
+        XCTAssertEqual(ranges.last, 0x68..<0x6C, "the value and its terminator")
+
+        view.selectList(.postCodes)
+        XCTAssertEqual(view.listedPostCodeCount, 1)
+        XCTAssertEqual(view.selectedPostCode?.text, "OUT 0x80, AL")
+        XCTAssertEqual(ranges.last, 0x69..<0x6A)
+
+        view.selectList(.statusCodes)
+        XCTAssertEqual(view.listedStatusCodeCount, 1)
+        XCTAssertEqual(view.selectedStatusCode?.text, "call [ebx+0x10]")
+        XCTAssertEqual(ranges.last, 0x6A..<0x6B)
+
+        view.selectList(.functions)
+        XCTAssertEqual(view.listedFunctionCount, 2)
+        XCTAssertEqual(view.selectedFunction?.name, "FUN_00000220")
+    }
+
+    /// Search narrows functions by their instructions as well as their names,
+    /// and the two reference lists by their text.
+    func testSearchNarrowsTheListInFront() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 480, height: 320)
+        view.layoutSubtreeIfNeeded()
+
+        view.filter(by: "MOV")
+        XCTAssertEqual(view.listedFunctionCount, 1)
+        XCTAssertEqual(view.selectedFunction?.name, "FUN_00000220",
+                       "the selected function stayed; the list narrowed around it")
+
+        view.selectList(.strings)
+        view.filter(by: "ABC")
+        XCTAssertEqual(view.listedStringCount, 1)
+        view.filter(by: "nothing here")
+        XCTAssertEqual(view.listedStringCount, 0)
+    }
+
+    /// A function's callers and callees are one click from it.
+    func testACalleeLeadsToItsFunction() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
+        view.layoutSubtreeIfNeeded()
+
+        let popup = try XCTUnwrap(first(NSPopUpButton.self, in: view) { _ in true })
+        let item = try XCTUnwrap(popup.menu?.items.first { $0.title == "entry" })
+        _ = item.target?.perform(item.action, with: item)
+        XCTAssertEqual(view.selectedFunction?.name, "entry")
+    }
+
+
+    /// The listing's first column is the byte's offset in the module — the
+    /// same 0x68 the hex view shows — not Ghidra's 0x220 virtual address.
+    func testTheListingShowsTheModuleOffset() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 480, height: 320)
+        view.layoutSubtreeIfNeeded()
+        let listing = try XCTUnwrap(first(NSTableView.self, in: view) {
+            $0.tableColumns.first?.identifier.rawValue == "instruction"
+        })
+        let cell = try XCTUnwrap(listing.view(atColumn: 0, row: 0, makeIfNecessary: true)
+                                    as? NSTableCellView)
+        XCTAssertTrue(try XCTUnwrap(cell.textField?.stringValue).hasPrefix("0x68"),
+                      "the module offset, as in the hex view")
     }
 
     func testTheStaleBannerIsSaidOutLoud() throws {        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),

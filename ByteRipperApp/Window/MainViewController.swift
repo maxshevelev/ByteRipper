@@ -1387,8 +1387,10 @@ final class MainViewController: NSViewController {
             activeFilePane = nil
             comparisonView = nil
             comparisonCoordinator.stop()
+            codeScreen?.pane.panelBadge = nil
             codeScreen = nil
             codeScreenView = nil
+            windowModel.pane1.panelBadge = nil
             surface.tools.allowsSelection = true
             // Keep the map's before-code state: a file opened next in this tab
             // is an ordinary document again and should get its map back.
@@ -1528,6 +1530,7 @@ final class MainViewController: NSViewController {
             if showsCode, let codeScreen {
                 // The functions are the screen: no tool strip, no map, exactly
                 // as in the dock.
+                paneModel.panelBadge = .code
                 if minimapVisibleBeforeCode == nil {
                     minimapVisibleBeforeCode = surface.minimap.isPanelVisible
                 }
@@ -1552,6 +1555,7 @@ final class MainViewController: NSViewController {
                 setContentView(codePane)
             } else {
                 codeScreenView = nil
+                paneModel.panelBadge = nil
                 surface.tools.allowsSelection = true
                 if let wasVisible = minimapVisibleBeforeCode {
                     minimapVisibleBeforeCode = nil
@@ -1599,6 +1603,7 @@ final class MainViewController: NSViewController {
             // tab is an ordinary comparison and its tools are its own again.
             captureCodeScreenState()
             codeScreenView = nil
+            codeScreen?.pane.panelBadge = nil
             surface.tools.allowsSelection = true
             if let wasVisible = minimapVisibleBeforeCode {
                 minimapVisibleBeforeCode = nil
