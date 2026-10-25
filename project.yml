@@ -109,6 +109,11 @@ packages:
   # puts back every part through one, whoever asked for it.
   PartCodec:
     path: Packages/PartCodec
+  # What a disassembler's analysis of a module is, and the local
+  # content-addressed store that keeps it. Nothing links it yet; the Code panel
+  # and the agent's Ghidra workflow will meet here.
+  CodeAnalysis:
+    path: Packages/CodeAnalysis
   # The Lenovo identity store's format and parse. UEFIImage reads the store
   # into the tree with it; the app's tests build and check blocks with it.
   LenovoDMI:
