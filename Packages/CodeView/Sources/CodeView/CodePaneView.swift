@@ -32,6 +32,9 @@ import ToolModuleKit
     public let artifact: CodeArtifact
     private let layout: ModuleLayout?
     private let functions: [CodeArtifact.Function]
+    /// The readable analyses of the same module, the chosen one first. One
+    /// entry is the ordinary case; more makes the header offer the others.
+    private let recipes: [AnalysisManifest]
     /// Every instruction in the artifact, and the selected function's rows —
     /// the listing shows one function, the way C does.
     private var allLines: [Line] = []
@@ -60,7 +63,16 @@ import ToolModuleKit
     private let cTextView = NSTextView()
     private let cScroll = NSScrollView()
     private let modeControl: NSSegmentedControl
+    private let recipePopUp = NSPopUpButton(frame: .zero, pullsDown: false)
+    private var recipePopUpCollapsed: NSLayoutConstraint?
     private let codeContent = NSView()
+    private let rightSplit = ALSplitView()
+    private let hexDumpBar = CodeDumpBar()
+    private let hexDumpButton = NSButton()
+    private let moduleHexView: NSView
+    private var hexDumpVisible = true
+    private static let hexDumpHeight: CGFloat = 220
+    private static let dumpBarHeight: CGFloat = 24
     private let staleLabel = NSTextField(labelWithString: "")
     private var syncingSelection = false
 
@@ -70,13 +82,23 @@ import ToolModuleKit
     /// A function's whole stored range, shown as the dump's main zone rather
     /// than as a selection: the reader keeps the selection for reading bytes.
     public var onFocusRange: ((Range<UInt64>) -> Void)?
+    /// Another stored analysis of the same module was chosen. The app loads
+    /// its artifact and rebuilds the screen; the pane does not read the store.
+    public var onChooseRecipe: ((AnalysisManifest) -> Void)?
 
     public init(manifest: AnalysisManifest, artifact: CodeArtifact,
-                moduleBytes: Data? = nil, hexView: NSView) {
+                moduleBytes: Data? = nil, hexView: NSView,
+                recipes: [AnalysisManifest] = []) {
         self.manifest = manifest
         self.artifact = artifact
         self.functions = artifact.functions
         self.layout = moduleBytes.flatMap { try? ModuleLayout(module: $0) }
+        self.moduleHexView = hexView
+        var allRecipes = [manifest]
+        for recipe in recipes where !allRecipes.contains(where: { $0.recipe.id == recipe.recipe.id }) {
+            allRecipes.append(recipe)
+        }
+        self.recipes = allRecipes
         // ASM and C are names of formats, not words to translate.
         modeControl = NSSegmentedControl(
             labels: ["ASM", "C"], trackingMode: .selectOne,
@@ -151,6 +173,16 @@ import ToolModuleKit
         return listedStatusCodes[functionTable.selectedRow]
     }
     public var showsDecompiledC: Bool { modeControl.selectedSegment == 1 }
+    /// The analyses the header can offer, the chosen one first.
+    public var offeredRecipes: [AnalysisManifest] { recipes }
+
+    /// Chooses one of `offeredRecipes`; the app loads its artifact and rebuilds
+    /// the screen.
+    public func chooseRecipe(at index: Int) {
+        guard recipes.indices.contains(index),
+              recipes[index].recipe.id != manifest.recipe.id else { return }
+        onChooseRecipe?(recipes[index])
+    }
 
     /// Switches the navigator: Functions, Strings, POST writes, Status codes.
     public func selectList(_ list: List) {
@@ -557,14 +589,18 @@ import ToolModuleKit
         modeControl.setContentHuggingPriority(.required, for: .horizontal)
         modeControl.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-        // The ASM/C switch is the screen's only control and belongs in its
-        // top-right corner, level with the title.
+        // The ASM/C switch is the screen's only format control and belongs in
+        // its top-right corner, level with the title; the dump bar carries the
+        // analysis and the fold.
         let titleSpacer = NSView()
         titleSpacer.setContentHuggingPriority(.init(1), for: .horizontal)
         let titleRow = NSStackView(views: [titleLabel, titleSpacer, modeControl])
         titleRow.orientation = .horizontal
         titleRow.alignment = .top
         titleRow.spacing = 8
+        titleRow.setContentHuggingPriority(.required, for: .vertical)
+        titleRow.setContentCompressionResistancePriority(.required, for: .vertical)
+        titleLabel.setContentCompressionResistancePriority(.required, for: .vertical)
         titleRow.translatesAutoresizingMaskIntoConstraints = false
 
         // The module and what produced the analysis read as one line: its
@@ -577,6 +613,26 @@ import ToolModuleKit
         detailRow.spacing = 6
         detailRow.translatesAutoresizingMaskIntoConstraints = false
         detailRow.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+        // The analysis dropdown, in the dump bar's right side. It shows the
+        // recipe in front; the others are its menu.
+        recipePopUp.controlSize = .small
+        recipePopUp.font = .systemFont(ofSize: 11)
+        recipePopUp.removeAllItems()
+        for recipe in recipes {
+            recipePopUp.addItem(withTitle: recipe.recipe.id)
+        }
+        recipePopUp.selectItem(withTitle: manifest.recipe.id)
+        recipePopUp.target = self
+        recipePopUp.action = #selector(recipeChanged)
+        recipePopUp.translatesAutoresizingMaskIntoConstraints = false
+        recipePopUp.isHidden = recipes.count <= 1
+        let collapsed = recipePopUp.widthAnchor.constraint(equalToConstant: 0)
+        collapsed.isActive = recipes.count <= 1
+        recipePopUpCollapsed = collapsed
+        recipePopUp.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        ControlHelp.describe(recipePopUp, name: L("Analysis"),
+                             tooltip: L("Choose the stored analysis shown here"))
 
         for button in [callersButton, calleesButton] {
             button.bezelStyle = .inline
@@ -649,8 +705,7 @@ import ToolModuleKit
         NSLayoutConstraint.activate([
             codeStack.leadingAnchor.constraint(equalTo: codeContent.leadingAnchor, constant: 12),
             codeStack.trailingAnchor.constraint(equalTo: codeContent.trailingAnchor, constant: -12),
-            codeStack.topAnchor.constraint(equalTo: codeContent.topAnchor, constant: 12),
-            codeStack.bottomAnchor.constraint(equalTo: codeContent.bottomAnchor, constant: -12)
+            codeStack.topAnchor.constraint(equalTo: codeContent.topAnchor, constant: 12)
         ])
         header.widthAnchor.constraint(equalTo: codeStack.widthAnchor).isActive = true
         titleRow.widthAnchor.constraint(equalTo: header.widthAnchor).isActive = true
@@ -658,13 +713,51 @@ import ToolModuleKit
         referencesRow.widthAnchor.constraint(equalTo: header.widthAnchor).isActive = true
         staleLabel.widthAnchor.constraint(equalTo: header.widthAnchor).isActive = true
 
-        let rightSplit = ALSplitView()
+        // The bar is part of the code panel: it stays when the dump is folded
+        // and only the dump moves. Its button is a toggle, filled while the
+        // bytes are showing.
+        hexDumpBar.translatesAutoresizingMaskIntoConstraints = false
+        hexDumpButton.image = NSImage(systemSymbolName: "inset.filled.bottomthird.rectangle",
+                                      accessibilityDescription: nil)
+        hexDumpButton.imagePosition = .imageOnly
+        hexDumpButton.setButtonType(.toggle)
+        hexDumpButton.isBordered = false
+        hexDumpButton.controlSize = .small
+        hexDumpButton.target = self
+        hexDumpButton.action = #selector(toggleHexDump)
+        hexDumpButton.translatesAutoresizingMaskIntoConstraints = false
+        hexDumpBar.addSubview(hexDumpButton)
+        hexDumpBar.addSubview(recipePopUp)
+        codeContent.addSubview(hexDumpBar)
+        NSLayoutConstraint.activate([
+            hexDumpBar.leadingAnchor.constraint(equalTo: codeContent.leadingAnchor),
+            hexDumpBar.trailingAnchor.constraint(equalTo: codeContent.trailingAnchor),
+            hexDumpBar.bottomAnchor.constraint(equalTo: codeContent.bottomAnchor),
+            hexDumpBar.heightAnchor.constraint(equalToConstant: Self.dumpBarHeight),
+            codeStack.bottomAnchor.constraint(equalTo: hexDumpBar.topAnchor, constant: -8),
+            hexDumpButton.trailingAnchor.constraint(equalTo: hexDumpBar.trailingAnchor, constant: -8),
+            hexDumpButton.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor),
+            recipePopUp.trailingAnchor.constraint(equalTo: hexDumpButton.leadingAnchor, constant: -12),
+            recipePopUp.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor),
+            recipePopUp.leadingAnchor.constraint(greaterThanOrEqualTo: hexDumpBar.leadingAnchor,
+                                                 constant: 8)
+        ])
+        updateHexDumpButton()
+
         rightSplit.isVertical = false
         rightSplit.dividerThickness = 1
         rightSplit.addPane(codeContent)
-        rightSplit.addPane(hexView)
+        rightSplit.addPane(moduleHexView)
         rightSplit.setPaneLayout(.fill, at: 0)
-        rightSplit.setPaneLayout(.fixed(220), at: 1)
+        rightSplit.setPaneLayout(.fixed(Self.hexDumpHeight), at: 1)
+        // A drag is the reader's own fold. The bar stays in the code pane, so
+        // it cannot be dragged out of sight; the button follows whether the
+        // dump has any height left.
+        rightSplit.onDividerMoved = { [weak self] _, _ in
+            guard let self, !self.rightSplit.isAnimatingDivider else { return }
+            self.hexDumpVisible = self.moduleHexView.frame.height > 0.5
+            self.updateHexDumpButton()
+        }
 
         let split = ALSplitView()
         split.isVertical = true
@@ -685,6 +778,36 @@ import ToolModuleKit
 
     private func applyCodeBackground() {
         codeContent.layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
+    }
+
+    // MARK: - The hex dump
+
+    public var isHexDumpVisible: Bool { hexDumpVisible }
+
+    /// Folds the hex view away under its bar, or brings it back, growing the
+    /// code on the split's own animation.
+    public func setHexDumpVisible(_ visible: Bool, animated: Bool = true) {
+        guard hexDumpVisible != visible else { return }
+        hexDumpVisible = visible
+        updateHexDumpButton()
+        let size = visible ? Self.hexDumpHeight : 0
+        if animated {
+            rightSplit.animateTrailingPaneSize(to: size, duration: 0.2)
+        } else {
+            rightSplit.setPaneLayout(.fixed(size), at: 1)
+            rightSplit.layoutSubtreeIfNeeded()
+        }
+    }
+
+    @objc private func toggleHexDump() {
+        setHexDumpVisible(!hexDumpVisible)
+    }
+
+    private func updateHexDumpButton() {
+        let phrase = hexDumpVisible ? L("Hide hex dump") : L("Show hex dump")
+        hexDumpButton.state = hexDumpVisible ? .on : .off
+        hexDumpButton.contentTintColor = hexDumpVisible ? .controlAccentColor : .secondaryLabelColor
+        ControlHelp.describe(hexDumpButton, name: phrase, tooltip: phrase)
     }
 
     private func configure(_ table: NSTableView, identifier: String) {
@@ -756,6 +879,10 @@ import ToolModuleKit
 
     @objc private func modeChanged() {
         applyMode()
+    }
+
+    @objc private func recipeChanged() {
+        chooseRecipe(at: recipePopUp.indexOfSelectedItem)
     }
 
     private func applyMode() {
@@ -901,5 +1028,20 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
                                              imageBase: artifact.program?.imageBase?.value)
         else { return address.description }
         return "0x" + String(offset, radix: 16, uppercase: true)
+    }
+}
+
+/// The thin bar between the code and the hex view: a window-background strip
+/// with one hairline along its top edge, and room at the right for the
+/// fold/unfold button.
+private final class CodeDumpBar: NSView {
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.windowBackgroundColor.setFill()
+        bounds.fill()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
     }
 }

@@ -1,5 +1,6 @@
 import ByteRipperCore
 import Cocoa
+import CodeAnalysis
 import Localization
 import Workspace
 
@@ -73,10 +74,19 @@ final class WorkspaceRecorder {
             .appendingPathComponent("Workspace", isDirectory: true))
     }
 
+    /// What the open project's bundle last held: its folder and the analyses
+    /// in it. A snapshot with the same set writes nothing.
+    private var bundledAnalyses: (project: URL, keys: Set<AnalysisKey>)?
+
     /// Records into `project` from now on, or — nil — into the session the
     /// app keeps by itself. The keeper starts afresh: what it knows was
     /// written is in the folder it leaves.
     func switchTo(project: WorkspaceFolder?) {
+        if let old = self.project, old.url != project?.url {
+            let store = try? ContentStore(root: CodeAnalysisStore.root, create: false)
+            try? store?.removeRef(CodeAnalysisStore.projectRefName(for: old.url))
+        }
+        if self.project?.url != project?.url { bundledAnalyses = nil }
         // What the keeper being left still writes goes on in its own queue,
         // into its own folder.
         self.project = project
@@ -152,10 +162,12 @@ final class WorkspaceRecorder {
     /// background has not made yet is hashed by the writer before it writes.
     func record(final: Bool = false) {
         updateJournalDirectory()
-        if project != nil {
+        if let project {
             guard !isPaused else { return }
             keeper.beginSnapshot()
-            keeper.commit(snapshot(), final: final)
+            let state = snapshot()
+            keeper.commit(state, final: final)
+            bundleAnalyses(of: state, in: project)
             return
         }
         // Neither written nor deleted: it is a newer build's.
@@ -196,6 +208,54 @@ final class WorkspaceRecorder {
 
     /// How long a last snapshot may take before its sheet shows.
     static var finalSheetDelay: Duration = .milliseconds(200)
+
+    // MARK: - The project's analyses
+
+    /// A project keeps the analyses its Code screens show: a bundle beside
+    /// `Project.json`, and a reference in the store so the objects the bundle
+    /// was made from are not collected. Viewing a module in the session
+    /// without a project creates neither.
+    private func bundleAnalyses(of workspace: Workspace, in project: WorkspaceFolder) {
+        let manifests = Self.codeManifests(in: workspace)
+        let keys = Set(manifests.compactMap(\.key))
+        guard bundledAnalyses?.project != project.url || bundledAnalyses?.keys != keys else { return }
+        bundledAnalyses = (project.url, keys)
+        let root = CodeAnalysisStore.root
+        let ref = CodeAnalysisStore.projectRefName(for: project.url)
+        let bundleURL = CodeAnalysisStore.bundleURL(in: project.url)
+        keeper.writer.enqueue { _ in
+            guard let store = try? ContentStore(root: root, create: !keys.isEmpty) else { return }
+            if keys.isEmpty {
+                try? FileManager.default.removeItem(at: bundleURL)
+                try? store.removeRef(ref)
+            } else {
+                let ordered = keys.sorted()
+                try? store.setRef(ref, analyses: ordered)
+                try? store.exportBundle(ordered, to: bundleURL)
+            }
+        }
+    }
+
+    /// Every analysis a Code screen in `workspace` names, once.
+    private static func codeManifests(in workspace: Workspace) -> [AnalysisManifest] {
+        let decoder = JSONDecoder()
+        var seen = Set<AnalysisKey>()
+        var manifests: [AnalysisManifest] = []
+        for window in workspace.windows {
+            for tab in window.tabs {
+                for state in [tab.code] + tab.fragments.map(\.code) {
+                    guard let state,
+                          let data = state.manifest.data(using: .utf8),
+                          let manifest = try? decoder.decode(AnalysisManifest.self, from: data),
+                          let key = manifest.key,
+                          seen.insert(key).inserted
+                    else { continue }
+                    manifests.append(manifest)
+                }
+            }
+        }
+        return manifests
+    }
 
     /// Waits until every snapshot taken so far is on disk — for a test.
     func flush() {

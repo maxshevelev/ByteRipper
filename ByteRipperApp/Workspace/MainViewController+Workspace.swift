@@ -134,18 +134,22 @@ extension MainViewController {
               let manifest = try? JSONDecoder().decode(AnalysisManifest.self, from: text)
         else { return nil }
         let root = UEFIToolModule.codeAnalysisRoot ?? CodeAnalysisPaths.defaultRoot
-        let artifact = await Task.detached(priority: .userInitiated) { () -> CodeArtifact? in
+        let loaded = await Task.detached(priority: .userInitiated)
+        { () -> (artifact: CodeArtifact, recipes: [AnalysisManifest])? in
             guard let store = try? ContentStore(root: root, create: false),
                   let data = try? store.object(manifest.artifact.sha256),
                   let artifact = try? JSONDecoder().decode(CodeArtifact.self, from: data)
             else { return nil }
-            return artifact
+            let recipes = CodeAnalysisIndex(manifests: store.usableAnalyses())
+                .manifests(for: manifest.module.sha256)
+            return (artifact, recipes)
         }.value
-        guard let artifact else { return nil }
-        return CodeScreen(manifest: manifest, artifact: artifact, bytes: Data(bytes),
+        guard let loaded else { return nil }
+        return CodeScreen(manifest: manifest, artifact: loaded.artifact, bytes: Data(bytes),
                           selectedFunction: state.selectedFunction,
                           selectedInstruction: state.selectedInstruction,
-                          showsC: state.showsC)
+                          showsC: state.showsC,
+                          recipes: loaded.recipes)
     }
 
     /// The open tool-module, what it has chosen, and the pane it reads.

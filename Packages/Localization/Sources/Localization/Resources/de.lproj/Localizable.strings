@@ -1696,3 +1696,8 @@
 "Strings" = "Zeichenketten";
 "Code" = "Code";
 "This panel reads the module's stored code analysis. Its bytes are a read-only snapshot." = "Diese Palette zeigt die gespeicherte Codeanalyse des Moduls. Ihre Bytes sind eine schreibgeschützte Momentaufnahme.";
+"Analysis" = "Analyse";
+"Choose the stored analysis shown here" = "Die hier gezeigte gespeicherte Analyse wählen";
+"The stored analysis is missing or cannot be read. The panel keeps the analysis it has." = "Die gespeicherte Analyse fehlt oder ist nicht lesbar. Die Palette behält die bereits geöffnete Analyse.";
+"Hide hex dump" = "Hex-Dump ausblenden";
+"Show hex dump" = "Hex-Dump einblenden";

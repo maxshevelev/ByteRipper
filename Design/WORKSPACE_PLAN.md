@@ -315,6 +315,13 @@ thing.
 - **Files by two paths.** A file is written by its path and by its path
   relative to the folder the project is in (`FileStamp.relativePath`), and is
   looked for at the first, then the second (`FileStamp.locate`).
+- **Code analyses travel with the project.** The analyses its Code screens show
+  are written as `Analyses.bundle` beside `Project.json`, and a stable
+  `project-…` reference in the local analysis store keeps their objects from
+  being collected. Opening the project imports the bundle before its screens
+  are restored, so a project moved to another Mac keeps its code. Opening a
+  Code panel in the session without a project creates neither the bundle nor a
+  reference.
 - **Unsaved changes of files on disk** are kept as the log of the edits made
   over the file, about the size of the changes; only when the log no longer
   leads from what the file holds are they written as runs over the file

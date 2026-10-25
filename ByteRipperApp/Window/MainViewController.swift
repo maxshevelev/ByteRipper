@@ -159,6 +159,14 @@ final class MainViewController: NSViewController {
         codeScreen = code
     }
 
+    /// The code screen `pane` is showing, in this tab or in a panel over it.
+    func codeScreen(for pane: PaneViewModel) -> CodeScreen? {
+        if let codeScreen, codeScreen.pane === pane {
+            return codeScreen.screen
+        }
+        return fragments.codeScreen(holding: pane)
+    }
+
     /// The tab's code screen as it stands, for the workspace. Nil while the
     /// tab is showing something else — a comparison, or a new document — even
     /// if the screen's analysis is still remembered for a return.
@@ -172,6 +180,33 @@ final class MainViewController: NSViewController {
     /// workspace restored — so the next mode apply draws it as Code.
     func installCodeScreen(_ screen: CodeScreen, on pane: PaneViewModel) {
         codeScreen = (pane, pane.document, screen)
+    }
+
+    /// Another analysis of the module, chosen in the header. The store supplies
+    /// its artifact; the tab then rebuilds the same screen with it, keeping the
+    /// function, instruction and ASM/C side.
+    func chooseCodeRecipe(_ manifest: AnalysisManifest, for pane: PaneViewModel) {
+        guard let current = codeScreen, current.pane === pane else { return }
+        captureCodeScreenState()
+        guard let current = codeScreen else { return }
+        let screen = current.screen
+        let dumpVisible = codeScreenView?.isHexDumpVisible ?? true
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            guard let artifact = await CodeAnalysisStore.artifact(for: manifest) else {
+                self.reportCodeAnalysisUnreadable()
+                return
+            }
+            let next = CodeScreen(manifest: manifest, artifact: artifact,
+                                  bytes: screen.bytes,
+                                  selectedFunction: screen.selectedFunction,
+                                  selectedInstruction: screen.selectedInstruction,
+                                  showsC: screen.showsC,
+                                  recipes: screen.recipes)
+            self.codeScreen = (pane, pane.document, next)
+            self.apply(mode: .singleFile)
+            self.codeScreenView?.setHexDumpVisible(dumpVisible, animated: false)
+        }
     }
 
     /// Makes a tab beside this window and hands back the controller that runs
@@ -1541,8 +1576,13 @@ final class MainViewController: NSViewController {
                 let codePane = CodePaneView(manifest: codeScreen.screen.manifest,
                                             artifact: codeScreen.screen.artifact,
                                             moduleBytes: codeScreen.screen.bytes,
-                                            hexView: pane)
+                                            hexView: pane,
+                                            recipes: codeScreen.screen.recipes)
                 codeScreenView = codePane
+                codePane.onChooseRecipe = { [weak self, weak paneModel] manifest in
+                    guard let self, let paneModel else { return }
+                    self.chooseCodeRecipe(manifest, for: paneModel)
+                }
                 wireCodeScreen(codePane, to: paneModel) { [weak self, weak paneModel] range in
                     guard let paneModel else { return }
                     self?.filePaneView(for: paneModel)?
@@ -1552,8 +1592,32 @@ final class MainViewController: NSViewController {
                                  instruction: codeScreen.screen.selectedInstruction,
                                  showsC: codeScreen.screen.showsC)
                 codePane.focusSelectedFunction()
-                setContentView(codePane)
+                // The file name belongs to the whole window, not to the strip
+                // over the bytes: take the pane's title bar out and lay it
+                // across the top, as a fragment panel does. The window closes
+                // the tab, so the pane's own ✕ would be a second close.
+                pane.hidesCloseButton = true
+                let header = pane.hoistHeader()
+                let screen = NSView()
+                header.translatesAutoresizingMaskIntoConstraints = false
+                codePane.translatesAutoresizingMaskIntoConstraints = false
+                screen.addSubview(header)
+                screen.addSubview(codePane)
+                NSLayoutConstraint.activate([
+                    header.topAnchor.constraint(equalTo: screen.topAnchor),
+                    header.leadingAnchor.constraint(equalTo: screen.leadingAnchor),
+                    header.trailingAnchor.constraint(equalTo: screen.trailingAnchor),
+                    codePane.topAnchor.constraint(equalTo: header.bottomAnchor),
+                    codePane.leadingAnchor.constraint(equalTo: screen.leadingAnchor),
+                    codePane.trailingAnchor.constraint(equalTo: screen.trailingAnchor),
+                    codePane.bottomAnchor.constraint(equalTo: screen.bottomAnchor)
+                ])
+                setContentView(screen)
             } else {
+                if pane.isHeaderHoisted {
+                    pane.restoreHeader()
+                    pane.hidesCloseButton = false
+                }
                 codeScreenView = nil
                 paneModel.panelBadge = nil
                 surface.tools.allowsSelection = true
@@ -1603,6 +1667,13 @@ final class MainViewController: NSViewController {
             // tab is an ordinary comparison and its tools are its own again.
             captureCodeScreenState()
             codeScreenView = nil
+            if let code = codeScreen {
+                let view = paneView(for: code.pane)
+                if view.isHeaderHoisted {
+                    view.restoreHeader()
+                    view.hidesCloseButton = false
+                }
+            }
             codeScreen?.pane.panelBadge = nil
             surface.tools.allowsSelection = true
             if let wasVisible = minimapVisibleBeforeCode {
@@ -2358,7 +2429,7 @@ final class MainViewController: NSViewController {
     /// refuses them with the analysis's reason.
     func openCode(named name: String, from pane: PaneViewModel, source: Range<UInt64>,
                   manifest: AnalysisManifest, artifact: CodeArtifact,
-                  codec: any PartCodec) {
+                  recipes: [AnalysisManifest] = [], codec: any PartCodec) {
         guard let document = pane.document,
               let content = try? DocumentPartReader(document: document)
         else { return }
@@ -2371,12 +2442,21 @@ final class MainViewController: NSViewController {
                 layout: .image, codec: codec, content: bytes)
             else { return }
             fragments.openCode(bytes, named: name, origin: origin,
-                               manifest: manifest, artifact: artifact)
+                               manifest: manifest, artifact: artifact,
+                               recipes: recipes)
         } catch {
             let refusal = error as? PartRefusal
             presentAlert(title: refusal?.title.text ?? L("Those bytes could not be read."),
                          message: refusal?.message.text ?? "\(error)", outcome: .problem)
         }
+    }
+
+    /// A recipe chosen from the panel's header names an artifact the store no
+    /// longer has, or cannot read.
+    func reportCodeAnalysisUnreadable() {
+        presentAlert(title: L("The code analysis could not be read."),
+                     message: L("The stored analysis is missing or cannot be read. The panel keeps the analysis it has."),
+                     outcome: .problem)
     }
 
     // MARK: - Fragment panels (Design/FRAGMENT_PANELS_PLAN.md)

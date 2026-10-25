@@ -1,3 +1,4 @@
+import ALSplitView
 import AppKit
 import XCTest
 import CodeAnalysis
@@ -62,7 +63,7 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertFalse(view.hasAmbiguousLayout)
     }
 
-    func testTheHeaderPutsTheSwitchOnTheRightAndTheVersionsInOneLine() throws {
+    func testTheHeaderKeepsTheVersionsInOneLine() throws {
         let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
                                 moduleBytes: moduleBytes, hexView: NSView())
         view.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
@@ -91,6 +92,34 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(nameRect.midY, versionsRect.midY, accuracy: 1,
                        "the name and the versions share one line")
         XCTAssertLessThan(nameRect.maxX, versionsRect.minX)
+    }
+
+
+    /// The dump bar is the screen's control strip: ASM/C on its left, the
+    /// analysis dropdown and the fold button on its right.
+    func testTheDumpBarCarriesTheControls() throws {
+        var second = manifest()
+        second.recipe = AnalysisRecipe(id: "code-v3-ghidra-12.2", exporter: 3,
+                                       ghidra: "12.2", script: "ExportCode.java")
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: moduleBytes, hexView: NSView(),
+                                recipes: [manifest(), second])
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.layoutSubtreeIfNeeded()
+
+        let analysis = try XCTUnwrap(first(NSPopUpButton.self, in: view) {
+            $0.accessibilityLabel() == "Analysis"
+        })
+        let fold = try XCTUnwrap(first(NSButton.self, in: view) {
+            $0.accessibilityLabel() == "Hide hex dump"
+        })
+        let analysisRect = view.convert(analysis.bounds, from: analysis)
+        let foldRect = view.convert(fold.bounds, from: fold)
+        XCTAssertEqual(analysisRect.midY, foldRect.midY, accuracy: 1,
+                       "the controls share the bar")
+        XCTAssertLessThan(analysisRect.maxX, foldRect.minX, "the dropdown before the fold button")
+        XCTAssertGreaterThan(analysisRect.minX, view.bounds.midX,
+                             "the dropdown is on the right")
     }
 
     func testTheFunctionsHeadingSitsAtTheLeftOfItsList() throws {
@@ -250,6 +279,84 @@ final class CodePaneViewTests: XCTestCase {
                                     as? NSTableCellView)
         XCTAssertTrue(try XCTUnwrap(cell.textField?.stringValue).hasPrefix("0x68"),
                       "the module offset, as in the hex view")
+    }
+
+
+    /// The header lists the module's other readable analyses, and choosing
+    /// one asks the app for its artifact.
+    func testTheHeaderOffersAnotherAnalysis() throws {
+        let first = manifest()
+        var second = first
+        second.recipe = AnalysisRecipe(id: "code-v3-ghidra-12.2", exporter: 3,
+                                       ghidra: "12.2", script: "ExportCode.java")
+        let view = CodePaneView(manifest: first, artifact: try artifact(),
+                                moduleBytes: teModule(), hexView: NSView(),
+                                recipes: [first, second])
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(view.offeredRecipes.map(\.recipe.id),
+                       ["code-v2-ghidra-12.1.2", "code-v3-ghidra-12.2"])
+
+        var chosen: AnalysisManifest?
+        view.onChooseRecipe = { chosen = $0 }
+        view.chooseRecipe(at: 1)
+        XCTAssertEqual(chosen?.recipe.id, "code-v3-ghidra-12.2")
+        view.chooseRecipe(at: 0)
+        XCTAssertEqual(chosen?.recipe.id, "code-v3-ghidra-12.2",
+                       "the one already open is not chosen again")
+    }
+
+
+    /// The bar above the hex view folds it away and brings it back, leaving
+    /// the bar and its button in place.
+    func testTheBarFoldsTheHexDumpAway() throws {
+        let hex = NSView()
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: moduleBytes, hexView: hex)
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertTrue(view.isHexDumpVisible)
+        XCTAssertEqual(hex.frame.height, 220, accuracy: 0.5)
+        let hide = try XCTUnwrap(first(NSButton.self, in: view) {
+            $0.accessibilityLabel() == "Hide hex dump"
+        })
+        XCTAssertEqual(hide.state, .on, "open is the selected state")
+
+        view.setHexDumpVisible(false, animated: false)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertFalse(view.isHexDumpVisible)
+        XCTAssertEqual(hex.frame.height, 0, accuracy: 0.5)
+        XCTAssertEqual(hide.accessibilityLabel(), "Show hex dump")
+        XCTAssertEqual(hide.state, .off)
+        XCTAssertFalse(hide.isHidden, "the bar stays to bring it back")
+
+        view.setHexDumpVisible(true, animated: false)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(hex.frame.height, 220, accuracy: 0.5)
+        XCTAssertEqual(hide.state, .on)
+    }
+
+
+    /// Dragging the divider to the bottom folds the dump; the bar stays, and
+    /// the button turns unselected and offers to open again.
+    func testDraggingTheDividerToTheBottomTurnsTheButtonOff() throws {
+        let hex = NSView()
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: moduleBytes, hexView: hex)
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.layoutSubtreeIfNeeded()
+        let split = try XCTUnwrap(first(ALSplitView.self, in: view) { !$0.isVertical })
+        let button = try XCTUnwrap(first(NSButton.self, in: view) {
+            $0.accessibilityLabel() == "Hide hex dump"
+        })
+
+        split.setDividerPosition(split.maximumDividerPosition(at: 0), at: 0)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(hex.frame.height, 0, accuracy: 0.5)
+        XCTAssertFalse(view.isHexDumpVisible)
+        XCTAssertEqual(button.state, .off)
+        XCTAssertEqual(button.accessibilityLabel(), "Show hex dump")
+        XCTAssertFalse(button.isHidden, "the bar did not go with the dump")
     }
 
     func testTheStaleBannerIsSaidOutLoud() throws {        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),

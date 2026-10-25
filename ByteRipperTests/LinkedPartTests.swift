@@ -1,10 +1,12 @@
 import XCTest
+import AgentKit
 import CodeAnalysis
 import Localization
 import PartCodec
 import UEFIContentSource
 import ToolModuleKit
 import UEFIImage
+import UEFIToolUI
 @testable import ByteRipper
 
 /// A panel opened from a part of another document remembers where it came
@@ -156,7 +158,9 @@ final class LinkedPartTests: XCTestCase {
             tab.windowModel.pane2.close()
         }
         controller.makeSiblingTab = { tab }
+        tab.loadViewIfNeeded()
         controller.tearOffFragment(id)
+        tab.view.layoutSubtreeIfNeeded()
 
         XCTAssertTrue(controller.fragments.isEmpty, "the panel left the dock")
         XCTAssertTrue(tab.hasCodeScreen, "it is still a code screen")
@@ -166,6 +170,15 @@ final class LinkedPartTests: XCTestCase {
         XCTAssertEqual(moved.functionCount, 1)
         XCTAssertEqual(moved.selectedFunction?.name, "entry")
         XCTAssertTrue(moved.showsDecompiledC, "the moved screen keeps the C side")
+        let paneView = try XCTUnwrap(descendants(of: tab.view, FilePaneView.self).first)
+        XCTAssertTrue(paneView.isHeaderHoisted, "the title bar is above the whole screen")
+        let header = try XCTUnwrap(descendants(of: tab.view, PaneHeaderView.self).first)
+        XCTAssertFalse(header.isDescendant(of: paneView),
+                       "the name is not attached to the hex view")
+        let close = try XCTUnwrap(descendants(of: header, NSButton.self).first {
+            $0.accessibilityLabel() == "Close pane"
+        })
+        XCTAssertTrue(close.isHidden, "the window's own close is the only one")
         XCTAssertFalse(tab.surface.minimapPanelVisible, "and still has no minimap")
         XCTAssertFalse(tab.minimapAllowed, "and still refuses a map")
         XCTAssertFalse(tab.surface.tools.isPanelVisible, "and still has no tool strip")
@@ -173,6 +186,126 @@ final class LinkedPartTests: XCTestCase {
         XCTAssertFalse(tab.toolSelectionAllowed, "and the menu agrees")
         let savedTab = tab.workspaceTab()
         XCTAssertTrue(savedTab.code?.showsC ?? false, "the workspace remembers the screen")
+
+        // A code tab that becomes an ordinary tab puts the title bar back on
+        // its dump, with the pane's own close control again.
+        let url = try tempFile([UInt8](repeating: 0x55, count: 0x80))
+        try tab.windowModel.pane1.open(url: url)
+        tab.apply(mode: .singleFile)
+        tab.view.layoutSubtreeIfNeeded()
+        XCTAssertFalse(paneView.isHeaderHoisted)
+        XCTAssertFalse(paneView.hidesCloseButton)
+        XCTAssertTrue(header.isDescendant(of: paneView))
+        XCTAssertFalse(close.isHidden)
+        try? FileManager.default.removeItem(at: url)
+    }
+
+
+    /// A module with two stored analyses: the header offers the other one, and
+    /// choosing it redraws the same panel with that artifact.
+    func testAnotherRecipeRedrawsTheSamePanel() async throws {
+        let bytes = [UInt8](repeating: 0x90, count: 0x100)
+        let one = Data("""
+        {"script_version":2,"ghidra":"12.1.2","functions":[
+          {"entry":"0x0","name":"first","instructions":[
+            {"address":"0x0","bytes":"90","mnemonic":"NOP","text":"NOP"}]}]}
+        """.utf8)
+        let two = Data("""
+        {"script_version":2,"ghidra":"12.2","functions":[
+          {"entry":"0x0","name":"second","instructions":[
+            {"address":"0x0","bytes":"90","mnemonic":"NOP","text":"NOP"}]}]}
+        """.utf8)
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("RecipeStore-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: root) }
+        let store = try ContentStore(root: root)
+        let module = ModuleIdentity(sha256: SHA256Digest(data: Data(bytes)),
+                                    size: bytes.count, name: "CpuPei", kind: "TE",
+                                    language: "x86:LE:32:default", imageBase: "0x0")
+        let first = try store.putAnalysis(
+            module: module,
+            recipe: AnalysisRecipe(id: "code-v2-ghidra-12.1.2", exporter: 2,
+                                   ghidra: "12.1.2", script: "ExportCode.java"),
+            artifact: one)
+        let second = try store.putAnalysis(
+            module: module,
+            recipe: AnalysisRecipe(id: "code-v3-ghidra-12.2", exporter: 3,
+                                   ghidra: "12.2", script: "ExportCode.java"),
+            artifact: two)
+        let previousRoot = UEFIToolModule.codeAnalysisRoot
+        UEFIToolModule.codeAnalysisRoot = root
+        addTeardownBlock { UEFIToolModule.codeAnalysisRoot = previousRoot }
+
+        let controller = try makeController(opening: [UInt8](repeating: 0xAA, count: 0x300))
+        controller.openCode(
+            named: "CpuPei body", from: controller.windowModel.pane1,
+            source: 0x100..<0x200, manifest: first,
+            artifact: try JSONDecoder().decode(CodeArtifact.self, from: one),
+            recipes: [first, second],
+            codec: ReadOnlyPartCodec(bytes, title: L("This cannot be put back"),
+                                     reason: L("A code analysis is a snapshot; edit the dump and analyze the module again.")))
+        let id = try XCTUnwrap(controller.fragments.expanded)
+        let before = try XCTUnwrap(controller.fragments.codePane(id))
+        XCTAssertEqual(before.offeredRecipes.map(\.recipe.id),
+                       [first.recipe.id, second.recipe.id])
+
+        before.chooseRecipe(at: 1)
+        try await until {
+            controller.fragments.codePane(id)?.manifest.recipe.id == second.recipe.id
+        }
+        let after = try XCTUnwrap(controller.fragments.codePane(id))
+        XCTAssertEqual(after.selectedFunction?.name, "second")
+        XCTAssertEqual(controller.fragments.expanded, id, "the panel did not move")
+    }
+
+
+    /// The agent reads the same typed artifact the panel shows: no second
+    /// parse, and the module offset beside Ghidra's address.
+    func testTheAgentReadsTheCodeArtifact() async throws {
+        let controller = try makeController(opening: [UInt8](repeating: 0xAA, count: 0x300))
+        let bytes = [UInt8](repeating: 0x90, count: 0x100)
+        let manifest = AnalysisManifest(
+            module: ModuleIdentity(sha256: SHA256Digest(data: Data(bytes)), size: bytes.count,
+                                   name: "CpuPei", kind: "TE", language: "x86:LE:32:default",
+                                   imageBase: "0x0"),
+            recipe: AnalysisRecipe(id: "code-v2-ghidra-12.1.2", exporter: 2,
+                                   ghidra: "12.1.2", script: "ExportCode.java"),
+            artifact: AnalysisArtifact(sha256: SHA256Digest(data: Data("artifact".utf8)),
+                                       size: 8, mediaType: "application/json"),
+            analyzedAt: "2026-10-25T15:00:00+00:00", stats: AnalysisStats())
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        {"script_version":2,"ghidra":"12.1.2","strings":[
+          {"address":"0x10","type":"string","value":"hello"}],
+         "functions":[{"entry":"0x0","name":"entry","instructions":[
+          {"address":"0x0","bytes":"90","mnemonic":"NOP","text":"NOP"}]}]}
+        """.utf8))
+        controller.openCode(
+            named: "CpuPei body", from: controller.windowModel.pane1,
+            source: 0x100..<0x200, manifest: manifest, artifact: artifact,
+            codec: ReadOnlyPartCodec(bytes, title: L("This cannot be put back"),
+                                     reason: L("A code analysis is a snapshot; edit the dump and analyze the module again.")))
+        let desk = AgentDesk(controllers: { [controller] }, keyController: { controller })
+        let tool = try XCTUnwrap(AgentCodeTools(desk: desk).tools().first)
+        let answer = try await tool.run(AgentCall(
+            tool: tool.name,
+            arguments: AgentArguments(["what": .string("functions")])))
+        guard case .json(let value) = answer,
+              case .string(let module)? = value["module"],
+              case .array(let functions)? = value["functions"],
+              case .object(let first)? = functions.first
+        else { return XCTFail("a functions answer") }
+        XCTAssertEqual(module, "CpuPei")
+        XCTAssertEqual(first["name"]?.stringValue, "entry")
+
+        let strings = try await tool.run(AgentCall(
+            tool: tool.name,
+            arguments: AgentArguments(["what": .string("strings")])))
+        guard case .json(let stringValue) = strings,
+              case .array(let rows)? = stringValue["strings"],
+              case .object(let row)? = rows.first
+        else { return XCTFail("a strings answer") }
+        XCTAssertEqual(row["value"]?.stringValue, "hello")
     }
 
     /// A zone "FFSv2" at 0x100..<0x180 of a 0x400-byte dump, opened as a panel

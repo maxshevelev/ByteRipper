@@ -202,7 +202,7 @@ public extension ToolReadHost {
 @MainActor public protocol CodePartOpening: AnyObject {
     func openCode(named name: String, linkedTo source: Range<UInt64>,
                   manifest: AnalysisManifest, artifact: CodeArtifact,
-                  codec: any PartCodec)
+                  recipes: [AnalysisManifest], codec: any PartCodec)
 }
 
 /// Bytes that do not change under the reader, from any thread.

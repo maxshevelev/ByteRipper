@@ -1696,3 +1696,8 @@
 "Strings" = "Строки";
 "Code" = "Код";
 "This panel reads the module's stored code analysis. Its bytes are a read-only snapshot." = "Панель показывает сохранённый анализ кода модуля. Её байты — снимок только для чтения.";
+"Analysis" = "Анализ";
+"Choose the stored analysis shown here" = "Выбрать сохранённый анализ для показа";
+"The stored analysis is missing or cannot be read. The panel keeps the analysis it has." = "Сохранённый анализ отсутствует или не читается. Панель оставляет тот анализ, который уже открыт.";
+"Hide hex dump" = "Скрыть дамп";
+"Show hex dump" = "Показать дамп";

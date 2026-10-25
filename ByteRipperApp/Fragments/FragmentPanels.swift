@@ -42,10 +42,10 @@ import ToolModuleKit
         let pane: PaneViewModel
         let surface: DocumentSurface
         let paneView: FilePaneView
-        let codePane: CodePaneView?
+        var codePane: CodePaneView?
         /// The screen the panel is, not only the view that draws it now. It is
         /// what a panel carries when it leaves for another container.
-        let screen: PanelContent.Screen
+        var screen: PanelContent.Screen
         let view: FragmentPanelView
 
         init(id: FragmentDock.PanelID, pane: PaneViewModel, surface: DocumentSurface,
@@ -170,7 +170,8 @@ import ToolModuleKit
                                               bytes: Data(bytes),
                                               selectedFunction: code.selectedFunction,
                                               selectedInstruction: code.selectedInstruction,
-                                              showsC: code.showsC)),
+                                              showsC: code.showsC,
+                                              recipes: code.recipes)),
                      animated: animated)
     }
 
@@ -181,9 +182,11 @@ import ToolModuleKit
     @discardableResult
     func openCode(_ bytes: [UInt8], named name: String, origin: DocumentOrigin,
                   manifest: AnalysisManifest, artifact: CodeArtifact,
+                  recipes: [AnalysisManifest] = [],
                   animated: Bool = true) -> FragmentDock.PanelID? {
         open(bytes, named: name, origin: origin,
-             code: CodeScreen(manifest: manifest, artifact: artifact, bytes: Data(bytes)),
+             code: CodeScreen(manifest: manifest, artifact: artifact, bytes: Data(bytes),
+                              recipes: recipes),
              animated: animated)
     }
 
@@ -211,7 +214,8 @@ import ToolModuleKit
         let codePane: CodePaneView?
         if case .code(let code) = screen {
             codePane = CodePaneView(manifest: code.manifest, artifact: code.artifact,
-                                    moduleBytes: code.bytes, hexView: paneView)
+                                    moduleBytes: code.bytes, hexView: paneView,
+                                    recipes: code.recipes)
         } else {
             codePane = nil
         }
@@ -249,6 +253,9 @@ import ToolModuleKit
                 codePane.restore(function: code.selectedFunction,
                                  instruction: code.selectedInstruction,
                                  showsC: code.showsC)
+            }
+            codePane.onChooseRecipe = { [weak self] manifest in
+                self?.chooseRecipe(opened.id, manifest: manifest)
             }
             codePane.focusSelectedFunction()
         }
@@ -349,6 +356,12 @@ import ToolModuleKit
         dock.panels.first { entries[$0]?.pane.dragID == dragID }
     }
 
+    /// The code screen a panel holds, if that is what it is.
+    func codeScreen(holding pane: PaneViewModel) -> CodeScreen? {
+        guard let id = panel(holding: pane) else { return nil }
+        return content(id)?.code
+    }
+
     /// Lets go of a panel without closing its document: what tearing one off
     /// into a tab of its own leaves behind. The pane is handed back so the
     /// caller can put it somewhere, with everything it carries — its edits, its
@@ -392,6 +405,61 @@ import ToolModuleKit
                       animated: Bool = false) -> FragmentDock.PanelID? {
         guard let content = release(id, animated: animated) else { return nil }
         return adopt(content.pane, screen: .code(screen), animated: animated)
+    }
+
+    /// Another analysis of the same module: read its artifact, then draw it in
+    /// the panel already open. The dock does not grow or move — this is a
+    /// screen changing its reading, not a panel arriving.
+    private func chooseRecipe(_ id: FragmentDock.PanelID, manifest: AnalysisManifest) {
+        guard let entry = entries[id], case .code(let current) = entry.screen,
+              let view = entry.codePane else { return }
+        var screen = current
+        screen.selectedFunction = view.selectedFunctionIndex
+        screen.selectedInstruction = view.selectedInstructionIndex
+        screen.showsC = view.showsDecompiledC
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            guard let artifact = await CodeAnalysisStore.artifact(for: manifest) else {
+                self.host?.reportCodeAnalysisUnreadable()
+                return
+            }
+            let next = CodeScreen(manifest: manifest, artifact: artifact,
+                                  bytes: screen.bytes,
+                                  selectedFunction: screen.selectedFunction,
+                                  selectedInstruction: screen.selectedInstruction,
+                                  showsC: screen.showsC,
+                                  recipes: screen.recipes)
+            self.replaceCodeScreen(id, with: next)
+        }
+    }
+
+    /// Puts a different code reading in the panel's existing surface. The
+    /// pane, its bytes, the dock and the panel's place stay where they are.
+    private func replaceCodeScreen(_ id: FragmentDock.PanelID, with screen: CodeScreen) {
+        guard let entry = entries[id], entry.codePane != nil else { return }
+        let dumpVisible = entry.codePane?.isHexDumpVisible ?? true
+        let pane = entry.pane
+        let view = entry.paneView
+        let codePane = CodePaneView(manifest: screen.manifest, artifact: screen.artifact,
+                                    moduleBytes: screen.bytes, hexView: view,
+                                    recipes: screen.recipes)
+        codePane.onChooseRecipe = { [weak self] manifest in
+            self?.chooseRecipe(id, manifest: manifest)
+        }
+        wireCodeScreen(codePane, to: pane) { [weak pane, weak host] range in
+            guard let pane else { return }
+            host?.filePaneView(for: pane)?.revealOffsetCentered(range.lowerBound)
+        }
+        entry.surface.setContent(codePane)
+        entry.codePane = codePane
+        entry.screen = .code(screen)
+        codePane.restore(function: screen.selectedFunction,
+                         instruction: screen.selectedInstruction,
+                         showsC: screen.showsC)
+        codePane.setHexDumpVisible(dumpVisible, animated: false)
+        codePane.focusSelectedFunction()
+        entry.surface.view.layoutSubtreeIfNeeded()
+        refreshDock()
     }
 
     /// The screen as it stands now: a code screen also carries the function,

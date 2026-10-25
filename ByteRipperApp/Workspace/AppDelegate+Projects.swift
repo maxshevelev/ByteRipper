@@ -124,6 +124,9 @@ extension AppDelegate {
             presentProjectError(L("The project could not be read."), url: url)
             return
         }
+        // A project carries its Code analyses beside `Project.json`: bring
+        // them into the local store before the screens that read them open.
+        CodeAnalysisStore.importProjectBundle(at: url)
         leaveCurrentSession { [weak self] in
             guard let self else { return }
             recorder.switchTo(project: folder)

@@ -190,22 +190,41 @@ the code with the hex view under it on the right.
 ```
 ┌ Code — CpuPei · TE ──────────────────────────────── ASM │ C ─ ? ┐
 │ Functions      │ CpuPei (code-v2 · Ghidra 12.1.2)              │
-│ FUN_000004bf   │ 0x4BF  55 8B EC   PUSH EBP                    │
-│ FUN_000005e8   │ 0x4C0  8B EC      MOV EBP, ESP                │
-│ ...            │ ...                                           │
-│                ├───────────────────────────────────────────────┤
-│                │ 00000000  VZ 00 00 ...                        │
-│                │ 00000010  00 00 00 ...                        │
+│ FUN_000004bf   │ 0x68  55 8B EC   PUSH EBP                     │
+│ FUN_000005e8   │ ...                                           │
+│ ...            ├───────────────────────────────────────────────┤
+│                │                       [code-v2 ▾]        [fold] │
+├────────────────┴───────────────────────────────────────────────┤
+│ 00000000  VZ 00 00 ...                                          │
+│ 00000010  00 00 00 ...                                          │
 ├──────────────────────────────────────────────────────────────────┤
 │ module 0x5C00 in the file · analyzed 2026-10-25 · recipe ...      │
 └──────────────────────────────────────────────────────────────────┘
 ```
+
+A code panel torn off into a tab is still a Code screen, and its title bar
+belongs to the whole screen: the pane's header is hoisted above the function
+list and the code, not left over the hex view. The pane's own close button is
+hidden in that header — the window's close button closes the tab — and comes
+back if the tab becomes an ordinary document again.
 
 The left pane is the whole function list, not a dropdown: the reader sees every
 function at once. The right pane splits vertically: code above, the hex view
 below as a reference for the bytes an instruction points at. The code is drawn
 on the ordinary text background; the hex view is not the subject of the screen.
 `ASM` and `C` are the names of formats and are not translated.
+
+A thin bar — the **dump bar** — sits at the bottom of the code pane, between
+the code and the hex view. At its right are the analysis dropdown and
+`inset.filled.bottomthird.rectangle`; the `ASM`/`C` switch stays in the header's
+top-right corner, where it has room. While the bytes are showing the fold
+button is in its selected state, and a click folds the hex view to nothing and
+brings it back. The bar belongs to the code pane, so it stays visible when the
+dump is folded and cannot be dragged out of sight: the split's divider only
+moves the dump. A drag of that divider updates the button — any remaining
+height is open, none is closed — and a closed button opens the dump again. The
+move runs on `ALSplitView`'s trailing-pane animation, so the code grows and the
+bytes shrink as one motion.
 
 **The hex view is the existing part view, not a new hex view.** The panel gets
 its bytes from the same `PaneViewModel`/hex view every part has; the code pane
@@ -300,7 +319,8 @@ fixture analysis, the bytes at the mapped file offset must equal the artifact's
 The header shows:
 
 - module name and kind (TE / PE32);
-- recipe and Ghidra version (`code-v2-ghidra-12.1.2`);
+- recipe and Ghidra version (`code-v2-ghidra-12.1.2`); the dropdown for the
+  module's other readable analyses lives in the dump bar, not the header;
 - when it was analyzed;
 - the module's short SHA-256;
 - the manifest's source document and node, when known.
@@ -442,11 +462,14 @@ Each stage builds, tests and is committable on its own.
      Functions, the search field over the list in front, and callers/callees as
      menus that lead to their functions. Done.
    - **5b, recipes:** the other readable analyses of the same module in the
-     header; choosing one loads its artifact without guessing at another.
-   - **5c, the agent:** MCP queries over the same typed model — functions,
-     instructions, strings, references.
-   - **5d, projects:** references and bundles decide which analyses a project
-     keeps; viewing alone does not create a reference.
+     header; choosing one loads its artifact without guessing at another. Done.
+   - **5c, the agent:** `code_query` reads the same typed model — functions,
+     instructions, strings, references — and gives Ghidra's address beside the
+     module offset. Done.
+   - **5d, projects:** a project writes its Code analyses into an
+     `Analyses.bundle` beside `Project.json` and keeps a store reference to the
+     same keys, so a moved project comes back with its code and viewing alone
+     creates no reference. Done.
 
 ## Verification
 

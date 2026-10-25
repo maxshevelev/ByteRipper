@@ -43,4 +43,8 @@ struct CodeScreen {
     var selectedFunction: Int?
     var selectedInstruction: Int?
     var showsC: Bool = false
+    /// Every readable analysis of this module, the chosen one included. Nil
+    /// or one entry means there is nothing to choose; the panel still has the
+    /// chosen manifest.
+    var recipes: [AnalysisManifest] = []
 }

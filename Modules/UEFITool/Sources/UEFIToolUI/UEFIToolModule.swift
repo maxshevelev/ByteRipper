@@ -2204,6 +2204,7 @@ private struct ChecksumPass: Sendable {
             opener.openCode(
                 named: open.partName, linkedTo: open.source, manifest: manifest,
                 artifact: artifact,
+                recipes: self.codeAnalysisIndex.manifests(for: manifest.module.sha256),
                 codec: ReadOnlyPartCodec(
                     bytes,
                     title: L("This cannot be put back"),

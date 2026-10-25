@@ -29,6 +29,7 @@ let package = Package(
         ]),
         .testTarget(name: "CodeViewTests", dependencies: [
             "CodeView",
+            .product(name: "ALSplitView", package: "ALSplitView"),
             .product(name: "CodeAnalysis", package: "CodeAnalysis")
         ])
     ]

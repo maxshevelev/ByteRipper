@@ -26,10 +26,19 @@ final class FilePaneView: NSView {
     /// Whether the header has been handed to a fragment panel
     /// (`hoistHeader()`) and no longer sits in this view.
     private(set) var isHeaderHoisted = false
+    /// The column header's pin while the title bar is away, so restoring the
+    /// pane can take it off again.
+    private var columnHeaderAtTop: NSLayoutConstraint?
+    /// A hoisted header that belongs to the whole window, not to the pane under
+    /// it: the window's own close control is the only one there, so the pane's
+    /// ✕ is hidden.
+    var hidesCloseButton = false {
+        didSet { updateHeader() }
+    }
 
-    /// Takes the title bar out of the pane so a fragment panel can lay it across
-    /// its whole width, above the tool, the dump and the map
-    /// (`Design/FRAGMENT_PANELS_PLAN.md`).
+    /// Takes the title bar out of the pane so a fragment panel — or a tab that
+    /// is a code screen — can lay it across its whole width, above the tool,
+    /// the dump and the map (`Design/FRAGMENT_PANELS_PLAN.md`).
     ///
     /// It is the same view, not a copy: the name, the link back, the lock, the ⌄
     /// and the ✕, the rename field, the pull-down and the pane's File menu stay
@@ -41,9 +50,29 @@ final class FilePaneView: NSView {
         // Removing the view drops the constraints it shares with this one,
         // including the column header's pin to its bottom edge.
         header.removeFromSuperview()
-        columnHeader.topAnchor.constraint(equalTo: topAnchor).isActive = true
+        let pin = columnHeader.topAnchor.constraint(equalTo: topAnchor)
+        pin.isActive = true
+        columnHeaderAtTop = pin
         needsLayout = true
         return header
+    }
+
+    /// Puts a hoisted header back on its pane: for a code tab that becomes an
+    /// ordinary tab again, where the title bar belongs to its own dump.
+    func restoreHeader() {
+        guard isHeaderHoisted else { return }
+        columnHeaderAtTop?.isActive = false
+        columnHeaderAtTop = nil
+        header.removeFromSuperview()
+        addSubview(header)
+        NSLayoutConstraint.activate([
+            header.topAnchor.constraint(equalTo: topAnchor),
+            header.leadingAnchor.constraint(equalTo: leadingAnchor),
+            header.trailingAnchor.constraint(equalTo: trailingAnchor),
+            columnHeader.topAnchor.constraint(equalTo: header.bottomAnchor)
+        ])
+        isHeaderHoisted = false
+        needsLayout = true
     }
 
     /// Ideal width of this pane's hex content, for zoom-to-fit (§3.1).
@@ -1254,7 +1283,7 @@ final class FilePaneView: NSView {
         // A header the panel has taken is as wide as the panel, not as the dump
         // beside the tool: its chrome fits whenever the panel does.
         let headerFits = fits || isHeaderHoisted
-        closeButton.isHidden = !headerFits
+        closeButton.isHidden = hidesCloseButton || !headerFits
         collapseButton.isHidden = !headerFits || onCollapse == nil
         lockLabel.isHidden = !headerFits
         linkButton.isHidden = !headerFits || viewModel.origin == nil

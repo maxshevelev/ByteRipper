@@ -205,10 +205,11 @@ extension PaneToolHost: CodePartOpening {
     /// additional view.
     func openCode(named name: String, linkedTo source: Range<UInt64>,
                   manifest: AnalysisManifest, artifact: CodeArtifact,
-                  codec: any PartCodec) {
+                  recipes: [AnalysisManifest], codec: any PartCodec) {
         guard let pane, let owner else { return }
         owner.openCode(named: name, from: pane, source: source,
-                       manifest: manifest, artifact: artifact, codec: codec)
+                       manifest: manifest, artifact: artifact,
+                       recipes: recipes, codec: codec)
     }
 }
 

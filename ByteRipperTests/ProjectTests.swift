@@ -1,4 +1,8 @@
 import ByteRipperCore
+import CodeAnalysis
+import Localization
+import PartCodec
+import UEFIToolUI
 import Workspace
 import XCTest
 @testable import ByteRipper
@@ -105,6 +109,61 @@ final class ProjectTests: XCTestCase {
         let (target, issues) = await reopen(project)
         XCTAssertEqual(issues, [.changed(path: dump.standardizedFileURL.path)])
         XCTAssertFalse(target.windowModel.pane1.status.isDirty, "the changes were made on other bytes")
+    }
+
+
+    /// A project carries the analyses its Code screens show: the bundle sits
+    /// beside `Project.json`, a reference keeps the store from collecting the
+    /// objects, and the screen comes back on a machine whose store is empty.
+    func testAProjectCarriesItsCodeAnalyses() async throws {
+        let (_, dump, project) = try jobFolder()
+        let codeBytes = [UInt8](repeating: 0x90, count: 0x100)
+        let artifactData = Data("""
+        {"script_version":2,"ghidra":"12.1.2","functions":[
+          {"entry":"0x0","name":"entry","instructions":[
+            {"address":"0x0","bytes":"90","mnemonic":"NOP","text":"NOP"}]}]}
+        """.utf8)
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: artifactData)
+        let storeRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ProjectAnalyses-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: storeRoot, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: storeRoot) }
+        let store = try ContentStore(root: storeRoot)
+        let manifest = try store.putAnalysis(
+            module: ModuleIdentity(sha256: SHA256Digest(data: Data(codeBytes)),
+                                   size: codeBytes.count, name: "CpuPei", kind: "TE",
+                                   language: "x86:LE:32:default", imageBase: "0x0"),
+            recipe: AnalysisRecipe(id: "code-v2-ghidra-12.1.2", exporter: 2,
+                                   ghidra: "12.1.2", script: "ExportCode.java"),
+            artifact: artifactData)
+        let previousRoot = UEFIToolModule.codeAnalysisRoot
+        UEFIToolModule.codeAnalysisRoot = storeRoot
+        addTeardownBlock { UEFIToolModule.codeAnalysisRoot = previousRoot }
+
+        let window = shownWindow()
+        let controller = window.mainViewController
+        controller.openFiles([dump])
+        controller.openCode(
+            named: "CpuPei body", from: controller.windowModel.pane1,
+            source: 0x100..<0x200, manifest: manifest, artifact: artifact,
+            codec: ReadOnlyPartCodec(codeBytes, title: L("This cannot be put back"),
+                                     reason: L("A code analysis is a snapshot; edit the dump and analyze the module again.")))
+        XCTAssertTrue(store.refs().isEmpty, "viewing alone creates no reference")
+
+        _ = await record([window], into: project)
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: CodeAnalysisStore.bundleURL(in: project).path),
+            "the project carries its analysis")
+        XCTAssertEqual(store.refs().map(\.name),
+                       [CodeAnalysisStore.projectRefName(for: project)])
+
+        // Another Mac: no store, only the project folder.
+        try FileManager.default.removeItem(at: storeRoot)
+        CodeAnalysisStore.importProjectBundle(at: project)
+        let (target, issues) = await reopen(project)
+        XCTAssertEqual(issues, [])
+        let restored = try XCTUnwrap(target.fragments.expanded.flatMap { target.fragments.codePane($0) })
+        XCTAssertEqual(restored.selectedFunction?.name, "entry")
     }
 
     func testAProjectIsRecognisedByItsExtension() {
