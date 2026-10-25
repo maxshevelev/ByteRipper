@@ -30,14 +30,16 @@ final class UEFICodeScanTests: XCTestCase {
     }
 
     @discardableResult
-    private func analyze(_ module: Data, name: String = "Module") throws -> AnalysisManifest {
+    private func analyze(_ module: Data, name: String = "Module",
+                         source: SourceIdentity = SourceIdentity()) throws -> AnalysisManifest {
         let store = try ContentStore(root: directory)
         return try store.putAnalysis(
             module: ModuleIdentity(
                 sha256: SHA256Digest(data: module), size: module.count, name: name,
                 kind: "TE", language: "x86:LE:32:default", imageBase: "0x0"),
             recipe: recipe,
-            artifact: Data("{\"script_version\":2}".utf8))
+            artifact: Data("{\"script_version\":2}".utf8),
+            source: source)
     }
 
     private func index() -> CodeAnalysisIndex {
@@ -71,6 +73,23 @@ final class UEFICodeScanTests: XCTestCase {
         let found = UEFICodeScan.scan(in: image, index: index(),
                                       bytesOf: { _ in module })
         XCTAssertEqual(Set(found.keys), Set([image.roots[0].id]))
+    }
+
+    func testSourceNodeIDsAreParsedAndDeduplicated() throws {
+        try analyze(teModule, name: "A", source: SourceIdentity(
+            document: "d1", node: "0.6.4.0.0.205.2"))
+        try analyze(peModule, name: "B", source: SourceIdentity(
+            document: "d1", node: "0.6.4.0.0.205.2"))
+        try analyze(Data([0x56, 0x5A]) + Data(repeating: 2, count: 14), name: "root",
+                    source: SourceIdentity(node: "root"))
+        try analyze(Data([0x4D, 0x5A]) + Data(repeating: 3, count: 14), name: "bad",
+                    source: SourceIdentity(node: "not.a.path"))
+
+        XCTAssertEqual(UEFICodeScan.sourceNodeIDs(in: index()),
+                       [NodeID([0, 6, 4, 0, 0, 205, 2])])
+        XCTAssertEqual(UEFICodeScan.sourceNodeIDs(in: index(), document: "d1"),
+                       [NodeID([0, 6, 4, 0, 0, 205, 2])])
+        XCTAssertTrue(UEFICodeScan.sourceNodeIDs(in: index(), document: "another.bin").isEmpty)
     }
 
     func testAnAnalyzedPE32ImageIsFound() throws {

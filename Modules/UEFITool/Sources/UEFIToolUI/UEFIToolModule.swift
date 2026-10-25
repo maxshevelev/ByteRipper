@@ -228,6 +228,10 @@ private struct ChecksumPass: Sendable {
     private var codeAnalysisRequest: Task<Void, Never>?
     /// Which scan is current; a result from an older reading is dropped.
     private var codeAnalysisGeneration = 0
+    /// How many refreshes are opening the branches analyses name. An expansion
+    /// then is that refresh's own work; refreshing again from `.expanded`
+    /// would cancel the task that is about to scan.
+    private var codeSourceMaterializationDepth = 0
     /// Re-reads the store while the panel is up. The store is written by the
     /// Ghidra skill, not by this app, so there is no change notification to
     /// subscribe to; a small poll is what makes a new analysis appear without
@@ -802,7 +806,10 @@ private struct ChecksumPass: Sendable {
             // code badge a newly materialized image may wear.
             verifyNewChecksums()
             show(rowsChanged: false)
-            refreshCodeAnalysis()
+            // A refresh opening the branches its analyses name is already
+            // going to scan what those expansions added; refreshing from here
+            // would cancel it.
+            if codeSourceMaterializationDepth == 0 { refreshCodeAnalysis() }
         case .addressesResolved, .protectedRangesRead, .dvarSettingsRead:
             verifyNewChecksums()
             show(rowsChanged: false)
@@ -933,9 +940,9 @@ private struct ChecksumPass: Sendable {
 
         codeAnalysisGeneration += 1
         let generation = codeAnalysisGeneration
-        let image = tree.image()
         let readers = tree.spaceReaders
         let treeGeneration = tree.generation
+        let document = host.fileName
         let previousIndex = codeAnalysisIndex
         let checked = codeAnalysisChecked
 
@@ -948,6 +955,26 @@ private struct ChecksumPass: Sendable {
                   self.tree === tree
             else { return }
 
+            // An analysis names the node it was made from. Open just those
+            // branches before the scan: a PEI image inside a compressed Boot
+            // FV is not in `allNodes` until its containers are materialized,
+            // and the badge must not wait for the reader to expand them. The
+            // body's SHA-256 below still decides whether the analysis applies;
+            // the path is only where to look.
+            let sourceNodes = UEFICodeScan.sourceNodeIDs(in: index, document: document)
+            if !sourceNodes.isEmpty {
+                self.codeSourceMaterializationDepth += 1
+                defer { self.codeSourceMaterializationDepth -= 1 }
+                for id in sourceNodes where tree.node(id) == nil {
+                    await self.materialize(id, in: tree)
+                    guard !Task.isCancelled,
+                          self.codeAnalysisGeneration == generation,
+                          self.tree === tree, tree.generation == treeGeneration
+                    else { return }
+                }
+            }
+
+            let image = tree.image()
             let changed = index != previousIndex
             let alreadyChecked: Set<NodeID> = changed ? [] : checked
             self.codeAnalysisIndex = index
@@ -989,6 +1016,15 @@ private struct ChecksumPass: Sendable {
                 self.codeAnalysisNodes.formUnion(found.keys)
             }
             self.show(rowsChanged: false)
+        }
+    }
+
+    /// Waits for the containers on the way to `id` to be materialized. The
+    /// `LazyUEFITree` callback is the completion; an edit that abandons the
+    /// expansion calls it with no node, so the continuation always resumes.
+    private func materialize(_ id: NodeID, in tree: LazyUEFITree) async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            tree.materialize(id) { _ in continuation.resume() }
         }
     }
 

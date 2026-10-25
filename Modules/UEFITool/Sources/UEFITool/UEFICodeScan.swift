@@ -10,6 +10,30 @@ import UEFIImage
 /// whose length no analysis was made from is rejected before it is read or
 /// hashed.
 public enum UEFICodeScan {
+    /// The paths analyses name in their `source.node`, once each.
+    ///
+    /// They are hints, not proof: the path is used to open the branch a module
+    /// lives in, and the body's SHA-256 still decides whether the analysis is
+    /// about the node now there. A path that does not parse, or the root, is
+    /// left out. With `document`, only analyses made from that document are
+    /// named: a path is relative to the image it was read from, and the store
+    /// holds analyses of other dumps too.
+    public static func sourceNodeIDs(
+        in index: CodeAnalysisIndex, document: String? = nil
+    ) -> [NodeID] {
+        var seen = Set<NodeID>()
+        var ids: [NodeID] = []
+        for manifest in index.manifests {
+            guard document == nil || manifest.source.document == document,
+                  let text = manifest.source.node,
+                  let id = NodeID(text), !id.path.isEmpty,
+                  seen.insert(id).inserted
+            else { continue }
+            ids.append(id)
+        }
+        return ids
+    }
+
     /// - Parameters:
     ///   - only: the nodes to examine; nil for every materialized node.
     ///   - bytesOf: the node's body, or nil when its space cannot be read.

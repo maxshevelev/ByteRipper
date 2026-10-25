@@ -95,6 +95,28 @@ final class ContentStoreTests: XCTestCase {
         XCTAssertEqual(replaced.stats.functions, 2)
     }
 
+    func testRebindingTheSameAnalysisUpdatesOnlyWhatIsNamed() throws {
+        let identity = module()
+        let data = artifact()
+        let first = try store.putAnalysis(
+            module: identity, recipe: recipe(), artifact: data,
+            source: SourceIdentity(document: "d1", node: "0.1"))
+        XCTAssertEqual(first.source.node, "0.1")
+
+        let rebound = try store.putAnalysis(
+            module: identity, recipe: recipe(), artifact: data,
+            source: SourceIdentity(document: "d1", node: "0.2"))
+        XCTAssertEqual(rebound.source.node, "0.2")
+        XCTAssertEqual(
+            try store.analysis(module: identity.sha256, recipe: "code-v2-ghidra-12.1.2")?.source.node,
+            "0.2")
+
+        // A re-put that names no node keeps the one already written.
+        let kept = try store.putAnalysis(module: identity, recipe: recipe(), artifact: data)
+        XCTAssertEqual(kept.source.node, "0.2")
+        XCTAssertEqual(kept.source.document, "d1")
+    }
+
     func testARecipeNameCannotEscapeItsDirectory() {
         XCTAssertThrowsError(try store.putAnalysis(
             module: module(), recipe: recipe("../../outside"), artifact: artifact()))

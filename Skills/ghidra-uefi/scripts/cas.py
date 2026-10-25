@@ -207,6 +207,22 @@ class Store:
                 existing = json.loads(path.read_text(encoding="utf-8"))
                 same = existing.get("artifact", {}).get("sha256") == artifact_digest
                 if same:
+                    # The artifact is the same analysis; a re-run may still
+                    # know where it came from. Merge only what the caller
+                    # names, so a later run without a node does not erase the
+                    # binding an earlier one wrote.
+                    merged = dict(existing.get("source") or {})
+                    rebound = False
+                    for key, value in (source or {}).items():
+                        if value is not None and merged.get(key) != value:
+                            merged[key] = value
+                            rebound = True
+                    if rebound:
+                        existing["source"] = merged
+                        _atomic_write(
+                            path,
+                            (json.dumps(existing, indent=2, ensure_ascii=False) + "\n").encode("utf-8"),
+                        )
                     return existing
                 if not replace:
                     raise CASError(

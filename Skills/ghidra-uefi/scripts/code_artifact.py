@@ -87,7 +87,10 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--store", type=Path, default=default_store())
     parser.add_argument("--ghidra-home", help="the Ghidra installation")
     parser.add_argument("--force", action="store_true", help="analyze even if the artifact exists")
-    parser.add_argument("--document", help="the ByteRipper document the module came from")
+    parser.add_argument(
+        "--document",
+        help="the ByteRipper document the module came from, by the file name the UEFI "
+             "panel shows; with --node it binds the code badge to that row")
     parser.add_argument("--node", help="the UEFI node the module came from")
     args = parser.parse_args(argv)
 
@@ -110,6 +113,19 @@ def main(argv: list[str]) -> int:
             except (cas.CASError, KeyError):
                 pass  # the object is gone or corrupt: analyze again
             else:
+                # The analysis is already there. Naming the document or node
+                # is provenance, not a reason to run Ghidra again: merge it
+                # into the manifest and answer with that.
+                if args.document is not None or args.node is not None:
+                    try:
+                        raw = store.get_object(existing["artifact"]["sha256"])
+                        existing = store.put_analysis(
+                            module=existing["module"], recipe=existing["recipe"],
+                            artifact=raw,
+                            source={"path": str(module), "document": args.document,
+                                    "node": args.node})
+                    except (cas.CASError, KeyError):
+                        pass
                 print(json.dumps(existing, indent=2))
                 return 0
 

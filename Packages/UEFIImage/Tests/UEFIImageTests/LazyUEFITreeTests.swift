@@ -40,6 +40,14 @@ final class LazyUEFITreeTests: XCTestCase {
         }
     }
 
+    private func materializePath(_ tree: LazyUEFITree, _ id: NodeID) async -> UEFINode? {
+        await withCheckedContinuation { continuation in
+            tree.materialize(id) { node in
+                continuation.resume(returning: node)
+            }
+        }
+    }
+
     /// The top level is built off the main actor, so every test that reads
     /// `rootNodes` waits for it first.
     private func built(_ bytes: any ByteSource) async -> LazyUEFITree {
@@ -185,6 +193,34 @@ final class LazyUEFITreeTests: XCTestCase {
         let sibling = tree.children(of: bios.id)[1]
         XCTAssertTrue(sibling.isExpandable)
         XCTAssertEqual(sibling.children, [])
+    }
+
+    /// An analysis names the path of its image. Opening that path is what puts
+    /// the node in `allNodes` without the reader expanding the branch by hand;
+    /// the file's sections below it stay closed.
+    func testMaterializingANodePathOpensOnlyItsAncestors() async {
+        let tree = await built(twoVolumeImage())
+        // intelImage → BIOS region → first volume → its one file.
+        let fileID = NodeID([0, 3, 0, 0])
+        XCTAssertNil(tree.node(fileID))
+        XCTAssertTrue(tree.children(of: NodeID([0, 3])).isEmpty)
+
+        let file = await materializePath(tree, fileID)
+
+        XCTAssertEqual(file?.kind, .file)
+        XCTAssertEqual(file?.body.count, 8)
+        XCTAssertNotNil(tree.node(fileID))
+        XCTAssertFalse(tree.children(of: NodeID([0, 3])).isEmpty,
+                       "the BIOS region was materialized on the way")
+        XCTAssertEqual(tree.children(of: fileID), [])
+    }
+
+    func testMaterializingAnImpossiblePathAnswersNil() async {
+        let tree = await built(twoVolumeImage())
+        let missing = await materializePath(tree, NodeID([0, 3, 9, 0]))
+        XCTAssertNil(missing)
+        XCTAssertNotNil(tree.node(NodeID([0, 3])),
+                        "the part of the path that exists was still opened")
     }
 
     // MARK: - Addresses, from the VTF and nothing else

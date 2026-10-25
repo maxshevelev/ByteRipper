@@ -89,6 +89,22 @@ class CASTests(unittest.TestCase):
         replaced = self.store.put_analysis(self.module(), self.recipe(), artifact(2), replace=True)
         self.assertEqual(replaced["artifact"]["sha256"], digest(artifact(2)))
 
+    def testRebindingTheSameAnalysisUpdatesOnlyWhatIsNamed(self):
+        data = artifact()
+        first = self.store.put_analysis(
+            self.module(), self.recipe(), data,
+            source={"document": "d1", "node": "0.1"})
+        self.assertEqual(first["source"]["node"], "0.1")
+        rebound = self.store.put_analysis(
+            self.module(), self.recipe(), data,
+            source={"document": "d1", "node": "0.2"})
+        self.assertEqual(rebound["source"]["node"], "0.2")
+        found = self.store.analysis(self.module()["sha256"], "code-v2-ghidra-12.1.2")
+        self.assertEqual(found["source"]["node"], "0.2")
+        kept = self.store.put_analysis(self.module(), self.recipe(), data)
+        self.assertEqual(kept["source"]["node"], "0.2")
+        self.assertEqual(kept["source"]["document"], "d1")
+
     def testARecipeNameCannotEscapeItsDirectory(self):
         with self.assertRaises(cas.CASError):
             self.store.put_analysis(self.module(), self.recipe("../../outside"), artifact())

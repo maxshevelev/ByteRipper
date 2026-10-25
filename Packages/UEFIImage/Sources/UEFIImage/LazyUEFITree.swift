@@ -360,6 +360,60 @@ public final class LazyUEFITree {
         }
     }
 
+    /// Opens the containers on the way to `id` and calls `done` with that node.
+    ///
+    /// A code badge knows the row an analysis names (`source.node`) before the
+    /// tree has reached it. Opening only that branch is what lets the badge
+    /// appear while the branch is still closed, without walking the image.
+    /// Nothing below the target is opened: its body is known once its parent
+    /// has been materialized. Nil when a component does not exist or a
+    /// container cannot be opened.
+    public func materialize(_ id: NodeID, _ done: @escaping @MainActor (UEFINode?) -> Void) {
+        guard !id.path.isEmpty else {
+            done(nil)
+            return
+        }
+        whenReady { [weak self] in
+            guard let self else { return }
+            self.step(to: id, from: .root, done: done)
+        }
+    }
+
+    private func step(
+        to target: NodeID,
+        from parent: NodeID,
+        done: @escaping @MainActor (UEFINode?) -> Void
+    ) {
+        guard let index = target.path.first else {
+            done(nil)
+            return
+        }
+        let siblings = parent.path.isEmpty ? roots : children(of: parent)
+        guard index >= 0, index < siblings.count else {
+            done(nil)
+            return
+        }
+        let id = parent.child(index)
+        let current = siblings[index]
+        let remainder = NodeID(Array(target.path.dropFirst()))
+        guard !remainder.path.isEmpty else {
+            done(current)
+            return
+        }
+        guard current.children.isEmpty else {
+            step(to: remainder, from: id, done: done)
+            return
+        }
+        guard current.isExpandable else {
+            done(nil)
+            return
+        }
+        expand(id) { [weak self] _ in
+            guard let self else { return }
+            self.step(to: remainder, from: id, done: done)
+        }
+    }
+
     private func step(
         containing offset: UInt64,
         from parent: NodeID,

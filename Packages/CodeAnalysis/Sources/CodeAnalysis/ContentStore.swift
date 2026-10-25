@@ -107,7 +107,29 @@ public struct ContentStore: Sendable {
             if FileManager.default.fileExists(atPath: url.path) {
                 let existing = try decodeManifest(at: url)
                 if existing.artifact.sha256 == digest {
-                    return existing
+                    // The artifact is the same analysis; a re-run may still
+                    // know where it came from. Merge only what the caller
+                    // names, so a later run without a node does not erase the
+                    // binding an earlier one wrote.
+                    var merged = existing.source
+                    var rebound = false
+                    if let path = source.path, path != merged.path {
+                        merged.path = path
+                        rebound = true
+                    }
+                    if let document = source.document, document != merged.document {
+                        merged.document = document
+                        rebound = true
+                    }
+                    if let node = source.node, node != merged.node {
+                        merged.node = node
+                        rebound = true
+                    }
+                    guard rebound else { return existing }
+                    var updated = existing
+                    updated.source = merged
+                    try atomicWrite(try encoder.encode(updated), to: url)
+                    return updated
                 }
                 if !replace {
                     throw CodeAnalysisError.analysisMismatch(

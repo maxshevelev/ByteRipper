@@ -77,9 +77,12 @@ before hashing.
 
 **Compressed images.** A TE/PE32 image inside an LZMA or Tiano buffer has a
 `space` other than `.file`. Its body is read through the same
-`spaceReaders` the tree uses. The badge appears when the branch is materialized;
-the panel can show the module's bytes even though no file offset addresses
-them.
+`spaceReaders` the tree uses. The badge appears when the branch is materialized
+or when an analysis names it: a manifest whose `source.document` is the file's
+name opens the branch `source.node` names, so a PEI image inside a compressed
+Boot FV gets its badge without the reader expanding the tree. The path is only
+where to look; the body's SHA-256 still decides. The panel can show the
+module's bytes even though no file offset addresses them.
 
 **Same bytes, several places.** Two occurrences of one module share an
 analysis; the badge may appear on both. The panel's provenance says which node

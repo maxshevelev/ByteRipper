@@ -377,6 +377,25 @@ public struct NodeID: Hashable, Sendable, Codable, CustomStringConvertible {
         self.path = path
     }
 
+    /// The path a `description` names — what an analysis manifest carries as
+    /// `source.node`, so a code badge can find the image without a scan.
+    /// Nil for a text that is not `"root"` and not dot-separated indices.
+    public init?(_ description: String) {
+        guard description != "root" else {
+            self.init()
+            return
+        }
+        let parts = description.split(separator: ".", omittingEmptySubsequences: false)
+        guard !parts.isEmpty else { return nil }
+        var path: [Int] = []
+        path.reserveCapacity(parts.count)
+        for part in parts {
+            guard let index = Int(part), index >= 0 else { return nil }
+            path.append(index)
+        }
+        self.init(path)
+    }
+
     public static let root = NodeID()
 
     public func child(_ index: Int) -> NodeID {

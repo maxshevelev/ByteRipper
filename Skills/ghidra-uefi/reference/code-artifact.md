@@ -104,6 +104,14 @@ A target may be the module file (its hash is computed) or the SHA-256 itself.
 `--json` gives the same answer as data, for an agent that wants to post-process
 it.
 
+`--document` and `--node` are provenance with a use: the UEFI panel matches the
+manifest's `source.document` to the file name it shows, opens the branch
+`source.node` names, and puts the code badge on that image node — including a
+PEI image inside a compressed Boot FV, which the lazy tree has not materialized
+otherwise. The body's SHA-256 still decides whether the analysis applies; the
+path is only where to look. Naming an existing analysis this way does not run
+Ghidra again.
+
 ## What CpuPei looks like in it
 
 - 13 functions, 508 instructions, no strings, no `OUT` writes;
