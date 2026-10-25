@@ -163,12 +163,12 @@
 "Delete Bookmark at %1$@" = "Lesezeichen auf Zeile %1$@ löschen";
 "Device or properties" = "Gerät oder Eigenschaften";
 "Device overrides" = "Geräteüberschreibungen";
-"Disassembly" = "Disassembly";
 "EC firmware image" = "EC-Firmware-Abbild";
 "Every device" = "Jedes Gerät";
 "Field" = "Feld";
 "FIT component" = "FIT-Komponente";
 "Format" = "Format";
+"Functions" = "Funktionen";
 "General" = "Allgemein";
 "Go to Original" = "Zum Original";
 "Go to Top Swap Copy" = "Zur Top-Swap-Kopie";
@@ -178,7 +178,6 @@
 "Microcode replaced" = "Microcode ersetzt";
 "Minor version" = "Nebenversion";
 "No decompiled C for this function." = "Für diese Funktion gibt es keinen dekompilierten C-Text.";
-"No functions" = "Keine Funktionen";
 "No longer found, not opened:" = "Nicht mehr gefunden, nicht geöffnet:";
 "OEM" = "OEM";
 "Open Decompressed Variable" = "Entpackte Variable öffnen";

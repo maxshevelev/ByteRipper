@@ -43,15 +43,20 @@ import ToolModuleKit
         let surface: DocumentSurface
         let paneView: FilePaneView
         let codePane: CodePaneView?
+        /// The screen the panel is, not only the view that draws it now. It is
+        /// what a panel carries when it leaves for another container.
+        let screen: PanelContent.Screen
         let view: FragmentPanelView
 
         init(id: FragmentDock.PanelID, pane: PaneViewModel, surface: DocumentSurface,
-             paneView: FilePaneView, codePane: CodePaneView?, view: FragmentPanelView) {
+             paneView: FilePaneView, codePane: CodePaneView?,
+             screen: PanelContent.Screen, view: FragmentPanelView) {
             self.id = id
             self.pane = pane
             self.surface = surface
             self.paneView = paneView
             self.codePane = codePane
+            self.screen = screen
             self.view = view
         }
     }
@@ -132,6 +137,12 @@ import ToolModuleKit
     var frontSurface: DocumentSurface? { dock.expanded.flatMap { entries[$0]?.surface } }
     /// The pane of the panel that is up, if one is.
     var frontPane: PaneViewModel? { dock.expanded.flatMap { entries[$0]?.pane } }
+    /// Whether the panel that is up is a code screen. Its function list is the
+    /// screen's own structure, so there is no room for a tool-module panel.
+    var frontIsCode: Bool {
+        guard let id = dock.expanded, let entry = entries[id] else { return false }
+        return entry.codePane != nil
+    }
 
     // MARK: - Opening
 
@@ -158,9 +169,10 @@ import ToolModuleKit
                   animated: Bool = true) -> FragmentDock.PanelID? {
         let pane = PaneViewModel()
         pane.openBytes(bytes, named: name, origin: origin)
-        let codePane = CodePaneView(manifest: manifest, artifact: artifact,
-                                    moduleBytes: Data(bytes))
-        return adopt(pane, codePane: codePane, animated: animated)
+        return adopt(pane,
+                     screen: .code(CodeScreen(manifest: manifest, artifact: artifact,
+                                              bytes: Data(bytes))),
+                     animated: animated)
     }
 
     /// Takes a pane that already exists as a panel of its own and raises it —
@@ -168,10 +180,10 @@ import ToolModuleKit
     /// somewhere else will arrive through.
     @discardableResult
     func adopt(_ pane: PaneViewModel, animated: Bool = true) -> FragmentDock.PanelID? {
-        adopt(pane, codePane: nil, animated: animated)
+        adopt(pane, screen: .bytes, animated: animated)
     }
 
-    private func adopt(_ pane: PaneViewModel, codePane: CodePaneView?,
+    private func adopt(_ pane: PaneViewModel, screen: PanelContent.Screen,
                        animated: Bool) -> FragmentDock.PanelID? {
         guard let host else { return nil }
         pane.bookmarks = bookmarkSpace(for: pane, in: host)
@@ -183,16 +195,23 @@ import ToolModuleKit
         surface.toolPanelWidthAllowance = FragmentPanelLayout.sideInset * 2
         host.addChild(surface)
         let paneView = host.paneView(for: pane)
-        if let codePane {
-            let split = ALSplitView()
-            split.isVertical = true
-            split.dividerThickness = 1
-            split.addPane(paneView)
-            split.addPane(codePane)
-            split.setPaneLayout(.fill, at: 0)
-            split.setPaneLayout(.fixed(480), at: 1)
-            surface.setContent(split)
+        let codePane: CodePaneView?
+        if case .code(let code) = screen {
+            codePane = CodePaneView(manifest: code.manifest, artifact: code.artifact,
+                                    moduleBytes: code.bytes, hexView: paneView)
         } else {
+            codePane = nil
+        }
+        if let codePane {
+            // The code screen is its own surface: no tool strip, no minimap —
+            // the functions and the code are the screen.
+            surface.tools.activate(nil, animated: false, movesWindow: false)
+            surface.tools.allowsSelection = false
+            surface.minimap.setPanelVisible(false, animated: false)
+            surface.setContent(codePane)
+        } else {
+            // The map is the tab's, for a part that is an ordinary dump.
+            host.prepareFragmentMinimap(of: surface, pane: pane, paneView: paneView)
             surface.setContent(paneView)
         }
         // The pane's title bar goes across the whole panel, over the tool and
@@ -200,38 +219,30 @@ import ToolModuleKit
         let view = FragmentPanelView(header: paneView.hoistHeader(), content: surface.view)
         let opened = dock.open()
         entries[opened.id] = Entry(id: opened.id, pane: pane, surface: surface,
-                                   paneView: paneView, codePane: codePane, view: view)
+                                   paneView: paneView, codePane: codePane,
+                                   screen: screen, view: view)
         // After the id exists: the ✕ closes *this* panel, and the tool that
         // hears about an edit is this surface's.
         host.wireFragmentPaneView(paneView, for: pane, panel: opened.id, surface: surface)
         if let codePane {
             // The code pane and the part's hex view are two views of one
             // selection: an instruction selects its bytes, a byte selection
-            // shows the instruction that holds it. The existing
-            // `onSelectionChanged` wiring (the hex view's redraw) is kept and
-            // chained, not replaced.
-            codePane.onSelectRange = { [weak pane, weak host] range in
+            // shows the instruction that holds it.
+            wireCodeScreen(codePane, to: pane) { [weak pane, weak host] range in
                 guard let pane else { return }
-                pane.select(range: range)
                 host?.filePaneView(for: pane)?.revealOffsetCentered(range.lowerBound)
             }
-            let previous = pane.onSelectionChanged
-            pane.onSelectionChanged = { [weak codePane, weak pane] reveal in
-                previous?(reveal)
-                guard let pane else { return }
-                let selection = pane.hexSelection()
-                codePane?.setStale(pane.origin?.state != .intact)
-                codePane?.selectModuleRange(selection.start..<selection.end)
+            if case .code(let code) = screen {
+                codePane.restore(function: code.selectedFunction,
+                                 instruction: code.selectedInstruction,
+                                 showsC: code.showsC)
             }
-            let selection = pane.hexSelection()
-            codePane.setStale(pane.origin?.state != .intact)
-            codePane.selectModuleRange(selection.start..<selection.end)
+            codePane.focusSelectedFunction()
         }
         // The tool panel's header is a handle too, when the panel has one open.
         surface.tools.panel.onHeaderPulledDown = { [weak self] event in
             self?.beginPullDown(opened.id, from: event)
         }
-        host.prepareFragmentMinimap(of: surface, pane: pane, paneView: paneView)
         // The first showing slides up from below; every later raise grows out
         // of the pill, which by then is what says where the panel lives.
         apply(opened.transition, animated: animated, risesFromBelow: true)
@@ -313,6 +324,9 @@ import ToolModuleKit
     /// The caller has already asked whatever had to be asked — unsaved edits,
     /// bytes not yet put back. This is the act, not the question.
     func close(_ id: FragmentDock.PanelID, animated: Bool = true) {
+        if let entry = entries[id], entry.codePane != nil {
+            entry.pane.clearCodeRange()
+        }
         apply(dock.remove(id), animated: animated, closesDocument: true)
     }
 
@@ -328,6 +342,10 @@ import ToolModuleKit
     /// undo, and the link to the parent, which is the pane's own property and
     /// so travels with it.
     ///
+    /// Its screen goes with it. A code panel that moves to another container is
+    /// still a code panel, not a plain part; `PanelContent` is what knows the
+    /// difference.
+    ///
     /// Its marks come too, as a copy at the part's own offsets: what the panel
     /// showed is what the tab will show, and the tab is about those bytes, so
     /// its list is in their offsets rather than the parent file's (§20.7). A
@@ -335,12 +353,33 @@ import ToolModuleKit
     /// pane itself leaves without one, because it is about to be given its new
     /// home's.
     func release(_ id: FragmentDock.PanelID,
-                 animated: Bool = true) -> (pane: PaneViewModel, bookmarks: [Bookmark])? {
+                 animated: Bool = true) -> PanelContent? {
         guard let entry = entries[id] else { return nil }
         let marks = entry.pane.bookmarks?.bookmarks ?? []
         entry.pane.bookmarks = nil
+        let content = PanelContent(pane: entry.pane, bookmarks: marks, screen: screen(of: entry))
         apply(dock.remove(id), animated: animated)
-        return (entry.pane, marks)
+        return content
+    }
+
+    /// What the panel is, without taking it out of the dock — the read side of
+    /// `release`, for a copy that a panel hands to another container while it
+    /// stays where it is.
+    func content(_ id: FragmentDock.PanelID) -> PanelContent? {
+        guard let entry = entries[id] else { return nil }
+        return PanelContent(pane: entry.pane,
+                            bookmarks: entry.pane.bookmarks?.bookmarks ?? [],
+                            screen: screen(of: entry))
+    }
+
+    /// The screen as it stands now: a code screen also carries the function,
+    /// the instruction and the ASM/C choice it was left on.
+    private func screen(of entry: Entry) -> PanelContent.Screen {
+        guard case .code(var code) = entry.screen else { return entry.screen }
+        code.selectedFunction = entry.codePane?.selectedFunctionIndex
+        code.selectedInstruction = entry.codePane?.selectedInstructionIndex
+        code.showsC = entry.codePane?.showsDecompiledC ?? false
+        return .code(code)
     }
 
     // MARK: - Pulling the panel down

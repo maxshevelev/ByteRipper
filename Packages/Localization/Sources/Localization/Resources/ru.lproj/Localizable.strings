@@ -163,12 +163,12 @@
 "Delete Bookmark at %1$@" = "Удалить закладку со строки %1$@";
 "Device or properties" = "Устройство или свойства";
 "Device overrides" = "Переопределения устройств";
-"Disassembly" = "Дизассемблер";
 "EC firmware image" = "Образ прошивки EC";
 "Every device" = "Любое устройство";
 "Field" = "Поле";
 "FIT component" = "Компонент FIT";
 "Format" = "Формат";
+"Functions" = "Функции";
 "General" = "Основные";
 "Go to Original" = "Перейти к оригиналу";
 "Go to Top Swap Copy" = "Перейти к копии Top Swap";
@@ -178,7 +178,6 @@
 "Microcode replaced" = "Микрокод заменён";
 "Minor version" = "Младшая версия";
 "No decompiled C for this function." = "Для этой функции нет декомпилированного C.";
-"No functions" = "Нет функций";
 "No longer found, not opened:" = "Больше не найдены и не открыты:";
 "OEM" = "OEM";
 "Open Decompressed Variable" = "Открыть распакованную переменную";

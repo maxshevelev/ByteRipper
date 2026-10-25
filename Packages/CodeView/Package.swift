@@ -13,12 +13,14 @@ let package = Package(
         .library(name: "CodeView", targets: ["CodeView"])
     ],
     dependencies: [
+        .package(path: "../ALSplitView"),
         .package(path: "../CodeAnalysis"),
         .package(path: "../Localization"),
         .package(path: "../ToolModuleKit")
     ],
     targets: [
         .target(name: "CodeView", dependencies: [
+            .product(name: "ALSplitView", package: "ALSplitView"),
             .product(name: "CodeAnalysis", package: "CodeAnalysis"),
             .product(name: "Localization", package: "Localization"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit")

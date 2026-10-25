@@ -1,6 +1,7 @@
 import Cocoa
 import AppPalette
 import CodeAnalysis
+import CodeView
 import HelpUI
 import Localization
 import PartCodec
@@ -83,9 +84,23 @@ final class MainViewController: NSViewController {
                               into index: Int,
                               onSaved: @escaping () -> Void) -> Bool {
         let target = index == 0 ? windowModel.pane1 : windowModel.pane2
+        if holder.hasCodeScreen,
+           index != 0 || windowModel.openPaneCount > 1 { return false }
         // The pane being displaced gets the ordinary prompt; a dirty untitled one
         // saves first and whatever asked for the move runs again from the top.
         guard confirmReplaceDirtyPane(target, onSaved: onSaved) else { return false }
+        // A code screen is two views of one pane: a move that would take only
+        // the pane would leave the code behind. It can only land in pane 1,
+        // which is the only place a single-file screen has.
+        if index == 0, let content = holder.releasePanel(at: holdingPane) {
+            if target !== content.pane {
+                paneViews.removeValue(forKey: ObjectIdentifier(target))?
+                    .searchResults.removeFromParent()
+                target.close()
+            }
+            adoptPanel(content)
+            return true
+        }
         let moved = holder.releasePane(at: holdingPane)
         if target !== moved {
             paneViews.removeValue(forKey: ObjectIdentifier(target))?
@@ -119,6 +134,29 @@ final class MainViewController: NSViewController {
             .searchResults.removeFromParent()
         refreshMode()
         return pane
+    }
+
+    /// Releases the tab's code screen whole, when the pane leaving is the one
+    /// it belongs to. A code tab torn off into another tab must stay a code
+    /// tab; parting with the pane alone would make it a plain dump.
+    func releasePanel(at index: Int) -> PanelContent? {
+        captureCodeScreenState()
+        guard index == 0, let code = codeScreen,
+              code.pane === windowModel.pane1 else { return nil }
+        let marks = windowModel.bookmarkStore.bookmarks
+        let pane = releasePane(at: index)
+        return PanelContent(pane: pane, bookmarks: marks, screen: .code(code.screen))
+    }
+
+    /// Keeps what the reader chose in the code pane — the function, the
+    /// instruction, the ASM/C side — in the screen the tab carries, before the
+    /// view that knows it goes away.
+    private func captureCodeScreenState() {
+        guard var code = codeScreen, let view = codeScreenView else { return }
+        code.screen.selectedFunction = view.selectedFunctionIndex
+        code.screen.selectedInstruction = view.selectedInstructionIndex
+        code.screen.showsC = view.showsDecompiledC
+        codeScreen = code
     }
 
     /// Makes a tab beside this window and hands back the controller that runs
@@ -320,8 +358,8 @@ final class MainViewController: NSViewController {
     /// panel has, since a pill has no header to drag.
     func tearOffFragment(_ panel: FragmentDock.PanelID) {
         guard let tab = makeSiblingTab?(),
-              let released = fragments.release(panel) else { return }
-        tab.adoptPane(released.pane, bookmarks: released.bookmarks)
+              let content = fragments.release(panel) else { return }
+        tab.adoptPanel(content)
     }
 
     private func movePaneToNewTab(at index: Int) {
@@ -342,7 +380,11 @@ final class MainViewController: NSViewController {
         // Read before the pane goes: releasing it ends the session bound to it.
         let toolFollowing = tools.boundPane === (index == 0 ? windowModel.pane1 : windowModel.pane2)
             ? tools.activeIdentifier : nil
-        tab.adoptPane(releasePane(at: index), bookmarks: marks)
+        if let content = releasePanel(at: index) {
+            tab.adoptPanel(content)
+        } else {
+            tab.adoptPane(releasePane(at: index), bookmarks: marks)
+        }
         // A tab made for this pane starts with nothing in it, so there is
         // nothing for its tool-module to conflict with — the same reason the
         // marks are copied rather than dropped. The session itself does not
@@ -393,21 +435,19 @@ final class MainViewController: NSViewController {
         if copying {
             // A copy of a part has no claim to put bytes back: it is a new
             // document that happens to hold the same bytes, exactly as
-            // Duplicate leaves one anywhere else.
-            guard let source = found.controller.fragments.pane(found.panel), source.isOpen else {
-                return true
-            }
+            // Duplicate leaves one anywhere else. The screen it was — a code
+            // analysis among them — is part of what is copied.
+            guard let content = found.controller.fragments.content(found.panel),
+                  content.pane.isOpen else { return true }
             do {
-                try tab.windowModel.pane1.openDuplicate(of: source, named: unsavedName(for: source))
+                try tab.adoptCopy(of: content)
             } catch {
                 presentFileError(L("Could not duplicate the panel."), error, url: nil)
-                return true
             }
-            tab.apply(mode: .singleFile)
             return true
         }
-        guard let released = found.controller.fragments.release(found.panel) else { return true }
-        tab.adoptPane(released.pane, bookmarks: released.bookmarks)
+        guard let content = found.controller.fragments.release(found.panel) else { return true }
+        tab.adoptPanel(content)
         return true
     }
 
@@ -444,8 +484,42 @@ final class MainViewController: NSViewController {
     /// file that just arrived. From here the two lists are independent — a mark
     /// added in one window does not appear in the other.
     func adoptPane(_ pane: PaneViewModel, bookmarks: [Bookmark]) {
+        codeScreen = nil
         windowModel.bookmarkStore.seed(bookmarks)
         windowModel.adopt(pane)
+        apply(mode: .singleFile)
+    }
+
+    /// Takes a fragment panel whole: its pane, the marks it was read under, and
+    /// the screen it is. A code panel that leaves its dock for a tab of its own
+    /// must arrive as the same screen, not as the plain dump its pane would
+    /// otherwise be.
+    func adoptPanel(_ content: PanelContent) {
+        windowModel.bookmarkStore.seed(content.bookmarks)
+        windowModel.adopt(content.pane)
+        switch content.screen {
+        case .bytes:
+            codeScreen = nil
+        case .code(let screen):
+            codeScreen = (content.pane, content.pane.document, screen)
+        }
+        apply(mode: .singleFile)
+    }
+
+    /// A copy of a panel for a tab that is not taking the panel itself: the
+    /// document is duplicated, and the screen — a code analysis in particular —
+    /// goes with it.
+    func adoptCopy(of content: PanelContent) throws {
+        let pane = PaneViewModel()
+        try pane.openDuplicate(of: content.pane, named: unsavedName(for: content.pane))
+        windowModel.bookmarkStore.seed(content.bookmarks)
+        windowModel.adopt(pane)
+        switch content.screen {
+        case .bytes:
+            codeScreen = nil
+        case .code(let screen):
+            codeScreen = (pane, pane.document, screen)
+        }
         apply(mode: .singleFile)
     }
 
@@ -479,6 +553,13 @@ final class MainViewController: NSViewController {
         guard let origin = paneLocation(ofPaneWith: draggedPaneID) else {
             return fragmentDropOutcome(draggedPaneID: draggedPaneID, onPaneAt: index,
                                        band: band, copying: copying)
+        }
+        // A code screen is one pane with two views; there is nowhere for it to
+        // go but the only pane of a single-file window. Copying would make a
+        // second screen of the same analysis and is not a pane operation.
+        if origin.controller.hasCodeScreen,
+           copying || index != 0 || band == .addSecond || windowModel.openPaneCount > 1 {
+            return .none
         }
         let outcome = PaneDrop.outcome(
             draggingPaneAt: origin.paneIndex,
@@ -579,12 +660,19 @@ final class MainViewController: NSViewController {
                                      copying: Bool) -> PaneDrop.Outcome {
         guard !band.isJoin,
               let found = fragmentLocation(ofPaneWith: draggedPaneID),
-              let source = found.controller.fragments.pane(found.panel), source.isOpen else { return .none }
+              found.controller.fragments.pane(found.panel)?.isOpen == true else { return .none }
         let target = index == 0 ? windowModel.pane1 : windowModel.pane2
+        // A code screen is one pane with a function list and a hex view: it is
+        // single-file by construction. It can take an empty window or replace
+        // pane 1, but it cannot become one half of a comparison or pane 2.
+        if found.controller.fragments.content(found.panel)?.code != nil,
+           index != 0 || band == .addSecond || windowModel.pane2.isOpen {
+            return .none
+        }
         // The free half is on screen only while that pane is free.
         if band == .addSecond, target.isOpen { return .none }
         if copying {
-            guard source.fileSize > 0 else { return .none }
+            guard (found.controller.fragments.pane(found.panel)?.fileSize ?? 0) > 0 else { return .none }
             return .duplicate(intoPane: index)
         }
         return .move(intoPane: index)
@@ -595,18 +683,36 @@ final class MainViewController: NSViewController {
                                      band: SingleFileDropTarget, copying: Bool) {
         let outcome = fragmentDropOutcome(draggedPaneID: draggedPaneID, onPaneAt: index,
                                           band: band, copying: copying)
-        guard outcome != .none, let found = fragmentLocation(ofPaneWith: draggedPaneID),
-              let source = found.controller.fragments.pane(found.panel) else { return }
+        guard outcome != .none, let found = fragmentLocation(ofPaneWith: draggedPaneID)
+        else { return }
         let target = index == 0 ? windowModel.pane1 : windowModel.pane2
         if case .duplicate = outcome {
-            copyPane(source, into: index)
+            guard let content = found.controller.fragments.content(found.panel) else { return }
+            guard confirmReplaceDirtyPane(target, onSaved: { [weak self] in
+                self?.performFragmentDrop(draggedPaneID: draggedPaneID, onPaneAt: index,
+                                          band: band, copying: copying)
+            }) else { return }
+            if content.code != nil {
+                if target.isOpen {
+                    paneViews.removeValue(forKey: ObjectIdentifier(target))?
+                        .searchResults.removeFromParent()
+                    target.close()
+                }
+                do {
+                    try adoptCopy(of: content)
+                } catch {
+                    presentFileError(L("Could not duplicate the panel."), error, url: nil)
+                }
+            } else {
+                copyPane(content.pane, into: index)
+            }
             return
         }
         guard confirmReplaceDirtyPane(target, onSaved: { [weak self] in
             self?.performFragmentDrop(draggedPaneID: draggedPaneID, onPaneAt: index,
                                       band: band, copying: copying)
         }) else { return }
-        guard let released = found.controller.fragments.release(found.panel) else { return }
+        guard let content = found.controller.fragments.release(found.panel) else { return }
         if target.isOpen {
             paneViews.removeValue(forKey: ObjectIdentifier(target))?
                 .searchResults.removeFromParent()
@@ -616,10 +722,14 @@ final class MainViewController: NSViewController {
         // for it does; one that holds a file keeps its own list, which the
         // pane beside the part is read under.
         if windowModel.openPaneCount == 0 {
-            windowModel.bookmarkStore.seed(released.bookmarks)
+            windowModel.bookmarkStore.seed(content.bookmarks)
         }
-        windowModel.adopt(released.pane, at: index)
-        apply(mode: windowModel.openPaneCount >= 2 ? .comparison : .singleFile)
+        if content.code != nil {
+            adoptPanel(content)
+        } else {
+            windowModel.adopt(content.pane, at: index)
+            apply(mode: windowModel.openPaneCount >= 2 ? .comparison : .singleFile)
+        }
     }
 
     /// Where the pane with `dragID` is, asked of the whole app when there is a
@@ -735,6 +845,21 @@ final class MainViewController: NSViewController {
     /// before anything has made it load its view.
     private(set) lazy var surface = DocumentSurface(host: self)
 
+    /// When this tab is not a dump but a module's code screen: the pane the
+    /// screen belongs to, the document it was opened on, and the analysis that
+    /// makes it one. A panel torn off the dock arrives this way, so it stays
+    /// the screen it was (`PanelContent`). Nil for every ordinary tab, and
+    /// cleared as soon as that pane holds another document.
+    private var codeScreen: (pane: PaneViewModel, document: BinaryDocument?,
+                             screen: CodeScreen)?
+    /// The code screen on display, for the mode's content and for tests.
+    private(set) var codeScreenView: CodePaneView?
+    /// Whether this tab is a code screen rather than an ordinary dump.
+    var hasCodeScreen: Bool { codeScreen != nil }
+    /// The map's state before a code screen hid it, put back when the tab
+    /// holds an ordinary document again.
+    private var minimapVisibleBeforeCode: Bool?
+
     // The surface's pieces under the names this file has always called them.
     // Forwarding rather than renaming three hundred call sites — here and
     // across the suite — in a change whose whole point is that nothing moves
@@ -755,6 +880,23 @@ final class MainViewController: NSViewController {
     /// A panel covers the tab's own tool panel, so the one the commands act on
     /// is always the one on screen — there is never a choice of two.
     var frontTools: ToolController { fragments.frontSurface?.tools ?? surface.tools }
+
+    /// Whether a tool-module may be chosen for what is in front. A code screen
+    /// is a fixed reader — its function list is the screen's own structure —
+    /// so the Tools menu and the toolbar's tool popup are disabled over one.
+    var toolSelectionAllowed: Bool {
+        // A panel in front answers for itself; with none up, the tab does.
+        if fragments.frontSurface != nil { return !fragments.frontIsCode }
+        return codeScreenView == nil && surface.tools.allowsSelection
+    }
+
+    /// Whether the minimap may be shown for what is in front. A code screen is
+    /// functions and code; the dump below is a reference strip, and a map of it
+    /// would be a third view of the same bytes.
+    var minimapAllowed: Bool {
+        if fragments.frontSurface != nil { return !fragments.frontIsCode }
+        return codeScreenView == nil
+    }
 
     /// The tool-module reading `pane`: a part's panel has its own, and a zone
     /// picked in a part belongs to the tool that drew it there.
@@ -1230,6 +1372,11 @@ final class MainViewController: NSViewController {
             activeFilePane = nil
             comparisonView = nil
             comparisonCoordinator.stop()
+            codeScreen = nil
+            codeScreenView = nil
+            surface.tools.allowsSelection = true
+            // Keep the map's before-code state: a file opened next in this tab
+            // is an ordinary document again and should get its map back.
             // Returning to the launch state must also dismiss the find bar —
             // nothing is left to search (§11).
             hideFindBar()
@@ -1347,46 +1494,101 @@ final class MainViewController: NSViewController {
             paneModel.onCaretChanged = { [weak surface] in
                 surface?.minimap.updateSelections()
             }
-            // Wrap in the drop-target split view (§4.3 single-file mode). The
-            // pane itself is NOT drop-registered here so the outer view wins.
-            let dropView = SingleFileDropView(paneView: pane)
-            singleFileDropView = dropView
-            dropView.onDragSessionChanged = { [weak self] active in
-                self?.setNewTabStripVisible(active)
-            }
-            dropView.onCopyModifierChanged = { [weak self] copying in
-                self?.setPaneDragCopyingEverywhere(copying)
-            }
-            // A dragged pane gets the same four zones a file gets, and they
-            // mean the same four things: the far half opens it as the second
-            // pane, and the three bands over this file join it at either end or
-            // put it in this pane's place.
-            //
-            // Which of those a pane from *this* window may do is `PaneDrop`'s to
-            // say, not a blanket refusal here: its own pane can still be joined
-            // to itself at either end, and only the middle band and the second
-            // half are meaningless for it.
-            dropView.paneDropOutcome = { [weak self] paneID, target, copying in
-                guard let self else { return .none }
-                let (index, band) = Self.singleFilePaneDrop(target)
-                return self.paneDropOutcome(draggedPaneID: paneID, onPaneAt: index,
-                                            band: band, copying: copying)
-            }
-            dropView.onPaneDropped = { [weak self] paneID, target, copying in
-                let (index, band) = Self.singleFilePaneDrop(target)
-                self?.performPaneDrop(draggedPaneID: paneID, onPaneAt: index,
-                                      band: band, copying: copying)
-            }
-            dropView.onDrop = { [weak self] target, urls in
-                self?.handleSingleFileDrop(target: target, urls: urls)
+            // A code panel that arrived from another container is still that
+            // screen: the tab holds the module's pane and its analysis, not a
+            // plain dump. It must be the same document; a new file in the same
+            // pane ends it.
+            let showsCode = codeScreen?.pane === paneModel
+                && codeScreen?.document === paneModel.document
+            if !showsCode {
+                if codeScreen != nil {
+                    captureCodeScreenState()
+                    paneModel.clearCodeRange()
+                }
+                codeScreen = nil
             }
             activeFilePane = pane
             comparisonView = nil
             comparisonCoordinator.stop()
-            setContentView(dropView)
+            if showsCode, let codeScreen {
+                // The functions are the screen: no tool strip, no map, exactly
+                // as in the dock.
+                if minimapVisibleBeforeCode == nil {
+                    minimapVisibleBeforeCode = surface.minimap.isPanelVisible
+                }
+                surface.tools.activate(nil, animated: false, movesWindow: false)
+                surface.tools.allowsSelection = false
+                surface.minimap.setPanelVisible(false, animated: false)
+                singleFileDropView = nil
+                let codePane = CodePaneView(manifest: codeScreen.screen.manifest,
+                                            artifact: codeScreen.screen.artifact,
+                                            moduleBytes: codeScreen.screen.bytes,
+                                            hexView: pane)
+                codeScreenView = codePane
+                wireCodeScreen(codePane, to: paneModel) { [weak self, weak paneModel] range in
+                    guard let paneModel else { return }
+                    self?.filePaneView(for: paneModel)?
+                        .revealOffsetCentered(range.lowerBound)
+                }
+                codePane.restore(function: codeScreen.screen.selectedFunction,
+                                 instruction: codeScreen.screen.selectedInstruction,
+                                 showsC: codeScreen.screen.showsC)
+                codePane.focusSelectedFunction()
+                setContentView(codePane)
+            } else {
+                codeScreenView = nil
+                surface.tools.allowsSelection = true
+                if let wasVisible = minimapVisibleBeforeCode {
+                    minimapVisibleBeforeCode = nil
+                    surface.minimap.setPanelVisible(wasVisible, animated: false)
+                }
+                // Wrap in the drop-target split view (§4.3 single-file mode). The
+                // pane itself is NOT drop-registered here so the outer view wins.
+                let dropView = SingleFileDropView(paneView: pane)
+                singleFileDropView = dropView
+                dropView.onDragSessionChanged = { [weak self] active in
+                    self?.setNewTabStripVisible(active)
+                }
+                dropView.onCopyModifierChanged = { [weak self] copying in
+                    self?.setPaneDragCopyingEverywhere(copying)
+                }
+                // A dragged pane gets the same four zones a file gets, and they
+                // mean the same four things: the far half opens it as the second
+                // pane, and the three bands over this file join it at either end or
+                // put it in this pane's place.
+                //
+                // Which of those a pane from *this* window may do is `PaneDrop`'s to
+                // say, not a blanket refusal here: its own pane can still be joined
+                // to itself at either end, and only the middle band and the second
+                // half are meaningless for it.
+                dropView.paneDropOutcome = { [weak self] paneID, target, copying in
+                    guard let self else { return .none }
+                    let (index, band) = Self.singleFilePaneDrop(target)
+                    return self.paneDropOutcome(draggedPaneID: paneID, onPaneAt: index,
+                                                band: band, copying: copying)
+                }
+                dropView.onPaneDropped = { [weak self] paneID, target, copying in
+                    let (index, band) = Self.singleFilePaneDrop(target)
+                    self?.performPaneDrop(draggedPaneID: paneID, onPaneAt: index,
+                                          band: band, copying: copying)
+                }
+                dropView.onDrop = { [weak self] target, urls in
+                    self?.handleSingleFileDrop(target: target, urls: urls)
+                }
+                setContentView(dropView)
+            }
             pane.focusHexView()
 
         case .comparison:
+            // A code screen is single-file: while a second pane is up, the
+            // tab is an ordinary comparison and its tools are its own again.
+            captureCodeScreenState()
+            codeScreenView = nil
+            surface.tools.allowsSelection = true
+            if let wasVisible = minimapVisibleBeforeCode {
+                minimapVisibleBeforeCode = nil
+                surface.minimap.setPanelVisible(wasVisible, animated: false)
+            }
             wireComparison()
             let pane1 = windowModel.pane1
             let pane2 = windowModel.pane2
@@ -1943,6 +2145,7 @@ final class MainViewController: NSViewController {
     /// opens, so the arrow keys walk its rows at once, and back to the dump the
     /// panel read when None closes it.
     @objc func activateTool(_ sender: NSMenuItem) {
+        guard toolSelectionAllowed else { return }
         let tools = frontTools
         let reading = tools.boundPane
         tools.activate(sender.representedObject as? String)
@@ -2888,6 +3091,7 @@ final class MainViewController: NSViewController {
     /// hidden by default and animated in/out; the split's divider keeps the
     /// user's chosen width between shows.
     @objc func toggleMinimap() {
+        guard minimapAllowed else { return }
         frontSurface.minimap.togglePanel(animated: true)
     }
 
@@ -3014,7 +3218,10 @@ final class MainViewController: NSViewController {
     /// Toggles between the whole-file overview and the detail window. The choice
     /// holds until the open files change, which decides afresh (§19.4).
     @objc func toggleMinimapOverview() {
-        guard surface.minimapView.renderMode == .overview || surface.minimapView.overviewIsInformative() else { return }
+        guard minimapAllowed,
+              surface.minimapView.renderMode == .overview
+                || surface.minimapView.overviewIsInformative()
+        else { return }
         surface.minimap.setRenderMode(surface.minimapView.renderMode == .overview ? .detail : .overview)
     }
 
@@ -7896,7 +8103,9 @@ extension MainViewController: NSToolbarItemValidation {
                     button.invalidateIntrinsicContentSize()
                 }
             }
-            return activePane.isOpen
+            // A code screen has no room for a tool-module: its own function
+            // list is the structure.
+            return activePane.isOpen && toolSelectionAllowed
         case #selector(setWordSize(_:)):
             // The button names the size in force, the way the View > Word Size
             // items carry the radio check (§6). Always enabled: a view setting,
@@ -7905,8 +8114,9 @@ extension MainViewController: NSToolbarItemValidation {
             return true
         case #selector(toggleMinimap):
             // No file open, no map to show: the empty window's panel is hidden
-            // and the toggle has nothing to switch (§19).
-            return mode != .empty
+            // and the toggle has nothing to switch (§19). A code screen has no
+            // map at all.
+            return mode != .empty && minimapAllowed
         case #selector(togglePaneLayout):
             // The icon names the arrangement the click will produce, the way the
             // Show/Hide Minimap item's title names its act (§24.3): stacked
@@ -7981,7 +8191,12 @@ extension MainViewController: NSMenuItemValidation {
         case #selector(activateTool(_:)):
             // A radio group: the active tool-module is checked, and a
             // tool-module needs a file to work on. None is always available —
-            // it is how the panel is closed.
+            // it is how the panel is closed. Over a code screen there is no
+            // choice at all: the screen is the tool.
+            guard toolSelectionAllowed else {
+                menuItem.state = .off
+                return false
+            }
             let (enabled, state) = frontTools.menuState(for: menuItem.representedObject as? String,
                                                         fileIsOpen: activePane.isOpen)
             menuItem.state = state
@@ -7993,14 +8208,16 @@ extension MainViewController: NSMenuItemValidation {
             // half (§19.4).
             guard mode != .empty else { return false }
             menuItem.state = surface.minimapView.renderMode == .overview ? .on : .off
-            return surface.minimapView.renderMode == .overview || surface.minimapView.overviewIsInformative()
+            return minimapAllowed
+                && (surface.minimapView.renderMode == .overview
+                    || surface.minimapView.overviewIsInformative())
         case #selector(toggleMinimap):
             // A Show/Hide item names what it will do, so the title flips with
             // the panel's state (§19). Disabled with no file open: the empty
             // window's panel is hidden and the item has nothing to toggle (§19).
             guard mode != .empty else { return false }
             menuItem.title = surface.minimapPanelVisible ? L("Hide Minimap") : L("Show Minimap")
-            return true
+            return minimapAllowed
         case #selector(toggleInsertMode):
             // A checked toggle reading the ACTIVE pane's mode: the mode is per
             // pane (§7.6), so the checkmark follows the pane the keys go to.

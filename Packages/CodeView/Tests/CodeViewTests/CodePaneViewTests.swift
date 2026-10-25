@@ -38,10 +38,11 @@ final class CodePaneViewTests: XCTestCase {
 
     func testThePaneListsFunctionsAndInstructions() throws {
         let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
-                                moduleBytes: moduleBytes)
+                                moduleBytes: moduleBytes, hexView: NSView())
         view.frame = NSRect(x: 0, y: 0, width: 480, height: 320)
         view.layoutSubtreeIfNeeded()
 
+        XCTAssertEqual(view.functionCount, 2)
         XCTAssertEqual(view.instructionCount, 3)
         XCTAssertEqual(view.selectedInstruction?.address, CodeAddress(0x220))
         XCTAssertEqual(view.selectedFunction?.name, "FUN_00000220")
@@ -54,9 +55,72 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertFalse(view.hasAmbiguousLayout)
     }
 
-    func testTheStaleBannerIsSaidOutLoud() throws {
+    func testTheFunctionsHeadingSitsAtTheLeftOfItsList() throws {
         let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
-                                moduleBytes: moduleBytes)
+                                moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 480, height: 320)
+        view.layoutSubtreeIfNeeded()
+
+        let heading = try XCTUnwrap(
+            first(NSTextField.self, in: view) { $0.stringValue == "Functions" })
+        XCTAssertEqual(heading.alignment, .left, "the heading reads from the left")
+        let list = try XCTUnwrap(
+            first(NSTableView.self, in: view) {
+                $0.tableColumns.first?.identifier.rawValue == "function"
+            })
+        let headingLeft = view.convert(heading.alignmentRect(forFrame: heading.bounds),
+                                       from: heading).minX
+        let listLeft = view.convert(list.bounds, from: list).minX
+        XCTAssertEqual(headingLeft, listLeft, accuracy: 0.5,
+                       "and starts where the list does")
+    }
+
+    /// A screen that moved container opens where it was left: the function,
+    /// the instruction and the ASM/C choice.
+    func testARestoredScreenKeepsItsPlace() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 480, height: 320)
+        view.layoutSubtreeIfNeeded()
+        view.selectInstruction(at: 2)
+
+        view.restore(function: 1, instruction: 2, showsC: true)
+        XCTAssertEqual(view.selectedFunction?.name, "entry")
+        XCTAssertEqual(view.selectedInstruction?.address, CodeAddress(0x355))
+        XCTAssertEqual(view.selectedFunctionIndex, 1)
+        XCTAssertEqual(view.selectedInstructionIndex, 2)
+        XCTAssertTrue(view.showsDecompiledC)
+        XCTAssertEqual(view.decompiledText, "return 0;")
+    }
+
+    func testTheFunctionsSitLeftOfTheCodeAndTheBytesBelowIt() throws {
+        let hex = NSView()
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: moduleBytes, hexView: hex)
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
+        view.layoutSubtreeIfNeeded()
+
+        let functions = try XCTUnwrap(
+            first(NSTableView.self, in: view) {
+                $0.tableColumns.first?.identifier.rawValue == "function"
+            })
+        let instructions = try XCTUnwrap(
+            first(NSTableView.self, in: view) {
+                $0.tableColumns.first?.identifier.rawValue == "instruction"
+            })
+        let functionsRect = view.convert(functions.bounds, from: functions)
+        let instructionsRect = view.convert(instructions.bounds, from: instructions)
+        let hexRect = view.convert(hex.bounds, from: hex)
+        XCTAssertLessThan(functionsRect.maxX, instructionsRect.minX,
+                          "the function list is the left pane")
+        XCTAssertGreaterThan(instructionsRect.maxY, hexRect.maxY,
+                             "the code is above the hex view")
+        XCTAssertEqual(hexRect.height, 220, accuracy: 0.5,
+                       "the hex view is the reference strip below")
+    }
+
+    func testTheStaleBannerIsSaidOutLoud() throws {        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: moduleBytes, hexView: NSView())
         view.frame = NSRect(x: 0, y: 0, width: 480, height: 320)
         view.layoutSubtreeIfNeeded()
         view.setStale(true)
@@ -73,12 +137,14 @@ final class CodePaneViewTests: XCTestCase {
     func testSelectionCrossesBetweenTheListingAndTheBytes() throws {
         let module = teModule()
         let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
-                                moduleBytes: module)
+                                moduleBytes: module, hexView: NSView())
         view.frame = NSRect(x: 0, y: 0, width: 480, height: 320)
         view.layoutSubtreeIfNeeded()
 
         var ranges: [Range<UInt64>] = []
+        var focused: [Range<UInt64>] = []
         view.onSelectRange = { ranges.append($0) }
+        view.onFocusRange = { focused.append($0) }
         view.selectInstruction(at: 0)
         XCTAssertEqual(ranges.last, 0x68..<0x69, "the first byte of the address 0x220")
         view.selectInstruction(at: 1)
@@ -86,6 +152,13 @@ final class CodePaneViewTests: XCTestCase {
 
         view.selectModuleRange(0x68..<0x69)
         XCTAssertEqual(view.selectedInstruction?.address, CodeAddress(0x220))
+
+        let selected = ranges.last
+        view.selectFunction(at: 0)
+        XCTAssertEqual(focused.last, 0x68..<0x6A,
+                       "a function's whole stored range is the main zone")
+        XCTAssertEqual(ranges.last, selected,
+                       "and choosing a function does not take the byte selection")
     }
 
     /// The real CpuPei artifact, when the machine has one: 13 functions, 508
@@ -102,10 +175,20 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(artifact.functions.reduce(0) { $0 + $1.instructions.count }, 508)
         XCTAssertTrue(artifact.statusCodeCalls.contains { $0.address == CodeAddress(0x535) })
 
-        let view = CodePaneView(manifest: manifest(), artifact: artifact)
+        let view = CodePaneView(manifest: manifest(), artifact: artifact,
+                                hexView: NSView())
         view.frame = NSRect(x: 0, y: 0, width: 480, height: 320)
         view.layoutSubtreeIfNeeded()
         XCTAssertEqual(view.instructionCount, 508)
+    }
+
+    private func first<T: NSView>(_ type: T.Type, in view: NSView,
+                                  where matches: (T) -> Bool) -> T? {
+        if let view = view as? T, matches(view) { return view }
+        for subview in view.subviews {
+            if let found = first(type, in: subview, where: matches) { return found }
+        }
+        return nil
     }
 
     private func labels(in view: NSView) -> [String] {

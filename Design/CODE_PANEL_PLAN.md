@@ -184,47 +184,66 @@ The part is the module body, read-only:
 - the codec is a read-only codec: `Update in Parent` is refused with a sentence
   saying an analysis is a snapshot, and edits belong in the dump.
 
-The panel's content is a left-right `ALSplitView` [module bytes | code]:
+The panel's content is two `ALSplitView`s: a function list down the left, and
+the code with the hex view under it on the right.
 
 ```
 ┌ Code — CpuPei · TE · Ghidra 12.1.2 ─────────────────────────── ? ┐
-│                                                                   │
-│ 00000000  VZ 00 00 ...          │ Functions ▾                     │
-│ 00000010  00 00 00 ...          │ 0x4BF  FUN_000004bf             │
-│ ...                             │ 0x5E8  FUN_000005e8             │
-│                                 │                                 │
-│                                 │ 0x4BF  55 8B EC   PUSH EBP      │
-│                                 │ 0x4C0  8B EC      MOV EBP, ESP  │
-│                                 │ ...                             │
-├───────────────────────────────────────────────────────────────────┤
-│ module 0x5C00 in the file · analyzed 2026-10-25 · recipe ...      │
-└───────────────────────────────────────────────────────────────────┘
+│ Functions      │ ASM │ C                                        │
+│ FUN_000004bf   │ 0x4BF  55 8B EC   PUSH EBP                   │
+│ FUN_000005e8   │ 0x4C0  8B EC      MOV EBP, ESP               │
+│ ...            │ ...                                          │
+│                ├──────────────────────────────────────────────┤
+│                │ 00000000  VZ 00 00 ...                      │
+│                │ 00000010  00 00 00 ...                      │
+├──────────────────────────────────────────────────────────────────┤
+│ module 0x5C00 in the file · analyzed 2026-10-25 · recipe ...     │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-**The left side is the existing part view, not a new hex view.** The panel gets
+The left pane is the whole function list, not a dropdown: the reader sees every
+function at once. The right pane splits vertically: code above, the hex view
+below as a reference for the bytes an instruction points at. The code is drawn
+on the ordinary text background; the hex view is not the subject of the screen.
+`ASM` and `C` are the names of formats and are not translated.
+
+**The hex view is the existing part view, not a new hex view.** The panel gets
 its bytes from the same `PaneViewModel`/hex view every part has; the code pane
 is the additional view. If a future change rebuilds a hex view inside the panel,
 the reason for replacing `Open Body` disappears and the duplication is back.
 
-**The right side is a code pane, not a `ToolModule`.** A tool-module owns the
-left strip and its rows; this pane needs the content width and its own
-selection. It is a new shared view package (`Packages/CodeView`), drawn by the
-app's fragment surface. It does not publish zones into the tool panel; its
-selection publishes a byte range into the part's hex view.
+**The code pane is not a `ToolModule`.** A tool-module owns the left strip and
+its rows; this screen needs the content width and its own function list. It is a
+new shared view package (`Packages/CodeView`), drawn by the app's fragment
+surface. It is a reader: no tool strip, no minimap, and the Tools menu and its
+toolbar popup are disabled while it is in front — the function list is the
+screen's structure.
 
 The code pane has:
 
-- a function navigator (search by name or address, callers/callees);
+- the whole function list, with the selected function's code beside it;
 - a disassembly listing: address, instruction bytes, mnemonic and operands;
-- a C view for the selected function, from the artifact's `c` field;
+- an `ASM`/`C` switch for the selected function's decompiled text;
 - strings, POST writes and `ReportStatusCode` candidates as selectable lists;
 - search across the listing, symbols and strings.
 
 The listing is the ground truth; C is a derived view and says so. The panel
 shows `status_code_calls` as candidates, not as confirmed calls.
 
+**A panel keeps its screen in any container.** The dock, a tab of its own and a
+tab in another window are all containers for the same `PanelContent`: the pane,
+its marks, and whether the screen is bytes or code. Tearing a code panel off
+into a tab — moving or copying it — rebuilds the code screen there, not a plain
+hex part, and opens it on the function, instruction and `ASM`/`C` side the
+reader had chosen. The pane, its edits and its link to the parent still travel
+as before. A code screen also refuses a tool-module at the controller, not only
+in the menu, so an agent or a restored workspace cannot put one there.
+
 ### Selection and addresses
 
+- Selecting a function marks its whole stored range as the dump's **main zone**
+  (the focused zone), not as a selection: the reader keeps the selection for
+  reading bytes.
 - Selecting an instruction selects its `bytes` range in the part's hex.
 - Selecting bytes in the hex shows the containing instruction and function.
 - Following a reference goes to its target address when it is inside the

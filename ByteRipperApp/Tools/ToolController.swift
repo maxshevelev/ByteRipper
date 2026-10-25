@@ -415,6 +415,14 @@ import ToolModuleKit
     /// that has no tool-module in it.
     private(set) var isPanelVisible = false
 
+    /// Whether a tool-module may be chosen for this surface at all. Every
+    /// surface says yes except a code screen: its function list is its own
+    /// structure, and a tool panel would take the width and the strip the code
+    /// needs. Checked here as well as in the menu, so a command that does not
+    /// go through the menu — an agent's `open_panel`, a restored workspace —
+    /// cannot put one there either.
+    var allowsSelection = true
+
     /// Where the panel's width is remembered — one key per tool-module, since
     /// a FIT table wants twice what a structure tree does and one shared width
     /// would be wrong for both. Swappable so the suite does not write into the
@@ -481,6 +489,7 @@ import ToolModuleKit
     /// inside it: a restored workspace's window already has the frame it had
     /// with the panel open.
     func activate(_ identifier: String?, animated: Bool = true, movesWindow: Bool = true) {
+        guard allowsSelection else { return }
         let resolved = identifier.flatMap { ToolRegistry.module(identified: $0) == nil ? nil : $0 }
         guard resolved != activeIdentifier else { return }
         activeIdentifier = resolved

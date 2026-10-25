@@ -30,6 +30,23 @@ final class PaneViewModelTests: XCTestCase {
 
     // MARK: - Hex nibble typing (§7)
 
+    /// A code screen's function is the dump's main zone, not a selection: the
+    /// reader keeps their place in the bytes while looking at the function.
+    func testACodeFunctionIsAFocusedZoneNotASelection() throws {
+        let (pane, url) = try openPane([0x00, 0x01, 0x02, 0x03])
+        defer { try? FileManager.default.removeItem(at: url) }
+        let before = pane.hexSelection()
+
+        pane.focusCodeRange(1..<3, named: "FUN_1")
+        XCTAssertEqual(pane.zones.focus, "code-screen.function")
+        XCTAssertEqual(pane.zones.zones.map(\.range), [1..<3])
+        XCTAssertEqual(pane.zones.zones.map(\.name), ["FUN_1"])
+        XCTAssertEqual(pane.hexSelection(), before, "the selection did not move")
+
+        pane.clearCodeRange()
+        XCTAssertTrue(pane.zones.zones.isEmpty, "the screen's zone goes with it")
+    }
+
     func testTypeHexNibblesWritesByteAndAdvances() throws {
         let (pane, url) = try openPane([0x00])
         defer { try? FileManager.default.removeItem(at: url) }

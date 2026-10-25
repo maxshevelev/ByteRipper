@@ -338,6 +338,13 @@ final class PaneViewModel: HexViewDataSource {
 
     var onSelectionChanged: ((SelectionReveal) -> Void)?
 
+    /// A second reader of the selection, for a view beside the bytes rather
+    /// than in place of them — the code screen's function listing. It is a
+    /// property of its own so joining one does not take the hex view's
+    /// callback away, and joining it twice replaces it instead of stacking a
+    /// second copy.
+    var onSelectionObserved: (() -> Void)?
+
     /// Fired after a content change — bytes overwritten in this pane, or its
     /// text decoder rebuilt — carrying the affected region, so the view can
     /// redraw only the affected rows/columns instead of the whole pane (§3.3
@@ -1362,8 +1369,10 @@ final class PaneViewModel: HexViewDataSource {
     /// (`Design/TOOL_MODULES_PLAN.md`), or nothing when none is running.
     ///
     /// The pane holds it because the dump draws it; the truth belongs to the
-    /// tab's `ToolController`, which pushes it here and clears it when the
-    /// session ends. Nothing else writes it — zones are the tool-module's alone.
+    /// tab's `ToolController`, which pushes a tool-module's map here and clears
+    /// it when the session ends. The one other writer is the code screen: it
+    /// publishes a single focused zone for the function in view, so a choice in
+    /// the function list marks bytes without taking the selection.
     private(set) var zones: ZoneMap = .empty
 
     /// Replaces the drawn map. The whole dump repaints rather than the rows
@@ -1377,6 +1386,26 @@ final class PaneViewModel: HexViewDataSource {
 
     /// Fired when the drawn zone map changes, so the view repaints.
     var onFullInvalidationOfZones: (() -> Void)?
+
+    /// The zone a code screen puts over the function it is showing. It is not
+    /// a tool-module's zone: the code screen has no tool, and this one only
+    /// says "these are the function's bytes". The focused zone is the dump's
+    /// main highlight, which is why choosing a function does not have to take
+    /// the selection away from the reader.
+    private static let codeRangeZoneID = "code-screen.function"
+
+    func focusCodeRange(_ range: Range<UInt64>, named name: String) {
+        guard !range.isEmpty else { return }
+        let zone = Zone(id: Self.codeRangeZoneID, name: name, range: range)
+        setZones(ZoneMap(zones: [zone], focus: zone.id))
+    }
+
+    /// Takes the code screen's zone away when the screen is no longer showing
+    /// these bytes. A tool-module's map is left alone.
+    func clearCodeRange() {
+        guard zones.focus == Self.codeRangeZoneID else { return }
+        setZones(.empty)
+    }
 
     /// Where an agent's annotations come from (`AgentAnnotationTools`): the
     /// ones for this pane's bytes, at its addresses, and every annotation's
@@ -2710,6 +2739,10 @@ final class PaneViewModel: HexViewDataSource {
             onChange?(reveal)
         }
         onCaretChanged?()
+        // The other reader of the selection — a code screen beside this pane —
+        // follows every channel, because an edit can move the selection as
+        // surely as a click can.
+        onSelectionObserved?()
     }
 
     /// Reports an in-place byte edit. When the file size is unchanged, a

@@ -74,7 +74,7 @@ final class LinkedPartTests: XCTestCase {
     func testACodePartOpensReadOnlyWithItsPane() throws {
         let controller = try makeController(opening: [UInt8](repeating: 0xAA, count: 0x400))
         let parent = controller.windowModel.pane1
-        let bytes = [UInt8](repeating: 0x90, count: 0x40)
+        let bytes = teModule()
         let manifest = AnalysisManifest(
             module: ModuleIdentity(
                 sha256: SHA256Digest(data: Data(bytes)), size: bytes.count, name: "CpuPei",
@@ -92,7 +92,7 @@ final class LinkedPartTests: XCTestCase {
             {"address":"0x0","bytes":"90","text":"NOP"}]}]}
         """.utf8))
         controller.openCode(
-            named: "CpuPei body", from: parent, source: 0x100..<0x140,
+            named: "CpuPei body", from: parent, source: 0x100..<0x160,
             manifest: manifest, artifact: artifact,
             codec: ReadOnlyPartCodec(
                 bytes,
@@ -103,10 +103,62 @@ final class LinkedPartTests: XCTestCase {
         controller.view.window?.layoutIfNeeded()
 
         let part = try XCTUnwrap(controller.fragments.pane(id))
-        XCTAssertEqual(part.origin?.sourceRange, 0x100..<0x140)
+        XCTAssertEqual(part.origin?.sourceRange, 0x100..<0x160)
         XCTAssertTrue(part.origin?.codec is ReadOnlyPartCodec)
         XCTAssertNil(part.bookmarks, "a read-only code part has no bookmark space")
+        XCTAssertEqual(part.zones.focus, "code-screen.function",
+                       "the function is the dump's main zone")
+        XCTAssertEqual(part.zones.zones.map(\.range), [0x50..<0x51])
+        part.select(range: 0..<1)
+        let selection = part.hexSelection()
+        controller.fragments.codePane(id)?.selectFunction(at: 0)
+        XCTAssertEqual(part.hexSelection(), selection,
+                       "choosing a function leaves the reader's selection alone")
+        XCTAssertEqual(part.zones.zones.map(\.range), [0x50..<0x51])
         XCTAssertNotNil(controller.fragments.codePane(id))
+        let surface = try XCTUnwrap(controller.fragments.surface(id))
+        XCTAssertFalse(surface.minimapPanelVisible, "the code screen has no minimap")
+        XCTAssertFalse(controller.minimapAllowed, "and the map commands are off")
+        XCTAssertFalse(surface.tools.isPanelVisible, "the code screen has no tool strip")
+        XCTAssertFalse(surface.tools.allowsSelection,
+                       "and no tool-module may be chosen on it")
+        XCTAssertFalse(controller.toolSelectionAllowed,
+                       "a code screen has no room for a tool-module")
+        // The screen's own place travels too: here the C side of the switch.
+        controller.fragments.codePane(id)?.restore(function: 0, instruction: 0, showsC: true)
+
+        // A copy is a new document, but the screen is part of what is copied.
+        let content = try XCTUnwrap(controller.fragments.content(id))
+        let copy = MainViewController()
+        try copy.adoptCopy(of: content)
+        XCTAssertTrue(copy.hasCodeScreen)
+        XCTAssertTrue(copy.codeScreenView?.showsDecompiledC ?? false,
+                      "the copy opens on the same side of the switch")
+        XCTAssertFalse(copy.windowModel.pane1 === part, "the copy has its own document")
+        copy.windowModel.pane1.close()
+
+        // Moving the panel to a tab of its own must keep the screen, not turn
+        // it into the plain dump its pane would otherwise be.
+        let tab = MainViewController()
+        defer {
+            tab.windowModel.pane1.close()
+            tab.windowModel.pane2.close()
+        }
+        controller.makeSiblingTab = { tab }
+        controller.tearOffFragment(id)
+
+        XCTAssertTrue(controller.fragments.isEmpty, "the panel left the dock")
+        XCTAssertTrue(tab.hasCodeScreen, "it is still a code screen")
+        XCTAssertTrue(tab.windowModel.pane1 === part, "the pane itself moved")
+        let moved = try XCTUnwrap(tab.codeScreenView)
+        XCTAssertEqual(moved.functionCount, 1)
+        XCTAssertEqual(moved.selectedFunction?.name, "entry")
+        XCTAssertTrue(moved.showsDecompiledC, "the moved screen keeps the C side")
+        XCTAssertFalse(tab.surface.minimapPanelVisible, "and still has no minimap")
+        XCTAssertFalse(tab.minimapAllowed, "and still refuses a map")
+        XCTAssertFalse(tab.surface.tools.isPanelVisible, "and still has no tool strip")
+        XCTAssertFalse(tab.surface.tools.allowsSelection, "and still refuses a tool-module")
+        XCTAssertFalse(tab.toolSelectionAllowed, "and the menu agrees")
     }
 
     /// A zone "FFSv2" at 0x100..<0x180 of a 0x400-byte dump, opened as a panel
@@ -683,5 +735,49 @@ final class LinkedPartTests: XCTestCase {
         XCTAssertEqual(controller.lastAlertTitle, "Updated “\(controller.windowModel.pane1.status.fileName)”")
         XCTAssertEqual(pane.origin?.state, .intact)
         XCTAssertEqual(pane.origin?.hasChanges(in: pane), false)
+    }
+
+    /// A minimal TE image with a `.text` section at address 0 whose one byte
+    /// lands at module offset 0x40 — the fixture the code screen's address map
+    /// can answer for.
+    private func teModule() -> [UInt8] {
+        var bytes = [UInt8](repeating: 0, count: 0x60)
+        bytes[0] = 0x56
+        bytes[1] = 0x5A
+        put16(&bytes, 2, 0x14C)
+        bytes[4] = 1
+        put16(&bytes, 6, 0x28)
+        put32(&bytes, 8, 0)
+        put32(&bytes, 12, 0)
+        put64(&bytes, 16, 0)
+        let section = 40
+        for (index, byte) in Array(".text".utf8).enumerated() {
+            bytes[section + index] = byte
+        }
+        put32(&bytes, section + 8, 0x10)
+        put32(&bytes, section + 12, 0)
+        put32(&bytes, section + 16, 0x10)
+        put32(&bytes, section + 20, 0x50)
+        put32(&bytes, section + 36, 0x6000_0020)
+        bytes[0x50] = 0x90
+        return bytes
+    }
+
+    private func put16(_ bytes: inout [UInt8], _ offset: Int, _ value: UInt16) {
+        for index in 0..<2 {
+            bytes[offset + index] = UInt8((value >> (8 * UInt16(index))) & 0xFF)
+        }
+    }
+
+    private func put32(_ bytes: inout [UInt8], _ offset: Int, _ value: UInt32) {
+        for index in 0..<4 {
+            bytes[offset + index] = UInt8((value >> (8 * UInt32(index))) & 0xFF)
+        }
+    }
+
+    private func put64(_ bytes: inout [UInt8], _ offset: Int, _ value: UInt64) {
+        for index in 0..<8 {
+            bytes[offset + index] = UInt8((value >> (8 * UInt64(index))) & 0xFF)
+        }
     }
 }

@@ -207,6 +207,13 @@ bookmarks travel as the copy `adoptPane` seeds — at the part's own offsets,
 because the tab it lands in is about those bytes and its list is in their
 addresses, not the parent file's.
 
+**What leaves the dock is the panel, not only its pane.** `PanelContent` carries
+the pane, the marks and the screen: bytes for an ordinary part, or the module's
+analysis for a code screen. A code panel torn off into a tab — moved, copied, or
+let go on an empty window — arrives as the same code screen, with its function
+list, code and hex view; the pane object and its link to the parent still
+travel unchanged. Only the surface that draws it is rebuilt.
+
 What leaves the dock is the surface, not the pane alone: its tool session ends
 where its pane does (`tools.paneLeft`), and the tab opens the same tool-module
 afresh if one was bound — the rule `tearOff` already follows.
