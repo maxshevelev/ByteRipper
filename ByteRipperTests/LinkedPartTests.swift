@@ -159,6 +159,8 @@ final class LinkedPartTests: XCTestCase {
         XCTAssertFalse(tab.surface.tools.isPanelVisible, "and still has no tool strip")
         XCTAssertFalse(tab.surface.tools.allowsSelection, "and still refuses a tool-module")
         XCTAssertFalse(tab.toolSelectionAllowed, "and the menu agrees")
+        let savedTab = tab.workspaceTab()
+        XCTAssertTrue(savedTab.code?.showsC ?? false, "the workspace remembers the screen")
     }
 
     /// A zone "FFSv2" at 0x100..<0x180 of a 0x400-byte dump, opened as a panel

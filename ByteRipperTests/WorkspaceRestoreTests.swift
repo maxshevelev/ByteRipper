@@ -1,4 +1,6 @@
 import ByteRipperCore
+import CodeAnalysis
+import Localization
 import PartCodec
 import ToolModuleKit
 import UEFIToolUI
@@ -224,6 +226,106 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertNil(panes[2].origin)
         XCTAssertEqual(panes[0].document?.selection.start, 0x10)
         XCTAssertEqual(target.fragments.expanded, target.fragments.panel(holding: panes[0]))
+    }
+
+    /// A code panel comes back as a code panel: the analysis from the store,
+    /// the function and the ASM/C side the reader left, not a plain part.
+    func testCodePanelComesBackAsCode() async throws {
+        let codeBytes = [UInt8](repeating: 0x90, count: 0x100)
+        let parentURL = try dump(0x1000, 0x77)
+        let artifactData = Data("""
+        {"script_version":2,"ghidra":"12.1.2","functions":[
+          {"entry":"0x0","name":"entry","c":"return 0;","instructions":[
+            {"address":"0x0","bytes":"90","mnemonic":"NOP","text":"NOP"}]}]}
+        """.utf8)
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: artifactData)
+
+        let storeRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CodePanelStore-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: storeRoot, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: storeRoot) }
+        let store = try ContentStore(root: storeRoot)
+        let manifest = try store.putAnalysis(
+            module: ModuleIdentity(sha256: SHA256Digest(data: Data(codeBytes)),
+                                   size: codeBytes.count, name: "CpuPei", kind: "TE",
+                                   language: "x86:LE:32:default", imageBase: "0x0"),
+            recipe: AnalysisRecipe(id: "code-v2-ghidra-12.1.2", exporter: 2,
+                                   ghidra: "12.1.2", script: "ExportCode.java"),
+            artifact: artifactData)
+        let previousRoot = UEFIToolModule.codeAnalysisRoot
+        UEFIToolModule.codeAnalysisRoot = storeRoot
+        addTeardownBlock { UEFIToolModule.codeAnalysisRoot = previousRoot }
+
+        let source = shownWindow().mainViewController
+        source.openFiles([parentURL])
+        source.openCode(
+            named: "CpuPei body", from: source.windowModel.pane1,
+            source: 0x100..<0x200, manifest: manifest, artifact: artifact,
+            codec: ReadOnlyPartCodec(codeBytes, title: L("This cannot be put back"),
+                                     reason: L("A code analysis is a snapshot; edit the dump and analyze the module again.")))
+        let id = try XCTUnwrap(source.fragments.expanded)
+        source.fragments.codePane(id)?.restore(function: 0, instruction: 0, showsC: true)
+        let tab = source.workspaceTab()
+        let saved = try XCTUnwrap(tab.fragments.first?.code)
+        XCTAssertEqual(saved.selectedFunction, 0)
+        XCTAssertTrue(saved.showsC)
+
+        let target = shownWindow().mainViewController
+        let issues = await restore([(tab, target)])
+        XCTAssertEqual(issues, [])
+        let restoredID = try XCTUnwrap(target.fragments.expanded,
+                                       "the code panel came back, not a plain part")
+        let restored = try XCTUnwrap(target.fragments.codePane(restoredID))
+        XCTAssertTrue(restored.showsDecompiledC)
+        XCTAssertEqual(restored.selectedFunction?.name, "entry")
+        XCTAssertFalse(target.toolSelectionAllowed)
+        XCTAssertFalse(target.minimapAllowed)
+    }
+
+    /// A tab torn off from the dock is a code screen too, and comes back as
+    /// one rather than as an ordinary tab of the same bytes.
+    func testACodeTabComesBackAsCode() async throws {
+        let codeBytes = [UInt8](repeating: 0x90, count: 0x100)
+        let fileURL = try tempFile(codeBytes, "code-tab")
+        let artifactData = Data("""
+        {"script_version":2,"ghidra":"12.1.2","functions":[
+          {"entry":"0x0","name":"entry","c":"return 1;","instructions":[
+            {"address":"0x0","bytes":"90","mnemonic":"NOP","text":"NOP"}]}]}
+        """.utf8)
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: artifactData)
+        let storeRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CodeTabStore-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: storeRoot, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: storeRoot) }
+        let store = try ContentStore(root: storeRoot)
+        let manifest = try store.putAnalysis(
+            module: ModuleIdentity(sha256: SHA256Digest(data: Data(codeBytes)),
+                                   size: codeBytes.count, name: "CpuPei", kind: "TE",
+                                   language: "x86:LE:32:default", imageBase: "0x0"),
+            recipe: AnalysisRecipe(id: "code-v2-ghidra-12.1.2", exporter: 2,
+                                   ghidra: "12.1.2", script: "ExportCode.java"),
+            artifact: artifactData)
+        let previousRoot = UEFIToolModule.codeAnalysisRoot
+        UEFIToolModule.codeAnalysisRoot = storeRoot
+        addTeardownBlock { UEFIToolModule.codeAnalysisRoot = previousRoot }
+
+        let source = shownWindow().mainViewController
+        source.openFiles([fileURL])
+        source.installCodeScreen(CodeScreen(manifest: manifest, artifact: artifact,
+                                            bytes: Data(codeBytes),
+                                            selectedFunction: 0, selectedInstruction: 0,
+                                            showsC: true),
+                                 on: source.windowModel.pane1)
+        source.apply(mode: .singleFile)
+        let tab = source.workspaceTab()
+        XCTAssertNotNil(tab.code)
+
+        let target = shownWindow().mainViewController
+        let issues = await restore([(tab, target)])
+        XCTAssertEqual(issues, [])
+        XCTAssertTrue(target.hasCodeScreen, "the tab is still a code screen")
+        XCTAssertTrue(target.codeScreenView?.showsDecompiledC ?? false)
+        XCTAssertEqual(target.codeScreenView?.selectedFunction?.name, "entry")
     }
 
     // MARK: - Parts torn off into tabs

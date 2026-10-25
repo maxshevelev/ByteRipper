@@ -171,6 +171,7 @@ struct TabState: Codable {
     var fragments: [FragmentState]   // parent first
     var expandedFragment: Int?
     var surface: SurfaceState        // minimap, tool panel, find bar
+    var code: CodeScreenState?       // a tab that is a code screen
 }
 struct PaneState: Codable {
     var source: DocumentSource       // .file(path, FileIdentity, size) | .untitled(id, name)
@@ -184,9 +185,20 @@ struct FragmentState: Codable {
     var source: Range<UInt64>; var name: String
     var codec: String                // codec identifier, see "Parts"
     var pane: PaneState; var surface: SurfaceState
+    var code: CodeScreenState?       // the panel is a code screen, not a plain part
+}
+struct CodeScreenState: Codable {
+    var manifest: String             // the analysis manifest, as JSON
+    var selectedFunction: Int?; var selectedInstruction: Int?
+    var showsC: Bool
 }
 struct ToolState: Codable { var identifier: String; var state: Data? }
 ```
+
+`CodeScreenState` is an added optional field on both kinds of container: an
+older workspace decodes with it absent, and a code panel that comes back looks
+its analysis up in the store the manifest names. If the artifact is gone the
+part opens as bytes rather than not at all.
 
 ## Restoring
 

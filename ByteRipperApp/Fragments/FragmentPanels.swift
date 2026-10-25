@@ -183,8 +183,8 @@ import ToolModuleKit
         adopt(pane, screen: .bytes, animated: animated)
     }
 
-    private func adopt(_ pane: PaneViewModel, screen: PanelContent.Screen,
-                       animated: Bool) -> FragmentDock.PanelID? {
+    func adopt(_ pane: PaneViewModel, screen: PanelContent.Screen,
+               animated: Bool) -> FragmentDock.PanelID? {
         guard let host else { return nil }
         pane.bookmarks = bookmarkSpace(for: pane, in: host)
         let surface = DocumentSurface(host: host)
@@ -370,6 +370,15 @@ import ToolModuleKit
         return PanelContent(pane: entry.pane,
                             bookmarks: entry.pane.bookmarks?.bookmarks ?? [],
                             screen: screen(of: entry))
+    }
+
+    /// Turns a part already open in the dock back into the code screen a
+    /// workspace says it was, keeping the pane that was restored.
+    @discardableResult
+    func reopenAsCode(_ id: FragmentDock.PanelID, screen: CodeScreen,
+                      animated: Bool = false) -> FragmentDock.PanelID? {
+        guard let content = release(id, animated: animated) else { return nil }
+        return adopt(content.pane, screen: .code(screen), animated: animated)
     }
 
     /// The screen as it stands now: a code screen also carries the function,

@@ -44,6 +44,8 @@ final class CodePaneViewTests: XCTestCase {
 
         XCTAssertEqual(view.functionCount, 2)
         XCTAssertEqual(view.instructionCount, 3)
+        XCTAssertEqual(view.listedInstructionCount, 2,
+                       "the ASM listing is the selected function, not the whole block")
         XCTAssertEqual(view.selectedInstruction?.address, CodeAddress(0x220))
         XCTAssertEqual(view.selectedFunction?.name, "FUN_00000220")
         XCTAssertEqual(view.decompiledText, "No decompiled C for this function.")
@@ -51,8 +53,39 @@ final class CodePaneViewTests: XCTestCase {
         view.selectInstruction(at: 2)
         XCTAssertEqual(view.selectedInstruction?.address, CodeAddress(0x355))
         XCTAssertEqual(view.selectedFunction?.name, "entry")
+        XCTAssertEqual(view.listedInstructionCount, 1,
+                       "choosing another function replaces the listing")
         XCTAssertEqual(view.decompiledText, "return 0;")
         XCTAssertFalse(view.hasAmbiguousLayout)
+    }
+
+    func testTheHeaderPutsTheSwitchOnTheRightAndTheVersionsInOneLine() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
+        view.layoutSubtreeIfNeeded()
+
+        let mode = try XCTUnwrap(first(NSSegmentedControl.self, in: view) { _ in true })
+        XCTAssertEqual((0..<mode.segmentCount).map { mode.label(forSegment: $0) ?? "" },
+                       ["ASM", "C"])
+        let modeRect = view.convert(mode.bounds, from: mode)
+        XCTAssertGreaterThan(modeRect.minX, view.bounds.midX,
+                             "the switch is on the code side")
+        XCTAssertGreaterThan(modeRect.minY, view.bounds.maxY - 80,
+                             "and at the top")
+
+        let name = try XCTUnwrap(first(NSTextField.self, in: view) {
+            $0.stringValue == "CpuPei"
+        })
+        let versions = try XCTUnwrap(first(NSTextField.self, in: view) {
+            $0.stringValue == "(code-v2 · Ghidra 12.1.2)"
+        })
+        XCTAssertEqual(versions.textColor, .secondaryLabelColor)
+        let nameRect = view.convert(name.bounds, from: name)
+        let versionsRect = view.convert(versions.bounds, from: versions)
+        XCTAssertEqual(nameRect.midY, versionsRect.midY, accuracy: 1,
+                       "the name and the versions share one line")
+        XCTAssertLessThan(nameRect.maxX, versionsRect.minX)
     }
 
     func testTheFunctionsHeadingSitsAtTheLeftOfItsList() throws {

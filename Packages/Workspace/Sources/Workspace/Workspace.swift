@@ -160,10 +160,14 @@ public struct TabState: Codable, Equatable, Sendable {
     /// The panel in front, as an index into `fragments`; nil when the tab's
     /// own panes are.
     public var expandedFragment: Int?
+    /// A tab that is a code screen rather than a dump: its pane is the
+    /// module's bytes, and this is the analysis drawn beside them.
+    public var code: CodeScreenState?
 
     public init(panes: [PaneState?], activePane: Int, dividerFraction: Double? = nil,
                 bookmarks: [BookmarkState] = [], surface: SurfaceState = SurfaceState(),
-                fragments: [FragmentState] = [], expandedFragment: Int? = nil) {
+                fragments: [FragmentState] = [], expandedFragment: Int? = nil,
+                code: CodeScreenState? = nil) {
         self.panes = panes
         self.activePane = activePane
         self.dividerFraction = dividerFraction
@@ -171,6 +175,7 @@ public struct TabState: Codable, Equatable, Sendable {
         self.surface = surface
         self.fragments = fragments
         self.expandedFragment = expandedFragment
+        self.code = code
     }
 
     /// A tab with no file in it: an empty window, worth a tab only if it was
@@ -280,10 +285,36 @@ public struct PartOrigin: Codable, Equatable, Sendable {
 public struct FragmentState: Codable, Equatable, Sendable {
     public var pane: PaneState
     public var surface: SurfaceState
+    /// The code screen the panel is, when it is one. A panel that showed a
+    /// module's analysis must come back as that screen, not as a plain part of
+    /// the same bytes. Nil for an ordinary part.
+    public var code: CodeScreenState?
 
-    public init(pane: PaneState, surface: SurfaceState) {
+    public init(pane: PaneState, surface: SurfaceState, code: CodeScreenState? = nil) {
         self.pane = pane
         self.surface = surface
+        self.code = code
+    }
+}
+
+/// A code screen's analysis and place, as a workspace writes it down.
+///
+/// The manifest is JSON text because this package does not read the analysis
+/// model: the app decodes it and finds the artifact in the store the manifest
+/// names. The bytes are the panel's own and come back with its `PaneState`, so
+/// they are not written twice.
+public struct CodeScreenState: Codable, Equatable, Sendable {
+    public var manifest: String
+    public var selectedFunction: Int?
+    public var selectedInstruction: Int?
+    public var showsC: Bool
+
+    public init(manifest: String, selectedFunction: Int? = nil,
+                selectedInstruction: Int? = nil, showsC: Bool = false) {
+        self.manifest = manifest
+        self.selectedFunction = selectedFunction
+        self.selectedInstruction = selectedInstruction
+        self.showsC = showsC
     }
 }
 

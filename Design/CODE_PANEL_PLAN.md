@@ -188,16 +188,16 @@ The panel's content is two `ALSplitView`s: a function list down the left, and
 the code with the hex view under it on the right.
 
 ```
-┌ Code — CpuPei · TE · Ghidra 12.1.2 ─────────────────────────── ? ┐
-│ Functions      │ ASM │ C                                        │
-│ FUN_000004bf   │ 0x4BF  55 8B EC   PUSH EBP                   │
-│ FUN_000005e8   │ 0x4C0  8B EC      MOV EBP, ESP               │
-│ ...            │ ...                                          │
-│                ├──────────────────────────────────────────────┤
-│                │ 00000000  VZ 00 00 ...                      │
-│                │ 00000010  00 00 00 ...                      │
+┌ Code — CpuPei · TE ──────────────────────────────── ASM │ C ─ ? ┐
+│ Functions      │ CpuPei (code-v2 · Ghidra 12.1.2)              │
+│ FUN_000004bf   │ 0x4BF  55 8B EC   PUSH EBP                    │
+│ FUN_000005e8   │ 0x4C0  8B EC      MOV EBP, ESP                │
+│ ...            │ ...                                           │
+│                ├───────────────────────────────────────────────┤
+│                │ 00000000  VZ 00 00 ...                        │
+│                │ 00000010  00 00 00 ...                        │
 ├──────────────────────────────────────────────────────────────────┤
-│ module 0x5C00 in the file · analyzed 2026-10-25 · recipe ...     │
+│ module 0x5C00 in the file · analyzed 2026-10-25 · recipe ...      │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -238,6 +238,13 @@ hex part, and opens it on the function, instruction and `ASM`/`C` side the
 reader had chosen. The pane, its edits and its link to the parent still travel
 as before. A code screen also refuses a tool-module at the controller, not only
 in the menu, so an agent or a restored workspace cannot put one there.
+
+**The workspace remembers the screen.** `FragmentState.code` and `TabState.code`
+are optional and carry the analysis manifest as text plus the function,
+instruction and `ASM`/`C` side. The session and a project both go through the
+same workspace value, so both bring a Code panel back as Code. The artifact is
+read from the store the manifest names; if it is gone, the part opens as the
+bytes it holds rather than not at all.
 
 ### Selection and addresses
 

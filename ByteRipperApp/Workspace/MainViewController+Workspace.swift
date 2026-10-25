@@ -1,9 +1,11 @@
 import ByteRipperCore
 import Cocoa
+import CodeAnalysis
 import Localization
 import PartCodec
 import ToolModuleKit
 import UEFIImage
+import UEFIToolUI
 import Workspace
 
 /// A pane a restore opened, and whether its document is still the one the
@@ -75,12 +77,16 @@ extension MainViewController {
         state.surface.findPattern = openFindPattern.map {
             FindPatternState(text: $0.text, encoding: $0.encoding.rawValue)
         }
+        state.code = currentCodeScreen().flatMap(workspaceCodeScreen)
         var expanded: Int?
         for id in fragments.dock.panels {
             guard let pane = fragments.pane(id), let surface = fragments.surface(id),
                   let paneState = workspacePane(of: pane, keeper: keeper, ids: ids) else { continue }
             if fragments.expanded == id { expanded = state.fragments.count }
-            state.fragments.append(FragmentState(pane: paneState, surface: workspaceSurface(surface)))
+            let code = fragments.content(id)?.code.flatMap(workspaceCodeScreen)
+            state.fragments.append(FragmentState(pane: paneState,
+                                                 surface: workspaceSurface(surface),
+                                                 code: code))
         }
         state.expandedFragment = expanded
         return state
@@ -91,6 +97,48 @@ extension MainViewController {
         return SurfaceState(minimapVisible: minimap.isPanelVisible,
                             minimapMode: minimap.isPanelVisible ? minimap.view.renderMode.rawValue : nil,
                             tool: workspaceTool(surface.tools))
+    }
+
+    /// A code screen as the workspace writes it down: the manifest as text
+    /// (the Workspace package does not read the analysis model), and the place
+    /// the reader left in it. Its bytes come back with the panel's own pane.
+    private func workspaceCodeScreen(_ code: CodeScreen) -> CodeScreenState? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        guard let data = try? encoder.encode(code.manifest),
+              let manifest = String(data: data, encoding: .utf8)
+        else { return nil }
+        return CodeScreenState(manifest: manifest,
+                               selectedFunction: code.selectedFunction,
+                               selectedInstruction: code.selectedInstruction,
+                               showsC: code.showsC)
+    }
+
+    /// The analysis a code screen was drawn from, read back from the store
+    /// its manifest names. Nil when the manifest or the artifact is gone: the
+    /// panel comes back as the part it holds rather than not at all.
+    @MainActor
+    func restoredCodeScreen(_ state: CodeScreenState,
+                            pane: PaneViewModel) async -> CodeScreen? {
+        guard let text = state.manifest.data(using: .utf8),
+              let manifest = try? JSONDecoder().decode(AnalysisManifest.self, from: text)
+        else { return nil }
+        let root = UEFIToolModule.codeAnalysisRoot ?? CodeAnalysisPaths.defaultRoot
+        let artifact = await Task.detached(priority: .userInitiated) { () -> CodeArtifact? in
+            guard let store = try? ContentStore(root: root, create: false),
+                  let data = try? store.object(manifest.artifact.sha256),
+                  let artifact = try? JSONDecoder().decode(CodeArtifact.self, from: data)
+            else { return nil }
+            return artifact
+        }.value
+        guard let artifact,
+              let document = pane.document,
+              let bytes = try? document.read(at: 0, length: Int(document.size))
+        else { return nil }
+        return CodeScreen(manifest: manifest, artifact: artifact, bytes: Data(bytes),
+                          selectedFunction: state.selectedFunction,
+                          selectedInstruction: state.selectedInstruction,
+                          showsC: state.showsC)
     }
 
     /// The open tool-module, what it has chosen, and the pane it reads.
@@ -277,7 +325,7 @@ extension MainViewController {
     /// Lays the tab out around the panes `opened` holds, by the slot each was
     /// written from: the bookmarks, the mode, each pane's place in its file,
     /// the split, the minimap, the tool panel and the Find bar.
-    func finishWorkspaceTab(_ tab: TabState, opened: [Int: RestoredPane]) {
+    func finishWorkspaceTab(_ tab: TabState, opened: [Int: RestoredPane]) async {
         guard !opened.isEmpty else { return }
         // Before the panes are built, so they draw the marks from the start:
         // a seeded store reports nothing (`BookmarkStore.seed`).
@@ -307,6 +355,14 @@ extension MainViewController {
             guard let state = tab.panes[slot] else { continue }
             scroll(entry.pane, to: state, unchanged: entry.unchanged)
         }
+        // A tab that was a code screen comes back as one, after its pane is
+        // placed: the screen's own function and instruction then win.
+        if let saved = tab.code, windowModel.pane1.isOpen,
+           let screen = await restoredCodeScreen(saved, pane: windowModel.pane1) {
+            installCodeScreen(screen, on: windowModel.pane1)
+            apply(mode: .singleFile)
+            view.layoutSubtreeIfNeeded()
+        }
         if let tool = tab.surface.tool {
             // The tool binds to the active pane as it starts; the one it read
             // is made active for that moment.
@@ -322,10 +378,12 @@ extension MainViewController {
         }
     }
 
-    /// Puts a panel's place, minimap and tool back once it is open.
-    func finishWorkspaceFragment(_ state: FragmentState, opened: RestoredPane) {
+    /// Puts a panel's place, minimap and tool back once it is open, and makes
+    /// it the code screen again when the workspace says it was one.
+    func finishWorkspaceFragment(_ state: FragmentState, opened: RestoredPane) async {
         apply(state.pane, to: opened.pane, unchanged: opened.unchanged)
-        if let surface = fragments.surface(holding: opened.pane) {
+        let restoresCode = state.code != nil
+        if !restoresCode, let surface = fragments.surface(holding: opened.pane) {
             apply(state.surface, to: surface)
             if let tool = state.surface.tool {
                 restoreTool(tool, on: surface.tools, pane: opened)
@@ -333,6 +391,16 @@ extension MainViewController {
         }
         view.layoutSubtreeIfNeeded()
         scroll(opened.pane, to: state.pane, unchanged: opened.unchanged)
+        if let saved = state.code, let id = fragments.panel(holding: opened.pane),
+           let screen = await restoredCodeScreen(saved, pane: opened.pane) {
+            // The pane's place is laid down first: the restored screen then
+            // puts its own function and instruction back over it.
+            fragments.reopenAsCode(id, screen: screen, animated: false)
+            if let surface = fragments.surface(holding: opened.pane) {
+                apply(state.surface, to: surface)
+            }
+            view.layoutSubtreeIfNeeded()
+        }
     }
 
     /// Brings the panel that was in front to the front again, or none.

@@ -88,7 +88,7 @@ import Workspace
         while progress {
             progress = false
             for tab in tabs where !tab.isLaidOut && tab.pendingSlots.isEmpty {
-                layOut(tab)
+                await layOut(tab)
                 progress = true
             }
             for tab in tabs {
@@ -124,7 +124,7 @@ import Workspace
                             continue
                         }
                         if opened.keptChangesLost { issues.append(.unreadable(name: origin.name)) }
-                        openedFragment(saved, opened, index: index, in: tab)
+                        await openedFragment(saved, opened, index: index, in: tab)
                     case let .untitled(stamp):
                         tab.pendingFragments.removeAll { $0 == index }
                         progress = true
@@ -132,7 +132,7 @@ import Workspace
                             issues.append(.unreadable(name: stamp.name ?? L("Untitled")))
                             continue
                         }
-                        openedFragment(saved, opened, index: index, in: tab)
+                        await openedFragment(saved, opened, index: index, in: tab)
                     case .file:
                         tab.pendingFragments.removeAll { $0 == index }
                     }
@@ -154,12 +154,12 @@ import Workspace
                 }
             }
             tab.pendingSlots = []
-            if !tab.isLaidOut { layOut(tab) }
+            if !tab.isLaidOut { await layOut(tab) }
             for index in tab.pendingFragments {
                 let saved = tab.state.fragments[index]
                 guard case let .part(origin) = saved.pane.document else { continue }
                 if let opened = tab.controller.openWorkspaceOrphan(origin, into: nil, keeper: keeper) {
-                    openedFragment(saved, opened, index: index, in: tab)
+                    await openedFragment(saved, opened, index: index, in: tab)
                 } else {
                     issues.append(notOpened(origin))
                 }
@@ -273,21 +273,22 @@ import Workspace
         if let id = saved.id { panes[id] = opened }
     }
 
-    private func openedFragment(_ saved: FragmentState, _ opened: RestoredPane, index: Int, in tab: Tab) {
+    private func openedFragment(_ saved: FragmentState, _ opened: RestoredPane,
+                                index: Int, in tab: Tab) async {
         tab.fragments[index] = opened
         if let id = saved.pane.id { panes[id] = opened }
-        tab.controller.finishWorkspaceFragment(saved, opened: opened)
+        await tab.controller.finishWorkspaceFragment(saved, opened: opened)
     }
 
     /// Lays a tab out around its own panes. A pane alone is File A, whichever
     /// slot it was written from.
-    private func layOut(_ tab: Tab) {
+    private func layOut(_ tab: Tab) async {
         tab.isLaidOut = true
         let model = tab.controller.windowModel
         if !model.pane1.isOpen, model.pane2.isOpen {
             model.swapPanes()
         }
-        tab.controller.finishWorkspaceTab(tab.state, opened: tab.opened)
+        await tab.controller.finishWorkspaceTab(tab.state, opened: tab.opened)
     }
 }
 

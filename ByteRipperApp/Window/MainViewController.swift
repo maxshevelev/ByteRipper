@@ -151,12 +151,27 @@ final class MainViewController: NSViewController {
     /// Keeps what the reader chose in the code pane — the function, the
     /// instruction, the ASM/C side — in the screen the tab carries, before the
     /// view that knows it goes away.
-    private func captureCodeScreenState() {
+    func captureCodeScreenState() {
         guard var code = codeScreen, let view = codeScreenView else { return }
         code.screen.selectedFunction = view.selectedFunctionIndex
         code.screen.selectedInstruction = view.selectedInstructionIndex
         code.screen.showsC = view.showsDecompiledC
         codeScreen = code
+    }
+
+    /// The tab's code screen as it stands, for the workspace. Nil while the
+    /// tab is showing something else — a comparison, or a new document — even
+    /// if the screen's analysis is still remembered for a return.
+    func currentCodeScreen() -> CodeScreen? {
+        guard codeScreenView != nil else { return nil }
+        captureCodeScreenState()
+        return codeScreen?.screen
+    }
+
+    /// Makes `pane` this tab's code screen — its bytes and the analysis the
+    /// workspace restored — so the next mode apply draws it as Code.
+    func installCodeScreen(_ screen: CodeScreen, on pane: PaneViewModel) {
+        codeScreen = (pane, pane.document, screen)
     }
 
     /// Makes a tab beside this window and hands back the controller that runs

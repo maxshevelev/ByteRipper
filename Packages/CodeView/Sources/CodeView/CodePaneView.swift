@@ -14,6 +14,9 @@ import ToolModuleKit
 /// range rather than only its first instruction.
 @MainActor public final class CodePaneView: NSView {
     private struct Line {
+        /// The instruction's index in the whole artifact. Table rows are the
+        /// selected function's instructions only, so a row is not this.
+        let global: Int
         let function: Int
         let instruction: CodeArtifact.Instruction
     }
@@ -22,6 +25,9 @@ import ToolModuleKit
     public let artifact: CodeArtifact
     private let layout: ModuleLayout?
     private let functions: [CodeArtifact.Function]
+    /// Every instruction in the artifact, and the selected function's rows —
+    /// the listing shows one function, the way C does.
+    private var allLines: [Line] = []
     private var lines: [Line] = []
 
     private let functionTable = NSTableView()
@@ -57,7 +63,8 @@ import ToolModuleKit
 
         for (index, function) in functions.enumerated() {
             for instruction in function.instructions {
-                lines.append(Line(function: index, instruction: instruction))
+                allLines.append(Line(global: allLines.count, function: index,
+                                     instruction: instruction))
             }
         }
         build(hexView: hexView)
@@ -78,7 +85,9 @@ import ToolModuleKit
     // MARK: - What the reader sees
 
     public var functionCount: Int { functions.count }
-    public var instructionCount: Int { lines.count }
+    public var instructionCount: Int { allLines.count }
+    /// The rows the listing shows: the selected function's instructions.
+    public var listedInstructionCount: Int { lines.count }
 
     public var selectedInstruction: CodeArtifact.Instruction? {
         guard table.selectedRow >= 0, table.selectedRow < lines.count else { return nil }
@@ -98,7 +107,8 @@ import ToolModuleKit
             ? functionTable.selectedRow : nil
     }
     public var selectedInstructionIndex: Int? {
-        table.selectedRow >= 0 && table.selectedRow < lines.count ? table.selectedRow : nil
+        guard table.selectedRow >= 0, table.selectedRow < lines.count else { return nil }
+        return lines[table.selectedRow].global
     }
     public var showsDecompiledC: Bool { modeControl.selectedSegment == 1 }
 
@@ -108,15 +118,8 @@ import ToolModuleKit
         if let function {
             selectFunction(at: function, notify: false)
         }
-        if let instruction, instruction >= 0, instruction < lines.count {
-            syncingSelection = true
-            table.selectRowIndexes(IndexSet(integer: instruction), byExtendingSelection: false)
-            table.scrollRowToVisible(instruction)
-            functionTable.selectRowIndexes(IndexSet(integer: lines[instruction].function),
-                                           byExtendingSelection: false)
-            functionTable.scrollRowToVisible(lines[instruction].function)
-            syncingSelection = false
-            updateC()
+        if let instruction, allLines.indices.contains(instruction) {
+            reveal(globalInstruction: instruction)
         }
         modeControl.selectedSegment = showsC ? 1 : 0
         applyMode()
@@ -139,9 +142,10 @@ import ToolModuleKit
         syncingSelection = true
         functionTable.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false)
         functionTable.scrollRowToVisible(index)
-        if let row = lines.firstIndex(where: { $0.function == index }) {
-            table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
-            table.scrollRowToVisible(row)
+        showInstructions(of: index)
+        if !lines.isEmpty {
+            table.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+            table.scrollRowToVisible(0)
         }
         syncingSelection = false
         updateC()
@@ -159,14 +163,10 @@ import ToolModuleKit
         onFocusRange?(range)
     }
 
-    /// Selects an instruction by its row, as a click would.
+    /// Selects an instruction by its index in the artifact, as a click would.
     public func selectInstruction(at index: Int) {
-        guard index >= 0, index < lines.count else { return }
-        syncingSelection = true
-        table.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false)
-        table.scrollRowToVisible(index)
-        syncingSelection = false
-        selectFunctionRow(lines[index].function)
+        guard allLines.indices.contains(index) else { return }
+        reveal(globalInstruction: index)
         updateC()
         notifyInstruction()
     }
@@ -174,16 +174,32 @@ import ToolModuleKit
     /// Selects the instruction covering `range` of the module without moving
     /// the hex view back: the selection came from there.
     public func selectModuleRange(_ range: Range<UInt64>) {
-        guard !lines.isEmpty, !syncingSelection else { return }
+        guard !allLines.isEmpty, !syncingSelection else { return }
         guard let row = row(forModuleRange: range) else { return }
-        syncingSelection = true
-        table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
-        table.scrollRowToVisible(row)
-        functionTable.selectRowIndexes(IndexSet(integer: lines[row].function),
-                                       byExtendingSelection: false)
-        functionTable.scrollRowToVisible(lines[row].function)
-        syncingSelection = false
+        reveal(globalInstruction: row)
         updateC()
+    }
+
+    /// Shows the function holding `index` and selects that instruction.
+    private func reveal(globalInstruction index: Int) {
+        guard allLines.indices.contains(index) else { return }
+        let line = allLines[index]
+        syncingSelection = true
+        functionTable.selectRowIndexes(IndexSet(integer: line.function),
+                                       byExtendingSelection: false)
+        functionTable.scrollRowToVisible(line.function)
+        showInstructions(of: line.function)
+        if let row = lines.firstIndex(where: { $0.global == index }) {
+            table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+            table.scrollRowToVisible(row)
+        }
+        syncingSelection = false
+    }
+
+    /// The listing is the selected function's instructions, nothing else.
+    private func showInstructions(of function: Int) {
+        lines = allLines.filter { $0.function == function }
+        table.reloadData()
     }
 
     /// The whole stored range of a function, for the hex view and for tests.
@@ -230,37 +246,54 @@ import ToolModuleKit
         codeContent.wantsLayer = true
         applyCodeBackground()
 
-        let header = NSStackView()
-        header.orientation = .vertical
-        header.alignment = .leading
-        header.spacing = 3
-        header.addArrangedSubview(label(L("Code analysis"), font: ToolPanelFont.title()))
-        header.addArrangedSubview(label(
+        let titleLabel = label(L("Code analysis"), font: ToolPanelFont.title())
+        let nameLabel = label(
             manifest.module.name.isEmpty ? manifest.recipe.id : manifest.module.name,
-            font: ToolPanelFont.body(weight: .medium)))
-        header.addArrangedSubview(label(manifest.recipe.id, font: ToolPanelFont.body(),
-                                        color: .secondaryLabelColor))
+            font: ToolPanelFont.body(weight: .medium))
+        let recipeLabel = label(recipeSummary(), font: ToolPanelFont.body(),
+                                color: .secondaryLabelColor)
+        recipeLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        recipeLabel.lineBreakMode = .byTruncatingMiddle
+
+        modeControl.target = self
+        modeControl.action = #selector(modeChanged)
+        modeControl.selectedSegment = 0
+        modeControl.setContentHuggingPriority(.required, for: .horizontal)
+        modeControl.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        // The ASM/C switch is the screen's only control and belongs in its
+        // top-right corner, level with the title.
+        let titleSpacer = NSView()
+        titleSpacer.setContentHuggingPriority(.init(1), for: .horizontal)
+        let titleRow = NSStackView(views: [titleLabel, titleSpacer, modeControl])
+        titleRow.orientation = .horizontal
+        titleRow.alignment = .centerY
+        titleRow.spacing = 8
+        titleRow.translatesAutoresizingMaskIntoConstraints = false
+
+        // The module and what produced the analysis read as one line: its
+        // name, then the plugin and Ghidra versions in grey parentheses.
+        let detailSpacer = NSView()
+        detailSpacer.setContentHuggingPriority(.init(1), for: .horizontal)
+        let detailRow = NSStackView(views: [nameLabel, recipeLabel, detailSpacer])
+        detailRow.orientation = .horizontal
+        detailRow.alignment = .firstBaseline
+        detailRow.spacing = 6
+        detailRow.translatesAutoresizingMaskIntoConstraints = false
+        detailRow.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
         staleLabel.font = ToolPanelFont.body()
         staleLabel.textColor = .systemOrange
         staleLabel.lineBreakMode = .byWordWrapping
         staleLabel.maximumNumberOfLines = 0
         staleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         staleLabel.isHidden = true
-        header.addArrangedSubview(staleLabel)
 
-        modeControl.target = self
-        modeControl.action = #selector(modeChanged)
-        modeControl.selectedSegment = 0
-        modeControl.setContentHuggingPriority(.required, for: .horizontal)
-
-        let controls = NSStackView(views: [modeControl, NSView()])
-        controls.orientation = .horizontal
-        controls.alignment = .centerY
-        controls.spacing = 8
-        controls.distribution = .fill
-        if let spacer = controls.arrangedSubviews.last {
-            spacer.setContentHuggingPriority(.init(1), for: .horizontal)
-        }
+        let header = NSStackView(views: [titleRow, detailRow, staleLabel])
+        header.orientation = .vertical
+        header.alignment = .width
+        header.spacing = 4
+        header.translatesAutoresizingMaskIntoConstraints = false
 
         configure(table, identifier: "instruction")
         tableScroll.documentView = table
@@ -288,7 +321,7 @@ import ToolModuleKit
             ])
         }
 
-        let codeStack = NSStackView(views: [header, controls, content])
+        let codeStack = NSStackView(views: [header, content])
         codeStack.orientation = .vertical
         codeStack.alignment = .width
         codeStack.spacing = 8
@@ -301,7 +334,9 @@ import ToolModuleKit
             codeStack.bottomAnchor.constraint(equalTo: codeContent.bottomAnchor, constant: -12)
         ])
         header.widthAnchor.constraint(equalTo: codeStack.widthAnchor).isActive = true
-        controls.widthAnchor.constraint(equalTo: codeStack.widthAnchor).isActive = true
+        titleRow.widthAnchor.constraint(equalTo: header.widthAnchor).isActive = true
+        detailRow.widthAnchor.constraint(equalTo: header.widthAnchor).isActive = true
+        staleLabel.widthAnchor.constraint(equalTo: header.widthAnchor).isActive = true
 
         let rightSplit = ALSplitView()
         rightSplit.isVertical = false
@@ -361,6 +396,19 @@ import ToolModuleKit
         cTextView.minSize = .zero
     }
 
+    /// The plugin that produced the analysis and the Ghidra it ran in, as the
+    /// quiet parenthesis after the module's name. The recipe id carries both;
+    /// the exporter and Ghidra fields are what it was built from.
+    private func recipeSummary() -> String {
+        let plugin = manifest.recipe.id
+            .components(separatedBy: "-ghidra-").first ?? manifest.recipe.id
+        var parts = [plugin]
+        if let ghidra = manifest.recipe.ghidra, !ghidra.isEmpty {
+            parts.append("Ghidra \(ghidra)")
+        }
+        return "(" + parts.joined(separator: " · ") + ")"
+    }
+
     private func label(_ text: String, font: NSFont,
                        color: NSColor = .labelColor) -> NSTextField {
         let label = NSTextField(labelWithString: text)
@@ -408,16 +456,16 @@ import ToolModuleKit
     }
 
     private func row(forModuleRange range: Range<UInt64>) -> Int? {
-        guard !lines.isEmpty else { return nil }
+        guard !allLines.isEmpty else { return nil }
         var preceding: Int?
-        for (index, line) in lines.enumerated() {
+        for line in allLines {
             guard let candidate = instructionRange(line.instruction) else { continue }
             if range.isEmpty {
-                if candidate.contains(range.lowerBound) { return index }
+                if candidate.contains(range.lowerBound) { return line.global }
             } else if candidate.overlaps(range) {
-                return index
+                return line.global
             }
-            if candidate.lowerBound <= range.lowerBound { preceding = index }
+            if candidate.lowerBound <= range.lowerBound { preceding = line.global }
         }
         return preceding
     }
