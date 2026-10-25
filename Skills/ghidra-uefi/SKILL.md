@@ -1,6 +1,6 @@
 ---
 name: ghidra-uefi
-description: Take one PEI or DXE module out of a firmware dump and analyze it in Ghidra — ByteRipper's UEFI Structure panel is the oracle for where the module is and what its bytes are, and this skill carries them across, rebuilds a TE image as a PE so Ghidra's loader accepts it, and drives either the running Ghidra through GhydraMCP or a headless analysis that writes functions and decompiled C to JSON. Use when a person asks what a PEIM or DXE driver does, where a function is called from, or why a module in a dump misbehaves; when a module inside a Tiano or LZMA section has to be disassembled; or when a firmware image has to be read as code rather than as bytes.
+description: Take one PEI or DXE module out of a firmware dump and analyze it in Ghidra — ByteRipper's UEFI Structure panel is the oracle for where the module is and what its bytes are, and this skill carries them across, rebuilds a TE image as a PE so Ghidra's loader accepts it, and drives either the running Ghidra through GhydraMCP or a headless analysis that writes functions and decompiled C to JSON, and keeps a one-time code artifact that answers function, instruction, xref and status-code questions without Ghidra. Use when a person asks what a PEIM or DXE driver does, where a function is called from, or why a module in a dump misbehaves; when a module inside a Tiano or LZMA section has to be disassembled; or when a firmware image has to be read as code rather than as bytes.
 ---
 
 # A UEFI module in Ghidra
@@ -24,9 +24,13 @@ with no app running.
 | `scripts/te_to_pe.py` | stdlib | rebuilds a PE32/PE32+ file from a TE image |
 | `scripts/ghidra_import.py` | calls Ghidra's `analyzeHeadless` | converts TE if needed, imports, analyzes, exports JSON |
 | `scripts/ExportModule.java` | a Ghidra script | functions, signatures, callers/callees, decompiled C |
+| `scripts/ExportCode.java` | a Ghidra script | the full code artifact: every instruction, references, C, strings, POST writes and status-code candidates |
+| `scripts/code_artifact.py` | one Ghidra run per module | analyzes once and stores the artifact under the module's SHA-256 |
+| `scripts/code_query.py` | stdlib, no Ghidra | reads the stored artifact: functions, disassembly, C, xrefs, search, post-codes |
 | `scripts/module_scan.py` | stdlib, offline only | finds PE32/TE images in a dump without the app; opens LZMA, not Tiano |
 | `reference/uefi-images.md` | — | the structures and the addresses |
 | `reference/ghidra.md` | — | GhydraMCP tools, import rules, pitfalls |
+| `reference/code-artifact.md` | — | the artifact's schema, store, queries and limits |
 
 ## 1. Find the module in ByteRipper
 
@@ -104,6 +108,37 @@ analysis.
 `--no-decompile` gives names and call edges only. `--delete` removes the
 temporary project.
 
+## The one-time code artifact
+
+Analysis and reading are split. `code_artifact.py` runs Ghidra once and stores
+what it found under the module's SHA-256; `code_query.py` answers from that
+store and never starts Ghidra.
+
+```bash
+python3 Skills/ghidra-uefi/scripts/code_artifact.py CpuPei.te --name CpuPei \
+    --document "CSME 15.bin" --node 0.5.5.2.0.1.0.8.1
+
+python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te functions
+python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te decompile 0x4BF
+python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te search 0x11004
+python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te status-codes
+```
+
+The store is `~/Library/Application Support/ByteRipper/Analysis/<sha256>/`,
+with `manifest.json` (provenance, versions, counts) and `code.json` (the
+analysis). The key is the module's own bytes, so the same PEIM from another
+dump reuses the artifact; `--force` re-runs it, and `SCRIPT_VERSION` in both
+the script and `ExportCode.java` is the invalidation when the exporter changes.
+The artifact holds functions, every instruction with its bytes and references,
+the decompiled C, strings, `OUT` writes, and candidates for
+`ReportStatusCode` calls (a call through a PEI services table entry at `+0x58`,
+with the pushes before it kept as context).
+
+For CpuPei the artifact is 13 functions and 508 instructions; it finds the
+status-code call at `0x535` with `PUSH 0x80000002`, `PUSH 0x11004`, the core id
+and the descriptor — the call the manual analysis found. The Code panel in the
+app will read the same artifact; this skill proves the data path first.
+
 ## What Ghidra will and will not tell you
 
 - **The loaded base is the header's ImageBase.** PEI modules often carry the
@@ -156,5 +191,8 @@ jq '.blocks[] | {name, start, end}' /tmp/module.analysis.json
 
 Tested against `CSME 15.bin` (32 MiB SPI dump): a PE32 DXE driver in an LZMA
 section (15 functions), the 106 KiB DxeCore (PE32+, 241 functions), and a TE
-PEIM from a compressed PEI volume (82 functions). The offline scanner was
-checked on `orig_30072026.BIN` (16 MiB, 15 volumes, 74 images).
+PEIM from a compressed PEI volume (82 functions). The code artifact was checked
+on CpuPei: 13 functions, 508 instructions, and one status-code candidate at
+`0x535` (`0x80000002`/`0x11004`); every query above was answered from the store
+with no Ghidra running. The offline scanner was checked on
+`orig_30072026.BIN` (16 MiB, 15 volumes, 74 images).
