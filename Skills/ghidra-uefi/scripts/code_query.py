@@ -26,6 +26,9 @@ import json
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cas
+
 
 def default_store() -> Path:
     return Path.home() / "Library" / "Application Support" / "ByteRipper" / "Analysis"
@@ -44,11 +47,10 @@ def normalize_address(text: str) -> int | None:
 
 
 class Artifact:
-    def __init__(self, folder: Path):
-        self.folder = folder
-        self.manifest = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
-        self.code = json.loads((folder / "code.json").read_text(encoding="utf-8"))
-        self.functions = self.code.get("functions", [])
+    def __init__(self, manifest: dict, code: dict):
+        self.manifest = manifest
+        self.code = code
+        self.functions = code.get("functions", [])
 
     def function(self, wanted: str) -> dict:
         address = normalize_address(wanted)
@@ -77,15 +79,18 @@ class Artifact:
 
 def summary(artifact: Artifact) -> None:
     manifest = artifact.manifest
-    print(f"{manifest.get('name')}  {manifest.get('sha256')}")
-    print(f"  {manifest.get('module_kind')}  {manifest.get('language')}  "
-          f"base {manifest.get('image_base')}")
-    print(f"  Ghidra {manifest.get('ghidra')}  analyzed {manifest.get('analyzed_at')}")
-    print(f"  {len(artifact.functions)} functions, "
-          f"{sum(len(f.get('instructions', [])) for f in artifact.functions)} instructions, "
-          f"{len(artifact.code.get('strings', []))} strings, "
-          f"{len(artifact.code.get('post_codes', []))} POST writes, "
-          f"{len(artifact.code.get('status_code_calls', []))} status-code candidates")
+    module = manifest.get("module", {})
+    stats = manifest.get("stats", {})
+    print(f"{module.get('name')}  {module.get('sha256')}")
+    print(f"  {module.get('kind')}  {module.get('language')}  base {module.get('image_base')}")
+    print(f"  {manifest.get('recipe', {}).get('id')}  "
+          f"Ghidra {manifest.get('recipe', {}).get('ghidra')}  "
+          f"analyzed {manifest.get('analyzed_at')}")
+    print(f"  {stats.get('functions', len(artifact.functions))} functions, "
+          f"{stats.get('instructions', 0)} instructions, "
+          f"{stats.get('strings', 0)} strings, "
+          f"{stats.get('post_code_writes', 0)} POST writes, "
+          f"{stats.get('status_code_candidates', 0)} status-code candidates")
     if manifest.get("source", {}).get("node"):
         print(f"  from {manifest['source'].get('document') or '?'} node {manifest['source']['node']}")
 
@@ -106,6 +111,7 @@ def main(argv: list[str]) -> int:
                                  "xrefs", "search", "strings", "post-codes", "status-codes"])
     parser.add_argument("argument", nargs="?", help="a function name or address, or the text to find")
     parser.add_argument("--store", type=Path, default=default_store())
+    parser.add_argument("--recipe", help="the analysis recipe, when several exist")
     parser.add_argument("--limit", type=int, default=40)
     parser.add_argument("--json", action="store_true", help="print the answer as JSON")
     args = parser.parse_args(argv)
@@ -118,11 +124,18 @@ def main(argv: list[str]) -> int:
     else:
         print(f"{target}: not a module file and not a SHA-256", file=sys.stderr)
         return 2
-    folder = args.store.expanduser() / digest
-    if not (folder / "code.json").exists():
-        print(f"no artifact for {digest} in {folder}; run code_artifact.py first", file=sys.stderr)
+    store = cas.Store(args.store, create=False)
+    manifest = store.analysis(digest, args.recipe)
+    if manifest is None:
+        print(f"no analysis for {digest} in {store.root}; run code_artifact.py first",
+              file=sys.stderr)
         return 1
-    artifact = Artifact(folder)
+    try:
+        code = json.loads(store.get_object(manifest["artifact"]["sha256"]).decode("utf-8"))
+    except (cas.CASError, KeyError, json.JSONDecodeError) as error:
+        print(f"{digest}: the artifact cannot be read: {error}", file=sys.stderr)
+        return 1
+    artifact = Artifact(manifest, code)
 
     if args.command == "summary":
         if args.json:

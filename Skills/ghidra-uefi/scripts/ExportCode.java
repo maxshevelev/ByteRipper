@@ -47,14 +47,13 @@ public class ExportCode extends GhidraScript {
         Listing listing = currentProgram.getListing();
         StringBuilder json = new StringBuilder(1 << 22);
         json.append("{\n");
-        json.append("  \"script_version\": 1,\n");
+        json.append("  \"script_version\": 2,\n");
         json.append("  \"ghidra\": ").append(quote(Application.getApplicationVersion())).append(",\n");
         json.append("  \"program\": {\n");
         json.append("    \"name\": ").append(quote(currentProgram.getName())).append(",\n");
         json.append("    \"language\": ").append(quote(currentProgram.getLanguageID().toString())).append(",\n");
         json.append("    \"image_base\": ").append(quote(hex(currentProgram.getImageBase()))).append(",\n");
-        json.append("    \"sha256\": ").append(quote(currentProgram.getExecutableSHA256())).append(",\n");
-        json.append("    \"executable\": ").append(quote(currentProgram.getExecutablePath())).append("\n");
+        json.append("    \"sha256\": ").append(quote(currentProgram.getExecutableSHA256())).append("\n");
         json.append("  },\n");
 
         // Blocks: the address ranges the program has, and whether they are code.

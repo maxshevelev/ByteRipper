@@ -7,28 +7,33 @@ this artifact is the whole module, and is the shape the Code panel will read.
 
 ## Store
 
+The artifact lives in the local CAS (`cas.md`):
+
 ```
-~/Library/Application Support/ByteRipper/Analysis/<sha256 of the module bytes>/
-    manifest.json
-    code.json
+Analysis/
+  objects/<sha256 of the artifact>                  # the artifact bytes
+  analyses/<sha256 of the module>/<recipe>/manifest.json
+  refs/<name>.json
 ```
 
-`--store` puts it elsewhere. The key is the SHA-256 of the **module's own
-bytes** — the TE image, not the PE rebuilt for Ghidra — so the same PEIM from
-another dump reuses the artifact, and one whose bytes changed does not.
-`manifest.json` records where it came from, the Ghidra and exporter versions,
-and the counts; `code.json` is the analysis.
+`--store` puts the store elsewhere. The key is the SHA-256 of the **module's
+own bytes** — the TE image, not the PE rebuilt for Ghidra — so the same PEIM
+from another dump reuses the analysis, and one whose bytes changed does not.
+The recipe (exporter version and Ghidra version) is the second half of the
+key: a new Ghidra is a second analysis beside the first, never an overwrite.
+The manifest records the module, the recipe, the object, the source document
+and node, and the counts.
 
-`code_artifact.py` checks the manifest before doing anything: an artifact whose
-`script_version` is current is reused; `--force` re-runs it. Bump
+`code_artifact.py` looks the module up before doing anything: an analysis from
+the current exporter is reused; `--force` runs the analysis again. Bump
 `SCRIPT_VERSION` in the script and in `ExportCode.java` whenever the exporter's
-output changes, so no reader mistakes an old shape for a new one.
+output changes.
 
 ## What is in `code.json`
 
 ```json
 {
-  "script_version": 1,
+  "script_version": 2,
   "ghidra": "12.1.2",
   "program": {
     "name": "CpuPei", "language": "x86:LE:32:default",

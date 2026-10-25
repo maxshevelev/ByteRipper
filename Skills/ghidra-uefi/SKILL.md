@@ -27,10 +27,13 @@ with no app running.
 | `scripts/ExportCode.java` | a Ghidra script | the full code artifact: every instruction, references, C, strings, POST writes and status-code candidates |
 | `scripts/code_artifact.py` | one Ghidra run per module | analyzes once and stores the artifact under the module's SHA-256 |
 | `scripts/code_query.py` | stdlib, no Ghidra | reads the stored artifact: functions, disassembly, C, xrefs, search, post-codes |
+| `scripts/cas.py` | stdlib | the local content-addressed store: objects, analyses, references, GC, bundles |
+| `scripts/cas_cli.py` | stdlib | the store's command line: list, show, verify, gc, ref, export, import |
 | `scripts/module_scan.py` | stdlib, offline only | finds PE32/TE images in a dump without the app; opens LZMA, not Tiano |
 | `reference/uefi-images.md` | — | the structures and the addresses |
 | `reference/ghidra.md` | — | GhydraMCP tools, import rules, pitfalls |
-| `reference/code-artifact.md` | — | the artifact's schema, store, queries and limits |
+| `reference/code-artifact.md` | — | the artifact's schema, queries and limits |
+| `reference/cas.md` | — | the local CAS: layout, keys, references, GC, bundles |
 
 ## 1. Find the module in ByteRipper
 
@@ -111,8 +114,8 @@ temporary project.
 ## The one-time code artifact
 
 Analysis and reading are split. `code_artifact.py` runs Ghidra once and stores
-what it found under the module's SHA-256; `code_query.py` answers from that
-store and never starts Ghidra.
+what it found in the local CAS, keyed by the module's SHA-256 and the analysis
+recipe; `code_query.py` answers from that store and never starts Ghidra.
 
 ```bash
 python3 Skills/ghidra-uefi/scripts/code_artifact.py CpuPei.te --name CpuPei \
@@ -124,15 +127,42 @@ python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te search 0x11004
 python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te status-codes
 ```
 
-The store is `~/Library/Application Support/ByteRipper/Analysis/<sha256>/`,
-with `manifest.json` (provenance, versions, counts) and `code.json` (the
-analysis). The key is the module's own bytes, so the same PEIM from another
-dump reuses the artifact; `--force` re-runs it, and `SCRIPT_VERSION` in both
-the script and `ExportCode.java` is the invalidation when the exporter changes.
-The artifact holds functions, every instruction with its bytes and references,
-the decompiled C, strings, `OUT` writes, and candidates for
+The store is `~/Library/Application Support/ByteRipper/Analysis`:
+
+```
+objects/<sha256 of the artifact>
+analyses/<sha256 of the module>/<recipe>/manifest.json
+refs/<name>.json
+```
+
+The key is the module's own bytes plus the recipe (exporter and Ghidra
+version), so the same PEIM from another dump reuses the analysis, and a new
+Ghidra is a second analysis beside it. `--force` re-runs; `SCRIPT_VERSION` in
+both the script and `ExportCode.java` is the invalidation when the exporter
+changes. The artifact holds functions, every instruction with its bytes and
+references, the decompiled C, strings, `OUT` writes, and candidates for
 `ReportStatusCode` calls (a call through a PEI services table entry at `+0x58`,
 with the pushes before it kept as context).
+
+The store has its own commands, and the same `--store` as the scripts:
+
+```bash
+python3 Skills/ghidra-uefi/scripts/cas_cli.py list
+python3 Skills/ghidra-uefi/scripts/cas_cli.py verify
+python3 Skills/ghidra-uefi/scripts/cas_cli.py ref add laptop <module-sha>/<recipe>
+python3 Skills/ghidra-uefi/scripts/cas_cli.py gc --apply
+python3 Skills/ghidra-uefi/scripts/cas_cli.py export --all --out analyses.zip
+python3 Skills/ghidra-uefi/scripts/cas_cli.py import analyses.zip
+```
+
+`gc` is a dry run unless `--apply`; `--analyses` also drops analyses no
+reference names and refuses to do that on a store with no references. The
+bundle is how a project carries its analyses; `reference/cas.md` has the layout
+and the rules. The CAS tests run without Ghidra:
+
+```bash
+python3 -m unittest discover -s Skills/ghidra-uefi/tests
+```
 
 For CpuPei the artifact is 13 functions and 508 instructions; it finds the
 status-code call at `0x535` with `PUSH 0x80000002`, `PUSH 0x11004`, the core id
