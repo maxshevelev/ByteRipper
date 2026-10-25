@@ -70,7 +70,7 @@ final class UEFICodeScanTests: XCTestCase {
         let image = image(section(0x12, bodySize: module.count))
         let found = UEFICodeScan.scan(in: image, index: index(),
                                       bytesOf: { _ in module })
-        XCTAssertEqual(found, Set([image.roots[0].id]))
+        XCTAssertEqual(Set(found.keys), Set([image.roots[0].id]))
     }
 
     func testAnAnalyzedPE32ImageIsFound() throws {
@@ -79,7 +79,7 @@ final class UEFICodeScanTests: XCTestCase {
         let image = image(section(0x10, bodySize: module.count))
         let found = UEFICodeScan.scan(in: image, index: index(),
                                       bytesOf: { _ in module })
-        XCTAssertEqual(found, Set([image.roots[0].id]))
+        XCTAssertEqual(Set(found.keys), Set([image.roots[0].id]))
     }
 
     func testAnAnalyzedRawFileIsFound() throws {
@@ -88,7 +88,7 @@ final class UEFICodeScanTests: XCTestCase {
         let image = image(rawFile(bodySize: module.count))
         let found = UEFICodeScan.scan(in: image, index: index(),
                                       bytesOf: { _ in module })
-        XCTAssertEqual(found, Set([image.roots[0].id]))
+        XCTAssertEqual(Set(found.keys), Set([image.roots[0].id]))
     }
 
     func testAnImageInADecompressedSpaceIsFound() throws {
@@ -99,7 +99,7 @@ final class UEFICodeScanTests: XCTestCase {
         let image = image(node)
         let found = UEFICodeScan.scan(in: image, index: index(),
                                       bytesOf: { _ in module })
-        XCTAssertEqual(found, Set([image.roots[0].id]))
+        XCTAssertEqual(Set(found.keys), Set([image.roots[0].id]))
     }
 
     /// The bytes really come through the decompressor: the child is a TE
@@ -133,7 +133,7 @@ final class UEFICodeScanTests: XCTestCase {
             else { return nil }
             return Data(data)
         })
-        XCTAssertEqual(found, Set([image.roots[0].children[0].id]))
+        XCTAssertEqual(Set(found.keys), Set([image.roots[0].children[0].id]))
     }
 
     // MARK: - Not finding

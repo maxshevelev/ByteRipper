@@ -91,8 +91,9 @@ import Localization
     /// line lands on the rows above and below (measured, in the UEFI tree —
     /// half a GUID over its neighbour's name, the disclosure arrow buried).
     ///
-    /// `badges` adds the two role-badge slots of `Design/ROW_MARKS.md`, after
-    /// the warning and against the text.
+    /// `badges` adds the two leading role-badge slots of `Design/ROW_MARKS.md`,
+    /// after the warning and against the text, and the code badge after the
+    /// text (`Design/CODE_PANEL_PLAN.md`).
     public static func makeCell(
         identifier: NSUserInterfaceItemIdentifier,
         warning: Bool = false,
@@ -132,7 +133,25 @@ import Localization
                 // Against the text: a badge describes the thing the text names.
                 leading += badgeTags.map(makeBadge)
             }
-            let row = NSStackView(views: leading + [field])
+            let row: NSStackView
+            if badges {
+                let codeBadge = makeBadge(tag: codeBadgeTag)
+                // An empty view that takes the slack so the code badge stands
+                // immediately after the name rather than at the column's edge.
+                // The field hugs its text (unlike the leading-only layout,
+                // where it took all the room); it still compresses before the
+                // icons.
+                let spacer = NSView()
+                spacer.translatesAutoresizingMaskIntoConstraints = false
+                spacer.setContentHuggingPriority(.init(1), for: .horizontal)
+                spacer.setContentCompressionResistancePriority(.init(1), for: .horizontal)
+                codeBadge.setContentHuggingPriority(.required, for: .horizontal)
+                row = NSStackView(views: leading + [field, codeBadge, spacer])
+                field.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+            } else {
+                row = NSStackView(views: leading + [field])
+                field.setContentHuggingPriority(.init(1), for: .horizontal)
+            }
             row.orientation = .horizontal
             row.alignment = .centerY
             row.spacing = 4
@@ -141,7 +160,6 @@ import Localization
             // to its views instead reads as a right-aligned column (measured —
             // the triangle and the name sat against the column's right edge).
             row.distribution = .fill
-            field.setContentHuggingPriority(.init(1), for: .horizontal)
             for icon in leading {
                 icon.setContentHuggingPriority(.required, for: .horizontal)
             }
@@ -208,18 +226,24 @@ import Localization
     /// The tags the two role-badge slots wear, leading first.
     public static let badgeTags = [6_002, 6_003]
 
+    /// The badge after the name: the code-analysis mark, which belongs to the
+    /// module the name denotes rather than to the leading run of storage marks.
+    public static let codeBadgeTag = 6_004
+
     /// Draws `roles` into `cell`'s badge slots, hiding the slots it does not
-    /// need. Set per row, like the warning: cells are recycled.
+    /// need. Set per row, like the warning: cells are recycled. The code badge
+    /// is the one role drawn after the text.
     public static func setBadges(_ roles: [ToolRowMarks.Role], on cell: NSTableCellView) {
+        let leadingRoles = roles.filter { $0 != .codeAnalysis }
         for (index, tag) in badgeTags.enumerated() {
             guard let badge = cell.viewWithTag(tag) as? NSImageView else { continue }
-            guard index < roles.count else {
+            guard index < leadingRoles.count else {
                 badge.isHidden = true
                 badge.image = nil
                 ControlHelp.describe(badge, nil)
                 continue
             }
-            let role = roles[index]
+            let role = leadingRoles[index]
             badge.image = NSImage(systemSymbolName: role.mark.symbol ?? "",
                                   accessibilityDescription: role.toolTip)
             badge.image?.isTemplate = true
@@ -228,6 +252,26 @@ import Localization
             ControlHelp.describe(badge, role.toolTip)
             badge.isHidden = false
         }
+        setCodeBadge(roles.contains(.codeAnalysis), on: cell)
+    }
+
+    private static func setCodeBadge(_ shown: Bool, on cell: NSTableCellView) {
+        guard let badge = cell.viewWithTag(codeBadgeTag) as? NSImageView else { return }
+        guard shown else {
+            badge.isHidden = true
+            badge.image = nil
+            ControlHelp.describe(badge, nil)
+            return
+        }
+        let mark = ToolRowMark.codeAnalysis
+        let toolTip = ToolRowMarks.Role.codeAnalysis.toolTip
+        badge.image = NSImage(systemSymbolName: mark.symbol ?? "",
+                              accessibilityDescription: toolTip)
+        badge.image?.isTemplate = true
+        badge.contentTintColor = mark.tint
+        badge.symbolConfiguration = .init(pointSize: ToolPanelFont.size, weight: .regular)
+        ControlHelp.describe(badge, toolTip)
+        badge.isHidden = false
     }
 
     /// Everything a row's marks put in its named cell: the problem, the badges,

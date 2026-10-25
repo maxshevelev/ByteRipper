@@ -223,6 +223,34 @@ public enum UEFIPresenter {
         return .node
     }
 
+    /// What opening a node's content means once a stored code analysis may
+    /// exist (`Design/CODE_PANEL_PLAN.md`). `hasCode` is true only for an image
+    /// node the scan found; the structural check keeps a mis-supplied set from
+    /// turning a container into a module.
+    public enum OpenChoice: Equatable, Sendable {
+        case code
+        case decompressedBody
+        case body
+        case node
+    }
+
+    public static func openChoice(for node: UEFINode, hasCode: Bool) -> OpenChoice {
+        if hasCode, UEFICodeCandidates.isCandidate(node) { return .code }
+        switch content(of: node) {
+        case .decompressedBody: return .decompressedBody
+        case .body: return .body
+        case .node: return .node
+        }
+    }
+
+    /// Whether the tree's menu offers the body-opening item. False for an
+    /// analyzed image: **Open with Code** holds the same bytes plus the code.
+    /// `Save Body…` is a different question and is not governed here.
+    public static func offersBodyOpen(for node: UEFINode, hasCode: Bool) -> Bool {
+        guard !(hasCode && UEFICodeCandidates.isCandidate(node)) else { return false }
+        return nodeOpenTitle(for: node, body: true) != nil
+    }
+
     public static func nodeOpen(for node: UEFINode, in image: UEFIImage, body: Bool) -> NodeOpen? {
         guard let title = nodeOpenTitle(for: node, body: body) else { return nil }
         let range = body ? node.body : node.range

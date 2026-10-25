@@ -1,4 +1,7 @@
 import XCTest
+import CodeAnalysis
+import Localization
+import PartCodec
 import UEFIContentSource
 import ToolModuleKit
 import UEFIImage
@@ -63,6 +66,42 @@ final class LinkedPartTests: XCTestCase {
     private func host(_ controller: MainViewController) throws -> PaneToolHost {
         controller.tools.activate(StubToolA.identifier, animated: false)
         return try XCTUnwrap(StubToolA.log.session?.host as? PaneToolHost)
+    }
+
+    /// A code part is a read-only part with the code pane beside its bytes:
+    /// the same source link, no bookmark space, and the placeholder the app
+    /// puts up until the listing is drawn.
+    func testACodePartOpensReadOnlyWithItsPane() throws {
+        let controller = try makeController(opening: [UInt8](repeating: 0xAA, count: 0x400))
+        let parent = controller.windowModel.pane1
+        let bytes = [UInt8](repeating: 0x90, count: 0x40)
+        let manifest = AnalysisManifest(
+            module: ModuleIdentity(
+                sha256: SHA256Digest(data: Data(bytes)), size: bytes.count, name: "CpuPei",
+                kind: "TE", language: "x86:LE:32:default", imageBase: "0x0"),
+            recipe: AnalysisRecipe(id: "code-v2-ghidra-12.1.2", exporter: 2,
+                                   ghidra: "12.1.2", script: "ExportCode.java"),
+            artifact: AnalysisArtifact(
+                sha256: SHA256Digest(data: Data("artifact".utf8)), size: 8,
+                mediaType: "application/json"),
+            analyzedAt: "2026-10-25T15:00:00+00:00",
+            stats: AnalysisStats())
+        controller.openCode(
+            named: "CpuPei body", from: parent, source: 0x100..<0x140,
+            manifest: manifest,
+            codec: ReadOnlyPartCodec(
+                bytes,
+                title: L("This cannot be put back"),
+                reason: L("A code analysis is a snapshot; edit the dump and analyze the module again.")
+            ))
+        let id = try XCTUnwrap(controller.fragments.expanded)
+        controller.view.window?.layoutIfNeeded()
+
+        let part = try XCTUnwrap(controller.fragments.pane(id))
+        XCTAssertEqual(part.origin?.sourceRange, 0x100..<0x140)
+        XCTAssertTrue(part.origin?.codec is ReadOnlyPartCodec)
+        XCTAssertNil(part.bookmarks, "a read-only code part has no bookmark space")
+        XCTAssertNotNil(controller.fragments.codePane(id))
     }
 
     /// A zone "FFSv2" at 0x100..<0x180 of a 0x400-byte dump, opened as a panel

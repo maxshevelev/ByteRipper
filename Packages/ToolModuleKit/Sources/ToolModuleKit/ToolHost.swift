@@ -1,3 +1,4 @@
+import CodeAnalysis
 import Foundation
 import PartCodec
 
@@ -187,6 +188,20 @@ public extension ToolReadHost {
     func rename(_ phase: String)
     /// The operation is over, however it ended: the sheet goes.
     func finish()
+}
+
+/// Opening a module's bytes together with a stored code analysis
+/// (`Design/CODE_PANEL_PLAN.md`). A separate protocol, like `UEFIPartOpening`:
+/// a host that can only open a plain part is still a host, and the tool-module
+/// that needs the code pane says so rather than making every test double
+/// implement it.
+///
+/// The codec is the read-only part: the panel shows the module's bytes and
+/// refuses to put edits back. The manifest names the analysis and its recipe;
+/// where the panel goes is the app's business.
+@MainActor public protocol CodePartOpening: AnyObject {
+    func openCode(named name: String, linkedTo source: Range<UInt64>,
+                  manifest: AnalysisManifest, codec: any PartCodec)
 }
 
 /// Bytes that do not change under the reader, from any thread.

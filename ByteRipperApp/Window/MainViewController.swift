@@ -1,5 +1,6 @@
 import Cocoa
 import AppPalette
+import CodeAnalysis
 import HelpUI
 import Localization
 import PartCodec
@@ -2125,6 +2126,31 @@ final class MainViewController: NSViewController {
             case .success(let bytes): open(bytes)
             case .failure(let error): fail(error)
             }
+        }
+    }
+
+    /// Opens a module's bytes with its stored code pane beside them
+    /// (`Design/CODE_PANEL_PLAN.md`). The codec is the read-only one the
+    /// UEFI panel handed over: the bytes open as a part, and Update in Parent
+    /// refuses them with the analysis's reason.
+    func openCode(named name: String, from pane: PaneViewModel, source: Range<UInt64>,
+                  manifest: AnalysisManifest, codec: any PartCodec) {
+        guard let document = pane.document,
+              let content = try? DocumentPartReader(document: document)
+        else { return }
+        let parent = PartParent(content: content, source: source, name: pane.status.fileName,
+                                partName: name)
+        do {
+            let bytes = try codec.decode(parent)
+            guard let origin = DocumentOrigin(
+                parent: pane, source: source, partName: name,
+                layout: .image, codec: codec, content: bytes)
+            else { return }
+            fragments.openCode(bytes, named: name, origin: origin, manifest: manifest)
+        } catch {
+            let refusal = error as? PartRefusal
+            presentAlert(title: refusal?.title.text ?? L("Those bytes could not be read."),
+                         message: refusal?.message.text ?? "\(error)", outcome: .problem)
         }
     }
 

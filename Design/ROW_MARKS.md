@@ -28,12 +28,15 @@ means.
 The icons sit in the column the row is named by — the UEFI tree's Name, the FIT
 table's Type, the ME tree's title — in this order, leading to trailing:
 
-**verdict · problem · role badges · text**
+**verdict · problem · role badges · text · the code badge**
 
 Verdict before problem is the order `ToolPanelTable` already lays out, for the
 reason it gives: where a panel has a verdict, it is what the reader reads the
 column for. Role badges sit against the text because they describe the thing
-the text names. An icon a row does not wear takes no room.
+the text names. An icon a row does not wear takes no room. The code-analysis
+badge is the one role badge drawn after the text: it says a stored analysis
+exists for the module the name denotes, so it belongs to the name, not to the
+leading run of marks.
 
 **Why protection takes the background.** Protection and decompression overlap on
 nearly every image — the DXE volume sits inside an LZMA section *and* under a
@@ -112,8 +115,7 @@ which is drawn in the dump and not in a panel.
 | `shield.lefthalf.filled` | badge | partly covered by protected ranges | `secondaryLabelColor` |
 | `lock` | badge | stored encoded: its bytes are not what it holds (a Lenovo LENV block, XORed with its key) | `secondaryLabelColor` |
 | `lock.open` | badge | encoded where it is stored and in the clear here — a LENV block opened decoded | `secondaryLabelColor` |
-| `chevron.left.forwardslash.chevron.right` | badge | a usable code analysis is stored for this TE/PE32 module | `secondaryLabelColor` |
-
+| `ellipsis.curlybraces` | badge | a usable code analysis is stored for this TE/PE32 module; drawn after the name, not in the leading badge slots | `secondaryLabelColor` |
 | `checkmark.seal.fill` | verdict | the newest revision the catalogue lists for this board | `SemanticColors.good` |
 | `arrow.up.circle` | verdict | a newer revision serves this board | `SemanticColors.caution` |
 | `questionmark.circle` | verdict | a newer revision may or may not serve this board | `SemanticColors.caution` |
@@ -138,7 +140,7 @@ after it, the red octagon.
 | Rail | the node's `space` is not `.file`, or it is a compressed section whose row is open on its decompressed children |
 | Verdict | none |
 | Problem | a wrong checksum (error) — today; a protected range whose hash does not match (error), a compressed section that did not decompress (caution) — with that work |
-| Badges | `zipper.page` on a compressed section; `lock.shield` on an AMI or Phoenix hash file and an Insyde Flash Device Map; `shield.lefthalf.filled` on a partly covered node; `lock` on a LENV block stored encoded, `lock.open` on one in the clear in a part opened decoded; `chevron.left.forwardslash.chevron.right` on a TE/PE32 image node whose bytes have a stored code analysis (`Design/CODE_PANEL_PLAN.md`) |
+| Badges | `zipper.page` on a compressed section; `lock.shield` on an AMI or Phoenix hash file and an Insyde Flash Device Map; `shield.lefthalf.filled` on a partly covered node; `lock` on a LENV block stored encoded, `lock.open` on one in the clear in a part opened decoded; `ellipsis.curlybraces` after the name of a TE/PE32 image node whose bytes have a stored code analysis (`Design/CODE_PANEL_PLAN.md`) |
 
 ### 5.2. FIT — the table
 

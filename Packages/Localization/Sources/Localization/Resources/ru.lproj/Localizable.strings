@@ -106,7 +106,8 @@
 "4 Bytes" = "4 байта";
 "64 bytes (4 rows)" = "64 байта (4 строки)";
 "8 Bytes" = "8 байт";
-"A code analysis is stored for this module" = "Для этого модуля сохранён разбор кода";
+"A code analysis is a snapshot; edit the dump and analyze the module again." = "Разбор кода — это снимок; измените дамп и разберите модуль заново.";
+"A code analysis is stored for this module; Open with Code opens it" = "Для этого модуля сохранён разбор кода; «Открыть с кодом» открывает его.";
 "A FIT needs at least one microcode entry." = "В FIT должна быть хотя бы одна запись микрокода.";
 "A file is open in one place at a time, so it cannot be opened here as well. Show it where it is, or move that pane into this tab." = "Файл открыт в одном месте за раз, поэтому открыть его ещё и здесь нельзя. Покажите его там, где он есть, или перенесите ту файловую панель в эту вкладку.";
 "A second header entry, where there may be only one" = "Вторая запись-заголовок, хотя она может быть только одна";
@@ -179,6 +180,7 @@
 "OEM" = "OEM";
 "Open Decompressed Variable" = "Открыть распакованную переменную";
 "Open Recent Project" = "Недавние проекты";
+"Open with Code" = "Открыть с кодом";
 "Opening a project closes what is open now. Saved as a project, it can be opened again as it is." = "Открытие проекта закрывает всё, что открыто сейчас. Сохранённое как проект, его можно будет открыть снова в том же виде.";
 "Picture" = "Изображение";
 "Picture preview" = "Предпросмотр изображения";
@@ -198,6 +200,9 @@
 "Save “%1$@” as…" = "Сохранить «%1$@» как…";
 "Saved %1$@ bytes." = "Сохранено байт: %1$@.";
 "Save…" = "Сохранить…";
+"The code panel is not available." = "Панель кода недоступна.";
+"The code listing is not drawn yet." = "Листинг кода ещё не отрисовывается.";
+"The module changed after this analysis." = "Модуль изменился после этого разбора.";
 "The project could not be read." = "Не удалось прочитать проект.";
 "The project could not be written." = "Не удалось записать проект.";
 "The project was saved by a newer version of ByteRipper. Open it in that version." = "Проект сохранён более новой версией ByteRipper. Откройте его в этой версии.";
@@ -290,6 +295,7 @@
 "Close the tool panel" = "Закрыть инструментальную панель";
 "Close “%1$@”" = "Закрыть «%1$@»";
 "Close “%1$@”?" = "Закрыть «%1$@»?";
+"Code analysis" = "Разбор кода";
 "Code Partition ($CPD)" = "Кодовый раздел ($CPD)";
 "Collapse into the dock" = "Свернуть в Dock";
 "Collapse panel" = "Свернуть панель";
@@ -903,6 +909,7 @@
 "the zone" = "зону";
 "Their version" = "Версию из библиотеки";
 "Theme:" = "Тема:";
+"There is no code analysis to open here." = "Здесь нет разбора кода, который можно открыть.";
 "There is no FIT table in this file to change." = "В этом файле нет таблицы FIT, которую можно было бы изменить.";
 "There is no microcode in this table to put a new one after." = "В этой таблице нет микрокода, после которого можно поставить новый.";
 "There is nothing decompressed to open here." = "Здесь нечего открывать — ничего не распаковано.";

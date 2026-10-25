@@ -18,7 +18,7 @@ public extension ToolRowMark {
         case .newerMaybe: return "questionmark.circle"
         case .error: return "exclamationmark.octagon.fill"
         case .caution: return "exclamationmark.circle.fill"
-        case .codeAnalysis: return "chevron.left.forwardslash.chevron.right"
+        case .codeAnalysis: return "ellipsis.curlybraces"
         case .compressed, .compressedUndecoded: return "zipper.page"
         case .holdsChecks: return "lock.shield"
         case .partlyProtected: return "shield.lefthalf.filled"

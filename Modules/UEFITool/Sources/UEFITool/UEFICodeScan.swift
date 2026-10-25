@@ -18,23 +18,22 @@ public enum UEFICodeScan {
         index: CodeAnalysisIndex,
         only: Set<NodeID>? = nil,
         bytesOf: @Sendable (UEFINode) -> Data?
-    ) -> Set<NodeID> {
-        guard !index.isEmpty else { return [] }
+    ) -> [NodeID: AnalysisManifest] {
+        guard !index.isEmpty else { return [:] }
         let candidates = image.allNodes.filter { node in
             guard only?.contains(node.id) ?? true,
                   UEFICodeCandidates.isCandidate(node)
             else { return false }
             return index.analyzedSizes.contains(node.body.count)
         }
-        var found: Set<NodeID> = []
+        var found: [NodeID: AnalysisManifest] = [:]
         for node in candidates {
             if Task.isCancelled { break }
             guard let data = bytesOf(node), data.count == node.body.count,
-                  UEFICodeCandidates.isImage(data)
+                  UEFICodeCandidates.isImage(data),
+                  let manifest = index.newest(for: SHA256Digest(data: data))
             else { continue }
-            if index.hasUsableAnalysis(for: SHA256Digest(data: data)) {
-                found.insert(node.id)
-            }
+            found[node.id] = manifest
         }
         return found
     }

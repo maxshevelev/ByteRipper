@@ -169,7 +169,7 @@ public enum ToolRowMark: CaseIterable, Hashable, Sendable {
         case .caution:
             return L("Could not be checked, or wants a second look")
         case .codeAnalysis:
-            return L("A code analysis is stored for this module")
+            return L("A code analysis is stored for this module; Open with Code opens it")
         case .compressed:
             return L("Holds compressed data that opens here")
         case .compressedUndecoded:

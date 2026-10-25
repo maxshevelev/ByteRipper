@@ -119,8 +119,7 @@ final class UEFITreeMarksTests: XCTestCase {
         XCTAssertEqual(marks.roles, [.codeAnalysis])
         XCTAssertNil(marks.problem)
         XCTAssertEqual(ToolRowMark.codeAnalysis.channel, .role)
-        XCTAssertEqual(ToolRowMark.codeAnalysis.symbol,
-                       "chevron.left.forwardslash.chevron.right")
+        XCTAssertEqual(ToolRowMark.codeAnalysis.symbol, "ellipsis.curlybraces")
         XCTAssertTrue(UEFITreeMarks.legendMarks.contains(.codeAnalysis))
     }
 

@@ -221,6 +221,10 @@ private struct ChecksumPass: Sendable {
     /// The image nodes with a usable analysis, readable so the app's tests can
     /// assert on the badge's input without reaching into a view.
     public private(set) var codeAnalysisNodes: Set<NodeID> = []
+    /// What each of those nodes opens: the newest readable analysis at the
+    /// last scan. The tree draws only the ids; the menu and the panel need the
+    /// manifest.
+    private var codeAnalysisManifests: [NodeID: AnalysisManifest] = [:]
     private var codeAnalysisRequest: Task<Void, Never>?
     /// Which scan is current; a result from an older reading is dropped.
     private var codeAnalysisGeneration = 0
@@ -377,6 +381,9 @@ private struct ChecksumPass: Sendable {
         }
         controller.onOpenContent = { [weak self] nodeID in
             self?.openNodeContent(for: nodeID)
+        }
+        controller.onOpenCode = { [weak self] nodeID in
+            self?.openCode(for: nodeID)
         }
         controller.onOpenDecompressed = { [weak self] nodeID in
             self?.openDecompressedInNewTab(for: nodeID)
@@ -650,6 +657,7 @@ private struct ChecksumPass: Sendable {
         codeAnalysisIndex = .empty
         codeAnalysisChecked = []
         codeAnalysisNodes = []
+        codeAnalysisManifests = [:]
         // A new reading is a new sub-tree; the presented roots of the last one
         // mean nothing here, and neither do the names and digests the last
         // one's rows were filled with. The ME focus is kept — it may be a
@@ -759,6 +767,7 @@ private struct ChecksumPass: Sendable {
                 codeAnalysisIndex = .empty
                 codeAnalysisChecked = []
                 codeAnalysisNodes = []
+                codeAnalysisManifests = [:]
                 // Not on every keystroke: a reading opens every volume's files.
                 requestProtectedRanges(after: 0.5)
                 // The stores went with the edit; the button waits for them.
@@ -950,6 +959,7 @@ private struct ChecksumPass: Sendable {
             guard !candidates.isEmpty else {
                 if changed {
                     self.codeAnalysisNodes = []
+                    self.codeAnalysisManifests = [:]
                     self.show(rowsChanged: false)
                 }
                 return
@@ -972,9 +982,11 @@ private struct ChecksumPass: Sendable {
 
             self.codeAnalysisChecked.formUnion(only)
             if changed {
-                self.codeAnalysisNodes = found
+                self.codeAnalysisManifests = found
+                self.codeAnalysisNodes = Set(found.keys)
             } else {
-                self.codeAnalysisNodes.formUnion(found)
+                self.codeAnalysisManifests.merge(found) { _, new in new }
+                self.codeAnalysisNodes.formUnion(found.keys)
             }
             self.show(rowsChanged: false)
         }
@@ -989,6 +1001,7 @@ private struct ChecksumPass: Sendable {
         codeAnalysisIndex = .empty
         codeAnalysisChecked = []
         codeAnalysisNodes = []
+        codeAnalysisManifests = [:]
         show(rowsChanged: false)
     }
 
@@ -2116,6 +2129,10 @@ private struct ChecksumPass: Sendable {
             fail(L("There is nothing to open here."))
             return
         }
+        if codeAnalysisNodes.contains(nodeID) {
+            openCode(for: nodeID)
+            return
+        }
         // A LENV block's bytes are encoded: what it holds is the block
         // decoded, from the block's row and from any of its entries'. A block
         // stored in the clear — one opened decoded among them — opens as its
@@ -2131,6 +2148,54 @@ private struct ChecksumPass: Sendable {
         case .decompressedBody: openDecompressedInNewTab(for: nodeID)
         case .body: openNodeInPanel(for: nodeID, body: true)
         case .node: openNodeInPanel(for: nodeID, body: false)
+        }
+    }
+
+    /// **Open with Code**: the module's own bytes and its stored analysis in
+    /// one fragment panel. The bytes are read off the main actor — a module in
+    /// a compressed buffer may have to be decoded again — and the codec is
+    /// read-only, so Update in Parent refuses the snapshot with its reason.
+    ///
+    /// Public because a right-click cannot be simulated — the level the app's
+    /// tests drive, like `openNodeInPanel(for:body:)`.
+    public func openCode(for nodeID: NodeID) {
+        guard let tree, tree.isReady, let node = tree.image().node(nodeID),
+              let manifest = codeAnalysisManifests[nodeID],
+              let open = UEFIPresenter.nodeOpen(for: node, in: tree.image(), body: true)
+        else {
+            fail(L("There is no code analysis to open here."))
+            return
+        }
+        let readers = tree.spaceReaders
+        let space = node.space
+        let body = node.body
+        controller.showBusy()
+        Task { [weak self] in
+            let bytes = await Task.detached(priority: .userInitiated) {
+                readers.reader(for: space)?.bytes(body)
+            }.value
+            guard let self else { return }
+            self.controller.endBusy()
+            guard let bytes, !bytes.isEmpty else {
+                self.fail(L("Those bytes could not be read."))
+                return
+            }
+            guard SHA256Digest(data: Data(bytes)) == manifest.module.sha256 else {
+                self.fail(L("The module changed after this analysis."))
+                return
+            }
+            guard let opener = self.host as? any CodePartOpening else {
+                self.fail(L("The code panel is not available."))
+                return
+            }
+            opener.openCode(
+                named: open.partName, linkedTo: open.source, manifest: manifest,
+                codec: ReadOnlyPartCodec(
+                    bytes,
+                    title: L("This cannot be put back"),
+                    reason: L("A code analysis is a snapshot; edit the dump and analyze the module again.")
+                )
+            )
         }
     }
 

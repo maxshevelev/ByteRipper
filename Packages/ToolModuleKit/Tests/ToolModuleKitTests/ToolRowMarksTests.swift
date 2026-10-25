@@ -93,6 +93,35 @@ final class ToolRowMarksTests: XCTestCase {
         XCTAssertNil(cell.toolTip)
     }
 
+    /// The code badge is a role mark, but it stands after the name: it says a
+    /// stored analysis exists for the module the name denotes.
+    func testTheCodeBadgeStandsAfterTheName() throws {
+        let cell = ToolPanelTable.makeCell(identifier: .init("name"),
+                                           warning: true, badges: true)
+        cell.textField?.stringValue = "CpuPei"
+        ToolPanelTable.dress(cell, with: ToolRowMarks(roles: [.codeAnalysis]))
+
+        let leading = ToolPanelTable.badgeTags.compactMap {
+            cell.viewWithTag($0) as? NSImageView
+        }
+        XCTAssertEqual(leading.map(\.isHidden), [true, true],
+                       "the code badge does not take a leading slot")
+        let code = try XCTUnwrap(
+            cell.viewWithTag(ToolPanelTable.codeBadgeTag) as? NSImageView)
+        XCTAssertFalse(code.isHidden)
+        XCTAssertEqual(code.toolTip, ToolRowMark.codeAnalysis.meaning)
+
+        let stack = try XCTUnwrap(cell.subviews.compactMap { $0 as? NSStackView }.first)
+        let field = try XCTUnwrap(cell.textField)
+        let fieldIndex = try XCTUnwrap(stack.arrangedSubviews.firstIndex(of: field))
+        let codeIndex = try XCTUnwrap(stack.arrangedSubviews.firstIndex(of: code))
+        XCTAssertEqual(codeIndex, fieldIndex + 1, "directly after the name")
+
+        ToolPanelTable.dress(cell, with: .none)
+        XCTAssertTrue(code.isHidden)
+        XCTAssertNil(code.toolTip)
+    }
+
     /// The FIT panel's existing call still shows the red octagon, even on a
     /// cell last dressed with a caution.
     func testTheOldWarningCallStillShowsAnError() throws {

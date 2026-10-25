@@ -1,4 +1,7 @@
+import ALSplitView
 import Cocoa
+import CodeAnalysis
+import CodeView
 import Localization
 import ToolModuleKit
 
@@ -39,14 +42,16 @@ import ToolModuleKit
         let pane: PaneViewModel
         let surface: DocumentSurface
         let paneView: FilePaneView
+        let codePane: CodePaneView?
         let view: FragmentPanelView
 
         init(id: FragmentDock.PanelID, pane: PaneViewModel, surface: DocumentSurface,
-             paneView: FilePaneView, view: FragmentPanelView) {
+             paneView: FilePaneView, codePane: CodePaneView?, view: FragmentPanelView) {
             self.id = id
             self.pane = pane
             self.surface = surface
             self.paneView = paneView
+            self.codePane = codePane
             self.view = view
         }
     }
@@ -99,6 +104,8 @@ import ToolModuleKit
     func pane(_ id: FragmentDock.PanelID) -> PaneViewModel? { entries[id]?.pane }
     func surface(_ id: FragmentDock.PanelID) -> DocumentSurface? { entries[id]?.surface }
     func panelView(_ id: FragmentDock.PanelID) -> FragmentPanelView? { entries[id]?.view }
+    /// The code pane a code panel carries, nil for any other part.
+    func codePane(_ id: FragmentDock.PanelID) -> CodePaneView? { entries[id]?.codePane }
 
     /// The panel `pane` belongs to, or nil for one of the tab's own panes.
     func panel(holding pane: PaneViewModel) -> FragmentDock.PanelID? {
@@ -141,11 +148,29 @@ import ToolModuleKit
         return adopt(pane, animated: animated)
     }
 
+    /// Opens a module's bytes with the code pane beside them — the panel
+    /// `Open with Code` asks for (`Design/CODE_PANEL_PLAN.md`). The bytes are
+    /// the same part a body would open; the analysis is read-only and the code
+    /// pane is the additional view.
+    @discardableResult
+    func openCode(_ bytes: [UInt8], named name: String, origin: DocumentOrigin,
+                  manifest: AnalysisManifest,
+                  animated: Bool = true) -> FragmentDock.PanelID? {
+        let pane = PaneViewModel()
+        pane.openBytes(bytes, named: name, origin: origin)
+        return adopt(pane, codePane: CodePaneView(manifest: manifest), animated: animated)
+    }
+
     /// Takes a pane that already exists as a panel of its own and raises it —
     /// the other half of `release`, and what a panel dragged back in from
     /// somewhere else will arrive through.
     @discardableResult
     func adopt(_ pane: PaneViewModel, animated: Bool = true) -> FragmentDock.PanelID? {
+        adopt(pane, codePane: nil, animated: animated)
+    }
+
+    private func adopt(_ pane: PaneViewModel, codePane: CodePaneView?,
+                       animated: Bool) -> FragmentDock.PanelID? {
         guard let host else { return nil }
         pane.bookmarks = bookmarkSpace(for: pane, in: host)
         let surface = DocumentSurface(host: host)
@@ -156,13 +181,24 @@ import ToolModuleKit
         surface.toolPanelWidthAllowance = FragmentPanelLayout.sideInset * 2
         host.addChild(surface)
         let paneView = host.paneView(for: pane)
-        surface.setContent(paneView)
+        if let codePane {
+            let split = ALSplitView()
+            split.isVertical = true
+            split.dividerThickness = 1
+            split.addPane(paneView)
+            split.addPane(codePane)
+            split.setPaneLayout(.fill, at: 0)
+            split.setPaneLayout(.fixed(360), at: 1)
+            surface.setContent(split)
+        } else {
+            surface.setContent(paneView)
+        }
         // The pane's title bar goes across the whole panel, over the tool and
         // the map as well as the dump.
         let view = FragmentPanelView(header: paneView.hoistHeader(), content: surface.view)
         let opened = dock.open()
         entries[opened.id] = Entry(id: opened.id, pane: pane, surface: surface,
-                                   paneView: paneView, view: view)
+                                   paneView: paneView, codePane: codePane, view: view)
         // After the id exists: the ✕ closes *this* panel, and the tool that
         // hears about an edit is this surface's.
         host.wireFragmentPaneView(paneView, for: pane, panel: opened.id, surface: surface)

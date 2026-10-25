@@ -1,4 +1,5 @@
 import Cocoa
+import CodeAnalysis
 import Localization
 import ByteRipperCore
 import ToolModuleKit
@@ -195,6 +196,18 @@ import MEFirmware
     func openPart(named name: String, linkedTo source: Range<UInt64>, codec: any PartCodec) {
         guard let pane, let owner else { return }
         owner.openPart(named: name, from: pane, source: source, codec: codec)
+    }
+}
+
+extension PaneToolHost: CodePartOpening {
+    /// A module's bytes and its stored code, through the window's fragment
+    /// machinery: the codec is read-only, and the code pane is the panel's
+    /// additional view.
+    func openCode(named name: String, linkedTo source: Range<UInt64>,
+                  manifest: AnalysisManifest, codec: any PartCodec) {
+        guard let pane, let owner else { return }
+        owner.openCode(named: name, from: pane, source: source,
+                       manifest: manifest, codec: codec)
     }
 }
 

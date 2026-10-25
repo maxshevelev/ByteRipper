@@ -26,9 +26,9 @@ built so they can.
    exact module blob plus the recipe; the CAS is the authority. No workspace
    field points a node at an analysis. The same module in another dump gets the
    same code; changed bytes get no badge.
-3. **The badge is a role badge, not a verdict.** `chevron.left.forwardslash.chevron.right`
-   on the image node means *a usable analysis exists for these bytes*, not
-   "these bytes are code".
+3. **The badge is a role badge, not a verdict.** `ellipsis.curlybraces`
+   on the image node, after its name, means *a usable analysis exists for
+   these bytes*, not "these bytes are code".
 4. **For an analyzed image, `Open Body` is replaced by `Open with Code`.**
    The panel holds the same bytes plus the code, so two menu items would be two
    routes to one act. `Open Body` stays for an unanalyzed image.
@@ -92,7 +92,8 @@ outside the module leaves the module's hash alone.
 
 ## The badge
 
-`chevron.left.forwardslash.chevron.right` is a role badge in `Design/ROW_MARKS.md`:
+`ellipsis.curlybraces` is a role badge in `Design/ROW_MARKS.md`, drawn after
+the node's name rather than in the leading badge slots:
 
 - tint `secondaryLabelColor`, like the other role badges;
 - tooltip: "A code analysis is stored for this module; Open with Code opens it";

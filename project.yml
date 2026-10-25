@@ -110,10 +110,14 @@ packages:
   PartCodec:
     path: Packages/PartCodec
   # What a disassembler's analysis of a module is, and the local
-  # content-addressed store that keeps it. Nothing links it yet; the Code panel
-  # and the agent's Ghidra workflow will meet here.
+  # content-addressed store that keeps it. The app and UEFITool read it; the
+  # Ghidra skill writes it.
   CodeAnalysis:
     path: Packages/CodeAnalysis
+  # The code pane beside a module's bytes, and the placeholder stage the panel
+  # is built through.
+  CodeView:
+    path: Packages/CodeView
   # The Lenovo identity store's format and parse. UEFIImage reads the store
   # into the tree with it; the app's tests build and check blocks with it.
   LenovoDMI:
@@ -198,6 +202,10 @@ targets:
       # codec a zone that is a UEFI structure goes back through.
       - package: PartCodec
       - package: UEFIContentSource
+      # The stored code analyses the UEFI tree marks, and the pane the app
+      # puts beside the module's bytes when one is opened.
+      - package: CodeAnalysis
+      - package: CodeView
     # No entitlements, and so no entitlements file: the app is not sandboxed
     # (issue #30). It is not going to the App Store, and the sandbox took away
     # what a workshop tool needs — reading a dump by path that nobody picked in
@@ -401,6 +409,9 @@ targets:
       - package: Workspace
       - package: PartCodec
       - package: UEFIContentSource
+      # The manifest and bytes a code-part test builds and opens.
+      - package: CodeAnalysis
+      - package: CodeView
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.maxik.ByteRipperTests

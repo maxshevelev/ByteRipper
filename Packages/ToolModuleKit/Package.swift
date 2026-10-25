@@ -52,7 +52,10 @@ let package = Package(
         // The pattern a search the host asks for comes back as
         // (`ToolPatternQuery`): the scan's own type, so a tool-module runs it
         // without knowing how the host parsed the field.
-        .package(path: "../BytePattern")
+        .package(path: "../BytePattern"),
+        // The stored analysis a tool-module hands the host to open beside a
+        // module's bytes (`CodePartOpening`).
+        .package(path: "../CodeAnalysis")
     ],
     targets: [
         .target(name: "ToolModuleKit",
@@ -64,7 +67,8 @@ let package = Package(
                     .product(name: "ALSplitView", package: "ALSplitView"),
                     .product(name: "AgentKit", package: "AgentKit"),
                     .product(name: "PartCodec", package: "PartCodec"),
-                    .product(name: "BytePattern", package: "BytePattern")
+                    .product(name: "BytePattern", package: "BytePattern"),
+                    .product(name: "CodeAnalysis", package: "CodeAnalysis")
                 ]),
         .testTarget(
             name: "ToolModuleKitTests",
@@ -80,7 +84,8 @@ let package = Package(
                 .product(name: "ALSplitView", package: "ALSplitView"),
                 .product(name: "AgentKit", package: "AgentKit"),
                 .product(name: "PartCodec", package: "PartCodec"),
-                .product(name: "BytePattern", package: "BytePattern")
+                .product(name: "BytePattern", package: "BytePattern"),
+                .product(name: "CodeAnalysis", package: "CodeAnalysis")
             ]
         )
     ]

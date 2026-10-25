@@ -45,6 +45,9 @@ import UEFITool
     /// A node's Open item was chosen: the node itself, or its body alone
     /// (`Design/FRAGMENT_PANELS_PLAN.md`).
     var onOpenNode: ((NodeID, Bool) -> Void)?
+    /// **Open with Code** was chosen for an analyzed image: the module's bytes
+    /// and its stored code in one fragment panel.
+    var onOpenCode: ((NodeID) -> Void)?
     /// A node's Save As item was chosen: the node itself, or its body alone.
     var onSaveNode: ((NodeID, Bool) -> Void)?
 
@@ -2789,10 +2792,14 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             }
         }
         let encoded = lenv?.block.encoding == .encoded
+        let hasCode = codeAnalysis.contains(node.id)
         // Every node can be taken out and read as a file of its own, and a
-        // node with a header can have its body taken out without it.
+        // node with a header can have its body taken out without it. An
+        // analyzed image is the one exception: Open with Code holds the body
+        // and more, so the body item is not offered.
         for body in [false, true] {
-            guard let title = UEFIPresenter.nodeOpenTitle(for: node, body: body, encoded: encoded),
+            guard !body || UEFIPresenter.offersBodyOpen(for: node, hasCode: hasCode),
+                  let title = UEFIPresenter.nodeOpenTitle(for: node, body: body, encoded: encoded),
                   !body || !node.header.isEmpty
             else { continue }
             let item = NSMenuItem(title: title.text, action: #selector(openNodeClicked(_:)),
@@ -2806,6 +2813,15 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
                 item.action = #selector(openDecodedBlockClicked(_:))
                 item.representedObject = node.id
             }
+            items.append(item)
+        }
+        if hasCode {
+            // help: panel.uefi.open-with-code
+            let item = NSMenuItem(
+                title: L("Open with Code"), action: #selector(openWithCodeClicked(_:)),
+                keyEquivalent: "")
+            item.target = self
+            item.representedObject = node.id
             items.append(item)
         }
         // The same bytes, saved to a file rather than opened.
@@ -2901,7 +2917,9 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     /// content is (`UEFIPresenter.content(of:)`).
     private func opensAsDoubleClick(_ item: NSMenuItem, node: UEFINode, decodable: Bool) -> Bool {
         if decodable { return item.action == #selector(openDecodedBlockClicked(_:)) }
-        switch UEFIPresenter.content(of: node) {
+        switch UEFIPresenter.openChoice(for: node, hasCode: codeAnalysis.contains(node.id)) {
+        case .code:
+            return item.action == #selector(openWithCodeClicked(_:))
         case .decompressedBody:
             return item.action == #selector(openDecompressedClicked(_:))
         case .body:
@@ -2927,6 +2945,11 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     @objc private func openNodeClicked(_ sender: NSMenuItem) {
         guard let target = sender.representedObject as? NodeOpenTarget else { return }
         onOpenNode?(target.id, target.body)
+    }
+
+    @objc private func openWithCodeClicked(_ sender: NSMenuItem) {
+        guard let nodeID = sender.representedObject as? NodeID else { return }
+        onOpenCode?(nodeID)
     }
 
     @objc private func saveNodeClicked(_ sender: NSMenuItem) {
@@ -3016,7 +3039,11 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     /// UEFI node — an ME row, a Loading row — has none to open.
     private func openContent(atRow row: Int) {
         guard row >= 0, let item = outline.item(atRow: row), let node = node(of: item) else { return }
-        onOpenContent?(node.id)
+        if UEFIPresenter.openChoice(for: node, hasCode: codeAnalysis.contains(node.id)) == .code {
+            onOpenCode?(node.id)
+        } else {
+            onOpenContent?(node.id)
+        }
     }
 
 
