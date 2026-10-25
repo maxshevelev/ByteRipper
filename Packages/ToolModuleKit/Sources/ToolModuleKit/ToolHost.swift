@@ -201,7 +201,8 @@ public extension ToolReadHost {
 /// where the panel goes is the app's business.
 @MainActor public protocol CodePartOpening: AnyObject {
     func openCode(named name: String, linkedTo source: Range<UInt64>,
-                  manifest: AnalysisManifest, codec: any PartCodec)
+                  manifest: AnalysisManifest, artifact: CodeArtifact,
+                  codec: any PartCodec)
 }
 
 /// Bytes that do not change under the reader, from any thread.

@@ -2134,7 +2134,8 @@ final class MainViewController: NSViewController {
     /// UEFI panel handed over: the bytes open as a part, and Update in Parent
     /// refuses them with the analysis's reason.
     func openCode(named name: String, from pane: PaneViewModel, source: Range<UInt64>,
-                  manifest: AnalysisManifest, codec: any PartCodec) {
+                  manifest: AnalysisManifest, artifact: CodeArtifact,
+                  codec: any PartCodec) {
         guard let document = pane.document,
               let content = try? DocumentPartReader(document: document)
         else { return }
@@ -2146,7 +2147,8 @@ final class MainViewController: NSViewController {
                 parent: pane, source: source, partName: name,
                 layout: .image, codec: codec, content: bytes)
             else { return }
-            fragments.openCode(bytes, named: name, origin: origin, manifest: manifest)
+            fragments.openCode(bytes, named: name, origin: origin,
+                               manifest: manifest, artifact: artifact)
         } catch {
             let refusal = error as? PartRefusal
             presentAlert(title: refusal?.title.text ?? L("Those bytes could not be read."),

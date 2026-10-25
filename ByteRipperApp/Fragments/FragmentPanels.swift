@@ -154,11 +154,13 @@ import ToolModuleKit
     /// pane is the additional view.
     @discardableResult
     func openCode(_ bytes: [UInt8], named name: String, origin: DocumentOrigin,
-                  manifest: AnalysisManifest,
+                  manifest: AnalysisManifest, artifact: CodeArtifact,
                   animated: Bool = true) -> FragmentDock.PanelID? {
         let pane = PaneViewModel()
         pane.openBytes(bytes, named: name, origin: origin)
-        return adopt(pane, codePane: CodePaneView(manifest: manifest), animated: animated)
+        let codePane = CodePaneView(manifest: manifest, artifact: artifact,
+                                    moduleBytes: Data(bytes))
+        return adopt(pane, codePane: codePane, animated: animated)
     }
 
     /// Takes a pane that already exists as a panel of its own and raises it —
@@ -188,7 +190,7 @@ import ToolModuleKit
             split.addPane(paneView)
             split.addPane(codePane)
             split.setPaneLayout(.fill, at: 0)
-            split.setPaneLayout(.fixed(360), at: 1)
+            split.setPaneLayout(.fixed(480), at: 1)
             surface.setContent(split)
         } else {
             surface.setContent(paneView)
@@ -202,6 +204,29 @@ import ToolModuleKit
         // After the id exists: the ✕ closes *this* panel, and the tool that
         // hears about an edit is this surface's.
         host.wireFragmentPaneView(paneView, for: pane, panel: opened.id, surface: surface)
+        if let codePane {
+            // The code pane and the part's hex view are two views of one
+            // selection: an instruction selects its bytes, a byte selection
+            // shows the instruction that holds it. The existing
+            // `onSelectionChanged` wiring (the hex view's redraw) is kept and
+            // chained, not replaced.
+            codePane.onSelectRange = { [weak pane, weak host] range in
+                guard let pane else { return }
+                pane.select(range: range)
+                host?.filePaneView(for: pane)?.revealOffsetCentered(range.lowerBound)
+            }
+            let previous = pane.onSelectionChanged
+            pane.onSelectionChanged = { [weak codePane, weak pane] reveal in
+                previous?(reveal)
+                guard let pane else { return }
+                let selection = pane.hexSelection()
+                codePane?.setStale(pane.origin?.state != .intact)
+                codePane?.selectModuleRange(selection.start..<selection.end)
+            }
+            let selection = pane.hexSelection()
+            codePane.setStale(pane.origin?.state != .intact)
+            codePane.selectModuleRange(selection.start..<selection.end)
+        }
         // The tool panel's header is a handle too, when the panel has one open.
         surface.tools.panel.onHeaderPulledDown = { [weak self] event in
             self?.beginPullDown(opened.id, from: event)

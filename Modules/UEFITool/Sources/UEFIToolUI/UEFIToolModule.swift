@@ -2184,12 +2184,26 @@ private struct ChecksumPass: Sendable {
                 self.fail(L("The module changed after this analysis."))
                 return
             }
+            let root = UEFIToolModule.codeAnalysisRoot
+            let artifact = await Task.detached(priority: .userInitiated) { () -> CodeArtifact? in
+                guard let root,
+                      let store = try? ContentStore(root: root, create: false),
+                      let data = try? store.object(manifest.artifact.sha256),
+                      let artifact = try? JSONDecoder().decode(CodeArtifact.self, from: data)
+                else { return nil }
+                return artifact
+            }.value
+            guard let artifact else {
+                self.fail(L("The code analysis could not be read."))
+                return
+            }
             guard let opener = self.host as? any CodePartOpening else {
                 self.fail(L("The code panel is not available."))
                 return
             }
             opener.openCode(
                 named: open.partName, linkedTo: open.source, manifest: manifest,
+                artifact: artifact,
                 codec: ReadOnlyPartCodec(
                     bytes,
                     title: L("This cannot be put back"),

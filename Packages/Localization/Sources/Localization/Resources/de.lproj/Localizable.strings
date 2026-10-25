@@ -163,6 +163,7 @@
 "Delete Bookmark at %1$@" = "Lesezeichen auf Zeile %1$@ löschen";
 "Device or properties" = "Gerät oder Eigenschaften";
 "Device overrides" = "Geräteüberschreibungen";
+"Disassembly" = "Disassembly";
 "EC firmware image" = "EC-Firmware-Abbild";
 "Every device" = "Jedes Gerät";
 "Field" = "Feld";
@@ -176,6 +177,8 @@
 "Microcode removed" = "Microcode entfernt";
 "Microcode replaced" = "Microcode ersetzt";
 "Minor version" = "Nebenversion";
+"No decompiled C for this function." = "Für diese Funktion gibt es keinen dekompilierten C-Text.";
+"No functions" = "Keine Funktionen";
 "No longer found, not opened:" = "Nicht mehr gefunden, nicht geöffnet:";
 "OEM" = "OEM";
 "Open Decompressed Variable" = "Entpackte Variable öffnen";
@@ -200,8 +203,9 @@
 "Save “%1$@” as…" = "„%1$@“ sichern unter…";
 "Saved %1$@ bytes." = "%1$@ Bytes gesichert.";
 "Save…" = "Sichern…";
+"The analysis holds no functions." = "Die Analyse enthält keine Funktionen.";
+"The code analysis could not be read." = "Die Codeanalyse konnte nicht gelesen werden.";
 "The code panel is not available." = "Die Codeansicht ist nicht verfügbar.";
-"The code listing is not drawn yet." = "Die Codeliste wird noch nicht dargestellt.";
 "The module changed after this analysis." = "Das Modul hat sich nach dieser Analyse geändert.";
 "The project could not be read." = "Das Projekt konnte nicht gelesen werden.";
 "The project could not be written." = "Das Projekt konnte nicht geschrieben werden.";

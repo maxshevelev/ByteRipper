@@ -163,6 +163,7 @@
 "Delete Bookmark at %1$@" = "Удалить закладку со строки %1$@";
 "Device or properties" = "Устройство или свойства";
 "Device overrides" = "Переопределения устройств";
+"Disassembly" = "Дизассемблер";
 "EC firmware image" = "Образ прошивки EC";
 "Every device" = "Любое устройство";
 "Field" = "Поле";
@@ -176,6 +177,8 @@
 "Microcode removed" = "Микрокод удалён";
 "Microcode replaced" = "Микрокод заменён";
 "Minor version" = "Младшая версия";
+"No decompiled C for this function." = "Для этой функции нет декомпилированного C.";
+"No functions" = "Нет функций";
 "No longer found, not opened:" = "Больше не найдены и не открыты:";
 "OEM" = "OEM";
 "Open Decompressed Variable" = "Открыть распакованную переменную";
@@ -200,8 +203,9 @@
 "Save “%1$@” as…" = "Сохранить «%1$@» как…";
 "Saved %1$@ bytes." = "Сохранено байт: %1$@.";
 "Save…" = "Сохранить…";
+"The analysis holds no functions." = "В разборе нет функций.";
+"The code analysis could not be read." = "Не удалось прочитать разбор кода.";
 "The code panel is not available." = "Панель кода недоступна.";
-"The code listing is not drawn yet." = "Листинг кода ещё не отрисовывается.";
 "The module changed after this analysis." = "Модуль изменился после этого разбора.";
 "The project could not be read." = "Не удалось прочитать проект.";
 "The project could not be written." = "Не удалось записать проект.";

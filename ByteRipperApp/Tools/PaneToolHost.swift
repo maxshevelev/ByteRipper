@@ -204,10 +204,11 @@ extension PaneToolHost: CodePartOpening {
     /// machinery: the codec is read-only, and the code pane is the panel's
     /// additional view.
     func openCode(named name: String, linkedTo source: Range<UInt64>,
-                  manifest: AnalysisManifest, codec: any PartCodec) {
+                  manifest: AnalysisManifest, artifact: CodeArtifact,
+                  codec: any PartCodec) {
         guard let pane, let owner else { return }
         owner.openCode(named: name, from: pane, source: source,
-                       manifest: manifest, codec: codec)
+                       manifest: manifest, artifact: artifact, codec: codec)
     }
 }
 

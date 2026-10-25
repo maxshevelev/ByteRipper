@@ -86,9 +86,14 @@ final class LinkedPartTests: XCTestCase {
                 mediaType: "application/json"),
             analyzedAt: "2026-10-25T15:00:00+00:00",
             stats: AnalysisStats())
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        {"script_version":2,"ghidra":"12.1.2","functions":[
+          {"entry":"0x0","name":"entry","instructions":[
+            {"address":"0x0","bytes":"90","text":"NOP"}]}]}
+        """.utf8))
         controller.openCode(
             named: "CpuPei body", from: parent, source: 0x100..<0x140,
-            manifest: manifest,
+            manifest: manifest, artifact: artifact,
             codec: ReadOnlyPartCodec(
                 bytes,
                 title: L("This cannot be put back"),
