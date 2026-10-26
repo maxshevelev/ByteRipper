@@ -4,6 +4,9 @@
 // CryptoKit for hashes, Foundation for files and JSON, CoreServices for the
 // FSEvents stream that says when another process wrote the store. A reader — the Code
 // panel or an agent — never needs a disassembler to read what it holds.
+// It also holds the client of a served store (`RemoteStore`) and the mirror the
+// app reads in its place (`StoreMirror`), on URLSession; the server side is
+// `CASService`.
 //
 // Beside the library, one executable: `byteripper-cas`, the store as a command
 // line. The skill's Python writes and reads the store through it, so the

@@ -20,7 +20,14 @@ import Foundation
 /// collection — take a file lock. Reads verify an object against its hash. The
 /// store links nothing: CryptoKit hashes, Foundation writes, Darwin locks.
 public struct ContentStore: Sendable {
+    /// Where a missing object comes from, when the store is a mirror of a
+    /// served one (`StoreMirror`): asked for the bytes, which the store checks
+    /// against the hash and keeps before it returns them. It may block on the
+    /// network, so a mirror is read off the main actor, as every store is.
+    public typealias ObjectSource = @Sendable (SHA256Digest) throws -> Data
+
     public let root: URL
+    public var objectSource: ObjectSource?
 
     public init(root: URL, create: Bool = true) throws {
         self.root = root.standardizedFileURL
@@ -90,6 +97,14 @@ public struct ContentStore: Sendable {
     public func object(_ digest: SHA256Digest) throws -> Data {
         let url = objectURL(digest)
         guard let data = try? Data(contentsOf: url) else {
+            if let objectSource {
+                let fetched = try objectSource(digest)
+                guard SHA256Digest(data: fetched) == digest else {
+                    throw CodeAnalysisError.objectCorrupt(digest.hex)
+                }
+                try putObject(fetched)
+                return fetched
+            }
             throw CodeAnalysisError.objectMissing(digest.hex)
         }
         guard SHA256Digest(data: data) == digest else {
@@ -260,7 +275,9 @@ public struct ContentStore: Sendable {
     /// This is the one walk the code-analysis index makes. It never reads an
     /// artifact body, so an empty or missing store costs no hashing.
     public func usableAnalyses() -> [AnalysisManifest] {
-        analyses().filter { hasObject($0.artifact.sha256) }
+        // A mirror fetches an object on first read, so every manifest it holds
+        // is usable; a fetch that fails says so when the panel opens it.
+        analyses().filter { objectSource != nil || hasObject($0.artifact.sha256) }
     }
 
     public func key(of manifest: AnalysisManifest) -> AnalysisKey? { manifest.key }
@@ -677,7 +694,7 @@ public struct ContentStore: Sendable {
         return (loaded, problems)
     }
 
-    private func decodeManifest(at url: URL) throws -> AnalysisManifest {
+    func decodeManifest(at url: URL) throws -> AnalysisManifest {
         do {
             return try decoder.decode(AnalysisManifest.self, from: Data(contentsOf: url))
         } catch {
@@ -685,17 +702,17 @@ public struct ContentStore: Sendable {
         }
     }
 
-    private func contents(of url: URL) -> [URL] {
+    func contents(of url: URL) -> [URL] {
         (try? FileManager.default.contentsOfDirectory(
             at: url, includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles])) ?? []
     }
 
-    private func isDirectory(_ url: URL) -> Bool {
+    func isDirectory(_ url: URL) -> Bool {
         (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
     }
 
-    private func atomicWrite(_ data: Data, to url: URL) throws {
+    func atomicWrite(_ data: Data, to url: URL) throws {
         let folder = url.deletingLastPathComponent()
         try FileManager.default.createDirectory(
             at: folder, withIntermediateDirectories: true,
@@ -709,7 +726,7 @@ public struct ContentStore: Sendable {
         }
     }
 
-    private func withLock<T>(_ body: () throws -> T) throws -> T {
+    func withLock<T>(_ body: () throws -> T) throws -> T {
         try FileManager.default.createDirectory(
             at: root, withIntermediateDirectories: true,
             attributes: [.posixPermissions: 0o700])
@@ -727,13 +744,13 @@ public struct ContentStore: Sendable {
         return try body()
     }
 
-    private var encoder: JSONEncoder {
+    var encoder: JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         return encoder
     }
 
-    private var decoder: JSONDecoder { JSONDecoder() }
+    var decoder: JSONDecoder { JSONDecoder() }
 }
 
 /// The counts a manifest carries, read from the artifact without knowing the
