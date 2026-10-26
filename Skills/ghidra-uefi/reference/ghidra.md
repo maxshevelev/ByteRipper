@@ -167,6 +167,19 @@ that keeps Ghidra open:
 - **Ghidra's call graph is a set.** `getCalledFunctions` and
   `getCallingFunctions` iterate in no fixed order; sort them before writing, or
   the same program exports different bytes.
+- **`CParserUtils.parseSignature` and a name already in the program.**
+  `VOID *Name(…)` with `Name` already a symbol came back as a function named
+  `*Name` returning `void` — and Ghidra accepts `*Name` as a symbol. The owner
+  parses under a name nothing has and sets the real one after
+  `ApplyFunctionSignatureCmd`, which renames only a function Ghidra named.
+- **EDK2's `VOID`, `CONST`, `IN`, `OUT`, `OPTIONAL`, `EFIAPI` are macros**, not
+  types; no archive has them. Expand them before handing EDK2-spelled C to
+  Ghidra's parser.
+- **A type the program does not hold yet** is not found by `DataTypeParser`
+  even when the EDK2 archive has it; resolve it from the archive first.
+- **A decompiler temporary's `unique:` storage is not stable** between two
+  decompilations until it is named (then it is `HASH:…`): name a local from
+  the listing you just read.
 - **The project lock is exclusive and survives nothing.** A second process
   gets `LockException` while the first runs; after `kill -9` the stale lock
   does not stop the next open, and only what was saved is there.

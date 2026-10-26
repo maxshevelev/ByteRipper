@@ -14,7 +14,8 @@
 // against every jar of the Ghidra install, then
 //
 //   java -cp <ghidra jars>:owner.jar Owner --project-dir D --project-name N
-//        --program P --module SHA --project-id UUID [--port 0] [--idle SECONDS]
+//        --program P --module SHA --project-id UUID [--types ARCHIVE.gdt]
+//        [--port 0] [--idle SECONDS]
 //
 // It prints `OWNER READY <port>` once it serves. The plain classpath and the
 // DomainFile open are the two findings of phase 0 (plan §3): a class on the
@@ -46,6 +47,7 @@ import ghidra.program.model.address.Address;
 import ghidra.program.model.data.DataType;
 import ghidra.program.model.data.DataTypeConflictHandler;
 import ghidra.program.model.data.DataUtilities;
+import ghidra.program.model.data.FileDataTypeManager;
 import ghidra.program.model.data.FunctionDefinitionDataType;
 import ghidra.program.model.listing.CodeUnit;
 import ghidra.program.model.listing.CommentType;
@@ -88,6 +90,9 @@ public class Owner {
     private GhidraProject project;
     private Program program;
     private DecompInterface decompiler;
+    // The EDK2 archive the program was typed with, read-only: a type a
+    // review names that the program does not hold yet comes from here.
+    private FileDataTypeManager archive;
     private final Map<Address, DecompileResults> decompiled = new HashMap<>();
     private long decompiledAt = -1;
     private volatile long lastRequest = System.currentTimeMillis();
@@ -125,6 +130,9 @@ public class Owner {
         program = (Program) file.getDomainObject(this, true, false, TaskMonitor.DUMMY);
         decompiler = new DecompInterface();
         decompiler.openProgram(program);
+        if (options.containsKey("types")) {
+            archive = FileDataTypeManager.openFileArchive(new File(options.get("types")), false);
+        }
         // What the program held before anyone reviewed it — the loader's
         // comments, ApplyUefi's types — so a harvest holds only the review.
         int transaction = program.startTransaction("baseline");
@@ -169,6 +177,7 @@ public class Owner {
             if (program == null) return;
             if (program.isChanged()) program.save("owner", TaskMonitor.DUMMY);
             if (decompiler != null) decompiler.dispose();
+            if (archive != null) archive.close();
             program.release(this);
             program = null;
             project.close();
@@ -525,6 +534,8 @@ public class Owner {
     private JsonObject renameFunction(JsonObject body) throws Exception {
         Function function = functionAt(required(body, "address"));
         String name = required(body, "name");
+        // Ghidra takes `*Name` for a name; C, the panel and a reader do not.
+        if (!name.matches("[A-Za-z_][A-Za-z0-9_]*")) throw new Failure(400, name + " is not a C identifier");
         // Ghidra would make a duplicate `Foo_1`; a client gets the refusal.
         for (Symbol other : program.getSymbolTable().getGlobalSymbols(name)) {
             if (!other.getAddress().equals(function.getEntryPoint())) {
@@ -583,8 +594,10 @@ public class Owner {
             if (ordinal != null) {
                 fits = symbol.isParameter() && symbol.getCategoryIndex() == ordinal;
             } else {
+                // A first use, when given, has to match whatever the variable is:
+                // a parameter shares its register with locals of the body.
                 fits = symbol.getStorage().toString().equals(storage)
-                    && (firstUse == null || symbol.isParameter()
+                    && (firstUse == null
                         || (symbol.getPCAddress() != null && hex(symbol.getPCAddress()).equalsIgnoreCase(firstUse)));
             }
             if (!fits) continue;
@@ -620,17 +633,39 @@ public class Owner {
 
     private JsonObject setSignature(JsonObject body) throws Exception {
         Function function = functionAt(required(body, "address"));
+        String text = edk2(required(body, "signature"));
+        // Ghidra's signature parser misreads the pointers of the return type
+        // when the function's name is already a symbol of the program (`T *`
+        // came back as `T`, or as `T **`). The text is parsed under a name
+        // nothing has, and the real one is set afterwards.
+        java.util.regex.Matcher named = java.util.regex.Pattern
+            .compile("([A-Za-z_][A-Za-z0-9_]*)\\s*\\(").matcher(text);
+        if (!named.find()) throw new Failure(400, "the signature names no function");
+        String name = named.group(1);
+        String parsed = text.substring(0, named.start(1)) + " __byteripper_signature"
+                        + text.substring(named.end(1));
+        importTypes(parsed);
         FunctionDefinitionDataType signature;
         try {
             signature = CParserUtils.parseSignature((ghidra.app.services.DataTypeManagerService) null,
-                                                    program, required(body, "signature"), false);
+                                                    program, parsed, false);
         } catch (Exception error) {
             throw new Failure(400, "the signature does not parse: " + error.getMessage());
         }
         if (signature == null) throw new Failure(400, "the signature does not parse");
+        signature.setName(name);
         ApplyFunctionSignatureCmd command =
             new ApplyFunctionSignatureCmd(function.getEntryPoint(), signature, SourceType.USER_DEFINED);
         if (!command.applyTo(program)) throw new Failure(400, command.getStatusMsg());
+        // The command renames only a function Ghidra named; a signature's name
+        // is the reviewer's either way.
+        if (!function.getName().equals(name)) {
+            try {
+                function.setName(name, SourceType.USER_DEFINED);
+            } catch (Exception error) {
+                throw new Failure(409, error.getMessage());
+            }
+        }
         if (!function.getName().equals(signature.getName()) || function.getSymbol().getSource() == SourceType.USER_DEFINED) {
             why(function.getEntryPoint(), body);
         }
@@ -700,7 +735,42 @@ public class Owner {
         return answer;
     }
 
+    /**
+     * Brings into the program every type `text` names that the program does
+     * not hold but the EDK2 archive does — `VOID`, a protocol, a PI table —
+     * so a signature or a variable can be written the way EDK2 spells it.
+     */
+    private void importTypes(String text) {
+        if (archive == null) return;
+        java.util.regex.Matcher words = java.util.regex.Pattern.compile("[A-Za-z_][A-Za-z0-9_]*").matcher(text);
+        while (words.find()) {
+            String word = words.group();
+            java.util.List<DataType> here = new java.util.ArrayList<>();
+            program.getDataTypeManager().findDataTypes(word, here);
+            if (!here.isEmpty()) continue;
+            java.util.List<DataType> there = new java.util.ArrayList<>();
+            archive.findDataTypes(word, there);
+            if (!there.isEmpty()) {
+                program.getDataTypeManager().resolve(there.get(0), DataTypeConflictHandler.DEFAULT_HANDLER);
+            }
+        }
+    }
+
+    /**
+     * EDK2's spelling without its macros, which are not types: `VOID` is
+     * `void`, `CONST` is `const`, and `IN`, `OUT`, `OPTIONAL`, `EFIAPI` say
+     * nothing a C parser reads.
+     */
+    static String edk2(String text) {
+        return text.replaceAll("\\bVOID\\b", "void")
+                   .replaceAll("\\bCONST\\b", "const")
+                   .replaceAll("\\b(IN|OUT|OPTIONAL|EFIAPI)\\b", " ")
+                   .replaceAll("\\s+", " ").trim();
+    }
+
     private DataType type(String text) throws Failure {
+        text = edk2(text);
+        importTypes(text);
         try {
             DataType type = new DataTypeParser(program.getDataTypeManager(), program.getDataTypeManager(),
                                                null, DataTypeParser.AllowedDataTypes.ALL).parse(text);

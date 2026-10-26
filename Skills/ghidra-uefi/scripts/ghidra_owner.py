@@ -184,6 +184,7 @@ class Project:
                           "types": uefi_types.EDK2_TAG if pass_ else None,
                           "passes": ["ApplyUefi.java"] if pass_ else []},
             "source": source,
+            "archive": str(pass_["gdt"]) if pass_ else None,
             "created_at": now(),
             "reviewed": False,
             "published": None,
@@ -223,6 +224,7 @@ class Project:
                    "--project-dir", str(self.dir), "--project-name", PROJECT_NAME,
                    "--program", state["program"], "--module", self.sha,
                    "--project-id", state["project"],
+                   *(["--types", state["archive"]] if state.get("archive") else []),
                    "--port", "0", "--idle", str(idle)]
         handle = open(log, "w", encoding="utf-8")
         process = subprocess.Popen(command, stdout=handle, stderr=subprocess.STDOUT,
@@ -470,6 +472,15 @@ def main(argv: list[str]) -> int:
                 project.create(module, blob, args.name or module.stem,
                                {"path": str(module), "document": args.document, "node": args.node},
                                args.phase, not args.no_uefi, args.ghidra_home, args.types_cache)
+            else:
+                # A project made before the archive was recorded learns it now.
+                state = project.state()
+                if state.get("made_with", {}).get("types") and not state.get("archive"):
+                    cache = uefi_types.paths(args.types_cache)
+                    gdt = cache["gdt_ia32"] if code_artifact.machine(blob) == 0x14C else cache["gdt_x64"]
+                    if gdt.is_file():
+                        state["archive"] = str(gdt)
+                        project.write_state(state)
             record = project.start(args.ghidra_home, args.idle)
             print(json.dumps({"module": project.sha, "port": record["port"],
                               "name": project.state()["module"]["name"]}, indent=2))
