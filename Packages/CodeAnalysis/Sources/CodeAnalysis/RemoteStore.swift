@@ -204,7 +204,8 @@ public struct RemoteStore: Sendable {
         do {
             (data, response) = try await session.data(for: request)
         } catch {
-            throw Failure.unreachable(error.localizedDescription)
+            throw Failure.unreachable("no byteripper-server answers at \(base.absoluteString) "
+                + "(\(error.localizedDescription)) — is it running, and listening on that address?")
         }
         guard let http = response as? HTTPURLResponse else {
             throw Failure.unexpected("not an HTTP answer")
