@@ -45,7 +45,8 @@ struct CodeScreen {
     /// The same place by address, preferred over the indices when the
     /// artifact has it: indices name a place in one artifact only.
     var place: CodeLocation?
-    var showsC: Bool = false
+    /// A module opens on its decompiled C; the listing is one click away.
+    var showsC: Bool = true
     /// Every readable analysis of this module, the chosen one included. Nil
     /// or one entry means there is nothing to choose; the panel still has the
     /// chosen manifest.

@@ -139,6 +139,7 @@ import ToolModuleKit
         build(hexView: moduleHexView)
         drawNavigator()
         drawSelection()
+        applyMode()
         resetHistory()
         // The code is read at the size of the dump beside it: View ▸ Zoom In
         // and Zoom Out move both.
@@ -781,7 +782,8 @@ import ToolModuleKit
 
         modeControl.target = self
         modeControl.action = #selector(modeChanged)
-        modeControl.selectedSegment = 0
+        // The decompiled C first: it is what a module is read in.
+        modeControl.selectedSegment = 1
         modeControl.setContentHuggingPriority(.required, for: .horizontal)
         modeControl.setContentCompressionResistancePriority(.required, for: .horizontal)
 

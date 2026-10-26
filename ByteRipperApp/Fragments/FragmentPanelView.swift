@@ -304,6 +304,18 @@ final class FragmentPanelHost: NSView {
     override func layout() {
         super.layout()
         onLayout?()
+        coverToolTips()
+    }
+
+    /// AppKit shows a covered view's tooltip as if nothing lay over it: a row
+    /// of the UEFI tree under a panel said "Decompressed from … at …" over the
+    /// panel's code. An empty tooltip of the host's own, over all of it, is
+    /// what the pointer reads over the scrim and the panel; a tooltip of a
+    /// view inside the panel still wins over it.
+    private func coverToolTips() {
+        removeAllToolTips()
+        guard isHoldingAPanel else { return }
+        addToolTip(bounds, owner: CoveringToolTip.shared, userData: nil)
     }
 
     // MARK: - The wall
@@ -363,12 +375,16 @@ final class FragmentPanelHost: NSView {
     override func didAddSubview(_ subview: NSView) {
         super.didAddSubview(subview)
         registerForDraggedTypes([.fileURL, .fileNames, .pane])
+        coverToolTips()
     }
 
     override func willRemoveSubview(_ subview: NSView) {
         super.willRemoveSubview(subview)
         // Sent before the removal, so the last one still counts itself.
-        if subviews == [subview] { unregisterDraggedTypes() }
+        if subviews == [subview] {
+            unregisterDraggedTypes()
+            removeAllToolTips()
+        }
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation { [] }
@@ -511,5 +527,15 @@ final class FragmentPanelView: NSView {
         effectiveAppearance.performAsCurrentDrawingAppearance {
             body.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
         }
+    }
+}
+
+/// The tooltip of nothing: what the panel host answers for the panes it covers.
+private final class CoveringToolTip: NSObject, NSViewToolTipOwner {
+    static let shared = CoveringToolTip()
+
+    func view(_ view: NSView, stringForToolTip tag: NSView.ToolTipTag,
+              point: NSPoint, userData data: UnsafeMutableRawPointer?) -> String {
+        ""
     }
 }
