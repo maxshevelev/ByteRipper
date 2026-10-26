@@ -114,6 +114,10 @@ packages:
   # Ghidra skill writes it.
   CodeAnalysis:
     path: Packages/CodeAnalysis
+  # The server's HTTP listener (`Design/SERVER_PLAN.md`). Only
+  # `byteripper-server` links it, never the app; listed so Xcode sees it.
+  HTTPService:
+    path: Packages/HTTPService
   # The code pane beside a module's bytes, and the placeholder stage the panel
   # is built through.
   CodeView:
