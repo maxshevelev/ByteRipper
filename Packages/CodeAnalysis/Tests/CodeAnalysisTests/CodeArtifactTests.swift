@@ -94,10 +94,28 @@ final class CodeArtifactTests: XCTestCase {
     // MARK: - Refusals
 
     func testAnUnknownScriptVersionIsRefused() {
-        let json = #"{"script_version": 3, "ghidra": "12.1.2", "functions": []}"#
+        let json = #"{"script_version": 4, "ghidra": "12.1.2", "functions": []}"#
         XCTAssertThrowsError(try decoded(json)) { error in
-            XCTAssertEqual(error as? CodeArtifactError, .unsupportedVersion(3))
+            XCTAssertEqual(error as? CodeArtifactError, .unsupportedVersion(4))
         }
+    }
+
+    // MARK: - Status-code candidates
+
+    /// `[reg + 0x58]` is ReportStatusCode only in the 32-bit PEI services
+    /// table. A v2 artifact of a 64-bit image listed SetTimer and SetVariable
+    /// calls under that name; the reader drops them. v3 does not write them.
+    func testAV2SixtyFourBitImageHasNoStatusCodeCandidates() throws {
+        func artifact(version: Int, language: String) throws -> CodeArtifact {
+            try decoded("""
+            {"script_version":\(version),"program":{"language":"\(language)"},
+             "status_code_calls":[{"address":"0x10A5","text":"CALL qword ptr [RAX + 0x58]"}]}
+            """)
+        }
+        XCTAssertTrue(try artifact(version: 2, language: "x86:LE:64:default").statusCodeCalls.isEmpty)
+        XCTAssertEqual(try artifact(version: 2, language: "x86:LE:32:default").statusCodeCalls.count, 1)
+        XCTAssertEqual(try artifact(version: 3, language: "x86:LE:64:default").statusCodeCalls.count, 1,
+                       "a v3 exporter's list is its own decision")
     }
 
     func testAMalformedAddressIsRefused() {

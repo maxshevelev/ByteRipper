@@ -377,10 +377,20 @@ rendered as text, never as HTML or a web view; the artifact is untrusted input
 even when its hash is sound.
 
 The artifact's `script_version` is the exporter's version, separate from the
-manifest `schema`. The current skill writes `script_version: 2`; the panel must
-read 2. An added optional field the reader can ignore needs no new version;
-anything the reader must understand is a new `script_version`, and old
-artifacts stay readable.
+manifest `schema`. The current skill writes `script_version: 3`; the panel reads
+2 and 3. Version 3 has the shape of 2: it keeps UTF-16 strings, and names
+`ReportStatusCode` candidates only in a 32-bit image, where `[reg + 0x58]` is
+that slot of the PEI services table. A v2 artifact of a 64-bit image has its
+candidate list dropped on reading — it was SetTimer and SetVariable calls. An
+added optional field the reader can ignore needs no new version; anything the
+reader must understand is a new `script_version`, and old artifacts stay
+readable.
+
+The panel reads the artifact through `CodeModel`, the indices built once over
+it — function by entry, instruction by the module bytes it covers, address by
+the instructions that use it — and draws a `CodeReaderState`, the selection and
+navigator rules apart from AppKit. An instruction's targets are written as
+module offsets, the same numbers as the listing's first column.
 
 `CodeAnalysis` also gains:
 
@@ -395,7 +405,10 @@ artifacts stay readable.
 The index never hashes on the main actor. It reads the manifests' module sizes,
 skips candidates whose body lengths cannot match, and hashes the rest off the
 main actor. With an empty store it does no hashing at all. It refreshes on the
-tree's edit generation and when the store changes.
+tree's edit generation and when the store changes: `CodeStoreWatcher` follows
+`analyses/` with FSEvents, so a manifest the skill writes is seen at once and an
+idle store costs nothing. A change during a scan does not cancel it; the scan
+runs again when it is done.
 
 ## Where the decisions live
 

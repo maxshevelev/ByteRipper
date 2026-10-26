@@ -26,7 +26,7 @@ with no app running.
 | `scripts/ExportModule.java` | a Ghidra script | functions, signatures, callers/callees, decompiled C |
 | `scripts/ExportCode.java` | a Ghidra script | the full code artifact: every instruction, references, C, strings, POST writes and status-code candidates |
 | `scripts/code_artifact.py` | one Ghidra run per module | analyzes once and stores the artifact under the module's SHA-256 |
-| `scripts/code_query.py` | stdlib, no Ghidra | reads the stored artifact: functions, disassembly, C, xrefs, search, post-codes |
+| `scripts/code_query.py` | stdlib, no Ghidra | reads the stored artifact: functions, disassembly, C, xrefs, the uses of an address, search, post-codes |
 | `scripts/cas.py` | stdlib | the local content-addressed store: objects, analyses, references, GC, bundles |
 | `scripts/cas_cli.py` | stdlib | the store's command line: list, show, verify, gc, ref, export, import |
 | `scripts/module_scan.py` | stdlib, offline only | finds PE32/TE images in a dump without the app; opens LZMA, not Tiano |
@@ -124,8 +124,13 @@ python3 Skills/ghidra-uefi/scripts/code_artifact.py CpuPei.te --name CpuPei \
 python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te functions
 python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te decompile 0x4BF
 python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te search 0x11004
+python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te uses 0x4BF
 python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te status-codes
 ```
+
+The exporter writes `script_version: 3` (`reference/code-artifact.md`): a
+module analyzed by the v2 exporter is analyzed again as a new recipe beside the
+old one. Status-code candidates exist only for a 32-bit (PEI) image.
 
 The store is `~/Library/Application Support/ByteRipper/Analysis`:
 

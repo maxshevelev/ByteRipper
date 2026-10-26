@@ -3,13 +3,15 @@
 
 `code_artifact.py` is the one-time pass; this is the reading side. Point it at
 the module's bytes or at the SHA-256 the artifact is stored under, then ask for
-functions, a function's disassembly or decompiled C, its references, a text in
-the code, the strings, or the writes to the POST port.
+functions, a function's disassembly or decompiled C, its references, the
+instructions that use an address, a text in the code, the strings, or the
+writes to the POST port.
 
     python3 code_query.py CpuPei.te functions
     python3 code_query.py CpuPei.te disasm FUN_000004bf
     python3 code_query.py CpuPei.te decompile 0x4BF
     python3 code_query.py CpuPei.te search 0x11004
+    python3 code_query.py CpuPei.te uses 0x4BF
     python3 code_query.py CpuPei.te post-codes
 
 No Ghidra is run and no program is loaded: the answer comes from `code.json`
@@ -46,11 +48,41 @@ def normalize_address(text: str) -> int | None:
         return None
 
 
+# The exporter versions this reader understands; the Swift reader keeps the
+# same set (`CodeArtifact.supportedScriptVersions`). 3 has the shape of 2.
+SUPPORTED_SCRIPT_VERSIONS = {2, 3}
+
+
 class Artifact:
     def __init__(self, manifest: dict, code: dict):
+        version = code.get("script_version")
+        if version not in SUPPORTED_SCRIPT_VERSIONS:
+            raise SystemExit(f"the artifact's script_version {version} is not supported")
         self.manifest = manifest
         self.code = code
         self.functions = code.get("functions", [])
+        # The v2 exporter took any call through [reg + 0x58] for
+        # ReportStatusCode. That is the 32-bit PEI services slot only; in a
+        # 64-bit image it is SetTimer or SetVariable, so the list is dropped.
+        language = (code.get("program") or {}).get("language") or ""
+        parts = language.split(":")
+        if version == 2 and len(parts) >= 3 and parts[2] == "64":
+            code["status_code_calls"] = []
+
+    def uses(self, address: int) -> list[dict]:
+        """The instructions that refer to `address`: calls, jumps, reads and
+        writes, in listing order."""
+        found = []
+        for function in self.functions:
+            for instruction in function.get("instructions", []):
+                for reference in instruction.get("references", []):
+                    if normalize_address(reference.get("to", "")) == address:
+                        found.append({"from": instruction.get("address"),
+                                      "function": function.get("entry"),
+                                      "name": function.get("name"),
+                                      "type": reference.get("type"),
+                                      "instruction": instruction.get("text")})
+        return found
 
     def function(self, wanted: str) -> dict:
         address = normalize_address(wanted)
@@ -108,7 +140,8 @@ def main(argv: list[str]) -> int:
     parser.add_argument("target", help="the module's bytes, or the artifact's SHA-256")
     parser.add_argument("command", nargs="?", default="summary",
                         choices=["summary", "functions", "function", "disasm", "decompile",
-                                 "xrefs", "search", "strings", "post-codes", "status-codes"])
+                                 "xrefs", "uses", "search", "strings", "post-codes",
+                                 "status-codes"])
     parser.add_argument("argument", nargs="?", help="a function name or address, or the text to find")
     parser.add_argument("--store", type=Path, default=default_store())
     parser.add_argument("--recipe", help="the analysis recipe, when several exist")
@@ -203,6 +236,21 @@ def main(argv: list[str]) -> int:
                     print(f"  {reference['from']} -> {reference['to']}  "
                           f"{reference['type']}  {reference['instruction']}")
             return 0
+
+    if args.command == "uses":
+        address = normalize_address(args.argument or "")
+        if address is None:
+            print("uses: give the address to look for", file=sys.stderr)
+            return 2
+        uses = artifact.uses(address)
+        if args.json:
+            print(json.dumps(uses[:args.limit or None], indent=2))
+        else:
+            for use in uses[:args.limit or None]:
+                print(f"{use['from']:>10}  {use['type']:<20}  {use['name']}  {use['instruction']}")
+            if not uses:
+                print(f"no instruction refers to {args.argument}")
+        return 0
 
     if args.command == "search":
         if not args.argument:

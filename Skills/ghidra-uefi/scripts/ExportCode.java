@@ -21,6 +21,7 @@ import ghidra.app.decompiler.DecompileResults;
 import ghidra.app.script.GhidraScript;
 import ghidra.framework.Application;
 import ghidra.program.model.address.Address;
+import ghidra.program.model.address.AddressSet;
 import ghidra.program.model.data.DataType;
 import ghidra.program.model.listing.Data;
 import ghidra.program.model.listing.DataIterator;
@@ -47,7 +48,7 @@ public class ExportCode extends GhidraScript {
         Listing listing = currentProgram.getListing();
         StringBuilder json = new StringBuilder(1 << 22);
         json.append("{\n");
-        json.append("  \"script_version\": 2,\n");
+        json.append("  \"script_version\": 3,\n");
         json.append("  \"ghidra\": ").append(quote(Application.getApplicationVersion())).append(",\n");
         json.append("  \"program\": {\n");
         json.append("    \"name\": ").append(quote(currentProgram.getName())).append(",\n");
@@ -71,15 +72,19 @@ public class ExportCode extends GhidraScript {
         }
         json.append("],\n");
 
-        // Strings worth naming: defined string data, at its address.
-        List<String> strings = new ArrayList<>();
+        // Strings worth naming: every defined string, whatever Ghidra's type
+        // for it — `string`, `TerminatedCString`, `unicode`,
+        // `TerminatedUnicode` — and then the UTF-16 runs Ghidra left as bytes.
+        // UEFI names its variables and its menus in UTF-16 (`L"BootOrder"`);
+        // a list without them misses what a repair is usually looking for.
+        List<long[]> stringOrder = new ArrayList<>();
+        List<String> stringEntries = new ArrayList<>();
+        AddressSet definedStrings = new AddressSet();
         DataIterator data = listing.getDefinedData(true);
         while (data.hasNext() && !monitor.isCancelled()) {
             Data item = data.next();
+            if (!item.hasStringValue()) continue;
             DataType type = item.getDataType();
-            if (type == null) continue;
-            String typeName = type.getName();
-            if (!typeName.toLowerCase().contains("string")) continue;
             Object value;
             try {
                 value = item.getValue();
@@ -87,10 +92,51 @@ public class ExportCode extends GhidraScript {
                 continue;
             }
             if (value == null) continue;
-            strings.add("{\"address\": " + quote(hex(item.getAddress()))
-                + ", \"type\": " + quote(typeName)
+            definedStrings.add(item.getMinAddress(), item.getMaxAddress());
+            stringOrder.add(new long[] { item.getAddress().getOffset(), stringEntries.size() });
+            stringEntries.add("{\"address\": " + quote(hex(item.getAddress()))
+                + ", \"type\": " + quote(type == null ? "string" : type.getName())
                 + ", \"value\": " + quote(value.toString()) + "}");
         }
+        for (MemoryBlock block : blocks) {
+            if (monitor.isCancelled()) break;
+            if (!block.isInitialized() || block.getSize() > (64L << 20)) continue;
+            byte[] bytes = new byte[(int) block.getSize()];
+            try {
+                block.getBytes(block.getStart(), bytes);
+            } catch (Exception error) {
+                continue;
+            }
+            int index = 0;
+            while (index + 1 < bytes.length) {
+                int length = 0;
+                while (index + 2 * length + 1 < bytes.length
+                        && bytes[index + 2 * length + 1] == 0
+                        && isText(bytes[index + 2 * length])) {
+                    length++;
+                }
+                boolean terminated = index + 2 * length + 1 < bytes.length
+                    && bytes[index + 2 * length] == 0 && bytes[index + 2 * length + 1] == 0;
+                if (length >= 4 && terminated) {
+                    Address start = block.getStart().add(index);
+                    if (!definedStrings.contains(start)
+                            && listing.getInstructionContaining(start) == null) {
+                        StringBuilder text = new StringBuilder(length);
+                        for (int at = 0; at < length; at++) text.append((char) bytes[index + 2 * at]);
+                        stringOrder.add(new long[] { start.getOffset(), stringEntries.size() });
+                        stringEntries.add("{\"address\": " + quote(hex(start))
+                            + ", \"type\": \"unicode\", \"value\": " + quote(text.toString())
+                            + ", \"source\": \"scan\"}");
+                    }
+                    index += 2 * (length + 1);
+                } else {
+                    index += 2;
+                }
+            }
+        }
+        stringOrder.sort((left, right) -> Long.compare(left[0], right[0]));
+        List<String> strings = new ArrayList<>();
+        for (long[] entry : stringOrder) strings.add(stringEntries.get((int) entry[1]));
         json.append("  \"strings\": [").append(String.join(", ", strings)).append("],\n");
 
         // Functions, in address order, with their instructions and decompiled C.
@@ -105,6 +151,10 @@ public class ExportCode extends GhidraScript {
 
         List<String> postCodes = new ArrayList<>();
         List<String> statusCodeCalls = new ArrayList<>();
+        // `[reg + 0x58]` is ReportStatusCode in the 32-bit PEI services
+        // table. In a 64-bit image the same slot is Boot Services' SetTimer or
+        // Runtime Services' SetVariable, so no candidate is named there.
+        boolean thirtyTwoBit = currentProgram.getLanguage().getLanguageDescription().getSize() == 32;
         json.append("  \"functions\": [\n");
         for (int index = 0; index < functions.size(); index++) {
             Function function = functions.get(index);
@@ -155,7 +205,7 @@ public class ExportCode extends GhidraScript {
                 // ReportStatusCode call in a 32-bit PEI services table; the
                 // pushes just before it carry Type and Value. A candidate,
                 // because another table could use the same displacement.
-                if (instruction.getFlowType().isCall() && text.matches(".*\\[\\s*\\w+\\s*\\+\\s*0x58\\s*\\].*")) {
+                if (thirtyTwoBit && instruction.getFlowType().isCall() && text.matches(".*\\[\\s*\\w+\\s*\\+\\s*0x58\\s*\\].*")) {
                     List<String> context = new ArrayList<>(recent);
                     statusCodeCalls.add("{\"address\": " + quote(hex(instruction.getAddress()))
                         + ", \"function\": " + quote(hex(function.getEntryPoint()))
@@ -213,6 +263,13 @@ public class ExportCode extends GhidraScript {
 
     private static String hex(long value) {
         return String.format("0x%X", value);
+    }
+
+    // A UTF-16 code unit's low byte that reads as text: printable ASCII, a
+    // tab or a line break.
+    private static boolean isText(byte value) {
+        int c = value & 0xFF;
+        return (c >= 0x20 && c < 0x7F) || c == '\t' || c == '\n' || c == '\r';
     }
 
     private static String hexBytes(byte[] bytes) {

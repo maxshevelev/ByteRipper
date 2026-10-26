@@ -1,7 +1,8 @@
 // swift-tools-version: 5.9
 // CodeAnalysis: the code artifacts a disassembler produces, and the local
 // content-addressed store that keeps them. It links nothing but the system:
-// CryptoKit for hashes, Foundation for files and JSON. A reader — the Code
+// CryptoKit for hashes, Foundation for files and JSON, CoreServices for the
+// FSEvents stream that says when another process wrote the store. A reader — the Code
 // panel or an agent — never needs a disassembler to read what it holds.
 import PackageDescription
 

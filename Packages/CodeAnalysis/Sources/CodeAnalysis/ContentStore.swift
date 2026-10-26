@@ -84,6 +84,20 @@ public struct ContentStore: Sendable {
         return data
     }
 
+    /// The typed artifact a manifest names: its object, checked against its
+    /// hash, then decoded. The one way the app and an agent load an artifact,
+    /// so a reader that refuses an exporter version refuses it everywhere.
+    public func artifact(for manifest: AnalysisManifest) throws -> CodeArtifact {
+        let data = try object(manifest.artifact.sha256)
+        do {
+            return try JSONDecoder().decode(CodeArtifact.self, from: data)
+        } catch let error as CodeArtifactError {
+            throw error
+        } catch {
+            throw CodeArtifactError.invalid("\(error)")
+        }
+    }
+
     // MARK: - Analyses
 
     @discardableResult

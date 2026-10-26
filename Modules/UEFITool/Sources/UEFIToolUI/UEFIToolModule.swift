@@ -232,12 +232,15 @@ private struct ChecksumPass: Sendable {
     /// then is that refresh's own work; refreshing again from `.expanded`
     /// would cancel the task that is about to scan.
     private var codeSourceMaterializationDepth = 0
-    /// Re-reads the store while the panel is up. The store is written by the
-    /// Ghidra skill, not by this app, so there is no change notification to
-    /// subscribe to; a small poll is what makes a new analysis appear without
-    /// the reader having to reopen the panel. The index comparison makes an
-    /// unchanged store cost one directory walk and no hashing.
-    private var codeAnalysisWatch: Task<Void, Never>?
+    /// Says when the store changed. The store is written by the Ghidra skill,
+    /// not by this app; the watcher's file-system events are what make a new
+    /// analysis appear without the reader reopening the panel, and an idle
+    /// store costs nothing at all.
+    private var codeStoreWatcher: CodeStoreWatcher?
+    /// The store changed while a scan was running. The scan is not cancelled
+    /// for it — a long one would never finish under a stream of writes — and
+    /// runs again from the top once it is done.
+    private var codeStoreChangedDuringScan = false
     /// The node the user is looking at. Nil before a choice, and after an edit
     /// that lost it.
     private var focus: NodeID?
@@ -462,21 +465,33 @@ private struct ChecksumPass: Sendable {
         }
     }
 
-    /// The local store is written by the Ghidra skill, outside this app, and
-    /// has no change notification of its own. While the panel is up, a small
-    /// poll reloads the index; an unchanged store is one directory walk, and
+    /// The local store is written by the Ghidra skill, outside this app. While
+    /// the panel is up its folder is watched; a change reloads the index, and
     /// only a changed index resets what was already hashed.
     private func watchCodeAnalysis() {
-        guard codeAnalysisWatch == nil else { return }
-        codeAnalysisWatch = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(2))
-                guard !Task.isCancelled, let self else { return }
-                guard self.tree != nil, UEFIToolModule.codeAnalysisRoot != nil else {
-                    continue
-                }
-                self.refreshCodeAnalysis()
-            }
+        guard codeStoreWatcher == nil, let root = UEFIToolModule.codeAnalysisRoot else { return }
+        codeStoreWatcher = CodeStoreWatcher(root: root) { [weak self] in
+            MainActor.assumeIsolated { self?.codeStoreChanged() }
+        }
+    }
+
+    private func codeStoreChanged() {
+        guard tree != nil else { return }
+        if codeAnalysisRequest != nil {
+            codeStoreChangedDuringScan = true
+        } else {
+            refreshCodeAnalysis()
+        }
+    }
+
+    /// A scan finished, or gave way to a newer one. The newest scan clears the
+    /// request, and runs again if the store changed while it ran.
+    private func codeAnalysisRequestEnded(_ generation: Int) {
+        guard codeAnalysisGeneration == generation else { return }
+        codeAnalysisRequest = nil
+        if codeStoreChangedDuringScan {
+            codeStoreChangedDuringScan = false
+            refreshCodeAnalysis()
         }
     }
 
@@ -580,8 +595,9 @@ private struct ChecksumPass: Sendable {
         meChecksumsTask = nil
         codeAnalysisRequest?.cancel()
         codeAnalysisRequest = nil
-        codeAnalysisWatch?.cancel()
-        codeAnalysisWatch = nil
+        codeStoreWatcher?.stop()
+        codeStoreWatcher = nil
+        codeStoreChangedDuringScan = false
     }
 
     public var parkedState: (any ToolSessionState)? {
@@ -947,6 +963,7 @@ private struct ChecksumPass: Sendable {
         let checked = codeAnalysisChecked
 
         codeAnalysisRequest = Task { [weak self] in
+            defer { self?.codeAnalysisRequestEnded(generation) }
             let index = await Task.detached(priority: .utility) {
                 CodeAnalysisIndex.load(from: root)
             }.value
@@ -2222,12 +2239,8 @@ private struct ChecksumPass: Sendable {
             }
             let root = UEFIToolModule.codeAnalysisRoot
             let artifact = await Task.detached(priority: .userInitiated) { () -> CodeArtifact? in
-                guard let root,
-                      let store = try? ContentStore(root: root, create: false),
-                      let data = try? store.object(manifest.artifact.sha256),
-                      let artifact = try? JSONDecoder().decode(CodeArtifact.self, from: data)
-                else { return nil }
-                return artifact
+                guard let root else { return nil }
+                return try? ContentStore(root: root, create: false).artifact(for: manifest)
             }.value
             guard let artifact else {
                 self.fail(L("The code analysis could not be read."))

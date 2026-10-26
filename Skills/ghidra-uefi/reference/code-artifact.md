@@ -33,7 +33,7 @@ output changes.
 
 ```json
 {
-  "script_version": 2,
+  "script_version": 3,
   "ghidra": "12.1.2",
   "program": {
     "name": "CpuPei", "language": "x86:LE:32:default",
@@ -41,7 +41,10 @@ output changes.
   },
   "blocks": [{"name": ".text", "start": "...", "end": "...",
               "executable": true, "initialized": true}],
-  "strings": [{"address": "...", "type": "string", "value": "..."}],
+  "strings": [{"address": "...", "type": "string", "value": "..."},
+              {"address": "...", "type": "unicode", "value": "BootOrder"},
+              {"address": "...", "type": "unicode", "value": "...",
+               "source": "scan"}],
   "functions": [{
     "entry": "0x4BF", "name": "FUN_000004bf", "size": 242,
     "signature": "...", "external": false, "thunk": false,
@@ -71,6 +74,12 @@ output changes.
 - `c` is the decompiler's C, kept per function. It is a derived view: the
   instructions are the ground truth, and a later Ghidra may word the C
   differently.
+- `strings` is every string Ghidra defined — `string`, `TerminatedCString`,
+  `unicode`, `TerminatedUnicode` — and, marked `"source": "scan"`, the UTF-16
+  runs of four characters or more that Ghidra left as bytes, outside any
+  instruction. UEFI names its variables and menus in UTF-16; the v2 exporter
+  kept only types whose name says `string`, so a v2 BdsDxe has 86 strings and
+  no `L"BootOrder"`, a v3 one 328.
 - `post_codes` is every `OUT` instruction, with its port and text. A board's
   POST card shows what these write.
 - `status_code_calls` is a **candidate** list: a call through a table entry at
@@ -79,6 +88,21 @@ output changes.
   pushes of `0x80000002` (Type), `0x11004` (Value), the instance and the data
   pointer. Another table could use the same displacement, so the reader must
   look at the context and the function, not take the label on trust.
+  Only a 32-bit image gets candidates: in a 64-bit one the same slot is Boot
+  Services' `SetTimer` or Runtime Services' `SetVariable`. A v2 artifact named
+  them in every image (66 in BdsDxe, none of them status codes); both readers
+  drop a v2 artifact's list when its language is 64-bit.
+
+### Versions
+
+| `script_version` | What changed |
+| --- | --- |
+| 2 | The first artifact the Code panel reads. |
+| 3 | Same shape. UTF-16 strings kept and scanned for; status-code candidates only in a 32-bit image. |
+
+The Swift reader (`CodeArtifact.supportedScriptVersions`) and `code_query.py`
+(`SUPPORTED_SCRIPT_VERSIONS`) accept the same set and refuse any other. A v3
+run is a new recipe beside the v2 one; the v2 analysis stays readable.
 
 ## Reading it
 
@@ -94,6 +118,7 @@ python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te function 0x4BF
 python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te disasm 0x4BF --limit 20
 python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te decompile 0x4BF
 python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te xrefs 0x4BF
+python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te uses 0x4BF
 python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te search 0x11004
 python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te strings
 python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te post-codes

@@ -133,12 +133,11 @@ extension MainViewController {
         guard let text = state.manifest.data(using: .utf8),
               let manifest = try? JSONDecoder().decode(AnalysisManifest.self, from: text)
         else { return nil }
-        let root = UEFIToolModule.codeAnalysisRoot ?? CodeAnalysisPaths.defaultRoot
+        let root = CodeAnalysisStore.root
         let loaded = await Task.detached(priority: .userInitiated)
         { () -> (artifact: CodeArtifact, recipes: [AnalysisManifest])? in
             guard let store = try? ContentStore(root: root, create: false),
-                  let data = try? store.object(manifest.artifact.sha256),
-                  let artifact = try? JSONDecoder().decode(CodeArtifact.self, from: data)
+                  let artifact = try? store.artifact(for: manifest)
             else { return nil }
             let recipes = CodeAnalysisIndex(manifests: store.usableAnalyses())
                 .manifests(for: manifest.module.sha256)

@@ -55,7 +55,10 @@ public struct CodeAddress: Decodable, Hashable, Sendable, Comparable, CustomStri
 public struct CodeArtifact: Decodable, Equatable, Sendable {
     /// The exporter versions this reader understands. A new exporter writes a
     /// new number; an old artifact stays readable beside it.
-    public static let supportedScriptVersions: Set<Int> = [2]
+    ///
+    /// 3 has the same shape as 2. It keeps UTF-16 strings, which 2 dropped,
+    /// and names `ReportStatusCode` candidates only in a 32-bit image.
+    public static let supportedScriptVersions: Set<Int> = [2, 3]
 
     public let scriptVersion: Int
     public let ghidra: String
@@ -79,8 +82,13 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         strings = try container.decodeIfPresent([StringEntry].self, forKey: .strings) ?? []
         functions = try container.decodeIfPresent([Function].self, forKey: .functions) ?? []
         postCodes = try container.decodeIfPresent([PostCode].self, forKey: .postCodes) ?? []
-        statusCodeCalls = try container.decodeIfPresent(
+        let calls = try container.decodeIfPresent(
             [StatusCodeCall].self, forKey: .statusCodeCalls) ?? []
+        // The v2 exporter took any call through `[reg + 0x58]` for
+        // ReportStatusCode. That is the slot in the 32-bit PEI services table
+        // only; in a 64-bit image it is Boot Services' SetTimer or Runtime
+        // Services' SetVariable, so the list is noise and is not shown.
+        statusCodeCalls = version == 2 && (program?.is64Bit ?? false) ? [] : calls
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -112,6 +120,14 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         private enum CodingKeys: String, CodingKey {
             case name, language, sha256, executable
             case imageBase = "image_base"
+        }
+
+        /// Whether Ghidra's language id names a 64-bit processor
+        /// (`x86:LE:64:default`). An unknown language is not assumed to be.
+        public var is64Bit: Bool {
+            guard let language else { return false }
+            let parts = language.split(separator: ":")
+            return parts.count >= 3 && parts[2] == "64"
         }
     }
 

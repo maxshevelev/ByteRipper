@@ -15,25 +15,29 @@ final class AgentCodeTools {
 
     nonisolated func tools() -> [AgentTool] { [queryTool] }
 
+    private static let lists = ["functions", "instructions", "c", "uses", "strings", "references"]
+
     private nonisolated var queryTool: AgentTool {
         AgentTool(
             name: "code_query",
             title: "Read a module's code analysis",
             description: """
-                Read the stored code analysis a Code panel is showing: functions, one function's \
-                instructions, strings, or a function's callers and callees. `what` picks the list \
-                (default "functions"); `function` names one by its name or Ghidra entry address for \
-                "instructions" and "references"; `search` narrows functions by name or instruction text, \
-                and strings by value. Addresses come twice: `entry` is Ghidra's virtual address, `offset` \
-                is the same byte's offset in the module, the number the hex view shows. The document must \
-                be open as a Code panel or a Code tab; the answer names its module and recipe. These are \
-                stored observations, not a live disassembly; `code` panels show the same model.
+                Read the stored code analysis a Code panel is showing. `what` picks the list (default \
+                "functions"): "functions"; one function's "instructions" or decompiled "c"; a function's \
+                callers and callees ("references"); the instructions that "uses" an address — who calls a \
+                function, jumps to a label, or reads a global or a string; or "strings". `function` names \
+                one by its name or Ghidra entry address; `address` is the target for "uses"; `search` \
+                narrows functions by name or instruction text, and strings by value. Addresses come \
+                twice: `entry`/`address` is Ghidra's virtual address, `offset` is the same byte's offset \
+                in the module, the number the hex view shows. The document must be open as a Code panel \
+                or a Code tab; the answer names its module and recipe. These are stored observations, not \
+                a live disassembly; the C is Ghidra's reading of the instructions, not the source.
                 """,
             inputSchema: AgentSchema.object([
                 "document": AgentSchema.string("The document's id from `documents`. Default: the focused one."),
-                "what": AgentSchema.choice(["functions", "instructions", "strings", "references"],
-                                           "The list to read. Default \"functions\"."),
-                "function": AgentSchema.string("A function name or Ghidra entry address, for \"instructions\" and \"references\"."),
+                "what": AgentSchema.choice(Self.lists, "The list to read. Default \"functions\"."),
+                "function": AgentSchema.string("A function name or Ghidra entry address, for \"instructions\", \"c\" and \"references\"."),
+                "address": AgentSchema.string("A Ghidra address, for \"uses\"."),
                 "search": AgentSchema.string("A word to narrow functions or strings by."),
                 "limit": AgentSchema.limit(default: 200, maximum: 500)
             ])
@@ -50,28 +54,33 @@ final class AgentCodeTools {
         guard let screen = controller.codeScreen(for: place.pane) else {
             throw AgentToolError("\(place.named) is not a code screen. Open the module with `Open with Code` first.")
         }
-        let what = try arguments.choice("what", from: ["functions", "instructions", "strings", "references"],
-                                        default: "functions")
+        let what = try arguments.choice("what", from: Self.lists, default: "functions")
         let search = (try arguments.optionalString("search"))?.lowercased()
         let limit = try arguments.limit(default: 200, maximum: 500)
-        let layout = try? ModuleLayout(module: screen.bytes)
-        let base = screen.artifact.program?.imageBase?.value
+        let model = CodeModel(artifact: screen.artifact, moduleBytes: screen.bytes)
 
-        func addressText(_ address: CodeAddress) -> String { address.description }
         func offsetText(_ address: CodeAddress) -> JSONValue {
-            guard let layout,
-                  let offset = layout.fileOffset(for: address, imageBase: base)
-            else { return .null }
+            guard let offset = model.moduleOffset(of: address) else { return .null }
             return .string("0x" + String(offset, radix: 16, uppercase: true))
         }
         func reference(_ address: CodeAddress) -> JSONValue {
-            let named = screen.artifact.functions.first { $0.entry == address }
             var members: [String: JSONValue] = [
-                "entry": .string(addressText(address)),
+                "entry": .string(address.description),
                 "offset": offsetText(address)
             ]
-            if let named, !named.name.isEmpty { members["name"] = .string(named.name) }
+            if let index = model.function(at: address), !model.functions[index].name.isEmpty {
+                members["name"] = .string(model.functions[index].name)
+            }
             return .object(members)
+        }
+        func namedFunction() throws -> CodeArtifact.Function {
+            guard let name = try arguments.optionalString("function") else {
+                throw AgentToolError("Argument `function` is required for this `what`.")
+            }
+            guard let index = model.function(named: name) else {
+                throw AgentToolError("No function \"\(name)\" in this analysis.")
+            }
+            return model.functions[index]
         }
 
         var body: [String: JSONValue] = [
@@ -83,45 +92,65 @@ final class AgentCodeTools {
 
         switch what {
         case "functions":
-            let functions = screen.artifact.functions.filter { function in
-                guard let search, !search.isEmpty else { return true }
-                return function.name.lowercased().contains(search)
-                    || function.entry.description.lowercased().contains(search)
-                    || (function.signature?.lowercased().contains(search) ?? false)
-                    || function.instructions.contains {
-                        $0.text.lowercased().contains(search)
-                            || ($0.mnemonic?.lowercased().contains(search) ?? false)
-                    }
-            }
+            let functions = model.functions(matching: search ?? "").map { model.functions[$0] }
             body["total"] = .int(Int64(functions.count))
             body["functions"] = .array(functions.prefix(limit).map { function in
                 .object([
                     "name": .string(function.name),
-                    "entry": .string(addressText(function.entry)),
+                    "entry": .string(function.entry.description),
                     "offset": offsetText(function.entry),
                     "size": function.size.map { JSONValue.int(Int64($0)) } ?? JSONValue.null,
                     "external": .bool(function.external),
                     "thunk": .bool(function.thunk),
                     "signature": function.signature.map(JSONValue.string) ?? .null,
-                    "callers": .array(function.callers.map { .string(addressText($0)) }),
-                    "callees": .array(function.callees.map { .string(addressText($0)) })
+                    "callers": .array(function.callers.map { .string($0.description) }),
+                    "callees": .array(function.callees.map { .string($0.description) })
                 ])
             })
 
         case "instructions":
-            let function = try namedFunction(arguments, in: screen.artifact)
+            let function = try namedFunction()
             body["function"] = .string(function.name)
             body["total"] = .int(Int64(function.instructions.count))
             body["instructions"] = .array(function.instructions.prefix(limit).map { instruction in
                 .object([
-                    "address": .string(addressText(instruction.address)),
+                    "address": .string(instruction.address.description),
                     "offset": offsetText(instruction.address),
                     "bytes": .string(instruction.bytes.map { String(format: "%02X", $0) }.joined(separator: " ")),
                     "mnemonic": instruction.mnemonic.map(JSONValue.string) ?? .null,
                     "text": .string(instruction.text),
                     "references": .array(instruction.references.map {
-                        .object(["to": .string(addressText($0.to)), "type": .string($0.type)])
+                        .object(["to": .string($0.to.description), "type": .string($0.type)])
                     })
+                ])
+            })
+
+        case "c":
+            let function = try namedFunction()
+            body["function"] = .string(function.name)
+            body["entry"] = .string(function.entry.description)
+            body["signature"] = function.signature.map(JSONValue.string) ?? .null
+            body["c"] = function.c.map(JSONValue.string) ?? .null
+            if function.c == nil {
+                body["note"] = .string("Ghidra left no C for this function: it is external, a thunk, or did not decompile.")
+            }
+
+        case "uses":
+            guard let text = try arguments.optionalString("address"),
+                  let address = CodeAddress(hex: text) else {
+                throw AgentToolError("Argument `address` is required for \"uses\": a Ghidra address such as 0x4BF.")
+            }
+            let uses = model.uses(of: address)
+            body["address"] = .string(address.description)
+            body["offset"] = offsetText(address)
+            body["total"] = .int(Int64(uses.count))
+            body["uses"] = .array(uses.prefix(limit).map { use in
+                .object([
+                    "from": .string(use.from.description),
+                    "offset": offsetText(use.from),
+                    "type": .string(use.type),
+                    "function": .string(model.functions[use.function].name),
+                    "text": .string(model.lines[use.line].instruction.text)
                 ])
             })
 
@@ -135,7 +164,7 @@ final class AgentCodeTools {
             body["total"] = .int(Int64(strings.count))
             body["strings"] = .array(strings.prefix(limit).map { entry in
                 .object([
-                    "address": .string(addressText(entry.address)),
+                    "address": .string(entry.address.description),
                     "offset": offsetText(entry.address),
                     "type": .string(entry.type),
                     "value": .string(entry.value)
@@ -143,26 +172,11 @@ final class AgentCodeTools {
             })
 
         default:
-            let function = try namedFunction(arguments, in: screen.artifact)
+            let function = try namedFunction()
             body["function"] = .string(function.name)
             body["callers"] = .array(function.callers.map(reference))
             body["callees"] = .array(function.callees.map(reference))
         }
         return .json(.object(body))
-    }
-
-    private func namedFunction(_ arguments: AgentArguments,
-                               in artifact: CodeArtifact) throws -> CodeArtifact.Function {
-        guard let name = try arguments.optionalString("function") else {
-            throw AgentToolError("Argument `function` is required for this `what`.")
-        }
-        if let function = artifact.functions.first(where: { $0.name == name }) {
-            return function
-        }
-        if let address = CodeAddress(hex: name),
-           let function = artifact.functions.first(where: { $0.entry == address }) {
-            return function
-        }
-        throw AgentToolError("No function \"\(name)\" in this analysis.")
     }
 }

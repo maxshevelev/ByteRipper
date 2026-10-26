@@ -277,8 +277,12 @@ final class LinkedPartTests: XCTestCase {
         let artifact = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
         {"script_version":2,"ghidra":"12.1.2","strings":[
           {"address":"0x10","type":"string","value":"hello"}],
-         "functions":[{"entry":"0x0","name":"entry","instructions":[
-          {"address":"0x0","bytes":"90","mnemonic":"NOP","text":"NOP"}]}]}
+         "functions":[{"entry":"0x0","name":"entry","c":"void entry(void) { }","instructions":[
+          {"address":"0x0","bytes":"90","mnemonic":"NOP","text":"NOP"},
+          {"address":"0x1","bytes":"E8 00 00 00 00","mnemonic":"CALL","text":"CALL 0x00000020",
+           "references":[{"to":"0x20","type":"UNCONDITIONAL_CALL"}]}]},
+          {"entry":"0x20","name":"FUN_00000020","instructions":[
+          {"address":"0x20","bytes":"C3","mnemonic":"RET","text":"RET"}]}]}
         """.utf8))
         controller.openCode(
             named: "CpuPei body", from: controller.windowModel.pane1,
@@ -306,6 +310,23 @@ final class LinkedPartTests: XCTestCase {
               case .object(let row)? = rows.first
         else { return XCTFail("a strings answer") }
         XCTAssertEqual(row["value"]?.stringValue, "hello")
+
+        let c = try await tool.run(AgentCall(
+            tool: tool.name,
+            arguments: AgentArguments(["what": .string("c"), "function": .string("entry")])))
+        guard case .json(let cValue) = c else { return XCTFail("a C answer") }
+        XCTAssertEqual(cValue["c"]?.stringValue, "void entry(void) { }")
+
+        let uses = try await tool.run(AgentCall(
+            tool: tool.name,
+            arguments: AgentArguments(["what": .string("uses"), "address": .string("0x20")])))
+        guard case .json(let usesValue) = uses,
+              case .array(let found)? = usesValue["uses"],
+              case .object(let use)? = found.first
+        else { return XCTFail("a uses answer") }
+        XCTAssertEqual(found.count, 1)
+        XCTAssertEqual(use["from"]?.stringValue, "0x1")
+        XCTAssertEqual(use["function"]?.stringValue, "entry")
     }
 
     /// A zone "FFSv2" at 0x100..<0x180 of a 0x400-byte dump, opened as a panel

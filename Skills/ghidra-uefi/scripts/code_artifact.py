@@ -35,7 +35,7 @@ import cas
 import ghidra_import
 import te_to_pe
 
-SCRIPT_VERSION = 2
+SCRIPT_VERSION = 3
 
 
 def default_store() -> Path:

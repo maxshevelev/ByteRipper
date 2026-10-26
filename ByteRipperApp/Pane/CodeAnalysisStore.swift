@@ -15,11 +15,7 @@ enum CodeAnalysisStore {
     static func artifact(for manifest: AnalysisManifest, root: URL? = nil) async -> CodeArtifact? {
         let root = root ?? self.root
         return await Task.detached(priority: .userInitiated) { () -> CodeArtifact? in
-            guard let store = try? ContentStore(root: root, create: false),
-                  let data = try? store.object(manifest.artifact.sha256),
-                  let artifact = try? JSONDecoder().decode(CodeArtifact.self, from: data)
-            else { return nil }
-            return artifact
+            try? ContentStore(root: root, create: false).artifact(for: manifest)
         }.value
     }
 

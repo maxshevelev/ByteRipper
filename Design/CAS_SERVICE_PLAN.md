@@ -23,7 +23,8 @@
 4. **No direct writes to the store.** `code_artifact.py`, `cas_cli.py`,
    `code_query.py`, the native app and the Electron main process go through a
    client. The service is the only writer.
-5. **Change feed replaces the 2-second poll.** The service publishes
+5. **Change feed.** (The 2-second poll it was to replace is already gone: the
+   app follows the store with FSEvents.) The service publishes
    `analysisChanged` after a commit; clients re-read the affected index and
    refresh their badges. A slow fallback poll (and a watcher during migration)
    covers missed events, sleep and old direct writers.
@@ -45,7 +46,9 @@
 - `UEFIToolUI` reads the store for the Code badge and the Code panel. It also
   writes nothing to the store itself except project bundles through
   `WorkspaceRecorder`.
-- `UEFIToolSession.refreshCodeAnalysis` polls the store every 2 seconds. A
+- `UEFIToolSession` follows the store's `analyses/` folder with FSEvents
+  (`CodeStoreWatcher`); there is no poll. Any writer — the skill, a project
+  import — is seen within a fraction of a second. A
   manifest's `source.document`/`source.node` now lets the panel materialize the
   branch an analysis names and put the badge on a PEI image inside a compressed
   Boot FV without the reader expanding it.

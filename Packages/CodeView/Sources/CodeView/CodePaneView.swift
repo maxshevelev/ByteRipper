@@ -13,42 +13,20 @@ import ToolModuleKit
 /// main surface; the hex view is there to see the bytes an instruction points
 /// at. The two are linked both ways, and a function selects its whole stored
 /// range rather than only its first instruction.
+///
+/// The view draws a `CodeReaderState` and turns clicks into its calls; the
+/// lookups are `CodeModel`'s indices, so a click in a large module costs a
+/// dictionary hit or a search by halves, not a walk of the artifact.
 @MainActor public final class CodePaneView: NSView {
-    private struct Line {
-        /// The instruction's index in the whole artifact. Table rows are the
-        /// selected function's instructions only, so a row is not this.
-        let global: Int
-        let function: Int
-        let instruction: CodeArtifact.Instruction
-    }
-
-    /// What the left navigator lists. One at a time, so every function stays
-    /// visible when Functions is chosen; the other lists are a click away.
-    public enum List: Int, CaseIterable {
-        case functions, strings, postCodes, statusCodes
-    }
+    public typealias List = CodeReaderState.List
 
     public let manifest: AnalysisManifest
     public let artifact: CodeArtifact
-    private let layout: ModuleLayout?
-    private let functions: [CodeArtifact.Function]
+    private var state: CodeReaderState
+    private var model: CodeModel { state.model }
     /// The readable analyses of the same module, the chosen one first. One
     /// entry is the ordinary case; more makes the header offer the others.
     private let recipes: [AnalysisManifest]
-    /// Every instruction in the artifact, and the selected function's rows —
-    /// the listing shows one function, the way C does.
-    private var allLines: [Line] = []
-    private var lines: [Line] = []
-    /// The navigator's rows for the list in front, after the search filter.
-    private var listedFunctions: [CodeArtifact.Function] = []
-    private var listedStrings: [CodeArtifact.StringEntry] = []
-    private var listedPostCodes: [CodeArtifact.PostCode] = []
-    private var listedStatusCodes: [CodeArtifact.StatusCodeCall] = []
-    private var list: List = .functions
-    private var searchText = ""
-    /// The selected function by its place in the artifact, not by a row: the
-    /// navigator may be showing strings at the time.
-    private var functionNumber: Int?
 
     private let functionTable = NSTableView()
     private let functionScroll = NSScrollView()
@@ -74,6 +52,8 @@ import ToolModuleKit
     private static let hexDumpHeight: CGFloat = 220
     private static let dumpBarHeight: CGFloat = 24
     private let staleLabel = NSTextField(labelWithString: "")
+    /// Set while the view moves a table's selection itself, so the table's
+    /// delegate does not take the move for a click.
     private var syncingSelection = false
 
     /// An instruction's bytes from a listing click. The app selects them in
@@ -86,13 +66,21 @@ import ToolModuleKit
     /// its artifact and rebuilds the screen; the pane does not read the store.
     public var onChooseRecipe: ((AnalysisManifest) -> Void)?
 
-    public init(manifest: AnalysisManifest, artifact: CodeArtifact,
-                moduleBytes: Data? = nil, hexView: NSView,
+    public convenience init(manifest: AnalysisManifest, artifact: CodeArtifact,
+                            moduleBytes: Data? = nil, hexView: NSView,
+                            recipes: [AnalysisManifest] = []) {
+        self.init(manifest: manifest,
+                  model: CodeModel(artifact: artifact, moduleBytes: moduleBytes),
+                  hexView: hexView, recipes: recipes)
+    }
+
+    /// A pane over a model already built — off the main actor, for a module
+    /// whose indices take a moment.
+    public init(manifest: AnalysisManifest, model: CodeModel, hexView: NSView,
                 recipes: [AnalysisManifest] = []) {
         self.manifest = manifest
-        self.artifact = artifact
-        self.functions = artifact.functions
-        self.layout = moduleBytes.flatMap { try? ModuleLayout(module: $0) }
+        self.artifact = model.artifact
+        self.state = CodeReaderState(model: model)
         self.moduleHexView = hexView
         var allRecipes = [manifest]
         for recipe in recipes where !allRecipes.contains(where: { $0.recipe.id == recipe.recipe.id }) {
@@ -109,15 +97,9 @@ import ToolModuleKit
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
 
-        for (index, function) in functions.enumerated() {
-            for instruction in function.instructions {
-                allLines.append(Line(global: allLines.count, function: index,
-                                     instruction: instruction))
-            }
-        }
-        build(hexView: hexView)
-        refreshNavigator()
-        selectFunction(at: 0, notify: false)
+        build(hexView: moduleHexView)
+        drawNavigator()
+        drawSelection()
     }
 
     @available(*, unavailable)
@@ -132,46 +114,37 @@ import ToolModuleKit
 
     // MARK: - What the reader sees
 
-    public var functionCount: Int { functions.count }
-    public var instructionCount: Int { allLines.count }
+    public var functionCount: Int { model.functions.count }
+    public var instructionCount: Int { model.lines.count }
     /// The rows the listing shows: the selected function's instructions.
-    public var listedInstructionCount: Int { lines.count }
-    public var listedFunctionCount: Int { listedFunctions.count }
-    public var listedStringCount: Int { listedStrings.count }
-    public var listedPostCodeCount: Int { listedPostCodes.count }
-    public var listedStatusCodeCount: Int { listedStatusCodes.count }
+    public var listedInstructionCount: Int { state.lines.count }
+    public var listedFunctionCount: Int { state.listedFunctions.count }
+    public var listedStringCount: Int { state.listedStrings.count }
+    public var listedPostCodeCount: Int { state.listedPostCodes.count }
+    public var listedStatusCodeCount: Int { state.listedStatusCodes.count }
 
-    public var selectedInstruction: CodeArtifact.Instruction? {
-        guard table.selectedRow >= 0, table.selectedRow < lines.count else { return nil }
-        return lines[table.selectedRow].instruction
-    }
-
-    public var selectedFunction: CodeArtifact.Function? {
-        guard let functionNumber, functions.indices.contains(functionNumber) else { return nil }
-        return functions[functionNumber]
-    }
-
+    public var selectedInstruction: CodeArtifact.Instruction? { state.selectedLine?.instruction }
+    public var selectedFunction: CodeArtifact.Function? { state.selectedFunction }
     public var decompiledText: String { cTextView.string }
-    public var selectedFunctionIndex: Int? { functionNumber }
-    public var selectedInstructionIndex: Int? {
-        guard table.selectedRow >= 0, table.selectedRow < lines.count else { return nil }
-        return lines[table.selectedRow].global
-    }
+    public var selectedFunctionIndex: Int? { state.function }
+    public var selectedInstructionIndex: Int? { state.line }
+
     public var selectedString: CodeArtifact.StringEntry? {
-        guard list == .strings, functionTable.selectedRow >= 0,
-              functionTable.selectedRow < listedStrings.count else { return nil }
-        return listedStrings[functionTable.selectedRow]
+        navigatorEntry(in: .strings, state.listedStrings).map { artifact.strings[$0] }
     }
     public var selectedPostCode: CodeArtifact.PostCode? {
-        guard list == .postCodes, functionTable.selectedRow >= 0,
-              functionTable.selectedRow < listedPostCodes.count else { return nil }
-        return listedPostCodes[functionTable.selectedRow]
+        navigatorEntry(in: .postCodes, state.listedPostCodes).map { artifact.postCodes[$0] }
     }
     public var selectedStatusCode: CodeArtifact.StatusCodeCall? {
-        guard list == .statusCodes, functionTable.selectedRow >= 0,
-              functionTable.selectedRow < listedStatusCodes.count else { return nil }
-        return listedStatusCodes[functionTable.selectedRow]
+        navigatorEntry(in: .statusCodes, state.listedStatusCodes).map { artifact.statusCodeCalls[$0] }
     }
+
+    private func navigatorEntry(in list: List, _ listed: [Int]) -> Int? {
+        let row = functionTable.selectedRow
+        guard state.list == list, listed.indices.contains(row) else { return nil }
+        return listed[row]
+    }
+
     public var showsDecompiledC: Bool { modeControl.selectedSegment == 1 }
     /// The analyses the header can offer, the chosen one first.
     public var offeredRecipes: [AnalysisManifest] { recipes }
@@ -186,11 +159,9 @@ import ToolModuleKit
 
     /// Switches the navigator: Functions, Strings, POST writes, Status codes.
     public func selectList(_ list: List) {
-        guard self.list != list else { return }
-        self.list = list
-        listControl.selectedSegment = list.rawValue
-        refreshNavigator()
-        if list != .functions, numberOfRows(in: functionTable) > 0 {
+        guard state.show(list) else { return }
+        drawNavigator()
+        if list != .functions, state.rowCount > 0 {
             selectNavigatorRow(0)
         }
     }
@@ -200,183 +171,8 @@ import ToolModuleKit
     /// they say.
     public func filter(by text: String) {
         searchField.stringValue = text
-        searchText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        refreshNavigator()
-    }
-
-    // MARK: - The navigator
-
-    private func title(for list: List) -> String {
-        switch list {
-        case .functions: L("Functions")
-        case .strings: L("Strings")
-        case .postCodes: L("POST writes")
-        case .statusCodes: L("Status codes")
-        }
-    }
-
-    /// Applies the search filter to the list in front and lets the table ask
-    /// for its rows again.
-    private func refreshNavigator() {
-        let needle = searchText.lowercased()
-        listedFunctions = functions.filter { function in
-            guard !needle.isEmpty else { return true }
-            if function.name.lowercased().contains(needle)
-                || function.entry.description.lowercased().contains(needle)
-                || (function.signature?.lowercased().contains(needle) ?? false) {
-                return true
-            }
-            return function.instructions.contains { instruction in
-                instruction.text.lowercased().contains(needle)
-                    || (instruction.mnemonic?.lowercased().contains(needle) ?? false)
-            }
-        }
-        listedStrings = artifact.strings.filter { entry in
-            needle.isEmpty
-                || entry.value.lowercased().contains(needle)
-                || entry.type.lowercased().contains(needle)
-                || entry.address.description.lowercased().contains(needle)
-        }
-        listedPostCodes = artifact.postCodes.filter { entry in
-            needle.isEmpty
-                || entry.text.lowercased().contains(needle)
-                || entry.port.lowercased().contains(needle)
-                || entry.address.description.lowercased().contains(needle)
-        }
-        listedStatusCodes = artifact.statusCodeCalls.filter { entry in
-            needle.isEmpty
-                || entry.text.lowercased().contains(needle)
-                || entry.address.description.lowercased().contains(needle)
-                || entry.context.contains { $0.lowercased().contains(needle) }
-        }
-        navigatorLabel.stringValue = title(for: list)
-        syncingSelection = true
-        functionTable.reloadData()
-        if list == .functions, let functionNumber,
-           let row = listedFunctions.firstIndex(where: {
-               $0.entry == functions[functionNumber].entry
-           }) {
-            functionTable.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
-            functionTable.scrollRowToVisible(row)
-        } else {
-            functionTable.deselectAll(nil)
-        }
-        syncingSelection = false
-    }
-
-    @objc private func listChanged() {
-        guard let list = List(rawValue: listControl.selectedSegment) else { return }
-        selectList(list)
-    }
-
-    @objc private func searchChanged() {
-        searchText = searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        refreshNavigator()
-    }
-
-    /// The callers and callees of the selected function, as short menus: a
-    /// target is one click away, and an address with no function still names
-    /// itself rather than disappearing.
-    private func updateReferences() {
-        guard let function = selectedFunction else {
-            referencesRow.isHidden = true
-            return
-        }
-        fill(callersButton, title: L("Callers"), with: function.callers)
-        fill(calleesButton, title: L("Callees"), with: function.callees)
-        referencesRow.isHidden = function.callers.isEmpty && function.callees.isEmpty
-    }
-
-    private func fill(_ button: NSPopUpButton, title: String,
-                      with addresses: [CodeAddress]) {
-        button.removeAllItems()
-        let heading = NSMenuItem(title: "\(title) (\(addresses.count))",
-                                 action: nil, keyEquivalent: "")
-        button.menu?.addItem(heading)
-        guard !addresses.isEmpty else { return }
-        for address in addresses {
-            let item = NSMenuItem(title: name(for: address),
-                                  action: #selector(callTargetChosen(_:)),
-                                  keyEquivalent: "")
-            item.target = self
-            item.representedObject = NSNumber(value: address.value)
-            button.menu?.addItem(item)
-        }
-    }
-
-    private func name(for address: CodeAddress) -> String {
-        functions.first(where: { $0.entry == address })?.name ?? displayAddress(address)
-    }
-
-    @objc private func callTargetChosen(_ sender: NSMenuItem) {
-        guard let number = sender.representedObject as? NSNumber else { return }
-        navigate(to: CodeAddress(number.uint64Value))
-    }
-
-    /// A reference goes to the function at its target when there is one, or to
-    /// the bytes there when the module holds them. An external target does
-    /// nothing rather than pretending to go somewhere.
-    private func navigate(to address: CodeAddress) {
-        if let index = functions.firstIndex(where: { $0.entry == address }) {
-            selectFunction(at: index)
-        } else if let range = addressRange(address) {
-            onSelectRange?(range)
-        }
-    }
-
-    private func addressRange(_ address: CodeAddress) -> Range<UInt64>? {
-        guard let layout else { return nil }
-        return layout.fileRange(for: address, count: 1,
-                                imageBase: artifact.program?.imageBase?.value)
-    }
-
-    /// The bytes a string occupies: its terminator included, and two bytes per
-    /// character when Ghidra says it is a wide string. When the layout has no
-    /// range for it the first byte is still worth showing.
-    private func stringRange(_ entry: CodeArtifact.StringEntry) -> Range<UInt64>? {
-        guard let layout else { return nil }
-        let type = entry.type.lowercased()
-        let wide = type.contains("unicode") || type.contains("wide") || type.contains("utf16")
-        let count = wide
-            ? max(2, (entry.value.utf16.count + 1) * 2)
-            : max(1, entry.value.utf8.count + 1)
-        let base = artifact.program?.imageBase?.value
-        return layout.fileRange(for: entry.address, count: count, imageBase: base)
-            ?? layout.fileRange(for: entry.address, count: 1, imageBase: base)
-    }
-
-    private func selectString(at row: Int) {
-        guard listedStrings.indices.contains(row),
-              let range = stringRange(listedStrings[row]) else { return }
-        onSelectRange?(range)
-    }
-
-    /// What a navigator row means in the list that is showing. The table has
-    /// selected the row already; this puts its bytes or its function on screen.
-    private func selectNavigatorRow(_ row: Int) {
-        guard row >= 0 else { return }
-        syncingSelection = true
-        functionTable.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
-        functionTable.scrollRowToVisible(row)
-        syncingSelection = false
-        switch list {
-        case .functions:
-            guard row < listedFunctions.count,
-                  let index = functions.firstIndex(where: {
-                      $0.entry == listedFunctions[row].entry
-                  }) else { return }
-            selectFunction(at: index)
-        case .strings:
-            selectString(at: row)
-        case .postCodes:
-            guard row < listedPostCodes.count else { return }
-            guard let range = addressRange(listedPostCodes[row].address) else { return }
-            onSelectRange?(range)
-        case .statusCodes:
-            guard row < listedStatusCodes.count else { return }
-            guard let range = addressRange(listedStatusCodes[row].address) else { return }
-            onSelectRange?(range)
-        }
+        state.search(text)
+        drawNavigator()
     }
 
     /// Puts the listing back where a screen that moved container left it:
@@ -385,8 +181,8 @@ import ToolModuleKit
         if let function {
             selectFunction(at: function, notify: false)
         }
-        if let instruction, allLines.indices.contains(instruction) {
-            reveal(globalInstruction: instruction)
+        if let instruction, model.lines.indices.contains(instruction) {
+            select(line: instruction)
         }
         modeControl.selectedSegment = showsC ? 1 : 0
         applyMode()
@@ -405,25 +201,13 @@ import ToolModuleKit
     /// marks the function's whole stored range as the dump's main zone; it
     /// does not take the selection, which belongs to the reader.
     public func selectFunction(at index: Int, notify: Bool = true) {
-        guard functions.indices.contains(index) else { return }
+        guard model.functions.indices.contains(index) else { return }
         // A caller can point at a function the current search or list hides:
         // show Functions, with the filter cleared, before selecting it.
-        ensureFunctionVisible(index)
-        functionNumber = index
-        syncingSelection = true
-        if let row = listedFunctions.firstIndex(where: { $0.entry == functions[index].entry }) {
-            functionTable.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
-            functionTable.scrollRowToVisible(row)
-        }
-        showInstructions(of: index)
-        if !lines.isEmpty {
-            table.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
-            table.scrollRowToVisible(0)
-        }
-        syncingSelection = false
-        updateC()
-        updateReferences()
-        if notify, let range = moduleRange(forFunction: index) {
+        revealInNavigator(index)
+        state.selectFunction(index)
+        drawSelection()
+        if notify, let range = model.moduleRange(ofFunction: index) {
             onFocusRange?(range)
         }
     }
@@ -431,89 +215,179 @@ import ToolModuleKit
     /// Marks the selected function's range as the main zone without a click —
     /// what the screen does when it opens on a function.
     public func focusSelectedFunction() {
-        guard let functionNumber,
-              let range = moduleRange(forFunction: functionNumber)
+        guard let function = state.function,
+              let range = model.moduleRange(ofFunction: function)
         else { return }
         onFocusRange?(range)
     }
 
     /// Selects an instruction by its index in the artifact, as a click would.
     public func selectInstruction(at index: Int) {
-        guard allLines.indices.contains(index) else { return }
-        reveal(globalInstruction: index)
-        updateC()
+        guard model.lines.indices.contains(index) else { return }
+        select(line: index)
         notifyInstruction()
     }
 
     /// Selects the instruction covering `range` of the module without moving
     /// the hex view back: the selection came from there.
     public func selectModuleRange(_ range: Range<UInt64>) {
-        guard list == .functions, !allLines.isEmpty, !syncingSelection else { return }
-        guard let row = row(forModuleRange: range) else { return }
-        reveal(globalInstruction: row)
-        updateC()
-    }
-
-    /// Shows the function holding `index` and selects that instruction.
-    private func reveal(globalInstruction index: Int) {
-        guard allLines.indices.contains(index) else { return }
-        let line = allLines[index]
-        ensureFunctionVisible(line.function)
-        functionNumber = line.function
-        syncingSelection = true
-        if let functionRow = listedFunctions.firstIndex(where: {
-            $0.entry == functions[line.function].entry
-        }) {
-            functionTable.selectRowIndexes(IndexSet(integer: functionRow),
-                                           byExtendingSelection: false)
-            functionTable.scrollRowToVisible(functionRow)
-        }
-        showInstructions(of: line.function)
-        if let row = lines.firstIndex(where: { $0.global == index }) {
-            table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
-            table.scrollRowToVisible(row)
-        }
-        syncingSelection = false
-        updateReferences()
-    }
-
-    /// Makes sure the navigator is showing Functions and that `index` survived
-    /// the search, clearing the search if it did not.
-    private func ensureFunctionVisible(_ index: Int) {
-        guard functions.indices.contains(index) else { return }
-        if list != .functions
-            || !listedFunctions.contains(where: { $0.entry == functions[index].entry }) {
-            list = .functions
-            listControl.selectedSegment = List.functions.rawValue
-            if !searchText.isEmpty {
-                searchField.stringValue = ""
-                searchText = ""
-            }
-            refreshNavigator()
-        }
-    }
-
-    /// The listing is the selected function's instructions, nothing else.
-    private func showInstructions(of function: Int) {
-        lines = allLines.filter { $0.function == function }
-        table.reloadData()
+        guard state.list == .functions, !syncingSelection,
+              let line = model.line(forModuleRange: range) else { return }
+        select(line: line)
     }
 
     /// The whole stored range of a function, for the hex view and for tests.
     public func moduleRange(forFunction index: Int) -> Range<UInt64>? {
-        guard index >= 0, index < functions.count else { return nil }
-        let function = functions[index]
-        guard let layout else { return nil }
-        let base = artifact.program?.imageBase?.value
-        if let size = function.size, size > 0,
-           let range = layout.fileRange(for: function.entry, count: size, imageBase: base) {
-            return range
+        model.moduleRange(ofFunction: index)
+    }
+
+    // MARK: - Drawing the state
+
+    /// Shows the function holding `line` and selects that instruction.
+    private func select(line: Int) {
+        revealInNavigator(model.lines[line].function)
+        state.selectLine(line)
+        drawSelection()
+    }
+
+    /// Brings a function into the navigator, redrawing the list when the
+    /// state had to switch to Functions or clear the search for it.
+    private func revealInNavigator(_ function: Int) {
+        guard state.reveal(function: function) else { return }
+        listControl.selectedSegment = List.functions.rawValue
+        searchField.stringValue = state.searchText
+        drawNavigator()
+    }
+
+    /// The navigator's title and rows for the list in front, with the selected
+    /// function's row chosen when Functions is showing.
+    private func drawNavigator() {
+        navigatorLabel.stringValue = title(for: state.list)
+        listControl.selectedSegment = state.list.rawValue
+        syncingSelection = true
+        functionTable.reloadData()
+        if state.list == .functions, let function = state.function,
+           let row = state.row(ofFunction: function) {
+            functionTable.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+            functionTable.scrollRowToVisible(row)
+        } else {
+            functionTable.deselectAll(nil)
         }
-        let ranges = function.instructions.compactMap { instructionRange($0) }
-        guard let lower = ranges.map(\.lowerBound).min(),
-              let upper = ranges.map(\.upperBound).max()
-        else { return nil }
-        return lower..<upper
+        syncingSelection = false
+    }
+
+    /// The function's row, its listing, the selected instruction, its C and
+    /// its callers and callees. The listing is reloaded only when the function
+    /// changed; a new instruction in the same function only moves the row.
+    private var drawnFunction: Int?
+
+    private func drawSelection() {
+        syncingSelection = true
+        if state.list == .functions, let function = state.function,
+           let row = state.row(ofFunction: function), functionTable.selectedRow != row {
+            functionTable.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+            functionTable.scrollRowToVisible(row)
+        }
+        if drawnFunction != state.function || table.numberOfRows != state.lines.count {
+            drawnFunction = state.function
+            table.reloadData()
+        }
+        if let row = state.selectedRow {
+            table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+            table.scrollRowToVisible(row)
+        }
+        syncingSelection = false
+        updateC()
+        updateReferences()
+    }
+
+    private func title(for list: List) -> String {
+        switch list {
+        case .functions: L("Functions")
+        case .strings: L("Strings")
+        case .postCodes: L("POST writes")
+        case .statusCodes: L("Status codes")
+        }
+    }
+
+    @objc private func listChanged() {
+        guard let list = List(rawValue: listControl.selectedSegment) else { return }
+        selectList(list)
+    }
+
+    @objc private func searchChanged() {
+        state.search(searchField.stringValue)
+        drawNavigator()
+    }
+
+    /// The callers and callees of the selected function, as short menus: a
+    /// target is one click away, and an address with no function still names
+    /// itself rather than disappearing.
+    private func updateReferences() {
+        guard let function = state.selectedFunction else {
+            referencesRow.isHidden = true
+            return
+        }
+        fill(callersButton, title: L("Callers"), with: function.callers)
+        fill(calleesButton, title: L("Callees"), with: function.callees)
+        referencesRow.isHidden = function.callers.isEmpty && function.callees.isEmpty
+    }
+
+    private func fill(_ button: NSPopUpButton, title: String,
+                      with addresses: [CodeAddress]) {
+        button.removeAllItems()
+        let heading = NSMenuItem(title: "\(title) (\(addresses.count))",
+                                 action: nil, keyEquivalent: "")
+        button.menu?.addItem(heading)
+        for address in addresses {
+            let item = NSMenuItem(title: model.name(for: address),
+                                  action: #selector(callTargetChosen(_:)),
+                                  keyEquivalent: "")
+            item.target = self
+            item.representedObject = NSNumber(value: address.value)
+            button.menu?.addItem(item)
+        }
+    }
+
+    @objc private func callTargetChosen(_ sender: NSMenuItem) {
+        guard let number = sender.representedObject as? NSNumber else { return }
+        navigate(to: CodeAddress(number.uint64Value))
+    }
+
+    /// A reference goes to the function at its target when there is one, or to
+    /// the bytes there when the module holds them. An external target does
+    /// nothing rather than pretending to go somewhere.
+    private func navigate(to address: CodeAddress) {
+        if let index = model.function(at: address) {
+            selectFunction(at: index)
+        } else if let range = model.moduleRange(of: address, count: 1) {
+            onSelectRange?(range)
+        }
+    }
+
+    /// What a navigator row means in the list that is showing. The table has
+    /// selected the row already; this puts its bytes or its function on screen.
+    private func selectNavigatorRow(_ row: Int) {
+        guard row >= 0, row < state.rowCount else { return }
+        syncingSelection = true
+        functionTable.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        functionTable.scrollRowToVisible(row)
+        syncingSelection = false
+        let range: Range<UInt64>?
+        switch state.list {
+        case .functions:
+            selectFunction(at: state.listedFunctions[row])
+            return
+        case .strings:
+            range = model.moduleRange(of: artifact.strings[state.listedStrings[row]])
+        case .postCodes:
+            range = model.moduleRange(
+                of: artifact.postCodes[state.listedPostCodes[row]].address, count: 1)
+        case .statusCodes:
+            range = model.moduleRange(
+                of: artifact.statusCodeCalls[state.listedStatusCodes[row]].address, count: 1)
+        }
+        if let range { onSelectRange?(range) }
     }
 
     // MARK: - Building
@@ -640,8 +514,8 @@ import ToolModuleKit
             button.controlSize = .small
             button.font = .systemFont(ofSize: 11)
             button.contentTintColor = .linkColor
-            button.target = self
-            button.action = #selector(callTargetChosen(_:))
+            // Each target item carries its own action; the button's would be
+            // sent with the button, not an item, as its sender.
             button.translatesAutoresizingMaskIntoConstraints = false
         }
         ControlHelp.describe(callersButton, name: L("Callers"),
@@ -867,16 +741,6 @@ import ToolModuleKit
 
     // MARK: - Selection
 
-    private func selectFunctionRow(_ index: Int) {
-        guard functions.indices.contains(index) else { return }
-        syncingSelection = true
-        if let row = listedFunctions.firstIndex(where: { $0.entry == functions[index].entry }) {
-            functionTable.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
-            functionTable.scrollRowToVisible(row)
-        }
-        syncingSelection = false
-    }
-
     @objc private func modeChanged() {
         applyMode()
     }
@@ -893,84 +757,40 @@ import ToolModuleKit
     }
 
     private func notifyInstruction() {
-        guard let instruction = selectedInstruction,
-              let range = instructionRange(instruction)
-        else { return }
+        guard let line = state.line, let range = model.moduleRange(ofLine: line) else { return }
         onSelectRange?(range)
     }
 
-    private func instructionRange(_ instruction: CodeArtifact.Instruction) -> Range<UInt64>? {
-        guard let layout else { return nil }
-        return layout.fileRange(for: instruction.address, count: instruction.bytes.count,
-                                imageBase: artifact.program?.imageBase?.value)
-    }
-
-    private func row(forModuleRange range: Range<UInt64>) -> Int? {
-        guard !allLines.isEmpty else { return nil }
-        var preceding: Int?
-        for line in allLines {
-            guard let candidate = instructionRange(line.instruction) else { continue }
-            if range.isEmpty {
-                if candidate.contains(range.lowerBound) { return line.global }
-            } else if candidate.overlaps(range) {
-                return line.global
-            }
-            if candidate.lowerBound <= range.lowerBound { preceding = line.global }
-        }
-        return preceding
-    }
-
+    /// The selected function's C. Set only when it is another text: a new
+    /// instruction in the same function does not lay the text out again.
     private func updateC() {
-        guard let function = selectedFunction else {
-            cTextView.string = L("The analysis holds no functions.")
-            return
+        let text: String
+        if let function = state.selectedFunction {
+            text = function.c ?? L("No decompiled C for this function.")
+        } else {
+            text = L("The analysis holds no functions.")
         }
-        cTextView.string = function.c ?? L("No decompiled C for this function.")
+        if cTextView.string != text { cTextView.string = text }
     }
 }
 
 extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
     public func numberOfRows(in tableView: NSTableView) -> Int {
-        guard tableView === functionTable else { return lines.count }
-        switch list {
-        case .functions: return listedFunctions.count
-        case .strings: return listedStrings.count
-        case .postCodes: return listedPostCodes.count
-        case .statusCodes: return listedStatusCodes.count
-        }
+        tableView === functionTable ? state.rowCount : state.lines.count
     }
 
     public func tableView(_ tableView: NSTableView,
                           viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         if tableView === functionTable {
-            let text: String
-            switch list {
-            case .functions:
-                guard row >= 0, row < listedFunctions.count else { return nil }
-                let function = listedFunctions[row]
-                text = function.name.isEmpty ? displayAddress(function.entry) : function.name
-            case .strings:
-                guard row >= 0, row < listedStrings.count else { return nil }
-                let entry = listedStrings[row]
-                text = entry.value.isEmpty
-                    ? displayAddress(entry.address)
-                    : "\(displayAddress(entry.address))  \(entry.value)"
-            case .postCodes:
-                guard row >= 0, row < listedPostCodes.count else { return nil }
-                let entry = listedPostCodes[row]
-                text = "\(displayAddress(entry.address))  \(entry.text)"
-            case .statusCodes:
-                guard row >= 0, row < listedStatusCodes.count else { return nil }
-                let entry = listedStatusCodes[row]
-                text = "\(displayAddress(entry.address))  \(entry.text)"
-            }
-            let cell = makeCell(identifier: .init("code-navigator"), monospaced: false)
-            cell.textField?.stringValue = text
+            guard row >= 0, row < state.rowCount else { return nil }
+            let cell = cell(in: tableView, identifier: .init("code-navigator"), monospaced: false)
+            cell.textField?.stringValue = navigatorText(at: row)
             return cell
         }
+        let lines = state.lines
         guard row >= 0, row < lines.count else { return nil }
-        let cell = makeCell(identifier: .init("code-line"), monospaced: true)
-        cell.textField?.stringValue = display(lines[row].instruction)
+        let cell = cell(in: tableView, identifier: .init("code-line"), monospaced: true)
+        cell.textField?.stringValue = display(lines[lines.startIndex + row].instruction)
         return cell
     }
 
@@ -981,15 +801,41 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
             guard row >= 0 else { return }
             selectNavigatorRow(row)
         } else if table === self.table {
-            guard table.selectedRow >= 0, table.selectedRow < lines.count else { return }
-            selectFunctionRow(lines[table.selectedRow].function)
-            updateC()
+            let lines = state.lines
+            let row = table.selectedRow
+            guard row >= 0, row < lines.count else { return }
+            select(line: lines[lines.startIndex + row].global)
             notifyInstruction()
         }
     }
 
-    private func makeCell(identifier: NSUserInterfaceItemIdentifier,
-                          monospaced: Bool) -> NSTableCellView {
+    private func navigatorText(at row: Int) -> String {
+        switch state.list {
+        case .functions:
+            let function = model.functions[state.listedFunctions[row]]
+            return function.name.isEmpty ? model.displayAddress(function.entry) : function.name
+        case .strings:
+            let entry = artifact.strings[state.listedStrings[row]]
+            return entry.value.isEmpty
+                ? model.displayAddress(entry.address)
+                : "\(model.displayAddress(entry.address))  \(entry.value)"
+        case .postCodes:
+            let entry = artifact.postCodes[state.listedPostCodes[row]]
+            return "\(model.displayAddress(entry.address))  \(entry.text)"
+        case .statusCodes:
+            let entry = artifact.statusCodeCalls[state.listedStatusCodes[row]]
+            return "\(model.displayAddress(entry.address))  \(entry.text)"
+        }
+    }
+
+    /// A row's cell, reused from the table's queue when it has one: a listing
+    /// of a large function scrolls through thousands of rows.
+    private func cell(in tableView: NSTableView, identifier: NSUserInterfaceItemIdentifier,
+                      monospaced: Bool) -> NSTableCellView {
+        if let reused = tableView.makeView(withIdentifier: identifier, owner: nil)
+            as? NSTableCellView {
+            return reused
+        }
         let cell = NSTableCellView()
         cell.identifier = identifier
         let field = NSTextField(labelWithString: "")
@@ -1009,31 +855,19 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
         return cell
     }
 
+    /// A listing row: the module offset, the bytes, and the instruction with
+    /// its targets written as module offsets too, so a jump names the row it
+    /// lands on.
     private func display(_ instruction: CodeArtifact.Instruction) -> String {
-        let address = displayAddress(instruction.address)
+        let address = model.displayAddress(instruction.address)
             .padding(toLength: 10, withPad: " ", startingAt: 0)
         let bytes = instruction.bytes.map { String(format: "%02X", $0) }
             .joined(separator: " ")
         let byteColumn = bytes.padding(toLength: 26, withPad: " ", startingAt: 0)
-        return address + "  " + byteColumn + "  " + instruction.text
-    }
-
-    /// The offset of an address in the module bytes — the same number the hex
-    /// view's offset column shows. Ghidra's virtual addresses are useful to
-    /// the code, but a reader looking for bytes needs the module's own offset.
-    /// An address with no bytes (an external target) falls back to Ghidra's.
-    private func displayAddress(_ address: CodeAddress) -> String {
-        guard let layout,
-              let offset = layout.fileOffset(for: address,
-                                             imageBase: artifact.program?.imageBase?.value)
-        else { return address.description }
-        return "0x" + String(offset, radix: 16, uppercase: true)
+        return address + "  " + byteColumn + "  " + model.displayText(of: instruction)
     }
 }
 
-/// The thin bar between the code and the hex view: a window-background strip
-/// with one hairline along its top edge, and room at the right for the
-/// fold/unfold button.
 private final class CodeDumpBar: NSView {
     override func draw(_ dirtyRect: NSRect) {
         NSColor.windowBackgroundColor.setFill()
