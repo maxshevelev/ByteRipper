@@ -18,8 +18,9 @@ Both are built once into a cache and reused:
     python3 uefi_types.py where             # print the cache's paths
 
 The cache is `~/Library/Application Support/ByteRipper/Ghidra`. The EDK2 tag is
-pinned (`EDK2_TAG`) so a module analyzed twice is typed by the same headers;
-the tag is part of the analysis recipe.
+pinned (`EDK2_TAG`) so a module analyzed twice is typed by the same headers.
+`TYPES_REVISION` counts what `BuildUefiTypes.java` makes of them; the two
+together (`TYPES`) name the archives and are part of the analysis recipe.
 
 Stdlib only; the external programs are git and Ghidra's analyzeHeadless.
 """
@@ -40,6 +41,9 @@ import progress
 
 EDK2_URL = "https://github.com/tianocore/edk2"
 EDK2_TAG = "edk2-stable202608"
+# 2: EFI_STATUS and EFI_STATUS_CODE_TYPE are enums.
+TYPES_REVISION = 2
+TYPES = f"{EDK2_TAG}-r{TYPES_REVISION}"
 GUIDS_URL = "https://raw.githubusercontent.com/LongSoft/UEFITool/new_engine/common/guids.csv"
 DEC_FILES = ("MdePkg/MdePkg.dec", "MdeModulePkg/MdeModulePkg.dec")
 
@@ -53,8 +57,8 @@ def paths(root: Path | None = None) -> dict[str, Path]:
     return {
         "root": root,
         "edk2": root / EDK2_TAG,
-        "gdt_x64": root / f"uefi_X64-{EDK2_TAG}.gdt",
-        "gdt_ia32": root / f"uefi_Ia32-{EDK2_TAG}.gdt",
+        "gdt_x64": root / f"uefi_X64-{TYPES}.gdt",
+        "gdt_ia32": root / f"uefi_Ia32-{TYPES}.gdt",
         "guids_csv": root / "guids.csv",
         "guids_tsv": root / f"guids-{EDK2_TAG}.tsv",
     }

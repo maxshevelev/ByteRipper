@@ -9,6 +9,11 @@ import Foundation
 /// command line tools has no working `git`, and has `tar`.
 public enum UEFITypes {
     public static let edk2Tag = "edk2-stable202608"
+    /// What `BuildUefiTypes.java` makes of the headers, `TYPES_REVISION` in
+    /// `uefi_types.py`. 2: `EFI_STATUS` and `EFI_STATUS_CODE_TYPE` are enums.
+    public static let typesRevision = 2
+    /// The archives' name and the recipe's `types`: the tag and the revision.
+    public static let types = "\(edk2Tag)-r\(typesRevision)"
     static let edk2Tarball = URL(string: "https://codeload.github.com/tianocore/edk2/tar.gz/refs/tags/\(edk2Tag)")!
     static let guidsURL = URL(string: "https://raw.githubusercontent.com/LongSoft/UEFITool/new_engine/common/guids.csv")!
     static let decFiles = ["MdePkg/MdePkg.dec", "MdeModulePkg/MdeModulePkg.dec"]
@@ -21,8 +26,8 @@ public enum UEFITypes {
     public struct Paths: Sendable {
         public let root: URL
         public var edk2: URL { root.appendingPathComponent(edk2Tag, isDirectory: true) }
-        public var gdtX64: URL { root.appendingPathComponent("uefi_X64-\(edk2Tag).gdt") }
-        public var gdtIa32: URL { root.appendingPathComponent("uefi_Ia32-\(edk2Tag).gdt") }
+        public var gdtX64: URL { root.appendingPathComponent("uefi_X64-\(types).gdt") }
+        public var gdtIa32: URL { root.appendingPathComponent("uefi_Ia32-\(types).gdt") }
         public var guidsCSV: URL { root.appendingPathComponent("guids.csv") }
         public var guidsTSV: URL { root.appendingPathComponent("guids-\(edk2Tag).tsv") }
 

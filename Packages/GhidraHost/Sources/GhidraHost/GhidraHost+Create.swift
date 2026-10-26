@@ -98,7 +98,7 @@ extension GhidraHost {
             module: .init(sha256: digest.hex, size: blob.count, name: name, kind: kind,
                           phase: pass == nil ? nil : chosen.rawValue),
             program: programName,
-            madeWith: .init(ghidra: install.version, types: pass == nil ? nil : UEFITypes.edk2Tag,
+            madeWith: .init(ghidra: install.version, types: pass == nil ? nil : UEFITypes.types,
                             passes: pass == nil ? [] : ["ApplyUefi.java"]),
             source: source, archive: pass?.gdt.path, createdAt: Self.now(), reviewed: false, published: nil)
         try project.write(state)

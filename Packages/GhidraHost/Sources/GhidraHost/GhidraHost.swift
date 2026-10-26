@@ -337,12 +337,20 @@ public actor GhidraHost {
     // MARK: -
 
     /// `code_artifact.recipe_for`: the exporter and the Ghidra that wrote the
-    /// artifact, and what the program was typed with when the UEFI pass ran.
+    /// artifact, and what the program was typed with when the UEFI pass ran;
+    /// a types revision past the first (`…-r2`) is in the id too.
     static func recipe(for artifact: [String: Any], types: String?, passes: [String]) -> AnalysisRecipe {
         let exporter = artifact["script_version"] as? Int ?? 0
         let ghidra = artifact["ghidra"] as? String
         var id = "code-v\(exporter)-ghidra-\(safeRecipe(ghidra ?? "unknown"))"
-        if types == nil { id = id.replacingOccurrences(of: "-ghidra-", with: "-plain-ghidra-") }
+        if let types {
+            if let dash = types.range(of: "-r", options: .backwards),
+               let revision = Int(types[dash.upperBound...]) {
+                id = id.replacingOccurrences(of: "-ghidra-", with: "-types\(revision)-ghidra-")
+            }
+        } else {
+            id = id.replacingOccurrences(of: "-ghidra-", with: "-plain-ghidra-")
+        }
         return AnalysisRecipe(id: id, exporter: exporter, ghidra: ghidra ?? "unknown", script: "ExportCode.java",
                               types: types, passes: types == nil ? nil : (passes.isEmpty ? ["ApplyUefi.java"] : passes))
     }

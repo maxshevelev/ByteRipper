@@ -181,7 +181,7 @@ class Project:
                        **({"phase": pass_["phase"]} if pass_ else {})},
             "program": image.name,
             "made_with": {"ghidra": ghidra_version(ghidra),
-                          "types": uefi_types.EDK2_TAG if pass_ else None,
+                          "types": uefi_types.TYPES if pass_ else None,
                           "passes": ["ApplyUefi.java"] if pass_ else []},
             "source": source,
             "archive": str(pass_["gdt"]) if pass_ else None,
@@ -482,11 +482,13 @@ def main(argv: list[str]) -> int:
                                {"path": str(module), "document": args.document, "node": args.node},
                                args.phase, not args.no_uefi, args.ghidra_home, args.types_cache)
             else:
-                # A project made before the archive was recorded learns it now.
+                # A project made before the archive was recorded learns it now:
+                # the archive of the types it was made with, not today's.
                 state = project.state()
-                if state.get("made_with", {}).get("types") and not state.get("archive"):
-                    cache = uefi_types.paths(args.types_cache)
-                    gdt = cache["gdt_ia32"] if code_artifact.machine(blob) == 0x14C else cache["gdt_x64"]
+                types = state.get("made_with", {}).get("types")
+                if types and not state.get("archive"):
+                    bits = "Ia32" if code_artifact.machine(blob) == 0x14C else "X64"
+                    gdt = uefi_types.paths(args.types_cache)["root"] / f"uefi_{bits}-{types}.gdt"
                     if gdt.is_file():
                         state["archive"] = str(gdt)
                         project.write_state(state)

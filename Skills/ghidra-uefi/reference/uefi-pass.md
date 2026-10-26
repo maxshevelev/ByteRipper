@@ -13,9 +13,29 @@ specifications fix, without guessing at what they do not.
 | File | From | What |
 | --- | --- | --- |
 | `edk2-stable202608/` | a sparse clone of EDK2 at the pinned tag | `MdePkg/Include`, `MdePkg.dec`, `MdeModulePkg.dec` (about 10 MB) |
-| `uefi_X64-….gdt`, `uefi_Ia32-….gdt` | `BuildUefiTypes.java`, Ghidra's C parser over MdePkg | the PI and UEFI tables, every PPI and protocol (about 23 800 types each) |
+| `uefi_X64-<tag>-r2.gdt`, `uefi_Ia32-<tag>-r2.gdt` | `BuildUefiTypes.java`, Ghidra's C parser over MdePkg | the PI and UEFI tables, every PPI and protocol (about 23 800 types each) |
 | `guids.csv` | LongSoft's `common/guids.csv`, the catalogue the app names its tree by | vendor GUIDs EDK2 does not declare |
 | `guids-….tsv` | both `.dec` files, then the catalogue | `<16 bytes as hex>\t<g…Guid name>`; EDK2's name wins |
+
+EDK2 spells a status as a `#define`, which the parser keeps as a one-value
+enum `define_<NAME>` under `/<header>/defines` and ties to no type; a value
+typed `EFI_STATUS` was therefore printed as `0x80000002`. After the parse,
+`BuildUefiTypes.java` makes two enums of those defines and puts them in place
+of the integer typedefs, so every prototype that names them carries them:
+
+- `EFI_STATUS` — the 41 codes `Base.h` defines as `RETURN_<NAME>` and
+  `UefiBaseType.h` as `EFI_<NAME>`, as wide as the archive's `UINTN` (4 bytes
+  for Ia32, 8 for X64). `RETURN_STATUS` stays an integer.
+- `EFI_STATUS_CODE_TYPE` — `EFI_PROGRESS_CODE`, `EFI_ERROR_CODE`,
+  `EFI_DEBUG_CODE` and the four severities, without the masks: the decompiler
+  writes `0x80000002` passed to `ReportStatusCode` as
+  `EFI_ERROR_MAJOR|EFI_ERROR_CODE`.
+
+`EFI_STATUS_CODE_VALUE` stays an integer: its operation codes repeat between
+subclasses, so a composition of members would be a guess. `-r2` is
+`TYPES_REVISION`; it is in the recipe's `types` and, past 1, in its id
+(`code-v4-types2-ghidra-…`), so a module typed by the new archive is a recipe
+beside the old one. A project keeps the archive it was made with.
 
 Each step says what it is when it starts, how long it has run while it runs
 (a line every 15 s in a log, a self-rewriting line on a terminal), and how long

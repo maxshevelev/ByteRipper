@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import shutil
 import sys
 import tempfile
@@ -149,12 +150,16 @@ def analyze(module: Path, ghidra_home: str | None,
 
 def recipe_for(artifact: dict, types: str | None, passes: list[str] | None) -> dict:
     """The recipe of an artifact: the exporter and the Ghidra that wrote it,
-    and — when the UEFI pass ran — what the program was typed with."""
+    and — when the UEFI pass ran — what the program was typed with. A types
+    revision past the first (`…-r2`) is in the id too, so a module typed
+    again is a recipe beside the old one, not a conflict with it."""
     exporter = artifact.get("script_version", SCRIPT_VERSION)
     ghidra = artifact.get("ghidra")
     name = cas.recipe_id(exporter, ghidra)
     if types is None:
         name = name.replace("-ghidra-", "-plain-ghidra-", 1)
+    elif revision := re.search(r"-r(\d+)$", types):
+        name = name.replace("-ghidra-", f"-types{revision.group(1)}-ghidra-", 1)
     recipe = {"id": name, "exporter": exporter, "ghidra": ghidra, "script": "ExportCode.java"}
     if types is not None:
         recipe["types"] = types
@@ -207,7 +212,7 @@ def run(args, module: Path, blob: bytes, digest: str, name: str, store: cas.Stor
     # A stored analysis from the current exporter and the same UEFI pass
     # answers the question without starting Ghidra. One from an older
     # exporter is left alone and a new recipe is added beside it.
-    types = None if args.no_uefi else uefi_types.EDK2_TAG
+    types = None if args.no_uefi else uefi_types.TYPES
     if not args.force:
         existing = next((manifest for manifest in
                          (store.analysis(digest, recipe) for recipe in store.recipes(digest))

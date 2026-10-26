@@ -9,6 +9,8 @@ final class GhidraHostUnitTests: XCTestCase {
         let typed = GhidraHost.recipe(for: artifact, types: "edk2-stable202608", passes: ["ApplyUefi.java"])
         XCTAssertEqual(typed.id, "code-v4-ghidra-12.1.2")
         XCTAssertEqual(typed.types, "edk2-stable202608")
+        let retyped = GhidraHost.recipe(for: artifact, types: "edk2-stable202608-r2", passes: ["ApplyUefi.java"])
+        XCTAssertEqual(retyped.id, "code-v4-types2-ghidra-12.1.2")
         let plain = GhidraHost.recipe(for: artifact, types: nil, passes: [])
         XCTAssertEqual(plain.id, "code-v4-plain-ghidra-12.1.2")
         XCTAssertNil(plain.passes)
