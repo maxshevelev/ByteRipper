@@ -1249,8 +1249,26 @@ import ToolModuleKit
             follow(link)
             return true
         }
-        highlight(token.flatMap { symbol(of: $0, in: cTextView.string) })
+        let clicked = token.flatMap { symbol(of: $0, in: cTextView.string) }
+        highlight(clicked)
+        if let clicked, case .variable = clicked, Self.isJump(event) {
+            selectDefinition(of: clicked)
+            return true
+        }
         return false
+    }
+
+    /// ⌘-click or a double click on a parameter or a local selects where it
+    /// is defined: its first occurrence, since Ghidra writes the parameters in
+    /// the signature and declares every local at the top of the body.
+    private func selectDefinition(of symbol: CodeSymbol) {
+        let text = cTextView.string
+        let first: CodeToken? = shownCTokens.first { token in self.symbol(of: token, in: text) == symbol }
+        guard let definition = first else { return }
+        let range = NSRange(location: definition.start, length: definition.length)
+        cTextView.window?.makeFirstResponder(cTextView)
+        cTextView.setSelectedRange(range)
+        cTextView.scrollRangeToVisible(range)
     }
 
     /// A click in the listing: on a reference, it highlights the instructions

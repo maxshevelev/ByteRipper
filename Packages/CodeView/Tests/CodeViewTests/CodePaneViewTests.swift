@@ -159,6 +159,14 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertFalse(view.clickC(at: at("Count", after: "Total ="), event: try click(count: 1)))
         XCTAssertEqual(highlighted(), ["Count", "Count"], "the parameter and its one use")
 
+        // ⌘-click or a double click on a variable selects its definition.
+        XCTAssertTrue(view.clickC(at: at("Total", after: "return"), event: try click(count: 1, flags: .command)))
+        XCTAssertEqual(textView.selectedRange(), c.range(of: "Total"), "the local's declaration at the top")
+        XCTAssertTrue(view.clickC(at: at("Count", after: "Total ="), event: try click(count: 2)))
+        XCTAssertEqual(textView.selectedRange(), c.range(of: "Count"), "the parameter in the signature")
+        XCTAssertEqual(highlighted(), ["Count", "Count"], "the occurrences stay highlighted")
+        XCTAssertEqual(view.selectedFunction?.name, "FUN_00000220")
+
         XCTAssertFalse(view.clickC(at: at("int"), event: try click(count: 1)))
         XCTAssertNil(view.highlightedSymbol, "a type is not a name to highlight")
         XCTAssertTrue(highlighted().isEmpty)
