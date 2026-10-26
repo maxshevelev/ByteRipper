@@ -303,6 +303,66 @@ final class ContentStoreTests: XCTestCase {
         XCTAssertEqual(store.verify().count, 1)
     }
 
+    // MARK: - Review history
+
+    /// The commit order of `Design/GHIDRA_SHARED_PLAN.md` §5.4: document,
+    /// history entry, analysis.
+    private func publish(_ rev: Int, document text: String, project: String = "p",
+                         functions: Int = 1) throws -> AnalysisReading {
+        let document = try store.putObject(Data(text.utf8))
+        let reading = AnalysisReading(project: project, rev: rev, review: document)
+        try store.recordRevision(module: module().sha256, reading: reading, by: "agent")
+        try store.putAnalysis(module: module(), recipe: recipe(), artifact: artifact(functions: functions),
+                              reading: reading)
+        return reading
+    }
+
+    func testTheHistoryKeepsEveryRevisionAndGCKeepsTheirDocuments() throws {
+        let first = try publish(1, document: #"{"rev":1}"#)
+        let second = try publish(2, document: #"{"rev":2}"#, functions: 2)
+        let history = try XCTUnwrap(try store.reviewHistory(module: module().sha256))
+        XCTAssertEqual(history.revisions.map(\.rev), [1, 2])
+        XCTAssertEqual(history.revisions.map(\.by), ["agent", "agent"])
+        XCTAssertEqual(try store.collectGarbage(dryRun: false).objects, 1, "only the first artifact goes")
+        XCTAssertTrue(store.hasObject(first.review!), "an earlier revision's document is the base for a diff")
+        XCTAssertTrue(store.hasObject(second.review!))
+        XCTAssertEqual(store.verify(), [])
+    }
+
+    func testARevisionNeedsItsDocumentFirst() {
+        let missing = SHA256Digest(data: Data("not stored".utf8))
+        XCTAssertThrowsError(try store.recordRevision(
+            module: module().sha256, reading: AnalysisReading(project: "p", rev: 1, review: missing)))
+        XCTAssertThrowsError(try store.recordRevision(
+            module: module().sha256, reading: AnalysisReading(project: "p", rev: 1)))
+    }
+
+    func testAPublishThatStoppedAfterTheHistoryIsReportedAndRepeatedOver() throws {
+        _ = try publish(1, document: #"{"rev":1}"#)
+        // Revision 2 recorded, its analysis never stored.
+        let stray = try store.putObject(Data(#"{"rev":"2, first try"}"#.utf8))
+        try store.recordRevision(module: module().sha256,
+                                 reading: AnalysisReading(project: "p", rev: 2, review: stray))
+        XCTAssertEqual(store.verify().count, 1)
+        XCTAssertTrue(store.verify()[0].contains("revision 2 of p is ahead of its analysis"), store.verify()[0])
+        // The next publish is revision 2 again, and overwrites the entry.
+        let again = try publish(2, document: #"{"rev":2}"#, functions: 2)
+        let history = try XCTUnwrap(try store.reviewHistory(module: module().sha256))
+        XCTAssertEqual(history.revisions.map(\.rev), [1, 2])
+        XCTAssertEqual(history.revisions.last?.review, again.review)
+        XCTAssertEqual(store.verify(), [])
+    }
+
+    func testABundleCarriesTheReviewDocumentItsReadingNames() throws {
+        let reading = try publish(1, document: #"{"functions":{}}"#)
+        let url = directory.appendingPathComponent("reviewed.zip")
+        try store.exportBundle([AnalysisKey(module: module().sha256, recipe: recipe().id)!], to: url)
+        let other = try ContentStore(root: directory.appendingPathComponent("other", isDirectory: true))
+        XCTAssertEqual(try other.importBundle(from: url).imported.count, 1)
+        XCTAssertEqual(try other.object(reading.review!), Data(#"{"functions":{}}"#.utf8))
+        XCTAssertEqual(other.verify(), [])
+    }
+
     func testOneBadEntryDoesNotStopTheRestOfABundle() throws {
         let first = try store.putAnalysis(module: module("a"), recipe: recipe(), artifact: artifact(functions: 1))
         let second = try store.putAnalysis(module: module("b"), recipe: recipe(), artifact: artifact(functions: 2))

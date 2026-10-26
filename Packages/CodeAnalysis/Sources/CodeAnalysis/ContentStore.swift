@@ -7,9 +7,10 @@ import Foundation
 /// The layout is the one `Skills/ghidra-uefi/reference/cas.md` describes:
 /// immutable objects under `objects/<sha256>`, a manifest for each analysis
 /// under `analyses/<module-sha>/<recipe>/manifest.json`, and named references
-/// under `refs/`, and another project's reading of an analysis kept aside under
-/// `conflicts/<module-sha>/<recipe>/<artifact-sha>.json`. The directory is the
-/// index; a reader walks it.
+/// under `refs/`, another project's reading of an analysis kept aside under
+/// `conflicts/<module-sha>/<recipe>/<artifact-sha>.json`, and the revisions of
+/// a module's readings under `reviews/<module-sha>/manifest.json`. The
+/// directory is the index; a reader walks it.
 ///
 /// This is the store's one implementation. The skill's Python reaches it
 /// through the `byteripper-cas` tool (`CASCommand`), so a rule — which reading
@@ -41,6 +42,7 @@ public struct ContentStore: Sendable {
     public var refsURL: URL { root.appendingPathComponent("refs", isDirectory: true) }
     public var tmpURL: URL { root.appendingPathComponent("tmp", isDirectory: true) }
     public var conflictsURL: URL { root.appendingPathComponent("conflicts", isDirectory: true) }
+    public var reviewsURL: URL { root.appendingPathComponent("reviews", isDirectory: true) }
     private var lockURL: URL { root.appendingPathComponent(".lock") }
 
     public func objectURL(_ digest: SHA256Digest) -> URL {
@@ -51,6 +53,12 @@ public struct ContentStore: Sendable {
         analysesURL
             .appendingPathComponent(key.module.hex, isDirectory: true)
             .appendingPathComponent(key.recipe, isDirectory: true)
+            .appendingPathComponent("manifest.json", isDirectory: false)
+    }
+
+    public func reviewHistoryURL(_ module: SHA256Digest) -> URL {
+        reviewsURL
+            .appendingPathComponent(module.hex, isDirectory: true)
             .appendingPathComponent("manifest.json", isDirectory: false)
     }
 
@@ -280,6 +288,56 @@ public struct ContentStore: Sendable {
             .appendingPathComponent("\(manifest.artifact.sha256.hex).json", isDirectory: false)
     }
 
+    // MARK: - Review history
+
+    /// Record a revision of a reading in its module's history. A publish
+    /// stores, in this order, the review document, this revision, and then the
+    /// analysis whose `reading` names it (`Design/GHIDRA_SHARED_PLAN.md` §5.4):
+    /// the document must already be here, and a revision a failed publish left
+    /// behind is overwritten by the next publish of the same revision.
+    @discardableResult
+    public func recordRevision(module: SHA256Digest, reading: AnalysisReading,
+                               by: String? = nil) throws -> ReviewHistory {
+        guard let review = reading.review else {
+            throw CodeAnalysisError.analysisMismatch("a revision names its review document")
+        }
+        guard hasObject(review) else { throw CodeAnalysisError.objectMissing(review.hex) }
+        let url = reviewHistoryURL(module)
+        return try withLock {
+            var history = try reviewHistory(module: module) ?? ReviewHistory(module: module)
+            let revision = ReviewRevision(project: reading.project, rev: reading.rev, review: review,
+                                          recordedAt: Timestamps.now(), by: by)
+            if let at = history.revisions.firstIndex(where: {
+                $0.project == reading.project && $0.rev == reading.rev
+            }) {
+                guard history.revisions[at].review != review else { return history }
+                history.revisions[at] = revision
+            } else {
+                history.revisions.append(revision)
+            }
+            try atomicWrite(try encoder.encode(history), to: url)
+            return history
+        }
+    }
+
+    public func reviewHistory(module: SHA256Digest) throws -> ReviewHistory? {
+        let url = reviewHistoryURL(module)
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        do {
+            return try decoder.decode(ReviewHistory.self, from: Data(contentsOf: url))
+        } catch {
+            throw CodeAnalysisError.io("\(url.path): \(error)")
+        }
+    }
+
+    /// Every module's history; an unreadable one is left out here and
+    /// reported by `verify`.
+    public func reviewHistories() -> [ReviewHistory] {
+        contents(of: reviewsURL).compactMap { folder in
+            SHA256Digest(hex: folder.lastPathComponent).flatMap { try? reviewHistory(module: $0) }
+        }
+    }
+
     // MARK: - References
 
     @discardableResult
@@ -364,6 +422,38 @@ public struct ContentStore: Sendable {
             }
         }
 
+        // A history entry ahead of every manifest of its project is a publish
+        // that stopped after recording the revision.
+        let readings = loaded.loaded.map(\.manifest) + conflicts()
+        for folder in contents(of: reviewsURL) {
+            let name = folder.lastPathComponent
+            guard let module = SHA256Digest(hex: name) else {
+                problems.append("reviews/\(name): not a SHA-256 name")
+                continue
+            }
+            guard let history = try? reviewHistory(module: module) else {
+                problems.append("reviews/\(name): cannot be read")
+                continue
+            }
+            var latest: [String: Int] = [:]
+            for revision in history.revisions {
+                if !hasObject(revision.review) {
+                    problems.append("reviews/\(name): revision \(revision.rev) of \(revision.project): "
+                                    + "review document \(revision.review.hex) is missing")
+                }
+                latest[revision.project] = max(latest[revision.project] ?? 0, revision.rev)
+            }
+            for (project, rev) in latest.sorted(by: { $0.key < $1.key }) {
+                let named = readings
+                    .filter { $0.module.sha256 == module && $0.reading?.project == project }
+                    .compactMap(\.reading?.rev).max()
+                if named.map({ $0 < rev }) ?? true {
+                    problems.append("reviews/\(name): revision \(rev) of \(project) is ahead of its analysis"
+                                    + (named.map { " (revision \($0))" } ?? ""))
+                }
+            }
+        }
+
         for manifest in conflicts() where !hasObject(manifest.artifact.sha256) {
             problems.append("conflicts/\(manifest.key?.description ?? "?"): artifact "
                             + "\(manifest.artifact.sha256.hex) is missing")
@@ -410,8 +500,11 @@ public struct ContentStore: Sendable {
         // as the review document of its reading. A reading kept aside is still
         // a person's to choose, so its objects stay too.
         let named = keep + conflicts()
+        // Every document a history names stays too: the history is the base
+        // for a diff, and pruning it is what lets its documents go.
         let keepObjects = Set(named.map(\.artifact.sha256))
             .union(named.compactMap(\.reading?.review))
+            .union(reviewHistories().flatMap { $0.revisions.map(\.review) })
         let orphanObjects = contents(of: objectsURL).filter {
             guard let digest = SHA256Digest(hex: $0.lastPathComponent) else { return true }
             return !keepObjects.contains(digest)
@@ -464,6 +557,10 @@ public struct ContentStore: Sendable {
             entries["analyses/\(key.description)/manifest.json"] = try Data(contentsOf: manifestURL)
             entries["objects/\(manifest.artifact.sha256.hex)"] =
                 try object(manifest.artifact.sha256)
+            // The reading travels with its rendering.
+            if let review = manifest.reading?.review {
+                entries["objects/\(review.hex)"] = try object(review)
+            }
         }
         try BundleArchive.write(entries: entries, to: url)
         return info
@@ -509,6 +606,13 @@ public struct ContentStore: Sendable {
                 continue
             }
             try putObject(artifact)
+            // A bundle written before documents travelled has none; the
+            // analysis still imports, and `verify` names the missing document.
+            if let review = manifest.reading?.review,
+               let document = entries["objects/\(review.hex)"],
+               SHA256Digest(data: document) == review {
+                try putObject(document)
+            }
             let target = manifestURL(key)
             try withLock {
                 guard FileManager.default.fileExists(atPath: target.path) else {

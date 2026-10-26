@@ -77,6 +77,9 @@ def main(argv: list[str]) -> int:
     import_.add_argument("bundle", type=Path)
     import_.add_argument("--json", action="store_true")
     sub.add_parser("conflicts", help="readings an import kept aside").add_argument("--json", action="store_true")
+    history = sub.add_parser("history", help="every revision of a module's readings")
+    history.add_argument("module")
+    history.add_argument("--json", action="store_true")
 
     args = parser.parse_args(argv)
     store = cas.Store(args.store)
@@ -223,6 +226,18 @@ def run(args, store: cas.Store) -> int:
                       f"rev {reading.get('rev')}  artifact {manifest['artifact']['sha256'][:16]}")
             if not manifests:
                 print("no conflicting readings")
+        return 0
+
+    if args.command == "history":
+        record = store.review_history(args.module)
+        if args.json:
+            print(json.dumps(record, indent=2))
+        elif not record:
+            print("no review history")
+        else:
+            for revision in record["revisions"]:
+                print(f"{revision['project']}  rev {revision['rev']}  {revision['recorded_at']}  "
+                      f"{revision.get('by') or '-'}  document {revision['review'][:16]}")
         return 0
 
     return 0

@@ -21,8 +21,8 @@ runs the skill therefore needs Xcode or its command line tools.
 ```
 byteripper-cas [--store <root>] [--no-create] <command>
   hello | put-object | has-object | get-object | put-analysis | analysis
-  recipes | list | conflicts | set-ref | refs | remove-ref | verify | gc
-  export | import
+  recipes | list | conflicts | record-revision | review-history | set-ref
+  refs | remove-ref | verify | gc | export | import
 ```
 
 Every answer is JSON on standard output (an object's bytes are the
@@ -41,6 +41,7 @@ refused, never dropped.
   refs/<name>.json                            # named sets a project keeps
   conflicts/<module-sha>/<recipe>/<artifact-sha>.json
                                               # another project's reading, kept aside
+  reviews/<module-sha>/manifest.json          # every revision of the module's readings
   tmp/                                        # staging; cleaned by gc
   .lock                                       # flock for writers
 ```
@@ -105,6 +106,17 @@ project (`Design/GHIDRA_SHARED_PLAN.md` §5.6).
 - The manifest is written atomically under a `flock`; readers see either the
   old or the new file, never a partial one.
 
+### The review history
+
+`reviews/<module-sha>/manifest.json` lists every revision a publish recorded,
+oldest first: project, revision, review document, when and by whom. It is an
+index for diffs and pruning; the analysis manifest's `reading` alone says which
+reading is current. A publish stores, in this order, the document
+(`put-object`), the revision (`record-revision`, which refuses a document the
+store does not hold), and the analysis naming it (`put-analysis`). A publish
+that stops after the revision leaves an entry ahead of its analysis, which
+`verify` reports and the next publish of the same revision overwrites.
+
 ### References and collection
 
 A reference is a named set of analyses a project wants to keep:
@@ -127,9 +139,13 @@ bundle analysis by analysis: it verifies and stores each object, then writes,
 skips or keeps the manifest aside by the table above, and reports
 `{imported, unchanged, skipped, conflicts}`. One entry the store cannot take
 does not stop the others; only an unreadable `bundle.json` fails the import.
-`gc` keeps every object a kept manifest names — its artifact and its reading's
-review document — and the objects of readings kept aside; `verify` reports a
-review document a reading names but the store does not hold. A project can carry a bundle with
+A bundle carries the review document each reading names, and the import
+stores it beside the artifact; a bundle written before documents travelled
+still imports. `gc` keeps every object a kept manifest names — its artifact
+and its reading's review document — the objects of readings kept aside, and
+every document a review history names; `verify` reports a review document a
+reading or a history names but the store does not hold, and a history entry
+ahead of its analysis. A project can carry a bundle with
 it, or the store can be shared by putting the same directory on a synced
 folder. Entries are written stored, not deflated, so the Swift store in
 `Packages/CodeAnalysis` reads them without linking a decompressor.
@@ -147,6 +163,7 @@ python3 Skills/ghidra-uefi/scripts/cas_cli.py gc --analyses --apply
 python3 Skills/ghidra-uefi/scripts/cas_cli.py export --all --out analyses.zip
 python3 Skills/ghidra-uefi/scripts/cas_cli.py import analyses.zip
 python3 Skills/ghidra-uefi/scripts/cas_cli.py conflicts
+python3 Skills/ghidra-uefi/scripts/cas_cli.py history <module-sha>
 ```
 
 `code_artifact.py` writes through this store and `code_query.py` reads through

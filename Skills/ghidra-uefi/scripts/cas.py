@@ -222,6 +222,19 @@ class Store:
         """The readings a bundle import kept aside for a person to choose."""
         return self._call("conflicts")
 
+    def record_revision(self, module_sha: str, reading: dict, by: str | None = None) -> dict:
+        """A revision of a reading into the module's history; its document
+        must be stored already. A publish stores the document, then this, then
+        the analysis (`Design/GHIDRA_SHARED_PLAN.md` §5.4)."""
+        arguments = ["record-revision", module_sha, "--reading", json.dumps(reading)]
+        if by:
+            arguments += ["--by", by]
+        return self._call(*arguments)
+
+    def review_history(self, module_sha: str) -> dict | None:
+        """Every revision of every reading of a module, oldest first."""
+        return self._call("review-history", module_sha)
+
     def key(self, manifest: dict) -> str:
         return f"{manifest['module']['sha256']}/{manifest['recipe']['id']}"
 

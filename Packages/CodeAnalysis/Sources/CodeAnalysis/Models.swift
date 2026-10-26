@@ -231,6 +231,46 @@ public struct AnalysisReading: Codable, Equatable, Sendable {
     }
 }
 
+/// One revision of a reading as the history keeps it: the reading, and when
+/// and by whom it was published.
+public struct ReviewRevision: Codable, Equatable, Sendable {
+    public var project: String
+    public var rev: Int
+    public var review: SHA256Digest
+    public var recordedAt: String
+    public var by: String?
+
+    public init(project: String, rev: Int, review: SHA256Digest, recordedAt: String,
+                by: String? = nil) {
+        self.project = project
+        self.rev = rev
+        self.review = review
+        self.recordedAt = recordedAt
+        self.by = by
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case project, rev, review, by
+        case recordedAt = "recorded_at"
+    }
+}
+
+/// `reviews/<module-sha>/manifest.json`: every revision of every reading of a
+/// module, oldest first — the base for a diff and for pruning. Which reading
+/// is current is the analysis manifest's `reading`, never this file's.
+public struct ReviewHistory: Codable, Equatable, Sendable {
+    public var schema: Int
+    public var module: SHA256Digest
+    public var revisions: [ReviewRevision]
+
+    public init(schema: Int = CodeAnalysisSchema.current, module: SHA256Digest,
+                revisions: [ReviewRevision] = []) {
+        self.schema = schema
+        self.module = module
+        self.revisions = revisions
+    }
+}
+
 /// One analysis: which module, which recipe, which object, and what it holds.
 public struct AnalysisManifest: Codable, Equatable, Sendable {
     public var schema: Int

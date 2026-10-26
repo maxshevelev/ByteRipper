@@ -39,6 +39,8 @@ public enum CASCommand {
           recipes <module-sha>
           list
           conflicts
+          record-revision <module-sha> --reading <json> [--by <who>]
+          review-history <module-sha>
           set-ref <name> <module-sha>/<recipe>...
           refs
           remove-ref <name>
@@ -144,6 +146,17 @@ public enum CASCommand {
         case "conflicts":
             try parser.end()
             output.stdout = try encode(try store().conflicts())
+        case "record-revision":
+            let module = try digestArgument(&parser)
+            let reading: AnalysisReading = try decode(
+                parser.option("--reading"), "--reading", keys: ["project", "rev", "review"])
+            let by = parser.option("--by")
+            try parser.end()
+            output.stdout = try encode(try store().recordRevision(module: module, reading: reading, by: by))
+        case "review-history":
+            let module = try digestArgument(&parser)
+            try parser.end()
+            output.stdout = try try store().reviewHistory(module: module).map(encode) ?? Data("null\n".utf8)
         case "set-ref":
             let name = try parser.required("a reference name")
             let keys = try parser.rest().map(keyArgument)

@@ -132,6 +132,12 @@ class OwnerClientTests(unittest.TestCase):
         self.assertEqual(third["artifact"], first["artifact"])
         self.assertEqual(self.store.analysis(self.sha)["reading"]["rev"], 2)
         self.assertTrue(self.project.state()["reviewed"])
+        # The history has each revision once, the unchanged repeat included in
+        # revision 1, and the store is sound after every publish.
+        history = self.store.review_history(self.sha)
+        self.assertEqual([r["rev"] for r in history["revisions"]], [1, 2])
+        self.assertEqual(history["revisions"][1]["review"], third["reading"]["review"])
+        self.assertEqual(self.store.verify(), [])
 
     def testAnOwnerWhoseProcessIsGoneIsNotRunning(self):
         self.project.owner_path.write_text(json.dumps({"pid": 999999, "port": 1}))

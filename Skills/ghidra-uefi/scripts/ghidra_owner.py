@@ -331,12 +331,12 @@ def write(project: Project, path: str, body: dict) -> dict:
     return answer
 
 
-def release(project: Project, store: cas.Store) -> dict | None:
+def release(project: Project, store: cas.Store, by: str | None = None) -> dict | None:
     """Publish what the lease changed, then give the lease back (§7.3)."""
     record = project.owner()
     if not record or not project.lease_path.is_file():
         return None
-    manifest = publish(project, store)
+    manifest = publish(project, store, by=by)
     token = json.loads(project.lease_path.read_text(encoding="utf-8")).get("token")
     try:
         call(record["port"], "DELETE", "/v1/lease", lease=token)
@@ -347,7 +347,7 @@ def release(project: Project, store: cas.Store) -> dict | None:
 
 # -- publish ------------------------------------------------------------------
 
-def publish(project: Project, store: cas.Store) -> dict:
+def publish(project: Project, store: cas.Store, by: str | None = None) -> dict:
     """The program's artifact and its review document, from the owner, into
     the store.
 
@@ -355,7 +355,7 @@ def publish(project: Project, store: cas.Store) -> dict:
     `reading` in the manifest. A reviewed one publishes a revision of this
     project's reading — one more than the last whenever the artifact or the
     document changed — naming the document, which is stored first (§5.4's
-    order). The recipe takes the exporter and the Ghidra from the artifact,
+    order), then recorded in the module's history with `by`. The recipe takes the exporter and the Ghidra from the artifact,
     the types and passes from what made the project (§5.2).
     """
     record = project.owner()
@@ -380,6 +380,7 @@ def publish(project: Project, store: cas.Store) -> dict:
         changed = (last.get("artifact") != cas.sha256_bytes(raw) or last.get("review") != review)
         rev = max(1, (last.get("rev") or 0) + (1 if changed else 0))
         reading = {"project": state["project"], "rev": rev, "review": review}
+        store.record_revision(project.sha, reading, by=by)
     made = state["made_with"]
     recipe = code_artifact.recipe_for(artifact, made.get("types"), made.get("passes"))
     program = artifact.get("program", {})
@@ -429,6 +430,8 @@ def main(argv: list[str]) -> int:
     get.add_argument("path")
     pub = sub.add_parser("publish", help="store the artifact of the program as it stands")
     pub.add_argument("module")
+    pub.add_argument("--by", choices=["agent", "person"], default="agent",
+                     help="who published, as the review history records it")
     rename = sub.add_parser("rename", help="name a function")
     rename.add_argument("module")
     rename.add_argument("address")
@@ -464,6 +467,7 @@ def main(argv: list[str]) -> int:
     type_.add_argument("c", help="the C text, or @file to read it from a file")
     rel = sub.add_parser("release", help="publish and give the write lease back")
     rel.add_argument("module")
+    rel.add_argument("--by", choices=["agent", "person"], default="agent")
     stop = sub.add_parser("stop", help="save and stop the module's owner")
     stop.add_argument("module")
     args = parser.parse_args(argv)
@@ -520,7 +524,7 @@ def main(argv: list[str]) -> int:
             sys.stdout.write(call(record["port"], "GET", args.path).decode("utf-8"))
             return 0
         if args.command == "publish":
-            print(json.dumps(publish(project, cas.Store(args.store)), indent=2))
+            print(json.dumps(publish(project, cas.Store(args.store), by=args.by), indent=2))
             return 0
         writes = {
             "rename": lambda: ("/v1/rename/function",
@@ -545,7 +549,7 @@ def main(argv: list[str]) -> int:
             print(json.dumps(write(project, path, body), indent=2))
             return 0
         if args.command == "release":
-            manifest = release(project, cas.Store(args.store))
+            manifest = release(project, cas.Store(args.store), by=args.by)
             print(json.dumps(manifest, indent=2) if manifest else "no lease held from here")
             return 0
         if args.command == "stop":
