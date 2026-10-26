@@ -15,7 +15,11 @@
 //
 //   java -cp <ghidra jars>:owner.jar Owner --project-dir D --project-name N
 //        --program P --module SHA --project-id UUID [--types ARCHIVE.gdt]
-//        [--port 0] [--idle SECONDS]
+//        [--review-types DIR] [--port 0] [--idle SECONDS]
+//
+// --review-types names the folder of the archives of types reviews define
+// (`review-types-Ia32.gdt`, `review-types-X64.gdt`, §6.5): the owner reads a
+// copy taken when it starts, and merges its own review's types in at publish.
 //
 // It prints `OWNER READY <port>` once it serves. The plain classpath and the
 // DomainFile open are the two findings of phase 0 (plan §3): a class on the
@@ -70,6 +74,10 @@ import ghidra.util.data.DataTypeParser;
 import ghidra.util.task.TaskMonitor;
 
 import java.io.File;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.InetSocketAddress;
@@ -93,6 +101,11 @@ public class Owner {
     // The EDK2 archive the program was typed with, read-only: a type a
     // review names that the program does not hold yet comes from here.
     private FileDataTypeManager archive;
+    // The types other reviews defined, as they were when this owner started:
+    // a copy, so no owner ever holds the shared archive open (§6.5).
+    private File reviewTypes;
+    private File reviewTypesCopy;
+    private FileDataTypeManager reviewArchive;
     private final Map<Address, DecompileResults> decompiled = new HashMap<>();
     private long decompiledAt = -1;
     private volatile long lastRequest = System.currentTimeMillis();
@@ -132,6 +145,17 @@ public class Owner {
         decompiler.openProgram(program);
         if (options.containsKey("types")) {
             archive = FileDataTypeManager.openFileArchive(new File(options.get("types")), false);
+        }
+        if (options.containsKey("review-types")) {
+            String bits = program.getDefaultPointerSize() == 8 ? "X64" : "Ia32";
+            reviewTypes = new File(options.get("review-types"), "review-types-" + bits + ".gdt");
+            if (reviewTypes.isFile()) {
+                reviewTypesCopy = File.createTempFile("review-types-", ".gdt");
+                try (FileChannel channel = lockChannel(); FileLock lock = channel.lock()) {
+                    Files.copy(reviewTypes.toPath(), reviewTypesCopy.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                }
+                reviewArchive = FileDataTypeManager.openFileArchive(reviewTypesCopy, false);
+            }
         }
         // What the program held before anyone reviewed it — the loader's
         // comments, ApplyUefi's types — so a harvest holds only the review.
@@ -178,6 +202,8 @@ public class Owner {
             if (program.isChanged()) program.save("owner", TaskMonitor.DUMMY);
             if (decompiler != null) decompiler.dispose();
             if (archive != null) archive.close();
+            if (reviewArchive != null) reviewArchive.close();
+            if (reviewTypesCopy != null) reviewTypesCopy.delete();
             program.release(this);
             program = null;
             project.close();
@@ -430,14 +456,68 @@ public class Owner {
             byte[] artifact = Files.readAllBytes(out.toPath());
             if (artifact.length == 0) throw new Failure(500, "the export wrote nothing");
             published = Harvest.of(program, options.get("module"), options.get("project-id"));
+            java.util.List<String> conflicts = mergeReviewTypes();
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.getResponseHeaders().set("X-Owner-Modification", Long.toString(program.getModificationNumber()));
             exchange.getResponseHeaders().set("X-Owner-Reviewed", Boolean.toString(published.reviewed));
+            if (!conflicts.isEmpty()) {
+                exchange.getResponseHeaders().set("X-Owner-Type-Conflicts", String.join(",", conflicts));
+            }
             exchange.sendResponseHeaders(200, artifact.length);
             try (OutputStream body = exchange.getResponseBody()) { body.write(artifact); }
         } finally {
             out.delete();
         }
+    }
+
+    private FileChannel lockChannel() throws Exception {
+        File lock = new File(reviewTypes.getPath() + ".lock");
+        return FileChannel.open(lock.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+    }
+
+    /**
+     * Puts this review's types into the shared archive, under its lock, for
+     * the modules opened after it. A type the archive already has under the
+     * name is left alone when it is the same, and reported when it is not:
+     * the program keeps its own, and choosing is a person's (§16.5). The
+     * lock is held for the length of the merge, a second or so.
+     */
+    private java.util.List<String> mergeReviewTypes() throws Exception {
+        java.util.List<String> conflicts = new java.util.ArrayList<>();
+        java.util.TreeMap<String, String> mine = Harvest.reviewTypes(program);
+        if (reviewTypes == null || mine.isEmpty()) return conflicts;
+        reviewTypes.getParentFile().mkdirs();
+        try (FileChannel channel = lockChannel(); FileLock lock = channel.lock()) {
+            FileDataTypeManager shared = reviewTypes.isFile()
+                ? FileDataTypeManager.openFileArchive(reviewTypes, true)
+                : FileDataTypeManager.createFileArchive(reviewTypes, program.getLanguageID(),
+                      program.getCompilerSpec().getCompilerSpecID());
+            try {
+                boolean changed = false;
+                int transaction = shared.startTransaction("review types of " + options.get("module"));
+                try {
+                    for (String name : mine.keySet()) {
+                        java.util.List<DataType> here = new java.util.ArrayList<>();
+                        program.getDataTypeManager().findDataTypes(name, here);
+                        if (here.isEmpty()) continue;
+                        java.util.List<DataType> there = new java.util.ArrayList<>();
+                        shared.findDataTypes(name, there);
+                        if (there.isEmpty()) {
+                            shared.resolve(here.get(0), DataTypeConflictHandler.KEEP_HANDLER);
+                            changed = true;
+                        } else if (!there.get(0).isEquivalent(here.get(0))) {
+                            conflicts.add(name);
+                        }
+                    }
+                } finally {
+                    shared.endTransaction(transaction, true);
+                }
+                if (changed) shared.save();
+            } finally {
+                shared.close();
+            }
+        }
+        return conflicts;
     }
 
     /** The review document harvested by the last publish. */
@@ -741,17 +821,22 @@ public class Owner {
      * so a signature or a variable can be written the way EDK2 spells it.
      */
     private void importTypes(String text) {
-        if (archive == null) return;
+        if (archive == null && reviewArchive == null) return;
         java.util.regex.Matcher words = java.util.regex.Pattern.compile("[A-Za-z_][A-Za-z0-9_]*").matcher(text);
         while (words.find()) {
             String word = words.group();
             java.util.List<DataType> here = new java.util.ArrayList<>();
             program.getDataTypeManager().findDataTypes(word, here);
             if (!here.isEmpty()) continue;
-            java.util.List<DataType> there = new java.util.ArrayList<>();
-            archive.findDataTypes(word, there);
-            if (!there.isEmpty()) {
-                program.getDataTypeManager().resolve(there.get(0), DataTypeConflictHandler.DEFAULT_HANDLER);
+            // Another review's type first, then EDK2's.
+            for (FileDataTypeManager source : new FileDataTypeManager[] {reviewArchive, archive}) {
+                if (source == null) continue;
+                java.util.List<DataType> there = new java.util.ArrayList<>();
+                source.findDataTypes(word, there);
+                if (!there.isEmpty()) {
+                    program.getDataTypeManager().resolve(there.get(0), DataTypeConflictHandler.DEFAULT_HANDLER);
+                    break;
+                }
             }
         }
     }

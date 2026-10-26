@@ -144,7 +144,12 @@ The review is made through the same owner: `rename`, `rename-var` (a local by
 the module's write lease; `publish` stores the artifact with a `reading` —
 this project's revision — and the review document; `release` publishes and
 gives the lease back. A name Ghidra would make unique (`Foo_1`) is refused,
-and so is a local named by a storage several locals share.
+and so is a local named by a storage several locals share. A signature or a
+type may be written the EDK2 way (`VOID`, `IN`, `EFI_FIRMWARE_VOLUME_HEADER`):
+the owner takes what the program lacks from the EDK2 archive. A type added
+with `type` is shared at publish through `GhidraProjects/review-types-*.gdt`,
+so a module opened afterwards can use it; one that another review defines
+differently is reported and stays in its program.
 
 ## The one-time code artifact
 

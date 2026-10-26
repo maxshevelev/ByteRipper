@@ -225,6 +225,7 @@ class Project:
                    "--program", state["program"], "--module", self.sha,
                    "--project-id", state["project"],
                    *(["--types", state["archive"]] if state.get("archive") else []),
+                   "--review-types", str(self.dir.parent),
                    "--port", "0", "--idle", str(idle)]
         handle = open(log, "w", encoding="utf-8")
         process = subprocess.Popen(command, stdout=handle, stderr=subprocess.STDOUT,
@@ -367,6 +368,10 @@ def publish(project: Project, store: cas.Store) -> dict:
         document = call(record["port"], "GET", "/v1/review")
     artifact = json.loads(raw)
     reviewed = headers.get("x-owner-reviewed") == "true"
+    conflicts = [name for name in headers.get("x-owner-type-conflicts", "").split(",") if name]
+    if conflicts:
+        print("these types are defined differently by another review and were not shared: "
+              + ", ".join(conflicts), file=sys.stderr)
     last = state.get("published") or {}
     reading = None
     review = None

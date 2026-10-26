@@ -486,8 +486,10 @@ A structure a review defines in one module — a vendor configuration block, a
 private protocol's interface — is usually needed in the modules that consume
 it. A type made in one project is invisible to another.
 
-- A **review type archive** (`GhidraProjects/review-types.gdt`) beside the EDK2
-  archives, which no owner holds open. An owner attaches a read-only *copy* of
+- A **review type archive** per pointer size, as EDK2's are
+  (`GhidraProjects/review-types-Ia32.gdt`, `review-types-X64.gdt`: a structure
+  with a pointer lays out differently), created on the program's language, and
+  held open by no owner. An owner attaches a read-only *copy* of
   it, taken when the owner starts, as it attaches EDK2's archives; so every
   module opened afterwards sees the types reviews defined before it.
 - `POST /v1/type` adds the type to the program only. At publish, the owner
@@ -499,8 +501,12 @@ it. A type made in one project is invisible to another.
 - A type whose name the archive already defines differently is refused at the
   merge and reported in the publish's answer; the program keeps its own
   definition. Choosing between the two is §16.5.
-- The archive is rebuildable: every type in it is in some review document, and
-  `cas_cli.py review types` rebuilds it from the stored documents.
+- A type a review names is looked up in the program, then in this copy of the
+  review archive, then in EDK2's, and brought into the program from the first
+  that has it. The answer of a publish names the types it could not share.
+- The archive is rebuildable: every type in it is in some review document.
+  A command that rebuilds it from the stored documents comes with phase 5,
+  which is when documents are applied by machine.
 
 ## 7. The bridge
 
@@ -829,11 +835,10 @@ already: a re-run analysis shifts indices as well.
    last publish and nothing else (§5.4). Costs on BdsDxe: step 1 54 s, owner
    start 3 s and 480 MB, a publish 12 s. No supervisor, no lease yet.
 2. **Writes, publish, readings**, in three parts that land separately:
-   - **2a — the owner writes — done except the type archive.** Lease; rename
-     function/parameter/local with author and reason; signature, comment,
-     data, type; save; `owner/Harvest.java`; publish with artifact and
-     document, the client numbering the revision. Still to do: the review type
-     archive merged at publish (§6.5) — a type lives in its program until then.
+   - **2a — the owner writes — done.** Lease; rename function/parameter/local
+     with author and reason; signature, comment, data, type; save;
+     `owner/Harvest.java`; publish with artifact and document, the client
+     numbering the revision; the review type archive merged at publish (§6.5).
      What 2a found: a pass's decisions are `USER_DEFINED` too (`ApplyUefi`
      types the entry's parameters that way, the PE loader writes section
      comments), so the owner records a **baseline** of the program's decisions
