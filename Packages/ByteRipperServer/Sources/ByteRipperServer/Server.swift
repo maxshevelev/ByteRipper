@@ -1,3 +1,4 @@
+import AgentKit
 import CASService
 import CodeAnalysis
 import Foundation
@@ -58,6 +59,13 @@ public final class Server: @unchecked Sendable {
             GhidraRoutes.projectsRoot = configuration.projects
             router.merge(GhidraRoutes.routes(host: host, published: { await feed?.rescan() }))
             ghidra = host
+            // The agent's tools over this host, at `/mcp`, behind the same token.
+            let agentServer = AgentServer(
+                info: AgentServerInfo(name: "byteripper-server", version: "1", title: "ByteRipper analysis server"),
+                instructions: GhidraTools.instructions,
+                tools: GhidraTools.tools(backend: host),
+                limits: .init(maxLineBytes: 16 << 20, maxAnswerBytes: 96 << 10))
+            router.merge(MCPEndpoint.routes(server: agentServer, log: log))
             let ghidraNote = (try? await host.ghidra()).map { "Ghidra \($0.version) at \($0.home.path)" }
                 ?? "no Ghidra found yet"
             log("projects \(configuration.projects.path); \(ghidraNote)")

@@ -20,14 +20,16 @@ let package = Package(
         .package(path: "../CodeAnalysis"),
         .package(path: "../HTTPService"),
         .package(path: "../CASService"),
-        .package(path: "../GhidraHost")
+        .package(path: "../GhidraHost"),
+        .package(path: "../AgentKit")
     ],
     targets: [
         .target(name: "ByteRipperServer", dependencies: [
             .product(name: "CodeAnalysis", package: "CodeAnalysis"),
             .product(name: "HTTPService", package: "HTTPService"),
             .product(name: "CASService", package: "CASService"),
-            .product(name: "GhidraHost", package: "GhidraHost")
+            .product(name: "GhidraHost", package: "GhidraHost"),
+            .product(name: "AgentKit", package: "AgentKit")
         ]),
         .executableTarget(name: "byteripper-server", dependencies: ["ByteRipperServer"]),
         .testTarget(name: "ByteRipperServerTests", dependencies: [
