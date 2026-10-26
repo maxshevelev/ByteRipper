@@ -151,6 +151,54 @@ with `type` is shared at publish through `GhidraProjects/review-types-*.gdt`,
 so a module opened afterwards can use it; one that another review defines
 differently is reported and stays in its program.
 
+### What a review makes of the code
+
+The aim of a review is decompiled C that reads like the module's source: a
+person who has never seen the module follows a function from its C alone, and
+a constant, a pointer walk or a branch says what it means where it stands.
+Names alone do not get there. Every review applies these rules:
+
+1. **Names, not constants.** A value that belongs to a set becomes an enum
+   member, and the parameter, field or return type that carries it gets the
+   enum type, so the decompiler prints the name: `EFI_STATUS` results as
+   `EFI_SUCCESS`, `EFI_NOT_FOUND`; `DEBUG` levels; POST and halt codes; group
+   and type ids of a vendor table. A signature, a magic size or a register
+   number used once gets a named global or an end-of-line comment that names
+   it. A GUID gets its name from the GUID table or a label. Write the tag of
+   a `typedef enum`/`struct` (`typedef enum _APOB_HALT_CODE { … }
+   APOB_HALT_CODE;`); the owner adds one that is missing, because Ghidra names
+   an untagged type by its place in the text and two of them collide.
+2. **Structures, not pointer arithmetic.** When the code reads `*(int *)(p +
+   0x10)` or walks a buffer by hand, define the structure it walks — the header,
+   the entry, the record — and type the pointer with it, so the C says
+   `Entry->Size` and `Entries[Index]`. Put the layout in the type from what the
+   instructions prove (which offsets are read, at what width), not from a
+   guess; a field nobody can name is `Unknown08`, never a plausible invention.
+   Fix the signatures first — a typed parameter retypes every local that
+   follows from it, in this function and in its callers.
+3. **Names for everything that stays.** Functions, parameters and locals get
+   names that say their role, in the module's own convention (EDK2:
+   `CamelCase`, `Ptr` only where a pointer and its target both appear). A
+   function is named for what it does for its caller, not for its first call.
+   After a signature change, list the locals again before `rename-var`: Ghidra
+   merges and retypes them, and the old storages no longer exist.
+4. **Comments that a source would have.** A plate comment on each function
+   that matters: what it does, why it exists in this module, what it expects
+   and what it returns or halts with. End-of-line comments where the code alone
+   cannot say it: the hardware or firmware meaning of a value, a convention
+   (the PEI Services pointer below the IDT), an error path that does not
+   return. Never paraphrase the line (`// add 1 to Index`). Say what is
+   uncertain (`probably`, `not confirmed`). Read the existing comment before
+   writing one: a `comment` replaces it.
+5. **Read it again.** After a publish, read the function and its callers once
+   more: a name or a type that reads wrong in a caller is not done. What still
+   reads as a constant, a cast or `local_` is the next round.
+6. **Findings are reported, not hidden.** A defect the review finds — an
+   unbounded buffer, a wrong format, an unused parameter — goes in a comment
+   at its place and in the report to the person. It never shapes a name: the
+   function is named for what it was meant to do, and the comment says what it
+   actually does.
+
 ## The one-time code artifact
 
 Analysis and reading are split. `code_artifact.py` runs Ghidra once and stores
