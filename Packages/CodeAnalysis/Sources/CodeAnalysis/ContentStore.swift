@@ -354,6 +354,9 @@ public struct ContentStore: Sendable {
             if !hasObject(manifest.artifact.sha256) {
                 problems.append("\(key.description): artifact \(manifest.artifact.sha256.hex) is missing")
             }
+            if let review = manifest.reading?.review, !hasObject(review) {
+                problems.append("\(key.description): review document \(review.hex) is missing")
+            }
         }
 
         for manifest in conflicts() where !hasObject(manifest.artifact.sha256) {
@@ -398,9 +401,12 @@ public struct ContentStore: Sendable {
             keep = all
             drop = []
         }
-        // A reading kept aside is still a person's to choose; its object stays.
-        let keepObjects = Set(keep.map(\.artifact.sha256))
-            .union(conflicts().map(\.artifact.sha256))
+        // An object stays while a kept manifest names it: as its artifact, or
+        // as the review document of its reading. A reading kept aside is still
+        // a person's to choose, so its objects stay too.
+        let named = keep + conflicts()
+        let keepObjects = Set(named.map(\.artifact.sha256))
+            .union(named.compactMap(\.reading?.review))
         let orphanObjects = contents(of: objectsURL).filter {
             guard let digest = SHA256Digest(hex: $0.lastPathComponent) else { return true }
             return !keepObjects.contains(digest)

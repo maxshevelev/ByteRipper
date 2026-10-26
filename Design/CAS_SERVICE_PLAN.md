@@ -130,7 +130,12 @@ byteripper-cas [--store <root>] [--no-create] <command>
   one entry the store cannot take does not stop the rest. Every object that
   matches its hash is stored, so a workspace naming a skipped artifact still
   opens it.
-- `gc` keeps the objects of the readings kept aside.
+- `gc` keeps every object a kept manifest names — the artifact and the
+  reading's review document — and those of the readings kept aside.
+- A reading is trusted input: on a local store its writer is the user. A
+  remote service (§5.1) must let only an authenticated writer claim a reading,
+  record who claimed it, and refuse a claim on a project that writer has not
+  written before.
 
 ## 4. Current state
 

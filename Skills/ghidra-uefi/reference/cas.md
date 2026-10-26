@@ -126,7 +126,9 @@ bundle analysis by analysis: it verifies and stores each object, then writes,
 skips or keeps the manifest aside by the table above, and reports
 `{imported, unchanged, skipped, conflicts}`. One entry the store cannot take
 does not stop the others; only an unreadable `bundle.json` fails the import.
-`gc` keeps the objects of readings kept aside. A project can carry a bundle with
+`gc` keeps every object a kept manifest names — its artifact and its reading's
+review document — and the objects of readings kept aside; `verify` reports a
+review document a reading names but the store does not hold. A project can carry a bundle with
 it, or the store can be shared by putting the same directory on a synced
 folder. Entries are written stored, not deflated, so the Swift store in
 `Packages/CodeAnalysis` reads them without linking a decompressor.

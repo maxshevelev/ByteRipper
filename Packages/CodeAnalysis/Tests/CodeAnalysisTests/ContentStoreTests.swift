@@ -284,6 +284,17 @@ final class ContentStoreTests: XCTestCase {
         XCTAssertEqual(other.verify(), [])
     }
 
+    func testGCKeepsTheReviewDocumentAReadingNames() throws {
+        let document = try store.putObject(Data(#"{"schema":1}"#.utf8))
+        try store.putAnalysis(module: module(), recipe: recipe(), artifact: artifact(),
+                              reading: AnalysisReading(project: "p", rev: 1, review: document))
+        XCTAssertEqual(try store.collectGarbage(dryRun: false).objects, 0)
+        XCTAssertTrue(store.hasObject(document))
+        XCTAssertEqual(store.verify(), [])
+        try FileManager.default.removeItem(at: store.objectURL(document))
+        XCTAssertEqual(store.verify().count, 1)
+    }
+
     func testOneBadEntryDoesNotStopTheRestOfABundle() throws {
         let first = try store.putAnalysis(module: module("a"), recipe: recipe(), artifact: artifact(functions: 1))
         let second = try store.putAnalysis(module: module("b"), recipe: recipe(), artifact: artifact(functions: 2))
