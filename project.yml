@@ -126,6 +126,10 @@ packages:
   # it; listed so Xcode sees it.
   ByteRipperServer:
     path: Packages/ByteRipperServer
+  # The Ghidra owners hosted from Swift: the server's Ghidra role, and the
+  # app's for a desktop (`Design/SERVER_PLAN.md` §6).
+  GhidraHost:
+    path: Packages/GhidraHost
   # The code pane beside a module's bytes, and the placeholder stage the panel
   # is built through.
   CodeView:
