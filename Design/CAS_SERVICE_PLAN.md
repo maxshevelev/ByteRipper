@@ -258,13 +258,19 @@ HTTP bodies. The protocol must not require base64 for multi-megabyte payloads.
 - `putObject` — streamed, content-addressed; idempotent; hash verified.
 - `putAnalysis` — module identity, recipe, manifest, artifact object, source
   identity; returns the committed manifest. Same module+recipe+artifact is
-  idempotent; same key with another artifact is a conflict unless the caller
-  explicitly replaces or uses another recipe.
+  idempotent; same key with another artifact is decided by the manifests'
+  `reading` (`Design/GHIDRA_SHARED_PLAN.md` §5.6): a newer revision of the
+  same reading replaces, an older one or a mechanical artifact over a reading
+  is skipped, another project's reading is a conflict kept aside. Without a
+  reading on either side it stays a conflict unless the caller explicitly
+  replaces or uses another recipe.
 - `getAnalysis` / `listAnalyses` / `listRecipes`.
 - `setRef` / `getRef` / `listRefs` — named sets of analysis keys; the project
   bundle uses a stable `project-…` ref.
 - `exportBundle` / `importBundle` — streamed ZIP or equivalent; preserves the
-  existing `Analyses.bundle` meaning.
+  existing `Analyses.bundle` meaning. Import goes key by key under the same
+  `reading` rule and reports skipped and conflicting keys; one conflict does
+  not stop the rest.
 - `collectGarbage` — dry-run by default; never deletes an analysis named by a
   live reference; a shared service uses leases/refs, not a global sweep.
 - `subscribeChanges` — from a cursor; events name module SHA, recipe and, when
