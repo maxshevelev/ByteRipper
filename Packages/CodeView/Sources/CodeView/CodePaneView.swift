@@ -811,6 +811,9 @@ import ToolModuleKit
             font: ToolPanelFont.title())
         let recipeLabel = label(recipeSummary(), font: Self.recipeFont(), color: .secondaryLabelColor)
         recipeLabel.lineBreakMode = .byTruncatingMiddle
+        // The name is what one searches for elsewhere — in the tree, in a
+        // report — so it can be selected and copied.
+        nameLabel.isSelectable = true
         for field in [nameLabel, recipeLabel] {
             field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         }

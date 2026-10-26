@@ -41,6 +41,15 @@ final class CodePaneViewTests: XCTestCase {
         """.utf8))
     }
 
+    /// The module's name in the header can be selected and copied.
+    func testTheModuleNameCanBeSelected() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: moduleBytes, hexView: NSView())
+        let name = try XCTUnwrap(all(NSTextField.self, in: view).first { $0.stringValue == manifest().module.name })
+        XCTAssertTrue(name.isSelectable)
+        XCTAssertFalse(name.isEditable)
+    }
+
     func testThePaneListsFunctionsAndInstructions() throws {
         let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
                                 moduleBytes: moduleBytes, hexView: NSView())
