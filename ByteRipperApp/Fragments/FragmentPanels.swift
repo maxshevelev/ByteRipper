@@ -423,6 +423,7 @@ import ToolModuleKit
         Task { @MainActor [weak self] in
             guard let self else { return }
             guard let artifact = await CodeAnalysisStore.artifact(for: manifest) else {
+                view.recipeLoadFailed()
                 self.host?.reportCodeAnalysisUnreadable()
                 return
             }

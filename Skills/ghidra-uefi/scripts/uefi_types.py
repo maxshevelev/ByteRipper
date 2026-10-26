@@ -29,7 +29,6 @@ from __future__ import annotations
 import argparse
 import re
 import shutil
-import subprocess
 import sys
 import tempfile
 import urllib.request
@@ -37,6 +36,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ghidra_import
+import progress
 
 EDK2_URL = "https://github.com/tianocore/edk2"
 EDK2_TAG = "edk2-stable202608"
@@ -135,15 +135,36 @@ def write_table(edk2: Path, csv: Path | None, out: Path) -> int:
     return len(table)
 
 
+def download(url: str, target: Path, label: str, timeout: float = 30) -> None:
+    """A download with its progress in kilobytes, into a temporary file that
+    becomes `target` only when it is whole. `timeout` is how long the server
+    may stay silent, not the whole download's limit."""
+    partial = target.with_suffix(target.suffix + ".part")
+    with progress.Step(label) as step, \
+            urllib.request.urlopen(url, timeout=timeout) as response, \
+            open(partial, "wb") as out:
+        total = int(response.headers.get("Content-Length") or 0)
+        received = 0
+        while chunk := response.read(64 * 1024):
+            out.write(chunk)
+            received += len(chunk)
+            step.tick(f"{received // 1024} KB" + (f" of {total // 1024} KB" if total else ""))
+    partial.replace(target)
+
+
 def fetch_edk2(target: Path) -> None:
     """A sparse, shallow clone of the pinned tag: MdePkg's headers and the two
     `.dec` files, about 10 MB."""
     if target.exists():
         shutil.rmtree(target)
-    subprocess.run(["git", "clone", "--quiet", "--depth", "1", "--branch", EDK2_TAG,
-                    "--filter=blob:none", "--sparse", EDK2_URL, str(target)], check=True)
-    subprocess.run(["git", "-C", str(target), "sparse-checkout", "set", "--no-cone",
-                    "/MdePkg/Include/", *[f"/{dec}" for dec in DEC_FILES]], check=True)
+    clone = ["git", "-c", "advice.detachedHead=false", "clone", "--progress", "--depth", "1", "--branch", EDK2_TAG,
+             "--filter=blob:none", "--sparse", EDK2_URL, str(target)]
+    if progress.run(clone, f"Cloning {EDK2_TAG} from GitHub", timeout=600) != 0:
+        raise SystemExit(f"git clone of {EDK2_URL} failed; is GitHub reachable?")
+    checkout = ["git", "-C", str(target), "sparse-checkout", "set", "--no-cone",
+                "/MdePkg/Include/", *[f"/{dec}" for dec in DEC_FILES]]
+    if progress.run(checkout, "Fetching MdePkg's headers (about 10 MB)", timeout=600) != 0:
+        raise SystemExit("git sparse-checkout of MdePkg failed")
 
 
 def build_archives(ghidra: Path, edk2: Path, out_x64: Path, out_ia32: Path) -> None:
@@ -159,13 +180,14 @@ def build_archives(ghidra: Path, edk2: Path, out_x64: Path, out_ia32: Path) -> N
                    "-processor", "x86:LE:64:default", "-noanalysis", "-deleteProject",
                    "-scriptPath", str(Path(__file__).resolve().parent),
                    "-preScript", "BuildUefiTypes.java", str(edk2), str(work)]
-        with open(log, "w", encoding="utf-8") as handle:
-            result = subprocess.run(command, stdout=handle, stderr=subprocess.STDOUT)
+        returncode = progress.run(
+            command, "Building the UEFI type archives in Ghidra (about a minute)",
+            log=log, timeout=1200)
         built = {"X64": work / "uefi_X64.gdt", "Ia32": work / "uefi_Ia32.gdt"}
-        if result.returncode != 0 or not all(path.exists() for path in built.values()):
+        if returncode != 0 or not all(path.exists() for path in built.values()):
             tail = log.read_text(encoding="utf-8", errors="replace").splitlines()[-30:]
             print("\n".join(tail), file=sys.stderr)
-            raise SystemExit(f"BuildUefiTypes failed (exit {result.returncode})")
+            raise SystemExit(f"BuildUefiTypes failed (exit {returncode})")
         shutil.move(str(built["X64"]), out_x64)
         shutil.move(str(built["Ia32"]), out_ia32)
     finally:
@@ -178,16 +200,13 @@ def ensure(ghidra_home: str | None = None, rebuild: bool = False,
     where = paths(root)
     where["root"].mkdir(parents=True, exist_ok=True)
     if rebuild or not (where["edk2"] / "MdePkg" / "Include").exists():
-        print(f"fetching {EDK2_TAG} headers …", file=sys.stderr)
         fetch_edk2(where["edk2"])
     if rebuild or not (where["gdt_x64"].exists() and where["gdt_ia32"].exists()):
-        print("building the UEFI type archives (about a minute) …", file=sys.stderr)
         build_archives(ghidra_import.find_ghidra(ghidra_home), where["edk2"],
                        where["gdt_x64"], where["gdt_ia32"])
     if rebuild or not where["guids_csv"].exists():
         try:
-            with urllib.request.urlopen(GUIDS_URL, timeout=30) as response:
-                where["guids_csv"].write_bytes(response.read())
+            download(GUIDS_URL, where["guids_csv"], "Downloading the GUID catalogue (about 700 KB)")
         except OSError as error:
             # EDK2's own names still name the standard GUIDs.
             print(f"guids.csv not fetched ({error}); EDK2's names only", file=sys.stderr)

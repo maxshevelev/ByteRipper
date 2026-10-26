@@ -30,7 +30,6 @@ import argparse
 import hashlib
 import json
 import shutil
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -38,6 +37,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cas
 import ghidra_import
+import progress
 import te_to_pe
 import uefi_types
 
@@ -101,20 +101,21 @@ def analyze(module: Path, ghidra_home: str | None,
             command += ["-postScript", "ApplyUefi.java",
                         str(uefi["gdt"]), str(uefi["guids"]), uefi["phase"]]
         command += ["-postScript", "ExportCode.java", str(artifact)]
-        with open(log, "w", encoding="utf-8") as handle:
-            result = subprocess.run(command, stdout=handle, stderr=subprocess.STDOUT)
+        steps = "analysis, UEFI names, export" if uefi is not None else "analysis, export"
+        returncode = progress.run(command, f"Ghidra: {module.name} ({steps})", log=log,
+                                  timeout=1800)
         # A script that does not compile is skipped with an error in the log,
         # and the run still exits 0: an artifact without the UEFI pass would
         # be stored under the recipe that says it had one.
         script_error = any("SCRIPT ERROR" in line for line in
                            log.read_text(encoding="utf-8", errors="replace").splitlines())
-        if result.returncode != 0 or script_error or not artifact.exists():
+        if returncode != 0 or script_error or not artifact.exists():
             tail = log.read_text(encoding="utf-8", errors="replace").splitlines()[-30:]
             print("\n".join(tail), file=sys.stderr)
-            raise SystemExit(f"Ghidra failed (exit {result.returncode}); log: {log}")
+            raise SystemExit(f"Ghidra failed (exit {returncode}); log: {log}")
         for line in log.read_text(encoding="utf-8", errors="replace").splitlines():
             if "ApplyUefi:" in line:
-                print(line[line.index("ApplyUefi:"):].removesuffix(" (GhidraScript)").rstrip(), file=sys.stderr)
+                print(line[line.index("ApplyUefi:"):].rstrip().removesuffix("(GhidraScript)").rstrip(), file=sys.stderr)
         raw = artifact.read_bytes()
         return json.loads(raw.decode("utf-8")), raw, kind
     finally:

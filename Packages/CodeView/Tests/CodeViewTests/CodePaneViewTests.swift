@@ -369,6 +369,14 @@ final class CodePaneViewTests: XCTestCase {
         view.onChooseRecipe = { chosen = $0 }
         view.chooseRecipe(at: 1)
         XCTAssertEqual(chosen?.recipe.id, "code-v3-ghidra-12.2")
+        XCTAssertTrue(view.isLoadingRecipe, "the dropdown waits while the app reads it")
+        chosen = nil
+        view.chooseRecipe(at: 1)
+        XCTAssertNil(chosen, "a second choice waits for the first")
+        view.recipeLoadFailed()
+        XCTAssertFalse(view.isLoadingRecipe)
+        view.chooseRecipe(at: 1)
+        XCTAssertEqual(chosen?.recipe.id, "code-v3-ghidra-12.2")
         view.chooseRecipe(at: 0)
         XCTAssertEqual(chosen?.recipe.id, "code-v3-ghidra-12.2",
                        "the one already open is not chosen again")

@@ -70,6 +70,7 @@ extension MainViewController {
         Task { @MainActor [weak self] in
             guard let self else { return }
             guard let artifact = await CodeAnalysisStore.artifact(for: manifest) else {
+                self.codeScreenView?.recipeLoadFailed()
                 self.reportCodeAnalysisUnreadable()
                 return
             }

@@ -21,12 +21,12 @@ import argparse
 import os
 import re
 import shutil
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import progress
 import te_to_pe
 
 
@@ -114,10 +114,10 @@ def main(argv: list[str]) -> int:
         if args.no_decompile:
             command.append("--no-decompile")
         log = work / "analyze.log"
-        with open(log, "w", encoding="utf-8") as handle:
-            result = subprocess.run(command, stdout=handle, stderr=subprocess.STDOUT)
-        if result.returncode != 0 or not out.exists():
-            print(f"Ghidra failed (exit {result.returncode}); log: {log}", file=sys.stderr)
+        returncode = progress.run(command, f"Ghidra: analyzing {module.name}", log=log,
+                                  timeout=args.analysis_timeout + 600)
+        if returncode != 0 or not out.exists():
+            print(f"Ghidra failed (exit {returncode}); log: {log}", file=sys.stderr)
             tail = log.read_text(encoding="utf-8", errors="replace").splitlines()[-25:]
             print("\n".join(tail), file=sys.stderr)
             return 1

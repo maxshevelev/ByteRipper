@@ -58,6 +58,8 @@ import ToolModuleKit
     private let cScroll = NSScrollView()
     private let modeControl: NSSegmentedControl
     private let recipePopUp = NSPopUpButton(frame: .zero, pullsDown: false)
+    /// Turns while the app reads another analysis the reader chose.
+    private let recipeSpinner = NSProgressIndicator()
     private var recipePopUpCollapsed: NSLayoutConstraint?
     private let codeContent = NSView()
     private let rightSplit = ALSplitView()
@@ -176,8 +178,26 @@ import ToolModuleKit
     /// the screen.
     public func chooseRecipe(at index: Int) {
         guard recipes.indices.contains(index),
-              recipes[index].recipe.id != manifest.recipe.id else { return }
+              recipes[index].recipe.id != manifest.recipe.id, !isLoadingRecipe else { return }
+        // A large module's artifact takes a moment to read: the dropdown
+        // waits, with a spinner beside it, until the app replaces this pane
+        // with the chosen analysis — or calls `recipeLoadFailed`.
+        recipePopUp.isEnabled = false
+        recipeSpinner.isHidden = false
+        recipeSpinner.startAnimation(nil)
         onChooseRecipe?(recipes[index])
+    }
+
+    /// Whether an analysis the reader chose is being read.
+    public var isLoadingRecipe: Bool { !recipeSpinner.isHidden }
+
+    /// The chosen analysis could not be read: the pane keeps the one it has,
+    /// and the dropdown says so again.
+    public func recipeLoadFailed() {
+        recipeSpinner.stopAnimation(nil)
+        recipeSpinner.isHidden = true
+        recipePopUp.isEnabled = true
+        recipePopUp.selectItem(withTitle: manifest.recipe.id)
     }
 
     /// Switches the navigator: Functions, Strings, POST writes, Status codes.
@@ -728,6 +748,12 @@ import ToolModuleKit
         hexDumpButton.translatesAutoresizingMaskIntoConstraints = false
         hexDumpBar.addSubview(hexDumpButton)
         hexDumpBar.addSubview(recipePopUp)
+        recipeSpinner.style = .spinning
+        recipeSpinner.controlSize = .small
+        recipeSpinner.isDisplayedWhenStopped = false
+        recipeSpinner.isHidden = true
+        recipeSpinner.translatesAutoresizingMaskIntoConstraints = false
+        hexDumpBar.addSubview(recipeSpinner)
         codeContent.addSubview(hexDumpBar)
         NSLayoutConstraint.activate([
             hexDumpBar.leadingAnchor.constraint(equalTo: codeContent.leadingAnchor),
@@ -739,6 +765,8 @@ import ToolModuleKit
             hexDumpButton.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor),
             recipePopUp.trailingAnchor.constraint(equalTo: hexDumpButton.leadingAnchor, constant: -12),
             recipePopUp.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor),
+            recipeSpinner.trailingAnchor.constraint(equalTo: recipePopUp.leadingAnchor, constant: -6),
+            recipeSpinner.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor),
             recipePopUp.leadingAnchor.constraint(greaterThanOrEqualTo: hexDumpBar.leadingAnchor,
                                                  constant: 8)
         ])

@@ -17,6 +17,12 @@ specifications fix, without guessing at what they do not.
 | `guids.csv` | LongSoft's `common/guids.csv`, the catalogue the app names its tree by | vendor GUIDs EDK2 does not declare |
 | `guids-….tsv` | both `.dec` files, then the catalogue | `<16 bytes as hex>\t<g…Guid name>`; EDK2's name wins |
 
+Each step says what it is when it starts, how long it has run while it runs
+(a line every 15 s in a log, a self-rewriting line on a terminal), and how long
+it took (`progress.py`). Each has a limit — the clone and the checkout 10
+minutes, the archives 20, a download 30 s of silence, a Ghidra analysis 30 —
+so an unreachable GitHub ends in a sentence, not a wait.
+
 Ghidra ships `CreateUEFIGDTArchivesScript.java` but not the archives, and that
 script reads a fixed path; `BuildUefiTypes.java` is the same parse with the
 paths as arguments. The tag is part of the analysis recipe (`recipe.types`),

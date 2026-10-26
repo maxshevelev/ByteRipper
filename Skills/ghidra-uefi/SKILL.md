@@ -26,6 +26,7 @@ with no app running.
 | `scripts/ExportModule.java` | a Ghidra script | functions, signatures, callers/callees, decompiled C |
 | `scripts/ApplyUefi.java` | a Ghidra script, before the export | the UEFI pass: EDK2 types on the entry point and down the calls, gBS/gRT/gST, GUID names, protocol and PPI pointers, callbacks, DEBUG names (`reference/uefi-pass.md`) |
 | `scripts/BuildUefiTypes.java` | a Ghidra script, once | parses MdePkg's headers into `uefi_X64.gdt` / `uefi_Ia32.gdt` |
+| `scripts/progress.py` | stdlib | what a long step is doing while it runs, and its time limit |
 | `scripts/uefi_types.py` | git, Ghidra, once | builds and caches the type archives and the GUID table the pass needs |
 | `scripts/ExportCode.java` | a Ghidra script | the full code artifact: every instruction, references, C with its token spans, named data, strings, POST writes and status-code candidates |
 | `scripts/code_artifact.py` | one Ghidra run per module | analyzes once and stores the artifact under the module's SHA-256 |

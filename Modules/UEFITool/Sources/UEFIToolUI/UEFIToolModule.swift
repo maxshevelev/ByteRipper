@@ -2222,13 +2222,15 @@ private struct ChecksumPass: Sendable {
         let readers = tree.spaceReaders
         let space = node.space
         let body = node.body
+        // Busy until the panel opens: the bytes are quick, the artifact is
+        // not — a large DXE driver's is ten megabytes of JSON.
         controller.showBusy()
         Task { [weak self] in
+            defer { self?.controller.endBusy() }
             let bytes = await Task.detached(priority: .userInitiated) {
                 readers.reader(for: space)?.bytes(body)
             }.value
             guard let self else { return }
-            self.controller.endBusy()
             guard let bytes, !bytes.isEmpty else {
                 self.fail(L("Those bytes could not be read."))
                 return
