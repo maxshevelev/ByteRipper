@@ -168,8 +168,8 @@ byteripper-cas [--store <root>] [--no-create] <command>
 
 ## 5. Later: a service, Electron, the web
 
-None of this is scheduled. It is written down so that the first need for it
-does not reopen the decision above.
+§5.1 is now scheduled as `Design/SERVER_PLAN.md`: one served store for a
+personal network, the app reading a mirror of it. The rest is not scheduled.
 
 ### 5.1 When a service is needed
 

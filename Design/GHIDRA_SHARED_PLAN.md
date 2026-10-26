@@ -580,21 +580,21 @@ Writes (each requires the lease token):
 ### 7.4 Transport and network
 
 - Every owner binds loopback only.
-- Until phase 3 the client talks to its owner's port directly. From phase 3 the
-  supervisor is the only listener a client knows: a Unix domain socket under
-  `~/Library/Application Support/ByteRipper/Ghidra/` for local clients and a
-  loopback HTTP port for the MCP wrapper, proxying to the owners.
-- Another machine reaches the supervisor through an SSH forward
-  (`ssh -L 8765:127.0.0.1:8765`) or a tailnet address — the documented default
-  and the whole of the "powerful machine, laptop client" deployment.
-- A non-loopback bind is an explicit option that refuses to start without a
-  token file (0600) and a client allowlist; TLS is expected at a proxy.
+- Until the server exists the client talks to its owner's port directly. Then
+  the supervisor is `byteripper-server`'s Ghidra role (`Design/SERVER_PLAN.md`):
+  one HTTP listener, one token, the owners behind it, and the store beside them
+  when its CAS role is on.
+- Another machine reaches the server at a tailnet address (or through an SSH
+  forward). A non-loopback bind refuses to start without a token file (0600);
+  encryption is the tailnet's, TLS a proxy's.
 
 ### 7.5 Who talks to it
 
-- **Agents:** a thin MCP wrapper (`Skills/ghidra-uefi/scripts/ghidra_mcp.py`,
-  stdlib) translating tool calls to `/v1` and owning the lease (§7.3). Whether
-  these tools also appear on ByteRipper's own MCP server is open (§16.8).
+- **Agents:** MCP tools defined once in Swift (`GhidraHost`), owning the lease
+  (§7.3), served by the server at `/mcp` and by the app's own MCP server —
+  in-process for a desktop host, relayed to the server otherwise
+  (`Design/SERVER_PLAN.md` §6). No Python MCP wrapper: a DMG user has no
+  Python.
 - **The skill:** `ghidra_review.py` drives a session — lease, rename, comment,
   publish, store; `code_query.py` keeps reading artifacts, with `--live` as the
   escape hatch to the bridge.
@@ -698,9 +698,7 @@ harvests to the same bytes whatever revision names it.
 |---|---|
 | `Skills/ghidra-uefi/owner/` | new: the Java owner — headless entry point, bridge, lease, `HarvestReview`; later the CodeBrowser plugin |
 | `Skills/ghidra-uefi/scripts/ghidra_owner.py` | new: compile the owner against the pinned Ghidra, start and stop it, `state.json` |
-| `Skills/ghidra-uefi/scripts/ghidra_review.py` | new: a review session client (lease, rename, comment, publish, store) |
-| `Skills/ghidra-uefi/scripts/ghidra_mcp.py` | new: MCP wrapper over `/v1`, owner of the lease |
-| `Skills/ghidra-uefi/scripts/ghidra_service.py` | new in phase 3: supervisor — pool, routing, network auth |
+| `Packages/GhidraHost`, `Packages/ByteRipperServer` | new: the host, the lease, the tools and the server (`Design/SERVER_PLAN.md`); they replace the planned `ghidra_review.py`, `ghidra_mcp.py` and `ghidra_service.py` |
 | `Packages/CodeAnalysis` (`ContentStore`, `byteripper-cas`) | done: `reading`, §5.6 at put and import, `conflicts/`; to do: `reviews/` and documents in bundles |
 | `Skills/ghidra-uefi/scripts/code_artifact.py` | refuses to put a mechanical artifact over a reading; `--review` in phase 5 |
 | `Skills/ghidra-uefi/scripts/cas_cli.py` | `gh projects list/purge`, `review list/export`; `review import/diff` in phase 5 |
@@ -764,8 +762,9 @@ Partly, and later.
   Ghidra protocol and never sees a path.
 - The work that must be on the powerful machine is the JVM and the decompiler,
   which is the owner. The laptop sends rename/comment requests and reads C.
-- The artifact and the document come back to the client, which stores them
-  where its own app watches. No remote CAS is involved.
+- The artifact and the document go into the store: the client's own, or —
+  when the server's CAS role is on — the shared store every Mac's app mirrors
+  (`Design/SERVER_PLAN.md`).
 - One owner per module in one place is also what keeps two readings of a
   module from forking across machines (§5.6).
 
@@ -860,13 +859,11 @@ already: a re-run analysis shifts indices as well.
      it shows is republished, not only when its set of analyses changes (a
      gap 2b found). A code annotation names its function as the newest
      analysis of the module does, found by address, through renames.
-   - **2c — the clients.** `ghidra_review.py`, `ghidra_mcp.py` holding the
-     lease.
-
-   After 2c the main workflow works end to end on one machine.
-3. **Supervisor and network.** Pool, routing, eviction by the rules of §6.4,
-   token and allowlist, SSH-forward documentation; a second machine's agent
-   connected and reviewing.
+   - **2c — the clients** — replaced by `Design/SERVER_PLAN.md`: the host and
+     the MCP tools are Swift, in the server and in the app.
+3. **Supervisor and network** — `Design/SERVER_PLAN.md`, phases 1–5: the
+   store served and mirrored, the Ghidra host in Swift, the tools, the desktop
+   host. Eviction by the rules of §6.4 belongs to the host's pool.
 4. **CodeBrowser host.** The bridge as a GUI plugin. A hand-over is explicit:
    the supervisor asks the headless owner to save and exit, the CodeBrowser
    opens the project under the module's own name (the project is named by SHA;
@@ -969,13 +966,10 @@ Acceptance for the main workflow (phases 1–2):
    be rebuilt without the module's bytes. If that becomes an obstacle, a project
    bundle may carry the bytes of the modules it names — not a second copy of
    the firmware beside every analysis.
-8. **Where an agent finds the review tools.** A separate MCP server
-   (`ghidra_mcp.py`) keeps Ghidra out of the app and works with the app closed;
-   the same tools on ByteRipper's own server spare the agent a second
-   connection and let it go from a tree node to a rename in one place, but make
-   the app a client of the supervisor. The plan builds the separate wrapper;
-   whether the app also relays it is decided after phase 2, by how agents use
-   it.
+8. **Where an agent finds the review tools — decided.** Both: the server's
+   `/mcp`, which works with no app, and the app's own MCP server, which relays
+   them or hosts them for a desktop. One definition (`Design/SERVER_PLAN.md`
+   §1.7).
 9. **Conflicting readings.** §5.6 keeps a second project's reading aside rather
    than choosing. Choosing — or merging by address — is a person's decision, and
    its interface is not designed yet.
