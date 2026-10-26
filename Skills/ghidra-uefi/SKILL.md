@@ -104,7 +104,9 @@ are two ways to reach them, with the same tools behind both:
 A TE image is converted by the server; a module opened before opens by
 `module`, its SHA-256. Then: `ghidra_functions`, `ghidra_function` (C, the
 parameters and the locals with their storage), `ghidra_disassembly`,
-`ghidra_xrefs`, `ghidra_data`, `ghidra_strings`; `ghidra_rename`,
+`ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_type_definition` (a
+type as the program, the shared review archive and EDK2 hold it — what a
+`type_conflicts` of a publish is read with); `ghidra_rename`,
 `ghidra_rename_variable`, `ghidra_signature`, `ghidra_type`, `ghidra_set_data`,
 `ghidra_comment`; `ghidra_publish` at a coherent checkpoint, `ghidra_done` at
 the end. The rules a review keeps are in "What a review makes of the code".

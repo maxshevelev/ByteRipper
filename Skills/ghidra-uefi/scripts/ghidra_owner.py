@@ -70,6 +70,7 @@ SCHEMA = 1
 PROJECT_NAME = "module"
 OWNER_SOURCES = [Path(__file__).resolve().parents[1] / "owner" / "Owner.java",
                  Path(__file__).resolve().parents[1] / "owner" / "Harvest.java",
+                 Path(__file__).resolve().parents[1] / "owner" / "TypeText.java",
                  Path(__file__).resolve().parent / "ExportCode.java"]
 
 

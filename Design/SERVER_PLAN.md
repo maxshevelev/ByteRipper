@@ -169,7 +169,7 @@ own lease stays the guard against a second host.
 ### 6.4 The tools
 
 `ghidra_open`, `ghidra_functions`, `ghidra_function`, `ghidra_disassembly`,
-`ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_rename`,
+`ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_type_definition`, `ghidra_rename`,
 `ghidra_rename_variable`, `ghidra_signature`, `ghidra_comment`,
 `ghidra_set_data`, `ghidra_type`, `ghidra_publish`, `ghidra_done`. The server's
 MCP instructions carry the review rules of the skill (`SKILL.md`, "What a

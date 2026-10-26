@@ -30,6 +30,7 @@ CAS, and its project lock keeps the owner off the project.
 | data, strings | `ghidra_data`, `ghidra_strings` |
 | rename a function, a parameter, a local | `ghidra_rename`, `ghidra_rename_variable` |
 | signature, comment, datum | `ghidra_signature`, `ghidra_comment`, `ghidra_set_data` |
+| read a type: program, shared archive, EDK2 | `ghidra_type_definition` |
 | define a type | `ghidra_type` |
 | make the review visible, end it | `ghidra_publish`, `ghidra_done` |
 

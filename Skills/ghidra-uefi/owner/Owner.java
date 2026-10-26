@@ -234,6 +234,7 @@ public class Owner {
                 if (path.equals("/v1/data")) { json(exchange, 200, data(query, false)); return; }
                 if (path.equals("/v1/strings")) { json(exchange, 200, data(query, true)); return; }
                 if (path.equals("/v1/review")) { review(exchange); return; }
+                if (path.equals("/v1/type")) { json(exchange, 200, readType(query)); return; }
             } else if (method.equals("DELETE") && path.equals("/v1/lease")) {
                 json(exchange, 200, release(exchange));
                 return;
@@ -844,6 +845,51 @@ public class Owner {
         answer.addProperty("name", resolved.getName());
         answer.addProperty("path", resolved.getPathName());
         return answer;
+    }
+
+    /**
+     * A type by name as the program holds it, as the shared review archive
+     * holds it now — read afresh, since another owner may have published
+     * into it since this one opened — and as EDK2's archive holds it, each
+     * as C and as fields with their offsets: what a review needs to bring
+     * its own definition in line with the one `publish` reported.
+     */
+    private JsonObject readType(Map<String, String> query) throws Exception {
+        String name = query.get("name");
+        if (name == null || name.isBlank()) throw new Failure(400, "name the type: ?name=");
+        name = name.trim();
+        JsonObject answer = identity();
+        answer.addProperty("name", name);
+        DataType here = find(program.getDataTypeManager(), name);
+        answer.add("program", TypeText.describe(here));
+        if (reviewTypes != null && reviewTypes.isFile()) {
+            File copy = File.createTempFile("review-types-", ".gdt");
+            try {
+                try (FileChannel channel = lockChannel(); FileLock lock = channel.lock()) {
+                    Files.copy(reviewTypes.toPath(), copy.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                }
+                FileDataTypeManager shared = FileDataTypeManager.openFileArchive(copy, false);
+                try {
+                    DataType there = find(shared, name);
+                    answer.add("shared", TypeText.describe(there));
+                    if (here != null && there != null) answer.addProperty("same", there.isEquivalent(here));
+                } finally {
+                    shared.close();
+                }
+            } finally {
+                copy.delete();
+            }
+        } else {
+            answer.add("shared", com.google.gson.JsonNull.INSTANCE);
+        }
+        answer.add("edk2", TypeText.describe(archive == null ? null : find(archive, name)));
+        return answer;
+    }
+
+    private static DataType find(ghidra.program.model.data.DataTypeManager manager, String name) {
+        java.util.List<DataType> found = new java.util.ArrayList<>();
+        manager.findDataTypes(name, found);
+        return found.isEmpty() ? null : found.get(0);
     }
 
     /**

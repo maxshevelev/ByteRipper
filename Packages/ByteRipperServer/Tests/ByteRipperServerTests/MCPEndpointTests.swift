@@ -77,11 +77,14 @@ final class MCPEndpointTests: XCTestCase {
         XCTAssertEqual(status, 200)
         let names = listed?["result"]?["tools"]?.arrayValue?.compactMap { $0["name"]?.stringValue } ?? []
         XCTAssertTrue(names.contains("ghidra_rename_variable"), "\(names)")
-        XCTAssertEqual(names.count, 16)
+        XCTAssertEqual(names.count, 17)
 
         let read = try await call(2, "ghidra_functions", ["module": .string(module), "limit": 5])
         let text = read["content"]?.arrayValue?.first?["text"]?.stringValue ?? ""
         XCTAssertTrue(text.contains(#""call":"functions""#) && text.contains(#""limit":"5""#), text)
+
+        let type = try await call(6, "ghidra_type_definition", ["module": .string(module), "name": "AMD_APOB_HEADER"])
+        XCTAssertTrue(type["content"]?.arrayValue?.first?["text"]?.stringValue?.contains(#""call":"type""#) == true)
 
         let opened = try await call(3, "ghidra_open", ["image_base64": .string(Data([1, 2, 3]).base64EncodedString()),
                                                        "name": "M"])

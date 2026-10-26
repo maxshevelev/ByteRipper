@@ -28,7 +28,7 @@ public enum GhidraTools {
         types and comments a review writes are Ghidra's own and are kept in the module's project between \
         sessions. A module is named by the SHA-256 of its bytes (`module`). Start with `ghidra_modules` \
         or `ghidra_open`; read with `ghidra_functions`, `ghidra_function` (decompiled C, parameters and \
-        locals with their storage), `ghidra_disassembly`, `ghidra_xrefs`, `ghidra_data`, `ghidra_strings`; \
+        locals with their storage), `ghidra_disassembly`, `ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_type_definition`; \
         write with `ghidra_rename`, `ghidra_rename_variable`, `ghidra_signature`, `ghidra_type`, \
         `ghidra_set_data`, `ghidra_comment`. `ghidra_publish` makes the review visible to the app — every \
         ByteRipper that reads this store — as a new revision; publish at coherent checkpoints, not after \
@@ -176,7 +176,27 @@ public enum GhidraTools {
             paged("ghidra_data", "data", "List a module's defined data",
                   "The defined data — named globals, GUIDs, tables — with address, name and type. Paged."),
             paged("ghidra_strings", "strings", "List a module's strings",
-                  "The strings Ghidra found, with address and value. Paged.")
+                  "The strings Ghidra found, with address and value. Paged."),
+            AgentTool(
+                name: "ghidra_type_definition",
+                title: "Read a type's definition",
+                description: """
+                    The type `name` three ways: as the module's program holds it (`program`), as the \
+                    shared review archive holds it now (`shared`, what another review published), and as \
+                    the EDK2 archive holds it (`edk2`); a key is left out where the type is not. Each has its C, `size`, and \
+                    for a structure or union every field's `offset`, `size`, `name` and `type`. `same` says \
+                    whether the program's and the shared one agree. Read the types `ghidra_publish` reports \
+                    in `type_conflicts` with it, and bring yours in line with `ghidra_type`.
+                    """,
+                inputSchema: AgentSchema.object([
+                    "module": moduleProperty,
+                    "name": AgentSchema.string("The type's name, e.g. \"EFI_PEI_SERVICES\" or \"AMD_APOB_HEADER\".")
+                ], required: ["module", "name"])
+            ) { call in
+                let module = try module(call.arguments)
+                let name = try call.arguments.string("name")
+                return try await answer { try await backend.readCall(module, "type", query: ["name": name]) }
+            }
         ]
     }
 
@@ -276,7 +296,7 @@ public enum GhidraTools {
                 Saves the module's program and stores its artifact and review document as the next \
                 revision: every ByteRipper reading this store shows the new names. Publishing an unchanged \
                 program is the same revision. `type_conflicts` names types another review defines \
-                differently, which stay in this module only.
+                differently, which stay in this module only: `ghidra_type_definition` shows both.
                 """,
             inputSchema: AgentSchema.object(["module": moduleProperty], required: ["module"]),
             annotations: .edit

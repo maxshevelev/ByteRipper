@@ -3,7 +3,7 @@ import Foundation
 
 /// Where the owner's Java comes from, and where it is built.
 public struct OwnerSources: Equatable, Sendable {
-    /// `Owner.java`, `Harvest.java` and `ExportCode.java`.
+    /// `Owner.java`, `Harvest.java`, `TypeText.java` and `ExportCode.java`.
     public let files: [URL]
     /// The folder of the Ghidra scripts `analyzeHeadless` runs —
     /// `ApplyUefi.java`, `ExportCode.java`, `BuildUefiTypes.java`.
@@ -20,6 +20,7 @@ public struct OwnerSources: Equatable, Sendable {
         let owner = root.appendingPathComponent("owner", isDirectory: true)
         return OwnerSources(files: [owner.appendingPathComponent("Owner.java"),
                                     owner.appendingPathComponent("Harvest.java"),
+                                    owner.appendingPathComponent("TypeText.java"),
                                     scripts.appendingPathComponent("ExportCode.java")],
                             scripts: scripts)
     }
