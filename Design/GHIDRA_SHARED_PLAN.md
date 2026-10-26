@@ -132,15 +132,54 @@ review of `8395f046` are folded in.
 - **GhydraMCP** serves REST inside a CodeBrowser and has no save, no
   local-variable rename and no authentication.
 
-To verify in phase 0 (§14), because the design depends on them:
+Verified in phase 0 (2026-10-26, Ghidra 12.1.2, JDK 21, CpuPei; the spike is
+`Skills/ghidra-uefi/owner/Spike.java`):
 
-- whether a script run by `analyzeHeadless` holds one transaction around the
-  whole script — if it does, a blocking server script cannot save mid-session,
-  and the owner needs its own entry point (§6.1);
-- `DomainObject.getModificationNumber()` restarts with every open, so it can
-  say "changed since the last publish" only within one run of an owner (§5.5);
-- how a register-based local keeps its identity across renames and
-  re-decompilation (storage plus first-use offset, §7.1).
+- **A script under `analyzeHeadless` runs inside the launcher's transaction and
+  cannot save**: `currentProgram.save` throws `ReadOnlyException`. A blocking
+  server script is therefore not an owner; the owner has its own entry point
+  (§6.1).
+- **The owner's entry point works on a plain classpath.** A class with a
+  `main` that calls `Application.initializeApplication(new
+  GhidraApplicationLayout(), new HeadlessGhidraApplicationConfiguration())`,
+  compiled with `javac` against every `Ghidra/**/lib/*.jar` and run with the
+  same jars on `-cp`, imports, analyzes, opens, saves and serves HTTP
+  (`com.sun.net.httpserver`) for as long as it runs. Launching it through
+  `ghidra.Ghidra` with `GhidraClassLoader` does *not* work for a class on
+  `-cp`: the system class loader takes it and cannot see Ghidra's jars.
+- **`GhidraProject.openProgram` is the wrong way to open the program.** It
+  keeps a transaction open on the program for the program's whole life; a
+  change that fails inside it aborts that standing transaction, and the next
+  save rolls back *every* change since the last save — a good rename was lost
+  that way in the spike. The owner opens the program with
+  `DomainFile.getDomainObject(consumer, …)`, which leaves no transaction open,
+  and wraps each change in its own; a failed rename then rolls back only
+  itself, and `DomainObject.save` saves mid-session.
+- **The modification number restarts with every open** (1757 in one run, 3
+  after reopening the same program), so it says "changed since the last
+  publish" only within one run (§5.5).
+- **Crashes and locks.** After `kill -9`, everything saved is there and
+  nothing unsaved is; the stale lock file does not stop the next open. While
+  an owner runs, a second process opening the same project gets
+  `LockException: Unable to lock project` — the exclusivity §6.2 relies on is
+  Ghidra's own.
+- **Locals.** One function of CpuPei has three locals stored in `EAX:4`; the
+  first-use address tells them apart, and `(storage, first use)` names a local
+  across a rename, a re-decompilation, a save and a reopen. A decompiler
+  temporary (`unique:00017200:4`) becomes `HASH:5ff3f8b9fb:4` once it is
+  named — the storage the review document must record is the one read *after*
+  the rename. Ghidra's own names for unnamed locals (`iVar4`) are renumbered
+  when another local is named, so a client may never address a local by such a
+  name.
+- **A project made by `analyzeHeadless`** (import, analysis, scripts — the
+  existing `code_artifact.py` pipeline without `-deleteProject`) opens in the
+  owner and takes edits and saves. Step 1 can therefore stay a headless run,
+  `ApplyUefi.java` included, and the owner opens its result.
+- **Running analysis inside the owner** needs the script machinery initialised
+  first (`GhidraScriptUtil` has no bundle host otherwise; Windows' resource
+  analyzer fails on it): one more reason to leave step 1 to `analyzeHeadless`.
+- **Cost on CpuPei:** open to serving in 3.3 s, 311 MB resident, 0.3 s to
+  decompile one function with a fresh decompiler (a kept one is faster).
 
 ## 4. Architecture
 
@@ -372,12 +411,17 @@ writes an artifact carrying that reading.
 A Ghidra process with exactly one program open, serving the bridge on a
 loopback port.
 
-- **Headless host (default).** A Java entry point that initializes Ghidra in
-  headless mode (`Application.initializeApplication`), opens the project and
-  the program itself, and starts the HTTP server. It is not a script run by
-  `analyzeHeadless`: a long-blocking script would hold the launcher's
-  transaction and its lifecycle, and the owner needs both its own (phase 0
-  confirms which). No window server, so launchd can own it.
+- **Headless host (default).** A Java `main` on a plain classpath of Ghidra's
+  jars that initializes Ghidra in headless mode, opens the project with
+  `GhidraProject.openProject` and the program with
+  `DomainFile.getDomainObject` — never `GhidraProject.openProgram`, whose
+  standing transaction turns one failed change into a lost session (§3) — and
+  starts the HTTP server on one thread, so changes are serialized. It is not a
+  script run by `analyzeHeadless`, which holds a transaction and cannot save.
+  No window server, so launchd can own it.
+- **Step 1 stays a headless run.** `analyzeHeadless` imports, analyzes and
+  runs `ApplyUefi.java` into the kept project, as `code_artifact.py` does
+  today but without `-deleteProject`; the owner then opens what it saved.
 - **CodeBrowser host (phase 4).** The same bridge code loaded as a plugin in
   the GUI.
 - **Built without Gradle.** The skill compiles the Java with `javac` against
@@ -493,6 +537,9 @@ Writes (each requires the lease token):
 
 - A local is named by its storage and, for a register, its first use: `EAX:4`
   alone names many locals in one function. A parameter also by its ordinal.
+  The answer of a rename gives the storage as it is *after* the rename — a
+  decompiler temporary becomes `HASH:…` once named — and Ghidra's names for
+  unnamed locals are never accepted as an address, since they renumber.
 - Deliberately absent: script execution, file paths, project management,
   analysis options.
 
@@ -757,11 +804,11 @@ and the Code screen restored by address, falling back to the indices; a recipe
 change keeps the place too. App-only, independent of Ghidra, and useful
 already: a re-run analysis shifts indices as well.
 
-0. **Spike.** Confirm the three facts of §3 "To verify": a long-lived headless
-   owner that saves mid-session; the modification number's lifetime; the
-   identity of a register local across a rename. Compile a minimal owner with
-   `javac` against 12.1.2. Half a day to a day; the rest of the plan changes if
-   any answer is different.
+0. **Spike — done.** The facts in §3 "Verified in phase 0": a long-lived
+   headless owner that saves mid-session, the modification number's lifetime,
+   the identity of a local across a rename, the project lock, and two traps
+   the design now avoids (`GhidraProject.openProgram`, `ghidra.Ghidra` as a
+   launcher for a class on `-cp`).
 1. **One owner, reads and export.** `ghidra_owner.py` starts one owner for one
    module on a loopback port; read endpoints; `POST /v1/publish` without
    writes. The client stores the result. An artifact published from an
