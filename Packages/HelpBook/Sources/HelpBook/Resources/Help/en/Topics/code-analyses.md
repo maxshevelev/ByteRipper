@@ -22,14 +22,14 @@ The setting changes only where analyses are read from. Nothing is copied or dele
 The server is set up once, on the machine that runs it, in Terminal:
 
 1. `byteripper-server token` makes the token and prints it.
-2. `byteripper-server --listen 100.64.0.7:8765` starts the server on the address given.
+2. `byteripper-server --listen 127.0.0.1:8765 --listen 100.64.0.7:8765` starts the server on the addresses given: the machine's own loopback address for ByteRipper on the server itself — a Mac does not reach its own address in a private network such as Tailscale — and the private-network address for the other Macs.
 
 Off the machine's own loopback address the server refuses to start without a token. The address is usually the server's address in a private network such as Tailscale, which also encrypts the connection.
 
 On each Mac, in **Settings ▸ Code Analysis**:
 
 1. Choose **On an analysis server**.
-2. Enter the address as `http://host:port`, and the token the server printed.
+2. Enter the address as `http://host:port` — on the server itself, `http://localhost:8765` — and the token the server printed.
 3. Click **Connect**.
 
 The line below the fields says whether the server is reached. The token is kept in a file only the current user may read, `~/Library/Application Support/ByteRipper/Server/token`; the Ghidra skill's scripts on this Mac read the same file. When the token field is left empty, the token already kept is used.

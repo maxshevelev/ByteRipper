@@ -179,7 +179,7 @@ public struct RemoteStore: Sendable {
     }
 
     private func json<T: Decodable>(_ method: String, _ path: String, query: [String: String] = [:],
-                                    body: Data? = nil, timeout: TimeInterval = 120) async throws -> T {
+                                    body: Data? = nil, timeout: TimeInterval = 20) async throws -> T {
         let data = try await call(method, path, query: query, body: body, timeout: timeout)
         do {
             return try JSONDecoder().decode(T.self, from: data)
@@ -189,7 +189,7 @@ public struct RemoteStore: Sendable {
     }
 
     private func call(_ method: String, _ path: String, query: [String: String] = [:],
-                      body: Data? = nil, timeout: TimeInterval = 120) async throws -> Data {
+                      body: Data? = nil, timeout: TimeInterval = 20) async throws -> Data {
         var components = URLComponents(url: base, resolvingAgainstBaseURL: false)!
         components.path = (components.path.hasSuffix("/") ? String(components.path.dropLast()) : components.path)
             + ServedStoreProtocol.prefix + "/" + path

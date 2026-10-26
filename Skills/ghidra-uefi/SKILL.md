@@ -208,7 +208,9 @@ and every Mac reads the result:
 ```bash
 swift build -c release --package-path Packages/ByteRipperServer
 .build/release/byteripper-server token                       # once
-.build/release/byteripper-server --listen 100.64.0.7:8765    # store + Ghidra
+.build/release/byteripper-server --listen 127.0.0.1:8765 --listen 100.64.0.7:8765
+# loopback for the app on the server itself (a Mac does not reach its own
+# tailnet address), the tailnet address for the other Macs
 ```
 
 An agent reaches the review tools at `http://host:8765/mcp` (`claude mcp add

@@ -9,7 +9,7 @@ import HTTPService
 public final class Server: @unchecked Sendable {
     public let configuration: ServerConfiguration
     private let log: @Sendable (String) -> Void
-    private var http: HTTPServer?
+    private var servers: [HTTPServer] = []
     private var watcher: CodeStoreWatcher?
     public private(set) var cas: CASService?
     public private(set) var ghidra: GhidraHost?
@@ -20,7 +20,7 @@ public final class Server: @unchecked Sendable {
         self.log = log
     }
 
-    /// Opens the roles and listens; returns the port.
+    /// Opens the roles and listens on every address; returns the first one's port.
     @discardableResult
     public func start() async throws -> UInt16 {
         let token = try TokenFile.read(at: configuration.tokenFile)
@@ -70,21 +70,30 @@ public final class Server: @unchecked Sendable {
                 ?? "no Ghidra found yet"
             log("projects \(configuration.projects.path); \(ghidraNote)")
         }
-        let http = HTTPServer(
-            configuration: .init(host: configuration.host, port: configuration.port, token: token,
-                                 log: log),
-            router: router)
-        let port = try await http.start()
-        self.http = http
-        let address = http.boundAddress.map { $0 == configuration.host ? "" : " (\($0))" } ?? ""
-        log("listening on \(configuration.host)\(address):\(port)"
-            + (token == nil ? ", no token (loopback only)" : ", token required"))
-        return port
+        var first: UInt16 = 0
+        for listen in configuration.listens {
+            let http = HTTPServer(
+                configuration: .init(host: listen.host, port: listen.port, token: token, log: log),
+                router: router)
+            let port: UInt16
+            do {
+                port = try await http.start()
+            } catch {
+                stop()
+                throw error
+            }
+            if servers.isEmpty { first = port }
+            servers.append(http)
+            let address = http.boundAddress.map { $0 == listen.host ? "" : " (\($0))" } ?? ""
+            log("listening on \(listen.host)\(address):\(port)"
+                + (token == nil ? ", no token (loopback only)" : ", token required"))
+        }
+        return first
     }
 
     public func stop() {
-        http?.stop()
-        http = nil
+        for server in servers { server.stop() }
+        servers = []
         watcher = nil
     }
 }

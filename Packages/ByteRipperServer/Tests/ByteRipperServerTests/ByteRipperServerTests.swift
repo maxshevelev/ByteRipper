@@ -24,6 +24,9 @@ final class ServerCommandTests: XCTestCase {
         XCTAssertTrue(configuration.tokenRequired)
         guard case .serve(let ipv6) = try ServerCommand.parse(["--listen", "[::1]:8765"]) else { return XCTFail() }
         XCTAssertEqual(ipv6.host, "::1")
+        guard case .serve(let both) = try ServerCommand.parse(["--listen", "127.0.0.1:8765", "--listen", "admins-imac:8765",
+                                                               "--token-file", "/tmp/t"]) else { return XCTFail() }
+        XCTAssertEqual(both.listens, [.init(host: "127.0.0.1", port: 8765), .init(host: "admins-imac", port: 8765)])
     }
 
     func testWhatIsRefused() {

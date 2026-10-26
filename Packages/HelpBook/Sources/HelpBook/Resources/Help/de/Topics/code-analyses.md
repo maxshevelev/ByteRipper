@@ -1,4 +1,4 @@
-@source-sha 7d6edfa8fb4cdc80155cd5d59aef3e9116b9eb425ea5aeaed74a28f9319c74b2
+@source-sha 1dad8e6e85dc4057d62c921521d0cf23701e21e5460ee5dca516565cda12c87c
 # Codeanalysen und der Analyseserver
 
 > Eine Codeanalyse ist das, was Ghidra in einem PEI- oder DXE-Modul gefunden hat: seine Funktionen, Befehle und den dekompilierten C-Code sowie die Namen, die eine Durchsicht ihnen gegeben hat. ByteRipper liest Analysen aus einem Speicher — einem Ordner auf diesem Mac oder einem Analyseserver, den alle Macs eines Netzwerks gemeinsam nutzen.
@@ -19,14 +19,14 @@ Die Einstellung legt nur fest, woher die Analysen gelesen werden. Beim Umstellen
 Der Server wird einmal eingerichtet, im Terminal des Rechners, auf dem er läuft:
 
 1. `byteripper-server token` erzeugt das Token und gibt es aus.
-2. `byteripper-server --listen 100.64.0.7:8765` startet den Server unter der angegebenen Adresse.
+2. `byteripper-server --listen 127.0.0.1:8765 --listen 100.64.0.7:8765` startet den Server unter den angegebenen Adressen: der Loopback-Adresse für ByteRipper auf dem Server selbst — ein Mac erreicht seine eigene Adresse in einem privaten Netzwerk wie Tailscale nicht — und der Adresse im privaten Netzwerk für die anderen Macs.
 
 Auf jeder Adresse außer der Loopback-Adresse des Rechners selbst startet der Server nur mit einem Token. Üblich ist die Adresse des Servers in einem privaten Netzwerk wie Tailscale, das die Verbindung zudem verschlüsselt.
 
 Auf jedem Mac unter **Einstellungen ▸ Codeanalyse**:
 
 1. **Auf einem Analyseserver** wählen.
-2. Die Adresse in der Form `http://host:port` und das vom Server ausgegebene Token eingeben.
+2. Die Adresse in der Form `http://host:port` — auf dem Server selbst `http://localhost:8765` — und das vom Server ausgegebene Token eingeben.
 3. Auf **Verbinden** klicken.
 
 Die Zeile unter den Feldern zeigt, ob der Server erreichbar ist. Das Token liegt in einer Datei, die nur der angemeldete Benutzer lesen kann, `~/Library/Application Support/ByteRipper/Server/token`; dieselbe Datei lesen die Skripte des Ghidra-Skills auf diesem Mac. Bleibt das Tokenfeld leer, wird das bereits gespeicherte Token verwendet.

@@ -19,8 +19,10 @@ public enum ServerCommand: Equatable {
           --ghidra        host the Ghidra owners; publishes into this server's
                           store, or into --cas-url's
                           (with neither named, both roles are on)
-          --listen        the address to listen on, 127.0.0.1:8765 by default;
-                          anything but loopback needs a token file
+          --listen        an address to listen on, 127.0.0.1:8765 by default;
+                          repeat it for several (loopback for this Mac's own
+                          app, the tailnet address for the others); anything
+                          but loopback needs a token file
           --store         the store's directory, the app's own by default
           --token-file    the bearer token, a file only its owner may read;
                           used when present, required off loopback
@@ -72,6 +74,7 @@ public enum ServerCommand: Equatable {
             var configuration = ServerConfiguration()
             var roles: Set<ServerConfiguration.Role> = []
             var tokenFileGiven = false
+            var listens: [ServerConfiguration.Listen] = []
             while let flag = rest.popFirst() {
                 switch flag {
                 case "--cas":
@@ -98,9 +101,8 @@ public enum ServerCommand: Equatable {
                           let port = UInt16(address[address.index(after: colon)...]) else {
                         throw Failure(description: "--listen takes <host>:<port>, not \(address)")
                     }
-                    configuration.host = String(address[..<colon])
-                        .trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
-                    configuration.port = port
+                    listens.append(.init(host: String(address[..<colon])
+                        .trimmingCharacters(in: CharacterSet(charactersIn: "[]")), port: port))
                 case "--store":
                     configuration.store = URL(fileURLWithPath: try value(flag))
                 case "--token-file":
@@ -112,6 +114,7 @@ public enum ServerCommand: Equatable {
                     throw Failure(description: "serve does not take \(flag)")
                 }
             }
+            if !listens.isEmpty { configuration.listens = listens }
             configuration.roles = roles.isEmpty ? [.cas, .ghidra] : roles
             if configuration.roles.contains(.ghidra), !configuration.roles.contains(.cas), configuration.casURL == nil {
                 throw Failure(description: "the Ghidra role publishes into a store: add --cas, or name --cas-url")
@@ -130,13 +133,34 @@ public struct ServerConfiguration: Equatable, Sendable {
         case ghidra
     }
 
+    public struct Listen: Equatable, Sendable {
+        public var host: String
+        public var port: UInt16
+
+        public init(host: String, port: UInt16) {
+            self.host = host
+            self.port = port
+        }
+    }
+
     public var roles: Set<Role> = [.cas, .ghidra]
+    /// Every address the server listens on, the same routes behind each.
+    public var listens = [Listen(host: "127.0.0.1", port: 8765)]
+
+    /// The first address — the one a single `--listen` names.
+    public var host: String {
+        get { listens[0].host }
+        set { listens[0].host = newValue }
+    }
+
+    public var port: UInt16 {
+        get { listens[0].port }
+        set { listens[0].port = newValue }
+    }
     public var casURL: URL?
     public var ghidraHome: URL?
     public var projects = GhidraHost.defaultProjectsRoot
     public var idle = 1800
-    public var host = "127.0.0.1"
-    public var port: UInt16 = 8765
     public var store = CodeAnalysisPaths.defaultRoot
     public var tokenFile = ServerPaths.defaultTokenFile
     /// A token file named on the command line must be there; the default one
