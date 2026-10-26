@@ -623,7 +623,7 @@ the next `hello` reports `unpublished: true` and the next session publishes.
 
 ```
 analyses/<module-sha>/<recipe>/manifest.json   the artifact cache; gains "reading"
-reviews/<module-sha>/manifest.json             { current: {project, rev, sha256}, history: [...] }
+reviews/<module-sha>/manifest.json             { module, revisions: [{project, rev, review, recorded_at, by}] }
 objects/<sha256>                               artifacts and review documents
 conflicts/<module-sha>/<recipe>/<sha>.json     a manifest from another reading, kept for a person
 GhidraProjects/<module-sha>/                   program + review + state.json
@@ -845,17 +845,21 @@ already: a re-run analysis shifts indices as well.
      at its first open and a harvest is the program minus that baseline; and
      Ghidra's decompiler prints `pre` comments in the C, so a comment changes
      the artifact as well as the document.
-   - **2b — the store and the app follow — the panel part done.** An open
-     Code screen or panel follows its analysis through the store's FSEvents
-     stream and is drawn again from a republished artifact at the same place
-     by address, with its back and forward carried over by address.
-     Still to do: `reviews/` history with the commit
-     order of §5.4 and its `gc`/`verify` rules; documents in bundles; a code
-     annotation's label read from the
-     current artifact by address (a rename is what makes the stored name
-     stale, so it lands with renames); the app reporting a bundle import's
-     skipped and kept-aside keys. (The manifest's `reading`, §5.6 and
-     `conflicts/` are already in `ContentStore`.)
+   - **2b — the store and the app follow — done.** An open Code screen or
+     panel follows its analysis through the store's FSEvents stream and is
+     drawn again from a republished artifact at the same place by address,
+     with its back and forward carried over by address. `reviews/` keeps
+     every revision (`record-revision`, written between the document and the
+     analysis, §5.4); `gc` keeps the documents a history names and `verify`
+     reports a revision ahead of its analysis. The history has no `current`:
+     the analysis manifest's `reading` is the one authority, so a second copy
+     of it would only be a second thing to keep right. A bundle carries each
+     reading's document. Opening a project reports an analysis it does not
+     show as saved — another project's reading, another mechanical artifact,
+     a damaged entry — and a project's bundle is written again when a reading
+     it shows is republished, not only when its set of analyses changes (a
+     gap 2b found). A code annotation names its function as the newest
+     analysis of the module does, found by address, through renames.
    - **2c — the clients.** `ghidra_review.py`, `ghidra_mcp.py` holding the
      lease.
 

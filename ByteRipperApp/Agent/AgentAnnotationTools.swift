@@ -47,6 +47,10 @@ final class AgentAnnotationTools {
     /// this run alone (`AnnotationsFile`).
     private var storage: URL?
     private var saveScheduled = false
+    /// The store, followed while a code annotation exists: a review
+    /// published again renames what such an annotation is about.
+    private var codeNamesWatcher: CodeStoreWatcher?
+    private var codeNamesTask: Task<Void, Never>?
     /// Bumped by every change, so a pane knows its drawn list is stale.
     private(set) var generation = 0
 
@@ -200,6 +204,54 @@ final class AgentAnnotationTools {
         unseen = Set(kept.unseen).intersection(ids)
         nextID = max(kept.nextID, (items.compactMap { Int($0.id.dropFirst()) }.max() ?? 0) + 1)
         changed()
+        refreshCodeNames()
+    }
+
+    // MARK: - Code annotations follow renames
+
+    /// Names each code annotation's function as the newest analysis of its
+    /// module does now, found by the function's address: a name kept from
+    /// when the note was made goes stale with the first rename. Starts
+    /// following the store the first time there is a code annotation; the
+    /// title, the person's words, is never touched.
+    func refreshCodeNames() {
+        let modules = Set(items.compactMap { $0.code?.module })
+        guard !modules.isEmpty else { return }
+        let root = CodeAnalysisStore.root
+        if codeNamesWatcher == nil {
+            codeNamesWatcher = CodeStoreWatcher(root: root) { [weak self] in
+                MainActor.assumeIsolated { self?.refreshCodeNames() }
+            }
+        }
+        codeNamesTask?.cancel()
+        codeNamesTask = Task { @MainActor [weak self] in
+            let names = await Task.detached(priority: .utility) { () -> [String: [CodeAddress: String]] in
+                guard let store = try? ContentStore(root: root, create: false) else { return [:] }
+                var names: [String: [CodeAddress: String]] = [:]
+                for module in modules {
+                    guard let digest = SHA256Digest(hex: module),
+                          let manifest = try? store.analysis(module: digest),
+                          let artifact = try? store.artifact(for: manifest) else { continue }
+                    names[module] = Dictionary(artifact.functions.map { ($0.entry, $0.name) },
+                                               uniquingKeysWith: { first, _ in first })
+                }
+                return names
+            }.value
+            guard !Task.isCancelled else { return }
+            self?.applyCodeNames(names)
+        }
+    }
+
+    private func applyCodeNames(_ names: [String: [CodeAddress: String]]) {
+        var renamed = false
+        for index in items.indices {
+            guard var code = items[index].code, let entry = CodeAddress(hex: code.function),
+                  let name = names[code.module]?[entry], name != code.functionName else { continue }
+            code.functionName = name
+            items[index].code = code
+            renamed = true
+        }
+        if renamed { changed() }
     }
 
     /// Writes the annotations once the change in hand is done: a survey that
@@ -991,6 +1043,7 @@ final class AgentAnnotationTools {
                 address: location.address?.description))
         nextID += 1
         add(annotation)
+        refreshCodeNames()
         if try arguments.bool("reveal", default: false) { show(annotation.id) }
         return .json(describe(annotation))
     }

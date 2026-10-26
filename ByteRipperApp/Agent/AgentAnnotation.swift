@@ -56,7 +56,10 @@ struct AgentAnnotation: Equatable {
         let moduleName: String
         /// Ghidra's entry address of the function, e.g. `0x4BF`.
         let function: String
-        let functionName: String
+        /// The function's name as the module's analysis has it now: made
+        /// with the name it had, then followed through renames
+        /// (`AgentAnnotationTools.refreshCodeNames`). The address is the key.
+        var functionName: String
         /// An instruction in the function, when the place is one.
         var address: String? = nil
 

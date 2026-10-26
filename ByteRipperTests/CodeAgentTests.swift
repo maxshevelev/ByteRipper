@@ -227,6 +227,32 @@ final class CodeAgentTests: XCTestCase {
         XCTAssertEqual(controller.fragments.codePane(panel)?.notes.first?.title, "Mine")
     }
 
+    /// A rename published after the note was made renames what the note is
+    /// about, found by the function's address; the note's title stays the
+    /// person's.
+    func testACodeAnnotationNamesItsFunctionAsTheAnalysisDoesNow() async throws {
+        let controller = try open()
+        let node = try await moduleNode()
+        _ = try await client.answer("open_code", ["node": .string(node)])
+        let panel = try XCTUnwrap(controller.fragments.expanded)
+        let codePane = try XCTUnwrap(controller.fragments.pane(panel))
+        let id = try await service.annotationTools.addNote(
+            title: "Mine", note: "", at: CodeLocation(function: CodeAddress(0x220)), of: codePane)
+        func annotation() -> AgentAnnotation? { service.annotationTools.all().first { $0.id == id } }
+        XCTAssertEqual(annotation()?.code?.functionName, "FUN_00000220")
+
+        let store = try ContentStore(root: root)
+        let stored = try XCTUnwrap(try store.analysis(module: SHA256Digest(data: Self.teModule())))
+        try store.putAnalysis(
+            module: stored.module, recipe: stored.recipe,
+            artifact: Data(Self.artifact.replacingOccurrences(of: #""name":"FUN_00000220""#,
+                                                              with: #""name":"LoadMicrocode""#).utf8),
+            reading: AnalysisReading(project: "p", rev: 1))
+        try await until { annotation()?.code?.functionName == "LoadMicrocode" }
+        XCTAssertEqual(annotation()?.code?.label, "CpuPei ▸ LoadMicrocode")
+        XCTAssertEqual(annotation()?.title, "Mine")
+    }
+
     func testACodeAnnotationIsKeptBetweenLaunches() throws {
         let annotation = AgentAnnotation(
             id: "a1", file: .disk(URL(fileURLWithPath: "/tmp/x.bin"), FileIdentity(url: URL(fileURLWithPath: "/tmp"))),
