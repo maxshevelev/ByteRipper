@@ -5,6 +5,7 @@
 @covers menu.file.save-as-project
 @covers menu.file.open-recent-project
 @covers menu.file.close-project
+@covers code.project-analyses
 
 A project holds what the [[topic:workspace|workspace]] holds — the windows and tabs, the files in them, where each pane was, the bookmarks, the segments, the fragment panels, the tool panels and the Annotations window — every change not yet saved included: untitled documents, changes in parts not yet put back, and the changed bytes of files on disk, which come back red as they were — and the undo history of each document. Unlike the workspace, a project is kept whatever the setting **Reopen the workspace at launch** says.
 
@@ -34,3 +35,13 @@ A version of ByteRipper opens the projects that earlier versions saved. A projec
 ## Files that changed or are missing
 
 A file not found at its path or relative to the project is not opened. A file that changed on disk while the project was closed opens without the project's unsaved changes to it, since those changes were made on other bytes. One message after opening lists both, as it does for the workspace.
+
+## Code analyses in a project
+
+A project also keeps the code analyses its Code panels show, inside the `.brp` package, so they open on another Mac without Ghidra. While the project is open, a new analysis of a module it shows — the module analyzed again, or its review published again — is written into the project too.
+
+On opening, each analysis is added to the ones stored on this Mac. One stored here is replaced only by a later revision of the same review; when this Mac holds the later revision, that one is shown. A notice after opening says when an analysis is shown other than as the project saved it, and how many:
+
+- **Another project's analysis is shown instead** — this Mac holds a review of the module made in another Ghidra project. The project's copy is kept aside, not lost.
+- **A different stored analysis is shown instead** — this Mac holds another analysis of the module made the same way.
+- **Damaged in the project and not read** — the project's copy cannot be read.

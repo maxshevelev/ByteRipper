@@ -1,5 +1,6 @@
 import CodeAnalysis
 import Foundation
+import Localization
 import UEFIToolUI
 
 /// The app's way to the analysis store, for the places that load an artifact
@@ -34,11 +35,34 @@ enum CodeAnalysisStore {
     /// Bring a project's bundle into the local store before its Code screens
     /// are restored. Missing or unreadable bundles are not an error: the
     /// project still opens, and a Code screen that cannot find its artifact
-    /// says so.
-    static func importProjectBundle(at project: URL, root: URL? = nil) {
+    /// says so. The import's report is returned for the window to tell what
+    /// the project will not show as it was saved (`noticeLines(for:)`).
+    @discardableResult
+    static func importProjectBundle(at project: URL, root: URL? = nil) -> BundleImport? {
         let url = bundleURL(in: project)
         guard FileManager.default.fileExists(atPath: url.path),
-              let store = try? ContentStore(root: root ?? self.root) else { return }
-        _ = try? store.importBundle(from: url)
+              let store = try? ContentStore(root: root ?? self.root) else { return nil }
+        return try? store.importBundle(from: url)
+    }
+
+    /// What a notice says about a bundle import, or nothing when every
+    /// analysis is shown as the project has it — or is superseded by a later
+    /// reading, which is the same work further on.
+    static func noticeLines(for result: BundleImport) -> [String]? {
+        let kept = result.conflicts.count
+        let other = result.skipped.filter { $0.kind == .otherAnalysis }.count
+        let damaged = result.skipped.filter { $0.kind == .damaged }.count
+        guard kept + other + damaged > 0 else { return nil }
+        var lines = [L("Not every code analysis of the project is shown as it was saved")]
+        if kept > 0 {
+            lines.append(L("Another project's analysis is shown instead: %1$@", String(kept)))
+        }
+        if other > 0 {
+            lines.append(L("A different stored analysis is shown instead: %1$@", String(other)))
+        }
+        if damaged > 0 {
+            lines.append(L("Damaged in the project and not read: %1$@", String(damaged)))
+        }
+        return lines
     }
 }

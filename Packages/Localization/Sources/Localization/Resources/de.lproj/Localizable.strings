@@ -1705,3 +1705,7 @@
 "The stored analysis is missing or cannot be read. The panel keeps the analysis it has." = "Die gespeicherte Analyse fehlt oder ist nicht lesbar. Die Palette behält die bereits geöffnete Analyse.";
 "Hide hex dump" = "Hex-Dump ausblenden";
 "Show hex dump" = "Hex-Dump einblenden";
+"Not every code analysis of the project is shown as it was saved" = "Nicht jede Codeanalyse des Projekts wird so gezeigt, wie sie gesichert wurde";
+"Another project's analysis is shown instead: %1$@" = "Stattdessen wird die Analyse eines anderen Projekts gezeigt: %1$@";
+"A different stored analysis is shown instead: %1$@" = "Stattdessen wird eine andere gespeicherte Analyse gezeigt: %1$@";
+"Damaged in the project and not read: %1$@" = "Im Projekt beschädigt und nicht gelesen: %1$@";

@@ -1,4 +1,4 @@
-@source-sha 92bb5f281eaf7318ac0dc9dd7044f072063951a987dc5953d1dfd8fbcbdeb4a8
+@source-sha 6528d361f14e183f23578593383d42227d7c2568b1c14818709bf85ebdbf084c
 # Projekte
 
 > Ein Projekt ist ein Arbeitsbereich in einer eigenen Datei: alles, was für einen Auftrag geöffnet ist, wird als Ganzes wieder geöffnet, und zwischen Projekten lässt sich wechseln.
@@ -31,3 +31,13 @@ Eine Version von ByteRipper öffnet die Projekte, die frühere Versionen gespeic
 ## Geänderte und fehlende Dateien
 
 Eine Datei, die weder unter ihrem Pfad noch relativ zum Projekt gefunden wird, wird nicht geöffnet. Eine Datei, die sich auf dem Datenträger geändert hat, während das Projekt geschlossen war, öffnet sich ohne die ungesicherten Änderungen des Projekts an ihr, da diese an anderen Bytes vorgenommen wurden. Eine Meldung nach dem Öffnen nennt beides, wie beim Arbeitsbereich.
+
+## Codeanalysen im Projekt
+
+Ein Projekt enthält auch die Codeanalysen, die seine Codebereiche zeigen — im Paket `.brp`, sodass sie sich auf einem anderen Mac ohne Ghidra öffnen. Solange das Projekt offen ist, wird eine neue Analyse eines darin gezeigten Moduls — das Modul erneut analysiert oder seine Durchsicht erneut veröffentlicht — ebenfalls ins Projekt geschrieben.
+
+Beim Öffnen wird jede Analyse zu den auf diesem Mac gespeicherten hinzugefügt. Eine hier gespeicherte Analyse wird nur durch eine spätere Revision derselben Durchsicht ersetzt; liegt die spätere Revision auf diesem Mac, wird sie gezeigt. Wird eine Analyse anders gezeigt, als das Projekt sie gesichert hat, nennt eine Meldung nach dem Öffnen dies mit der Anzahl:
+
+- **Stattdessen wird die Analyse eines anderen Projekts gezeigt** — dieser Mac hat eine Durchsicht des Moduls aus einem anderen Ghidra-Projekt. Die Kopie des Projekts wird beiseitegelegt, nicht verworfen.
+- **Stattdessen wird eine andere gespeicherte Analyse gezeigt** — dieser Mac hat eine andere, auf dieselbe Weise erstellte Analyse des Moduls.
+- **Im Projekt beschädigt und nicht gelesen** — die Kopie des Projekts lässt sich nicht lesen.

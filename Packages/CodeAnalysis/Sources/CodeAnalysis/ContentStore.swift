@@ -588,21 +588,21 @@ public struct ContentStore: Sendable {
             let manifestPath = "analyses/\(name)/manifest.json"
             guard let manifestData = entries[manifestPath],
                   let manifest = try? decoder.decode(AnalysisManifest.self, from: manifestData) else {
-                result.skipped.append(.init(key: name, reason: "\(manifestPath) is missing or unreadable"))
+                result.skipped.append(.init(key: name, reason: "\(manifestPath) is missing or unreadable", kind: .damaged))
                 continue
             }
             guard manifest.schema == CodeAnalysisSchema.current else {
-                result.skipped.append(.init(key: name, reason: "schema is not \(CodeAnalysisSchema.current)"))
+                result.skipped.append(.init(key: name, reason: "schema is not \(CodeAnalysisSchema.current)", kind: .damaged))
                 continue
             }
             guard manifest.key == key else {
-                result.skipped.append(.init(key: name, reason: "the manifest names another analysis"))
+                result.skipped.append(.init(key: name, reason: "the manifest names another analysis", kind: .damaged))
                 continue
             }
             let objectPath = "objects/\(manifest.artifact.sha256.hex)"
             guard let artifact = entries[objectPath],
                   SHA256Digest(data: artifact) == manifest.artifact.sha256 else {
-                result.skipped.append(.init(key: name, reason: "\(objectPath) is missing or does not match its hash"))
+                result.skipped.append(.init(key: name, reason: "\(objectPath) is missing or does not match its hash", kind: .damaged))
                 continue
             }
             try putObject(artifact)
@@ -630,14 +630,16 @@ public struct ContentStore: Sendable {
                     try atomicWrite(manifestData, to: target)
                     result.imported.append(manifest)
                 case .notNewer:
-                    result.skipped.append(.init(key: name, reason: "the store holds a later revision of this reading"))
+                    result.skipped.append(.init(key: name, reason: "the store holds a later revision of this reading",
+                                                      kind: .olderRevision))
                 case .unreviewedOverReviewed:
-                    result.skipped.append(.init(key: name, reason: "the store holds a reviewed reading"))
+                    result.skipped.append(.init(key: name, reason: "the store holds a reviewed reading", kind: .reviewedStored))
                 case .unreviewed:
-                    result.skipped.append(.init(key: name, reason: "the store holds another analysis"))
+                    result.skipped.append(.init(key: name, reason: "the store holds another analysis", kind: .otherAnalysis))
                 case .otherProject:
                     try atomicWrite(manifestData, to: conflictURL(for: manifest, key: key))
-                    result.conflicts.append(.init(key: name, reason: "the store holds another project's reading"))
+                    result.conflicts.append(.init(key: name, reason: "the store holds another project's reading",
+                                                        kind: .otherProject))
                 }
             }
         }

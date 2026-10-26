@@ -159,11 +159,78 @@ final class ProjectTests: XCTestCase {
 
         // Another Mac: no store, only the project folder.
         try FileManager.default.removeItem(at: storeRoot)
-        CodeAnalysisStore.importProjectBundle(at: project)
+        let imported = try XCTUnwrap(CodeAnalysisStore.importProjectBundle(at: project))
+        XCTAssertEqual(imported.imported.count, 1)
+        XCTAssertNil(CodeAnalysisStore.noticeLines(for: imported), "nothing to tell")
         let (target, issues) = await reopen(project)
         XCTAssertEqual(issues, [])
         let restored = try XCTUnwrap(target.fragments.expanded.flatMap { target.fragments.codePane($0) })
         XCTAssertEqual(restored.selectedFunction?.name, "entry")
+
+        // A Mac whose store holds another analysis under the same key: the
+        // project opens with that one, and the notice says so.
+        try FileManager.default.removeItem(at: storeRoot)
+        try ContentStore(root: storeRoot).putAnalysis(
+            module: manifest.module, recipe: manifest.recipe,
+            artifact: Data(#"{"script_version":2,"ghidra":"12.1.2","functions":[]}"#.utf8))
+        let other = try XCTUnwrap(CodeAnalysisStore.importProjectBundle(at: project))
+        XCTAssertEqual(other.notTaken.map(\.kind), [.otherAnalysis])
+        XCTAssertEqual(CodeAnalysisStore.noticeLines(for: other), [
+            L("Not every code analysis of the project is shown as it was saved"),
+            L("A different stored analysis is shown instead: %1$@", "1")])
+    }
+
+    /// A reading published again under the same key is written into the
+    /// project's bundle too, not only a change of which analyses it shows.
+    func testARepublishedReadingIsBundledAgain() async throws {
+        let (_, dump, project) = try jobFolder()
+        let codeBytes = [UInt8](repeating: 0x90, count: 0x100)
+        func artifactData(_ name: String) -> Data {
+            Data("""
+            {"script_version":2,"ghidra":"12.1.2","functions":[
+              {"entry":"0x0","name":"\(name)","instructions":[
+                {"address":"0x0","bytes":"90","mnemonic":"NOP","text":"NOP"}]}]}
+            """.utf8)
+        }
+        let storeRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ProjectAnalyses-\(UUID().uuidString)")
+        addTeardownBlock { try? FileManager.default.removeItem(at: storeRoot) }
+        let store = try ContentStore(root: storeRoot)
+        let module = ModuleIdentity(sha256: SHA256Digest(data: Data(codeBytes)),
+                                    size: codeBytes.count, name: "CpuPei", kind: "TE",
+                                    language: "x86:LE:32:default", imageBase: "0x0")
+        let recipe = AnalysisRecipe(id: "code-v2-ghidra-12.1.2", exporter: 2,
+                                    ghidra: "12.1.2", script: "ExportCode.java")
+        let first = try store.putAnalysis(module: module, recipe: recipe, artifact: artifactData("entry"),
+                                          reading: AnalysisReading(project: "p", rev: 1))
+        let previousRoot = UEFIToolModule.codeAnalysisRoot
+        UEFIToolModule.codeAnalysisRoot = storeRoot
+        addTeardownBlock { UEFIToolModule.codeAnalysisRoot = previousRoot }
+
+        let window = shownWindow()
+        let controller = window.mainViewController
+        controller.openFiles([dump])
+        controller.openCode(
+            named: "CpuPei body", from: controller.windowModel.pane1,
+            source: 0x100..<0x200, manifest: first,
+            artifact: try JSONDecoder().decode(CodeArtifact.self, from: artifactData("entry")),
+            codec: ReadOnlyPartCodec(codeBytes, title: L("This cannot be put back"),
+                                     reason: L("A code analysis is a snapshot; edit the dump and analyze the module again.")))
+        let recorder = await record([window], into: project)
+
+        try store.putAnalysis(module: module, recipe: recipe, artifact: artifactData("CpuInit"),
+                              reading: AnalysisReading(project: "p", rev: 2))
+        let id = try XCTUnwrap(controller.fragments.expanded)
+        controller.codeStoreChanged()
+        for _ in 0..<100 where controller.fragments.codePane(id)?.selectedFunction?.name != "CpuInit" {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertEqual(controller.fragments.codePane(id)?.selectedFunction?.name, "CpuInit")
+        await recorder.recordSettled()
+
+        let elsewhere = try ContentStore(root: storeRoot.appendingPathComponent("elsewhere"))
+        _ = try elsewhere.importBundle(from: CodeAnalysisStore.bundleURL(in: project))
+        XCTAssertEqual(try elsewhere.analysis(module: module.sha256)?.reading?.rev, 2)
     }
 
     func testAProjectIsRecognisedByItsExtension() {

@@ -76,7 +76,7 @@ final class WorkspaceRecorder {
 
     /// What the open project's bundle last held: its folder and the analyses
     /// in it. A snapshot with the same set writes nothing.
-    private var bundledAnalyses: (project: URL, keys: Set<AnalysisKey>)?
+    private var bundledAnalyses: (project: URL, versions: Set<String>)?
 
     /// Records into `project` from now on, or — nil — into the session the
     /// app keeps by itself. The keeper starts afresh: what it knows was
@@ -218,8 +218,14 @@ final class WorkspaceRecorder {
     private func bundleAnalyses(of workspace: Workspace, in project: WorkspaceFolder) {
         let manifests = Self.codeManifests(in: workspace)
         let keys = Set(manifests.compactMap(\.key))
-        guard bundledAnalyses?.project != project.url || bundledAnalyses?.keys != keys else { return }
-        bundledAnalyses = (project.url, keys)
+        // A republished reading keeps its key and changes its artifact or
+        // revision: the bundle is written again for that too, or a project
+        // carried to another Mac would carry the reading it first saw.
+        let versions = Set(manifests.map {
+            "\($0.key?.description ?? "")/\($0.artifact.sha256.hex)/\($0.reading?.rev ?? 0)"
+        })
+        guard bundledAnalyses?.project != project.url || bundledAnalyses?.versions != versions else { return }
+        bundledAnalyses = (project.url, versions)
         let root = CodeAnalysisStore.root
         let ref = CodeAnalysisStore.projectRefName(for: project.url)
         let bundleURL = CodeAnalysisStore.bundleURL(in: project.url)

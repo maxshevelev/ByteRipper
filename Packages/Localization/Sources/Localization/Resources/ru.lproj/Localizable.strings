@@ -1705,3 +1705,7 @@
 "The stored analysis is missing or cannot be read. The panel keeps the analysis it has." = "Сохранённый анализ отсутствует или не читается. Панель оставляет тот анализ, который уже открыт.";
 "Hide hex dump" = "Скрыть дамп";
 "Show hex dump" = "Показать дамп";
+"Not every code analysis of the project is shown as it was saved" = "Не все разборы кода проекта показаны в том виде, в каком были сохранены";
+"Another project's analysis is shown instead: %1$@" = "Вместо сохранённого показан разбор другого проекта: %1$@";
+"A different stored analysis is shown instead: %1$@" = "Вместо сохранённого показан другой разбор с этого Mac: %1$@";
+"Damaged in the project and not read: %1$@" = "Повреждены в проекте и не прочитаны: %1$@";

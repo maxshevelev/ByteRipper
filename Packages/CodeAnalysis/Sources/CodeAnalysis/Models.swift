@@ -403,12 +403,28 @@ public struct BundleInfo: Codable, Equatable, Sendable {
 public struct BundleImport: Codable, Equatable, Sendable {
     /// One analysis the store did not take, and why.
     public struct Entry: Codable, Equatable, Sendable {
+        /// Why, as a reader acts on it.
+        public enum Kind: String, Codable, Sendable {
+            /// The store holds a later revision of the same reading.
+            case olderRevision = "older_revision"
+            /// The store holds a reading; the bundle, a mechanical artifact.
+            case reviewedStored = "reviewed_stored"
+            /// Both mechanical, and not the same artifact.
+            case otherAnalysis = "other_analysis"
+            /// Another project's reading: kept aside under `conflicts/`.
+            case otherProject = "other_project"
+            /// The bundle's entry cannot be read or does not match its hash.
+            case damaged
+        }
+
         public var key: String
         public var reason: String
+        public var kind: Kind
 
-        public init(key: String, reason: String) {
+        public init(key: String, reason: String, kind: Kind) {
             self.key = key
             self.reason = reason
+            self.kind = kind
         }
     }
 
@@ -428,6 +444,14 @@ public struct BundleImport: Codable, Equatable, Sendable {
     /// The analyses a reader can now find for the bundle's keys: written or
     /// already there.
     public var present: [AnalysisManifest] { imported + unchanged }
+
+    /// The entries whose analysis a reader will not see as the bundle had
+    /// it: another project's reading in use instead, another mechanical
+    /// artifact, or an entry the bundle got wrong. An older revision, or a
+    /// mechanical artifact under a reading, is superseded rather than lost.
+    public var notTaken: [Entry] {
+        conflicts + skipped.filter { $0.kind == .otherAnalysis || $0.kind == .damaged }
+    }
 }
 
 /// A file or directory name the store may use: ASCII letters, digits, dot,

@@ -126,7 +126,7 @@ extension AppDelegate {
         }
         // A project carries its Code analyses beside `Project.json`: bring
         // them into the local store before the screens that read them open.
-        CodeAnalysisStore.importProjectBundle(at: url)
+        let imported = CodeAnalysisStore.importProjectBundle(at: url)
         leaveCurrentSession { [weak self] in
             guard let self else { return }
             recorder.switchTo(project: folder)
@@ -134,6 +134,11 @@ extension AppDelegate {
                 self.makeWindow()
             }
             self.projectOpened(url)
+            // help: code.project-analyses
+            if let imported, let lines = CodeAnalysisStore.noticeLines(for: imported) {
+                self.windowControllers.last?.mainViewController
+                    .showNotice(symbol: "exclamationmark.triangle", lines: lines)
+            }
         }
     }
 
