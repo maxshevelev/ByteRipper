@@ -1,6 +1,7 @@
 import CASService
 import CodeAnalysis
 import Foundation
+import GhidraHost
 import HTTPService
 
 /// The running server: its roles' routes on one listener, behind one token.
@@ -10,6 +11,7 @@ public final class Server: @unchecked Sendable {
     private var http: HTTPServer?
     private var watcher: CodeStoreWatcher?
     public private(set) var cas: CASService?
+    public private(set) var ghidra: GhidraHost?
 
     public init(configuration: ServerConfiguration,
                 log: @escaping @Sendable (String) -> Void = { FileHandle.standardError.write(Data(($0 + "\n").utf8)) }) {
@@ -38,6 +40,27 @@ public final class Server: @unchecked Sendable {
                 Task { await feed.rescan() }
             }
             log("store \(store.root.path) (\(cas.feed.storeID))")
+        }
+        if configuration.roles.contains(.ghidra) {
+            let writer: AnalysisWriter
+            if let url = configuration.casURL {
+                writer = RemoteStore(base: url, token: token)
+            } else if let cas {
+                writer = cas.store
+            } else {
+                throw ServerCommand.Failure(description: "the Ghidra role publishes into a store: add --cas, or name --cas-url")
+            }
+            let host = GhidraHost(configuration: .init(projectsRoot: configuration.projects,
+                                                       ghidraHome: configuration.ghidraHome,
+                                                       idle: configuration.idle),
+                                  writer: writer)
+            let feed = cas?.feed
+            GhidraRoutes.projectsRoot = configuration.projects
+            router.merge(GhidraRoutes.routes(host: host, published: { await feed?.rescan() }))
+            ghidra = host
+            let ghidraNote = (try? await host.ghidra()).map { "Ghidra \($0.version) at \($0.home.path)" }
+                ?? "no Ghidra found yet"
+            log("projects \(configuration.projects.path); \(ghidraNote)")
         }
         let http = HTTPServer(
             configuration: .init(host: configuration.host, port: configuration.port, token: token,

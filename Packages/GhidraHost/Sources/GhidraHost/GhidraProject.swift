@@ -24,6 +24,12 @@ public struct ProjectState: Codable, Equatable, Sendable {
         public var path: String?
         public var document: String?
         public var node: String?
+
+        public init(path: String? = nil, document: String? = nil, node: String? = nil) {
+            self.path = path
+            self.document = document
+            self.node = node
+        }
     }
 
     public struct Published: Codable, Equatable, Sendable {

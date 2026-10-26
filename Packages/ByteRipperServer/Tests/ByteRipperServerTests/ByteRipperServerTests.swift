@@ -6,7 +6,7 @@ import XCTest
 final class ServerCommandTests: XCTestCase {
     func testTheDefaultsServeTheStoreOnLoopback() throws {
         guard case .serve(let configuration) = try ServerCommand.parse([]) else { return XCTFail() }
-        XCTAssertEqual(configuration.roles, [.cas])
+        XCTAssertEqual(configuration.roles, [.cas, .ghidra])
         XCTAssertEqual(configuration.host, "127.0.0.1")
         XCTAssertEqual(configuration.port, 8765)
         XCTAssertEqual(configuration.store, CodeAnalysisPaths.defaultRoot)
@@ -27,7 +27,9 @@ final class ServerCommandTests: XCTestCase {
     }
 
     func testWhatIsRefused() {
-        XCTAssertThrowsError(try ServerCommand.parse(["--ghidra"]))
+        XCTAssertThrowsError(try ServerCommand.parse(["--ghidra"]), "the Ghidra role alone has no store")
+        XCTAssertNoThrow(try ServerCommand.parse(["--ghidra", "--cas-url", "http://100.64.0.7:8765"]))
+        XCTAssertThrowsError(try ServerCommand.parse(["--idle", "-1"]))
         XCTAssertThrowsError(try ServerCommand.parse(["--listen", "nowhere"]))
         XCTAssertThrowsError(try ServerCommand.parse(["--store"]))
         XCTAssertThrowsError(try ServerCommand.parse(["--bogus"]))
@@ -77,6 +79,7 @@ final class ServerTests: XCTestCase {
             .appendingPathComponent("ServerTests-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         var configuration = ServerConfiguration()
+        configuration.roles = [.cas]
         configuration.port = 0
         configuration.store = directory.appendingPathComponent("store")
         configuration.tokenFile = directory.appendingPathComponent("token")
@@ -100,6 +103,7 @@ final class ServerTests: XCTestCase {
 
     func testANamedTokenFileMustExist() async throws {
         var configuration = ServerConfiguration()
+        configuration.roles = [.cas]
         configuration.port = 0
         configuration.store = FileManager.default.temporaryDirectory.appendingPathComponent("s-\(UUID())")
         configuration.tokenFile = URL(fileURLWithPath: "/nonexistent/token")
