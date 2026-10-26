@@ -91,15 +91,13 @@ python3 Skills/ghidra-uefi/scripts/byteripper_extract.py \
 A review — reading the decompiler, renaming, typing, commenting — goes through
 the `ghidra_` tools. Each module has a kept Ghidra project, made once by the
 same analysis and UEFI pass as `code_artifact.py`, and every change is
-published into the CAS, so each ByteRipper reading that store shows it. There
-are two ways to reach them, with the same tools behind both:
+published into the CAS, so each ByteRipper reading that store shows it.
 
-- **Through ByteRipper's own MCP server**, when Settings ▸ Code Analysis names
-  an analysis server. `ghidra_open` takes the image `node` and its `document`;
-  the app sends the bytes, so there is nothing to extract.
-- **At the server, `http://host:8765/mcp`**, for an agent with no ByteRipper
-  beside it ("On an analysis server" below). `ghidra_open` takes the image as
-  `image_base64` with a `name`, extracted as in step 2.
+Reach them through ByteRipper's own MCP server, when Settings ▸ Code Analysis
+names an analysis server: the same connection carries the tree tools, so a
+module goes from its UEFI node to a rename without leaving it. `ghidra_open`
+takes the image `node` and its `document`; the app sends the bytes, so there
+is nothing to extract.
 
 A TE image is converted by the server; a module opened before opens by
 `module`, its SHA-256. Then: `ghidra_functions`, `ghidra_function` (C, the
@@ -229,9 +227,7 @@ swift build -c release --package-path Packages/ByteRipperServer
 # tailnet address), the tailnet address for the other Macs
 ```
 
-An agent reaches the review tools at `http://host:8765/mcp` (`claude mcp add
---transport http byteripper-server http://host:8765/mcp --header
-"Authorization: Bearer <token>"`), or through ByteRipper's own MCP server when
+An agent reaches the review tools through ByteRipper's own MCP server when
 Settings ▸ Code Analysis names the server: `ghidra_open` with a node,
 `ghidra_function`, `ghidra_rename`, `ghidra_rename_variable`,
 `ghidra_signature`, `ghidra_type`, `ghidra_comment`, `ghidra_publish`,

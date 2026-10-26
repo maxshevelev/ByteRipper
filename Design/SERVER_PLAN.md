@@ -175,6 +175,11 @@ own lease stays the guard against a second host.
 MCP instructions carry the review rules of the skill (`SKILL.md`, "What a
 review makes of the code"), so an agent without the skill gets them too.
 
+`/mcp` is kept but not advertised (2026-10-27): an agent with no app beside it
+has no tree — no module map, no nodes — so it can open only modules that
+already have a project, or bytes it found on its own. The skill sends agents
+through ByteRipper's MCP; `/mcp` stays for a test or a later headless use.
+
 ## 7. Configuration
 
 ```

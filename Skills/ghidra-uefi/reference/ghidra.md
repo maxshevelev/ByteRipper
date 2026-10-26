@@ -2,8 +2,8 @@
 
 Two ways to get at a module:
 
-- **a review** — the `ghidra_` tools, served by `byteripper-server` at `/mcp`
-  and relayed by ByteRipper's own MCP server: a kept project per module, held
+- **a review** — the `ghidra_` tools of ByteRipper's own MCP server, relayed to
+  `byteripper-server`: a kept project per module, held
   open by an owner (`owner/Owner.java`), every change published into the CAS;
   good for following a call graph, renaming and typing, and reading the
   decompiler as you go;
