@@ -78,11 +78,9 @@ enum CodeColors {
 
     static let linkKey = NSAttributedString.Key("CodeViewLink")
 
-    /// Behind every occurrence of the symbol the reader clicked: grey, so it
-    /// is never taken for a selection, which wears the accent; faint enough
-    /// that the token's own colour still reads over it.
-    static let symbolHighlight = NSColor(name: nil) { appearance in
-        let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        return isDark ? NSColor(white: 1, alpha: 0.18) : NSColor(white: 0, alpha: 0.12)
-    }
+    /// Behind every occurrence of the symbol the reader clicked: Xcode's own
+    /// blue-grey (#EEF1F9 in Default (Light)), never the accent a selection
+    /// wears, drawn as a rounded box around each name.
+    static let symbolHighlight = themed(light: 0xEEF1F9, dark: 0x3A3E4A)
+    static let symbolHighlightRadius: CGFloat = 3
 }

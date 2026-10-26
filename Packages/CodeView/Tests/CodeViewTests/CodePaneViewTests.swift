@@ -142,6 +142,19 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertFalse(view.clickC(at: at("Total", after: "return"), event: try click(count: 1)))
         XCTAssertEqual(view.highlightedSymbol, .variable("Total"))
         XCTAssertEqual(highlighted(), Array(repeating: "Total", count: 5), "the declaration and every use")
+        // Drawn, not only listed: Xcode's blue-grey shows behind a name.
+        textView.appearance = NSAppearance(named: .aqua)
+        let box = try XCTUnwrap(textView.layoutManager?.boundingRect(
+            forGlyphRange: textView.highlightedRanges[0], in: textView.textContainer!))
+        let rep = try XCTUnwrap(textView.bitmapImageRepForCachingDisplay(in: textView.bounds))
+        textView.cacheDisplay(in: textView.bounds, to: rep)
+        let scale = CGFloat(rep.pixelsWide) / textView.bounds.width
+        let corner = NSPoint(x: box.minX + textView.textContainerOrigin.x,
+                             y: box.minY + textView.textContainerOrigin.y + 1)
+        let pixel = try XCTUnwrap(rep.colorAt(x: Int(corner.x * scale), y: Int(corner.y * scale))?
+            .usingColorSpace(.sRGB))
+        XCTAssertEqual(Int((pixel.redComponent * 255).rounded()), 0xEE, "\(pixel)")
+        XCTAssertEqual(Int((pixel.blueComponent * 255).rounded()), 0xF9, "\(pixel)")
 
         XCTAssertFalse(view.clickC(at: at("Count", after: "Total ="), event: try click(count: 1)))
         XCTAssertEqual(highlighted(), ["Count", "Count"], "the parameter and its one use")

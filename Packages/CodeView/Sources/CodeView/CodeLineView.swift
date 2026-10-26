@@ -81,7 +81,9 @@ final class CodeLineView: NSView {
             for range in highlighted where range.location + range.length <= attributed.length {
                 let start = CTLineGetOffsetForStringIndex(line, range.location, nil)
                 let end = CTLineGetOffsetForStringIndex(line, range.location + range.length, nil)
-                NSRect(x: start, y: top, width: end - start, height: height).fill()
+                NSBezierPath(roundedRect: NSRect(x: start - 2, y: top, width: end - start + 4, height: height),
+                             xRadius: CodeColors.symbolHighlightRadius,
+                             yRadius: CodeColors.symbolHighlightRadius).fill()
             }
         }
         shown.draw(at: NSPoint(x: 0, y: top))

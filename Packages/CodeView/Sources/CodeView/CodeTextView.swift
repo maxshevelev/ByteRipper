@@ -68,14 +68,28 @@ final class CodeTextView: NSTextView {
     private var highlighted: [NSRange] = []
 
     func highlight(_ ranges: [NSRange]) {
-        guard let layoutManager, let storage = textStorage else { return }
-        for range in highlighted where range.location + range.length <= storage.length {
-            layoutManager.removeTemporaryAttribute(.backgroundColor, forCharacterRange: range)
-        }
+        guard let storage = textStorage else { return }
         highlighted = ranges.filter { $0.location + $0.length <= storage.length }
+        needsDisplay = true
+    }
+
+    /// The highlight is drawn under the text as Xcode draws it: a rounded box
+    /// around each occurrence.
+    override func drawBackground(in rect: NSRect) {
+        super.drawBackground(in: rect)
+        guard !highlighted.isEmpty, let layoutManager, let textContainer else { return }
+        CodeColors.symbolHighlight.setFill()
+        let origin = textContainerOrigin
         for range in highlighted {
-            layoutManager.addTemporaryAttribute(.backgroundColor, value: CodeColors.symbolHighlight,
-                                                forCharacterRange: range)
+            let glyphs = layoutManager.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+            layoutManager.enumerateEnclosingRects(forGlyphRange: glyphs,
+                                                  withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0),
+                                                  in: textContainer) { box, _ in
+                let shown = box.offsetBy(dx: origin.x, dy: origin.y).insetBy(dx: -2, dy: 0)
+                guard shown.intersects(rect) else { return }
+                NSBezierPath(roundedRect: shown, xRadius: CodeColors.symbolHighlightRadius,
+                             yRadius: CodeColors.symbolHighlightRadius).fill()
+            }
         }
     }
 
