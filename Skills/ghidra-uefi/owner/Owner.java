@@ -797,12 +797,43 @@ public class Owner {
         return answer;
     }
 
+    /**
+     * `typedef enum { … } NAME;` with the tag `_NAME` written in. Ghidra's C
+     * parser names an anonymous enum by where it starts in the text, so two
+     * of them, each first in its own call, are the same type to the program:
+     * the second replaced the first's values, and the decompiler wrote an
+     * EFI_STATUS as DEBUG_* flags. A structure or union is tagged the same.
+     */
+    static String tagAnonymous(String c) {
+        java.util.regex.Matcher open = java.util.regex.Pattern
+            .compile("\\btypedef\\s+(struct|union|enum)\\s*\\{").matcher(c);
+        java.util.regex.Pattern name = java.util.regex.Pattern.compile("\\s*([A-Za-z_][A-Za-z0-9_]*)");
+        StringBuilder out = new StringBuilder();
+        int from = 0;
+        while (open.find(from)) {
+            int brace = open.end() - 1;
+            int depth = 0, close = -1;
+            for (int i = brace; i < c.length() && close < 0; i++) {
+                if (c.charAt(i) == '{') depth++;
+                else if (c.charAt(i) == '}' && --depth == 0) close = i;
+            }
+            if (close < 0) break;
+            java.util.regex.Matcher named = name.matcher(c).region(close + 1, c.length());
+            out.append(c, from, brace);
+            if (named.lookingAt()) out.append('_').append(named.group(1)).append(' ');
+            out.append(c, brace, close + 1);
+            from = close + 1;
+        }
+        out.append(c.substring(from));
+        return out.toString();
+    }
+
     /** A structure, union, enum or typedef from C, into the program. */
     private JsonObject addType(JsonObject body) throws Exception {
         String c = required(body, "c");
         DataType parsed;
         try {
-            parsed = new CParser(program.getDataTypeManager(), true, null).parse(c);
+            parsed = new CParser(program.getDataTypeManager(), true, null).parse(tagAnonymous(c));
         } catch (Exception error) {
             throw new Failure(400, "the C does not parse: " + error.getMessage());
         }

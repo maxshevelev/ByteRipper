@@ -177,6 +177,12 @@ that keeps Ghidra open:
   Ghidra's parser.
 - **A type the program does not hold yet** is not found by `DataTypeParser`
   even when the EDK2 archive has it; resolve it from the archive first.
+- **An anonymous `typedef enum { … } NAME;` is named by where it starts.**
+  Two such enums, each first in its own `CParser.parse`, become one type of
+  the program: adding `EFI_DEBUG_LEVEL` replaced the values of
+  `EFI_STATUS_VALUE`, and `0x80000003` decompiled as
+  `DEBUG_ERROR|DEBUG_WARN|DEBUG_INIT`. The owner writes the tag `_NAME` into
+  every anonymous struct, union and enum before parsing.
 - **A decompiler temporary's `unique:` storage is not stable** between two
   decompilations until it is named (then it is `HASH:…`): name a local from
   the listing you just read.
