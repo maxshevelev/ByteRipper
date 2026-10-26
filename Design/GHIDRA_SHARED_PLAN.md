@@ -325,6 +325,12 @@ save  →  export the artifact  →  harvest the review document  →  return bo
   revision, or a reading over none). Anything else is refused as today, and
   `code_artifact.py --force` keeps its meaning but refuses to put a mechanical
   artifact over a reading unless told `--discard-reading`.
+- **Until readings exist, a project replaces only its own publish.** A
+  mechanical artifact never replaces another (§5.6); a publish of a project
+  whose program has not been reviewed still has to supersede that project's
+  own previous publish (after an exporter fix, say). The client passes
+  `replace` exactly when the stored artifact is the one `state.json` records
+  as this project's last publish.
 - **If publishing fails halfway** — save done, export failed — or the client
   dies before storing, the project is ahead of the cache. `state.json` keeps the
   last stored artifact's SHA and revision; the owner reports unpublished
@@ -809,11 +815,17 @@ already: a re-run analysis shifts indices as well.
    the identity of a local across a rename, the project lock, and two traps
    the design now avoids (`GhidraProject.openProgram`, `ghidra.Ghidra` as a
    launcher for a class on `-cp`).
-1. **One owner, reads and export.** `ghidra_owner.py` starts one owner for one
-   module on a loopback port; read endpoints; `POST /v1/publish` without
-   writes. The client stores the result. An artifact published from an
-   unmodified program equals what `code_artifact.py` produces today; the panel
-   shows it. No supervisor, no lease yet.
+1. **One owner, reads and export — done.** `ghidra_owner.py` makes the kept
+   project (step 1 by `analyzeHeadless`, project kept), compiles and starts
+   `owner/Owner.java` on a free loopback port, and passes read calls to it;
+   `POST /v1/publish` runs `ExportCode` in the owner and the client stores the
+   artifact. Parity holds byte for byte on CpuPei (PEI, 13 functions) and
+   BdsDxe (DXE, 529 functions) after two fixes it exposed: `ExportCode` sorts
+   callers and callees (Ghidra gives sets), and `ApplyUefi` settles the
+   analysis its changes schedule (`analyzeChanges`), so the export of a batch
+   run sees what a kept project saves. A publish replaces this project's own
+   last publish and nothing else (§5.4). Costs on BdsDxe: step 1 54 s, owner
+   start 3 s and 480 MB, a publish 12 s. No supervisor, no lease yet.
 2. **Writes, publish, readings**, in three parts that land separately:
    - **2a — the owner writes.** Lease; rename function/parameter/local with
      author and reason; signature, comment, data, type; save; `HarvestReview`;

@@ -31,6 +31,8 @@ with no app running.
 | `scripts/ExportCode.java` | a Ghidra script | the full code artifact: every instruction, references, C with its token spans, named data, strings, POST writes and status-code candidates |
 | `scripts/code_artifact.py` | one Ghidra run per module | analyzes once and stores the artifact under the module's SHA-256 |
 | `scripts/code_query.py` | stdlib, no Ghidra | reads the stored artifact: functions, disassembly, C, xrefs, the uses of an address, search, post-codes |
+| `scripts/ghidra_owner.py` | analyzeHeadless, javac, java | a kept Ghidra project per module and the long-lived owner that serves it on loopback: open, read calls, publish into the CAS, stop |
+| `owner/Owner.java` | built by `ghidra_owner.py` | the owner: one program, the bridge's read calls and publish (`Design/GHIDRA_SHARED_PLAN.md` phase 1) |
 | `scripts/cas.py` | `byteripper-cas` (built once with `swift build`) | the client of the local content-addressed store, which is implemented once in `Packages/CodeAnalysis` |
 | `scripts/cas_cli.py` | `cas.py` | the store's command line: list, show, verify, gc, ref, export, import, conflicts |
 | `scripts/module_scan.py` | stdlib, offline only | finds PE32/TE images in a dump without the app; opens LZMA, not Tiano |
@@ -114,6 +116,28 @@ analysis.
 
 `--no-decompile` gives names and call edges only. `--delete` removes the
 temporary project.
+
+### Kept: a long-lived owner per module
+
+```bash
+python3 Skills/ghidra-uefi/scripts/ghidra_owner.py open /tmp/CpuPei.te --name CpuPei \
+    --document "CSME 15.bin" --node 0.5.5.2.0.1.0.8.1
+python3 Skills/ghidra-uefi/scripts/ghidra_owner.py get <module-sha> /v1/function/0x68A
+python3 Skills/ghidra-uefi/scripts/ghidra_owner.py publish <module-sha>
+python3 Skills/ghidra-uefi/scripts/ghidra_owner.py stop <module-sha>
+```
+
+`open` keeps the module's Ghidra project in
+`~/Library/Application Support/ByteRipper/GhidraProjects/<module-sha>/` — made
+once by the same analysis and UEFI pass as `code_artifact.py` — and starts an
+owner that holds it open; a later `open` reuses a running one. The read calls
+(`/v1/hello`, `/v1/functions`, `/v1/function/<addr>`, `/v1/disassembly/<addr>`,
+`/v1/xrefs?to=`, `/v1/data`, `/v1/strings`) answer from the live program, with
+decompiled C and every local's storage and first use. `publish` stores the
+program's artifact in the CAS the app reads; for an unchanged program it is
+byte for byte what `code_artifact.py` stores. The owner saves and exits after
+`--idle` seconds without a call (1800 by default). Renames through the owner
+are phase 2 of `Design/GHIDRA_SHARED_PLAN.md`.
 
 ## The one-time code artifact
 

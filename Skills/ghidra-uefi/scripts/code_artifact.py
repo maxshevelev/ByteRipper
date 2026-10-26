@@ -70,56 +70,96 @@ def default_store() -> Path:
     return Path.home() / "Library" / "Application Support" / "ByteRipper" / "Analysis"
 
 
+def prepare_image(module: Path, blob: bytes, work: Path) -> tuple[Path, str]:
+    """The image Ghidra imports and the kind the manifest names: a TE image is
+    converted to PE first, and the original bytes are still what the hash
+    names."""
+    if blob[:2] == b"VZ":
+        image = work / (module.stem + ".pe")
+        image.write_bytes(te_to_pe.convert(blob))
+        return image, "TE"
+    if blob[:2] != b"MZ":
+        raise SystemExit(f"{module}: starts with {blob[:2]!r}, neither MZ nor VZ")
+    return module, "PE32"
+
+
+def uefi_pass(blob: bytes, phase: str, ghidra_home: str | None, types_cache: Path | None) -> dict:
+    """What `ApplyUefi.java` needs for this module: its type archive, the GUID
+    table and the phase, building the cache once."""
+    phase = guess_phase(blob) if phase == "auto" else phase
+    cache = uefi_types.ensure(ghidra_home, root=types_cache)
+    gdt = cache["gdt_ia32"] if machine(blob) == 0x14C else cache["gdt_x64"]
+    return {"gdt": gdt, "guids": cache["guids_tsv"], "phase": phase}
+
+
+def run_headless(image: Path, label: str, ghidra_home: str | None, uefi: dict | None,
+                 project_dir: Path, project_name: str, log: Path,
+                 export_to: Path | None = None, keep_project: bool = False) -> None:
+    """One analyzeHeadless run: the import and its analysis, the UEFI pass when
+    `uefi` names its types, GUID table and phase, and the export when
+    `export_to` names a file. With `keep_project` the analyzed program stays
+    in the project — step 1 of the shared workbench, which an owner then
+    opens (Design/GHIDRA_SHARED_PLAN.md §5.2)."""
+    ghidra = ghidra_import.find_ghidra(ghidra_home)
+    command = [
+        str(ghidra / "support" / "analyzeHeadless"), str(project_dir), project_name,
+        "-import", str(image), "-overwrite",
+        "-scriptPath", str(Path(__file__).resolve().parent),
+    ]
+    if not keep_project:
+        command.append("-deleteProject")
+    if uefi is not None:
+        command += ["-postScript", "ApplyUefi.java",
+                    str(uefi["gdt"]), str(uefi["guids"]), uefi["phase"]]
+    if export_to is not None:
+        command += ["-postScript", "ExportCode.java", str(export_to)]
+    steps = ", ".join(["analysis"] + (["UEFI names"] if uefi is not None else [])
+                      + (["export"] if export_to is not None else []))
+    returncode = progress.run(command, f"Ghidra: {label} ({steps})", log=log, timeout=1800)
+    # A script that does not compile is skipped with an error in the log,
+    # and the run still exits 0: an artifact without the UEFI pass would
+    # be stored under the recipe that says it had one.
+    text = log.read_text(encoding="utf-8", errors="replace")
+    script_error = any("SCRIPT ERROR" in line for line in text.splitlines())
+    if returncode != 0 or script_error or (export_to is not None and not export_to.exists()):
+        print("\n".join(text.splitlines()[-30:]), file=sys.stderr)
+        raise SystemExit(f"Ghidra failed (exit {returncode}); log: {log}")
+    for line in text.splitlines():
+        if "ApplyUefi:" in line:
+            print(line[line.index("ApplyUefi:"):].rstrip().removesuffix("(GhidraScript)").rstrip(), file=sys.stderr)
+
+
 def analyze(module: Path, ghidra_home: str | None,
             uefi: dict | None) -> tuple[dict, bytes, str]:
-    """Runs Ghidra once: the import and its analysis, the UEFI pass when
-    `uefi` names its types, GUID table and phase, then the export."""
-    ghidra = ghidra_import.find_ghidra(ghidra_home)
-    analyze_headless = ghidra / "support" / "analyzeHeadless"
+    """Runs Ghidra once in a project thrown away afterwards: import, analysis,
+    the UEFI pass, the export."""
     work = Path(tempfile.mkdtemp(prefix="ghidra-code-"))
     project_dir = work / "project"
     project_dir.mkdir()
     try:
-        blob = module.read_bytes()
-        image = module
-        kind = "PE32"
-        if blob[:2] == b"VZ":
-            image = work / (module.stem + ".pe")
-            image.write_bytes(te_to_pe.convert(blob))
-            kind = "TE"
-        elif blob[:2] != b"MZ":
-            raise SystemExit(f"{module}: starts with {blob[:2]!r}, neither MZ nor VZ")
-
+        image, kind = prepare_image(module, module.read_bytes(), work)
         artifact = work / "code.json"
-        log = work / "analyze.log"
-        command = [
-            str(analyze_headless), str(project_dir), "code-artifact",
-            "-import", str(image), "-overwrite", "-deleteProject",
-            "-scriptPath", str(Path(__file__).resolve().parent),
-        ]
-        if uefi is not None:
-            command += ["-postScript", "ApplyUefi.java",
-                        str(uefi["gdt"]), str(uefi["guids"]), uefi["phase"]]
-        command += ["-postScript", "ExportCode.java", str(artifact)]
-        steps = "analysis, UEFI names, export" if uefi is not None else "analysis, export"
-        returncode = progress.run(command, f"Ghidra: {module.name} ({steps})", log=log,
-                                  timeout=1800)
-        # A script that does not compile is skipped with an error in the log,
-        # and the run still exits 0: an artifact without the UEFI pass would
-        # be stored under the recipe that says it had one.
-        script_error = any("SCRIPT ERROR" in line for line in
-                           log.read_text(encoding="utf-8", errors="replace").splitlines())
-        if returncode != 0 or script_error or not artifact.exists():
-            tail = log.read_text(encoding="utf-8", errors="replace").splitlines()[-30:]
-            print("\n".join(tail), file=sys.stderr)
-            raise SystemExit(f"Ghidra failed (exit {returncode}); log: {log}")
-        for line in log.read_text(encoding="utf-8", errors="replace").splitlines():
-            if "ApplyUefi:" in line:
-                print(line[line.index("ApplyUefi:"):].rstrip().removesuffix("(GhidraScript)").rstrip(), file=sys.stderr)
+        run_headless(image, module.name, ghidra_home, uefi, project_dir, "code-artifact",
+                     work / "analyze.log", export_to=artifact)
         raw = artifact.read_bytes()
         return json.loads(raw.decode("utf-8")), raw, kind
     finally:
         shutil.rmtree(work, ignore_errors=True)
+
+
+def recipe_for(artifact: dict, types: str | None, passes: list[str] | None) -> dict:
+    """The recipe of an artifact: the exporter and the Ghidra that wrote it,
+    and — when the UEFI pass ran — what the program was typed with."""
+    exporter = artifact.get("script_version", SCRIPT_VERSION)
+    ghidra = artifact.get("ghidra")
+    name = cas.recipe_id(exporter, ghidra)
+    if types is None:
+        name = name.replace("-ghidra-", "-plain-ghidra-", 1)
+    recipe = {"id": name, "exporter": exporter, "ghidra": ghidra, "script": "ExportCode.java"}
+    if types is not None:
+        recipe["types"] = types
+        recipe["passes"] = passes or ["ApplyUefi.java"]
+    return recipe
 
 
 def main(argv: list[str]) -> int:
@@ -196,33 +236,15 @@ def run(args, module: Path, blob: bytes, digest: str, name: str, store: cas.Stor
                 print(json.dumps(existing, indent=2))
                 return 0
 
-    uefi = None
-    phase = None
-    if not args.no_uefi:
-        phase = guess_phase(blob) if args.phase == "auto" else args.phase
-        cache = uefi_types.ensure(args.ghidra_home, root=args.types_cache)
-        gdt = cache["gdt_ia32"] if machine(blob) == 0x14C else cache["gdt_x64"]
-        uefi = {"gdt": gdt, "guids": cache["guids_tsv"], "phase": phase}
+    uefi = None if args.no_uefi else uefi_pass(blob, args.phase, args.ghidra_home, args.types_cache)
+    phase = uefi["phase"] if uefi else None
     artifact, raw, kind = analyze(module, args.ghidra_home, uefi)
     if artifact.get("script_version") != SCRIPT_VERSION:
         print(f"the artifact's script version is {artifact.get('script_version')}, "
               f"expected {SCRIPT_VERSION}", file=sys.stderr)
         return 1
 
-    exporter = artifact.get("script_version", SCRIPT_VERSION)
-    ghidra = artifact.get("ghidra")
-    recipe_name = cas.recipe_id(exporter, ghidra)
-    if types is None:
-        recipe_name = recipe_name.replace("-ghidra-", "-plain-ghidra-", 1)
-    recipe = {
-        "id": recipe_name,
-        "exporter": exporter,
-        "ghidra": ghidra,
-        "script": "ExportCode.java",
-    }
-    if types is not None:
-        recipe["types"] = types
-        recipe["passes"] = ["ApplyUefi.java"]
+    recipe = recipe_for(artifact, types, ["ApplyUefi.java"] if types else None)
     program = artifact.get("program", {})
     manifest = store.put_analysis(
         module={

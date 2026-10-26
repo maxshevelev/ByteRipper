@@ -200,10 +200,11 @@ public class ExportCode extends GhidraScript {
             json.append("      \"thunk\": ").append(function.isThunk()).append(",\n");
             json.append("      \"signature\": ").append(quote(function.getPrototypeString(false, false))).append(",\n");
 
-            List<String> callers = new ArrayList<>();
-            for (Function caller : function.getCallingFunctions(monitor)) callers.add(quote(hex(caller.getEntryPoint())));
-            List<String> callees = new ArrayList<>();
-            for (Function callee : function.getCalledFunctions(monitor)) callees.add(quote(hex(callee.getEntryPoint())));
+            // Ghidra answers with sets; sorted by entry, the same program
+            // always exports the same bytes, which is what lets a publish of
+            // an unchanged program be recognised as one.
+            List<String> callers = entries(function.getCallingFunctions(monitor));
+            List<String> callees = entries(function.getCalledFunctions(monitor));
             json.append("      \"callers\": [").append(String.join(", ", callers)).append("],\n");
             json.append("      \"callees\": [").append(String.join(", ", callees)).append("],\n");
 
@@ -376,6 +377,15 @@ public class ExportCode extends GhidraScript {
             return hex(varnode.getAddress());
         }
         return null;
+    }
+
+    private static List<String> entries(java.util.Set<Function> functions) {
+        List<Address> addresses = new ArrayList<>();
+        for (Function function : functions) addresses.add(function.getEntryPoint());
+        java.util.Collections.sort(addresses);
+        List<String> quoted = new ArrayList<>();
+        for (Address address : addresses) quoted.add(quote(hex(address)));
+        return quoted;
     }
 
     private static String hex(Address address) {

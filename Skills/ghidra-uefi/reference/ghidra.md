@@ -136,6 +136,41 @@ $G/support/analyzeHeadless /tmp/proj uefi \
 6. **Everything is `FUN_…` until named.** Keep the names from the module's own
    debug strings where they exist; they are the best ground truth.
 
+## A long-lived owner (`owner/Owner.java`)
+
+What phase 0 of `Design/GHIDRA_SHARED_PLAN.md` found, for anyone writing Java
+that keeps Ghidra open:
+
+- **A script under `analyzeHeadless` cannot be a server.** It runs inside the
+  launcher's transaction and cannot save (`ReadOnlyException`).
+- **Run your own `main` on a plain classpath**: every `Ghidra/**/lib/*.jar`
+  of the install, compiled against with `javac` and passed to `java -cp`, and
+  `Application.initializeApplication(new GhidraApplicationLayout(), new
+  HeadlessGhidraApplicationConfiguration())`. Through `ghidra.Ghidra` and its
+  `GhidraClassLoader` a class on `-cp` is loaded by the system class loader and
+  cannot see Ghidra.
+- **Never `GhidraProject.openProgram` for a program you edit.** It keeps a
+  standing transaction; one failed change aborts it, and the next save rolls
+  back every change since the last one. Open with
+  `DomainFile.getDomainObject(consumer, true, false, monitor)` and wrap each
+  change in a transaction of its own.
+- **A GhidraScript can run in-process** without the script manager: construct
+  it, `setScriptArgs`, and `execute(new GhidraState(null, project, program,
+  null, null, null), new ScriptControls(out, err, monitor))`. The owner runs
+  `ExportCode` that way.
+- **Analysis inside your own process** needs the script manager initialised
+  (a Windows analyzer looks scripts up); keep analysis in `analyzeHeadless`.
+- **`analyzeChanges(currentProgram)` at the end of a pass** that changes
+  signatures settles the analysis it schedules. Without it, an export in the
+  same run reads the program before stack frames and parameter ids are
+  updated, and a kept project — saved after them — exports differently.
+- **Ghidra's call graph is a set.** `getCalledFunctions` and
+  `getCallingFunctions` iterate in no fixed order; sort them before writing, or
+  the same program exports different bytes.
+- **The project lock is exclusive and survives nothing.** A second process
+  gets `LockException` while the first runs; after `kill -9` the stale lock
+  does not stop the next open, and only what was saved is there.
+
 ## Pitfalls
 
 - **A converted TE keeps its RVAs.** The section data is at the offsets the TE

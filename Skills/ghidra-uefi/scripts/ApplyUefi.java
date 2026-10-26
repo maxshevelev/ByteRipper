@@ -158,6 +158,11 @@ public class ApplyUefi extends GhidraScript {
         println(String.format(
             "ApplyUefi: %d GUIDs, %d parameters, %d globals, %d locals typed; %d functions named",
             guidAt.size(), typedParameters, typedGlobals, typedLocals, named));
+        // The signatures and types set here schedule Ghidra's own analysis
+        // again (stack frames, parameter ids). Run it to the end now, so what
+        // the export reads in this run is the program a kept project saves:
+        // the batch artifact and an owner's publish of the same program agree.
+        analyzeChanges(currentProgram);
     }
 
     // MARK: - Types and GUIDs
