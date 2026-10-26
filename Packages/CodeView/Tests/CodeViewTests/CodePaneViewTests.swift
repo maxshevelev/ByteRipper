@@ -122,6 +122,68 @@ final class CodePaneViewTests: XCTestCase {
         return (text.attribute(.font, at: text.length - 1, effectiveRange: nil) as? NSFont)?.pointSize
     }
 
+    /// A click on a name highlights its every occurrence, as in Xcode: a
+    /// local within its function, a call or a global wherever it leads to the
+    /// same place. ⌘-click and a double click go there; Escape clears.
+    func testAClickHighlightsTheNamesOccurrences() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try spannedArtifact(),
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 0, instruction: nil, showsC: true)
+        let textView = try XCTUnwrap(first(CodeTextView.self, in: view) { _ in true })
+        let c = textView.string as NSString
+        func at(_ name: String, after: String = "") -> Int {
+            let base = after.isEmpty ? 0 : c.range(of: after).location
+            return c.range(of: name, options: [], range: NSRange(location: base, length: c.length - base)).location
+        }
+        func highlighted() -> [String] { textView.highlightedRanges.map { c.substring(with: $0) } }
+
+        XCTAssertFalse(view.clickC(at: at("Total", after: "return"), event: try click(count: 1)))
+        XCTAssertEqual(view.highlightedSymbol, .variable("Total"))
+        XCTAssertEqual(highlighted(), Array(repeating: "Total", count: 5), "the declaration and every use")
+
+        XCTAssertFalse(view.clickC(at: at("Count", after: "Total ="), event: try click(count: 1)))
+        XCTAssertEqual(highlighted(), ["Count", "Count"], "the parameter and its one use")
+
+        XCTAssertFalse(view.clickC(at: at("int"), event: try click(count: 1)))
+        XCTAssertNil(view.highlightedSymbol, "a type is not a name to highlight")
+        XCTAssertTrue(highlighted().isEmpty)
+
+        // A plain click on a call highlights it and stays.
+        XCTAssertFalse(view.clickC(at: at("entry", after: "gValue"), event: try click(count: 1)))
+        XCTAssertEqual(view.highlightedSymbol, .target(.function(1)))
+        XCTAssertEqual(highlighted(), ["entry"])
+        XCTAssertEqual(view.selectedFunction?.name, "FUN_00000220")
+        let listing = try XCTUnwrap(first(NSTableView.self, in: view) {
+            $0.tableColumns.first?.identifier.rawValue == "instruction"
+        })
+        let call = try XCTUnwrap(listing.view(atColumn: 0, row: 1, makeIfNecessary: true) as? CodeLineCell)
+        XCTAssertEqual(call.line.highlighted.map { (call.line.string as NSString).substring(with: $0) }, ["0x6A"],
+                       "the listing highlights the instruction that calls it")
+
+        // ⌘-click goes there; a double click too.
+        XCTAssertTrue(view.clickC(at: at("entry", after: "gValue"), event: try click(count: 1, flags: .command)))
+        XCTAssertEqual(view.selectedFunction?.name, "entry")
+        view.goBack()
+        XCTAssertTrue(view.clickC(at: at("entry", after: "gValue"), event: try click(count: 2)))
+        XCTAssertEqual(view.selectedFunction?.name, "entry")
+        XCTAssertEqual(view.highlightedSymbol, .target(.function(1)), "a function stays highlighted across a jump")
+
+        // A local is its function's own: going elsewhere drops it.
+        view.goBack()
+        XCTAssertFalse(view.clickC(at: at("Total"), event: try click(count: 1)))
+        view.goForward()
+        XCTAssertNil(view.highlightedSymbol)
+
+        view.goBack()
+        XCTAssertFalse(view.clickC(at: at("gValue"), event: try click(count: 1)))
+        XCTAssertEqual(highlighted(), ["gValue"])
+        view.cancelOperation(nil)
+        XCTAssertNil(view.highlightedSymbol)
+        XCTAssertTrue(highlighted().isEmpty)
+    }
+
     func testTheHeaderKeepsTheVersionsInOneLine() throws {
         let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
                                 moduleBytes: moduleBytes, hexView: NSView())
@@ -448,7 +510,11 @@ final class CodePaneViewTests: XCTestCase {
         let cell = try XCTUnwrap(listing.view(atColumn: 0, row: 1, makeIfNecessary: true)
                                     as? CodeLineCell)
         XCTAssertTrue(cell.line.string.hasSuffix("CALL 0x6A"), cell.line.string)
-        cell.line.onLink?(.function(1))
+        XCTAssertEqual(cell.line.onClick?(.function(1), try click(count: 1)), false,
+                       "a plain click highlights and leaves the row to the table")
+        XCTAssertEqual(view.highlightedSymbol, .target(.function(1)))
+        XCTAssertEqual(view.selectedFunction?.name, "FUN_00000220")
+        XCTAssertEqual(cell.line.onClick?(.function(1), try click(count: 1, flags: .command)), true)
         XCTAssertEqual(view.selectedFunction?.name, "entry")
         XCTAssertTrue(view.canGoBack)
     }
@@ -575,6 +641,48 @@ final class CodePaneViewTests: XCTestCase {
             {"address":"0x222","bytes":"C3","mnemonic":"RET","text":"RET"}]}
          ]}
         """.utf8))
+    }
+
+    /// A v4 artifact whose C says what each name is: a parameter, a local
+    /// used five times, a global, a call.
+    private func spannedArtifact() throws -> CodeArtifact {
+        let c = "int FUN_00000220(int Count)\n{\n  int Total;\n  Total = Count;\n"
+            + "  Total = Total + gValue;\n  entry();\n  return Total;\n}\n"
+        let text = c as NSString
+        var spans: [[Any]] = []
+        func span(_ name: String, _ kind: String, _ target: String? = nil) {
+            var from = 0
+            while true {
+                let found = text.range(of: name, options: [], range: NSRange(location: from, length: text.length - from))
+                guard found.location != NSNotFound else { return }
+                spans.append([found.location, found.length, kind] + (target.map { [$0] } ?? []))
+                from = found.location + found.length
+            }
+        }
+        span("Count", "parameter")
+        span("Total", "local")
+        span("gValue", "global", "0x230")
+        span("entry", "function", "0x222")
+        span("int", "type")
+        let json: [String: Any] = [
+            "script_version": 4, "ghidra": "12.1.2", "program": ["image_base": "0x0"],
+            "functions": [
+                ["entry": "0x220", "name": "FUN_00000220", "c": c, "c_spans": spans,
+                 "instructions": [
+                    ["address": "0x220", "bytes": "56", "mnemonic": "PUSH", "text": "PUSH ESI"],
+                    ["address": "0x221", "bytes": "E8 00", "mnemonic": "CALL", "text": "CALL 0x00000222",
+                     "references": [["to": "0x222", "type": "UNCONDITIONAL_CALL"]]]]],
+                ["entry": "0x222", "name": "entry", "c": "void entry(void)\n{\n}\n",
+                 "instructions": [["address": "0x222", "bytes": "C3", "mnemonic": "RET", "text": "RET"]]]
+            ]
+        ]
+        return try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+    }
+
+    private func click(count: Int, flags: NSEvent.ModifierFlags = []) throws -> NSEvent {
+        try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseDown, location: .zero, modifierFlags: flags,
+                                         timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0,
+                                         clickCount: count, pressure: 1))
     }
 
     private func all<T: NSView>(_ type: T.Type, in view: NSView) -> [T] {

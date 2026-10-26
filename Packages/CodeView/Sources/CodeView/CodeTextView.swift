@@ -28,8 +28,31 @@ final class CodeTextView: NSTextView {
         underline(nil)
     }
 
-    /// The link whose glyphs are under `point`, in the view's coordinates.
-    func linkRange(at point: NSPoint) -> NSRange? {
+    /// A click on the text: the character under it, or nil off the glyphs,
+    /// and the event, for its modifiers and its click count. True when the
+    /// pane took the click — a jump — and the text view does nothing more.
+    var onClick: ((Int?, NSEvent) -> Bool)?
+    /// Escape, which a text view otherwise sends as `complete:`.
+    var onEscape: (() -> Void)?
+
+    override func mouseDown(with event: NSEvent) {
+        let character = characterIndex(atViewPoint: convert(event.locationInWindow, from: nil))
+        if onClick?(character, event) == true { return }
+        // A link is followed by the pane, on ⌘-click or a double click; the
+        // text view's own handling of a plain click would follow it too.
+        if let character, textStorage?.attribute(.link, at: character, effectiveRange: nil) != nil {
+            window?.makeFirstResponder(self)
+            return
+        }
+        super.mouseDown(with: event)
+    }
+
+    override func complete(_ sender: Any?) {
+        if let onEscape { onEscape() } else { super.complete(sender) }
+    }
+
+    /// The character whose glyph is under `point`, in the view's coordinates.
+    func characterIndex(atViewPoint point: NSPoint) -> Int? {
         guard let layoutManager, let textContainer, let storage = textStorage, storage.length > 0
         else { return nil }
         let inContainer = NSPoint(x: point.x - textContainerOrigin.x, y: point.y - textContainerOrigin.y)
@@ -37,7 +60,31 @@ final class CodeTextView: NSTextView {
         let box = layoutManager.boundingRect(forGlyphRange: NSRange(location: glyph, length: 1), in: textContainer)
         guard box.contains(inContainer) else { return nil }
         let character = layoutManager.characterIndexForGlyph(at: glyph)
-        guard character < storage.length else { return nil }
+        return character < storage.length ? character : nil
+    }
+
+    /// The occurrences of the symbol the reader clicked, drawn behind the
+    /// glyphs as Xcode does. A temporary attribute, like the underline.
+    private var highlighted: [NSRange] = []
+
+    func highlight(_ ranges: [NSRange]) {
+        guard let layoutManager, let storage = textStorage else { return }
+        for range in highlighted where range.location + range.length <= storage.length {
+            layoutManager.removeTemporaryAttribute(.backgroundColor, forCharacterRange: range)
+        }
+        highlighted = ranges.filter { $0.location + $0.length <= storage.length }
+        for range in highlighted {
+            layoutManager.addTemporaryAttribute(.backgroundColor, value: CodeColors.symbolHighlight,
+                                                forCharacterRange: range)
+        }
+    }
+
+    /// What is highlighted now, for tests.
+    var highlightedRanges: [NSRange] { highlighted }
+
+    /// The link whose glyphs are under `point`, in the view's coordinates.
+    func linkRange(at point: NSPoint) -> NSRange? {
+        guard let character = characterIndex(atViewPoint: point), let storage = textStorage else { return nil }
         var range = NSRange()
         guard storage.attribute(.link, at: character, effectiveRange: &range) != nil else { return nil }
         return range
@@ -64,6 +111,7 @@ final class CodeTextView: NSTextView {
     override func didChangeText() {
         super.didChangeText()
         hovered = nil
+        highlighted = []
     }
 
     func hover(at point: NSPoint?) { underline(linkAt: point) }

@@ -77,4 +77,11 @@ enum CodeColors {
     }
 
     static let linkKey = NSAttributedString.Key("CodeViewLink")
+
+    /// Behind every occurrence of the symbol the reader clicked: the accent,
+    /// faint enough that the token's own colour still reads over it.
+    static let symbolHighlight = NSColor(name: nil) { appearance in
+        let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        return NSColor.controlAccentColor.withAlphaComponent(isDark ? 0.35 : 0.22)
+    }
 }

@@ -16,13 +16,17 @@ final class CodeLineView: NSView {
     /// The link under the pointer: drawn underlined, as a link in an IDE.
     private(set) var hoveredLink: NSRange?
     private var tracking: NSTrackingArea?
-    /// Called with the link a click landed on.
-    var onLink: ((CodeLink) -> Void)?
+    /// A click on the line: the link it landed on, if any, and the event.
+    /// True when the pane took it — a jump — and the row is not selected.
+    var onClick: ((CodeLink?, NSEvent) -> Bool)?
+    /// The occurrences of the symbol the reader clicked, drawn behind the text.
+    private(set) var highlighted: [NSRange] = []
 
     override var isFlipped: Bool { true }
 
-    func show(_ text: String, tokens: [CodeToken], font: NSFont) {
+    func show(_ text: String, tokens: [CodeToken], font: NSFont, highlighted: [NSRange] = []) {
         string = text
+        self.highlighted = highlighted
         links = []
         attributed = CodeColors.attributed(text, tokens: tokens, font: font,
                                            links: &links, asTextLinks: false)
@@ -71,7 +75,16 @@ final class CodeLineView: NSView {
             shown = underlined
         }
         let height = shown.size().height
-        shown.draw(at: NSPoint(x: 0, y: ((bounds.height - height) / 2).rounded(.down)))
+        let top = ((bounds.height - height) / 2).rounded(.down)
+        if let line, !highlighted.isEmpty {
+            CodeColors.symbolHighlight.setFill()
+            for range in highlighted where range.location + range.length <= attributed.length {
+                let start = CTLineGetOffsetForStringIndex(line, range.location, nil)
+                let end = CTLineGetOffsetForStringIndex(line, range.location + range.length, nil)
+                NSRect(x: start, y: top, width: end - start, height: height).fill()
+            }
+        }
+        shown.draw(at: NSPoint(x: 0, y: top))
     }
 
     /// The link under a point of the view, if the point is on one.
@@ -104,10 +117,7 @@ final class CodeLineView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        if let link = link(at: point), let onLink {
-            onLink(link)
-            return
-        }
+        if onClick?(link(at: point), event) == true { return }
         super.mouseDown(with: event)
     }
 

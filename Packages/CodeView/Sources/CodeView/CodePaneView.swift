@@ -55,6 +55,14 @@ import ToolModuleKit
     private var notesByLine: [Int: [CodeNote]] = [:]
     /// Which link each `code:N` in the C text is.
     private var cLinks: [CodeLink] = []
+    /// The tokens of the C on screen, in the text's own offsets — past the
+    /// annotations heading it.
+    private var shownCTokens: [CodeToken] = []
+    /// The symbol the reader clicked, every occurrence of which is drawn
+    /// highlighted in the C and the listing.
+    public private(set) var highlightedSymbol: CodeSymbol?
+    /// The function a highlighted variable belongs to.
+    private var highlightedIn: Int?
     private var drawnC: Int?
     private let table = NSTableView()
     private let tableScroll = NSScrollView()
@@ -1056,6 +1064,8 @@ import ToolModuleKit
     }
 
     private func configureC() {
+        cTextView.onClick = { [weak self] character, event in self?.clickC(at: character, event: event) ?? false }
+        cTextView.onEscape = { [weak self] in self?.highlight(nil) }
         cTextView.isEditable = false
         cTextView.isSelectable = true
         cTextView.isRichText = true
@@ -1127,6 +1137,7 @@ import ToolModuleKit
         drawnC = state.function
         let font = Self.codeFont()
         cLinks = []
+        var tokensShown: [CodeToken] = []
         let text: NSAttributedString
         if let index = state.function, let c = model.functions[index].c {
             // The function's annotations head its C, as comments in the note's
@@ -1147,6 +1158,7 @@ import ToolModuleKit
             }
             text = CodeColors.attributed(header + c, tokens: tokens, font: font,
                                          links: &cLinks, asTextLinks: true)
+            tokensShown = tokens
         } else {
             let message = state.selectedFunction == nil
                 ? L("The analysis holds no functions.")
@@ -1157,7 +1169,106 @@ import ToolModuleKit
         }
         cTextView.hover(at: nil)
         cTextView.textStorage?.setAttributedString(text)
+        shownCTokens = tokensShown
+        // A parameter or a local is its function's alone: another function's
+        // `Status` is another variable.
+        if case .variable = highlightedSymbol, highlightedIn != state.function { highlightedSymbol = nil }
+        cTextView.highlight(highlightedRanges(in: shownCTokens, of: cTextView.string))
     }
+
+    // MARK: - Highlighting a symbol
+
+    /// The symbol a token is an occurrence of, or nil for one that is not a
+    /// name: a keyword, a type, a constant, an address.
+    func symbol(of token: CodeToken, in text: String) -> CodeSymbol? {
+        switch token.kind {
+        case .function, .global, .label:
+            if let link = token.link { return .target(link) }
+            return .named(token.kind, utf16Slice(text, token))
+        case .parameter, .local:
+            return .variable(utf16Slice(text, token))
+        default:
+            return nil
+        }
+    }
+
+    private func utf16Slice(_ text: String, _ token: CodeToken) -> String {
+        let units = Array(text.utf16)
+        guard token.start >= 0, token.start + token.length <= units.count else { return "" }
+        return String(decoding: units[token.start..<token.start + token.length], as: UTF16.self)
+    }
+
+    private func highlightedRanges(in tokens: [CodeToken], of text: String) -> [NSRange] {
+        guard let highlightedSymbol else { return [] }
+        return tokens.filter { symbol(of: $0, in: text) == highlightedSymbol }
+            .map { NSRange(location: $0.start, length: $0.length) }
+    }
+
+    /// Highlights every occurrence of `symbol` — in the C on screen and in the
+    /// listing's rows — or clears the highlight.
+    public func highlight(_ symbol: CodeSymbol?) {
+        guard symbol != highlightedSymbol else { return }
+        highlightedSymbol = symbol
+        highlightedIn = state.function
+        cTextView.highlight(highlightedRanges(in: shownCTokens, of: cTextView.string))
+        // Every row, not only the visible ones: the listing may be behind the
+        // C, and a row with no view yet costs nothing to reload.
+        guard table.numberOfRows > 0 else { return }
+        syncingSelection = true
+        table.reloadData(forRowIndexes: IndexSet(integersIn: 0..<table.numberOfRows),
+                         columnIndexes: IndexSet(integer: 0))
+        syncingSelection = false
+    }
+
+    /// Whether a click jumps to what it is on: ⌘-click, or a double click.
+    /// A plain click highlights, as in Xcode.
+    static func isJump(_ event: NSEvent) -> Bool {
+        event.modifierFlags.contains(.command) || event.clickCount >= 2
+    }
+
+    // help: panel.code.highlight
+    /// A click in the C: on a name, it highlights the name's every
+    /// occurrence; ⌘-click or a double click on a call or a global goes there.
+    func clickC(at character: Int?, event: NSEvent) -> Bool {
+        let token = character.flatMap { index in
+            shownCTokens.filter { $0.start <= index && index < $0.start + $0.length }
+                .min { $0.length < $1.length }
+        }
+        if let link = token?.link, Self.isJump(event) {
+            follow(link)
+            return true
+        }
+        highlight(token.flatMap { symbol(of: $0, in: cTextView.string) })
+        return false
+    }
+
+    /// A click in the listing: on a reference, it highlights the instructions
+    /// that refer to the same place; ⌘-click or a double click goes there.
+    /// Anywhere else it clears the highlight. The row is selected either way.
+    func clickListing(on link: CodeLink?, event: NSEvent) -> Bool {
+        if let link, Self.isJump(event) {
+            follow(link)
+            return true
+        }
+        highlight(link.map(CodeSymbol.target))
+        return false
+    }
+
+    /// Escape clears the highlight.
+    public override func cancelOperation(_ sender: Any?) {
+        highlight(nil)
+    }
+}
+
+/// What a click highlights the occurrences of. A function, a global or a
+/// jump's target is what it leads to, so two spellings of one address are one
+/// symbol; one the analysis could not place is its kind and name. A parameter
+/// or a local is its name within the function on screen — Ghidra names each
+/// of a function's variables once, and declares all of them at its top.
+public enum CodeSymbol: Hashable, Sendable {
+    case target(CodeLink)
+    case named(CodeToken.Kind, String)
+    case variable(String)
 }
 
 extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
@@ -1211,8 +1322,9 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
                                           length: mark.utf16.count - 4, kind: note.kind))
             shown.text += mark
         }
-        cell.line.show(shown.text, tokens: shown.tokens, font: Self.codeFont())
-        cell.line.onLink = { [weak self] link in self?.follow(link) }
+        cell.line.show(shown.text, tokens: shown.tokens, font: Self.codeFont(),
+                       highlighted: highlightedRanges(in: shown.tokens, of: shown.text))
+        cell.line.onClick = { [weak self] link, event in self?.clickListing(on: link, event: event) ?? false }
         return cell
     }
 
@@ -1290,7 +1402,8 @@ private final class CodeDumpBar: NSView {
 }
 
 extension CodePaneView: NSTextViewDelegate {
-    /// A click on a call or a global in the C.
+    /// A call or a global in the C pressed other than by the mouse — by
+    /// VoiceOver, say; a click is `clickC`'s.
     public func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
         guard textView === cTextView, let text = link as? String, text.hasPrefix("code:"),
               let number = Int(text.dropFirst(5)), cLinks.indices.contains(number) else { return false }
