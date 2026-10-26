@@ -302,7 +302,7 @@ public enum GhidraTools {
 
     // MARK: -
 
-    static func module(_ arguments: AgentArguments) throws -> SHA256Digest {
+    public static func module(_ arguments: AgentArguments) throws -> SHA256Digest {
         let text = try arguments.string("module")
         guard let digest = SHA256Digest(hex: text.trimmingCharacters(in: .whitespacesAndNewlines)) else {
             throw AgentToolError("`module` is the SHA-256 of the module's bytes: 64 hex digits.")
@@ -312,7 +312,7 @@ public enum GhidraTools {
 
     /// The backend's JSON as the tool's answer; its refusal as a tool error
     /// the model reads.
-    static func answer(_ body: () async throws -> Data) async throws -> AgentAnswer {
+    public static func answer(_ body: () async throws -> Data) async throws -> AgentAnswer {
         do {
             let data = try await body()
             guard let value = try? JSONValue.parse(data) else {

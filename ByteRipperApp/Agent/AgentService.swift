@@ -54,6 +54,8 @@ final class AgentService {
     let refsTools: AgentRefsTools
     /// The stored code analysis of a Code panel, read as a model.
     let codeTools: AgentCodeTools
+    /// The review in Ghidra, relayed to the analysis server.
+    let ghidraTools: AgentGhidraTools
     private let modules: [any ToolModule.Type]
     /// Built once: the tools do not change while the app runs.
     private(set) lazy var server = AgentServer(
@@ -76,6 +78,7 @@ final class AgentService {
         list += entries(diffTools.tools(), .comparison)
         list += entries(findTools.tools() + refsTools.tools(), .search)
         list += entries(codeTools.tools(), .panels)
+        list += entries(ghidraTools.tools(), .ghidra)
         list += entries(editTools.tools(), .edits)
         // A module's tools under the module; its edits are edits.
         let modules = self.modules
@@ -271,6 +274,7 @@ final class AgentService {
         self.findTools = AgentFindTools(desk: desk, diff: diffTools)
         self.refsTools = AgentRefsTools(desk: desk, diff: diffTools)
         self.codeTools = AgentCodeTools(desk: desk)
+        self.ghidraTools = AgentGhidraTools(desk: desk)
         self.moduleTools = AgentModuleTools(desk: desk, edits: editTools, modules: { modules })
         editTools.isAllowed = { [weak self] in self?.editsAllowed ?? false }
         editTools.locate = { [diffTools] host, range in

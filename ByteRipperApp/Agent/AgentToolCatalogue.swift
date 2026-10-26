@@ -14,7 +14,7 @@ struct AgentToolEntry {
 
 /// Where a tool comes from: a part of the host, or a tool-module.
 enum AgentToolGroup {
-    case files, annotations, dumps, comparison, search, edits, panels
+    case files, annotations, dumps, comparison, search, edits, panels, ghidra
     case module(any ToolModule.Type)
 
     var title: String {
@@ -26,6 +26,7 @@ enum AgentToolGroup {
         case .search: return L("Search")
         case .edits: return L("Edits")
         case .panels: return L("Tool Panels")
+        case .ghidra: return "Ghidra"
         case .module(let module): return module.title
         }
     }

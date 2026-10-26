@@ -199,6 +199,29 @@ Names alone do not get there. Every review applies these rules:
    function is named for what it was meant to do, and the comment says what it
    actually does.
 
+### On an analysis server
+
+`byteripper-server` (`Design/SERVER_PLAN.md`) runs the same owners from Swift
+and serves them with the store, so one machine keeps every module's project
+and every Mac reads the result:
+
+```bash
+swift build -c release --package-path Packages/ByteRipperServer
+.build/release/byteripper-server token                       # once
+.build/release/byteripper-server --listen 100.64.0.7:8765    # store + Ghidra
+```
+
+An agent reaches the review tools at `http://host:8765/mcp` (`claude mcp add
+--transport http byteripper-server http://host:8765/mcp --header
+"Authorization: Bearer <token>"`), or through ByteRipper's own MCP server when
+Settings ▸ Code Analysis names the server: `ghidra_open` with a node,
+`ghidra_function`, `ghidra_rename`, `ghidra_rename_variable`,
+`ghidra_signature`, `ghidra_type`, `ghidra_comment`, `ghidra_publish`,
+`ghidra_done`. The server holds the lease; the scripts here write to it with
+`--store http://host:8765`. A project made by the server and one made by
+`ghidra_owner.py` are the same files; do not run both on one project at once —
+Ghidra's project lock refuses the second.
+
 ## The one-time code artifact
 
 Analysis and reading are split. `code_artifact.py` runs Ghidra once and stores

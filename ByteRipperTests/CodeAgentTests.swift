@@ -2,6 +2,7 @@ import AgentKit
 import ByteRipperCore
 import CodeAnalysis
 import CodeView
+import HTTPService
 import XCTest
 import UEFIImage
 @testable import UEFIToolUI
@@ -90,6 +91,40 @@ final class CodeAgentTests: XCTestCase {
         XCTAssertEqual(modules.first?["module"]?.stringValue, "CpuPei")
         XCTAssertEqual(modules.first?["recipes"]?.arrayValue?.first?.stringValue, "code-v4-ghidra-12.1.2")
         return try XCTUnwrap(modules.first?["node"]?.stringValue)
+    }
+
+    // MARK: - Ghidra on the analysis server
+
+    /// `ghidra_open` sends a node's image to the server Settings name; with
+    /// the analyses on this Mac, a Ghidra tool says where to set a server.
+    func testGhidraOpenSendsTheNodesImageToTheAnalysisServer() async throws {
+        try open()
+        let node = try await moduleNode()
+        for key in ["CodeAnalysisLocation", "CodeAnalysisServer"] { AppDefaults.store.removeObject(forKey: key) }
+        let refused = try await client.call("ghidra_modules")
+        XCTAssertTrue(refused.isError)
+        XCTAssertTrue(refused.answer.stringValue?.contains("Settings ▸ Code Analysis") == true, "\(refused.answer)")
+
+        final class Received: @unchecked Sendable { var body = Data(); var query: [String: String] = [:] }
+        let received = Received()
+        var router = HTTPRouter()
+        router.add("POST", "/ghidra/v1/modules") { request in
+            received.body = request.body
+            received.query = request.query
+            return .json(["module": SHA256Digest(data: request.body).hex, "functions": "2"])
+        }
+        let server = HTTPServer(configuration: .init(port: 0), router: router)
+        let port = try await server.start()
+        defer { server.stop() }
+        AppDefaults.store.set("server", forKey: "CodeAnalysisLocation")
+        AppDefaults.store.set("http://127.0.0.1:\(port)", forKey: "CodeAnalysisServer")
+        defer { for key in ["CodeAnalysisLocation", "CodeAnalysisServer"] { AppDefaults.store.removeObject(forKey: key) } }
+
+        let opened = try await client.answer("ghidra_open", ["node": .string(node)])
+        XCTAssertEqual(received.body, Self.teModule(), "the node's image is what went to the server")
+        XCTAssertEqual(opened["module"]?.stringValue, SHA256Digest(data: Self.teModule()).hex)
+        XCTAssertEqual(received.query["node"], node)
+        XCTAssertFalse((received.query["name"] ?? "").isEmpty)
     }
 
     // MARK: - Reading without a panel

@@ -40,6 +40,10 @@ The line below the fields says whether the server is reached. The token is kept 
 - **What has been read stays readable.** This Mac keeps a copy of what it has read from the server. When the server cannot be reached, the line in the settings says so, and the analyses already read are still shown; the ones not yet read are not. The connection is retried by itself.
 - **Projects use the server.** When a project is opened, the analyses it carries are sent to the server, which takes them by the usual rules (see [[topic:projects|Projects]]); the notice after opening reports the server's answer.
 
+## A review by an agent
+
+When the analysis server also hosts Ghidra, an agent connected to ByteRipper (see [[topic:agent|Working with an Agent]]) can review a module there: it opens the module from a PE32 or TE image node of the UEFI tree, names functions, variables and types, writes comments, and publishes the result. Each publication is a new revision of the module's analysis, and every Mac that reads the server shows it. The project in Ghidra stays on the server, so a review can be continued later, by the agent or by a person. An agent running on the server itself connects to `byteripper-server` directly, at the address `/mcp`.
+
 ## Sending this Mac's analyses
 
 **Send This Mac's Analyses to the Server** copies every analysis kept in this Mac's folder to the server. It is meant for the first connection, when this Mac holds analyses the server does not. The server takes each analysis by the same rules as a project's: a later revision of a review replaces an earlier one, another project's review of a module is kept aside rather than replacing the one there, and an analysis already on the server is left as it is. The line below the button gives the counts.

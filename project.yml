@@ -204,6 +204,9 @@ targets:
       # The agent service: the protocol, the tools' shape, the socket
       # (`Design/AGENT_PLAN.md`).
       - package: AgentKit
+      # The Ghidra tools the agent gets beside the tree's: relayed to an
+      # analysis server, or (later) a host in the app (`Design/SERVER_PLAN.md` §6).
+      - package: GhidraHost
       # The relay an agent's client launches, shipped inside the app so it is
       # always the relay of the app beside it. `Contents/Helpers` is where a
       # bundle keeps executables that are not the app itself.

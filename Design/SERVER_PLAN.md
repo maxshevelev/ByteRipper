@@ -232,13 +232,26 @@ them).
    *Send This Mac's Analyses*, the help page. The token is a 0600 file shared
    with the scripts, not a keychain item (an ad-hoc signed app would be asked
    again after every update).
-3. **The Ghidra host in Swift.** `GhidraHost` doing what `ghidra_owner.py`
-   does, parity with its artifacts on CpuPei and BdsDxe; `ghidra_owner.py`
-   becomes a thin client of the host.
-4. **The tools.** `/mcp` on the server; the same tools in the app, in-process
-   and relayed; the review rules in the instructions.
-5. **Desktop.** The app hosts owners itself when the store is on this Mac and a
-   Ghidra install is found; the Settings pane says which Ghidra and JDK it uses.
+3. **The Ghidra host in Swift — done.** `GhidraHost` finds Ghidra and a JDK,
+   builds the owner, makes a project from a module's bytes (TE→PE, the EDK2
+   archives and GUID table — EDK2 from its tag's tarball, so no `git` — and
+   `analyzeHeadless`), starts owners in sessions of their own, holds the
+   lease and publishes into a local or served store. Parity: 480 TE images
+   convert to the bytes `te_to_pe.py` makes, the GUID table is the same
+   file, and a project made here publishes the artifact `code_artifact.py`
+   stores (CpuPei, TE; AmdMemAm4RnPei, PE32). `byteripper-server --ghidra`
+   serves it under `/ghidra/v1`, naming no server path in an answer.
+   Not done: `ghidra_owner.py` still runs its own owners; making it a client
+   of the host is left until the scripts need the server.
+4. **The tools — done.** `GhidraTools` over a `GhidraBackend` (the host, or
+   a server's `/ghidra/v1`): `/mcp` on the server (Streamable HTTP, one
+   AgentKit connection per request, the review rules as instructions), and
+   the same list on the app's MCP server, relayed to the server Settings
+   name, with `ghidra_open` taking a node of an open dump.
+5. **Desktop — next.** The app hosts owners itself when the store is on this
+   Mac and a Ghidra install is found (`CurrentGhidraBackend` returns the
+   in-process host); the owner's Java ships in the app's resources; the
+   Settings pane says which Ghidra and JDK it uses.
 
 These replace phase 2c and phase 3 of `Design/GHIDRA_SHARED_PLAN.md`.
 

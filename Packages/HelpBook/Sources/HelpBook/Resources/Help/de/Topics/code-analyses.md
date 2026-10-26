@@ -1,4 +1,4 @@
-@source-sha 2b2242181f54793dffab4511d3c624d15f827f08662d15452e8db0f7bcd8e01e
+@source-sha 7d6edfa8fb4cdc80155cd5d59aef3e9116b9eb425ea5aeaed74a28f9319c74b2
 # Codeanalysen und der Analyseserver
 
 > Eine Codeanalyse ist das, was Ghidra in einem PEI- oder DXE-Modul gefunden hat: seine Funktionen, Befehle und den dekompilierten C-Code sowie die Namen, die eine Durchsicht ihnen gegeben hat. ByteRipper liest Analysen aus einem Speicher — einem Ordner auf diesem Mac oder einem Analyseserver, den alle Macs eines Netzwerks gemeinsam nutzen.
@@ -36,6 +36,10 @@ Die Zeile unter den Feldern zeigt, ob der Server erreichbar ist. Das Token liegt
 - **Neue Analysen erscheinen von selbst.** Der Server meldet jede Änderung sofort; eine von einem beliebigen Rechner gespeicherte Analyse oder veröffentlichte Durchsicht erscheint daher binnen ein bis zwei Sekunden auf allen Macs, und eine offene Codepalette wird an derselben Stelle neu aus ihr aufgebaut.
 - **Bereits Gelesenes bleibt lesbar.** Dieser Mac behält eine Kopie dessen, was er vom Server gelesen hat. Ist der Server nicht erreichbar, meldet die Zeile in den Einstellungen dies; bereits gelesene Analysen werden weiter gezeigt, noch nicht gelesene nicht. Die Verbindung wird selbsttätig erneut aufgebaut.
 - **Projekte nutzen den Server.** Beim Öffnen eines Projekts werden die Analysen, die es enthält, an den Server gesendet, der sie nach den üblichen Regeln übernimmt (siehe [[topic:projects|Projekte]]); die Meldung nach dem Öffnen gibt die Antwort des Servers wieder.
+
+## Durchsicht durch einen Agenten
+
+Betreibt der Analyseserver auch Ghidra, kann ein mit ByteRipper verbundener Agent (siehe [[topic:agent|Mit einem Agenten arbeiten]]) dort ein Modul durchsehen: Er öffnet das Modul über einen PE32- oder TE-Image-Knoten des UEFI-Baums, benennt Funktionen, Variablen und Typen, schreibt Kommentare und veröffentlicht das Ergebnis. Jede Veröffentlichung ist eine neue Revision der Analyse des Moduls, und jeder Mac, der den Server liest, zeigt sie. Das Ghidra-Projekt bleibt auf dem Server; eine Durchsicht lässt sich daher später fortsetzen, durch den Agenten oder durch eine Person. Ein Agent, der auf dem Server selbst läuft, verbindet sich direkt mit `byteripper-server` unter der Adresse `/mcp`.
 
 ## Die Analysen dieses Macs senden
 
