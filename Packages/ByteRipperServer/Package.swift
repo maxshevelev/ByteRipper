@@ -34,7 +34,10 @@ let package = Package(
         .executableTarget(name: "byteripper-server", dependencies: ["ByteRipperServer"]),
         .testTarget(name: "ByteRipperServerTests", dependencies: [
             "ByteRipperServer",
-            .product(name: "CodeAnalysis", package: "CodeAnalysis")
+            .product(name: "CodeAnalysis", package: "CodeAnalysis"),
+            .product(name: "GhidraHost", package: "GhidraHost"),
+            .product(name: "HTTPService", package: "HTTPService"),
+            .product(name: "AgentKit", package: "AgentKit")
         ])
     ]
 )
