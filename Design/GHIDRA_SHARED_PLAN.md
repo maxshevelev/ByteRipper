@@ -86,7 +86,8 @@ often as it likes (§5.5).
 ## 3. Facts this design is built on
 
 Verified against Ghidra 12.1.2 on this machine, the installed GhydraMCP
-2.2.0-rc.3 extension, and the repository as of `5c75d3e3`.
+2.2.0-rc.3 extension, and the repository as of `130083b9`. The findings of the
+review of `8395f046` are folded in.
 
 - **A name is a symbol-table entry, not text.** Ghidra renders a name from the
   symbol table when it draws a listing or decompiles a caller. Renaming one
@@ -191,12 +192,19 @@ loopback port.
   signature, and names recovered from the module's own `DEBUG` strings.
 - Result: a program in a project under
   `~/Library/Application Support/ByteRipper/GhidraProjects/<module-sha>/`.
-- **The project records what made it.** `state.json` keeps the Ghidra version,
-  the EDK2 tag, the passes and the project's identity (a UUID minted at
-  creation). A publish builds its recipe from these, not from the tooling
-  installed now: a project made with `edk2-stable202608` and published after an
-  exporter update is `code-v5-ghidra-12.1.2` with `types: edk2-stable202608`,
-  never the new tag it was not typed with.
+- **The project records what made it.** `state.json` keeps the Ghidra version
+  that analysed it, the EDK2 tag, the passes and the project's identity — a
+  UUID minted at creation, unless the project is being rebuilt from a review
+  document, which brings its identity with it (§11).
+- **A recipe names who produced what.** `recipe.exporter` and `recipe.ghidra`
+  come from the artifact (`script_version`, `ghidra`): what actually wrote the
+  JSON. `recipe.types` and `recipe.passes` come from `state.json`: what the
+  program was typed with. A project made with Ghidra 12.1.2 and
+  `edk2-stable202608`, migrated to Ghidra 13.0 and exported with a new exporter,
+  publishes `code-v5-ghidra-13.0` with `types: edk2-stable202608` — never the
+  newer tag it was not typed with, never the Ghidra that did not export it.
+  `state.json`'s Ghidra version decides only whether the project should be
+  rebuilt; it never labels an artifact.
 - Not free: a DxeCore-sized module takes tens of seconds. That is one reason
   the project is kept.
 
@@ -263,6 +271,16 @@ save  →  export the artifact  →  harvest the review document  →  return bo
   objects; the manifest is replaced atomically; the previous object stays until
   garbage collection. A crash between the two leaves an unreferenced object,
   never a manifest pointing at a missing one.
+- **One record of a reading is the authority.** The analysis manifest's
+  `reading` — project, revision, document SHA — says which reading is current.
+  `reviews/<module-sha>/manifest.json` is the history beside it, an index for
+  diffs and pruning. The client stores in this order: (1) the document object,
+  (2) the history entry for the new revision, (3) the artifact and the analysis
+  manifest naming that revision and document. A publish has succeeded only when
+  (3) is stored. A failure after (1) leaves an object nothing names yet; after
+  (2), a revision in the history that no manifest names, which the next publish
+  overwrites with the same revision. `verify` reports a manifest whose document
+  is missing, and a history entry ahead of its manifest.
 - **Replacement is the publish path's, not a flag.** `putAnalysis` replaces
   when the incoming reading is newer than the stored one (same project, higher
   revision, or a reading over none). Anything else is refused as today, and
@@ -306,7 +324,7 @@ back, rename more, publish again.
 |---|---|
 | the right to write | the lease, one per module, in the owner |
 | one change is all-or-nothing | a Ghidra transaction per mutation |
-| the review is not lost | save on publish, release, expiry, idle and stop; the document in the store at each publish |
+| the review is not lost | save on publish, release, expiry, idle and stop; the document in the store when a client publishes |
 | what the app sees | the last stored publish; a change event after each one |
 | newer replaces older, never the reverse | the manifest's `reading` |
 | a repeat publish costs nothing | the modification number; after a restart, the artifact's SHA |
@@ -328,8 +346,12 @@ last publish, a second Mac with its own owner, a batch run. The manifest's
 | P | another project Q | kept; the conflict is reported, and the incoming manifest is kept aside under `conflicts/` for a person to choose |
 
 - Bundle import goes key by key: one conflict does not stop the rest of the
-  bundle from importing. The app reports skipped and conflicting keys instead
-  of discarding the result (`CodeAnalysisStore.swift:42` today ignores it).
+  bundle from importing. `ContentStore` writes `conflicts/` whoever imports —
+  the app on project open, or `cas_cli.py import` — and `gc` keeps every object
+  a kept-aside manifest names. The app is to report skipped and conflicting
+  keys (`CodeAnalysisStore.swift:42` computes the report and ignores it).
+- A rebuilt project continues its reading rather than starting one (§11), so a
+  rebuild's first publish is revision n+1 of the same project, not a conflict.
 - Two owners of the same module on two Macs are two projects, so their readings
   conflict rather than overwrite each other. The cure is one owner per module —
   on the powerful machine — which is what §12.1 recommends; from phase 5 the
@@ -415,13 +437,20 @@ private protocol's interface — is usually needed in the modules that consume
 it. A type made in one project is invisible to another.
 
 - A **review type archive** (`GhidraProjects/review-types.gdt`) beside the EDK2
-  archives. `POST /v1/type` adds the type to the program *and* to the archive;
-  every project opened afterwards has the archive attached, as it has EDK2's.
-- The archive is part of the review: harvested types carry their source, and
-  from phase 5 a document can rebuild the archive's entries it uses.
-- The archive has one writer at a time — the owner that holds it open; a second
-  owner adding a type waits for it or is refused. Measured in phase 2 whether
-  this is a real constraint.
+  archives, which no owner holds open. An owner attaches a read-only *copy* of
+  it, taken when the owner starts, as it attaches EDK2's archives; so every
+  module opened afterwards sees the types reviews defined before it.
+- `POST /v1/type` adds the type to the program only. At publish, the owner
+  merges the program's review-defined types into the shared archive: it takes
+  the archive's file lock, opens it for update, adds or refuses each type, and
+  closes it — a batched step of a second or so, inside the publish that already
+  writes. No owner holds the archive for longer than that, so two owners never
+  wait on each other except for the length of a merge.
+- A type whose name the archive already defines differently is refused at the
+  merge and reported in the publish's answer; the program keeps its own
+  definition. Choosing between the two is §16.5.
+- The archive is rebuildable: every type in it is in some review document, and
+  `cas_cli.py review types` rebuilds it from the stored documents.
 
 ## 7. The bridge
 
@@ -442,11 +471,17 @@ Reads:
 | `GET /v1/xrefs?to=/from=` | reference list |
 | `GET /v1/data`, `GET /v1/strings` | data items and strings |
 
+The lease (§7.3):
+
+| call | requires | answer |
+|---|---|---|
+| `POST /v1/lease` | nothing | `{token, expires}`, or the holder and expiry when refused |
+| `DELETE /v1/lease` | the token | released; unsaved edits are saved |
+
 Writes (each requires the lease token):
 
 | call | Ghidra operation |
 |---|---|
-| `POST /v1/lease` / `DELETE /v1/lease` | take or release the write lease (§7.3) |
 | `POST /v1/rename/function` | `{address, name, reason?}` → symbol rename |
 | `POST /v1/rename/variable` | `{function, storage, first_use?, name, type?}` → parameter or local |
 | `POST /v1/set/signature` | `{address, signature}` |
@@ -544,6 +579,13 @@ GhidraProjects/review-types.gdt                types shared by reviews (§6.5)
   rule. The owner writes nothing.
 - A bundle carries the review documents its analyses' readings name, so a
   project bundle carries the reading as well as its rendering.
+- `gc` keeps every object a kept manifest names — its artifact and its
+  reading's document (done in `ContentStore`) — every document named in a
+  `reviews/` history, and the objects of `conflicts/` manifests.
+- **The history keeps every revision** while the module is under review: it is
+  the base for diffs. `cas_cli.py review prune <module-sha> --keep N` folds older
+  revisions into a bundle and drops them from the history, after which `gc`
+  collects their documents. Fifty checkpoints of a PEIM are about a megabyte.
 
 ### 9.1 The review document
 
@@ -579,6 +621,12 @@ person or an agent made (`USER_DEFINED`), not what the passes produced:
 - **Locals keyed by storage and first use**, parameters also by ordinal (§7.1).
 - **An export, not an editing format.** The only writer is `HarvestReview.java`;
   a hand edit would be undone by the next harvest.
+- **Which types are the review's**: a data type the program holds that neither
+  EDK2 archive defines and that no pass created — the owner records a type
+  `POST /v1/type` or a CodeBrowser user adds in the program property
+  `ByteRipper.reviewTypes`, the way names record their reason. A type the
+  review archive brought in is not harvested again; its source is the document
+  that defined it.
 - **Deterministic**: sorted keys, no timestamps inside, so an unchanged review
   harvests to the same SHA. Time and author of a revision are in
   `reviews/<module-sha>/manifest.json`.
@@ -599,16 +647,26 @@ person or an agent made (`USER_DEFINED`), not what the passes produced:
 | `Skills/ghidra-uefi/reference/ghidra.md`, `SKILL.md` | the owner, the bridge, the loop |
 | `ByteRipperApp/Pane/CodeAnalysisStore.swift` | report skipped and conflicting keys of a project's bundle |
 | Code panel (`Packages/CodeView`, `MainViewController+CodeScreen.swift`) | an open panel reloads when its analysis's manifest changes, keeping the function, the place and the history by address |
-| Code screen state (`FragmentPanels.swift`, workspace) | the place is kept by address (`CodeLocation`), not by index — independent of this plan, needed before it |
+| Code screen state (`ByteRipperApp/Fragments/FragmentPanels.swift`, `Packages/Workspace`) | the place is also kept by address (`CodeLocation`) — an added optional field beside the indices; done first, independent of this plan |
 | `AgentAnnotation.swift`, cards | a code annotation's label is read from the current artifact by address; the stored name is the fallback |
 
-`reading` is an optional manifest field: earlier builds read the manifest and
-ignore it, so no store or workspace version changes. The artifact schema does
-not change.
+**Formats.** `reading` is an optional manifest field: earlier builds read the
+manifest and ignore it, so the store's schema does not change. The artifact
+schema does not change. The workspace gains an optional field too:
+`CodeScreenState` keeps `selectedFunction` and `selectedInstruction` as the
+indices they are, and adds `place` — the function's entry and the
+instruction's address. A build that knows `place` prefers it and falls back to
+the indices; an earlier build reads the indices, which are still written and
+still mean what they meant. Nothing an earlier file holds changes meaning, so
+by the repository's rule (CLAUDE.md, "Workspace and project format") this needs
+no new `Workspace.currentVersion` and no migration step. Should the indices
+ever be dropped, that is the change that raises the version.
 
 ## 11. Phase 5 — applying a review
 
 The document is harvested from phase 2 on; what phase 5 adds is using it.
+Until then the document is readable — a person or an agent can redo a lost
+project's decisions from it — but nothing applies it by machine.
 
 1. **Rebuild a project.** A lost disk, a broken upgrade, a project the pinned
    Ghidra can no longer open, a project purged on purpose: import, analyze,
@@ -626,8 +684,13 @@ The document is harvested from phase 2 on; what phase 5 adds is using it.
   transaction; is idempotent;
 - reports and skips an address the program does not contain, a local whose
   storage it cannot find, or a type the C parser refuses — never an abort;
-- writes into a new revision of the same project's reading when applied to a
-  rebuild, and into the target project's reading when reconciling.
+- **continues the reading instead of starting one** when it applies a document
+  to a project it has just created: it writes the document's `reading.project`
+  and `reading.rev` into `state.json`, so the next publish is revision n+1 of
+  the same project and replaces the stored artifact rather than conflicting
+  with it;
+- writes into the target project's reading when reconciling two projects, so
+  the result is the next revision of the target.
 
 ## 12. Discussion: is a Ghidra "shared project" what we want?
 
@@ -676,12 +739,23 @@ checkout in their own Ghidra.
 - A lease is not a permission model; it prevents accidental interleaving.
   Whoever reaches the bridge can write.
 - Every mutation is logged with the session and the lease holder.
+- **A reading is a claim.** Precedence in the store is decided by a project
+  UUID and a revision the client supplies. On a local store the client is the
+  user, and that is fine. A remote store (`Design/CAS_SERVICE_PLAN.md` §5.1)
+  must let only an authenticated writer claim a reading, record who claimed it,
+  and refuse — or keep aside, like a conflict — a claim on a project that writer
+  has not written before.
 - `types[].c` and `POST /v1/type` are parsed by Ghidra's C parser inside a
   transaction; a failure is reported — it is data, not code.
 
 ## 14. Phases
 
 Each phase leaves something usable.
+
+**Before the phases: the place by address.** `CodeScreenState.place`, the Code
+screen restored by address, an annotation's label read from the artifact by
+address. App-only, independent of Ghidra, and useful already: a re-run
+analysis shifts indices too.
 
 0. **Spike.** Confirm the three facts of §3 "To verify": a long-lived headless
    owner that saves mid-session; the modification number's lifetime; the
@@ -693,12 +767,20 @@ Each phase leaves something usable.
    writes. The client stores the result. An artifact published from an
    unmodified program equals what `code_artifact.py` produces today; the panel
    shows it. No supervisor, no lease yet.
-2. **Writes, publish, readings.** Lease; rename function/parameter/local with
-   author and reason; signature, comment, data, type with the review type
-   archive; save; `HarvestReview`; `reviews/` and documents in bundles (the
-   manifest's `reading` and §5.6 already exist); the open Code panel following a republish; the
-   place kept by address; `ghidra_review.py` and `ghidra_mcp.py`. The main
-   workflow works end to end on one machine.
+2. **Writes, publish, readings**, in three parts that land separately:
+   - **2a — the owner writes.** Lease; rename function/parameter/local with
+     author and reason; signature, comment, data, type; save; `HarvestReview`;
+     the publish answer with artifact, document and revision; the review type
+     archive merged at publish.
+   - **2b — the store and the app follow.** `reviews/` history with the commit
+     order of §5.4 and its `gc`/`verify` rules; documents in bundles; the open
+     Code panel following a republish; the app reporting a bundle import's
+     skipped and kept-aside keys. (The manifest's `reading`, §5.6 and
+     `conflicts/` are already in `ContentStore`.)
+   - **2c — the clients.** `ghidra_review.py`, `ghidra_mcp.py` holding the
+     lease.
+
+   After 2c the main workflow works end to end on one machine.
 3. **Supervisor and network.** Pool, routing, eviction by the rules of §6.4,
    token and allowlist, SSH-forward documentation; a second machine's agent
    connected and reviewing.
@@ -715,9 +797,12 @@ Each phase leaves something usable.
 ## 15. Testing and acceptance
 
 - **Pipeline parity:** an artifact published from an unmodified program equals
-  the one `code_artifact.py` produces for the same bytes and recipe.
+  the one `code_artifact.py` produces for the same bytes, the same EDK2 tag and
+  the same exporter — the test pins both, since §5.2 lets them differ
+  legitimately.
 - **Recipe from provenance:** a project made with one EDK2 tag publishes that
-  tag after the installed archives move to another.
+  tag after the installed archives move to another; `recipe.ghidra` is the
+  Ghidra that exported, not the one that analysed.
 - **Review fidelity:** a rename by hand in a CodeBrowser and the same rename
   through the bridge produce the same program state and the same document.
 - **Bridge:** a fake owner for client tests; a real owner smoke test on CpuPei
@@ -731,8 +816,15 @@ Each phase leaves something usable.
   and reports the skipped one; two projects of one module conflict and nothing
   is overwritten.
 - **Replacement in the store:** after two publishes the key has one manifest
-  pointing at the second artifact; after `gc` the first object is gone,
-  `verify` is clean, and both documents are still in `reviews/` history.
+  pointing at the second artifact; after `gc` the first artifact is gone, both
+  documents are still there (one named by the manifest, one by the history),
+  and `verify` is clean.
+- **Commit order:** a client killed after storing the document, and one killed
+  after the history entry, both leave a store `verify` explains, and the next
+  publish completes it.
+- **Shared types:** two owners open; each defines a type and publishes; both
+  types are in the archive, neither owner waited longer than a merge; a second
+  definition of a name is refused and reported.
 - **Persistence:** rename, publish, kill the owner, reopen: the names are
   there. Rename, do not publish, kill, reopen: `unpublished: true`.
 - **Housekeeping:** over budget, only unreviewed projects are removed; purge
@@ -742,7 +834,8 @@ Each phase leaves something usable.
   exit.
 - **App:** an open Code panel reloads after a publish and stays on the same
   function and place; a code annotation's label follows the rename; a saved
-  Code screen reopens at the same address after functions were added.
+  Code screen reopens at the same address after functions were added, and a
+  workspace without `place` still reopens by index.
 - **No Ghidra in the read path:** with Ghidra stopped and its projects deleted,
   the panel, `code_query.py` and `code_modules` still answer from the
   artifacts.
@@ -751,7 +844,9 @@ Each phase leaves something usable.
   client's own store shows it to the app.
 - **Phase 5:** applying a document to a fresh project reproduces the names; a
   mismatched `image_base` is refused; a skipped address is reported;
-  `--review` reproduces the owner's artifact with no project.
+  `--review` reproduces the owner's artifact with no project; a rebuilt
+  project's first publish replaces the stored artifact instead of being kept
+  aside as a conflict.
 
 Acceptance for the main workflow (phases 1–2):
 
@@ -782,9 +877,10 @@ Acceptance for the main workflow (phases 1–2):
    start. Ghidra's migration decides; the apply report of phase 5 is where it
    becomes visible.
 5. **Name collisions across modules** are legitimate; the review is per
-   module. The review type archive (§6.5) is the one cross-module piece, and
-   two reviews defining the same type name differently is its open question —
-   refused at the second definition for now.
+   module. The review type archive (§6.5) is the one cross-module piece: two
+   reviews defining the same type name differently are refused at the second
+   merge, and the program keeps its own definition. A way to rename or choose
+   is not designed yet.
 6. **The UEFI types.** Semantic naming is only as good as the types behind it.
 7. **A store without the dump.** Artifacts stay readable, but a project cannot
    be rebuilt without the module's bytes. If that becomes an obstacle, a project
