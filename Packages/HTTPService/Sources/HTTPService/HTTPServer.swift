@@ -14,13 +14,16 @@ public final class HTTPServer: @unchecked Sendable {
         public var port: UInt16
         public var token: String?
         public var maxBodyBytes: Int
+        /// One line per answered request: method, path, status, time.
+        public var log: (@Sendable (String) -> Void)?
 
         public init(host: String = "127.0.0.1", port: UInt16 = 8765, token: String? = nil,
-                    maxBodyBytes: Int = 512 * 1024 * 1024) {
+                    maxBodyBytes: Int = 512 * 1024 * 1024, log: (@Sendable (String) -> Void)? = nil) {
             self.host = host
             self.port = port
             self.token = token
             self.maxBodyBytes = maxBodyBytes
+            self.log = log
         }
 
         public var isLoopback: Bool {
@@ -154,14 +157,19 @@ public final class HTTPServer: @unchecked Sendable {
         let keepAlive = request.headers["connection"]?.lowercased() != "close"
         if let token = configuration.token, !token.isEmpty,
            !Self.authorized(request.headers["authorization"], token: token) {
+            configuration.log?("\(request.method) \(request.path) 401")
             send(.error(HTTPError(.unauthorized, "a bearer token is required")),
                  on: connection, keepAlive: keepAlive)
             if keepAlive { receive(on: connection, parser: parser) }
             return
         }
         let router = self.router
+        let log = configuration.log
         Task {
+            let started = Date()
             let response = await router.handle(request)
+            let milliseconds = Int((Date().timeIntervalSince(started) * 1000).rounded())
+            log?("\(request.method) \(request.path) \(response.status.code) \(milliseconds) ms")
             self.queue.async {
                 self.send(response, on: connection, keepAlive: keepAlive)
                 if keepAlive { self.receive(on: connection, parser: parser) }

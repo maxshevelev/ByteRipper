@@ -122,6 +122,10 @@ packages:
   # only its client (`RemoteStore` in CodeAnalysis).
   CASService:
     path: Packages/CASService
+  # `byteripper-server`: the roles on one listener. Nothing in the app links
+  # it; listed so Xcode sees it.
+  ByteRipperServer:
+    path: Packages/ByteRipperServer
   # The code pane beside a module's bytes, and the placeholder stage the panel
   # is built through.
   CodeView:

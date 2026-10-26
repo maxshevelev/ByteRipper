@@ -56,8 +56,8 @@ public struct HTTPRouter: Sendable {
             }
         }
         return pathMatched
-            ? .error(HTTPError(.methodNotAllowed, "\(request.method) is not served at /\(request.path)"))
-            : .error(HTTPError(.notFound, "nothing is served at /\(request.path)"))
+            ? .error(HTTPError(.methodNotAllowed, "\(request.method) is not served at \(request.path)"))
+            : .error(HTTPError(.notFound, "nothing is served at \(request.path)"))
     }
 
     static func match(_ pattern: [String], _ segments: [String]) -> [String: String]? {
