@@ -1694,6 +1694,9 @@
 "The calls to this function; choosing one shows the call" = "Вызовы этой функции; выбор вызова показывает место вызова";
 "Callers" = "Вызывающие";
 "POST" = "POST";
+"Function" = "Функция";
+"Through" = "Через";
+"Call address" = "Адрес вызова";
 "POST codes" = "Коды POST";
 "Port unknown" = "Порт неизвестен";
 "Value unknown" = "Значение неизвестно";

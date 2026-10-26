@@ -77,7 +77,7 @@ final class MCPEndpointTests: XCTestCase {
         XCTAssertEqual(status, 200)
         let names = listed?["result"]?["tools"]?.arrayValue?.compactMap { $0["name"]?.stringValue } ?? []
         XCTAssertTrue(names.contains("ghidra_rename_variable"), "\(names)")
-        XCTAssertEqual(names.count, 17)
+        XCTAssertEqual(names.count, 18)
 
         let read = try await call(2, "ghidra_functions", ["module": .string(module), "limit": 5])
         let text = read["content"]?.arrayValue?.first?["text"]?.stringValue ?? ""

@@ -176,6 +176,14 @@ import ToolModuleKit
     /// What a navigator row reads, for tests.
     func navigatorRowText(_ row: Int) -> String { navigatorText(at: row) }
     var navigatorTitle: String { navigatorLabel.stringValue }
+    /// The navigator's column headers; none for a one-column list.
+    var navigatorColumnTitles: [String] {
+        functionTable.headerView == nil ? [] : functionTable.tableColumns.map(\.title)
+    }
+    /// What a POST row's column shows, for tests.
+    func postCell(_ row: Int, _ column: PostColumn) -> String {
+        postCodeCell(artifact.postCodes[state.listedPostCodes[row]], column)
+    }
 
     public var selectedInstruction: CodeArtifact.Instruction? { state.selectedLine?.instruction }
     public var selectedFunction: CodeArtifact.Function? { state.selectedFunction }
@@ -400,6 +408,7 @@ import ToolModuleKit
     private func drawNavigator() {
         navigatorLabel.stringValue = title(for: state.list)
         listControl.selectedSegment = state.list.rawValue
+        layOutNavigatorColumns()
         syncingSelection = true
         functionTable.reloadData()
         if state.list == .functions, let function = state.function,
@@ -1038,6 +1047,7 @@ import ToolModuleKit
         staleLabel.font = ToolPanelFont.body()
         drawNavigationImages()
         cTextView.font = Self.codeFont()
+        layOutNavigatorColumns()
         syncingSelection = true
         for table in [functionTable, table] {
             let selected = table.selectedRow
@@ -1095,6 +1105,99 @@ import ToolModuleKit
         hexDumpButton.state = hexDumpVisible ? .on : .off
         hexDumpButton.contentTintColor = hexDumpVisible ? .controlAccentColor : .secondaryLabelColor
         ControlHelp.describe(hexDumpButton, name: phrase, tooltip: phrase)
+    }
+
+    /// The POST list's columns, in order: the code, the function that sends
+    /// it, the routines it goes through, the address of the call.
+    enum PostColumn: String, CaseIterable {
+        case code = "post-code", function = "post-function", via = "post-via", address = "post-address"
+
+        var title: String {
+            switch self {
+            case .code: L("Code")
+            case .function: L("Function")
+            case .via: L("Through")
+            case .address: L("Call address")
+            }
+        }
+    }
+
+    /// The navigator is one column for every list but POST, which is a
+    /// table: aligned columns under headers, wider than the pane when it
+    /// must, scrolled sideways.
+    private func layOutNavigatorColumns() {
+        let wantsColumns = state.list == .postCodes
+        let hasColumns = functionTable.tableColumns.count > 1
+        if wantsColumns != hasColumns {
+            for column in functionTable.tableColumns { functionTable.removeTableColumn(column) }
+            if wantsColumns {
+                for kind in PostColumn.allCases {
+                    let column = NSTableColumn(identifier: .init(kind.rawValue))
+                    column.title = kind.title
+                    column.resizingMask = .userResizingMask
+                    functionTable.addTableColumn(column)
+                }
+                functionTable.headerView = NSTableHeaderView()
+                functionTable.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
+                functionTable.intercellSpacing = NSSize(width: 6, height: 0)
+                functionScroll.hasHorizontalScroller = true
+            } else {
+                let column = NSTableColumn(identifier: .init("function"))
+                column.resizingMask = .autoresizingMask
+                functionTable.addTableColumn(column)
+                functionTable.headerView = nil
+                functionTable.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
+                functionTable.intercellSpacing = NSSize(width: 0, height: 0)
+                functionScroll.hasHorizontalScroller = false
+                functionTable.sizeLastColumnToFit()
+            }
+        }
+        if wantsColumns {
+            // Each column as wide as what it holds, so the codes line up and
+            // nothing is cut; a long chain of routines is cut at a limit.
+            let limit = ToolPanelFont.size * 18
+            for kind in PostColumn.allCases {
+                var width = (kind.title as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)]).width
+                for index in state.listedPostCodes {
+                    let entry = artifact.postCodes[index]
+                    let text = postCodeCell(entry, kind) as NSString
+                    width = max(width, text.size(withAttributes: [.font: postFont(entry, kind)]).width)
+                }
+                functionTable.tableColumn(withIdentifier: .init(kind.rawValue))?.width = min(limit, ceil(width) + 10)
+            }
+        }
+    }
+
+    /// Numbers in the code font, words in the panel's: a code and an address
+    /// line up digit under digit, "Value unknown" reads as a sentence.
+    private func postFont(_ entry: CodeArtifact.PostCode, _ column: PostColumn) -> NSFont {
+        switch column {
+        case .code where entry.value != nil, .address: Self.codeFont()
+        default: ToolPanelFont.body()
+        }
+    }
+
+    /// What a POST row says in one column.
+    func postCodeCell(_ entry: CodeArtifact.PostCode, _ column: PostColumn) -> String {
+        switch column {
+        case .code:
+            if let value = entry.value {
+                let digits = max(2, 2 * (entry.width ?? 1))
+                let port = entry.portNumber.map { $0 == 0x80 ? "" : String(format: " → 0x%llX", $0) } ?? ""
+                return String(format: "0x%0\(digits)llX", value) + port
+            }
+            switch entry.unresolved {
+            case .portParameter, .portComputed: return L("Port unknown")
+            case .valueParameter, .valueComputed: return L("Value unknown")
+            case nil: return entry.text
+            }
+        case .function:
+            return entry.function.flatMap(model.function(at:)).map { model.functions[$0].name } ?? ""
+        case .via:
+            return entry.via.map { $0.name ?? model.displayAddress($0.function) }.joined(separator: " → ")
+        case .address:
+            return model.displayAddress(entry.address)
+        }
     }
 
     private func configure(_ table: NSTableView, identifier: String) {
@@ -1349,6 +1452,18 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
                           viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         if tableView === functionTable {
             guard row >= 0, row < state.rowCount else { return nil }
+            if state.list == .postCodes, let id = tableColumn?.identifier.rawValue,
+               let column = PostColumn(rawValue: id) {
+                let entry = artifact.postCodes[state.listedPostCodes[row]]
+                let cell = cell(in: tableView, identifier: .init("code-post"), monospaced: false)
+                cell.textField?.font = postFont(entry, column)
+                cell.textField?.stringValue = postCodeCell(entry, column)
+                let unknown = entry.value == nil && entry.unresolved != nil
+                cell.textField?.textColor = unknown || column == .via || column == .address
+                    ? .secondaryLabelColor : .labelColor
+                cell.toolTip = postCodeDetail(entry)
+                return cell
+            }
             let cell = cell(in: tableView, identifier: .init("code-navigator"), monospaced: false)
             // A cell from the queue was made at the size before a zoom.
             cell.textField?.font = ToolPanelFont.body()
@@ -1440,21 +1555,11 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
     /// function that sends it. One the analysis could not tell says what it
     /// lacks. An artifact before v5 lists its OUT instructions as they read.
     private func postCodeText(_ entry: CodeArtifact.PostCode) -> String {
-        let place = entry.function.flatMap(model.function(at:)).map { model.functions[$0].name }
-            ?? model.displayAddress(entry.address)
-        if let value = entry.value {
-            let digits = max(2, 2 * (entry.width ?? 1))
-            let port = entry.portNumber.map { $0 == 0x80 ? "" : String(format: " → 0x%llX", $0) } ?? ""
-            return String(format: "0x%0\(digits)llX", value) + port + "  " + place
-        }
-        switch entry.unresolved {
-        case .portParameter, .portComputed:
-            return L("Port unknown") + "  " + place
-        case .valueParameter, .valueComputed:
-            return L("Value unknown") + "  " + place
-        case nil:
+        guard entry.value != nil || entry.unresolved != nil else {
             return "\(model.displayAddress(entry.address))  \(entry.text)"
         }
+        let place = postCodeCell(entry, .function)
+        return postCodeCell(entry, .code) + "  " + (place.isEmpty ? model.displayAddress(entry.address) : place)
     }
 
     /// What a POST code's row says on hover: where it is sent, through what,

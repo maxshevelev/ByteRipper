@@ -93,6 +93,22 @@ import java.util.concurrent.TimeUnit;
 
 public class Owner {
     static final int PROTOCOL = 1;
+    /**
+     * The jar this owner runs from, as its modification time in seconds: a
+     * host compares it with the jar it would start now, and replaces an
+     * owner that outlived a rebuild — a server restarted on new sources
+     * while the owner ran on.
+     */
+    static final long BUILD = build();
+
+    private static long build() {
+        try {
+            File jar = new File(Owner.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+            return jar.isFile() ? jar.lastModified() / 1000 : 0;
+        } catch (Exception error) {
+            return 0;
+        }
+    }
 
     private final Map<String, String> options;
     private GhidraProject project;
@@ -243,6 +259,7 @@ public class Owner {
                 if (path.equals("/v1/lease")) { lease(exchange, body(exchange)); return; }
                 JsonObject write = switch (path) {
                     case "/v1/rename/function" -> write(exchange, this::renameFunction);
+                    case "/v1/create/function" -> write(exchange, this::createFunction);
                     case "/v1/rename/variable" -> write(exchange, this::renameVariable);
                     case "/v1/set/signature" -> write(exchange, this::setSignature);
                     case "/v1/set/comment" -> write(exchange, this::setComment);
@@ -276,6 +293,7 @@ public class Owner {
     private JsonObject hello() {
         JsonObject answer = identity();
         answer.addProperty("protocol", PROTOCOL);
+        answer.addProperty("build", BUILD);
         answer.addProperty("ghidra", Application.getApplicationVersion());
         answer.addProperty("functions", program.getFunctionManager().getFunctionCount());
         answer.addProperty("changed", program.isChanged());
@@ -535,6 +553,13 @@ public class Owner {
     private void lease(HttpExchange exchange, JsonObject body) throws Exception {
         expireLease();
         String holder = string(body, "holder", "a client");
+        // The same holder asking again is a host that lost its token — a
+        // server restarted while this owner ran on: it takes the lease over.
+        if (leaseToken != null && leaseToken.length() > 0 && holder.equals(leaseHolder)) {
+            System.out.println("OWNER LEASE TAKEN OVER by " + holder);
+            if (program.isChanged()) program.save("lease taken over by " + holder, TaskMonitor.DUMMY);
+            leaseToken = null;
+        }
         if (leaseToken != null) {
             JsonObject refused = new JsonObject();
             refused.addProperty("error", "the module is leased to " + leaseHolder);
@@ -632,6 +657,48 @@ public class Owner {
         JsonObject answer = identity();
         answer.addProperty("entry", hex(function.getEntryPoint()));
         answer.addProperty("name", function.getName());
+        return answer;
+    }
+
+    /**
+     * A function at `address` where Ghidra made none: code reached only
+     * through a table — a services table's slot, a PPI's member — that no
+     * call names. The instructions are disassembled first when they are not
+     * yet; `name`, when given, names it as a rename would. One already there
+     * is answered as it is.
+     */
+    private JsonObject createFunction(JsonObject body) throws Exception {
+        Address at = address(required(body, "address"));
+        Function function = program.getFunctionManager().getFunctionAt(at);
+        boolean created = false;
+        if (function == null) {
+            if (program.getListing().getInstructionAt(at) == null) {
+                if (program.getListing().getDefinedDataContaining(at) != null) {
+                    throw new Failure(409, hex(at) + " is defined data, not code");
+                }
+                new ghidra.app.cmd.disassemble.DisassembleCommand(at, null, true).applyTo(program, TaskMonitor.DUMMY);
+                if (program.getListing().getInstructionAt(at) == null) {
+                    throw new Failure(400, "no instruction decodes at " + hex(at));
+                }
+            }
+            ghidra.app.cmd.function.CreateFunctionCmd command = new ghidra.app.cmd.function.CreateFunctionCmd(at);
+            if (!command.applyTo(program, TaskMonitor.DUMMY)) {
+                throw new Failure(400, "Ghidra made no function at " + hex(at)
+                    + (command.getStatusMsg() == null ? "" : ": " + command.getStatusMsg()));
+            }
+            function = program.getFunctionManager().getFunctionAt(at);
+            created = true;
+        }
+        if (body.has("name") && !body.get("name").isJsonNull()) {
+            JsonObject rename = body.deepCopy();
+            rename.addProperty("address", hex(at));
+            renameFunction(rename);
+        }
+        JsonObject answer = identity();
+        answer.addProperty("entry", hex(function.getEntryPoint()));
+        answer.addProperty("name", function.getName());
+        answer.addProperty("created", created);
+        answer.addProperty("size", function.getBody().getNumAddresses());
         return answer;
     }
 

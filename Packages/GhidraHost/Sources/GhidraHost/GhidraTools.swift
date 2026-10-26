@@ -29,7 +29,7 @@ public enum GhidraTools {
         sessions. A module is named by the SHA-256 of its bytes (`module`). Start with `ghidra_modules` \
         or `ghidra_open`; read with `ghidra_functions`, `ghidra_function` (decompiled C, parameters and \
         locals with their storage), `ghidra_disassembly`, `ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_type_definition`; \
-        write with `ghidra_rename`, `ghidra_rename_variable`, `ghidra_signature`, `ghidra_type`, \
+        write with `ghidra_rename`, `ghidra_function_create`, `ghidra_rename_variable`, `ghidra_signature`, `ghidra_type`, \
         `ghidra_set_data`, `ghidra_comment`. `ghidra_publish` makes the review visible to the app — every \
         ByteRipper that reads this store — as a new revision; publish at coherent checkpoints, not after \
         every rename. `ghidra_done` publishes and ends the session.
@@ -230,6 +230,19 @@ public enum GhidraTools {
                    "name": AgentSchema.string("The new name."),
                    "reason": AgentSchema.string("Why this name, in a few words.")],
                   required: ["address", "name"]) { arguments in
+                var body = try optional(arguments, ["address", "name", "reason"])
+                body["by"] = "agent"
+                return body
+            },
+            write("ghidra_function_create", "create/function", "Make a function where Ghidra made none",
+                  "Makes a function at `address`: code only a table points at — a slot of a services table, "
+                  + "a member of a PPI or a protocol — which no call names, so Ghidra left it outside any "
+                  + "function and `ghidra_rename` finds nothing there. Disassembles it first if needed. "
+                  + "With `name`, names it as `ghidra_rename` would. A function already there is answered as it is.",
+                  ["address": AgentSchema.string("The entry address, e.g. the value in the table's slot."),
+                   "name": AgentSchema.string("A name for it, optional."),
+                   "reason": AgentSchema.string("Why this name, in a few words.")],
+                  required: ["address"]) { arguments in
                 var body = try optional(arguments, ["address", "name", "reason"])
                 body["by"] = "agent"
                 return body

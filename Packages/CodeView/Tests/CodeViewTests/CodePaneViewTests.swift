@@ -530,6 +530,16 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(code.selectedRange(), second, "the call in the C")
         XCTAssertEqual(view.navigatorTitle, "POST codes", "the list stays in front")
         XCTAssertEqual(ranges.last, 0x6A..<0x6B, "the call's bytes")
+
+        XCTAssertEqual(view.navigatorColumnTitles, ["Code", "Function", "Through", "Call address"],
+                       "aligned columns under headers")
+        XCTAssertEqual(view.postCell(1, .code), "0x20320120")
+        XCTAssertEqual(view.postCell(1, .function), "Caller")
+        XCTAssertEqual(view.postCell(1, .via), "Halt")
+        XCTAssertEqual(view.postCell(1, .address), "0x69", "as the panel shows addresses: the byte in the module")
+        XCTAssertEqual(view.postCell(2, .code), "Value unknown")
+        view.selectList(.functions)
+        XCTAssertEqual(view.navigatorColumnTitles, [], "the other lists stay one column")
     }
 
     /// Search narrows functions by their instructions as well as their names,

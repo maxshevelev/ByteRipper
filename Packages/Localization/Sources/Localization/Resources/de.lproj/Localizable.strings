@@ -1694,6 +1694,9 @@
 "The calls to this function; choosing one shows the call" = "Die Aufrufe dieser Funktion; die Auswahl zeigt die Stelle des Aufrufs";
 "Callers" = "Aufrufer";
 "POST" = "POST";
+"Function" = "Funktion";
+"Through" = "Über";
+"Call address" = "Aufrufadresse";
 "POST codes" = "POST-Codes";
 "Port unknown" = "Port unbekannt";
 "Value unknown" = "Wert unbekannt";

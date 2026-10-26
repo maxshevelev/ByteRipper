@@ -50,6 +50,13 @@ enum OwnerBuild {
             .appendingPathComponent(install.home.lastPathComponent, isDirectory: true)
     }
 
+    /// The build an owner reports in its `hello`: the jar's modification
+    /// time in whole seconds, after building it again if a source is newer.
+    static func build(for install: GhidraInstall, sources: OwnerSources) throws -> Int {
+        let jar = try jar(for: install, sources: sources)
+        return Int((modified(jar) ?? .distantPast).timeIntervalSince1970)
+    }
+
     static func jar(for install: GhidraInstall, sources: OwnerSources) throws -> URL {
         let folder = cache(for: install)
         let jar = folder.appendingPathComponent("owner.jar")

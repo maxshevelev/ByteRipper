@@ -227,7 +227,7 @@ public actor GhidraHost {
         guard project.exists else {
             throw GhidraHostError(.project, "no project for \(module.hex): open the module first", status: 404)
         }
-        if let running = await runningOwner(project) { return running }
+        if let running = await runningOwner(project, replacingStale: true) { return running }
         if let pending = starting[module] { return try await pending.value }
         let task = Task { try await self.start(project) }
         starting[module] = task
@@ -236,7 +236,13 @@ public actor GhidraHost {
     }
 
     /// A recorded owner whose process lives and answers; nil otherwise.
-    func runningOwner(_ project: GhidraProject) async -> OwnerRecord? {
+    ///
+    /// With `replacingStale`, an owner running from another build of the jar
+    /// than the one the host would start now — one that outlived a server
+    /// restarted on new sources — is stopped, so the caller starts a new one:
+    /// an old owner would publish with the old exporter. It saves on the way
+    /// out, so nothing written is lost.
+    func runningOwner(_ project: GhidraProject, replacingStale: Bool = false) async -> OwnerRecord? {
         guard let data = try? Data(contentsOf: project.ownerURL),
               let record = try? JSONDecoder().decode(OwnerRecord.self, from: data) else { return nil }
         guard kill(record.pid, 0) == 0 else {
@@ -244,8 +250,19 @@ public actor GhidraHost {
             leases[project.module] = nil
             return nil
         }
-        guard (try? await Self.call(record.port, "GET", "/v1/hello", timeout: 5)) != nil else { return nil }
-        return record
+        guard let hello = try? await Self.call(record.port, "GET", "/v1/hello", timeout: 5) else { return nil }
+        guard replacingStale, let current = try? OwnerBuild.build(for: ghidra(), sources: configuration.sources) else {
+            return record
+        }
+        let running = (try? JSONSerialization.jsonObject(with: hello.data) as? [String: Any])?["build"] as? Int
+        guard running != current else { return record }
+        _ = try? await Self.call(record.port, "POST", "/v1/stop", timeout: 60)
+        for _ in 0..<120 where kill(record.pid, 0) == 0 {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+        }
+        try? FileManager.default.removeItem(at: project.ownerURL)
+        leases[project.module] = nil
+        return nil
     }
 
     private func start(_ project: GhidraProject) async throws -> OwnerRecord {
