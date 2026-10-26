@@ -180,8 +180,11 @@ final class CodeAnalysisLocation {
             return L("The server does not accept the token.")
         case .refused(_, let message):
             return message
-        case .unreachable:
-            return L("The server does not answer.")
+        case .unreachable(let reason):
+            // The system's own words say which: the name did not resolve,
+            // nothing listens there, the connection timed out, or the app's
+            // transport security refused plain HTTP to that host.
+            return L("The server does not answer: %1$@", reason)
         case .unexpected:
             return L("The server is not an analysis server of this version.")
         case nil:

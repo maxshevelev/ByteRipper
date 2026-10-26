@@ -12,7 +12,8 @@ public struct RemoteStore: Sendable {
     private let session: URLSession
 
     public enum Failure: Error, Equatable, Sendable, CustomStringConvertible {
-        /// The server could not be reached, or did not answer in time.
+        /// The server could not be reached, or did not answer in time: its
+        /// address and the system's words for why.
         case unreachable(String)
         /// The server answered with a refusal.
         case refused(status: Int, message: String)
@@ -21,7 +22,8 @@ public struct RemoteStore: Sendable {
 
         public var description: String {
             switch self {
-            case .unreachable(let reason): return "the analysis server cannot be reached: \(reason)"
+            case .unreachable(let reason):
+                return "no byteripper-server answers at \(reason) — is it running, and listening on that address?"
             case .refused(_, let message): return message
             case .unexpected(let reason): return "the analysis server answered unexpectedly: \(reason)"
             }
@@ -204,8 +206,7 @@ public struct RemoteStore: Sendable {
         do {
             (data, response) = try await session.data(for: request)
         } catch {
-            throw Failure.unreachable("no byteripper-server answers at \(base.absoluteString) "
-                + "(\(error.localizedDescription)) — is it running, and listening on that address?")
+            throw Failure.unreachable("\(base.absoluteString): \(error.localizedDescription)")
         }
         guard let http = response as? HTTPURLResponse else {
             throw Failure.unexpected("not an HTTP answer")
