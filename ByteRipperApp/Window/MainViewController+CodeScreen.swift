@@ -90,12 +90,22 @@ extension MainViewController {
     /// (`Design/CODE_PANEL_PLAN.md`). The codec is the read-only one the
     /// UEFI panel handed over: the bytes open as a part, and Update in Parent
     /// refuses them with the analysis's reason.
+    ///
+    /// A Code panel of the same module already open over `pane` is raised and
+    /// moved to `location` rather than opened twice. Returns the panel.
+    @discardableResult
     func openCode(named name: String, from pane: PaneViewModel, source: Range<UInt64>,
                   manifest: AnalysisManifest, artifact: CodeArtifact,
-                  recipes: [AnalysisManifest] = [], codec: any PartCodec) {
+                  recipes: [AnalysisManifest] = [], codec: any PartCodec,
+                  at location: CodeLocation? = nil) -> FragmentDock.PanelID? {
+        if let open = fragments.codePanel(module: manifest.module.sha256, over: pane) {
+            fragments.expand(open)
+            if let location, !location.isEmpty { fragments.codePane(open)?.go(to: location) }
+            return open
+        }
         guard let document = pane.document,
               let content = try? DocumentPartReader(document: document)
-        else { return }
+        else { return nil }
         let parent = PartParent(content: content, source: source, name: pane.status.fileName,
                                 partName: name)
         do {
@@ -103,14 +113,15 @@ extension MainViewController {
             guard let origin = DocumentOrigin(
                 parent: pane, source: source, partName: name,
                 layout: .image, codec: codec, content: bytes)
-            else { return }
-            fragments.openCode(bytes, named: name, origin: origin,
-                               manifest: manifest, artifact: artifact,
-                               recipes: recipes)
+            else { return nil }
+            return fragments.openCode(bytes, named: name, origin: origin,
+                                      manifest: manifest, artifact: artifact,
+                                      recipes: recipes, at: location)
         } catch {
             let refusal = error as? PartRefusal
             presentAlert(title: refusal?.title.text ?? L("Those bytes could not be read."),
                          message: refusal?.message.text ?? "\(error)", outcome: .problem)
+            return nil
         }
     }
 
@@ -120,6 +131,27 @@ extension MainViewController {
         presentAlert(title: L("The code analysis could not be read."),
                      message: L("The stored analysis is missing or cannot be read. The panel keeps the analysis it has."),
                      outcome: .problem)
+    }
+
+    /// The code pane drawing `pane`: the tab's code screen, or a code panel.
+    func codePaneView(for pane: PaneViewModel) -> CodePaneView? {
+        if let codeScreen, codeScreen.pane === pane { return codeScreenView }
+        return fragments.panel(holding: pane).flatMap { fragments.codePane($0) }
+    }
+
+    /// Hands every code pane of this tab the annotations on its module's code,
+    /// from whatever dump they were made on: a note is about the code, and
+    /// the same module's code is the same wherever it is.
+    func applyCodeNotes() {
+        let annotations = AgentAnnotationTools.current?.all() ?? []
+        for pane in [codeScreenView].compactMap({ $0 }) + fragments.codePanes {
+            let module = pane.manifest.module.sha256.hex
+            pane.setNotes(annotations.compactMap { annotation in
+                guard let code = annotation.code, code.module == module else { return nil }
+                return CodeNote(id: annotation.id, title: annotation.title, note: annotation.note,
+                                location: code.location, byPerson: annotation.author == .person)
+            })
+        }
     }
 
     /// The code pane that has the keyboard — the tab's code screen or a code
@@ -154,11 +186,12 @@ extension MainViewController {
             guard let self, let paneModel else { return }
             self.chooseCodeRecipe(manifest, for: paneModel)
         }
-        wireCodeScreen(codePane, to: paneModel) { [weak self, weak paneModel] range in
+        wireCodeScreen(codePane, to: paneModel, owner: self) { [weak self, weak paneModel] range in
             guard let paneModel else { return }
             self?.filePaneView(for: paneModel)?
                 .revealOffsetCentered(range.lowerBound)
         }
+        applyCodeNotes()
         codePane.restore(function: screen.selectedFunction,
                          instruction: screen.selectedInstruction,
                          showsC: screen.showsC)

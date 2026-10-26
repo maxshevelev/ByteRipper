@@ -7,6 +7,8 @@ public struct CodeToken: Equatable, Sendable {
     public enum Kind: String, Sendable {
         case keyword, comment, type, constant, string, parameter, local
         case function, global, label, mnemonic, address, bytes
+        /// An annotation's words beside the code: the agent's, the person's.
+        case note, personNote
     }
 
     public let start: Int

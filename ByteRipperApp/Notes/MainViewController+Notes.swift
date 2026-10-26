@@ -1,4 +1,5 @@
 import Cocoa
+import CodeAnalysis
 import Localization
 
 /// The tab's part in the notes: the count on its toolbar's Annotations
@@ -60,6 +61,30 @@ extension MainViewController {
                 // The note is seen made: the Annotations window comes up, a
                 // step its Back returns from to the bytes it was made on.
                 self?.showNotesWindow(leaving: pane)
+            }
+        }
+    }
+}
+
+extension MainViewController {
+    /// A Code panel's right-click ▸ Add Annotation… on a function or an
+    /// instruction: the same form as on the dump's bytes; the note belongs to
+    /// the dump the module is in and opens the Code panel at its place.
+    // help: panel.code.annotate
+    func annotateCode(of pane: PaneViewModel, at location: CodeLocation, suggesting name: String) {
+        NoteForm.ask(L("Add Annotation"),
+                     L("The annotation is shown beside the code and listed in the Annotations window. A double-click on it opens the code here."),
+                     button: L("Add"), title: name, in: view.window) { title, note in
+            Task { @MainActor [weak self] in
+                do {
+                    _ = try await AgentAnnotationTools.current?.addNote(title: title, note: note, at: location,
+                                                                        of: pane)
+                    self?.showNotesWindow(leaving: pane)
+                } catch {
+                    self?.presentAlert(title: L("Could not add the annotation"),
+                                       message: L("The module of this code was not found in the dump it was opened over."),
+                                       outcome: .problem)
+                }
             }
         }
     }

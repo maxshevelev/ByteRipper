@@ -127,3 +127,24 @@ final class CodeModelTests: XCTestCase {
         }
     }
 }
+
+/// A place in code as an annotation and `open_code` name it.
+final class CodeLocationTests: XCTestCase {
+    func testALocationIsFoundAsAFunctionAndAnInstruction() throws {
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        {"script_version":4,"functions":[
+          {"entry":"0x10","name":"a","instructions":[{"address":"0x10","text":"NOP"},{"address":"0x11","text":"RET"}]},
+          {"entry":"0x20","name":"b","instructions":[{"address":"0x20","text":"RET"}]}]}
+        """.utf8))
+        XCTAssertEqual(artifact.indices(of: CodeLocation(function: CodeAddress(0x20))).function, 1)
+        XCTAssertNil(artifact.indices(of: CodeLocation(function: CodeAddress(0x20))).line)
+        let instruction = artifact.indices(of: CodeLocation(address: CodeAddress(0x11)))
+        XCTAssertEqual(instruction.function, 0, "the function holding the instruction")
+        XCTAssertEqual(instruction.line, 1)
+        XCTAssertEqual(artifact.indices(of: CodeLocation(function: CodeAddress(0x20), address: CodeAddress(0x20))).line, 2)
+        XCTAssertNil(artifact.indices(of: CodeLocation(address: CodeAddress(0x99))).function)
+        XCTAssertEqual(artifact.function(named: "b")?.entry, CodeAddress(0x20))
+        XCTAssertEqual(artifact.function(named: "0x10")?.name, "a")
+        XCTAssertEqual(artifact.function(containing: CodeAddress(0x11))?.name, "a")
+    }
+}

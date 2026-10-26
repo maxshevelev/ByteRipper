@@ -200,9 +200,13 @@ public extension ToolReadHost {
 /// refuses to put edits back. The manifest names the analysis and its recipe;
 /// where the panel goes is the app's business.
 @MainActor public protocol CodePartOpening: AnyObject {
+    /// Opens the panel at `location` — a function, an instruction — or, when
+    /// a Code panel of the same module is already open over the same dump,
+    /// raises that one and goes there.
     func openCode(named name: String, linkedTo source: Range<UInt64>,
                   manifest: AnalysisManifest, artifact: CodeArtifact,
-                  recipes: [AnalysisManifest], codec: any PartCodec)
+                  recipes: [AnalysisManifest], codec: any PartCodec,
+                  at location: CodeLocation?)
 }
 
 /// Bytes that do not change under the reader, from any thread.

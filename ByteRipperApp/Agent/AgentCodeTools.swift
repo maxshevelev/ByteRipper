@@ -1,10 +1,18 @@
 import AgentKit
 import CodeAnalysis
+import CodeView
 import Foundation
+import UEFIImage
+import UEFITool
+import UEFIToolUI
 
-/// The code analysis a panel is showing, as an agent's questions
-/// (`Design/CODE_PANEL_PLAN.md`, stage 5). The same typed artifact the panel
-/// reads: no second parse, and no Ghidra on the agent's side.
+/// A module's stored code analysis, as an agent's questions
+/// (`Design/CODE_PANEL_PLAN.md`, stage 5): what to read, which modules of a
+/// dump have one, and a Code panel opened where the agent is pointing.
+///
+/// The analysis is read from the local store, keyed by the module's bytes —
+/// a Code panel need not be open. The same typed artifact the panel reads: no
+/// second parse, and no Ghidra on the agent's side.
 @MainActor
 final class AgentCodeTools {
     private let desk: AgentDesk
@@ -13,54 +21,207 @@ final class AgentCodeTools {
         self.desk = desk
     }
 
-    nonisolated func tools() -> [AgentTool] { [queryTool] }
+    nonisolated func tools() -> [AgentTool] { [queryTool, modulesTool, openTool] }
 
     private static let lists = ["functions", "instructions", "c", "uses", "strings", "symbols", "references"]
 
+    private nonisolated static let whereProperties: [String: JSONValue] = [
+        "document": AgentSchema.string("A Code panel or tab, or the dump the module is in. Default: the focused one."),
+        "node": AgentSchema.string("The module's PE32/TE image node in the dump, e.g. \"0.6.4.0.0.205.2\" — from `code_modules`."),
+        "module": AgentSchema.string("Or the module by its bytes' SHA-256, read from the store without a dump."),
+        "recipe": AgentSchema.string("With `module`: which analysis, when there are several. Default: the newest.")
+    ]
+
     private nonisolated var queryTool: AgentTool {
-        AgentTool(
+        var properties = Self.whereProperties
+        properties["what"] = AgentSchema.choice(Self.lists, "The list to read. Default \"functions\".")
+        properties["function"] = AgentSchema.string(
+            "A function name or Ghidra entry address, for \"instructions\", \"c\" and \"references\".")
+        properties["address"] = AgentSchema.string("A Ghidra address, for \"uses\".")
+        properties["search"] = AgentSchema.string("A word to narrow functions, strings or symbols by.")
+        properties["limit"] = AgentSchema.limit(default: 200, maximum: 500)
+        return AgentTool(
             name: "code_query",
             title: "Read a module's code analysis",
             description: """
-                Read the stored code analysis a Code panel is showing. `what` picks the list (default \
-                "functions"): "functions"; one function's "instructions" or decompiled "c"; a function's \
-                callers and callees ("references"); the instructions that "uses" an address — who calls a \
-                function, jumps to a label, or reads a global or a string; "strings"; or "symbols", the \
-                named data — GUIDs, service tables, interfaces. A function's `name_source` says where its \
-                name came from: DEFAULT is Ghidra's FUN_ placeholder, ANALYSIS a name the UEFI pass read \
-                from the module (`name_reason` says from what), IMPORTED the image's own. `function` names \
-                one by its name or Ghidra entry address; `address` is the target for "uses"; `search` \
-                narrows functions by name or instruction text, and strings by value. Addresses come \
-                twice: `entry`/`address` is Ghidra's virtual address, `offset` is the same byte's offset \
-                in the module, the number the hex view shows. The document must be open as a Code panel \
-                or a Code tab; the answer names its module and recipe. These are stored observations, not \
-                a live disassembly; the C is Ghidra's reading of the instructions, not the source.
+                Read a module's stored code analysis. The module is the Code panel or tab given as \
+                `document`; or a PE32/TE image `node` of a dump (`code_modules` lists the ones with an \
+                analysis), its bytes hashed to find the analysis; or a `module` SHA-256, read from the store \
+                alone. No panel needs to be open. `what` picks the list (default "functions"): \
+                "functions"; one function's "instructions" or decompiled "c"; a function's callers and \
+                callees ("references"); the instructions that "uses" an address — who calls a function, \
+                jumps to a label, or reads a global or a string; "strings"; or "symbols", the named data — \
+                GUIDs, service tables, interfaces. A function's `name_source` says where its name came \
+                from: DEFAULT is Ghidra's FUN_ placeholder, ANALYSIS a name the UEFI pass read from the \
+                module (`name_reason` says from what), IMPORTED the image's own. Addresses come twice: \
+                `entry`/`address` is Ghidra's virtual address, `offset` the same byte's offset in the \
+                module, the number the hex view shows (none when read by `module` alone). To show the \
+                person a function, `open_code`; to leave a note on it, `annotate` with `function`. These \
+                are stored observations, not a live disassembly; the C is Ghidra's reading of the \
+                instructions, not the source.
                 """,
-            inputSchema: AgentSchema.object([
-                "document": AgentSchema.string("The document's id from `documents`. Default: the focused one."),
-                "what": AgentSchema.choice(Self.lists, "The list to read. Default \"functions\"."),
-                "function": AgentSchema.string("A function name or Ghidra entry address, for \"instructions\", \"c\" and \"references\"."),
-                "address": AgentSchema.string("A Ghidra address, for \"uses\"."),
-                "search": AgentSchema.string("A word to narrow functions or strings by."),
-                "limit": AgentSchema.limit(default: 200, maximum: 500)
-            ])
+            inputSchema: AgentSchema.object(properties)
         ) { call in
             try await self.answer(call.arguments)
         }
     }
 
+    private nonisolated var modulesTool: AgentTool {
+        AgentTool(
+            name: "code_modules",
+            title: "List a dump's analyzed modules",
+            description: """
+                The PE32/TE modules of a dump that have a stored code analysis: their image `node`, name, \
+                the analyses (`recipes`, newest first) and how many functions the newest found. The modules \
+                are found by their bytes — the same module in another dump has the same analysis — \
+                including those inside compressed sections, which are opened for it: seconds on a large \
+                image the first time. Read one with `code_query`, show it with `open_code`.
+                """,
+            inputSchema: AgentSchema.object([
+                "document": AgentSchema.string("The dump. Default: the focused one.")
+            ])
+        ) { call in
+            try await self.modules(call.arguments)
+        }
+    }
+
+    private nonisolated var openTool: AgentTool {
+        AgentTool(
+            name: "open_code",
+            title: "Open a module's code",
+            description: """
+                Opens the Code panel of a module — its functions, ASM and C beside its bytes — over the \
+                dump, at a `function` or an instruction `address` when given, and brings it forward: what \
+                the person's Open with Code does. Give the dump `document` and the image `node` \
+                (`code_modules`), or a Code panel as `document` to move it to another place. A panel of the \
+                same module already open is raised rather than opened twice. Answers the panel's \
+                `document` id, which `code_query` reads.
+                """,
+            inputSchema: AgentSchema.object([
+                "document": AgentSchema.string("The dump, or a Code panel. Default: the focused one."),
+                "node": AgentSchema.string("The module's PE32/TE image node in the dump."),
+                "function": AgentSchema.string("A function name or Ghidra entry address to open at."),
+                "address": AgentSchema.string("Or an instruction's Ghidra address to open at.")
+            ]),
+            annotations: AgentTool.Annotations(readOnly: false, idempotent: true)
+        ) { call in
+            try await self.open(call.arguments)
+        }
+    }
+
+    // MARK: - Which analysis
+
+    /// The analysis a call is about, and where it was found.
+    struct Source {
+        let manifest: AnalysisManifest
+        let artifact: CodeArtifact
+        /// The module's bytes, for module offsets; nil when read by SHA alone.
+        let bytes: Data?
+        /// The Code panel, or the dump, the agent named; nil for `module`.
+        let document: String?
+        let node: String?
+    }
+
+    /// A Code panel or tab; else an image node of a dump; else a module SHA
+    /// read from the store alone.
+    func source(_ arguments: AgentArguments) async throws -> Source {
+        if let text = try arguments.optionalString("module") {
+            guard let digest = SHA256Digest(hex: text.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+                throw AgentToolError("`module` is a SHA-256 of the module's bytes: 64 hex digits.")
+            }
+            let recipe = try arguments.optionalString("recipe")
+            let root = CodeAnalysisStore.root
+            let loaded = await Task.detached(priority: .userInitiated) { () -> (AnalysisManifest, CodeArtifact)? in
+                let index = CodeAnalysisIndex.load(from: root)
+                let manifests = index.manifests(for: digest)
+                guard let manifest = recipe.map({ id in manifests.first { $0.recipe.id == id } })
+                        ?? index.newest(for: digest),
+                      let artifact = try? ContentStore(root: root, create: false).artifact(for: manifest)
+                else { return nil }
+                return (manifest, artifact)
+            }.value
+            guard let (manifest, artifact) = loaded else {
+                throw AgentToolError("The store has no readable analysis of module \(digest.hex)"
+                    + (recipe.map { " with recipe \($0)" } ?? "") + ".")
+            }
+            return Source(manifest: manifest, artifact: artifact, bytes: nil, document: nil, node: nil)
+        }
+        let place = try place(arguments)
+        if let screen = place.controller?.codeScreen(for: place.pane) {
+            return Source(manifest: screen.manifest, artifact: screen.artifact, bytes: screen.bytes,
+                          document: place.id, node: nil)
+        }
+        guard let node = try arguments.optionalString("node") else {
+            throw AgentToolError("\(place.named) is not a Code panel. Give the module's image `node` in it — "
+                + "`code_modules` lists the ones with an analysis — or a `module` SHA-256.")
+        }
+        let opening = try await opening(node, in: place)
+        return Source(manifest: opening.manifest, artifact: opening.artifact, bytes: Data(opening.bytes),
+                      document: place.id, node: node)
+    }
+
+    /// Node `text` of `place`'s tree, read and matched with the store.
+    private func opening(_ text: String, in place: AgentDesk.Place) async throws -> UEFICodeOpening {
+        let id = try UEFIAgentQueries.nodeID(text)
+        let host = PaneToolHost(pane: place.pane, owner: place.controller, tools: nil)
+        let tree = try await UEFIAgentQueries.readyTree(host)
+        guard await UEFIAgentQueries.reachable(id, in: tree) else {
+            throw AgentToolError("\(place.named) has no node \(text).")
+        }
+        do {
+            return try await UEFICodeOpening.prepare(node: id, in: tree, store: CodeAnalysisStore.root)
+        } catch let failure as UEFICodeOpening.Failure {
+            switch failure {
+            case .noAnalysis:
+                throw AgentToolError("Node \(text) of \(place.named) is not a PE32/TE image with a stored code "
+                    + "analysis. `code_modules` lists the ones that are; the ghidra-uefi skill makes one.")
+            default:
+                throw AgentToolError(failure.message)
+            }
+        }
+    }
+
+    /// The image node in `tree` whose bytes are the module `manifest` was
+    /// made from: the node the analysis names first, when this is its file,
+    /// then every node the tree has open, then — the last resort — the tree
+    /// with every compressed section opened.
+    func imageNode(of manifest: AnalysisManifest, in tree: LazyUEFITree, fileName: String) async -> NodeID? {
+        let index = CodeAnalysisIndex(manifests: [manifest])
+        for id in UEFICodeScan.sourceNodeIDs(in: index, document: fileName) {
+            _ = await UEFIAgentQueries.reachable(id, in: tree)
+        }
+        for pass in 0..<2 {
+            if pass == 1 { await UEFIContentSearch.openEverything(under: nil, in: tree) }
+            let image = tree.image()
+            let readers = tree.spaceReaders
+            let found = await Task.detached(priority: .userInitiated) {
+                UEFICodeScan.scan(in: image, index: index) { node in
+                    guard let reader = readers.reader(for: node.space), let bytes = reader.bytes(node.body)
+                    else { return nil }
+                    return Data(bytes)
+                }
+            }.value
+            if let id = found.keys.min(by: { $0.path.lexicographicallyPrecedes($1.path) }) { return id }
+        }
+        return nil
+    }
+
+    private func place(_ arguments: AgentArguments) throws -> AgentDesk.Place {
+        do {
+            return try desk.place(named: try arguments.optionalString("document"))
+        } catch let error as AgentDeskError {
+            throw AgentToolError(error.description)
+        }
+    }
+
+    // MARK: - code_query
+
     private func answer(_ arguments: AgentArguments) async throws -> AgentAnswer {
-        let place = try desk.place(named: try arguments.optionalString("document"))
-        guard let controller = place.controller else {
-            throw AgentToolError("\(place.named) is not on screen, so it has no code panel.")
-        }
-        guard let screen = controller.codeScreen(for: place.pane) else {
-            throw AgentToolError("\(place.named) is not a code screen. Open the module with `Open with Code` first.")
-        }
+        let source = try await source(arguments)
         let what = try arguments.choice("what", from: Self.lists, default: "functions")
         let search = (try arguments.optionalString("search"))?.lowercased()
         let limit = try arguments.limit(default: 200, maximum: 500)
-        let model = CodeModel(artifact: screen.artifact, moduleBytes: screen.bytes)
+        let model = CodeModel(artifact: source.artifact, moduleBytes: source.bytes)
 
         func offsetText(_ address: CodeAddress) -> JSONValue {
             guard let offset = model.moduleOffset(of: address) else { return .null }
@@ -87,11 +248,13 @@ final class AgentCodeTools {
         }
 
         var body: [String: JSONValue] = [
-            "document": .string(place.id),
             "what": .string(what),
-            "module": .string(screen.manifest.module.name),
-            "recipe": .string(screen.manifest.recipe.id)
+            "module": .string(source.manifest.module.name),
+            "sha256": .string(source.manifest.module.sha256.hex),
+            "recipe": .string(source.manifest.recipe.id)
         ]
+        if let document = source.document { body["document"] = .string(document) }
+        if let node = source.node { body["node"] = .string(node) }
 
         switch what {
         case "functions":
@@ -160,7 +323,7 @@ final class AgentCodeTools {
             })
 
         case "symbols":
-            let symbols = screen.artifact.symbols.filter { symbol in
+            let symbols = source.artifact.symbols.filter { symbol in
                 guard let search, !search.isEmpty else { return true }
                 return symbol.name.lowercased().contains(search)
                     || (symbol.type?.lowercased().contains(search) ?? false)
@@ -178,7 +341,7 @@ final class AgentCodeTools {
             })
 
         case "strings":
-            let strings = screen.artifact.strings.filter { entry in
+            let strings = source.artifact.strings.filter { entry in
                 guard let search, !search.isEmpty else { return true }
                 return entry.value.lowercased().contains(search)
                     || entry.type.lowercased().contains(search)
@@ -201,5 +364,126 @@ final class AgentCodeTools {
             body["callees"] = .array(function.callees.map(reference))
         }
         return .json(.object(body))
+    }
+
+    // MARK: - code_modules
+
+    private func modules(_ arguments: AgentArguments) async throws -> AgentAnswer {
+        let place = try place(arguments)
+        let host = PaneToolHost(pane: place.pane, owner: place.controller, tools: nil)
+        let tree = try await UEFIAgentQueries.readyTree(host)
+        let root = CodeAnalysisStore.root
+        let index = await Task.detached(priority: .userInitiated) { CodeAnalysisIndex.load(from: root) }.value
+        var body: [String: JSONValue] = ["document": .string(place.id)]
+        guard !index.isEmpty else {
+            body["modules"] = .array([])
+            body["note"] = .string("The code store holds no analyses; the ghidra-uefi skill makes them.")
+            return .json(.object(body))
+        }
+        // Every branch, compressed ones too: a module is wherever its bytes
+        // are, and the tree reads lazily. What is opened stays open for the
+        // panel; the bytes' hash decides which node is which module.
+        await UEFIContentSearch.openEverything(under: nil, in: tree)
+        let image = tree.image()
+        let readers = tree.spaceReaders
+        let found = await Task.detached(priority: .userInitiated) {
+            UEFICodeScan.scan(in: image, index: index) { node in
+                guard let reader = readers.reader(for: node.space), let bytes = reader.bytes(node.body)
+                else { return nil }
+                return Data(bytes)
+            }
+        }.value
+        let catalogue = await UEFIToolModule.agentCatalogue()
+        let rows: [JSONValue] = found.keys.sorted { $0.path.lexicographicallyPrecedes($1.path) }.map { id in
+            let manifest = found[id]!
+            let recipes = index.manifests(for: manifest.module.sha256)
+                .sorted { $0.analyzedAt > $1.analyzedAt }
+            var row: [String: JSONValue] = [
+                "node": .string(id.description),
+                "module": .string(manifest.module.name),
+                "sha256": .string(manifest.module.sha256.hex),
+                "recipes": .array(recipes.map { .string($0.recipe.id) }),
+                "functions": .int(Int64(manifest.stats.functions))
+            ]
+            if let label = UEFITreeDisplay.nameAfterParent(of: id, in: tree, catalogue: catalogue,
+                                                           image: image, in: .english) {
+                row["label"] = .string(label)
+            }
+            if let node = image.node(id), node.space != .file { row["in_compressed"] = .bool(true) }
+            return .object(row)
+        }
+        body["modules"] = .array(rows)
+        if rows.isEmpty {
+            body["note"] = .string("No PE32/TE module of this dump matches a stored analysis. "
+                + "The ghidra-uefi skill makes one.")
+        }
+        return .json(.object(body))
+    }
+
+    // MARK: - open_code
+
+    private func open(_ arguments: AgentArguments) async throws -> AgentAnswer {
+        let place = try place(arguments)
+        let controller = try place.onScreen()
+        // A Code panel already: move it.
+        if let screen = controller.codeScreen(for: place.pane), let view = controller.codePaneView(for: place.pane) {
+            if let location = try location(arguments, in: screen.artifact) { view.go(to: location) }
+            desk.bringForward(place)
+            return .json(.object(openAnswer(place.id, manifest: screen.manifest, view: view)))
+        }
+        guard let node = try arguments.optionalString("node") else {
+            throw AgentToolError("Give the module's image `node` in \(place.named) — `code_modules` lists them — "
+                + "or a Code panel as `document`.")
+        }
+        let opening = try await opening(node, in: place)
+        let location = try location(arguments, in: opening.artifact)
+        desk.bringForward(place)
+        controller.view.window?.makeKeyAndOrderFront(nil)
+        guard let panel = controller.openCode(named: opening.partName, from: place.pane, source: opening.source,
+                                              manifest: opening.manifest, artifact: opening.artifact,
+                                              recipes: opening.recipes, codec: opening.codec, at: location),
+              let pane = controller.fragments.pane(panel),
+              let opened = desk.places().first(where: { $0.pane === pane })
+        else { throw AgentToolError("The Code panel could not be opened over \(place.named).") }
+        var answer = openAnswer(opened.id, manifest: opening.manifest, view: controller.fragments.codePane(panel))
+        answer["node"] = .string(node)
+        return .json(.object(answer))
+    }
+
+    private func openAnswer(_ document: String, manifest: AnalysisManifest, view: CodePaneView?) -> [String: JSONValue] {
+        var answer: [String: JSONValue] = [
+            "document": .string(document),
+            "module": .string(manifest.module.name),
+            "recipe": .string(manifest.recipe.id)
+        ]
+        if let function = view?.selectedFunction {
+            answer["function"] = .string(function.name)
+            answer["entry"] = .string(function.entry.description)
+        }
+        if let instruction = view?.selectedInstruction { answer["address"] = .string(instruction.address.description) }
+        return answer
+    }
+
+    /// The place `function` or `address` names in `artifact`; nil when
+    /// neither is given. An unknown one is refused, not skipped.
+    func location(_ arguments: AgentArguments, in artifact: CodeArtifact) throws -> CodeLocation? {
+        var location = CodeLocation()
+        if let name = try arguments.optionalString("function") {
+            guard let function = artifact.function(named: name) else {
+                throw AgentToolError("No function \"\(name)\" in this analysis. `code_query` lists them.")
+            }
+            location.function = function.entry
+        }
+        if let text = try arguments.optionalString("address") {
+            guard let address = CodeAddress(hex: text), let function = artifact.function(containing: address) else {
+                throw AgentToolError("No instruction at \(text) in this analysis: give an address `code_query` "
+                    + "lists under \"instructions\".")
+            }
+            if let entry = location.function, entry != function.entry {
+                throw AgentToolError("\(text) is in \(function.name), not in the function given.")
+            }
+            location.address = address
+        }
+        return location.isEmpty ? nil : location
     }
 }

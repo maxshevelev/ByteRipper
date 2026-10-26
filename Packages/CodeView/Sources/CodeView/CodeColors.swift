@@ -1,4 +1,5 @@
 import AppKit
+import AppPalette
 import CodeAnalysis
 
 /// The colours a token kind is drawn in. System colours, so light and dark
@@ -18,6 +19,8 @@ enum CodeColors {
         case .local: .labelColor
         case .address: .secondaryLabelColor
         case .bytes: .tertiaryLabelColor
+        case .note: ZoneColors.agent
+        case .personNote: ZoneColors.person
         }
     }
 

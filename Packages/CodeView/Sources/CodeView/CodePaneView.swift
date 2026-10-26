@@ -48,6 +48,11 @@ import ToolModuleKit
     /// function only moves the current one.
     private var history: [Place] = []
     private var historyIndex = -1
+    /// The annotations on this module's code, by the function and by the
+    /// instruction they are on.
+    public private(set) var notes: [CodeNote] = []
+    private var notesByFunction: [Int: [CodeNote]] = [:]
+    private var notesByLine: [Int: [CodeNote]] = [:]
     /// Which link each `code:N` in the C text is.
     private var cLinks: [CodeLink] = []
     private var drawnC: Int?
@@ -80,6 +85,11 @@ import ToolModuleKit
     /// A function's whole stored range, shown as the dump's main zone rather
     /// than as a selection: the reader keeps the selection for reading bytes.
     public var onFocusRange: ((Range<UInt64>) -> Void)?
+    /// Add Annotation… on a function or an instruction: the place, and the
+    /// name the form suggests as the title. The app asks for the note.
+    public var onAnnotate: ((CodeLocation, String) -> Void)?
+    /// Open Annotation “title” on an annotated row: the annotation's id.
+    public var onOpenNote: ((String) -> Void)?
     /// Another stored analysis of the same module was chosen. The app loads
     /// its artifact and rebuilds the screen; the pane does not read the store.
     public var onChooseRecipe: ((AnalysisManifest) -> Void)?
@@ -461,6 +471,43 @@ import ToolModuleKit
         updateHistoryButtons()
     }
 
+    /// Shows the annotations on this module's code: a mark beside each
+    /// annotated function in the list, the title at the end of an annotated
+    /// instruction's row, and a comment over the function's C.
+    public func setNotes(_ notes: [CodeNote]) {
+        guard notes != self.notes else { return }
+        self.notes = notes
+        notesByFunction = [:]
+        notesByLine = [:]
+        for note in notes {
+            let place = artifact.indices(of: note.location)
+            if let function = place.function { notesByFunction[function, default: []].append(note) }
+            if let line = place.line { notesByLine[line, default: []].append(note) }
+        }
+        drawNavigator()
+        let selected = table.selectedRow
+        syncingSelection = true
+        table.reloadData()
+        if selected >= 0, selected < table.numberOfRows {
+            table.selectRowIndexes(IndexSet(integer: selected), byExtendingSelection: false)
+        }
+        syncingSelection = false
+        drawnC = nil
+        updateC()
+    }
+
+    /// Goes to a function, or to an instruction and the function holding it,
+    /// as a click on a link would: a place Back returns from. What an
+    /// annotation on code and an agent's `open_code` open at.
+    public func go(to location: CodeLocation) {
+        let place = artifact.indices(of: location)
+        if let line = place.line {
+            follow(.line(line))
+        } else if let function = place.function {
+            follow(.function(function))
+        }
+    }
+
     /// Back: the place before the last jump. View ▸ Back (⌘[) calls this
     /// while the code pane has the keyboard.
     public func goBack() {
@@ -548,6 +595,7 @@ import ToolModuleKit
         searchField.translatesAutoresizingMaskIntoConstraints = false
 
         configure(functionTable, identifier: "function")
+        functionTable.menu = rowMenu()
         functionScroll.documentView = functionTable
         functionScroll.hasVerticalScroller = true
         functionScroll.drawsBackground = false
@@ -691,6 +739,7 @@ import ToolModuleKit
         header.translatesAutoresizingMaskIntoConstraints = false
 
         configure(table, identifier: "instruction")
+        table.menu = rowMenu()
         tableScroll.documentView = table
         tableScroll.hasVerticalScroller = true
         tableScroll.drawsBackground = false
@@ -928,7 +977,23 @@ import ToolModuleKit
         cLinks = []
         let text: NSAttributedString
         if let index = state.function, let c = model.functions[index].c {
-            text = CodeColors.attributed(c, tokens: model.cTokens(ofFunction: index), font: font,
+            // The function's annotations head its C, as comments in the note's
+            // hue: what was found, over what it was found in.
+            var header = ""
+            var tokens: [CodeToken] = []
+            for note in notesByFunction[index] ?? [] {
+                var line = "// ◆ \(note.heading)"
+                if let address = note.location.address { line += " @ \(model.displayAddress(address))" }
+                if !note.note.isEmpty { line += " — \(note.note)" }
+                tokens.append(CodeToken(start: header.utf16.count, length: line.utf16.count, kind: note.kind))
+                header += line + "\n"
+            }
+            if !header.isEmpty { header += "\n" }
+            let shift = header.utf16.count
+            tokens += model.cTokens(ofFunction: index).map {
+                CodeToken(start: $0.start + shift, length: $0.length, kind: $0.kind, link: $0.link)
+            }
+            text = CodeColors.attributed(header + c, tokens: tokens, font: font,
                                          links: &cLinks, asTextLinks: true)
         } else {
             let message = state.selectedFunction == nil
@@ -964,6 +1029,17 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
             }
             cell.textField?.textColor = color
             cell.toolTip = reason
+            if state.list == .functions, let notes = notesByFunction[state.listedFunctions[row]], !notes.isEmpty,
+               let field = cell.textField {
+                let marked = NSMutableAttributedString(string: field.stringValue, attributes: [
+                    .foregroundColor: color, .font: field.font ?? ToolPanelFont.body()
+                ])
+                marked.append(NSAttributedString(string: "  ◆", attributes: [
+                    .foregroundColor: CodeColors.color(for: notes[0].kind), .font: field.font ?? ToolPanelFont.body()
+                ]))
+                field.attributedStringValue = marked
+                cell.toolTip = ([reason].compactMap { $0 } + notes.map(\.heading)).joined(separator: "\n")
+            }
             return cell
         }
         let lines = state.lines
@@ -971,7 +1047,15 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
         let identifier = NSUserInterfaceItemIdentifier("code-line")
         let cell = tableView.makeView(withIdentifier: identifier, owner: nil) as? CodeLineCell
             ?? CodeLineCell(identifier: identifier)
-        let shown = model.listingRow(ofLine: lines[lines.startIndex + row].global)
+        let global = lines[lines.startIndex + row].global
+        var shown = model.listingRow(ofLine: global)
+        // An annotated instruction carries its note at the end of the row.
+        for note in notesByLine[global] ?? [] {
+            let mark = "    ◆ \(note.heading)"
+            shown.tokens.append(CodeToken(start: shown.text.utf16.count + 4,
+                                          length: mark.utf16.count - 4, kind: note.kind))
+            shown.text += mark
+        }
         cell.line.show(shown.text, tokens: shown.tokens,
                        font: .monospacedSystemFont(ofSize: ToolPanelFont.size, weight: .regular))
         cell.line.onLink = { [weak self] link in self?.follow(link) }
@@ -1083,5 +1167,75 @@ final class CodeLineCell: NSTableCellView {
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) is not used")
+    }
+}
+
+extension CodePaneView: NSMenuDelegate {
+    /// The right-click menu of the function list and the listing, filled for
+    /// the row clicked: Add Annotation…, and Open Annotation for each note
+    /// already there.
+    private func rowMenu() -> NSMenu {
+        let menu = NSMenu()
+        menu.delegate = self
+        return menu
+    }
+
+    /// The place the right-click is on, and the notes there.
+    func clickedPlace(in tableView: NSTableView) -> (location: CodeLocation, name: String, notes: [CodeNote])? {
+        let row = tableView.clickedRow
+        guard row >= 0 else { return nil }
+        if tableView === functionTable {
+            guard state.list == .functions, row < state.listedFunctions.count else { return nil }
+            let index = state.listedFunctions[row]
+            let function = model.functions[index]
+            let onFunction = (notesByFunction[index] ?? []).filter { $0.location.address == nil }
+            return (CodeLocation(function: function.entry), function.name, onFunction)
+        }
+        let lines = state.lines
+        guard row < lines.count else { return nil }
+        let line = lines[lines.startIndex + row]
+        let function = model.functions[line.function]
+        return (CodeLocation(function: function.entry, address: line.instruction.address),
+                "\(function.name) @ \(model.displayAddress(line.instruction.address))",
+                notesByLine[line.global] ?? [])
+    }
+
+    public func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+        let tableView = menu === functionTable.menu ? functionTable : table
+        guard let place = clickedPlace(in: tableView) else { return }
+        for note in place.notes {
+            let item = menu.addItem(withTitle: L("Open Annotation “%1$@”", note.title),
+                                    action: #selector(openNoteChosen(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = note.id
+        }
+        guard onAnnotate != nil else { return }
+        // help: panel.code.annotate
+        let add = menu.addItem(withTitle: L("Add Annotation…"), action: #selector(annotateChosen(_:)),
+                               keyEquivalent: "")
+        add.target = self
+        add.representedObject = CodePlaceBox(location: place.location, name: place.name)
+    }
+
+    @objc private func openNoteChosen(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String else { return }
+        onOpenNote?(id)
+    }
+
+    @objc private func annotateChosen(_ sender: NSMenuItem) {
+        guard let box = sender.representedObject as? CodePlaceBox else { return }
+        onAnnotate?(box.location, box.name)
+    }
+}
+
+/// A menu item's place in the code.
+private final class CodePlaceBox: NSObject {
+    let location: CodeLocation
+    let name: String
+
+    init(location: CodeLocation, name: String) {
+        self.location = location
+        self.name = name
     }
 }

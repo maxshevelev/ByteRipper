@@ -1687,6 +1687,11 @@
 "Protocol GUID" = "GUID протокола";
 "Go back to the previous place in the code (⌘[)" = "Вернуться к предыдущему месту в коде (⌘[)";
 "Go forward again (⌘])" = "Снова перейти вперёд (⌘])";
+"Open the code here" = "Открыть код в этом месте";
+"Opening the code…" = "Открытие кода…";
+"The annotation is shown beside the code and listed in the Annotations window. A double-click on it opens the code here." = "Заметка показывается рядом с кодом и в окне «Заметки». Двойной клик по ней открывает код в этом месте.";
+"The module of this code was not found in the dump it was opened over." = "Модуль этого кода не найден в дампе, над которым открыта панель.";
+"The note was made on other bytes of this module." = "Заметка сделана для других байтов этого модуля.";
 "Callers" = "Вызывающие";
 "Functions that call this one" = "Функции, которые вызывают эту";
 "POST" = "POST";

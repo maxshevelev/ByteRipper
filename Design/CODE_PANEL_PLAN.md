@@ -486,6 +486,22 @@ Each stage builds, tests and is committable on its own.
    - **5c, the agent:** `code_query` reads the same typed model — functions,
      instructions, strings, references — and gives Ghidra's address beside the
      module offset. Done.
+     It reads the store, not the panel: a Code panel or tab, an image `node`
+     of a dump (its bytes hashed), or a `module` SHA-256 alone.
+     `code_modules` lists a dump's analyzed modules, opening every
+     compressed section to look; `open_code` opens the panel at a function or
+     an instruction, or raises and moves the one already open. All three
+     routes — the tree's Open with Code, `open_code`, an annotation — go
+     through one `UEFICodeOpening.prepare`, which needs no UEFI panel scan.
+   - **5e, annotations on code:** an annotation can be on a function or an
+     instruction (`AgentAnnotation.Code`: the module's SHA-256, the function's
+     entry, the instruction). It belongs to the dump the module is in, is drawn
+     over the bytes when the module lies in the file's own, and its card wears
+     the Code badge with its icon and names the place as module ▸ function @
+     instruction. A double-click — or the card's place link — opens the Code
+     panel there instead of the bytes. The panel shows the module's notes: a
+     mark beside the function, the title at the end of the instruction's row,
+     a comment over the function's C; its rows' right-click adds one. Done.
    - **5d, projects:** a project writes its Code analyses into an
      `Analyses.bundle` beside `Project.json` and keeps a store reference to the
      same keys, so a moved project comes back with its code and viewing alone

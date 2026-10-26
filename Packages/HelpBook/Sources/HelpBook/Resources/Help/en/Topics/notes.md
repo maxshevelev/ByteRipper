@@ -5,6 +5,7 @@
 @covers window.notes
 @covers menu.offset.note
 @covers menu.offset.open-note
+@covers panel.code.annotate
 @covers window.notes.edit
 @covers panel.uefi.annotate-node
 @covers menu.window.notes
@@ -39,4 +40,6 @@ The newest card comes first and wears a **New** tag on its top edge — a card m
 A card can be dragged to another place with the mouse.
 
 A click selects a card. **⇧**-click selects the cards from the one last clicked to the one clicked, in the cards' order; **⌘**-click adds a card to the selection or takes it out; **⌘A** selects every card; the arrow keys move the selection. A click with **⇧** or **⌘** only selects: on a link, the pencil or the ✕ it does nothing else. A double-click on a card, or **Return**, brings its file forward — or opens it in a new tab — and selects the place, as a step of the navigation history ([[topic:navigation|Moving Around]]): **Back** in that tab returns to the **Annotations** window. In a firmware image **UEFI Structure** opens beside the dump at the node the place is in, as a click on a Contents search result does. A place in decompressed or decoded bytes opens in a fragment panel of those bytes, with the place selected and **UEFI Structure** in that panel open to the node that holds it.
+
+An annotation can also be on a place in a module's code — a function, or one instruction — rather than on bytes. It is made in the code panel: right-click a function in the list or an instruction in the listing and choose **Add Annotation…**; an agent makes one with its `annotate` tool. Its card shows a **Code** badge and the place as module, function and instruction, and a double-click opens the module's code panel over the dump at that place. In the code panel the note is shown at the place: a mark beside the function in the list, the note's title at the end of the instruction's row, and the note as a comment above the function's C. The note belongs to the dump the module is in; the same module in another dump shows it too, since its code is the same.
 The ✕ on a card removes that annotation; **Delete** removes the selected cards. The cards after a removed one move up to close the gap. Relations to a removed annotation go with it. **⌘Z** puts the cards last removed back where they stood, with their relations, and **⇧⌘Z** removes them again; this lasts while ByteRipper runs, not past a restart.

@@ -2211,57 +2211,33 @@ private struct ChecksumPass: Sendable {
     ///
     /// Public because a right-click cannot be simulated — the level the app's
     /// tests drive, like `openNodeInPanel(for:body:)`.
-    public func openCode(for nodeID: NodeID) {
-        guard let tree, tree.isReady, let node = tree.image().node(nodeID),
-              let manifest = codeAnalysisManifests[nodeID],
-              let open = UEFIPresenter.nodeOpen(for: node, in: tree.image(), body: true)
-        else {
-            fail(L("There is no code analysis to open here."))
+    public func openCode(for nodeID: NodeID, at location: CodeLocation? = nil) {
+        guard let tree, tree.isReady else {
+            fail(UEFICodeOpening.Failure.noAnalysis.message)
             return
         }
-        let readers = tree.spaceReaders
-        let space = node.space
-        let body = node.body
         // Busy until the panel opens: the bytes are quick, the artifact is
         // not — a large DXE driver's is ten megabytes of JSON.
         controller.showBusy()
         Task { [weak self] in
             defer { self?.controller.endBusy() }
-            let bytes = await Task.detached(priority: .userInitiated) {
-                readers.reader(for: space)?.bytes(body)
-            }.value
-            guard let self else { return }
-            guard let bytes, !bytes.isEmpty else {
-                self.fail(L("Those bytes could not be read."))
-                return
+            do {
+                let opening = try await UEFICodeOpening.prepare(
+                    node: nodeID, in: tree, store: UEFIToolModule.codeAnalysisRoot,
+                    preferred: self?.codeAnalysisManifests[nodeID])
+                guard let self else { return }
+                guard let opener = self.host as? any CodePartOpening else {
+                    self.fail(L("The code panel is not available."))
+                    return
+                }
+                opener.openCode(named: opening.partName, linkedTo: opening.source,
+                                manifest: opening.manifest, artifact: opening.artifact,
+                                recipes: opening.recipes, codec: opening.codec, at: location)
+            } catch let failure as UEFICodeOpening.Failure {
+                self?.fail(failure.message)
+            } catch {
+                self?.fail("\(error)")
             }
-            guard SHA256Digest(data: Data(bytes)) == manifest.module.sha256 else {
-                self.fail(L("The module changed after this analysis."))
-                return
-            }
-            let root = UEFIToolModule.codeAnalysisRoot
-            let artifact = await Task.detached(priority: .userInitiated) { () -> CodeArtifact? in
-                guard let root else { return nil }
-                return try? ContentStore(root: root, create: false).artifact(for: manifest)
-            }.value
-            guard let artifact else {
-                self.fail(L("The code analysis could not be read."))
-                return
-            }
-            guard let opener = self.host as? any CodePartOpening else {
-                self.fail(L("The code panel is not available."))
-                return
-            }
-            opener.openCode(
-                named: open.partName, linkedTo: open.source, manifest: manifest,
-                artifact: artifact,
-                recipes: self.codeAnalysisIndex.manifests(for: manifest.module.sha256),
-                codec: ReadOnlyPartCodec(
-                    bytes,
-                    title: L("This cannot be put back"),
-                    reason: L("A code analysis is a snapshot; edit the dump and analyze the module again.")
-                )
-            )
         }
     }
 

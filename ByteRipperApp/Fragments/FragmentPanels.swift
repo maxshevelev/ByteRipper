@@ -185,12 +185,25 @@ import ToolModuleKit
     @discardableResult
     func openCode(_ bytes: [UInt8], named name: String, origin: DocumentOrigin,
                   manifest: AnalysisManifest, artifact: CodeArtifact,
-                  recipes: [AnalysisManifest] = [],
+                  recipes: [AnalysisManifest] = [], at location: CodeLocation? = nil,
                   animated: Bool = true) -> FragmentDock.PanelID? {
-        open(bytes, named: name, origin: origin,
-             code: CodeScreen(manifest: manifest, artifact: artifact, bytes: Data(bytes),
-                              recipes: recipes),
-             animated: animated)
+        // A place to open at is the screen's first function and instruction,
+        // as a restored screen's would be.
+        let place = location.map { artifact.indices(of: $0) }
+        return open(bytes, named: name, origin: origin,
+                    code: CodeScreen(manifest: manifest, artifact: artifact, bytes: Data(bytes),
+                                     selectedFunction: place?.function,
+                                     selectedInstruction: place?.line,
+                                     recipes: recipes),
+                    animated: animated)
+    }
+
+    /// The Code panel of module `module` opened over `parent`, when one is.
+    func codePanel(module: SHA256Digest, over parent: PaneViewModel) -> FragmentDock.PanelID? {
+        dock.panels.first { id in
+            guard let entry = entries[id], case .code(let screen) = entry.screen else { return false }
+            return screen.manifest.module.sha256 == module && entry.pane.origin?.parent === parent
+        }
     }
 
     /// Takes a pane that already exists as a panel of its own and raises it —
@@ -248,7 +261,7 @@ import ToolModuleKit
             // The code pane and the part's hex view are two views of one
             // selection: an instruction selects its bytes, a byte selection
             // shows the instruction that holds it.
-            wireCodeScreen(codePane, to: pane) { [weak pane, weak host] range in
+            wireCodeScreen(codePane, to: pane, owner: host) { [weak pane, weak host] range in
                 guard let pane else { return }
                 host?.filePaneView(for: pane)?.revealOffsetCentered(range.lowerBound)
             }
@@ -260,6 +273,7 @@ import ToolModuleKit
             codePane.onChooseRecipe = { [weak self] manifest in
                 self?.chooseRecipe(opened.id, manifest: manifest)
             }
+            host.applyCodeNotes()
             codePane.focusSelectedFunction()
         }
         // The tool panel's header is a handle too, when the panel has one open.
@@ -450,7 +464,8 @@ import ToolModuleKit
         codePane.onChooseRecipe = { [weak self] manifest in
             self?.chooseRecipe(id, manifest: manifest)
         }
-        wireCodeScreen(codePane, to: pane) { [weak pane, weak host] range in
+        host?.applyCodeNotes()
+        wireCodeScreen(codePane, to: pane, owner: host) { [weak pane, weak host] range in
             guard let pane else { return }
             host?.filePaneView(for: pane)?.revealOffsetCentered(range.lowerBound)
         }

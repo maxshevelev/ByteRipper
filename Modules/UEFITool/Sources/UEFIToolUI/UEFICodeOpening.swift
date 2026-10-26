@@ -1,0 +1,87 @@
+import CodeAnalysis
+import Foundation
+import Localization
+import PartCodec
+import ToolModuleKit
+import UEFIContentSource
+import UEFIImage
+import UEFITool
+
+/// Everything a Code panel is opened with, read and checked: the module's
+/// bytes, the analysis that matches them, its artifact, and where the part
+/// links back to in the dump.
+///
+/// One way to it for every route: **Open with Code** in the tree, an agent's
+/// `open_code`, a double-click on an annotation on code. None of them needs
+/// the UEFI panel to have scanned the tree first — the node's bytes are
+/// hashed here, and the store says which analysis they have.
+public struct UEFICodeOpening: Sendable {
+    public let partName: String
+    public let source: Range<UInt64>
+    public let bytes: [UInt8]
+    public let manifest: AnalysisManifest
+    public let artifact: CodeArtifact
+    /// Every readable analysis of the module, for the panel's dropdown.
+    public let recipes: [AnalysisManifest]
+
+    /// The read-only codec the part is opened with.
+    public var codec: ReadOnlyPartCodec {
+        ReadOnlyPartCodec(bytes, title: L("This cannot be put back"),
+                          reason: L("A code analysis is a snapshot; edit the dump and analyze the module again."))
+    }
+
+    /// What stopped an opening, in the words the panel shows.
+    public enum Failure: Error, Equatable, Sendable {
+        case noAnalysis
+        case unreadableBytes
+        case changed
+        case unreadableAnalysis
+
+        public var message: String {
+            switch self {
+            case .noAnalysis: L("There is no code analysis to open here.")
+            case .unreadableBytes: L("Those bytes could not be read.")
+            case .changed: L("The module changed after this analysis.")
+            case .unreadableAnalysis: L("The code analysis could not be read.")
+            }
+        }
+    }
+
+    /// Reads node `id`'s module and the analysis stored for it.
+    ///
+    /// - Parameter preferred: the analysis to open when it still matches the
+    ///   bytes — the one the tree's badge was drawn from; otherwise the
+    ///   newest the store has for them.
+    @MainActor
+    public static func prepare(node id: NodeID, in tree: LazyUEFITree, store root: URL?,
+                               preferred: AnalysisManifest? = nil) async throws -> UEFICodeOpening {
+        let image = tree.image()
+        guard let root, let node = image.node(id), UEFICodeCandidates.isCandidate(node),
+              let open = UEFIPresenter.nodeOpen(for: node, in: image, body: true)
+        else { throw Failure.noAnalysis }
+        let readers = tree.spaceReaders
+        let space = node.space
+        let body = node.body
+        let bytes = await Task.detached(priority: .userInitiated) {
+            readers.reader(for: space)?.bytes(body)
+        }.value
+        guard let bytes, !bytes.isEmpty else { throw Failure.unreadableBytes }
+        let loaded = await Task.detached(priority: .userInitiated)
+        { () -> (manifest: AnalysisManifest, artifact: CodeArtifact?, recipes: [AnalysisManifest])? in
+            let digest = SHA256Digest(data: Data(bytes))
+            let index = CodeAnalysisIndex.load(from: root)
+            let manifest = preferred.flatMap { $0.module.sha256 == digest ? $0 : nil }
+                ?? index.newest(for: digest)
+            guard let manifest else { return nil }
+            let artifact = try? ContentStore(root: root, create: false).artifact(for: manifest)
+            return (manifest, artifact, index.manifests(for: digest))
+        }.value
+        guard let loaded else {
+            throw preferred == nil ? Failure.noAnalysis : Failure.changed
+        }
+        guard let artifact = loaded.artifact else { throw Failure.unreadableAnalysis }
+        return UEFICodeOpening(partName: open.partName, source: open.source, bytes: bytes,
+                               manifest: loaded.manifest, artifact: artifact,
+                               recipes: loaded.recipes)
+    }
+}

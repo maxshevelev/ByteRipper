@@ -57,6 +57,9 @@ enum AnnotationsFile {
         var relatedTo: [String]
         var site: AgentAnnotation.Site?
         var author: AgentAnnotation.Author
+        /// A place in a module's code; absent from a file written before
+        /// there were any, which reads as nil.
+        var code: AgentAnnotation.Code?
 
         /// Nil for one on a document never saved, which is not kept.
         init?(_ annotation: AgentAnnotation) {
@@ -72,12 +75,13 @@ enum AnnotationsFile {
             relatedTo = annotation.relatedTo
             site = annotation.site
             author = annotation.author
+            code = annotation.code
         }
 
         var annotation: AgentAnnotation {
             AgentAnnotation(id: id, file: .disk(URL(fileURLWithPath: path), identity), range: range, node: node,
                             title: title, note: note, decoded: decoded, relatedTo: relatedTo, site: site,
-                            author: author)
+                            author: author, code: code)
         }
     }
 

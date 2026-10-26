@@ -330,6 +330,41 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertTrue(view.canGoBack)
     }
 
+    /// An annotation on code shows at its place: beside the function in the
+    /// list, at the end of the instruction's row, over the function's C; and
+    /// the rows carry the menu Add Annotation… is offered in.
+    func testAnnotationsShowAtTheirPlaceInTheCode() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try linkedArtifact(),
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
+        view.layoutSubtreeIfNeeded()
+        view.setNotes([
+            CodeNote(id: "a1", title: "Saves ESI", note: "", location: CodeLocation(address: CodeAddress(0x220)),
+                     byPerson: false),
+            CodeNote(id: "a2", title: "The caller", note: "Calls entry.",
+                     location: CodeLocation(function: CodeAddress(0x220)), byPerson: true)
+        ])
+        let listing = try XCTUnwrap(first(NSTableView.self, in: view) {
+            $0.tableColumns.first?.identifier.rawValue == "instruction"
+        })
+        let row = try XCTUnwrap(listing.view(atColumn: 0, row: 0, makeIfNecessary: true) as? CodeLineCell)
+        XCTAssertTrue(row.line.string.hasSuffix("◆ a1 Saves ESI"), row.line.string)
+        view.restore(function: 0, instruction: nil, showsC: true)
+        XCTAssertTrue(view.decompiledText.hasPrefix("// ◆ a1 Saves ESI @ 0x68\n// ◆ a2 The caller — Calls entry.\n"),
+                      view.decompiledText)
+
+        // A right-click is not simulated here; with no row clicked the menu
+        // offers nothing rather than a place that is not there.
+        view.onAnnotate = { _, _ in }
+        let functions = try XCTUnwrap(first(NSTableView.self, in: view) {
+            $0.tableColumns.first?.identifier.rawValue == "function"
+        })
+        let menu = try XCTUnwrap(functions.menu)
+        XCTAssertNil(view.clickedPlace(in: functions))
+        view.menuNeedsUpdate(menu)
+        XCTAssertTrue(menu.items.isEmpty)
+    }
+
     private func linkedArtifact() throws -> CodeArtifact {
         try JSONDecoder().decode(CodeArtifact.self, from: Data("""
         {"script_version":3,"ghidra":"12.1.2","program":{"image_base":"0x0"},

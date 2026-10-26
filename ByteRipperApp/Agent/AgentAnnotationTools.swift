@@ -1,5 +1,6 @@
 import Cocoa
 import AgentKit
+import CodeAnalysis
 import ByteRipperCore
 import LenovoDMI
 import Localization
@@ -258,6 +259,24 @@ final class AgentAnnotationTools {
         return id
     }
 
+    /// The person's note on a place in the code of the Code panel `pane`:
+    /// placed as the agent's `function`/`address` form places one.
+    @discardableResult
+    func addNote(title: String, note: String, at location: CodeLocation,
+                 of pane: PaneViewModel) async throws -> String {
+        guard let place = desk.places().first(where: { $0.pane === pane }) else {
+            throw AgentToolError("The document is not open.")
+        }
+        var arguments: [String: JSONValue] = [
+            "title": .string(title), "note": .string(note), "document": .string(place.id)
+        ]
+        if let function = location.function { arguments["function"] = .string(function.description) }
+        if let address = location.address { arguments["address"] = .string(address.description) }
+        let answer = try await annotate(AgentArguments(arguments), author: .person)
+        guard case .json(let json) = answer, let id = json["id"]?.stringValue else { return "" }
+        return id
+    }
+
     /// The person's note on node `id` of `pane`'s tree, placed as the agent's
     /// `node` form places one; the new annotation's id.
     @discardableResult
@@ -297,7 +316,11 @@ final class AgentAnnotationTools {
                 to, a LENV block decoded, given as a node there or as a part of them — is kept there: the \
                 annotation answers `decoded` (the section or block, the range in its bytes, the `codecs`), the \
                 person's double-click opens those bytes in a fragment panel at the place, and the card shows the \
-                codecs as badges, so the title need not name them. Annotations go with `remove_annotations` or when the person clears them.
+                codecs as badges, so the title need not name them. A place in a module's code — a `function`, or an \
+                instruction `address`, in a Code panel given as `document` or in a module's image `node` of a dump \
+                with a stored analysis — is a code annotation: the person's double-click opens the module's Code \
+                panel at that function or instruction, the panel shows the note beside it, and the answer has \
+                `code`. Annotations go with `remove_annotations` or when the person clears them.
                 """,
             inputSchema: AgentSchema.object([
                 "title": AgentSchema.string("A few words: what the bytes are. At most \(Self.maxTitle) characters."),
@@ -310,7 +333,12 @@ final class AgentAnnotationTools {
                 "related_to": AgentSchema.strings(
                     "Ids of annotations this one is about, e.g. [\"a1\"] for the target of a pointer. Give it "
                     + "whenever there is such an annotation."),
-                "reveal": AgentSchema.boolean("Also bring the place on screen. Default false.")
+                "reveal": AgentSchema.boolean("Also bring the place on screen. Default false."),
+                "function": AgentSchema.string(
+                    "A function of a module's code, by name or Ghidra entry address: annotate it in the Code panel "
+                    + "`document`, or in the module at image `node` of the dump `document`."),
+                "address": AgentSchema.string(
+                    "Or an instruction's Ghidra address in that code — the place is the instruction.")
             ], required: ["title"]),
             annotations: AgentTool.Annotations(readOnly: false, idempotent: false)
         ) { call in
@@ -330,6 +358,9 @@ final class AgentAnnotationTools {
         let known = Set(all().map(\.id))
         if let missing = related.first(where: { !known.contains($0) }) {
             throw AgentToolError("No annotation \(missing). Call `annotations` for the ones there are.")
+        }
+        if arguments.has("function") || arguments.has("address") {
+            return try await annotateCode(arguments, title: title, note: note, related: related, author: author)
         }
         let offset = try arguments.optionalOffset("offset")
         let length = try arguments.optionalOffset("length") ?? 1
@@ -717,6 +748,10 @@ final class AgentAnnotationTools {
         controller.view.window?.makeKeyAndOrderFront(nil)
         if let range = annotation.range, range.upperBound > place.pane.fileSize { return }
         controller.recordJump(in: place.pane)
+        if annotation.code != nil {
+            openCode(of: annotation, at: place, in: controller)
+            return
+        }
         // A file just opened has its tree still to read, and whether the
         // place is a node — and how to open it — is the tree's to say; the
         // block or the section the place is in may sit in branches nobody has
@@ -875,6 +910,14 @@ final class AgentAnnotationTools {
                                 "codecs": .array(decoded.codecs.map { .string($0.text(in: .english)) })]
         }
         if let site = annotation.site { entry["label"] = .string(site.agentLabel) }
+        if let code = annotation.code {
+            var described: [String: JSONValue] = [
+                "module": .string(code.moduleName), "sha256": .string(code.module),
+                "function": .string(code.functionName), "entry": .string(code.function)
+            ]
+            if let address = code.address { described["address"] = .string(address) }
+            entry["code"] = .object(described)
+        }
         if !annotation.note.isEmpty { entry["note"] = .string(annotation.note) }
         if annotation.author == .person { entry["author"] = "person" }
         if !annotation.relatedTo.isEmpty { entry["related_to"] = .array(annotation.relatedTo.map { .string($0) }) }
@@ -893,4 +936,100 @@ final class AgentAnnotationTools {
             throw AgentToolError(error.description)
         }
     }
+
+    // MARK: - Code
+
+    /// `annotate` with `function` or `address`: a note on a place in a
+    /// module's code. It belongs to the dump the module is in — kept with it,
+    /// drawn over the function's bytes when they are the file's own — and is
+    /// opened as the person reads code: in the Code panel, at the place.
+    private func annotateCode(_ arguments: AgentArguments, title: String, note: String, related: [String],
+                              author: AgentAnnotation.Author) async throws -> AgentAnswer {
+        let code = AgentCodeTools(desk: desk)
+        let named = try resolve(arguments.optionalString("document"))
+        // The dump: the one named, or the one a Code panel was opened over.
+        var dump = named.pane
+        while let parent = dump.origin?.parent { dump = parent }
+        guard let place = desk.places().first(where: { $0.pane === dump }), let document = dump.document else {
+            throw AgentToolError("The dump \(named.named) was opened from is no longer open.")
+        }
+        let source = try await code.source(arguments)
+        guard let location = try code.location(arguments, in: source.artifact) else {
+            throw AgentToolError("Give `function` or `address`.")
+        }
+        let model = CodeModel(artifact: source.artifact, moduleBytes: source.bytes)
+        let place_ = model.artifact.indices(of: location)
+        guard let functionIndex = place_.function else { throw AgentToolError("That place is in no function.") }
+        let function = model.functions[functionIndex]
+
+        // The module's node in the dump, and where its bytes are there.
+        let host = PaneToolHost(pane: dump, owner: place.controller, tools: nil)
+        let tree = try await UEFIAgentQueries.readyTree(host)
+        let nodeText: String
+        if let given = source.node, dump === named.pane {
+            nodeText = given
+        } else if let found = await code.imageNode(of: source.manifest, in: tree, fileName: host.fileName) {
+            nodeText = found.description
+        } else {
+            throw AgentToolError("The module of \(named.named) was not found in \(place.named)'s tree.")
+        }
+        var range: Range<UInt64>?
+        if let id = try? UEFIAgentQueries.nodeID(nodeText), let node = tree.image().node(id), node.space == .file {
+            let inModule = place_.line.flatMap(model.moduleRange(ofLine:)) ?? model.moduleRange(ofFunction: functionIndex)
+            range = inModule.map { (node.body.lowerBound + $0.lowerBound)..<(node.body.lowerBound + $0.upperBound) }
+        }
+
+        let file: AgentAnnotation.File = dump.isUntitled
+            ? .document(WeakDocument(document)) : .disk(document.url, document.identity)
+        let site = await self.site(of: file, range: nil, node: nodeText, decoded: nil)
+        let annotation = AgentAnnotation(
+            id: "a\(nextID)", file: file, range: range, node: nodeText, title: title, note: note,
+            relatedTo: related, site: site, author: author,
+            code: AgentAnnotation.Code(
+                module: source.manifest.module.sha256.hex, moduleName: source.manifest.module.name,
+                function: function.entry.description, functionName: function.name,
+                address: location.address?.description))
+        nextID += 1
+        add(annotation)
+        if try arguments.bool("reveal", default: false) { show(annotation.id) }
+        return .json(describe(annotation))
+    }
+
+    /// Opens a code annotation's place: the module's Code panel over its
+    /// dump, at the function or instruction — what a double-click on its card
+    /// does. The tree is read first; a module in a compressed volume may need
+    /// its branch opened, and the window says so in a sheet that can be
+    /// cancelled.
+    private func openCode(of annotation: AgentAnnotation, at place: AgentDesk.Place,
+                          in controller: MainViewController) {
+        guard let code = annotation.code, let node = annotation.node,
+              let id = try? UEFIAgentQueries.nodeID(node) else { return }
+        let host = PaneToolHost(pane: place.pane, owner: controller, tools: nil)
+        var cancelled = false
+        let work = host.beginBlockingWork(title: L("Opening the code…")) { cancelled = true }
+        Task { @MainActor in
+            defer { work.finish() }
+            guard let tree = try? await UEFIAgentQueries.readyTree(host), !cancelled,
+                  await UEFIAgentQueries.reachable(id, in: tree), !cancelled
+            else { return }
+            do {
+                let opening = try await UEFICodeOpening.prepare(node: id, in: tree, store: CodeAnalysisStore.root)
+                guard !cancelled else { return }
+                guard opening.manifest.module.sha256.hex == code.module else {
+                    controller.presentAlert(title: UEFICodeOpening.Failure.changed.message,
+                                            message: L("The note was made on other bytes of this module."),
+                                            outcome: .problem)
+                    return
+                }
+                controller.openCode(named: opening.partName, from: place.pane, source: opening.source,
+                                    manifest: opening.manifest, artifact: opening.artifact,
+                                    recipes: opening.recipes, codec: opening.codec, at: code.location)
+            } catch let failure as UEFICodeOpening.Failure {
+                controller.presentAlert(title: failure.message, message: "", outcome: .problem)
+            } catch {
+                controller.presentAlert(title: "\(error)", message: "", outcome: .problem)
+            }
+        }
+    }
 }
+

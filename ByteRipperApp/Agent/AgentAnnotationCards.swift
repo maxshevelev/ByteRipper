@@ -469,13 +469,18 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
         // A place in decoded bytes is told in their addresses, after the
         // badges of the codecs they came through.
         let shown = annotation.decoded?.range ?? annotation.range
-        let address = shown.map { range in
+        var address = shown.map { range in
             range.count <= 1 ? String(format: "0x%llX", range.lowerBound)
                 : String(format: "0x%llX–0x%llX", range.lowerBound, range.upperBound)
         }
+        // A place in code is told as code: the Code badge with its icon, then
+        // the module, the function and the instruction — a link that opens
+        // the code panel there.
+        if let code = annotation.code { address = code.label }
         return AnnotationCardView.Content(
             id: annotation.id, title: annotation.title, isOpen: isOpen(annotation),
             file: fileName, codecs: annotation.decoded?.codecs.map(\.text) ?? [], address: address,
+            isCode: annotation.code != nil,
             path: annotation.file.url?.path,
             site: annotation.site?.label, note: annotation.note,
             related: annotation.relatedTo.map { ($0, titles[$0] ?? "") },
@@ -636,6 +641,9 @@ final class AnnotationCardView: NSView {
         /// The badges before the address: the codecs of decoded bytes.
         var codecs: [String] = []
         var address: String?
+        /// The place is in a module's code: the address is the code's place,
+        /// worn with the Code badge, and opens the code panel.
+        var isCode = false
         var path: String?
         var site: String?
         var note: String
@@ -779,7 +787,14 @@ final class AnnotationCardView: NSView {
         // The place: the node, which the bytes selected in the dump do not
         // say — or, with no tree to name it, the addresses.
         let place: AnnotationPlaceLine?
-        if let site = content.site {
+        if content.isCode, let address = content.address {
+            // The node the module is in matters less than the code: the
+            // place is the function, and a click opens it, as a double-click
+            // on the card does.
+            let link = CardLinkField(text: address) { [weak self] in self?.onDoubleClick() }
+            link.toolTip = [L("Open the code here"), content.site].compactMap { $0 }.joined(separator: "\n")
+            place = AnnotationPlaceLine(codecs: [], place: link, text: address, isCode: true)
+        } else if let site = content.site {
             let link = CardLinkField(text: site) { [weak self] in self?.onSite() }
             link.toolTip = L("Show in UEFI Structure")
             place = AnnotationPlaceLine(codecs: content.codecs, place: link, text: site)
@@ -1081,10 +1096,13 @@ final class AnnotationPlaceLine: NSView {
     /// What the line says, as one string, for tests.
     let text: String
 
-    init(codecs: [String], place: NSControl, text: String) {
-        badges = codecs.map { PartBadgeView(text: $0, isTransform: true) }
+    init(codecs: [String], place: NSControl, text: String, isCode: Bool = false) {
+        // A place in code wears the Code badge the code panel's header wears:
+        // its curly-braces icon, then the word.
+        let code = isCode ? [PartBadgeView(text: L("Code"), symbolName: "ellipsis.curlybraces")] : []
+        badges = code + codecs.map { PartBadgeView(text: $0, isTransform: true) }
         address = place
-        self.text = (codecs + [text]).joined(separator: " ")
+        self.text = ((isCode ? [L("Code")] : []) + codecs + [text]).joined(separator: " ")
         super.init(frame: .zero)
         (badges + [address]).forEach { view in
             view.translatesAutoresizingMaskIntoConstraints = true

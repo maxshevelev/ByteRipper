@@ -3174,7 +3174,11 @@ final class MainViewController: NSViewController {
             agentServiceObserver = NotificationCenter.default.addObserver(
                 forName: AgentService.didChange, object: nil, queue: .main
             ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.syncAgentToolbarItem() }
+                MainActor.assumeIsolated {
+                    self?.syncAgentToolbarItem()
+                    // An annotation on code changed: the code panels show it.
+                    self?.applyCodeNotes()
+                }
             }
         }
         syncAgentToolbarItem()

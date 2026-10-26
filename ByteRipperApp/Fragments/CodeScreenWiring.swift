@@ -8,8 +8,19 @@ import Foundation
 /// The same wiring serves a panel in the dock and a code screen in a tab —
 /// the screen changing container must not change how the two halves talk.
 @MainActor
-func wireCodeScreen(_ codePane: CodePaneView, to pane: PaneViewModel,
+func wireCodeScreen(_ codePane: CodePaneView, to pane: PaneViewModel, owner: MainViewController?,
                     reveal: @escaping (Range<UInt64>) -> Void) {
+    // A note on the code is the person's as one on the dump is: the same
+    // form, the same window.
+    codePane.onAnnotate = { [weak owner, weak pane] location, name in
+        guard let owner, let pane else { return }
+        owner.annotateCode(of: pane, at: location, suggesting: name)
+    }
+    codePane.onOpenNote = { [weak owner, weak pane] id in
+        guard let owner, let pane else { return }
+        owner.showNotesWindow(leaving: pane)
+        NotesWindowController.instance.cards.select(id)
+    }
     codePane.onSelectRange = { [weak pane] range in
         guard let pane else { return }
         pane.select(range: range)

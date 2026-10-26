@@ -1,6 +1,7 @@
 import ByteRipperCore
 import Foundation
 import Localization
+import CodeAnalysis
 import UEFIImage
 
 /// A note about a place in a file — made by an agent
@@ -42,6 +43,32 @@ struct AgentAnnotation: Equatable {
     /// Who made it: the agent, or the person, from the dump's right-click
     /// menu. The two are drawn in hues of their own.
     var author: Author = .agent
+
+    /// A place in a module's code: the annotation is about a function or an
+    /// instruction, and opens the module's Code panel there, not its bytes.
+    /// `node` is the module's image node; `range`, when the module lies in the
+    /// file's own bytes, the function's or the instruction's bytes there.
+    var code: Code? = nil
+
+    struct Code: Codable, Equatable {
+        /// The module, by its bytes' SHA-256 — what the analysis is keyed by.
+        let module: String
+        let moduleName: String
+        /// Ghidra's entry address of the function, e.g. `0x4BF`.
+        let function: String
+        let functionName: String
+        /// An instruction in the function, when the place is one.
+        var address: String? = nil
+
+        var location: CodeLocation {
+            CodeLocation(function: CodeAddress(hex: function), address: address.flatMap { CodeAddress(hex: $0) })
+        }
+
+        /// "CpuPei ▸ FUN_000004bf", "… @ 0x535": what the card says the place is.
+        var label: String {
+            "\(moduleName) ▸ \(functionName)" + (address.map { " @ \($0)" } ?? "")
+        }
+    }
 
     enum Author: String, Codable, Equatable {
         case agent
@@ -94,25 +121,26 @@ struct AgentAnnotation: Equatable {
     /// The same annotation at another range: the place as a pane shows it.
     func at(_ range: Range<UInt64>?) -> AgentAnnotation {
         AgentAnnotation(id: id, file: file, range: range, node: node, title: title, note: note, decoded: decoded,
-                        relatedTo: relatedTo, site: site, author: author)
+                        relatedTo: relatedTo, site: site, author: author, code: code)
     }
 
     /// The same annotation with another title and note: the person's edit.
     func with(title: String, note: String) -> AgentAnnotation {
         AgentAnnotation(id: id, file: file, range: range, node: node, title: title, note: note, decoded: decoded,
-                        relatedTo: relatedTo, site: site, author: author)
+                        relatedTo: relatedTo, site: site, author: author, code: code)
     }
 
     /// Without the relations to the ones `gone` names.
     func dropping(_ gone: Set<String>) -> AgentAnnotation {
         AgentAnnotation(id: id, file: file, range: range, node: node, title: title, note: note, decoded: decoded,
-                        relatedTo: relatedTo.filter { !gone.contains($0) }, site: site, author: author)
+                        relatedTo: relatedTo.filter { !gone.contains($0) }, site: site, author: author,
+                       code: code)
     }
 
     /// With `ids` as the annotations it is about: its relations given back.
     func relating(_ ids: [String]) -> AgentAnnotation {
         AgentAnnotation(id: id, file: file, range: range, node: node, title: title, note: note, decoded: decoded,
-                        relatedTo: ids, site: site, author: author)
+                        relatedTo: ids, site: site, author: author, code: code)
     }
 
     /// What the callout over the bytes says: the title, the note and
