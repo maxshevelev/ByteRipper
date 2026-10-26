@@ -50,6 +50,24 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertFalse(name.isEditable)
     }
 
+    /// ⌘C with the list of functions in focus copies the selected
+    /// function's name; with anything else in focus it is not offered here.
+    func testCopyTakesTheSelectedFunctionsName() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: moduleBytes, hexView: NSView())
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 640, height: 400),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        view.layoutSubtreeIfNeeded()
+        XCTAssertNil(view.copyableFunctionName, "the list does not have the keyboard")
+        let list = try XCTUnwrap(all(NSTableView.self, in: view).first { $0.numberOfRows == view.listedFunctionCount && $0.tableColumns.first?.identifier.rawValue == "function" })
+        window.makeFirstResponder(list)
+        view.selectFunction(at: 1)
+        XCTAssertEqual(view.copyableFunctionName, "entry")
+        let item = NSMenuItem(title: "Copy", action: #selector(CodePaneView.copy(_:)), keyEquivalent: "c")
+        XCTAssertTrue(view.validateMenuItem(item))
+    }
+
     func testThePaneListsFunctionsAndInstructions() throws {
         let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
                                 moduleBytes: moduleBytes, hexView: NSView())

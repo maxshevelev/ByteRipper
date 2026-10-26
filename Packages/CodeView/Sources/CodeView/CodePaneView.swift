@@ -1661,6 +1661,35 @@ final class CodeLineCell: NSTableCellView {
     }
 }
 
+extension CodePaneView: NSMenuItemValidation {
+    /// Edit ▸ Copy (⌘C) with the list of functions in focus copies the
+    /// selected function's name. The C copies its own selection, and the
+    /// header's name is a selectable field.
+    @objc public func copy(_ sender: Any?) {
+        guard let name = copyableFunctionName else { return }
+        Self.copyToPasteboard(name)
+    }
+
+    public func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(copy(_:)) { return copyableFunctionName != nil }
+        return true
+    }
+
+    /// The selected function's name, while the list of functions has the
+    /// keyboard.
+    var copyableFunctionName: String? {
+        guard window?.firstResponder === functionTable, state.list == .functions else { return nil }
+        let row = functionTable.selectedRow
+        guard row >= 0, row < state.listedFunctions.count else { return nil }
+        return model.functions[state.listedFunctions[row]].name
+    }
+
+    static func copyToPasteboard(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+}
+
 extension CodePaneView: NSMenuDelegate {
     /// The right-click menu of the function list and the listing, filled for
     /// the row clicked: Add Annotation…, and Open Annotation for each note
@@ -1695,6 +1724,14 @@ extension CodePaneView: NSMenuDelegate {
         menu.removeAllItems()
         let tableView = menu === functionTable.menu ? functionTable : table
         guard let place = clickedPlace(in: tableView) else { return }
+        if tableView === functionTable {
+            // help: panel.code.copy-name
+            let copy = menu.addItem(withTitle: L("Copy Name"), action: #selector(copyNameChosen(_:)),
+                                    keyEquivalent: "")
+            copy.target = self
+            copy.representedObject = model.functions[state.listedFunctions[tableView.clickedRow]].name
+            menu.addItem(.separator())
+        }
         for note in place.notes {
             let item = menu.addItem(withTitle: L("Open Annotation “%1$@”", note.title),
                                     action: #selector(openNoteChosen(_:)), keyEquivalent: "")
@@ -1707,6 +1744,11 @@ extension CodePaneView: NSMenuDelegate {
                                keyEquivalent: "")
         add.target = self
         add.representedObject = CodePlaceBox(location: place.location, name: place.name)
+    }
+
+    @objc private func copyNameChosen(_ sender: NSMenuItem) {
+        guard let name = sender.representedObject as? String else { return }
+        Self.copyToPasteboard(name)
     }
 
     @objc private func openNoteChosen(_ sender: NSMenuItem) {

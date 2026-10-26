@@ -310,6 +310,7 @@
 "Copy hex size" = "Größe als Hex kopieren";
 "Copy size" = "Größe kopieren";
 "Copy" = "Kopieren";
+"Copy Name" = "Namen kopieren";
 "Copy CPUID" = "CPUID kopieren";
 "Copy File Name" = "Dateinamen kopieren";
 "Copy Full Path" = "Vollständigen Pfad kopieren";
