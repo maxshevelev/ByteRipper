@@ -195,7 +195,7 @@ public enum GhidraTools {
                 return try await answer { try await backend.writeCall(module, call, body: payload) }
             }
         }
-        func optional(_ arguments: AgentArguments, _ names: [String]) throws -> [String: JSONValue] {
+        @Sendable func optional(_ arguments: AgentArguments, _ names: [String]) throws -> [String: JSONValue] {
             var found: [String: JSONValue] = [:]
             for name in names {
                 if let value = try arguments.optionalString(name) { found[name] = .string(value) }

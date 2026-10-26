@@ -76,7 +76,9 @@ public final class Server: @unchecked Sendable {
             router: router)
         let port = try await http.start()
         self.http = http
-        log("listening on \(configuration.host):\(port)" + (token == nil ? ", no token (loopback only)" : ", token required"))
+        let address = http.boundAddress.map { $0 == configuration.host ? "" : " (\($0))" } ?? ""
+        log("listening on \(configuration.host)\(address):\(port)"
+            + (token == nil ? ", no token (loopback only)" : ", token required"))
         return port
     }
 

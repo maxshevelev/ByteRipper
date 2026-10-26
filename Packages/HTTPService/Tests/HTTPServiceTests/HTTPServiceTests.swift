@@ -153,6 +153,28 @@ final class HTTPServerTests: XCTestCase {
         XCTAssertEqual(slowAnswer.0, 200)
     }
 
+    /// A name is resolved, and the listener takes the port asked for on that
+    /// address — not every interface and a port of the system's choosing.
+    func testAHostNameListensOnItsAddressAndTheGivenPort() async throws {
+        let name = ProcessInfo.processInfo.hostName
+        guard let address = try? HTTPServer.resolve(name) else { throw XCTSkip("\(name) does not resolve here") }
+        XCTAssertEqual(try HTTPServer.resolve("127.0.0.1"), "127.0.0.1")
+        XCTAssertEqual(try HTTPServer.resolve("localhost"), "127.0.0.1")
+        XCTAssertThrowsError(try HTTPServer.resolve("no-such-host.invalid"))
+
+        let port = UInt16.random(in: 40000...49000)
+        var router = HTTPRouter()
+        router.add("GET", "/hello") { _ in .json(["ok": true]) }
+        let server = HTTPServer(configuration: .init(host: name, port: port, token: "t"), router: router)
+        let listening = try await server.start()
+        defer { server.stop() }
+        XCTAssertEqual(listening, port)
+        XCTAssertEqual(server.boundAddress, address)
+        let host = address.contains(":") ? "[\(address)]" : address
+        let (status, _) = try await call(URL(string: "http://\(host):\(port)/hello")!, token: "t")
+        XCTAssertEqual(status, 200)
+    }
+
     func testTheTokenComparisonNeedsEveryByte() {
         XCTAssertTrue(HTTPServer.authorized("Bearer abc", token: "abc"))
         XCTAssertFalse(HTTPServer.authorized("Bearer abcd", token: "abc"))

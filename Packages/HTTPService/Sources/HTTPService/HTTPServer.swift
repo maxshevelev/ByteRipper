@@ -31,6 +31,39 @@ public final class HTTPServer: @unchecked Sendable {
         }
     }
 
+    /// The address a host name stands for, as a literal the listener can bind
+    /// to: Network.framework does not resolve a name given as the local
+    /// endpoint — it listens on every interface, on a port of its choosing —
+    /// so the name is resolved here. IPv4 first, the address a tailnet or a
+    /// LAN name is usually meant by.
+    public static func resolve(_ host: String) throws -> String {
+        if host == "localhost" { return "127.0.0.1" }
+        var hints = addrinfo()
+        hints.ai_family = AF_UNSPEC
+        hints.ai_socktype = SOCK_STREAM
+        hints.ai_flags = AI_ADDRCONFIG
+        var list: UnsafeMutablePointer<addrinfo>?
+        let status = getaddrinfo(host, nil, &hints, &list)
+        guard status == 0, let first = list else {
+            throw StartError.cannotListen("\(host) does not resolve to an address of this Mac")
+        }
+        defer { freeaddrinfo(first) }
+        var found: [String] = []
+        var entry: UnsafeMutablePointer<addrinfo>? = first
+        while let current = entry {
+            var buffer = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+            if getnameinfo(current.pointee.ai_addr, current.pointee.ai_addrlen, &buffer, socklen_t(buffer.count),
+                           nil, 0, NI_NUMERICHOST) == 0 {
+                found.append(String(cString: buffer))
+            }
+            entry = current.pointee.ai_next
+        }
+        guard let address = found.first(where: { !$0.contains(":") }) ?? found.first else {
+            throw StartError.cannotListen("\(host) does not resolve to an address")
+        }
+        return address
+    }
+
     public enum StartError: Error, Equatable, CustomStringConvertible {
         case tokenRequired(String)
         case cannotListen(String)
@@ -46,6 +79,8 @@ public final class HTTPServer: @unchecked Sendable {
     }
 
     public let configuration: Configuration
+    /// The address the listener is bound to, once `start` resolved it.
+    public private(set) var boundAddress: String?
     private let router: HTTPRouter
     private let queue = DispatchQueue(label: "HTTPServer")
     private var listener: NWListener?
@@ -67,8 +102,12 @@ public final class HTTPServer: @unchecked Sendable {
         guard let port = NWEndpoint.Port(rawValue: configuration.port) else {
             throw StartError.cannotListen("port \(configuration.port)")
         }
-        let host = configuration.host == "localhost" ? "127.0.0.1" : configuration.host
-        parameters.requiredLocalEndpoint = .hostPort(host: NWEndpoint.Host(host), port: port)
+        let address = try Self.resolve(configuration.host)
+        if !Self.isLoopbackAddress(address), (configuration.token ?? "").isEmpty {
+            throw StartError.tokenRequired(configuration.host)
+        }
+        boundAddress = address
+        parameters.requiredLocalEndpoint = .hostPort(host: NWEndpoint.Host(address), port: port)
         let listener: NWListener
         do {
             listener = try NWListener(using: parameters)
@@ -88,7 +127,16 @@ public final class HTTPServer: @unchecked Sendable {
                 switch state {
                 case .ready:
                     once.resumed = true
-                    continuation.resume(returning: listener.port?.rawValue ?? 0)
+                    let actual = listener.port?.rawValue ?? 0
+                    // A listener that did not take the port asked for is not
+                    // the server the person started: a client cannot find it.
+                    if port.rawValue != 0, actual != port.rawValue {
+                        listener.cancel()
+                        continuation.resume(throwing: StartError.cannotListen(
+                            "asked for port \(port.rawValue), the system gave \(actual)"))
+                    } else {
+                        continuation.resume(returning: actual)
+                    }
                 case .failed(let error):
                     once.resumed = true
                     continuation.resume(throwing: StartError.cannotListen("\(error)"))
@@ -182,6 +230,10 @@ public final class HTTPServer: @unchecked Sendable {
                         completion: .contentProcessed { _ in
             if !keepAlive { connection.cancel() }
         })
+    }
+
+    static func isLoopbackAddress(_ address: String) -> Bool {
+        address == "::1" || address.hasPrefix("127.")
     }
 
     /// Compares every byte whatever the first difference, so the time an
