@@ -236,6 +236,60 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertEqual(target.fragments.expanded, target.fragments.panel(holding: panes[0]))
     }
 
+    /// A code panel follows its analysis: published again with a review — a
+    /// function renamed, another found before it — the open panel draws the
+    /// new artifact, on the same function by address although its index moved.
+    func testAnOpenCodePanelFollowsARepublishedReading() async throws {
+        let codeBytes = [UInt8](repeating: 0x90, count: 0x100)
+        let parentURL = try dump(0x1000, 0x77)
+        func artifactData(_ functions: [(String, String)]) -> Data {
+            let list = functions.map { entry, name in
+                #"{"entry":"\#(entry)","name":"\#(name)","c":"return 0;","instructions":[{"address":"\#(entry)","bytes":"90","mnemonic":"NOP","text":"NOP"}]}"#
+            }
+            return Data(#"{"script_version":2,"ghidra":"12.1.2","functions":[\#(list.joined(separator: ","))]}"#.utf8)
+        }
+        let before = artifactData([("0x0", "entry"), ("0x10", "FUN_00000010")])
+        let after = artifactData([("0x0", "entry"), ("0x8", "FUN_00000008"), ("0x10", "LoadMicrocode")])
+
+        let storeRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CodeFollowStore-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: storeRoot, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: storeRoot) }
+        let store = try ContentStore(root: storeRoot)
+        let module = ModuleIdentity(sha256: SHA256Digest(data: Data(codeBytes)),
+                                    size: codeBytes.count, name: "CpuPei", kind: "TE",
+                                    language: "x86:LE:32:default", imageBase: "0x0")
+        let recipe = AnalysisRecipe(id: "code-v2-ghidra-12.1.2", exporter: 2,
+                                    ghidra: "12.1.2", script: "ExportCode.java")
+        let manifest = try store.putAnalysis(module: module, recipe: recipe, artifact: before)
+        let previousRoot = UEFIToolModule.codeAnalysisRoot
+        UEFIToolModule.codeAnalysisRoot = storeRoot
+        addTeardownBlock { UEFIToolModule.codeAnalysisRoot = previousRoot }
+
+        let source = shownWindow().mainViewController
+        source.openFiles([parentURL])
+        source.openCode(
+            named: "CpuPei body", from: source.windowModel.pane1,
+            source: 0x100..<0x200, manifest: manifest,
+            artifact: try JSONDecoder().decode(CodeArtifact.self, from: before),
+            codec: ReadOnlyPartCodec(codeBytes, title: L("This cannot be put back"),
+                                     reason: L("A code analysis is a snapshot; edit the dump and analyze the module again.")),
+            at: CodeLocation(function: CodeAddress(0x10)))
+        let id = try XCTUnwrap(source.fragments.expanded)
+        XCTAssertEqual(source.fragments.codePane(id)?.selectedFunctionIndex, 1)
+
+        try store.putAnalysis(module: module, recipe: recipe, artifact: after,
+                              reading: AnalysisReading(project: "p", rev: 1))
+        source.codeStoreChanged()
+        for _ in 0..<100 where source.fragments.codePane(id)?.selectedFunction?.name != "LoadMicrocode" {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        let pane = try XCTUnwrap(source.fragments.codePane(id))
+        XCTAssertEqual(pane.selectedFunction?.name, "LoadMicrocode", "the panel drew the new reading")
+        XCTAssertEqual(pane.selectedFunctionIndex, 2, "on the same function, by address")
+        XCTAssertEqual(pane.manifest.reading?.rev, 1)
+    }
+
     /// A code panel comes back as a code panel: the analysis from the store,
     /// the function and the ASM/C side the reader left, not a plain part.
     func testCodePanelComesBackAsCode() async throws {

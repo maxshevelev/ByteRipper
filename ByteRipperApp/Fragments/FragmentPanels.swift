@@ -276,6 +276,7 @@ import ToolModuleKit
                 self?.chooseRecipe(opened.id, manifest: manifest)
             }
             host.applyCodeNotes()
+            host.followCodeStore()
             codePane.focusSelectedFunction()
         }
         // The tool panel's header is a handle too, when the panel has one open.
@@ -376,6 +377,21 @@ import ToolModuleKit
     }
 
     /// The code screen a panel holds, if that is what it is.
+    /// The analysis each code panel is drawn from, panel by panel.
+    var codeManifests: [(FragmentDock.PanelID, AnalysisManifest)] {
+        dock.panels.compactMap { id in
+            guard let entry = entries[id], case .code(let screen) = entry.screen else { return nil }
+            return (id, screen.manifest)
+        }
+    }
+
+    /// A code panel drawn again from `manifest` — its analysis published
+    /// again — where the reader was, with the same back and forward.
+    func redrawCode(_ id: FragmentDock.PanelID, with manifest: AnalysisManifest,
+                    recipes: [AnalysisManifest]) {
+        chooseRecipe(id, manifest: manifest, recipes: recipes)
+    }
+
     func codeScreen(holding pane: PaneViewModel) -> CodeScreen? {
         guard let id = panel(holding: pane) else { return nil }
         return content(id)?.code
@@ -429,9 +445,11 @@ import ToolModuleKit
     /// Another analysis of the same module: read its artifact, then draw it in
     /// the panel already open. The dock does not grow or move — this is a
     /// screen changing its reading, not a panel arriving.
-    private func chooseRecipe(_ id: FragmentDock.PanelID, manifest: AnalysisManifest) {
+    private func chooseRecipe(_ id: FragmentDock.PanelID, manifest: AnalysisManifest,
+                              recipes: [AnalysisManifest]? = nil) {
         guard let entry = entries[id], case .code(let current) = entry.screen,
               let view = entry.codePane else { return }
+        let history = view.historyLocations
         var screen = current
         screen.selectedFunction = view.selectedFunctionIndex
         screen.selectedInstruction = view.selectedInstructionIndex
@@ -450,8 +468,9 @@ import ToolModuleKit
                                   selectedInstruction: screen.selectedInstruction,
                                   place: screen.place,
                                   showsC: screen.showsC,
-                                  recipes: screen.recipes)
+                                  recipes: recipes ?? screen.recipes)
             self.replaceCodeScreen(id, with: next)
+            self.entries[id]?.codePane?.adoptHistory(history.places, index: history.index)
         }
     }
 

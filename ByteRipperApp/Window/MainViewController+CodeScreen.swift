@@ -63,10 +63,20 @@ extension MainViewController {
     /// its artifact; the tab then rebuilds the same screen with it, keeping the
     /// function, instruction and ASM/C side.
     func chooseCodeRecipe(_ manifest: AnalysisManifest, for pane: PaneViewModel) {
+        redrawCodeScreen(with: manifest, recipes: nil, for: pane)
+    }
+
+    /// The tab's code screen drawn again from `manifest`'s artifact — another
+    /// recipe chosen in the header, or the same one published again — at the
+    /// same place, with the same back and forward, the same ASM/C side.
+    /// `recipes` replaces the list the header offers when it is given.
+    func redrawCodeScreen(with manifest: AnalysisManifest, recipes: [AnalysisManifest]?,
+                          for pane: PaneViewModel) {
         guard let current = codeScreen, current.pane === pane else { return }
         captureCodeScreenState()
         guard let current = codeScreen else { return }
         let screen = current.screen
+        let history = codeScreenView?.historyLocations
         let dumpVisible = codeScreenView?.isHexDumpVisible ?? true
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -81,10 +91,64 @@ extension MainViewController {
                                   selectedInstruction: screen.selectedInstruction,
                                   place: screen.place,
                                   showsC: screen.showsC,
-                                  recipes: screen.recipes)
+                                  recipes: recipes ?? screen.recipes)
             self.codeScreen = (pane, pane.document, next)
             self.apply(mode: .singleFile)
             self.codeScreenView?.setHexDumpVisible(dumpVisible, animated: false)
+            if let history { self.codeScreenView?.adoptHistory(history.places, index: history.index) }
+        }
+    }
+
+    // MARK: - Following the store
+
+    /// Starts following the store, once per tab, when the tab first shows
+    /// code. The watcher is the same FSEvents stream the UEFI tree's badges
+    /// follow; it costs nothing while nothing is written.
+    func followCodeStore() {
+        guard codeStoreWatcher == nil else { return }
+        codeStoreWatcher = CodeStoreWatcher(root: CodeAnalysisStore.root) { [weak self] in
+            MainActor.assumeIsolated { self?.codeStoreChanged() }
+        }
+    }
+
+    /// The store changed: every code screen and panel of this tab whose
+    /// analysis now names another artifact — a review published again, a
+    /// re-run that replaced it — is drawn from that artifact, where the reader
+    /// was. A screen whose analysis is unchanged, or gone, stays as it is.
+    func codeStoreChanged() {
+        var shown: [(pane: PaneViewModel?, panel: FragmentDock.PanelID?, manifest: AnalysisManifest)] = []
+        if let code = codeScreen, codeScreenView != nil {
+            shown.append((code.pane, nil, code.screen.manifest))
+        }
+        for (id, manifest) in fragments.codeManifests {
+            shown.append((nil, id, manifest))
+        }
+        guard !shown.isEmpty else { return }
+        let root = CodeAnalysisStore.root
+        let keys = shown.compactMap(\.manifest.key)
+        Task { @MainActor [weak self] in
+            let stored = await Task.detached(priority: .utility) {
+                () -> [AnalysisKey: (manifest: AnalysisManifest, recipes: [AnalysisManifest])] in
+                guard let store = try? ContentStore(root: root, create: false) else { return [:] }
+                let index = CodeAnalysisIndex(manifests: store.usableAnalyses())
+                var found: [AnalysisKey: (AnalysisManifest, [AnalysisManifest])] = [:]
+                for key in keys {
+                    guard let manifest = try? store.analysis(module: key.module, recipe: key.recipe),
+                          store.hasObject(manifest.artifact.sha256) else { continue }
+                    found[key] = (manifest, index.manifests(for: key.module))
+                }
+                return found
+            }.value
+            guard let self else { return }
+            for item in shown {
+                guard let key = item.manifest.key, let now = stored[key],
+                      now.manifest.artifact.sha256 != item.manifest.artifact.sha256 else { continue }
+                if let pane = item.pane {
+                    self.redrawCodeScreen(with: now.manifest, recipes: now.recipes, for: pane)
+                } else if let id = item.panel {
+                    self.fragments.redrawCode(id, with: now.manifest, recipes: now.recipes)
+                }
+            }
         }
     }
 
@@ -195,6 +259,7 @@ extension MainViewController {
                                     hexView: pane,
                                     recipes: screen.recipes)
         codeScreenView = codePane
+        followCodeStore()
         codePane.onChooseRecipe = { [weak self, weak paneModel] manifest in
             guard let self, let paneModel else { return }
             self.chooseCodeRecipe(manifest, for: paneModel)

@@ -536,6 +536,39 @@ import ToolModuleKit
         updateHistoryButtons()
     }
 
+    /// Back and forward by address, and where in it the reader is: what a
+    /// pane drawing another artifact of the same module — a republished
+    /// review, another recipe — takes over with `adoptHistory`.
+    public var historyLocations: (places: [CodeLocation], index: Int) {
+        if historyIndex >= 0, let place = currentPlace { history[historyIndex] = place }
+        let places = history.map { place in
+            CodeLocation(function: artifact.functions.indices.contains(place.function)
+                            ? artifact.functions[place.function].entry : nil,
+                         address: place.line.flatMap { model.lines.indices.contains($0)
+                            ? model.lines[$0].instruction.address : nil })
+        }
+        return (places, historyIndex)
+    }
+
+    /// Takes over another pane's history, place by place, through this
+    /// artifact's own numbering; a place this artifact no longer has drops
+    /// out. The current place stays where `restore` put it.
+    public func adoptHistory(_ places: [CodeLocation], index: Int) {
+        var adopted: [Place] = []
+        var current = -1
+        for (position, location) in places.enumerated() {
+            let found = artifact.indices(of: location)
+            guard let function = found.function else { continue }
+            if position == index { current = adopted.count }
+            adopted.append(Place(function: function, line: found.line))
+        }
+        guard current >= 0, let here = currentPlace else { return }
+        adopted[current] = here
+        history = adopted
+        historyIndex = current
+        updateHistoryButtons()
+    }
+
     /// Shows the annotations on this module's code: a mark beside each
     /// annotated function in the list, the title at the end of an annotated
     /// instruction's row, and a comment over the function's C.

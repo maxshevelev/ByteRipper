@@ -840,7 +840,11 @@ already: a re-run analysis shifts indices as well.
      at its first open and a harvest is the program minus that baseline; and
      Ghidra's decompiler prints `pre` comments in the C, so a comment changes
      the artifact as well as the document.
-   - **2b — the store and the app follow.** `reviews/` history with the commit
+   - **2b — the store and the app follow — the panel part done.** An open
+     Code screen or panel follows its analysis through the store's FSEvents
+     stream and is drawn again from a republished artifact at the same place
+     by address, with its back and forward carried over by address.
+     Still to do: `reviews/` history with the commit
      order of §5.4 and its `gc`/`verify` rules; documents in bundles; the open
      Code panel following a republish; a code annotation's label read from the
      current artifact by address (a rename is what makes the stored name

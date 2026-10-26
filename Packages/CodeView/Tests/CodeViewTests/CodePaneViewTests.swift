@@ -216,6 +216,29 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(view.selectedInstructionIndex, 2, "the indices, when the address is gone")
     }
 
+    /// A pane over a republished artifact takes the history by address.
+    func testAPaneTakesOverAnotherPanesHistory() throws {
+        let first = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                 moduleBytes: teModule(), hexView: NSView())
+        first.frame = NSRect(x: 0, y: 0, width: 480, height: 320)
+        first.layoutSubtreeIfNeeded()
+        first.restore(function: 0, instruction: nil, showsC: false)
+        first.go(to: CodeLocation(address: CodeAddress(0x355)))
+        XCTAssertTrue(first.canGoBack)
+        let carried = first.historyLocations
+        XCTAssertEqual(carried.places.count, 2)
+
+        let second = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                  moduleBytes: teModule(), hexView: NSView())
+        second.frame = first.frame
+        second.layoutSubtreeIfNeeded()
+        second.restore(at: first.selectedLocation, function: nil, instruction: nil, showsC: false)
+        second.adoptHistory(carried.places, index: carried.index)
+        XCTAssertTrue(second.canGoBack)
+        second.goBack()
+        XCTAssertEqual(second.selectedFunctionIndex, 0)
+    }
+
     func testTheFunctionsSitLeftOfTheCodeAndTheBytesBelowIt() throws {
         let hex = NSView()
         let view = CodePaneView(manifest: manifest(), artifact: try artifact(),

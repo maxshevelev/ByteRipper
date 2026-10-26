@@ -833,6 +833,10 @@ final class MainViewController: NSViewController {
                      screen: CodeScreen)?
     /// The code screen on display, for the mode's content and for tests.
     var codeScreenView: CodePaneView?
+    /// Follows the analysis store once this tab has shown code, so a code
+    /// screen or panel redraws when its analysis is published again
+    /// (`MainViewController+CodeScreen.swift`, "Following the store").
+    var codeStoreWatcher: CodeStoreWatcher?
     /// Whether this tab is a code screen rather than an ordinary dump.
     var hasCodeScreen: Bool { codeScreen != nil }
     /// The map's state before a code screen hid it, put back when the tab
