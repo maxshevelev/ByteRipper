@@ -195,6 +195,27 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(view.decompiledText, "return 0;")
     }
 
+    /// A place kept by address wins over indices that name another place —
+    /// what an artifact numbered differently, another recipe or a re-run,
+    /// does to them; a place this artifact lacks falls back to the indices.
+    func testAPlaceByAddressWinsOverStaleIndices() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 480, height: 320)
+        view.layoutSubtreeIfNeeded()
+        view.selectInstruction(at: 2)
+        let place = try XCTUnwrap(view.selectedLocation)
+        XCTAssertEqual(place.address, CodeAddress(0x355))
+
+        view.restore(at: place, function: 0, instruction: 0, showsC: false)
+        XCTAssertEqual(view.selectedFunction?.name, "entry")
+        XCTAssertEqual(view.selectedInstruction?.address, CodeAddress(0x355))
+
+        view.restore(at: CodeLocation(function: CodeAddress(0xDEAD)), function: 1, instruction: 2,
+                     showsC: false)
+        XCTAssertEqual(view.selectedInstructionIndex, 2, "the indices, when the address is gone")
+    }
+
     func testTheFunctionsSitLeftOfTheCodeAndTheBytesBelowIt() throws {
         let hex = NSView()
         let view = CodePaneView(manifest: manifest(), artifact: try artifact(),

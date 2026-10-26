@@ -647,7 +647,7 @@ person or an agent made (`USER_DEFINED`), not what the passes produced:
 | `Skills/ghidra-uefi/reference/ghidra.md`, `SKILL.md` | the owner, the bridge, the loop |
 | `ByteRipperApp/Pane/CodeAnalysisStore.swift` | report skipped and conflicting keys of a project's bundle |
 | Code panel (`Packages/CodeView`, `MainViewController+CodeScreen.swift`) | an open panel reloads when its analysis's manifest changes, keeping the function, the place and the history by address |
-| Code screen state (`ByteRipperApp/Fragments/FragmentPanels.swift`, `Packages/Workspace`) | the place is also kept by address (`CodeLocation`) — an added optional field beside the indices; done first, independent of this plan |
+| Code screen state (`ByteRipperApp/Fragments/FragmentPanels.swift`, `Packages/Workspace`) | done: the place is also kept by address (`CodeScreenState.place`) — an added optional field beside the indices |
 | `AgentAnnotation.swift`, cards | a code annotation's label is read from the current artifact by address; the stored name is the fallback |
 
 **Formats.** `reading` is an optional manifest field: earlier builds read the
@@ -752,10 +752,10 @@ checkout in their own Ghidra.
 
 Each phase leaves something usable.
 
-**Before the phases: the place by address.** `CodeScreenState.place`, the Code
-screen restored by address, an annotation's label read from the artifact by
-address. App-only, independent of Ghidra, and useful already: a re-run
-analysis shifts indices too.
+**Before the phases: the place by address — done.** `CodeScreenState.place`
+and the Code screen restored by address, falling back to the indices; a recipe
+change keeps the place too. App-only, independent of Ghidra, and useful
+already: a re-run analysis shifts indices as well.
 
 0. **Spike.** Confirm the three facts of §3 "To verify": a long-lived headless
    owner that saves mid-session; the modification number's lifetime; the
@@ -774,7 +774,9 @@ analysis shifts indices too.
      archive merged at publish.
    - **2b — the store and the app follow.** `reviews/` history with the commit
      order of §5.4 and its `gc`/`verify` rules; documents in bundles; the open
-     Code panel following a republish; the app reporting a bundle import's
+     Code panel following a republish; a code annotation's label read from the
+     current artifact by address (a rename is what makes the stored name
+     stale, so it lands with renames); the app reporting a bundle import's
      skipped and kept-aside keys. (The manifest's `reading`, §5.6 and
      `conflicts/` are already in `ContentStore`.)
    - **2c — the clients.** `ghidra_review.py`, `ghidra_mcp.py` holding the

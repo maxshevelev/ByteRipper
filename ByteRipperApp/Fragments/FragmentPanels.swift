@@ -173,6 +173,7 @@ import ToolModuleKit
                                               bytes: Data(bytes),
                                               selectedFunction: code.selectedFunction,
                                               selectedInstruction: code.selectedInstruction,
+                                              place: code.place,
                                               showsC: code.showsC,
                                               recipes: code.recipes)),
                      animated: animated)
@@ -194,6 +195,7 @@ import ToolModuleKit
                     code: CodeScreen(manifest: manifest, artifact: artifact, bytes: Data(bytes),
                                      selectedFunction: place?.function,
                                      selectedInstruction: place?.line,
+                                     place: location,
                                      recipes: recipes),
                     animated: animated)
     }
@@ -266,7 +268,7 @@ import ToolModuleKit
                 host?.filePaneView(for: pane)?.revealOffsetCentered(range.lowerBound)
             }
             if case .code(let code) = screen {
-                codePane.restore(function: code.selectedFunction,
+                codePane.restore(at: code.place, function: code.selectedFunction,
                                  instruction: code.selectedInstruction,
                                  showsC: code.showsC)
             }
@@ -433,6 +435,7 @@ import ToolModuleKit
         var screen = current
         screen.selectedFunction = view.selectedFunctionIndex
         screen.selectedInstruction = view.selectedInstructionIndex
+        screen.place = view.selectedLocation
         screen.showsC = view.showsDecompiledC
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -445,6 +448,7 @@ import ToolModuleKit
                                   bytes: screen.bytes,
                                   selectedFunction: screen.selectedFunction,
                                   selectedInstruction: screen.selectedInstruction,
+                                  place: screen.place,
                                   showsC: screen.showsC,
                                   recipes: screen.recipes)
             self.replaceCodeScreen(id, with: next)
@@ -472,7 +476,7 @@ import ToolModuleKit
         entry.surface.setContent(codePane)
         entry.codePane = codePane
         entry.screen = .code(screen)
-        codePane.restore(function: screen.selectedFunction,
+        codePane.restore(at: screen.place, function: screen.selectedFunction,
                          instruction: screen.selectedInstruction,
                          showsC: screen.showsC)
         codePane.setHexDumpVisible(dumpVisible, animated: false)
@@ -487,6 +491,7 @@ import ToolModuleKit
         guard case .code(var code) = entry.screen else { return entry.screen }
         code.selectedFunction = entry.codePane?.selectedFunctionIndex
         code.selectedInstruction = entry.codePane?.selectedInstructionIndex
+        code.place = entry.codePane?.selectedLocation
         code.showsC = entry.codePane?.showsDecompiledC ?? false
         return .code(code)
     }

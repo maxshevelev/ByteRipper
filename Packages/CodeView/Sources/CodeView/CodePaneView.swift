@@ -162,6 +162,13 @@ import ToolModuleKit
     public var canGoForward: Bool { historyIndex + 1 < history.count }
     public var selectedFunctionIndex: Int? { state.function }
     public var selectedInstructionIndex: Int? { state.line }
+    /// The place by address: what survives an artifact whose functions are
+    /// numbered differently — another recipe, a re-run, a republished review.
+    public var selectedLocation: CodeLocation? {
+        let location = CodeLocation(function: selectedFunction?.entry,
+                                    address: selectedInstruction?.address)
+        return location.isEmpty ? nil : location
+    }
 
     public var selectedString: CodeArtifact.StringEntry? {
         navigatorEntry(in: .strings, state.listedStrings).map { artifact.strings[$0] }
@@ -229,7 +236,20 @@ import ToolModuleKit
 
     /// Puts the listing back where a screen that moved container left it:
     /// the function, the instruction and the ASM/C choice.
-    public func restore(function: Int?, instruction: Int?, showsC: Bool) {
+    /// Puts the reader back where it was: at `location` when this artifact
+    /// still has it, otherwise at the indices — what a workspace written
+    /// before places were kept by address holds.
+    public func restore(at location: CodeLocation? = nil, function: Int?, instruction: Int?,
+                        showsC: Bool) {
+        var function = function
+        var instruction = instruction
+        if let location, !location.isEmpty {
+            let found = artifact.indices(of: location)
+            if found.function != nil || found.line != nil {
+                function = found.function
+                instruction = found.line
+            }
+        }
         if let function {
             selectFunction(at: function, notify: false)
         }

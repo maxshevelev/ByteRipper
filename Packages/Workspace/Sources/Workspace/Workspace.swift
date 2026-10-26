@@ -303,17 +303,38 @@ public struct FragmentState: Codable, Equatable, Sendable {
 /// model: the app decodes it and finds the artifact in the store the manifest
 /// names. The bytes are the panel's own and come back with its `PaneState`, so
 /// they are not written twice.
+///
+/// The place is written twice. `place` names it by address — the function's
+/// entry and the instruction — so it survives an artifact whose functions are
+/// numbered differently: another recipe, a re-run, a republished review. The
+/// indices are what a build before `place` reads, and are still written with
+/// the meaning they always had; a build that knows `place` prefers it and
+/// falls back to them.
 public struct CodeScreenState: Codable, Equatable, Sendable {
+    /// A place in the module's code by Ghidra address, as hex text
+    /// (`0x1F2C0`): this package does not read the analysis model.
+    public struct Place: Codable, Equatable, Sendable {
+        public var function: String?
+        public var instruction: String?
+
+        public init(function: String? = nil, instruction: String? = nil) {
+            self.function = function
+            self.instruction = instruction
+        }
+    }
+
     public var manifest: String
     public var selectedFunction: Int?
     public var selectedInstruction: Int?
+    public var place: Place?
     public var showsC: Bool
 
     public init(manifest: String, selectedFunction: Int? = nil,
-                selectedInstruction: Int? = nil, showsC: Bool = false) {
+                selectedInstruction: Int? = nil, place: Place? = nil, showsC: Bool = false) {
         self.manifest = manifest
         self.selectedFunction = selectedFunction
         self.selectedInstruction = selectedInstruction
+        self.place = place
         self.showsC = showsC
     }
 }

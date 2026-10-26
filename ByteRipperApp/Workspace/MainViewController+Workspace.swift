@@ -108,9 +108,14 @@ extension MainViewController {
         guard let data = try? encoder.encode(code.manifest),
               let manifest = String(data: data, encoding: .utf8)
         else { return nil }
+        let place = code.place.map {
+            CodeScreenState.Place(function: $0.function?.description,
+                                  instruction: $0.address?.description)
+        }
         return CodeScreenState(manifest: manifest,
                                selectedFunction: code.selectedFunction,
                                selectedInstruction: code.selectedInstruction,
+                               place: place,
                                showsC: code.showsC)
     }
 
@@ -147,6 +152,10 @@ extension MainViewController {
         return CodeScreen(manifest: manifest, artifact: loaded.artifact, bytes: Data(bytes),
                           selectedFunction: state.selectedFunction,
                           selectedInstruction: state.selectedInstruction,
+                          place: state.place.map {
+                              CodeLocation(function: $0.function.flatMap(CodeAddress.init(hex:)),
+                                           address: $0.instruction.flatMap(CodeAddress.init(hex:)))
+                          },
                           showsC: state.showsC,
                           recipes: loaded.recipes)
     }

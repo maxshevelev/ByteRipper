@@ -276,6 +276,7 @@ final class WorkspaceRestoreTests: XCTestCase {
         let tab = source.workspaceTab()
         let saved = try XCTUnwrap(tab.fragments.first?.code)
         XCTAssertEqual(saved.selectedFunction, 0)
+        XCTAssertNotNil(saved.place?.function, "the place is kept by address as well")
         XCTAssertTrue(saved.showsC)
 
         let target = shownWindow().mainViewController

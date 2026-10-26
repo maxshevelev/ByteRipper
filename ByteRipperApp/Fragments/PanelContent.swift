@@ -42,6 +42,9 @@ struct CodeScreen {
     let bytes: Data
     var selectedFunction: Int?
     var selectedInstruction: Int?
+    /// The same place by address, preferred over the indices when the
+    /// artifact has it: indices name a place in one artifact only.
+    var place: CodeLocation?
     var showsC: Bool = false
     /// Every readable analysis of this module, the chosen one included. Nil
     /// or one entry means there is nothing to choose; the panel still has the

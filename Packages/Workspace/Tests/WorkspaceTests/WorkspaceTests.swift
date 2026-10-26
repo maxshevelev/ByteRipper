@@ -245,4 +245,24 @@ extension WorkspaceTests {
         XCTAssertEqual(stamp.content.head, 9)
         XCTAssertEqual(origin.edits?.content.head, 9)
     }
+
+    /// A Code screen written before `place` existed reads with its indices
+    /// and no place; one written now keeps both, so an earlier build still
+    /// finds the indices it understands.
+    func testACodeScreenPlaceIsAnAddedOptionalField() throws {
+        let before = #"{"manifest":"{}","selectedFunction":3,"selectedInstruction":40,"showsC":true}"#
+        let old = try JSONDecoder().decode(CodeScreenState.self, from: Data(before.utf8))
+        XCTAssertEqual(old.selectedFunction, 3)
+        XCTAssertEqual(old.selectedInstruction, 40)
+        XCTAssertNil(old.place)
+
+        let now = CodeScreenState(manifest: "{}", selectedFunction: 3, selectedInstruction: 40,
+                                  place: .init(function: "0x1F00", instruction: "0x1F2C"),
+                                  showsC: true)
+        let data = try JSONEncoder().encode(now)
+        XCTAssertEqual(try JSONDecoder().decode(CodeScreenState.self, from: data), now)
+        let fields = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(fields["selectedFunction"] as? Int, 3)
+        XCTAssertEqual(fields["selectedInstruction"] as? Int, 40)
+    }
 }

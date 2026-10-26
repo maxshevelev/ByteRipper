@@ -31,6 +31,7 @@ extension MainViewController {
         guard var code = codeScreen, let view = codeScreenView else { return }
         code.screen.selectedFunction = view.selectedFunctionIndex
         code.screen.selectedInstruction = view.selectedInstructionIndex
+        code.screen.place = view.selectedLocation
         code.screen.showsC = view.showsDecompiledC
         codeScreen = code
     }
@@ -78,6 +79,7 @@ extension MainViewController {
                                   bytes: screen.bytes,
                                   selectedFunction: screen.selectedFunction,
                                   selectedInstruction: screen.selectedInstruction,
+                                  place: screen.place,
                                   showsC: screen.showsC,
                                   recipes: screen.recipes)
             self.codeScreen = (pane, pane.document, next)
@@ -203,7 +205,7 @@ extension MainViewController {
                 .revealOffsetCentered(range.lowerBound)
         }
         applyCodeNotes()
-        codePane.restore(function: screen.selectedFunction,
+        codePane.restore(at: screen.place, function: screen.selectedFunction,
                          instruction: screen.selectedInstruction,
                          showsC: screen.showsC)
         codePane.focusSelectedFunction()
