@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Analyze one extracted module in Ghidra headless and export its functions.
 
-The running-Ghidra path is the interactive one: open the module in a CodeBrowser
-and use the GhydraMCP tools. This script is the batch path, for an agent that
-has no Ghidra window open, or for a run whose result has to be a file on disk:
+The interactive path is the `ghidra_` tools of ByteRipper or byteripper-server,
+over a kept project per module. This script is the batch path, for a run whose
+result has to be a file on disk:
 
     analyzeHeadless ... -import module.pe -postScript ExportModule.java out.json
 

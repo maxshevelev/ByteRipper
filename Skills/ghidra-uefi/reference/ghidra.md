@@ -1,58 +1,41 @@
-# Ghidra, headless and through GhydraMCP
+# Ghidra: the review tools and headless runs
 
 Two ways to get at a module:
 
-- **interactive** — a running Ghidra with the GhydraMCP extension, driven over
-  MCP; good for following a call graph, renaming, and reading the decompiler
-  as you go;
+- **a review** — the `ghidra_` tools, served by `byteripper-server` at `/mcp`
+  and relayed by ByteRipper's own MCP server: a kept project per module, held
+  open by an owner (`owner/Owner.java`), every change published into the CAS;
+  good for following a call graph, renaming and typing, and reading the
+  decompiler as you go;
 - **headless** — `analyzeHeadless` plus the shipped `ExportModule.java`, which
-  writes one JSON file; good for a batch answer, a diff, or an agent with no
-  Ghidra window open.
+  writes one JSON file; good for a batch answer or a diff.
 
 Both use the same loader and the same analysis, so a function's address and
 decompiled body are the same in either.
 
-## GhydraMCP
+A Ghidra window with an MCP extension of its own (GhydraMCP and the like) is
+not a way in: what it changes stays in that window's program, never reaches the
+CAS, and its project lock keeps the owner off the project.
 
-The extension (`starsong-consulting/GhydraMCP`, a descendant of LaurieWired's
-GhidraMCP) runs an HTTP server inside every CodeBrowser: the first gets 8192,
-the second 8193, and so on. A Python bridge on the MCP client side translates
-MCP calls into that REST API.
-
-Setup on a machine that already has the extension:
-
-```bash
-# The bridge pins mcp 1.6.0, which imports a pydantic symbol removed in 2.12.
-uv venv --python 3.12 ~/.local/share/ghydra-mcp/venv
-uv pip install --python ~/.local/share/ghydra-mcp/venv/bin/python \
-    mcp==1.6.0 requests==2.32.3 'pydantic<2.12'
-
-# A one-line wrapper, then register it as an MCP server.
-claude mcp add -s user ghydra -- ~/.local/bin/ghydra-mcp
-```
-
-Instances are chosen per call:
-
-- `instances_list` — ports, the program open in each, the project;
-- `instances_use(port)` — make one the default;
-- `instances_discover(host)` — only for a non-default host.
-
-Useful tools, by task:
+## The review tools, by task
 
 | task | tool |
 |---|---|
-| entry points, all functions | `functions_list`, `functions_get` |
-| C | `functions_decompile` |
-| instructions around an address | `functions_disassemble`, `memory_disassemble` |
-| who calls this | `xrefs_list` (`to_addr`), `analysis_get_callgraph` |
-| strings | `data_list_strings` |
-| rename, comment, signature | `functions_rename`, `functions_set_comment`, `functions_set_signature` |
-| types | `structs_create`, `structs_add_field`, `datatypes_search` |
-| memory | `memory_read`, `segments_list` |
+| the modules with a project | `ghidra_modules` |
+| open one, by node, image or SHA-256 | `ghidra_open` |
+| all functions | `ghidra_functions` |
+| C, parameters, locals and their storage | `ghidra_function` |
+| instructions around an address | `ghidra_disassembly` |
+| who refers to an address | `ghidra_xrefs` |
+| data, strings | `ghidra_data`, `ghidra_strings` |
+| rename a function, a parameter, a local | `ghidra_rename`, `ghidra_rename_variable` |
+| signature, comment, datum | `ghidra_signature`, `ghidra_comment`, `ghidra_set_data` |
+| define a type | `ghidra_type` |
+| make the review visible, end it | `ghidra_publish`, `ghidra_done` |
 
 A program's addresses are the ones the PE header declares (see
-`uefi-images.md`, "Addresses"). `functions_list` prints them with the image
-base already applied; `memory_read` uses the same numbers.
+`uefi-images.md`, "Addresses"); every tool takes and gives them with the image
+base applied.
 
 ## Importing
 
@@ -127,7 +110,7 @@ $G/support/analyzeHeadless /tmp/proj uefi \
    `FUN_…` taking two arguments where the second is dereferenced several times
    is usually that table.
 4. **Strings** in `.data` (or `.rodata`) name the hardware: PCI vendor/device
-   IDs, HII package names, `Setup` variable names. `data_list_strings` is
+   IDs, HII package names, `Setup` variable names. `ghidra_strings` is
    often faster than reading the decompiler.
 5. **The decompiler assumes C.** UEFI uses the Microsoft ABI on x64 and cdecl
    on x86; Ghidra's PE-derived compiler spec usually gets this right. Where a
@@ -203,7 +186,7 @@ that keeps Ghidra open:
   time; the analysis is still correct relative to the image.
 - **Large modules produce large JSON.** 100 KiB of x86 can be tens of MB of
   decompiled C. Filter with `jq` (`.functions[] | select(.size > 200)`) or run
-  with `--no-decompile` and decompile only the functions that matter through
-  GhydraMCP.
+  with `--no-decompile` and read only the functions that matter with
+  `ghidra_function`.
 - **Ghidra 12.1.2 has no TE loader.** Newer versions may add one; until then
   the conversion is part of the path, not a workaround for one version.

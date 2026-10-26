@@ -1,6 +1,6 @@
 ---
 name: ghidra-uefi
-description: Take one PEI or DXE module out of a firmware dump and analyze it in Ghidra — ByteRipper's UEFI Structure panel is the oracle for where the module is and what its bytes are, and this skill carries them across, rebuilds a TE image as a PE so Ghidra's loader accepts it, and drives either the running Ghidra through GhydraMCP or a headless analysis that writes functions and decompiled C to JSON, and keeps a one-time code artifact that answers function, instruction, xref and status-code questions without Ghidra. Use when a person asks what a PEIM or DXE driver does, where a function is called from, or why a module in a dump misbehaves; when a module inside a Tiano or LZMA section has to be disassembled; or when a firmware image has to be read as code rather than as bytes.
+description: Take one PEI or DXE module out of a firmware dump and analyze it in Ghidra — ByteRipper's UEFI Structure panel is the oracle for where the module is and what its bytes are, and this skill carries them across, rebuilds a TE image as a PE so Ghidra's loader accepts it, and reviews it in a kept Ghidra project through the `ghidra_` tools of ByteRipper or of byteripper-server, or runs a headless analysis that writes functions and decompiled C to JSON, and keeps a one-time code artifact that answers function, instruction, xref and status-code questions without Ghidra. Use when a person asks what a PEIM or DXE driver does, where a function is called from, or why a module in a dump misbehaves; when a module inside a Tiano or LZMA section has to be disassembled; or when a firmware image has to be read as code rather than as bytes.
 ---
 
 # A UEFI module in Ghidra
@@ -37,7 +37,7 @@ with no app running.
 | `scripts/cas_cli.py` | `cas.py` | the store's command line: list, show, verify, gc, ref, export, import, conflicts |
 | `scripts/module_scan.py` | stdlib, offline only | finds PE32/TE images in a dump without the app; opens LZMA, not Tiano |
 | `reference/uefi-images.md` | — | the structures and the addresses |
-| `reference/ghidra.md` | — | GhydraMCP tools, import rules, pitfalls |
+| `reference/ghidra.md` | — | import rules, the headless recipe, the owner's Java, pitfalls |
 | `reference/code-artifact.md` | — | the artifact's schema, queries and limits |
 | `reference/cas.md` | — | the local CAS: the tool, layout, keys, readings, references, GC, bundles |
 
@@ -86,18 +86,32 @@ python3 Skills/ghidra-uefi/scripts/byteripper_extract.py \
 
 ## 3. Get it into Ghidra
 
-### Interactive: a running Ghidra and GhydraMCP
+### Interactive: the `ghidra_` tools
 
-Ghidra's MCP extension (`GhydraMCP`) listens on 8192, 8193, … for each open
-CodeBrowser. Use `instances_list`, then `instances_use(port)`.
+A review — reading the decompiler, renaming, typing, commenting — goes through
+the `ghidra_` tools. Each module has a kept Ghidra project, made once by the
+same analysis and UEFI pass as `code_artifact.py`, and every change is
+published into the CAS, so each ByteRipper reading that store shows it. There
+are two ways to reach them, with the same tools behind both:
 
-- **PE32/PE32+** — open the extracted file in Ghidra. The PE loader handles it.
-- **TE** — Ghidra's PE loader starts at a DOS header and refuses `VZ`.
-  Convert first: `te_to_pe.py module.te -o module.pe`, then open the `.pe`.
+- **Through ByteRipper's own MCP server**, when Settings ▸ Code Analysis names
+  an analysis server. `ghidra_open` takes the image `node` and its `document`;
+  the app sends the bytes, so there is nothing to extract.
+- **At the server, `http://host:8765/mcp`**, for an agent with no ByteRipper
+  beside it ("On an analysis server" below). `ghidra_open` takes the image as
+  `image_base64` with a `name`, extracted as in step 2.
 
-Then the useful tools are `functions_list`, `functions_decompile`,
-`functions_disassemble`, `xrefs_list`, `analysis_get_callgraph`,
-`data_list_strings`, `functions_rename`, `functions_set_comment`.
+A TE image is converted by the server; a module opened before opens by
+`module`, its SHA-256. Then: `ghidra_functions`, `ghidra_function` (C, the
+parameters and the locals with their storage), `ghidra_disassembly`,
+`ghidra_xrefs`, `ghidra_data`, `ghidra_strings`; `ghidra_rename`,
+`ghidra_rename_variable`, `ghidra_signature`, `ghidra_type`, `ghidra_set_data`,
+`ghidra_comment`; `ghidra_publish` at a coherent checkpoint, `ghidra_done` at
+the end. The rules a review keeps are in "What a review makes of the code".
+
+Never review in a Ghidra window of your own: what it holds is not in the CAS,
+no other Mac sees it, and Ghidra's project lock keeps the owner off a project
+a window has open.
 
 ### Batch: headless, result on disk
 
@@ -300,10 +314,12 @@ app will read the same artifact; this skill proves the data path first.
   addresses. `--image-base` on `te_to_pe.py` can give it a stand-in base.
 - **x86_64 UEFI uses the Microsoft calling convention.** Ghidra's PE loader
   picks the Windows compiler spec, which is what EFIAPI uses on x64.
-- **No UEFI symbol database is applied.** Functions arrive as `FUN_<address>`.
-  Protocol GUIDs, boot-service names and driver names have to be added by hand
-  (`functions_rename`, `structs_create`) or recognized from the module's own
-  strings (`data_list_strings`).
+- **The UEFI pass names what EDK2 can name, and no more.** Services tables,
+  GUIDs from the table, protocol and PPI pointers and DEBUG strings are named
+  (`reference/uefi-pass.md`); a vendor's own functions and structures arrive
+  as `FUN_<address>` and raw offsets until a review names them
+  (`ghidra_rename`, `ghidra_type`) or the module's own strings
+  (`ghidra_strings`) say what they are.
 - **TE relocation semantics are preserved by the conversion, not invented.**
   Section data keeps the offsets the TE table names; see
   `reference/ghidra.md` for the exact mapping.
