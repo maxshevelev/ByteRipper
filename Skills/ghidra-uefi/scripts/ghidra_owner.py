@@ -409,7 +409,7 @@ def publish(project: Project, store: cas.Store, by: str | None = None) -> dict:
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="Kept Ghidra projects and their owners.")
     parser.add_argument("--projects", type=Path, default=projects_root())
-    parser.add_argument("--store", type=Path, default=code_artifact.default_store())
+    parser.add_argument("--store", type=cas.store_location, default=code_artifact.default_store())
     parser.add_argument("--ghidra-home")
     sub = parser.add_subparsers(dest="command", required=True)
 

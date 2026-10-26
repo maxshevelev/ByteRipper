@@ -167,7 +167,7 @@ def main(argv: list[str]) -> int:
         description="Analyze a module once and store the code artifact by its bytes.")
     parser.add_argument("module", type=Path, help="the PE32 or TE image")
     parser.add_argument("--name", help="what to call the module (default: the file name)")
-    parser.add_argument("--store", type=Path, default=default_store())
+    parser.add_argument("--store", type=cas.store_location, default=default_store())
     parser.add_argument("--ghidra-home", help="the Ghidra installation")
     parser.add_argument("--force", action="store_true",
                         help="analyze even if the artifact exists, and replace it")

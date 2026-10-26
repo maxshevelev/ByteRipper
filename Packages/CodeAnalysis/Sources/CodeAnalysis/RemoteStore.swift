@@ -57,11 +57,16 @@ public struct RemoteStore: Sendable {
     /// The same as `object`, for `ContentStore.objectSource`, which is called
     /// from synchronous code off the main actor.
     public func objectBlocking(_ digest: SHA256Digest) throws -> Data {
-        let box = BlockingResult<Data>()
+        try Self.blocking { try await object(digest) }
+    }
+
+    /// Waits on this thread for an async call. Only off the main actor, and
+    /// never from inside a task the call would need: it blocks the thread.
+    static func blocking<T>(_ body: @escaping @Sendable () async throws -> T) throws -> T {
+        let box = BlockingResult<T>()
         let semaphore = DispatchSemaphore(value: 0)
-        Task {
-            do { box.value = .success(try await object(digest)) }
-            catch { box.value = .failure(error) }
+        Task.detached {
+            do { box.value = .success(try await body()) } catch { box.value = .failure(error) }
             semaphore.signal()
         }
         semaphore.wait()
@@ -213,6 +218,6 @@ public struct RemoteStore: Sendable {
     }
 }
 
-private final class BlockingResult<T>: @unchecked Sendable {
+final class BlockingResult<T>: @unchecked Sendable {
     var value: Result<T, Error>?
 }

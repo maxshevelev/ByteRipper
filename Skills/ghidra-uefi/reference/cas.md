@@ -169,6 +169,37 @@ python3 Skills/ghidra-uefi/scripts/cas_cli.py history <module-sha>
 `code_artifact.py` writes through this store and `code_query.py` reads through
 it, both with the same `--store`.
 
+## A served store
+
+`byteripper-server` (`Packages/ByteRipperServer`, `Design/SERVER_PLAN.md`)
+serves one store to a personal network: every Mac's app mirrors it, and every
+script can write to it. The server runs this same `ContentStore` on its own
+directory and is that directory's only writer over the network, so the rules
+above hold unchanged.
+
+```bash
+# on the server
+byteripper-server token                      # once: …/ByteRipper/Server/token, 0600
+byteripper-server --listen 100.64.0.7:8765   # a tailnet address; loopback by default
+
+# on any machine that has the token in …/ByteRipper/Server/token
+python3 Skills/ghidra-uefi/scripts/cas_cli.py --store http://100.64.0.7:8765 list
+python3 Skills/ghidra-uefi/scripts/code_artifact.py module.efi --store http://100.64.0.7:8765
+```
+
+- `--store http://host:port` works for every script; `byteripper-cas` takes it
+  as `--server <url>`. The token is `--token-file`, or the file
+  `BYTERIPPER_SERVER_TOKEN_FILE` names, or `…/ByteRipper/Server/token`.
+- Off loopback the server refuses to start without a token file, and refuses
+  a token file group or others may read.
+- `gc` is refused over the network: run it on the server, against its own
+  directory. A write made there directly — `byteripper-cas`, `code_artifact.py`
+  — is seen by the server's FSEvents stream and announced like any other.
+- The protocol is `/cas/v1` (`ServedStoreProtocol`). A client is told of a
+  change by a long poll, `GET /cas/v1/changes?since=<seq>&epoch=<epoch>&wait=<s>`:
+  it answers as soon as a module's manifests or history change, with the
+  modules that did, or `resync` when the client must read everything again.
+
 ## The project's part
 
 The store holds derived facts; a project holds decisions — which analyses it
@@ -182,8 +213,8 @@ script; a missing store is not an error, only a prompt to analyze again.
 - No index beyond the directory walk; fine for thousands of analyses, not for
   millions. A `index.json` or SQLite can be added behind the same API.
 - Objects are stored raw; gzip is a later concern.
-- The lock is local to one machine; a network store needs an object service
-  with atomic writes, not a shared filesystem.
+- The lock is local to one machine. A network store is a served store (above),
+  never a shared filesystem: `flock` over SMB or NFS is not to be trusted.
 - The old flat store from the first slice (`<module-sha>/manifest.json`) is not
   read; re-run `code_artifact.py` to put the same module into the CAS.
 

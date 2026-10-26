@@ -28,7 +28,8 @@ public enum CASCommand {
     }
 
     static let usage = """
-        usage: byteripper-cas [--store <root>] [--no-create] <command>
+        usage: byteripper-cas [--store <root> | --server <url> [--token-file <file>]]
+                              [--no-create] <command>
           hello
           put-object <file>
           has-object <sha256>
@@ -54,11 +55,23 @@ public enum CASCommand {
         var output = Output()
         do {
             var parser = Arguments(arguments)
-            let root = parser.option("--store").map { URL(fileURLWithPath: $0) }
-                ?? CodeAnalysisPaths.defaultRoot
+            let storeOption = parser.option("--store")
+            let server = parser.option("--server")
+            let tokenFile = parser.option("--token-file")
             let create = !parser.flag("--no-create")
+            let operations: StoreOperations
+            if let server {
+                guard storeOption == nil else {
+                    throw Usage(description: "name a --store or a --server, not both")
+                }
+                operations = RemoteOperations(remote: try remote(server, tokenFile: tokenFile))
+            } else {
+                operations = LocalOperations(
+                    root: storeOption.map { URL(fileURLWithPath: $0) } ?? CodeAnalysisPaths.defaultRoot,
+                    create: create)
+            }
             guard let command = parser.next() else { throw Usage(description: usage) }
-            try execute(command, &parser, root: root, create: create, into: &output)
+            try execute(command, &parser, operations, into: &output)
         } catch let usage as Usage {
             output.stdout = Data()
             output.stderr = errorJSON(usage.description)
@@ -73,32 +86,52 @@ public enum CASCommand {
 
     // MARK: - Commands
 
-    private static func execute(_ command: String, _ parser: inout Arguments, root: URL,
-                                create: Bool, into output: inout Output) throws {
-        func store() throws -> ContentStore { try ContentStore(root: root, create: create) }
+    /// The served store's client. The token is the file named, or the one
+    /// `BYTERIPPER_SERVER_TOKEN_FILE` names, or the server's default
+    /// (`…/ByteRipper/Server/token`) when it exists — the place a laptop keeps
+    /// the token it was given, too.
+    static func remote(_ server: String, tokenFile: String?) throws -> RemoteStore {
+        guard let url = URL(string: server), let scheme = url.scheme,
+              ["http", "https"].contains(scheme), url.host != nil else {
+            throw Usage(description: "--server takes http://<host>:<port>, not \(server)")
+        }
+        let file = tokenFile.map { URL(fileURLWithPath: $0) }
+            ?? ProcessInfo.processInfo.environment["BYTERIPPER_SERVER_TOKEN_FILE"].map { URL(fileURLWithPath: $0) }
+            ?? CodeAnalysisPaths.defaultRoot.deletingLastPathComponent()
+                .appendingPathComponent("Server/token")
+        var token: String?
+        if FileManager.default.fileExists(atPath: file.path) {
+            guard let text = try? String(contentsOf: file, encoding: .utf8) else {
+                throw CodeAnalysisError.io("\(file.path): cannot be read")
+            }
+            token = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        } else if tokenFile != nil {
+            throw CodeAnalysisError.io("\(file.path): no such token file")
+        }
+        return RemoteStore(base: url, token: token)
+    }
+
+    private static func execute(_ command: String, _ parser: inout Arguments,
+                                _ store: StoreOperations, into output: inout Output) throws {
         switch command {
         case "hello":
             try parser.end()
-            output.stdout = try json([
-                "protocol": protocolVersion,
-                "schema": CodeAnalysisSchema.current,
-                "store": root.standardizedFileURL.path
-            ] as [String: Any])
+            output.stdout = try json(try store.hello())
         case "put-object":
             let file = try parser.required("a file")
             try parser.end()
             let data = try read(file)
-            let digest = try store().putObject(data)
+            let digest = try store.putObject(data)
             output.stdout = try json(["sha256": digest.hex, "size": data.count] as [String: Any])
         case "has-object":
             let digest = try digestArgument(&parser)
             try parser.end()
-            output.stdout = try json(["present": try store().hasObject(digest)])
+            output.stdout = try json(["present": try store.hasObject(digest)])
         case "get-object":
             let digest = try digestArgument(&parser)
             let out = parser.option("--out")
             try parser.end()
-            let data = try store().object(digest)
+            let data = try store.object(digest)
             if let out {
                 try write(data, to: out)
                 output.stdout = try json(["sha256": digest.hex, "size": data.count] as [String: Any])
@@ -124,7 +157,7 @@ public enum CASCommand {
             let replace = parser.flag("--replace")
             let discardReading = parser.flag("--discard-reading")
             try parser.end()
-            let manifest = try store().putAnalysis(
+            let manifest = try store.putAnalysis(
                 module: module, recipe: recipe, artifact: try read(artifact), source: source,
                 reading: reading, replace: replace, discardReading: discardReading)
             output.stdout = try encode(manifest)
@@ -132,51 +165,49 @@ public enum CASCommand {
             let module = try digestArgument(&parser)
             let recipe = parser.option("--recipe")
             try parser.end()
-            let store = try store()
-            let manifest = try recipe.map { try store.analysis(module: module, recipe: $0) }
-                ?? store.analysis(module: module)
+            let manifest = try store.analysis(module: module, recipe: recipe)
             output.stdout = try manifest.map(encode) ?? Data("null\n".utf8)
         case "recipes":
             let module = try digestArgument(&parser)
             try parser.end()
-            output.stdout = try encode(try store().recipes(ofModule: module))
+            output.stdout = try encode(try store.recipes(ofModule: module))
         case "list":
             try parser.end()
-            output.stdout = try encode(try store().analyses())
+            output.stdout = try encode(try store.analyses())
         case "conflicts":
             try parser.end()
-            output.stdout = try encode(try store().conflicts())
+            output.stdout = try encode(try store.conflicts())
         case "record-revision":
             let module = try digestArgument(&parser)
             let reading: AnalysisReading = try decode(
                 parser.option("--reading"), "--reading", keys: ["project", "rev", "review"])
             let by = parser.option("--by")
             try parser.end()
-            output.stdout = try encode(try store().recordRevision(module: module, reading: reading, by: by))
+            output.stdout = try encode(try store.recordRevision(module: module, reading: reading, by: by))
         case "review-history":
             let module = try digestArgument(&parser)
             try parser.end()
-            output.stdout = try try store().reviewHistory(module: module).map(encode) ?? Data("null\n".utf8)
+            output.stdout = try store.reviewHistory(module: module).map(encode) ?? Data("null\n".utf8)
         case "set-ref":
             let name = try parser.required("a reference name")
             let keys = try parser.rest().map(keyArgument)
             guard !keys.isEmpty else { throw Usage(description: "set-ref: name at least one analysis") }
-            output.stdout = try encode(try store().setRef(name, analyses: keys))
+            output.stdout = try encode(try store.setRef(name, analyses: keys))
         case "refs":
             try parser.end()
-            output.stdout = try encode(try store().refs())
+            output.stdout = try encode(try store.refs())
         case "remove-ref":
             let name = try parser.required("a reference name")
             try parser.end()
-            output.stdout = try json(["removed": try store().removeRef(name)])
+            output.stdout = try json(["removed": try store.removeRef(name)])
         case "verify":
             try parser.end()
-            output.stdout = try json(["problems": try store().verify()])
+            output.stdout = try json(["problems": try store.verify()])
         case "gc":
             let apply = parser.flag("--apply")
             let analyses = parser.flag("--analyses")
             try parser.end()
-            output.stdout = try encode(try store().collectGarbage(
+            output.stdout = try encode(try store.collectGarbage(
                 dryRun: !apply, deleteUnreferencedAnalyses: analyses))
         case "export":
             guard let out = parser.option("--out") else {
@@ -184,11 +215,11 @@ public enum CASCommand {
             }
             let keys = try parser.rest().map(keyArgument)
             guard !keys.isEmpty else { throw Usage(description: "export: name at least one analysis") }
-            output.stdout = try encode(try store().exportBundle(keys, to: URL(fileURLWithPath: out)))
+            output.stdout = try encode(try store.exportBundle(keys, to: URL(fileURLWithPath: out)))
         case "import":
             let file = try parser.required("a bundle")
             try parser.end()
-            output.stdout = try encode(try store().importBundle(from: URL(fileURLWithPath: file)))
+            output.stdout = try encode(try store.importBundle(from: URL(fileURLWithPath: file)))
         default:
             throw Usage(description: "unknown command \(command)\n\(usage)")
         }

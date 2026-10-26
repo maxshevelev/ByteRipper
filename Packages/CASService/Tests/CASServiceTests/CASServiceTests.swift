@@ -230,6 +230,49 @@ final class CASServiceTests: XCTestCase {
         }
     }
 
+    // MARK: - byteripper-cas --server
+
+    func testTheCommandLineRunsItsCommandsOnAServedStore() async throws {
+        let tokenFile = directory.appendingPathComponent("token")
+        try Data("token\n".utf8).write(to: tokenFile)
+        let artifactFile = directory.appendingPathComponent("artifact.json")
+        try artifact(2).write(to: artifactFile)
+        let server = remote.base.absoluteString
+        let moduleJSON = String(data: try JSONEncoder().encode(module()), encoding: .utf8)!
+        let recipeJSON = String(data: try JSONEncoder().encode(recipe), encoding: .utf8)!
+
+        // The command line blocks on the network; it runs off the test's actor.
+        func run(_ arguments: [String]) async -> CASCommand.Output {
+            await Task.detached {
+                CASCommand.run(["--server", server, "--token-file", tokenFile.path] + arguments)
+            }.value
+        }
+        let hello = await run(["hello"])
+        XCTAssertEqual(hello.status, 0, String(data: hello.stderr, encoding: .utf8)!)
+        let helloJSON = try JSONSerialization.jsonObject(with: hello.stdout) as! [String: Any]
+        XCTAssertEqual(helloJSON["store"] as? String, try served.identity())
+
+        let put = await run(["put-analysis", "--module", moduleJSON, "--recipe", recipeJSON,
+                             "--artifact", artifactFile.path])
+        XCTAssertEqual(put.status, 0, String(data: put.stderr, encoding: .utf8)!)
+        XCTAssertEqual(try served.analysis(module: module().sha256)?.stats.functions, 2)
+
+        let list = await run(["list"])
+        XCTAssertEqual((try JSONSerialization.jsonObject(with: list.stdout) as! [Any]).count, 1)
+        let newest = await run(["analysis", module().sha256.hex])
+        XCTAssertEqual(try JSONDecoder().decode(AnalysisManifest.self, from: newest.stdout).recipe.id, recipe.id)
+
+        let gc = await run(["gc", "--apply"])
+        XCTAssertEqual(gc.status, 1)
+        XCTAssertTrue(String(data: gc.stderr, encoding: .utf8)!.contains("on the server"))
+
+        let both = CASCommand.run(["--server", server, "--store", "/tmp/x", "list"])
+        XCTAssertEqual(both.status, 2)
+        let missingToken = CASCommand.run(["--server", server, "--token-file", "/nonexistent", "list"])
+        XCTAssertEqual(missingToken.status, 1)
+        XCTAssertTrue(String(data: missingToken.stderr, encoding: .utf8)!.contains("no such token file"))
+    }
+
     func testTheTokenGuardsTheStore() async throws {
         let anonymous = RemoteStore(base: remote.base, token: nil)
         do {

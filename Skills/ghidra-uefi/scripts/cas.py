@@ -124,16 +124,31 @@ def tool() -> Path:
 
 # -- the store ------------------------------------------------------------
 
-class Store:
-    """The store rooted at a directory, through `byteripper-cas`."""
+def store_location(text: str):
+    """A `--store` argument: a directory, or a served store's address."""
+    return text if text.startswith(("http://", "https://")) else Path(text).expanduser()
 
-    def __init__(self, root: Path, create: bool = True):
-        self.root = Path(root).expanduser()
+
+class Store:
+    """The store rooted at a directory, or served by `byteripper-server` at an
+    `http://host:port` address, through `byteripper-cas`.
+
+    A served store takes the same calls; its token is the file
+    `BYTERIPPER_SERVER_TOKEN_FILE` names, or `…/ByteRipper/Server/token`.
+    Garbage collection is refused there: it runs on the server."""
+
+    def __init__(self, root, create: bool = True):
+        text = str(root)
+        self.server = text if text.startswith(("http://", "https://")) else None
+        self.root = None if self.server else Path(root).expanduser()
         self.create = create
 
     def _call(self, *arguments: str, raw: bool = False):
-        command = [str(tool()), "--store", str(self.root)]
-        if not self.create:
+        if self.server:
+            command = [str(tool()), "--server", self.server]
+        else:
+            command = [str(tool()), "--store", str(self.root)]
+        if not self.create and not self.server:
             command.append("--no-create")
         completed = subprocess.run([*command, *arguments], capture_output=True)
         if completed.returncode != 0:

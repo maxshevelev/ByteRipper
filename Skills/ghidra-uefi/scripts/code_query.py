@@ -143,7 +143,7 @@ def main(argv: list[str]) -> int:
                                  "xrefs", "uses", "search", "strings", "symbols",
                                  "post-codes", "status-codes"])
     parser.add_argument("argument", nargs="?", help="a function name or address, or the text to find")
-    parser.add_argument("--store", type=Path, default=default_store())
+    parser.add_argument("--store", type=cas.store_location, default=default_store())
     parser.add_argument("--recipe", help="the analysis recipe, when several exist")
     parser.add_argument("--limit", type=int, default=40)
     parser.add_argument("--json", action="store_true", help="print the answer as JSON")
@@ -160,7 +160,7 @@ def main(argv: list[str]) -> int:
     store = cas.Store(args.store, create=False)
     manifest = store.analysis(digest, args.recipe)
     if manifest is None:
-        print(f"no analysis for {digest} in {store.root}; run code_artifact.py first",
+        print(f"no analysis for {digest} in {store.server or store.root}; run code_artifact.py first",
               file=sys.stderr)
         return 1
     try:

@@ -36,8 +36,8 @@ def default_store() -> Path:
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description="The local code-artifact CAS.")
-    parser.add_argument("--store", type=Path, default=default_store(),
-                        help="the store root")
+    parser.add_argument("--store", type=cas.store_location, default=default_store(),
+                        help="the store root, or a served store as http://host:port")
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("list", help="every analysis in the store").add_argument("--json", action="store_true")

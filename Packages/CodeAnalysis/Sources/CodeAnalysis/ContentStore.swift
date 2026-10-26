@@ -239,12 +239,15 @@ public struct ContentStore: Sendable {
                 manifests.append(manifest)
             }
         }
-        return manifests.max { left, right in
-            if left.analyzedAt == right.analyzedAt {
-                return left.recipe.id < right.recipe.id
-            }
-            return left.analyzedAt < right.analyzedAt
+        return manifests.max(by: Self.olderThan)
+    }
+
+    /// The order "the newest analysis of a module" is the maximum of.
+    static func olderThan(_ left: AnalysisManifest, _ right: AnalysisManifest) -> Bool {
+        if left.analyzedAt == right.analyzedAt {
+            return left.recipe.id < right.recipe.id
         }
+        return left.analyzedAt < right.analyzedAt
     }
 
     public func recipes(ofModule module: SHA256Digest) -> [String] {
