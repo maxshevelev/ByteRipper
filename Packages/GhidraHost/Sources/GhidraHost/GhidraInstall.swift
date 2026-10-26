@@ -34,6 +34,14 @@ public struct GhidraInstall: Equatable, Sendable {
     public let jdk: URL
 
     public var analyzeHeadless: URL { home.appendingPathComponent("support/analyzeHeadless") }
+
+    /// The environment Ghidra's own launch scripts run in: `JAVA_HOME` named,
+    /// so they use the JDK this install was found with.
+    public var environment: [String: String] {
+        var variables = ProcessInfo.processInfo.environment
+        variables["JAVA_HOME"] = jdk.path
+        return variables
+    }
     public var java: URL { jdk.appendingPathComponent("bin/java") }
 
     /// The install named, else `GHIDRA_HOME`, else the newest `ghidra_*` in

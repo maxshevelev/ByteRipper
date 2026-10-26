@@ -372,14 +372,3 @@ public actor GhidraHost {
         return formatter.string(from: Date()).replacingOccurrences(of: "Z", with: "+00:00")
     }
 }
-
-/// Where the EDK2 type archives and the GUID table are cached — the folder
-/// `uefi_types.py` builds into.
-public enum UEFITypes {
-    public static let edk2Tag = "edk2-stable202608"
-
-    public static var cacheRoot: URL {
-        CodeAnalysisPaths.defaultRoot.deletingLastPathComponent()
-            .appendingPathComponent("Ghidra", isDirectory: true)
-    }
-}
