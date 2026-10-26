@@ -2,6 +2,7 @@ import Cocoa
 import HelpBook
 import HelpUI
 import Localization
+import ToolModuleKit
 
 /// The Appearance section of the Settings window's View tab (§3.2): the
 /// monospaced font (family and size), the row-height factor, and the app
@@ -407,7 +408,10 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         case Self.codeAnalysisItemID:
             item.label = Self.label(for: itemIdentifier)
             item.paletteLabel = item.label
-            item.image = NSImage(systemSymbolName: "server.rack", accessibilityDescription: item.label)
+            // The mark a module with a stored analysis wears in the UEFI tree,
+            // read from the mark's own style so the two never drift apart.
+            item.image = NSImage(systemSymbolName: ToolRowMark.codeAnalysis.symbol ?? "ellipsis.curlybraces",
+                                 accessibilityDescription: item.label)
             item.target = self
             item.action = #selector(tabTapped(_:))
         // help: settings.text-decoding
