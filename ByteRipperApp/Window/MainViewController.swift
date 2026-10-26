@@ -8483,6 +8483,12 @@ enum AlertOutcome {
 extension MainViewController {
     /// View ▸ Back (⌘[): the place the last jump left.
     @objc func navigateBack() {
+        // In a code screen Back walks the code's own jumps first — a call
+        // followed, a caller chosen — and the tab's places after them.
+        if let code = focusedCodePane(), code.canGoBack {
+            code.goBack()
+            return
+        }
         var current = navigationPlace(of: activePane)
         current.isToolStep = windowModel.arrivedByToolStep
         guard let place = windowModel.navigationHistory.goBack(
@@ -8496,6 +8502,10 @@ extension MainViewController {
 
     /// View ▸ Forward (⌘]): the place Back left.
     @objc func navigateForward() {
+        if let code = focusedCodePane(), code.canGoForward {
+            code.goForward()
+            return
+        }
         var current = navigationPlace(of: activePane)
         current.isToolStep = windowModel.arrivedByToolStep
         guard let place = windowModel.navigationHistory.goForward(
@@ -8539,12 +8549,14 @@ extension MainViewController {
     }
 
     var canNavigateBack: Bool {
-        activePane.isOpen && windowModel.navigationHistory.canGoBack(
+        if focusedCodePane()?.canGoBack == true { return true }
+        return activePane.isOpen && windowModel.navigationHistory.canGoBack(
             from: navigationPlace(of: activePane), isReachable: isReachable)
     }
 
     var canNavigateForward: Bool {
-        activePane.isOpen && windowModel.navigationHistory.canGoForward(
+        if focusedCodePane()?.canGoForward == true { return true }
+        return activePane.isOpen && windowModel.navigationHistory.canGoForward(
             from: navigationPlace(of: activePane), isReachable: isReachable)
     }
 

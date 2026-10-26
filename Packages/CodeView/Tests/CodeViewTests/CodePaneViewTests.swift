@@ -276,9 +276,77 @@ final class CodePaneViewTests: XCTestCase {
             $0.tableColumns.first?.identifier.rawValue == "instruction"
         })
         let cell = try XCTUnwrap(listing.view(atColumn: 0, row: 0, makeIfNecessary: true)
-                                    as? NSTableCellView)
-        XCTAssertTrue(try XCTUnwrap(cell.textField?.stringValue).hasPrefix("0x68"),
-                      "the module offset, as in the hex view")
+                                    as? CodeLineCell)
+        XCTAssertTrue(cell.line.string.hasPrefix("0x68"), "the module offset, as in the hex view")
+    }
+
+    /// The callees are in the code, not in a menu: only Callers is offered.
+    func testThereIsNoCalleesMenu() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: teModule(), hexView: NSView())
+        let titles = all(NSPopUpButton.self, in: view).compactMap { $0.menu?.items.first?.title }
+        XCTAssertTrue(titles.contains { $0.hasPrefix("Callers") })
+        XCTAssertFalse(titles.contains { $0.hasPrefix("Callees") })
+    }
+
+    /// A call in the C is a link: clicking it opens the called function, and
+    /// Back returns to the caller.
+    func testACallInTheCLeadsToItsFunctionAndBackReturns() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try linkedArtifact(),
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 0, instruction: nil, showsC: true)
+        let text = view.decompiledAttributedText
+        let call = (text.string as NSString).range(of: "entry")
+        XCTAssertNotEqual(call.location, NSNotFound)
+        let link = try XCTUnwrap(text.attribute(.link, at: call.location, effectiveRange: nil) as? String)
+        let textView = try XCTUnwrap(first(NSTextView.self, in: view) { _ in true })
+        XCTAssertTrue(view.textView(textView, clickedOnLink: link, at: call.location))
+        XCTAssertEqual(view.selectedFunction?.name, "entry")
+        XCTAssertTrue(view.canGoBack)
+
+        view.goBack()
+        XCTAssertEqual(view.selectedFunction?.name, "FUN_00000220")
+        XCTAssertTrue(view.canGoForward)
+        view.goForward()
+        XCTAssertEqual(view.selectedFunction?.name, "entry")
+    }
+
+    /// A call in the listing is a link too.
+    func testACallInTheListingLeadsToItsFunction() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try linkedArtifact(),
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
+        view.layoutSubtreeIfNeeded()
+        let listing = try XCTUnwrap(first(NSTableView.self, in: view) {
+            $0.tableColumns.first?.identifier.rawValue == "instruction"
+        })
+        let cell = try XCTUnwrap(listing.view(atColumn: 0, row: 1, makeIfNecessary: true)
+                                    as? CodeLineCell)
+        XCTAssertTrue(cell.line.string.hasSuffix("CALL 0x6A"), cell.line.string)
+        cell.line.onLink?(.function(1))
+        XCTAssertEqual(view.selectedFunction?.name, "entry")
+        XCTAssertTrue(view.canGoBack)
+    }
+
+    private func linkedArtifact() throws -> CodeArtifact {
+        try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        {"script_version":3,"ghidra":"12.1.2","program":{"image_base":"0x0"},
+         "functions":[
+          {"entry":"0x220","name":"FUN_00000220","c":"void FUN_00000220(void)\\n{\\n  entry();\\n}\\n",
+           "instructions":[
+            {"address":"0x220","bytes":"56","mnemonic":"PUSH","text":"PUSH ESI"},
+            {"address":"0x221","bytes":"E8 00","mnemonic":"CALL","text":"CALL 0x00000222",
+             "references":[{"to":"0x222","type":"UNCONDITIONAL_CALL"}]}]},
+          {"entry":"0x222","name":"entry","c":"void entry(void)\\n{\\n}\\n","instructions":[
+            {"address":"0x222","bytes":"C3","mnemonic":"RET","text":"RET"}]}
+         ]}
+        """.utf8))
+    }
+
+    private func all<T: NSView>(_ type: T.Type, in view: NSView) -> [T] {
+        ((view as? T).map { [$0] } ?? []) + view.subviews.flatMap { all(type, in: $0) }
     }
 
 

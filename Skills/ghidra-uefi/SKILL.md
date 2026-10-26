@@ -24,7 +24,10 @@ with no app running.
 | `scripts/te_to_pe.py` | stdlib | rebuilds a PE32/PE32+ file from a TE image |
 | `scripts/ghidra_import.py` | calls Ghidra's `analyzeHeadless` | converts TE if needed, imports, analyzes, exports JSON |
 | `scripts/ExportModule.java` | a Ghidra script | functions, signatures, callers/callees, decompiled C |
-| `scripts/ExportCode.java` | a Ghidra script | the full code artifact: every instruction, references, C, strings, POST writes and status-code candidates |
+| `scripts/ApplyUefi.java` | a Ghidra script, before the export | the UEFI pass: EDK2 types on the entry point and down the calls, gBS/gRT/gST, GUID names, protocol and PPI pointers, callbacks, DEBUG names (`reference/uefi-pass.md`) |
+| `scripts/BuildUefiTypes.java` | a Ghidra script, once | parses MdePkg's headers into `uefi_X64.gdt` / `uefi_Ia32.gdt` |
+| `scripts/uefi_types.py` | git, Ghidra, once | builds and caches the type archives and the GUID table the pass needs |
+| `scripts/ExportCode.java` | a Ghidra script | the full code artifact: every instruction, references, C with its token spans, named data, strings, POST writes and status-code candidates |
 | `scripts/code_artifact.py` | one Ghidra run per module | analyzes once and stores the artifact under the module's SHA-256 |
 | `scripts/code_query.py` | stdlib, no Ghidra | reads the stored artifact: functions, disassembly, C, xrefs, the uses of an address, search, post-codes |
 | `scripts/cas.py` | stdlib | the local content-addressed store: objects, analyses, references, GC, bundles |
@@ -128,9 +131,12 @@ python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te uses 0x4BF
 python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te status-codes
 ```
 
-The exporter writes `script_version: 3` (`reference/code-artifact.md`): a
-module analyzed by the v2 exporter is analyzed again as a new recipe beside the
-old one. Status-code candidates exist only for a 32-bit (PEI) image.
+The exporter writes `script_version: 4` (`reference/code-artifact.md`): a
+module analyzed by an older exporter is analyzed again as a new recipe beside
+the old one. Before the export, `ApplyUefi.java` types and names the module
+from EDK2 (`reference/uefi-pass.md`); the first run builds its type archives,
+about a minute. `--phase pei|dxe` overrides the guess (TE or 32-bit is PEI);
+`--no-uefi` keeps Ghidra's names only, as a `-plain-` recipe of its own.
 
 The store is `~/Library/Application Support/ByteRipper/Analysis`:
 

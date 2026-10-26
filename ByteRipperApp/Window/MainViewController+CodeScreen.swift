@@ -121,6 +121,14 @@ extension MainViewController {
                      outcome: .problem)
     }
 
+    /// The code pane that has the keyboard — the tab's code screen or a code
+    /// panel in the dock — when one has.
+    func focusedCodePane() -> CodePaneView? {
+        guard let responder = view.window?.firstResponder as? NSView else { return nil }
+        let panes = [codeScreenView].compactMap { $0 } + fragments.codePanes
+        return panes.first { responder.isDescendant(of: $0) }
+    }
+
     // MARK: - Drawing the screen
 
     /// The single-file content of a code screen: the pane's title bar across

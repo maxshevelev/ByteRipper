@@ -253,8 +253,12 @@ The code pane has:
 - a four-way navigator — Functions, Strings, POST writes, Status codes — and a
   search field that narrows the list in front; a function also matches the text
   of its instructions, so `MOV` finds the functions that contain one;
-- the selected function's callers and callees as short menus, each target one
-  click away;
+- the selected function's callers as a short menu, each one click away. Its
+  callees need no menu: every call in the C and in the listing is a link to
+  the function it calls, as in an IDE; a jump's target leads to its
+  instruction, a global or a GUID to its bytes. View ▸ Back and View ▸ Forward
+  (⌘[ / ⌘]), and the arrows beside ASM/C, walk the places those links led to
+  while the pane has the keyboard, before the tab's own places;
 - a disassembly listing: address, instruction bytes, mnemonic and operands;
 - an `ASM`/`C` switch for the selected function's decompiled text;
 - strings, POST writes and `ReportStatusCode` candidates as selectable lists;

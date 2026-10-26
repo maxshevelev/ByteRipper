@@ -20,6 +20,12 @@ import ToolModuleKit
 @MainActor public final class CodePaneView: NSView {
     public typealias List = CodeReaderState.List
 
+    /// A place in the code Back and Forward return to.
+    private struct Place: Equatable {
+        var function: Int
+        var line: Int?
+    }
+
     public let manifest: AnalysisManifest
     public let artifact: CodeArtifact
     private var state: CodeReaderState
@@ -34,7 +40,17 @@ import ToolModuleKit
     private let listControl: NSSegmentedControl
     private let searchField = NSSearchField()
     private let callersButton = NSPopUpButton(frame: .zero, pullsDown: true)
-    private let calleesButton = NSPopUpButton(frame: .zero, pullsDown: true)
+    private let backButton = NSButton()
+    private let forwardButton = NSButton()
+    /// The places the reader went to, oldest first, and which one is current:
+    /// Back and Forward walk it as in an IDE. A jump — a click on a call, a
+    /// caller, a function in the list — adds a place; moving inside one
+    /// function only moves the current one.
+    private var history: [Place] = []
+    private var historyIndex = -1
+    /// Which link each `code:N` in the C text is.
+    private var cLinks: [CodeLink] = []
+    private var drawnC: Int?
     private let referencesRow = NSStackView()
     private let table = NSTableView()
     private let tableScroll = NSScrollView()
@@ -100,6 +116,7 @@ import ToolModuleKit
         build(hexView: moduleHexView)
         drawNavigator()
         drawSelection()
+        resetHistory()
     }
 
     @available(*, unavailable)
@@ -126,6 +143,12 @@ import ToolModuleKit
     public var selectedInstruction: CodeArtifact.Instruction? { state.selectedLine?.instruction }
     public var selectedFunction: CodeArtifact.Function? { state.selectedFunction }
     public var decompiledText: String { cTextView.string }
+    /// The decompiled C as drawn: its colours and links, for tests.
+    public var decompiledAttributedText: NSAttributedString {
+        cTextView.textStorage.map { NSAttributedString(attributedString: $0) } ?? NSAttributedString()
+    }
+    public var canGoBack: Bool { historyIndex > 0 }
+    public var canGoForward: Bool { historyIndex + 1 < history.count }
     public var selectedFunctionIndex: Int? { state.function }
     public var selectedInstructionIndex: Int? { state.line }
 
@@ -186,6 +209,7 @@ import ToolModuleKit
         }
         modeControl.selectedSegment = showsC ? 1 : 0
         applyMode()
+        resetHistory()
     }
 
     /// Shows the stale banner. The app calls this when the module's current
@@ -328,9 +352,9 @@ import ToolModuleKit
             referencesRow.isHidden = true
             return
         }
+        // The callees are in the code itself: every call is a link there.
         fill(callersButton, title: L("Callers"), with: function.callers)
-        fill(calleesButton, title: L("Callees"), with: function.callees)
-        referencesRow.isHidden = function.callers.isEmpty && function.callees.isEmpty
+        referencesRow.isHidden = function.callers.isEmpty
     }
 
     private func fill(_ button: NSPopUpButton, title: String,
@@ -358,12 +382,97 @@ import ToolModuleKit
     /// the bytes there when the module holds them. An external target does
     /// nothing rather than pretending to go somewhere.
     private func navigate(to address: CodeAddress) {
-        if let index = model.function(at: address) {
-            selectFunction(at: index)
-        } else if let range = model.moduleRange(of: address, count: 1) {
-            onSelectRange?(range)
+        if let link = model.link(to: address) { follow(link) }
+    }
+
+    // MARK: - Following links, and the way back
+
+    /// A click on a call, a jump's label or a global — in the C or the
+    /// listing — goes where it names, as in an IDE: a function opens with its
+    /// range as the dump's main zone, an instruction is selected with its
+    /// bytes, data selects its bytes in the hex view. The first two are
+    /// places Back returns from.
+    func follow(_ link: CodeLink) {
+        switch link {
+        case .function(let index):
+            jump { selectFunction(at: index) }
+        case .line(let line):
+            jump {
+                select(line: line)
+                notifyInstruction()
+            }
+        case .bytes(let address):
+            if let range = dataRange(at: address) { onSelectRange?(range) }
         }
     }
+
+    /// The bytes a click on a global selects: a GUID's 16, a pointer's width,
+    /// or the one byte at the address when the artifact does not say.
+    private func dataRange(at address: CodeAddress) -> Range<UInt64>? {
+        let symbol = artifact.symbols.first { $0.address == address }
+        var count = 1
+        if let type = symbol?.type {
+            if type == "EFI_GUID" { count = 16 }
+            else if type.hasSuffix("*") { count = (artifact.program?.is64Bit ?? false) ? 8 : 4 }
+        }
+        return model.moduleRange(of: address, count: count) ?? model.moduleRange(of: address, count: 1)
+    }
+
+    private var currentPlace: Place? {
+        state.function.map { Place(function: $0, line: state.line) }
+    }
+
+    /// Moves somewhere new: the place left is kept, what was ahead of it is
+    /// dropped, and the new place becomes the current one.
+    private func jump(_ move: () -> Void) {
+        if historyIndex >= 0, let place = currentPlace { history[historyIndex] = place }
+        move()
+        guard let place = currentPlace else { return }
+        if historyIndex >= 0, history[historyIndex].function == place.function,
+           history[historyIndex].line == place.line { return }
+        history = Array(history.prefix(historyIndex + 1)) + [place]
+        historyIndex = history.count - 1
+        updateHistoryButtons()
+    }
+
+    private func resetHistory() {
+        history = currentPlace.map { [$0] } ?? []
+        historyIndex = history.count - 1
+        updateHistoryButtons()
+    }
+
+    /// Back: the place before the last jump. View ▸ Back (⌘[) calls this
+    /// while the code pane has the keyboard.
+    public func goBack() {
+        guard canGoBack else { return }
+        if let place = currentPlace { history[historyIndex] = place }
+        historyIndex -= 1
+        go(to: history[historyIndex])
+    }
+
+    public func goForward() {
+        guard canGoForward else { return }
+        if let place = currentPlace { history[historyIndex] = place }
+        historyIndex += 1
+        go(to: history[historyIndex])
+    }
+
+    private func go(to place: Place) {
+        selectFunction(at: place.function)
+        if let line = place.line, model.lines.indices.contains(line) {
+            select(line: line)
+            notifyInstruction()
+        }
+        updateHistoryButtons()
+    }
+
+    private func updateHistoryButtons() {
+        backButton.isEnabled = canGoBack
+        forwardButton.isEnabled = canGoForward
+    }
+
+    @objc private func goBackClicked() { goBack() }
+    @objc private func goForwardClicked() { goForward() }
 
     /// What a navigator row means in the list that is showing. The table has
     /// selected the row already; this puts its bytes or its function on screen.
@@ -376,7 +485,8 @@ import ToolModuleKit
         let range: Range<UInt64>?
         switch state.list {
         case .functions:
-            selectFunction(at: state.listedFunctions[row])
+            let function = state.listedFunctions[row]
+            jump { selectFunction(at: function) }
             return
         case .strings:
             range = model.moduleRange(of: artifact.strings[state.listedStrings[row]])
@@ -468,7 +578,26 @@ import ToolModuleKit
         // analysis and the fold.
         let titleSpacer = NSView()
         titleSpacer.setContentHuggingPriority(.init(1), for: .horizontal)
-        let titleRow = NSStackView(views: [titleLabel, titleSpacer, modeControl])
+        for (button, symbol, action) in [
+            (backButton, "chevron.backward", #selector(goBackClicked)),
+            (forwardButton, "chevron.forward", #selector(goForwardClicked))
+        ] {
+            button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+            button.imagePosition = .imageOnly
+            button.isBordered = false
+            button.bezelStyle = .inline
+            button.controlSize = .small
+            button.target = self
+            button.action = action
+            button.setContentHuggingPriority(.required, for: .horizontal)
+        }
+        // help: panel.code.navigate
+        ControlHelp.describe(backButton, name: L("Back"),
+                             tooltip: L("Go back to the previous place in the code (⌘[)"))
+        ControlHelp.describe(forwardButton, name: L("Forward"),
+                             tooltip: L("Go forward again (⌘])"))
+        let titleRow = NSStackView(views: [titleLabel, titleSpacer, backButton, forwardButton,
+                                           modeControl])
         titleRow.orientation = .horizontal
         titleRow.alignment = .top
         titleRow.spacing = 8
@@ -508,7 +637,7 @@ import ToolModuleKit
         ControlHelp.describe(recipePopUp, name: L("Analysis"),
                              tooltip: L("Choose the stored analysis shown here"))
 
-        for button in [callersButton, calleesButton] {
+        for button in [callersButton] {
             button.bezelStyle = .inline
             button.isBordered = false
             button.controlSize = .small
@@ -520,14 +649,11 @@ import ToolModuleKit
         }
         ControlHelp.describe(callersButton, name: L("Callers"),
                              tooltip: L("Functions that call this one"))
-        ControlHelp.describe(calleesButton, name: L("Callees"),
-                             tooltip: L("Functions this one calls"))
         referencesRow.orientation = .horizontal
         referencesRow.alignment = .centerY
         referencesRow.spacing = 12
         referencesRow.translatesAutoresizingMaskIntoConstraints = false
         referencesRow.addArrangedSubview(callersButton)
-        referencesRow.addArrangedSubview(calleesButton)
         referencesRow.addArrangedSubview(NSView())
         referencesRow.isHidden = true
 
@@ -703,7 +829,11 @@ import ToolModuleKit
     private func configureC() {
         cTextView.isEditable = false
         cTextView.isSelectable = true
-        cTextView.isRichText = false
+        cTextView.isRichText = true
+        cTextView.delegate = self
+        // A link keeps the colour of what it is — a function, a global — and
+        // shows the hand; no underline over every call.
+        cTextView.linkTextAttributes = [.cursor: NSCursor.pointingHand]
         cTextView.drawsBackground = false
         cTextView.font = .monospacedSystemFont(ofSize: ToolPanelFont.size, weight: .regular)
         cTextView.textContainerInset = NSSize(width: 8, height: 8)
@@ -764,13 +894,23 @@ import ToolModuleKit
     /// The selected function's C. Set only when it is another text: a new
     /// instruction in the same function does not lay the text out again.
     private func updateC() {
-        let text: String
-        if let function = state.selectedFunction {
-            text = function.c ?? L("No decompiled C for this function.")
+        guard drawnC != state.function || cTextView.string.isEmpty else { return }
+        drawnC = state.function
+        let font = NSFont.monospacedSystemFont(ofSize: ToolPanelFont.size, weight: .regular)
+        cLinks = []
+        let text: NSAttributedString
+        if let index = state.function, let c = model.functions[index].c {
+            text = CodeColors.attributed(c, tokens: model.cTokens(ofFunction: index), font: font,
+                                         links: &cLinks, asTextLinks: true)
         } else {
-            text = L("The analysis holds no functions.")
+            let message = state.selectedFunction == nil
+                ? L("The analysis holds no functions.")
+                : L("No decompiled C for this function.")
+            text = NSAttributedString(string: message, attributes: [
+                .font: font, .foregroundColor: NSColor.secondaryLabelColor
+            ])
         }
-        if cTextView.string != text { cTextView.string = text }
+        cTextView.textStorage?.setAttributedString(text)
     }
 }
 
@@ -785,12 +925,28 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
             guard row >= 0, row < state.rowCount else { return nil }
             let cell = cell(in: tableView, identifier: .init("code-navigator"), monospaced: false)
             cell.textField?.stringValue = navigatorText(at: row)
+            // A name the module's own evidence gave reads as a name; Ghidra's
+            // FUN_ placeholder reads quieter. The reason is one hover away.
+            var color = NSColor.labelColor
+            var reason: String?
+            if state.list == .functions {
+                let function = model.functions[state.listedFunctions[row]]
+                if function.hasPlaceholderName { color = .secondaryLabelColor }
+                reason = function.nameReason
+            }
+            cell.textField?.textColor = color
+            cell.toolTip = reason
             return cell
         }
         let lines = state.lines
         guard row >= 0, row < lines.count else { return nil }
-        let cell = cell(in: tableView, identifier: .init("code-line"), monospaced: true)
-        cell.textField?.stringValue = display(lines[lines.startIndex + row].instruction)
+        let identifier = NSUserInterfaceItemIdentifier("code-line")
+        let cell = tableView.makeView(withIdentifier: identifier, owner: nil) as? CodeLineCell
+            ?? CodeLineCell(identifier: identifier)
+        let shown = model.listingRow(ofLine: lines[lines.startIndex + row].global)
+        cell.line.show(shown.text, tokens: shown.tokens,
+                       font: .monospacedSystemFont(ofSize: ToolPanelFont.size, weight: .regular))
+        cell.line.onLink = { [weak self] link in self?.follow(link) }
         return cell
     }
 
@@ -855,17 +1011,6 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
         return cell
     }
 
-    /// A listing row: the module offset, the bytes, and the instruction with
-    /// its targets written as module offsets too, so a jump names the row it
-    /// lands on.
-    private func display(_ instruction: CodeArtifact.Instruction) -> String {
-        let address = model.displayAddress(instruction.address)
-            .padding(toLength: 10, withPad: " ", startingAt: 0)
-        let bytes = instruction.bytes.map { String(format: "%02X", $0) }
-            .joined(separator: " ")
-        let byteColumn = bytes.padding(toLength: 26, withPad: " ", startingAt: 0)
-        return address + "  " + byteColumn + "  " + model.displayText(of: instruction)
-    }
 }
 
 private final class CodeDumpBar: NSView {
@@ -877,5 +1022,38 @@ private final class CodeDumpBar: NSView {
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
         needsDisplay = true
+    }
+}
+
+extension CodePaneView: NSTextViewDelegate {
+    /// A click on a call or a global in the C.
+    public func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
+        guard textView === cTextView, let text = link as? String, text.hasPrefix("code:"),
+              let number = Int(text.dropFirst(5)), cLinks.indices.contains(number) else { return false }
+        follow(cLinks[number])
+        return true
+    }
+}
+
+/// The listing's row: a table cell around one clickable line of code.
+final class CodeLineCell: NSTableCellView {
+    let line = CodeLineView()
+
+    init(identifier: NSUserInterfaceItemIdentifier) {
+        super.init(frame: .zero)
+        self.identifier = identifier
+        line.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(line)
+        NSLayoutConstraint.activate([
+            line.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
+            line.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            line.topAnchor.constraint(equalTo: topAnchor),
+            line.bottomAnchor.constraint(equalTo: bottomAnchor)
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not used")
     }
 }

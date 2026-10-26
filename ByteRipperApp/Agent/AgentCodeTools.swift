@@ -15,7 +15,7 @@ final class AgentCodeTools {
 
     nonisolated func tools() -> [AgentTool] { [queryTool] }
 
-    private static let lists = ["functions", "instructions", "c", "uses", "strings", "references"]
+    private static let lists = ["functions", "instructions", "c", "uses", "strings", "symbols", "references"]
 
     private nonisolated var queryTool: AgentTool {
         AgentTool(
@@ -25,7 +25,10 @@ final class AgentCodeTools {
                 Read the stored code analysis a Code panel is showing. `what` picks the list (default \
                 "functions"): "functions"; one function's "instructions" or decompiled "c"; a function's \
                 callers and callees ("references"); the instructions that "uses" an address — who calls a \
-                function, jumps to a label, or reads a global or a string; or "strings". `function` names \
+                function, jumps to a label, or reads a global or a string; "strings"; or "symbols", the \
+                named data — GUIDs, service tables, interfaces. A function's `name_source` says where its \
+                name came from: DEFAULT is Ghidra's FUN_ placeholder, ANALYSIS a name the UEFI pass read \
+                from the module (`name_reason` says from what), IMPORTED the image's own. `function` names \
                 one by its name or Ghidra entry address; `address` is the target for "uses"; `search` \
                 narrows functions by name or instruction text, and strings by value. Addresses come \
                 twice: `entry`/`address` is Ghidra's virtual address, `offset` is the same byte's offset \
@@ -103,6 +106,8 @@ final class AgentCodeTools {
                     "external": .bool(function.external),
                     "thunk": .bool(function.thunk),
                     "signature": function.signature.map(JSONValue.string) ?? .null,
+                    "name_source": function.nameSource.map(JSONValue.string) ?? .null,
+                    "name_reason": function.nameReason.map(JSONValue.string) ?? .null,
                     "callers": .array(function.callers.map { .string($0.description) }),
                     "callees": .array(function.callees.map { .string($0.description) })
                 ])
@@ -151,6 +156,24 @@ final class AgentCodeTools {
                     "type": .string(use.type),
                     "function": .string(model.functions[use.function].name),
                     "text": .string(model.lines[use.line].instruction.text)
+                ])
+            })
+
+        case "symbols":
+            let symbols = screen.artifact.symbols.filter { symbol in
+                guard let search, !search.isEmpty else { return true }
+                return symbol.name.lowercased().contains(search)
+                    || (symbol.type?.lowercased().contains(search) ?? false)
+            }
+            body["total"] = .int(Int64(symbols.count))
+            body["symbols"] = .array(symbols.prefix(limit).map { symbol in
+                .object([
+                    "address": .string(symbol.address.description),
+                    "offset": offsetText(symbol.address),
+                    "name": .string(symbol.name),
+                    "type": symbol.type.map(JSONValue.string) ?? .null,
+                    "source": symbol.source.map(JSONValue.string) ?? .null,
+                    "reason": symbol.reason.map(JSONValue.string) ?? .null
                 ])
             })
 

@@ -3,6 +3,7 @@
 > The map of a firmware image: which region, which volume, which file, and where.
 
 @covers panel.uefi
+@covers panel.code.navigate
 @covers panel.uefi.fix-checksum
 @covers panel.uefi.top-swap
 @covers panel.uefi.save-node
@@ -80,6 +81,10 @@ Right-click a node:
 - **Open Decompressed Body** / **Save Decompressed Body as…** for a compressed section — what those bytes actually expand to.
 - **Open Decompressed Variable** for the `overrides` variable of an Apple system-flags store — its device overrides, which are kept as a bzip2 stream, unpacked into a tab as text. The tab is a copy: nothing here compresses the text again, so editing it does not change the dump.
 - **Go to Top Swap Copy** / **Go to Original** for a node in either block of an image with a [[term:top-swap|Top Swap]] copy — selects the same node in the other block and shows its bytes in the dump, so that each part of the copy can be matched with the part of the top block it duplicates.
+
+In the code panel the code leads where it names. A called function's name — in the C and in the ASM listing — is a link: a click opens that function, and its bytes become the dump's main zone. A jump's target selects the instruction it lands on, and a global or a GUID selects its bytes in the dump. **View ▸ Back** and **View ▸ Forward** (**⌘[** and **⌘]**), or the arrows beside **ASM**/**C**, walk back and forth through the places those clicks led to while the panel has the keyboard. **Callers** lists the functions that call the one shown.
+
+The names in the code are read from the module itself. A GUID is named from EDK2 and the GUID catalogue; `gBS`, `gRT` and `gST` are the globals written from the tables the entry point is given; a protocol or PPI pointer is named after the call that fetches it; a callback, after the event it is registered for. A function nothing names stays `FUN_…` and is shown in grey; hovering over a recovered name shows what it was read from. These names are a reading of the code, not the source's own, and where the evidence is not unique the name is left out.
 
 A double click on a row does without the menu: it opens what the node holds as a fragment panel — for a compressed section its decompressed body; for a node with rows under it — a volume, a file with sections, a DMI or NVRAM store — the whole node with its header, so that the panel's tree shows it as the structure it is, its rows under it; for any other node its body; and for a node with no body of its own, such as padding or free space, the node itself. On a [[term:lenv|LENV]] block or one of its entries it opens the block decoded, as **Open Decoded …** does ([[topic:lenovo-dmi|Lenovo DMI]]). What a double click opens is the first item of the row's menu. A double click on the disclosure triangle only folds or unfolds the row.
 

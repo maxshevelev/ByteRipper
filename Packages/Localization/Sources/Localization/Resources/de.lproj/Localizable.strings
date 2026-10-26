@@ -1685,10 +1685,10 @@
 "A PEI dependency expression cannot use %1$@ (at %2$@)." = "Ein PEI-Abhängigkeitsausdruck darf %1$@ nicht verwenden (bei %2$@).";
 "PPI GUID" = "PPI-GUID";
 "Protocol GUID" = "Protokoll-GUID";
-"Callees" = "Aufgerufene";
+"Go back to the previous place in the code (⌘[)" = "Zur vorherigen Stelle im Code zurückgehen (⌘[)";
+"Go forward again (⌘])" = "Wieder vorwärtsgehen (⌘])";
 "Callers" = "Aufrufer";
 "Functions that call this one" = "Funktionen, die diese aufrufen";
-"Functions this one calls" = "Funktionen, die diese aufruft";
 "POST" = "POST";
 "POST writes" = "POST-Schreibzugriffe";
 "Status" = "Status";

@@ -111,6 +111,9 @@ import ToolModuleKit
     func panelView(_ id: FragmentDock.PanelID) -> FragmentPanelView? { entries[id]?.view }
     /// The code pane a code panel carries, nil for any other part.
     func codePane(_ id: FragmentDock.PanelID) -> CodePaneView? { entries[id]?.codePane }
+    /// Every code pane the dock holds, for the commands that ask which one
+    /// has the keyboard.
+    var codePanes: [CodePaneView] { dock.panels.compactMap { entries[$0]?.codePane } }
 
     /// The panel `pane` belongs to, or nil for one of the tab's own panes.
     func panel(holding pane: PaneViewModel) -> FragmentDock.PanelID? {

@@ -16,8 +16,12 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
+import ghidra.app.decompiler.ClangFuncNameToken;
+import ghidra.app.decompiler.ClangLine;
+import ghidra.app.decompiler.ClangToken;
 import ghidra.app.decompiler.DecompInterface;
 import ghidra.app.decompiler.DecompileResults;
+import ghidra.app.decompiler.PrettyPrinter;
 import ghidra.app.script.GhidraScript;
 import ghidra.framework.Application;
 import ghidra.program.model.address.Address;
@@ -31,7 +35,16 @@ import ghidra.program.model.listing.Instruction;
 import ghidra.program.model.listing.InstructionIterator;
 import ghidra.program.model.listing.Listing;
 import ghidra.program.model.mem.MemoryBlock;
+import ghidra.program.model.pcode.HighFunction;
+import ghidra.program.model.pcode.HighSymbol;
+import ghidra.program.model.pcode.PcodeOp;
+import ghidra.program.model.pcode.Varnode;
 import ghidra.program.model.symbol.Reference;
+import ghidra.program.model.symbol.SourceType;
+import ghidra.program.model.symbol.Symbol;
+import ghidra.program.model.symbol.SymbolIterator;
+import ghidra.program.model.symbol.SymbolType;
+import ghidra.program.model.util.StringPropertyMap;
 import ghidra.program.model.scalar.Scalar;
 
 public class ExportCode extends GhidraScript {
@@ -48,7 +61,7 @@ public class ExportCode extends GhidraScript {
         Listing listing = currentProgram.getListing();
         StringBuilder json = new StringBuilder(1 << 22);
         json.append("{\n");
-        json.append("  \"script_version\": 3,\n");
+        json.append("  \"script_version\": 4,\n");
         json.append("  \"ghidra\": ").append(quote(Application.getApplicationVersion())).append(",\n");
         json.append("  \"program\": {\n");
         json.append("    \"name\": ").append(quote(currentProgram.getName())).append(",\n");
@@ -139,10 +152,30 @@ public class ExportCode extends GhidraScript {
         for (long[] entry : stringOrder) strings.add(stringEntries.get((int) entry[1]));
         json.append("  \"strings\": [").append(String.join(", ", strings)).append("],\n");
 
+        StringPropertyMap reasons =
+            currentProgram.getUsrPropertyManager().getStringPropertyMap("ByteRipper.nameReason");
+        // Named data: the GUIDs, service tables and interfaces the UEFI pass
+        // named, and whatever the image's own symbols named.
+        List<String> symbols = new ArrayList<>();
+        SymbolIterator named = currentProgram.getSymbolTable().getPrimarySymbolIterator(true);
+        while (named.hasNext() && !monitor.isCancelled()) {
+            Symbol symbol = named.next();
+            if (symbol.getSymbolType() != SymbolType.LABEL || symbol.getSource() == SourceType.DEFAULT
+                    || !symbol.getAddress().isMemoryAddress()) continue;
+            Data item = listing.getDataAt(symbol.getAddress());
+            String why = reasons == null ? null : reasons.getString(symbol.getAddress());
+            symbols.add("{\"address\": " + quote(hex(symbol.getAddress()))
+                + ", \"name\": " + quote(symbol.getName())
+                + ", \"type\": " + quote(item == null ? null : item.getDataType().getDisplayName())
+                + ", \"source\": " + quote(symbol.getSource().name())
+                + (why == null ? "" : ", \"reason\": " + quote(why)) + "}");
+        }
+        json.append("  \"symbols\": [").append(String.join(", ", symbols)).append("],\n");
+
         // Functions, in address order, with their instructions and decompiled C.
         DecompInterface decompiler = new DecompInterface();
         decompiler.toggleCCode(true);
-        decompiler.toggleSyntaxTree(false);
+        decompiler.toggleSyntaxTree(true);
         decompiler.openProgram(currentProgram);
 
         List<Function> functions = new ArrayList<>();
@@ -174,11 +207,21 @@ public class ExportCode extends GhidraScript {
             json.append("      \"callers\": [").append(String.join(", ", callers)).append("],\n");
             json.append("      \"callees\": [").append(String.join(", ", callees)).append("],\n");
 
+            // Where the name came from: Ghidra's FUN_ placeholder (DEFAULT),
+            // the UEFI pass (ANALYSIS, with its reason), the image's own
+            // symbols (IMPORTED) or a user.
+            json.append("      \"name_source\": ")
+                .append(quote(function.getSymbol().getSource().name())).append(",\n");
+            String reason = reasons == null ? null : reasons.getString(function.getEntryPoint());
+            if (reason != null) {
+                json.append("      \"name_reason\": ").append(quote(reason)).append(",\n");
+            }
+
             if (!function.isExternal() && !function.isThunk()) {
                 DecompileResults results = decompiler.decompileFunction(function, 120, monitor);
                 if (results != null && results.decompileCompleted()
-                        && results.getDecompiledFunction() != null) {
-                    json.append("      \"c\": ").append(quote(results.getDecompiledFunction().getC())).append(",\n");
+                        && results.getCCodeMarkup() != null) {
+                    appendC(json, function, results);
                 }
             }
 
@@ -255,6 +298,84 @@ public class ExportCode extends GhidraScript {
         }
         decompiler.dispose();
         println("wrote " + functions.size() + " functions to " + out);
+    }
+
+    // The decompiled C, written from the decompiler's tokens so that every
+    // token's place in the text is known, and the spans a reader colours and
+    // follows: a called function with its entry, a global with its address,
+    // a type, a parameter, a local, a constant, a keyword, a comment. Offsets
+    // are UTF-16 code units into `c`, the units a Swift or Java string counts.
+    private void appendC(StringBuilder json, Function function, DecompileResults results) {
+        PrettyPrinter printer = new PrettyPrinter(function, results.getCCodeMarkup(), null);
+        HighFunction high = results.getHighFunction();
+        StringBuilder text = new StringBuilder();
+        List<String> spans = new ArrayList<>();
+        for (ClangLine line : printer.getLines()) {
+            text.append(line.getIndentString());
+            for (ClangToken token : line.getAllTokens()) {
+                String piece = token.getText();
+                int start = text.length();
+                text.append(piece);
+                if (piece.isEmpty() || piece.isBlank()) continue;
+                String kind = null;
+                String target = null;
+                switch (token.getSyntaxType()) {
+                    case ClangToken.KEYWORD_COLOR: kind = "keyword"; break;
+                    case ClangToken.COMMENT_COLOR: kind = "comment"; break;
+                    case ClangToken.TYPE_COLOR: kind = "type"; break;
+                    case ClangToken.CONST_COLOR: kind = "constant"; break;
+                    case ClangToken.PARAMETER_COLOR: kind = "parameter"; break;
+                    case ClangToken.VARIABLE_COLOR: kind = "local"; break;
+                    case ClangToken.FUNCTION_COLOR:
+                        kind = "function";
+                        target = calledEntry(token);
+                        break;
+                    case ClangToken.GLOBAL_COLOR:
+                        kind = "global";
+                        target = globalAddress(token, high);
+                        break;
+                    default: break;
+                }
+                if (kind == null) continue;
+                spans.add("[" + start + ", " + piece.length() + ", " + quote(kind)
+                    + (target == null ? "" : ", " + quote(target)) + "]");
+            }
+            text.append('\n');
+        }
+        json.append("      \"c\": ").append(quote(text.toString())).append(",\n");
+        json.append("      \"c_spans\": [").append(String.join(", ", spans)).append("],\n");
+    }
+
+    // The entry a function-name token calls, or names: the CALL's target, or
+    // the function of that name.
+    private String calledEntry(ClangToken token) {
+        PcodeOp op = token.getPcodeOp();
+        if (op != null && op.getOpcode() == PcodeOp.CALL) {
+            return hex(op.getInput(0).getAddress());
+        }
+        if (token instanceof ClangFuncNameToken) {
+            List<Function> functions = getGlobalFunctions(token.getText());
+            if (functions.size() == 1) return hex(functions.get(0).getEntryPoint());
+        }
+        return null;
+    }
+
+    // The address of a global a token names.
+    private String globalAddress(ClangToken token, HighFunction high) {
+        try {
+            HighSymbol symbol = token.getHighSymbol(high);
+            if (symbol != null && symbol.isGlobal() && symbol.getStorage() != null) {
+                Address address = symbol.getStorage().getMinAddress();
+                if (address != null && address.isMemoryAddress()) return hex(address);
+            }
+        } catch (Exception ignored) {
+            // A token whose symbol cannot be read has no target.
+        }
+        Varnode varnode = token.getVarnode();
+        if (varnode != null && varnode.isAddress() && varnode.getAddress().isMemoryAddress()) {
+            return hex(varnode.getAddress());
+        }
+        return null;
     }
 
     private static String hex(Address address) {

@@ -1,4 +1,4 @@
-@source-sha 207e7725d44c694a85adbddd28b3ff57997e64cdbe1900f8b4fd5dcb2502682c
+@source-sha 124a1deb5c93b67c2590ffd08aebbd5baba28f121bc0e65e9e3bd4ba6cd0b372
 # UEFI-Struktur
 
 > Die Karte eines Firmware-Images: welche Region, welches Volume, welche Datei und wo.
@@ -58,6 +58,10 @@ Rechtsklick auf einen Knoten:
 - **Entpackten Rumpf öffnen** / **Entpackten Rumpf sichern unter…** bei einer komprimierten Sektion — das, wozu diese Bytes sich tatsächlich entfalten.
 - **Entpackte Variable öffnen** bei der Variable `overrides` des Apple-Systemspeichers — ihre Geräteüberschreibungen liegen als bzip2-Datenstrom vor und werden als Text in einem Tab geöffnet. Der Tab ist eine Kopie: Der Text wird hier nicht wieder komprimiert, eine Änderung der Kopie lässt den Dump daher unberührt.
 - **Zur Top-Swap-Kopie** / **Zum Original** bei einem Knoten in einem der beiden Blöcke eines Images mit [[term:top-swap|Top-Swap]]-Kopie — wählt denselben Knoten im anderen Block aus und zeigt seine Bytes im Dump, sodass sich jedem Teil der Kopie der Teil des obersten Blocks zuordnen lässt, den er wiederholt.
+
+Im Code-Bereich führt der Code dorthin, was er nennt. Der Name einer aufgerufenen Funktion ist im C wie im ASM-Listing ein Link: Ein Klick öffnet diese Funktion, und ihre Bytes werden zur Hauptzone des Dumps. Ein Klick auf ein Sprungziel wählt die Instruktion aus, auf der der Sprung landet; ein Klick auf eine globale Variable oder eine GUID wählt deren Bytes im Dump aus. Solange der Bereich die Tastatur hat, gehen **Darstellung ▸ Zurück** und **Darstellung ▸ Vorwärts** (**⌘[** und **⌘]**) sowie die Pfeile neben **ASM**/**C** die Stellen zurück und wieder vor, zu denen diese Klicks geführt haben. **Aufrufer** listet die Funktionen, die die gezeigte aufrufen.
+
+Die Namen im Code stammen aus dem Modul selbst. Eine GUID wird nach EDK2 und dem GUID-Katalog benannt; `gBS`, `gRT` und `gST` sind die globalen Variablen, in die die Tabellen geschrieben werden, die der Einsprungpunkt erhält; ein Zeiger auf ein Protokoll oder eine PPI trägt den Namen nach dem Aufruf, der ihn holt; eine Callback-Funktion nach dem Ereignis, für das sie registriert ist. Eine Funktion, für die sich kein Name findet, bleibt `FUN_…` und erscheint grau; beim Überfahren eines rekonstruierten Namens wird angezeigt, woraus er gelesen wurde. Diese Namen sind eine Lesart des Codes, nicht die Namen aus dem Quelltext; wo die Hinweise nicht eindeutig sind, wird kein Name vergeben.
 
 Ein Doppelklick auf eine Zeile ersetzt das Menü: Er öffnet, was der Knoten enthält, als Fragment-Bereich — bei einer komprimierten Sektion ihren entpackten Rumpf; bei einem Knoten mit Zeilen darunter — einem Volume, einer Datei mit Sektionen, einem DMI- oder NVRAM-Speicher — den ganzen Knoten samt Kopf, sodass der Baum des Bereichs ihn als die Struktur zeigt, die er ist, mit seinen Zeilen darunter; bei jedem anderen Knoten seinen Rumpf; und bei einem Knoten ohne eigenen Rumpf, etwa Padding oder freiem Platz, den Knoten selbst. Auf einem [[term:lenv|LENV]]-Block oder einem seiner Einträge öffnet er den Block dekodiert, wie **„…“ (dekodiert) öffnen** ([[topic:lenovo-dmi|Lenovo DMI]]). Was ein Doppelklick öffnet, ist der erste Befehl im Kontextmenü der Zeile. Ein Doppelklick auf das Aufklapp-Dreieck klappt die Zeile nur ein oder aus.
 

@@ -57,8 +57,12 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
     /// new number; an old artifact stays readable beside it.
     ///
     /// 3 has the same shape as 2. It keeps UTF-16 strings, which 2 dropped,
-    /// and names `ReportStatusCode` candidates only in a 32-bit image.
-    public static let supportedScriptVersions: Set<Int> = [2, 3]
+    /// and names `ReportStatusCode` candidates only in a 32-bit image. 4 adds,
+    /// all optional: where each function's name came from, the decompiled C's
+    /// spans (what each token is, and what a call or a global names), and the
+    /// named data — the GUIDs, service tables and interfaces the UEFI pass
+    /// named.
+    public static let supportedScriptVersions: Set<Int> = [2, 3, 4]
 
     public let scriptVersion: Int
     public let ghidra: String
@@ -68,6 +72,9 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
     public let functions: [Function]
     public let postCodes: [PostCode]
     public let statusCodeCalls: [StatusCodeCall]
+    /// Named data, from v4 on: what the UEFI pass named, and what the image's
+    /// own symbols did. Empty for an older artifact.
+    public let symbols: [Symbol]
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -89,6 +96,7 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         // only; in a 64-bit image it is Boot Services' SetTimer or Runtime
         // Services' SetVariable, so the list is noise and is not shown.
         statusCodeCalls = version == 2 && (program?.is64Bit ?? false) ? [] : calls
+        symbols = try container.decodeIfPresent([Symbol].self, forKey: .symbols) ?? []
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -96,6 +104,7 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         case ghidra, program, blocks, strings, functions
         case postCodes = "post_codes"
         case statusCodeCalls = "status_code_calls"
+        case symbols
     }
 
     /// What Ghidra says about the program it read. `sha256` is the hash of the
@@ -184,7 +193,20 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         public let callers: [CodeAddress]
         public let callees: [CodeAddress]
         public let c: String?
+        /// What each token of `c` is, from v4 on; empty before.
+        public let cSpans: [CSpan]
+        /// Where the name came from (v4): `DEFAULT` for Ghidra's FUN_
+        /// placeholder, `ANALYSIS` for the UEFI pass, `IMPORTED` for the
+        /// image's own symbols, `USER_DEFINED` for a person's.
+        public let nameSource: String?
+        /// Why the UEFI pass gave the name, in the pass's words.
+        public let nameReason: String?
         public let instructions: [Instruction]
+
+        /// Whether the name is Ghidra's placeholder rather than evidence.
+        public var hasPlaceholderName: Bool {
+            nameSource == "DEFAULT" || (nameSource == nil && name.hasPrefix("FUN_"))
+        }
 
         public init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -197,6 +219,9 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             callers = try container.decodeIfPresent([CodeAddress].self, forKey: .callers) ?? []
             callees = try container.decodeIfPresent([CodeAddress].self, forKey: .callees) ?? []
             c = try container.decodeIfPresent(String.self, forKey: .c)
+            cSpans = try container.decodeIfPresent([CSpan].self, forKey: .cSpans) ?? []
+            nameSource = try container.decodeIfPresent(String.self, forKey: .nameSource)
+            nameReason = try container.decodeIfPresent(String.self, forKey: .nameReason)
             instructions = try container.decodeIfPresent(
                 [Instruction].self, forKey: .instructions) ?? []
         }
@@ -204,6 +229,66 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         private enum CodingKeys: String, CodingKey {
             case entry, name, size, signature, external, thunk
             case callers, callees, c, instructions
+            case cSpans = "c_spans"
+            case nameSource = "name_source"
+            case nameReason = "name_reason"
+        }
+    }
+
+    /// One token of the decompiled C: where it is (UTF-16 units into `c`),
+    /// what it is, and — for a called function or a global — the address it
+    /// names. Written as `[start, length, kind]` or `[start, length, kind,
+    /// target]`.
+    public struct CSpan: Decodable, Equatable, Sendable {
+        public enum Kind: String, Sendable {
+            case keyword, comment, type, constant, parameter, local, function, global
+        }
+
+        public let start: Int
+        public let length: Int
+        /// Nil for a kind this reader does not know: the span is not drawn.
+        public let kind: Kind?
+        public let target: CodeAddress?
+
+        public init(start: Int, length: Int, kind: Kind?, target: CodeAddress?) {
+            self.start = start
+            self.length = length
+            self.kind = kind
+            self.target = target
+        }
+
+        public init(from decoder: Decoder) throws {
+            var container = try decoder.unkeyedContainer()
+            start = try container.decode(Int.self)
+            length = try container.decode(Int.self)
+            kind = Kind(rawValue: try container.decode(String.self))
+            target = container.isAtEnd ? nil : try container.decodeIfPresent(CodeAddress.self)
+            guard start >= 0, length > 0 else {
+                throw DecodingError.dataCorruptedError(
+                    in: container, debugDescription: "a span must have a place and a length")
+            }
+        }
+    }
+
+    /// A named place in the module's data (v4).
+    public struct Symbol: Decodable, Equatable, Sendable {
+        public let address: CodeAddress
+        public let name: String
+        public let type: String?
+        public let source: String?
+        public let reason: String?
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            address = try container.decode(CodeAddress.self, forKey: .address)
+            name = try container.decode(String.self, forKey: .name)
+            type = try container.decodeIfPresent(String.self, forKey: .type)
+            source = try container.decodeIfPresent(String.self, forKey: .source)
+            reason = try container.decodeIfPresent(String.self, forKey: .reason)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case address, name, type, source, reason
         }
     }
 

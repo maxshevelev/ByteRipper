@@ -50,7 +50,7 @@ def normalize_address(text: str) -> int | None:
 
 # The exporter versions this reader understands; the Swift reader keeps the
 # same set (`CodeArtifact.supportedScriptVersions`). 3 has the shape of 2.
-SUPPORTED_SCRIPT_VERSIONS = {2, 3}
+SUPPORTED_SCRIPT_VERSIONS = {2, 3, 4}
 
 
 class Artifact:
@@ -140,8 +140,8 @@ def main(argv: list[str]) -> int:
     parser.add_argument("target", help="the module's bytes, or the artifact's SHA-256")
     parser.add_argument("command", nargs="?", default="summary",
                         choices=["summary", "functions", "function", "disasm", "decompile",
-                                 "xrefs", "uses", "search", "strings", "post-codes",
-                                 "status-codes"])
+                                 "xrefs", "uses", "search", "strings", "symbols",
+                                 "post-codes", "status-codes"])
     parser.add_argument("argument", nargs="?", help="a function name or address, or the text to find")
     parser.add_argument("--store", type=Path, default=default_store())
     parser.add_argument("--recipe", help="the analysis recipe, when several exist")
@@ -179,7 +179,8 @@ def main(argv: list[str]) -> int:
 
     if args.command == "functions":
         rows = [{"entry": f.get("entry"), "name": f.get("name"), "size": f.get("size"),
-                 "signature": f.get("signature")}
+                 "signature": f.get("signature"), "name_source": f.get("name_source"),
+                 "name_reason": f.get("name_reason")}
                 for f in artifact.functions[:(args.limit or None)]]
         if args.json:
             print(json.dumps(rows, indent=2))
@@ -283,6 +284,19 @@ def main(argv: list[str]) -> int:
                 print(f"{match['kind']:<12} {match['address']:>10}  {match['text']}")
             if len(matches) > (args.limit or 0):
                 print(f"... {len(matches) - args.limit} more")
+        return 0
+
+    if args.command == "symbols":
+        needle = (args.argument or "").lower()
+        symbols = [s for s in artifact.code.get("symbols", [])
+                   if needle in s.get("name", "").lower() or needle in (s.get("type") or "").lower()]
+        if args.json:
+            print(json.dumps(symbols[:args.limit or None], indent=2))
+        else:
+            for symbol in symbols[:args.limit or None]:
+                print(f"{symbol.get('address'):>10}  {symbol.get('name'):<40} {symbol.get('type') or ''}")
+            if not symbols:
+                print("no named data (an artifact before v4 has none)")
         return 0
 
     if args.command == "strings":

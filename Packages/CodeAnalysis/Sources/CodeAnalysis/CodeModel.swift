@@ -46,6 +46,10 @@ public struct CodeModel: Sendable {
     /// What a search matches a function against, lowered once.
     private let functionText: [String]
     private let uses: [CodeAddress: [Use]]
+    /// The instruction at each address.
+    private let lineByAddress: [CodeAddress: Int]
+    /// A function by its name, for the C lexer: the first of a repeated name.
+    let functionsByName: [String: Int]
 
     public init(artifact: CodeArtifact, moduleBytes: Data?) {
         self.init(artifact: artifact,
@@ -97,6 +101,17 @@ public struct CodeModel: Sendable {
                 return leftStart == rightStart ? left < right : leftStart < rightStart
             }
 
+        var lineByAddress: [CodeAddress: Int] = [:]
+        for line in lines where lineByAddress[line.instruction.address] == nil {
+            lineByAddress[line.instruction.address] = line.global
+        }
+        var functionsByName: [String: Int] = [:]
+        for (index, function) in artifact.functions.enumerated()
+        where !function.name.isEmpty && functionsByName[function.name] == nil {
+            functionsByName[function.name] = index
+        }
+        self.lineByAddress = lineByAddress
+        self.functionsByName = functionsByName
         self.lines = lines
         self.functionLines = functionLines
         self.functionByEntry = functionByEntry
@@ -234,6 +249,11 @@ public struct CodeModel: Sendable {
         return "0x" + String(offset, radix: 16, uppercase: true)
     }
 
+    /// The instruction at an address, when the listing has one.
+    public func line(at address: CodeAddress) -> Int? {
+        lineByAddress[address]
+    }
+
     /// The instruction's text with every address it refers to written as a
     /// module offset, the way the listing's first column is. Ghidra prints a
     /// target as its own virtual address (`JZ 0x000010bc`); in a TE image
@@ -241,23 +261,34 @@ public struct CodeModel: Sendable {
     /// rewritten — an immediate that happens to look like an address is a
     /// value, and stays as Ghidra wrote it.
     public func displayText(of instruction: CodeArtifact.Instruction) -> String {
-        guard layout != nil, !instruction.references.isEmpty else { return instruction.text }
+        display(instruction).text
+    }
+
+    /// The displayed text and where in it each reference's target is, with
+    /// what a click on it leads to.
+    func display(_ instruction: CodeArtifact.Instruction)
+        -> (text: String, targets: [(start: Int, length: Int, link: CodeLink?)]) {
+        guard !instruction.references.isEmpty else { return (instruction.text, []) }
         let targets = Set(instruction.references.map(\.to.value))
         var result = ""
+        var found: [(start: Int, length: Int, link: CodeLink?)] = []
         var rest = Substring(instruction.text)
         while let start = rest.range(of: "0x") {
             result += rest[..<start.lowerBound]
             let digits = rest[start.upperBound...].prefix { $0.isHexDigit }
             let literal = rest[start.lowerBound..<digits.endIndex]
-            if let value = UInt64(digits, radix: 16), targets.contains(value),
-               let offset = moduleOffset(of: CodeAddress(value)) {
-                result += "0x" + String(offset, radix: 16, uppercase: true)
+            if let value = UInt64(digits, radix: 16), targets.contains(value) {
+                let address = CodeAddress(value)
+                let written = moduleOffset(of: address)
+                    .map { "0x" + String($0, radix: 16, uppercase: true) } ?? String(literal)
+                found.append((result.utf16.count, written.utf16.count, link(to: address)))
+                result += written
             } else {
                 result += literal
             }
             rest = rest[digits.endIndex...]
         }
-        return result + rest
+        return (result + rest, found)
     }
 
     // MARK: - Uses

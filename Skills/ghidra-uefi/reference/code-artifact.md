@@ -99,6 +99,27 @@ output changes.
 | --- | --- |
 | 2 | The first artifact the Code panel reads. |
 | 3 | Same shape. UTF-16 strings kept and scanned for; status-code candidates only in a 32-bit image. |
+| 4 | Adds, all optional: a function's `name_source` and `name_reason`, its `c_spans`, and the top-level `symbols`. `c` is written from the decompiler's tokens. |
+
+### v4: names, spans, symbols
+
+```json
+"name_source": "ANALYSIS",
+"name_reason": "CreateEventEx registers it for the gEfiEventReadyToBootGuid event group",
+"c_spans": [[41, 3, "global", "0x31FD0"], [52, 5, "function", "0x230"], [0, 4, "type"]],
+"symbols": [{"address": "0x31FD0", "name": "gBS", "type": "EFI_BOOT_SERVICES *",
+             "source": "ANALYSIS", "reason": "written from a EFI_BOOT_SERVICES* value in FUN_00000498"}]
+```
+
+- `name_source` is Ghidra's `SourceType`: `DEFAULT` is the `FUN_` placeholder,
+  `ANALYSIS` a name the UEFI pass read from the module (`uefi-pass.md`),
+  `IMPORTED` the image's own, `USER_DEFINED` a person's.
+- `c_spans` are `[start, length, kind]` or `[start, length, kind, target]`,
+  in UTF-16 units of `c`. Kinds: `keyword`, `comment`, `type`, `constant`,
+  `parameter`, `local`, `function` (target: the called entry), `global`
+  (target: its address). The Code panel colours by kind and makes a target a
+  link; without spans (v2, v3) it lexes the C and links names it knows.
+- `symbols` is the named data: GUIDs, service tables, interfaces.
 
 The Swift reader (`CodeArtifact.supportedScriptVersions`) and `code_query.py`
 (`SUPPORTED_SCRIPT_VERSIONS`) accept the same set and refuse any other. A v3
