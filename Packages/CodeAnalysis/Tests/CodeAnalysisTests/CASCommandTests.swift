@@ -73,8 +73,22 @@ final class CASCommandTests: XCTestCase {
         XCTAssertNotNil(error?["error"])
     }
 
-    func testAnUnknownCommandIsAUsageError() {
-        XCTAssertEqual(run("bogus").status, 2)
-        XCTAssertEqual(run("verify", "extra").status, 2)
+    func testAUsageErrorIsPlainTextAndHelpIsTheUsage() {
+        let bogus = run("bogus")
+        XCTAssertEqual(bogus.status, 2)
+        let text = String(decoding: bogus.stderr, as: UTF8.self)
+        XCTAssertTrue(text.hasPrefix("byteripper-cas: unknown command bogus\n"), text)
+        XCTAssertTrue(text.contains("usage: byteripper-cas"), "an unknown command shows the usage")
+        XCTAssertNil(try? JSONSerialization.jsonObject(with: bogus.stderr))
+
+        let extra = run("verify", "extra")
+        XCTAssertEqual(extra.status, 2)
+        XCTAssertEqual(String(decoding: extra.stderr, as: UTF8.self),
+                       "byteripper-cas: unexpected argument extra\n", "a wrong argument is one line")
+
+        let help = run("help")
+        XCTAssertEqual(help.status, 0)
+        XCTAssertTrue(String(decoding: help.stdout, as: UTF8.self).hasPrefix("usage: byteripper-cas"))
+        XCTAssertTrue(help.stderr.isEmpty)
     }
 }

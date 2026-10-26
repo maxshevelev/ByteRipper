@@ -4,10 +4,12 @@ import Foundation
 /// skill's Python calls instead of a store of its own.
 ///
 /// Every answer is JSON on standard output — an object's bytes are the one
-/// exception — and every refusal is `{"error": "…"}` on standard error with a
-/// non-zero status: 1 for what the store refused, 2 for a command it does not
-/// know. An argument the store does not know is refused, never dropped, so a
-/// field the Python side adds cannot vanish from a manifest unseen.
+/// exception. What the store refused is `{"error": "…"}` on standard error with
+/// status 1, for the skill's Python to read. A command line it cannot read is
+/// a person's mistake: plain text on standard error with status 2, and the
+/// usage when the command itself is wrong. An argument the store does not
+/// know is refused, never dropped, so a field the Python side adds cannot
+/// vanish from a manifest unseen. `help` prints the usage.
 ///
 ///     byteripper-cas [--store <root>] [--no-create] <command> …
 ///
@@ -25,6 +27,9 @@ public enum CASCommand {
 
     struct Usage: Error, CustomStringConvertible {
         let description: String
+        /// The command itself is missing or unknown: the whole usage helps.
+        /// A wrong argument of a known command is said in one line.
+        var showsUsage = false
     }
 
     static let usage = """
@@ -70,11 +75,17 @@ public enum CASCommand {
                     root: storeOption.map { URL(fileURLWithPath: $0) } ?? CodeAnalysisPaths.defaultRoot,
                     create: create)
             }
-            guard let command = parser.next() else { throw Usage(description: usage) }
+            guard let command = parser.next() else { throw Usage(description: "name a command", showsUsage: true) }
+            if ["help", "--help", "-h"].contains(command) {
+                output.stdout = Data((usage + "\n").utf8)
+                return output
+            }
             try execute(command, &parser, operations, into: &output)
-        } catch let usage as Usage {
+        } catch let refusal as Usage {
             output.stdout = Data()
-            output.stderr = errorJSON(usage.description)
+            var text = "byteripper-cas: \(refusal.description)\n"
+            if refusal.showsUsage { text += "\n" + usage + "\n" }
+            output.stderr = Data(text.utf8)
             output.status = 2
         } catch {
             output.stdout = Data()
@@ -221,7 +232,7 @@ public enum CASCommand {
             try parser.end()
             output.stdout = try encode(try store.importBundle(from: URL(fileURLWithPath: file)))
         default:
-            throw Usage(description: "unknown command \(command)\n\(usage)")
+            throw Usage(description: "unknown command \(command)", showsUsage: true)
         }
     }
 
