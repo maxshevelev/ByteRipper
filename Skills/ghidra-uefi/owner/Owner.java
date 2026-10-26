@@ -832,6 +832,9 @@ public class Owner {
     /** A structure, union, enum or typedef from C, into the program. */
     private JsonObject addType(JsonObject body) throws Exception {
         String c = required(body, "c");
+        // The fields may name what only an archive holds — `CHAR8`, a PI
+        // structure, another review's type — as a signature may.
+        importTypes(c);
         DataType parsed;
         try {
             parsed = new CParser(program.getDataTypeManager(), true, null).parse(tagAnonymous(c));
