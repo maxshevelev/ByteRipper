@@ -845,8 +845,8 @@ already: a re-run analysis shifts indices as well.
      stream and is drawn again from a republished artifact at the same place
      by address, with its back and forward carried over by address.
      Still to do: `reviews/` history with the commit
-     order of §5.4 and its `gc`/`verify` rules; documents in bundles; the open
-     Code panel following a republish; a code annotation's label read from the
+     order of §5.4 and its `gc`/`verify` rules; documents in bundles; a code
+     annotation's label read from the
      current artifact by address (a rename is what makes the stored name
      stale, so it lands with renames); the app reporting a bundle import's
      skipped and kept-aside keys. (The manifest's `reading`, §5.6 and
