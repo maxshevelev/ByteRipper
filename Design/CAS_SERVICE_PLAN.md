@@ -23,11 +23,13 @@
 4. **No direct writes to the store.** `code_artifact.py`, `cas_cli.py`,
    `code_query.py`, the native app and the Electron main process go through a
    client. The service is the only writer.
-5. **Change feed.** (The 2-second poll it was to replace is already gone: the
+5. **Change feed and a safety net.** (The 2-second poll is already gone: the
    app follows the store with FSEvents.) The service publishes
    `analysisChanged` after a commit; clients re-read the affected index and
-   refresh their badges. A slow fallback poll (and a watcher during migration)
-   covers missed events, sleep and old direct writers.
+   refresh their badges. Until the service owns the writes, the app also keeps
+   a slow fallback poll (30 s) and refreshes on app activation and system wake,
+   for the events FSEvents misses while the Mac sleeps or when its stream
+   cannot start.
 6. **ByteRipperWeb does not get a local process by default.** It is a static
    web edition with no backend; its Electron shell may use a bundled sidecar or
    a remote service, but a browser cannot spawn one. The web edition keeps its
@@ -47,11 +49,13 @@
   writes nothing to the store itself except project bundles through
   `WorkspaceRecorder`.
 - `UEFIToolSession` follows the store's `analyses/` folder with FSEvents
-  (`CodeStoreWatcher`); there is no poll. Any writer — the skill, a project
-  import — is seen within a fraction of a second. A
-  manifest's `source.document`/`source.node` now lets the panel materialize the
-  branch an analysis names and put the badge on a PEI image inside a compressed
-  Boot FV without the reader expanding it.
+  (`CodeStoreWatcher`); a slow fallback poll (30 s) and a refresh on app
+  activation/system wake cover what FSEvents misses while the Mac sleeps or
+  when its stream cannot start. Any writer — the skill, a project import — is
+  normally seen within a fraction of a second. A manifest's
+  `source.document`/`source.node` now lets the panel materialize the branch an
+  analysis names and put the badge on a PEI image inside a compressed Boot FV
+  without the reader expanding it.
 - The store lives under
   `~/Library/Application Support/ByteRipper/Analysis`.
 
@@ -85,7 +89,8 @@
 - The native app, the Electron shell and the skill work **offline** and
   **headless**; CI runs the same service.
 - A remote service can be added later without changing the clients' model.
-- Immediate badge updates when an analysis is written, without polling.
+- Immediate badge updates when an analysis is written, with FSEvents and a slow
+  safety-net poll rather than a 2-second poll.
 - Existing stores, projects and bundles remain readable and migratable.
 - No double writers and no split brain on one store.
 - Large artifacts (the BdsDxe artifact is about 8 MB) are transferred as
@@ -202,8 +207,9 @@ HTTP bodies. The protocol must not require base64 for multi-megabyte payloads.
   service is listening.
 - Reads and writes go through the client; the existing `ContentStore` becomes
   the service's file backend or is replaced by the service implementation.
-- The Code badge and panel subscribe to changes. The 2-second poll becomes a
-  slow fallback, not the primary trigger.
+- The Code badge and panel subscribe to changes. `CodeStoreWatcher` is the
+  trigger; a slow fallback poll (30 s) and a refresh on app activation/system
+  wake are the safety net. The 2-second poll is gone.
 - The app can still read a store written by an older build; it does not write
   around a running service.
 
@@ -320,10 +326,12 @@ HTTP bodies. The protocol must not require base64 for multi-megabyte payloads.
   marks the node; source-node materialization is already implemented and stays
   the path for compressed PEI images.
 - Missed events (sleep, reconnect) are recovered by re-reading the index; the
-  event stream is an optimisation, not the source of truth.
-- During migration, a fallback poll (slow, e.g. 30 s) and/or a store watcher
-  covers old direct writers. Once direct writes are removed, the poll can be
-  removed or kept only as a safety net.
+  event stream is an optimisation, not the source of truth. The app already
+  polls slowly (30 s) and refreshes on app activation/system wake, so a missed
+  FSEvent does not leave a badge stale for the session.
+- During migration, the slow fallback poll and the store watcher cover old
+  direct writers. Once direct writes are removed, the poll can stay as the
+  safety net it now is.
 
 ## 9. Security
 
@@ -353,8 +361,8 @@ Each phase leaves the product working.
    Direct writes to the store are removed from the skill. CI runs the service.
 4. **Native client.** Swift `CASClient` over the local socket; the app starts
    the bundled service if needed; Code badge/panel use the client; change feed
-   replaces the 2 s poll; fallback remains. Existing stores are read and
-   verified.
+   replaces the 2 s poll; the 30 s fallback and activation/wake refresh remain
+   as the safety net. Existing stores are read and verified.
 5. **Electron shell.** Main process CAS client, preload bridge, packaged
    sidecar (or remote endpoint); Windows named pipe; packaging/signing checks.
    The browser edition is untouched.

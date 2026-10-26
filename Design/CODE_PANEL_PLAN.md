@@ -412,7 +412,9 @@ main actor. With an empty store it does no hashing at all. It refreshes on the
 tree's edit generation and when the store changes: `CodeStoreWatcher` follows
 `analyses/` with FSEvents, so a manifest the skill writes is seen at once and an
 idle store costs nothing. A change during a scan does not cancel it; the scan
-runs again when it is done.
+runs again when it is done. A slow fallback poll (30 s) and a refresh on app
+activation/system wake cover events FSEvents misses while the Mac sleeps, or
+when its stream cannot start at all.
 
 ## Where the decisions live
 

@@ -241,6 +241,16 @@ private struct ChecksumPass: Sendable {
     /// for it — a long one would never finish under a stream of writes — and
     /// runs again from the top once it is done.
     private var codeStoreChangedDuringScan = false
+    /// The safety net under `CodeStoreWatcher`: a slow poll catches a change
+    /// FSEvents missed while the Mac slept, and keeps a session honest if the
+    /// stream could not be started at all.
+    private var codeAnalysisFallback: Task<Void, Never>?
+    /// App activation and system wake are the two moments FSEvents may have
+    /// missed something; either asks for one refresh.
+    private var codeStoreActivationObserver: NSObjectProtocol?
+    private var codeStoreWakeObserver: NSObjectProtocol?
+    /// Rare on purpose: the watcher is the trigger, this only catches up.
+    private static let codeAnalysisFallbackInterval: Duration = .seconds(30)
     /// The node the user is looking at. Nil before a choice, and after an edit
     /// that lost it.
     private var focus: NodeID?
@@ -469,9 +479,35 @@ private struct ChecksumPass: Sendable {
     /// the panel is up its folder is watched; a change reloads the index, and
     /// only a changed index resets what was already hashed.
     private func watchCodeAnalysis() {
-        guard codeStoreWatcher == nil, let root = UEFIToolModule.codeAnalysisRoot else { return }
-        codeStoreWatcher = CodeStoreWatcher(root: root) { [weak self] in
-            MainActor.assumeIsolated { self?.codeStoreChanged() }
+        if codeStoreWatcher == nil, let root = UEFIToolModule.codeAnalysisRoot {
+            codeStoreWatcher = CodeStoreWatcher(root: root) { [weak self] in
+                MainActor.assumeIsolated { self?.codeStoreChanged() }
+            }
+        }
+        if codeAnalysisFallback == nil {
+            codeAnalysisFallback = Task { [weak self] in
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: Self.codeAnalysisFallbackInterval)
+                    guard !Task.isCancelled, let self else { return }
+                    self.codeStoreChanged()
+                }
+            }
+        }
+        if codeStoreActivationObserver == nil {
+            codeStoreActivationObserver = NotificationCenter.default.addObserver(
+                forName: NSApplication.didBecomeActiveNotification,
+                object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.codeStoreChanged() }
+            }
+        }
+        if codeStoreWakeObserver == nil {
+            codeStoreWakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.didWakeNotification,
+                object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.codeStoreChanged() }
+            }
         }
     }
 
@@ -597,6 +633,16 @@ private struct ChecksumPass: Sendable {
         codeAnalysisRequest = nil
         codeStoreWatcher?.stop()
         codeStoreWatcher = nil
+        codeAnalysisFallback?.cancel()
+        codeAnalysisFallback = nil
+        if let observer = codeStoreActivationObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        codeStoreActivationObserver = nil
+        if let observer = codeStoreWakeObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+        }
+        codeStoreWakeObserver = nil
         codeStoreChangedDuringScan = false
     }
 
