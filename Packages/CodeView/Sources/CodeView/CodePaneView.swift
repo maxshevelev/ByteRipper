@@ -1024,8 +1024,13 @@ import ToolModuleKit
         .monospacedSystemFont(ofSize: ToolPanelFont.size, weight: .regular)
     }
 
+    /// A layer's colour is a CGColor, fixed when it is made: it is resolved
+    /// in the pane's own appearance, not whatever appearance happens to be
+    /// current — that one left a white page under white text in Dark.
     private func applyCodeBackground() {
-        codeContent.layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            codeContent.layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
+        }
     }
 
     // MARK: - The hex dump

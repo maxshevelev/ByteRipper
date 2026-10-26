@@ -205,6 +205,33 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertTrue(highlighted().isEmpty)
     }
 
+    /// The code is drawn on the background of its own appearance: in Dark,
+    /// a dark page, or the C's plain text — white — is white on white.
+    func testTheCodeBackgroundFollowsTheViewsAppearance() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
+        view.layoutSubtreeIfNeeded()
+        func brightness() throws -> CGFloat {
+            let page = try XCTUnwrap(all(NSView.self, in: view).first {
+                $0.layer?.backgroundColor != nil && $0.subviews.contains { $0 is NSStackView }
+            })
+            let color = try XCTUnwrap(page.layer?.backgroundColor.flatMap(NSColor.init(cgColor:))?
+                .usingColorSpace(.sRGB))
+            return color.brightnessComponent
+        }
+        NSAppearance(named: .aqua)!.performAsCurrentDrawingAppearance {
+            view.appearance = NSAppearance(named: .darkAqua)
+            view.viewDidChangeEffectiveAppearance()
+        }
+        XCTAssertLessThan(try brightness(), 0.3, "a dark page in Dark")
+        NSAppearance(named: .darkAqua)!.performAsCurrentDrawingAppearance {
+            view.appearance = NSAppearance(named: .aqua)
+            view.viewDidChangeEffectiveAppearance()
+        }
+        XCTAssertGreaterThan(try brightness(), 0.9, "a white page in Light")
+    }
+
     func testTheHeaderKeepsTheVersionsInOneLine() throws {
         let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
                                 moduleBytes: moduleBytes, hexView: NSView())
