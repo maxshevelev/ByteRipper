@@ -108,35 +108,45 @@ public struct ModuleIdentity: Codable, Equatable, Sendable {
     public var kind: String?
     public var language: String?
     public var imageBase: String?
+    /// The boot phase the UEFI pass typed the entry point for: `pei`, `dxe`.
+    public var phase: String?
 
     public init(sha256: SHA256Digest, size: Int, name: String,
-                kind: String? = nil, language: String? = nil, imageBase: String? = nil) {
+                kind: String? = nil, language: String? = nil, imageBase: String? = nil,
+                phase: String? = nil) {
         self.sha256 = sha256
         self.size = size
         self.name = name
         self.kind = kind
         self.language = language
         self.imageBase = imageBase
+        self.phase = phase
     }
 
     private enum CodingKeys: String, CodingKey {
-        case sha256, size, name, kind, language
+        case sha256, size, name, kind, language, phase
         case imageBase = "image_base"
     }
 }
 
-/// What produced an analysis: the exporter's version and the Ghidra that ran.
+/// What produced an analysis: the exporter's version, the Ghidra that ran,
+/// and — when the UEFI pass ran — the EDK2 tag it typed with and its scripts.
 public struct AnalysisRecipe: Codable, Equatable, Sendable {
     public var id: String
     public var exporter: Int
     public var ghidra: String?
     public var script: String
+    public var types: String?
+    public var passes: [String]?
 
-    public init(id: String, exporter: Int, ghidra: String?, script: String) {
+    public init(id: String, exporter: Int, ghidra: String?, script: String,
+                types: String? = nil, passes: [String]? = nil) {
         self.id = id
         self.exporter = exporter
         self.ghidra = ghidra
         self.script = script
+        self.types = types
+        self.passes = passes
     }
 
     /// The recipe as a path-safe name, e.g. `code-v2-ghidra-12.1.2`.
@@ -204,6 +214,23 @@ public struct AnalysisStats: Codable, Equatable, Sendable {
     }
 }
 
+/// Which reading of a module an artifact renders: the Ghidra project a
+/// person or an agent reviewed it in, and how many publishes of that project
+/// it is (`Design/GHIDRA_SHARED_PLAN.md` §5.6). A mechanical artifact — Ghidra
+/// and the UEFI pass, nobody's decisions — has none.
+public struct AnalysisReading: Codable, Equatable, Sendable {
+    public var project: String
+    public var rev: Int
+    /// The review document harvested with this publish, when there is one.
+    public var review: SHA256Digest?
+
+    public init(project: String, rev: Int, review: SHA256Digest? = nil) {
+        self.project = project
+        self.rev = rev
+        self.review = review
+    }
+}
+
 /// One analysis: which module, which recipe, which object, and what it holds.
 public struct AnalysisManifest: Codable, Equatable, Sendable {
     public var schema: Int
@@ -213,11 +240,13 @@ public struct AnalysisManifest: Codable, Equatable, Sendable {
     public var source: SourceIdentity
     public var analyzedAt: String
     public var stats: AnalysisStats
+    public var reading: AnalysisReading?
 
     public init(schema: Int = CodeAnalysisSchema.current, module: ModuleIdentity,
                 recipe: AnalysisRecipe, artifact: AnalysisArtifact,
                 source: SourceIdentity = SourceIdentity(),
-                analyzedAt: String, stats: AnalysisStats) {
+                analyzedAt: String, stats: AnalysisStats,
+                reading: AnalysisReading? = nil) {
         self.schema = schema
         self.module = module
         self.recipe = recipe
@@ -225,13 +254,44 @@ public struct AnalysisManifest: Codable, Equatable, Sendable {
         self.source = source
         self.analyzedAt = analyzedAt
         self.stats = stats
+        self.reading = reading
     }
 
     public var key: AnalysisKey? { AnalysisKey(module: module.sha256, recipe: recipe.id) }
 
     private enum CodingKeys: String, CodingKey {
-        case schema, module, recipe, artifact, source, stats
+        case schema, module, recipe, artifact, source, stats, reading
         case analyzedAt = "analyzed_at"
+    }
+}
+
+/// How an incoming analysis stands to the one stored under the same key, by
+/// their readings. Only an artifact that is not the stored one is compared.
+public enum ReadingOrder: Equatable, Sendable {
+    /// A later publish of the same project, or a reading over a mechanical
+    /// artifact: it replaces the stored one.
+    case newer
+    /// The same project's reading, at the stored revision or before it.
+    case notNewer
+    /// A mechanical artifact over a reviewed one: the reading is kept.
+    case unreviewedOverReviewed
+    /// Two different projects' readings: a person chooses.
+    case otherProject
+    /// Two mechanical artifacts that differ: the stored one stays, as today.
+    case unreviewed
+
+    public init(incoming: AnalysisReading?, stored: AnalysisReading?) {
+        switch (incoming, stored) {
+        case (nil, nil): self = .unreviewed
+        case (.some, nil): self = .newer
+        case (nil, .some): self = .unreviewedOverReviewed
+        case let (.some(incoming), .some(stored)):
+            if incoming.project != stored.project {
+                self = .otherProject
+            } else {
+                self = incoming.rev > stored.rev ? .newer : .notNewer
+            }
+        }
     }
 }
 
@@ -298,6 +358,38 @@ public struct BundleInfo: Codable, Equatable, Sendable {
     }
 }
 
+/// What a bundle import did with each analysis it carried. One analysis the
+/// store cannot take does not stop the others.
+public struct BundleImport: Codable, Equatable, Sendable {
+    /// One analysis the store did not take, and why.
+    public struct Entry: Codable, Equatable, Sendable {
+        public var key: String
+        public var reason: String
+
+        public init(key: String, reason: String) {
+            self.key = key
+            self.reason = reason
+        }
+    }
+
+    /// Written: new here, or a newer reading than the stored one.
+    public var imported: [AnalysisManifest] = []
+    /// Already here with the same artifact.
+    public var unchanged: [AnalysisManifest] = []
+    /// Not taken: an older reading, a mechanical artifact over a reading,
+    /// another mechanical artifact, or an entry the bundle got wrong.
+    public var skipped: [Entry] = []
+    /// Another project's reading of an analysis stored here, kept aside under
+    /// `conflicts/` for a person to choose.
+    public var conflicts: [Entry] = []
+
+    public init() {}
+
+    /// The analyses a reader can now find for the bundle's keys: written or
+    /// already there.
+    public var present: [AnalysisManifest] { imported + unchanged }
+}
+
 /// A file or directory name the store may use: ASCII letters, digits, dot,
 /// underscore and hyphen; not empty, and not a path traversal.
 enum SafeName {
@@ -314,10 +406,10 @@ enum SafeName {
     }
 }
 
-/// The ISO-8601 time the Python store writes: seconds, and `+00:00` for UTC,
-/// so a manifest written by either side sorts with the other. The offset is
-/// written out rather than left to `XXX`: on this platform that reads back `Z`,
-/// and the Python side writes `+00:00`.
+/// The ISO-8601 time a manifest carries: seconds, and `+00:00` for UTC — the
+/// shape the Python store that came before `byteripper-cas` wrote, so old and
+/// new manifests sort together. The offset is written out rather than left to
+/// `XXX`: on this platform that reads back `Z`.
 enum Timestamps {
     static func now() -> String {
         let formatter = DateFormatter()

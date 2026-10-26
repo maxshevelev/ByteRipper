@@ -1,484 +1,248 @@
-# CAS service — one store, many clients
+# CAS — one store, one implementation, many clients
 
-> Status: proposal for review. This document describes a design and a migration
-> order; it does not describe code that exists yet.
+> Status: phases 1–3 are done (§6). The rest is later, and each later phase
+> starts from a need named in §6, not from this document.
 >
-> The problem is not the file layout. It is that the same layout is implemented
-> twice — Swift in `Packages/CodeAnalysis`, Python in
-> `Skills/ghidra-uefi/scripts/cas.py` — and written by two different processes.
-> A source-provenance change already had to be made twice. The next change may
-> not be, and a shared/network store cannot be built on two writers.
+> This document replaces the earlier proposal of a separate CAS daemon in Go or
+> Rust with its own socket protocol. That proposal solved a real problem — the
+> store implemented twice, in Swift and in Python, and the two drifting — with
+> a new language, a second signed executable, a service lifecycle and a remote
+> protocol for a product that has one user and one machine per store. The
+> problem is solved here with less: one implementation, in the language the app
+> is written in, run as a command line by everything that is not the app.
 
 ## 1. Decision in one page
 
-1. **One CAS implementation**, behind a versioned protocol. It owns objects,
-   analyses, references, bundles, garbage collection and change notifications.
-2. **The service is a process, not the GUI.** The native app, the Electron
-   shell and the Ghidra skill are clients. The native app may start the service
-   and bundle its binary, but it is not the only host and does not own its
-   lifetime.
-3. **Local first, remote-ready.** A local sidecar serves the native app,
-   Electron and the skill; a remote service later speaks the same protocol.
-   The current on-disk store remains the first backend.
-4. **No direct writes to the store.** `code_artifact.py`, `cas_cli.py`,
-   `code_query.py`, the native app and the Electron main process go through a
-   client. The service is the only writer.
-5. **Change feed and a safety net.** (The 2-second poll is already gone: the
-   app follows the store with FSEvents.) The service publishes
-   `analysisChanged` after a commit; clients re-read the affected index and
-   refresh their badges. Until the service owns the writes, the app also keeps
-   a slow fallback poll (30 s) and refreshes on app activation and system wake,
-   for the events FSEvents misses while the Mac sleeps or when its stream
-   cannot start.
-6. **ByteRipperWeb does not get a local process by default.** It is a static
-   web edition with no backend; its Electron shell may use a bundled sidecar or
-   a remote service, but a browser cannot spawn one. The web edition keeps its
-   current promises — no backend, files never leave the machine, no install —
-   unless a remote CAS is explicitly enabled as a separate, disclosed mode.
-7. **Preserve the store.** Existing `Analysis/` directories remain readable.
-   Manifests, content keys, references and bundles keep their meaning. The
-   service can wrap the existing layout before any new backend exists.
+1. **One implementation of the store: `ContentStore` in
+   `Packages/CodeAnalysis`.** Objects, analyses, references, collection,
+   bundles and the rule for which artifact replaces which are written once, in
+   Swift. The app links it.
+2. **A command line, not a daemon.** `byteripper-cas` — an executable target of
+   the same package — is `ContentStore` behind a JSON command set
+   (`CASCommand`). The skill's Python (`scripts/cas.py`) is its client and
+   holds no store logic. There is no process to start, discover, keep alive or
+   upgrade; each command is one process that takes the store's `flock` for as
+   long as it writes.
+3. **The change feed is the file system.** The app follows `analyses/` with
+   FSEvents (`CodeStoreWatcher`); a slow fallback poll (30 s) and a refresh on
+   app activation and system wake cover what FSEvents misses. Any writer —
+   the tool, a project import — is seen within a fraction of a second. No
+   writer has to announce anything.
+4. **Readings decide replacement.** A manifest may name the reviewed Ghidra
+   project and revision that produced its artifact (`reading`,
+   `Design/GHIDRA_SHARED_PLAN.md` §5.6). A newer reading replaces an older one;
+   a mechanical run never replaces a reading unless told to; another project's
+   reading is kept aside under `conflicts/`. The same rule holds at a put and
+   at a bundle import.
+5. **The store's layout and its manifests stay as they were.** Every store and
+   bundle written before still reads; the new fields are optional, and an
+   older build ignores them.
+6. **A service comes when something needs a store it cannot open as a
+   directory** — a remote store, or the Electron shell on Windows (§5). It
+   would expose the same command set over a socket and keep `ContentStore` as
+   its file backend. Nothing in the clients' model changes when it arrives.
+7. **ByteRipperWeb gets no CAS by default.** The browser edition stays static,
+   with no backend, no install, and files that never leave the machine (§5.2).
 
-## 2. Current state
+## 2. Why not a daemon, now
+
+- **The race the daemon was to prevent did not exist.** Swift and Python
+  already took the same `flock` and wrote atomically. The real problems were
+  that one semantics lived in two places and drifted (the Swift manifest model
+  dropped `recipe.types`, `recipe.passes` and `module.phase` that Python wrote;
+  a rebind through Swift would have erased them), and that the app polled.
+- **A second executable costs more than it looks.** The macOS release is
+  ad-hoc signed; a sidecar binary is one more thing for quarantine and
+  Gatekeeper to stop, one more thing to version against the app, and one more
+  lifecycle to get right (start-on-demand, duplicate starts, idle exit, crash).
+- **A new language is a second toolchain** in a project whose rule is "no
+  third-party dependencies", for a service whose first deployment is one user
+  on one Mac.
+- **A command line answers the same need.** One implementation, one writer
+  semantics, JSON answers, no base64 for large artifacts (they pass as files),
+  and a process the skill can run headless in CI on a Mac.
+
+## 3. Architecture
+
+```
+       app (links ContentStore)                skill / CLI / CI
+                 │                                    │
+                 │                     cas.py ──► byteripper-cas (CASCommand)
+                 │                                    │
+                 └──────────► ContentStore ◄──────────┘
+                                   │  flock, atomic writes
+                                   ▼
+             ~/Library/Application Support/ByteRipper/Analysis/
+                                   │
+                         FSEvents ─┴─► the app's badges and Code panel
+```
+
+### 3.1 The command set
+
+```
+byteripper-cas [--store <root>] [--no-create] <command>
+  hello                                   protocol, schema, store root
+  put-object <file>                       { sha256, size }
+  has-object <sha256>                     { present }
+  get-object <sha256> [--out <file>]      the bytes, or { sha256, size }
+  put-analysis --module <json> --recipe <json> --artifact <file>
+               [--source <json>] [--reading <json>] [--replace] [--discard-reading]
+  analysis <module-sha> [--recipe <id>]   the manifest, or null
+  recipes <module-sha>                    [ id ]
+  list | conflicts                        [ manifest ]
+  set-ref <name> <key>... | refs | remove-ref <name>
+  verify                                  { problems }
+  gc [--apply] [--analyses]               the report; a dry run unless --apply
+  export --out <file> <key>...            the bundle's list
+  import <file>                           { imported, unchanged, skipped, conflicts }
+```
+
+- Answers are JSON on standard output, an object's bytes the one exception.
+  A refusal is `{"error": "…"}` on standard error with status 1; a command or
+  argument the tool does not know is status 2.
+- A JSON argument with a field the store does not know is refused, never
+  dropped, so a client cannot lose a field silently.
+- `hello` names the protocol (1). It is raised when an answer's shape changes,
+  never for an addition.
+
+### 3.2 Where the tool comes from
+
+- `cas.py` uses `$BYTERIPPER_CAS` when it is set, and otherwise builds the tool
+  from the repository with `swift build -c release` into
+  `~/Library/Caches/ByteRipper/byteripper-cas` — about 20 seconds, once, and
+  again when a source of the package is newer than the build. The build step
+  says what it is doing while it runs.
+- So a machine that runs the skill needs Xcode or its command line tools. Every
+  machine the skill runs on today has them.
+- Later, if the skill must run where only the app is installed, the app can
+  carry the tool in its bundle and `cas.py` can look there before building
+  (§6, phase 5).
+
+### 3.3 The rules the store enforces
+
+- Objects are named by their SHA-256, written atomically, verified on read.
+- A manifest is written atomically under the store's `flock`.
+- The same artifact under the same key is the same analysis: a put merges the
+  source it names and adopts a reading only where the stored analysis had none.
+- Another artifact under the same key is decided by the readings — the table is
+  in `Skills/ghidra-uefi/reference/cas.md` and in the Ghidra plan §5.6.
+- A bundle import goes analysis by analysis and reports what it did with each;
+  one entry the store cannot take does not stop the rest. Every object that
+  matches its hash is stored, so a workspace naming a skipped artifact still
+  opens it.
+- `gc` keeps the objects of the readings kept aside.
+
+## 4. Current state
 
 ### Native macOS app
 
-- `Packages/CodeAnalysis` has `ContentStore`: content-addressed objects,
-  `AnalysisManifest`, references, export/import bundles, garbage collection.
-- `UEFIToolUI` reads the store for the Code badge and the Code panel. It also
-  writes nothing to the store itself except project bundles through
-  `WorkspaceRecorder`.
-- `UEFIToolSession` follows the store's `analyses/` folder with FSEvents
-  (`CodeStoreWatcher`); a slow fallback poll (30 s) and a refresh on app
-  activation/system wake cover what FSEvents misses while the Mac sleeps or
-  when its stream cannot start. Any writer — the skill, a project import — is
-  normally seen within a fraction of a second. A manifest's
-  `source.document`/`source.node` now lets the panel materialize the branch an
-  analysis names and put the badge on a PEI image inside a compressed Boot FV
-  without the reader expanding it.
-- The store lives under
-  `~/Library/Application Support/ByteRipper/Analysis`.
+- Links `ContentStore`; reads the store for the Code badge and the Code panel;
+  writes only through project bundles (`WorkspaceRecorder` exports, and
+  `CodeAnalysisStore.importProjectBundle` imports on project open).
+- Follows `analyses/` with FSEvents; the 30 s fallback poll and the
+  activation/wake refresh are the safety net.
+- Ignores what a project-bundle import skipped or kept aside: the result is
+  computed but not shown (§6, phase 4).
 
 ### Ghidra skill
 
-- `Skills/ghidra-uefi/scripts/cas.py` implements the same store in Python.
-- `code_artifact.py` runs Ghidra headless and writes the artifact and manifest
-  directly; `code_query.py` and `cas_cli.py` read and manage the store
-  directly.
-- The skill can run without the app, including in CI and on a headless analysis
-  machine. The app's MCP relay is needed only for extracting nodes from an open
-  dump; it is not a storage API.
+- `cas.py` is the client of `byteripper-cas`; `code_artifact.py`,
+  `code_query.py` and `cas_cli.py` reach the store only through it.
+- `code_artifact.py --force` replaces a mechanical artifact; replacing a
+  reviewed reading also needs `--discard-reading`.
+- The skill runs without the app, including headless on a Mac. The app's MCP
+  relay is needed only to extract nodes from an open dump.
 
 ### ByteRipperWeb
 
-- `ByteRipperWeb` is the browser edition: TypeScript, Vite, static hosting, no
-  backend; files never leave the machine and nothing must be installed.
-- `ByteRipperWeb/desktop` is an optional Electron shell around the same page.
-  Its main process owns the filesystem and process access; the page gets a
-  preload bridge (`byteripperDesktop`) and never Node or direct disk access.
-- The web edition uses IndexedDB, OPFS and the Cache API for its own local
-  state. It has no Code panel and no CAS today.
-- A local CAS sidecar is possible in the Electron shell, but not in a browser:
-  a browser cannot spawn a process, and a page served from HTTPS cannot rely on
-  an `http://localhost` companion without mixed-content and installation
-  problems.
+- The browser edition: TypeScript, Vite, static hosting, no backend, no Code
+  panel and no CAS.
+- `ByteRipperWeb/desktop` is an optional Electron shell around the same page,
+  with a narrow preload bridge.
 
-## 3. Goals
+## 5. Later: a service, Electron, the web
 
-- One implementation of CAS semantics, used by every client.
-- The native app, the Electron shell and the skill work **offline** and
-  **headless**; CI runs the same service.
-- A remote service can be added later without changing the clients' model.
-- Immediate badge updates when an analysis is written, with FSEvents and a slow
-  safety-net poll rather than a 2-second poll.
-- Existing stores, projects and bundles remain readable and migratable.
-- No double writers and no split brain on one store.
-- Large artifacts (the BdsDxe artifact is about 8 MB) are transferred as
-  binary, not as base64 in a command protocol.
-- Browser defaults remain local and private; any remote mode is explicit.
+None of this is scheduled. It is written down so that the first need for it
+does not reopen the decision above.
 
-## 4. Non-goals
+### 5.1 When a service is needed
 
-- Running Ghidra inside the app or the service.
-- Replacing workspace or project JSON with CAS; only code analyses and their
-  blobs move behind the service.
-- A general-purpose object store or a search index.
-- A browser-local CAS in the first phase. If the Code panel is ever ported to
-  the browser, that is a separate decision (see §11).
-- A remote, multi-tenant service in the first phase; the protocol is designed
-  for it, the deployment is later.
-- Making the GUI the only host. The app may start the service; it does not own
-  the only copy of it.
+A service is the right shape once a client cannot run `byteripper-cas` against
+a directory it can open:
 
-## 5. Architecture
+- **a remote store**, shared between machines or people — then the service is
+  the only writer, behind HTTPS with authentication and per-project scoping;
+- **the Electron shell on Windows or Linux** — `CryptoKit` is macOS-only, so
+  the tool would first need a portable SHA-256 (the open question of a Linux
+  CI is the same one).
 
-```
-                       CAS protocol
-       putObject / putAnalysis / get / list / refs / bundle / gc / changes
-                    /                              \
-       native app (Swift client)            skill / CLI (Python client)
-                    \                              /
-                 local CAS service  ── files, locks, change feed ── store
-                    ^
-                    |
-       Electron main (Node client)  ── preload IPC ── renderer (page)
+It would serve the command set of §3.1 over a socket (and HTTP/WebSocket when
+remote), keep `ContentStore` as the file backend, and add the one thing a
+file system cannot give a remote reader: a change feed. Clients would switch
+transport, not model. Before then, a remote store is a synced folder of
+bundles, or the Ghidra plan's "the supervisor runs on the powerful machine and
+returns artifacts to the client's own store".
 
-       web page (browser) ── HTTPS/WS ── remote CAS service (opt-in)
-```
-
-### 5.1 Service responsibilities
-
-- Own the store and be its only writer.
-- Validate every content hash and every manifest before commit.
-- Serialize writes per store; atomic object-before-manifest commits.
-- Maintain references, bundles and garbage collection.
-- Publish change events after a successful commit.
-- Report health, version, store root and statistics.
-- Refuse incompatible clients or stores with a clear error.
-
-### 5.2 Clients and transports
-
-A small client interface is shared conceptually across languages:
-
-```text
-putObject(stream, sha) -> ObjectRef
-putAnalysis(module, recipe, manifest, artifact, source) -> AnalysisManifest
-getAnalysis(moduleSha, recipe?) -> AnalysisManifest?
-listAnalyses(filter) -> [AnalysisManifest]
-setRef / getRef / listRefs
-exportBundle(keys) / importBundle(stream)
-collectGarbage(dryRun, deleteUnreferencedAnalyses)
-subscribeChanges(since?) -> stream of AnalysisChanged
-health() / version()
-```
-
-Transports:
-
-| Client | Local transport | Remote transport |
-|---|---|---|
-| native Swift | Unix domain socket (and optionally a localhost HTTP port) | HTTPS + WebSocket |
-| Python skill/CLI | Unix socket; start a local sidecar if absent | HTTPS + WebSocket |
-| Electron main | Unix socket / named pipe; start a bundled sidecar if absent | HTTPS + WebSocket |
-| Electron renderer | IPC to main only | IPC to main only |
-| browser page | none | HTTPS + WebSocket (opt-in) |
-
-Control messages are JSON; artifacts and object blobs are binary frames or
-HTTP bodies. The protocol must not require base64 for multi-megabyte payloads.
-
-### 5.3 Deployment modes
-
-1. **Local sidecar (default for desktop).** A `byteripper-cas` binary runs as
-   the user, one per store. Native app, Electron main and the skill connect to
-   the same socket/pipe. Any client may start it; a lock prevents duplicates.
-2. **User service (optional).** The same binary registered as a macOS
-   LaunchAgent, a Windows scheduled task/service or a systemd user unit. It is
-   always on; clients only connect.
-3. **Remote service (opt-in).** HTTP/WebSocket, TLS, authentication and
-   tenant/project scoping. The browser edition uses this mode only; the native
-   and Electron clients may use it instead of a local store.
-4. **No service.** ByteRipperWeb in a browser remains without CAS/Code unless a
-   remote endpoint is configured. Existing projects with bundled analyses can
-   still be opened read-only through the project bundle/cache path.
-
-### 5.4 Service lifecycle
-
-- **Discovery:** well-known socket path per user/store, overridable by
-  `BYTERIPPER_CAS` and by a client setting; a small endpoint file with version
-  and store root.
-- **Start on demand:** client tries to connect; on failure, it starts the
-  bundled binary with the store root, waits for the endpoint and handshakes.
-  An OS lock makes concurrent starts harmless.
-- **Lifetime:** the service is not killed when the app that started it quits.
-  It exits after an idle timeout when no client is connected, or runs as a user
-  service. A remote service is always on.
-- **Crash:** clients reconnect; incomplete temp files are ignored; the service
-  validates manifests on start and reports unreadable entries through
-  `verify`.
-- **Version:** protocol version and store schema version are separate. A
-  client refuses a newer service it does not understand; a service refuses a
-  newer store only where reading it would be guessing. Migration is explicit and
-  fixture-tested.
-- **Multiple stores:** a service instance has one root; a remote service may
-  expose several stores/tenants. Clients name the store or use the default.
-
-### 5.5 Native app
-
-- The app bundles the service binary and starts it on first CAS use if no
-  service is listening.
-- Reads and writes go through the client; the existing `ContentStore` becomes
-  the service's file backend or is replaced by the service implementation.
-- The Code badge and panel subscribe to changes. `CodeStoreWatcher` is the
-  trigger; a slow fallback poll (30 s) and a refresh on app activation/system
-  wake are the safety net. The 2-second poll is gone.
-- The app can still read a store written by an older build; it does not write
-  around a running service.
-
-### 5.6 Electron shell (ByteRipperWeb/desktop)
-
-- The Electron **main process** is the only process with filesystem/process
-  access. It is the CAS client for the window.
-- `preload.cjs` exposes a narrow `byteripperDesktop.cas` bridge: `put`, `get`,
-  `list`, `refs`, `bundle`, `changes`, `status`. The renderer has no fs and no
-  direct network access to a local CAS.
-- If the shell is configured for local CAS, main connects to the local
-  socket/pipe or starts the bundled sidecar. The binary is packaged as an
-  `asarUnpack` entry, like the agent relay. Windows uses a named pipe; other
-  platforms use a Unix socket.
-- If configured for remote CAS, main uses HTTPS/WebSocket; the renderer still
-  uses IPC only. The endpoint and credentials are main-process settings.
-- Single-instance behavior and profile isolation stay as they are; the CAS
-  service is separate and outlives either window.
-- The Electron shell is optional; the web page does not require CAS to work as
-  it does today.
-
-### 5.7 Browser web edition
-
-- A browser cannot start a local sidecar. The default remains: no backend, no
-  Code/CAS, files never leave the machine.
-- If the Code panel is brought to the web edition, it has two honest modes:
-  - **Remote CAS, opt-in:** an HTTPS/WebSocket endpoint with auth, CORS, change
-    feed and a clear warning that analyses (and only analyses, not the dump)
-    leave the machine. This is a team/shared mode, not the default.
-  - **Project-bundle/read-only cache:** the page can read analyses bundled in a
-    project or cached in OPFS/Cache API; it does not write a second CAS. This
-    keeps the local promise but cannot create new analyses.
-- A browser-local writable CAS in OPFS/IndexedDB is a **second implementation**
-  and is not part of this plan. It would be considered only if offline Code in
-  the browser becomes a requirement, and would be documented as a separate
-  product decision.
-- A local companion daemon for the browser is not a default: it requires
-  installation and fights mixed-content rules. It is not part of this plan.
-
-## 6. Protocol
-
-### 6.1 Operations
-
-- `hello` — protocol version, service version, store id/root, capabilities
-  (binary blobs, change feed, bundle import/export).
-- `putObject` — streamed, content-addressed; idempotent; hash verified.
-- `putAnalysis` — module identity, recipe, manifest, artifact object, source
-  identity; returns the committed manifest. Same module+recipe+artifact is
-  idempotent; same key with another artifact is decided by the manifests'
-  `reading` (`Design/GHIDRA_SHARED_PLAN.md` §5.6): a newer revision of the
-  same reading replaces, an older one or a mechanical artifact over a reading
-  is skipped, another project's reading is a conflict kept aside. Without a
-  reading on either side it stays a conflict unless the caller explicitly
-  replaces or uses another recipe.
-- `getAnalysis` / `listAnalyses` / `listRecipes`.
-- `setRef` / `getRef` / `listRefs` — named sets of analysis keys; the project
-  bundle uses a stable `project-…` ref.
-- `exportBundle` / `importBundle` — streamed ZIP or equivalent; preserves the
-  existing `Analyses.bundle` meaning. Import goes key by key under the same
-  `reading` rule and reports skipped and conflicting keys; one conflict does
-  not stop the rest.
-- `collectGarbage` — dry-run by default; never deletes an analysis named by a
-  live reference; a shared service uses leases/refs, not a global sweep.
-- `subscribeChanges` — from a cursor; events name module SHA, recipe and, when
-  known, source document/node. Clients re-read manifests/index; events are a
-  hint, not the payload.
-- `health` / `stats` / `verify`.
-
-### 6.2 Commit model
-
-1. Receive and verify the artifact blob; write it atomically.
-2. Validate the manifest against the blob hash and schema.
-3. Commit the manifest under the module+recipe key.
-4. Commit/refresh references and bundle metadata.
-5. Publish `analysisChanged` after the commit is durable.
-6. A crash before (5) leaves a valid analysis; the client's next read/index
-   fetch sees it. A crash before (3) leaves an unreferenced object eligible for
-   GC.
-
-### 6.3 Versioning and compatibility
-
-- Protocol version (`v1`) is independent of the manifest schema and the store
-  layout.
-- Clients refuse a service that does not speak their protocol; services refuse
-  a store newer than they understand rather than guessing.
-- Added optional fields are backward-compatible; a changed field, a rename or
-  a changed meaning raises the schema/version and gets a migration and
-  fixtures.
-- The first implementation must pass a language-neutral conformance suite
-  built from existing CAS fixtures.
-
-### 6.4 Source identity
-
-- `source.document` is the file name the UEFI panel shows; `source.node` is the
-  image node path (`0.6.4.0.0.205.2`).
-- The service stores it as provenance; it is not a content key.
-- Clients use it only as a hint to open the branch that holds the image. The
-  body's SHA-256 still decides whether the analysis applies.
-- Re-binding an existing analysis's source is a metadata update, not a new
-  analysis; it must not erase fields the caller did not name.
-
-## 7. Store
-
-- Keep `objects/<sha256>`, `analyses/<module-sha>/<recipe>/manifest.json`,
-  `refs/<name>.json` and the bundle format as the first local backend.
-- The service is the only writer. Existing stores remain readable; a one-time
-  scan builds the in-memory index.
-- Project `Analyses.bundle` export/import remains the portable path; a remote
-  service stores the same bundles.
-- The service validates on read where it is cheap and on `verify` where it is
-  not.
-- A remote backend may use object storage for blobs and a database for
-  manifests/refs; the protocol, not the layout, is the contract.
-
-## 8. Change feed and UI
-
-- On commit, the service publishes `analysisChanged` with module SHA, recipe,
-  and source (document/node when known).
-- Native app and Electron subscribe; the relevant tree reloads its index and
-  marks the node; source-node materialization is already implemented and stays
-  the path for compressed PEI images.
-- Missed events (sleep, reconnect) are recovered by re-reading the index; the
-  event stream is an optimisation, not the source of truth. The app already
-  polls slowly (30 s) and refreshes on app activation/system wake, so a missed
-  FSEvent does not leave a badge stale for the session.
-- During migration, the slow fallback poll and the store watcher cover old
-  direct writers. Once direct writes are removed, the poll can stay as the
-  safety net it now is.
-
-## 9. Security
-
-- Local sockets/pipes: user-only permissions; the service never listens on a
-  network interface by default.
-- Remote: TLS, authentication, per-project/tenant authorisation, CORS allowlist
-  and size limits.
-- Client paths are names/hashes, not arbitrary filesystem paths; the service
-  refuses traversal.
-- Electron renderer gets IPC only; main validates the sender and the message;
-  the page never receives a filesystem path or a service token.
-- Change subscriptions are scoped to what the client may read.
-- GC on a shared service uses references/leases; never delete objects another
-  tenant/project still names.
-
-## 10. Migration order
-
-Each phase leaves the product working.
-
-1. **ADR and protocol.** Decide the service language/host model, web policy and
-   remote auth model. Write the protocol and the conformance fixtures.
-2. **Service core.** Local file backend, object/manifest/ref/bundle/GC
-   operations, `hello`, `health`, `verify`, change feed. CLI only; no client
-   migrated yet.
-3. **Python client.** `code_artifact.py`, `code_query.py`, `cas_cli.py` go
-   through a `cas_client`; the skill starts a headless service when needed.
-   Direct writes to the store are removed from the skill. CI runs the service.
-4. **Native client.** Swift `CASClient` over the local socket; the app starts
-   the bundled service if needed; Code badge/panel use the client; change feed
-   replaces the 2 s poll; the 30 s fallback and activation/wake refresh remain
-   as the safety net. Existing stores are read and verified.
-5. **Electron shell.** Main process CAS client, preload bridge, packaged
-   sidecar (or remote endpoint); Windows named pipe; packaging/signing checks.
-   The browser edition is untouched.
-6. **Web Code (optional).** If approved: a TS `CasClient` with remote transport
-   and an opt-in remote mode, or project-bundle/read-only cache. No browser
-   writes a second CAS.
-7. **Remote service.** Same protocol, HTTPS/WS, auth/tenancy, deployment,
-   quotas and GC leases; native/Electron/skill can point at it.
-8. **Cleanup.** Remove duplicate CAS write implementations; document direct
-   write removal; archive the old Python store code as a client/reference only;
-   update design docs and tests.
-
-## 11. ByteRipperWeb policy
-
-This is the part most likely to need a product decision, so it is stated
-explicitly:
+### 5.2 ByteRipperWeb policy
 
 - The browser edition remains **static, no backend, no install**, and files do
   not leave the machine by default.
-- The Electron shell is the only place a local CAS sidecar may run, because it
-  is installed and its main process may spawn a process; the page still talks
-  to it only through IPC.
-- A remote CAS for the browser is **opt-in** and must be visible in the UI:
-  what is uploaded (analyses and artifacts, not the dump unless the user asks),
-  where, and with what account. It is a separate shared/team mode, not a silent
-  default.
-- A browser-local writable CAS is **not** in this plan. If Code must work
-  offline in a browser, that is a new decision with a second implementation and
-  its own storage/GC rules; it should not be smuggled in as "the same CAS".
+- The Electron shell is the only place a local CAS may be used, through its
+  main process; the page talks to it only through IPC and never gets a path or
+  a token.
+- A remote CAS for the browser is **opt-in** and visible in the UI: what is
+  uploaded (analyses and artifacts, not the dump unless the user asks), where,
+  and with what account.
+- A browser-local writable CAS in OPFS/IndexedDB would be a second
+  implementation of the store and is not in this plan.
 - Project bundles remain the portable bridge: a project can carry its analyses
-  to a machine with no service, and the web edition can read them if the Code
-  panel is ported.
+  to a machine with no store, and a web Code panel, if one is ever built, could
+  read them.
 
-## 12. Testing and acceptance
+## 6. Phases
 
-- **Protocol conformance:** one fixture suite run against the service and each
-  client; objects, manifests, conflicts, refs, bundles, GC, changes, errors,
-  version refusal.
-- **Store compatibility:** existing `Analysis/` fixtures and project bundles
-  read by the service; old builds still read what the service writes (same
-  layout).
-- **Clients:** Swift, Python and TypeScript clients against a fake and a real
-  service; reconnect and missed-event re-read.
-- **Lifecycle:** start-on-demand, duplicate-start lock, crash/restart, idle
-  exit, multiple clients, store root changes.
-- **Electron:** main starts/connects; renderer cannot reach fs/CAS directly;
-  packaged sidecar; Windows named pipe; single-instance behavior.
-- **Web:** remote opt-in only; CORS/auth; privacy notice; no backend in the
-  default build; project-bundle read path.
-- **Security:** socket permissions, path traversal, size limits, remote
-  auth/tenancy, renderer IPC validation.
-- **CI/offline:** `code_artifact.py` and `cas_cli.py` with no GUI and no agent
-  settings; service binary available.
+1. **Done — the change feed.** FSEvents instead of the 2-second poll, with the
+   slow poll and the activation/wake refresh as the safety net.
+2. **Done — one implementation.** `byteripper-cas` over `ContentStore`;
+   `cas.py` its client; the manifest model carries every field the skill
+   writes (`module.phase`, `recipe.types`, `recipe.passes`); unknown fields
+   refused.
+3. **Done — readings.** `reading` in the manifest, `ReadingOrder`, replacement
+   by reading at put and at import, per-key import with a report, `conflicts/`
+   kept by `gc`, `code_artifact.py --discard-reading`.
+4. **The app reports a project bundle's import.** Skipped entries and readings
+   kept aside become a notice on project open, and a way to choose between two
+   readings. Needed once readings exist, i.e. with phase 2 of the Ghidra plan.
+5. **The tool in the app bundle (optional).** For a machine with the app and
+   no Xcode: the app carries `byteripper-cas`, `cas.py` finds it there. Needs a
+   signing check for a second executable in an ad-hoc signed bundle.
+6. **A service (optional, §5.1).** Only for a remote store or a non-macOS
+   client.
 
-Acceptance for the first migration:
+## 7. Testing
 
-- No skill or app code writes the CAS store directly.
-- A native app with a running service shows a new analysis badge from the
-  change feed without the 2 s poll.
-- The skill analyzes and stores a module headless; the app reads it after
-  launch.
-- Existing store and project bundles still work.
-- ByteRipperWeb's default build is unchanged; Electron can use a local
-  sidecar or a remote endpoint.
+- `swift test` in `Packages/CodeAnalysis`: the store (`ContentStoreTests`,
+  including the reading table at put and at import, a Python-written bundle
+  fixture, a bad entry that does not stop the rest of a bundle) and the command
+  line (`CASCommandTests`: answers, refusals, unknown fields, usage errors).
+- `python3 -m unittest discover -s Skills/ghidra-uefi/tests`: the skill's
+  client against the real tool, built on first use.
+- A store written before this change opens, lists, verifies and serves its
+  artifacts through the tool unchanged (checked on the nine analyses in this
+  Mac's store).
 
-## 13. Risks and open questions
+## 8. Risks and open questions
 
-1. **Service language/host.** A Swift-only service covers macOS but not the
-   Windows Electron shell or a headless Linux CI. A cross-platform binary
-   (Go/Rust) is the clean answer; Node/TS shares code with Electron but needs a
-   runtime; Python is easy for the skill but poor for the GUI. Decide in the
-   ADR.
-2. **Web Code scope.** Is Code a macOS/Electron feature only, or a web feature?
-   The answer decides whether a remote CAS is required or the web edition stays
-   CAS-free.
-3. **Remote privacy/tenancy.** Uploading analyses is still uploading data; the
-   remote mode needs consent, auth, tenant isolation and clear retention.
-4. **Service ownership/lifecycle.** Who installs/starts it? Bundled sidecar,
-   user service, or both? What happens when the app quits? What if two clients
-   start it at once?
-5. **Packaging/signing.** macOS notarisation, Windows signing, sidecar updates,
-   antivirus behaviour for a second executable.
-6. **Large artifacts.** Streaming, limits, disk pressure, and whether the
-   service or the client computes hashes.
-7. **Migration of old writers.** A fallback watcher/poll is needed until every
-   old client is upgraded; the plan must say when direct writes become an error.
-8. **GC/leases on a shared service.** A simple reference set is enough locally;
-   a remote service needs leases or project ownership so one tenant's GC cannot
-   remove another's objects.
-9. **Protocol governance.** Who may add fields/operations; how versions and
-   capabilities are negotiated; how clients degrade.
-10. **Store location/multiple stores.** Per-user local store, project-adjacent
-    bundles, remote tenant stores; naming and discovery must be explicit.
-
-## 14. Appendix — sketch
-
-```
-hello            -> { protocol: 1, service: "x.y.z", store: "...", caps: [...] }
-putObject        <- stream + sha256 -> { sha256, size }
-putAnalysis      <- module, recipe, manifest, artifactSha, source -> manifest
-getAnalysis      <- moduleSha, recipe? -> manifest | notFound
-subscribeChanges <- since? -> events: analysisChanged { module, recipe, source? }
-```
-
-Local endpoint (illustrative):
-
-```
-~/Library/Application Support/ByteRipper/CAS/endpoint.json
-{ "protocol": 1, "socket": ".../cas.sock", "pid": 1234, "store": ".../Analysis" }
-```
-
-The endpoint file is a hint; the lock and the socket are the authority. A
-client that finds a stale endpoint starts or waits for a fresh one.
+1. **A Linux CI for the skill.** `byteripper-cas` uses CryptoKit, which is
+   macOS-only. If the skill must run on Linux, the tool needs a portable
+   SHA-256 (swift-crypto would be a dependency; a small SHA-256 in the package
+   would not be).
+2. **The first command builds the tool.** About 20 seconds once per machine and
+   per change of the package's sources; a machine without Swift cannot use the
+   store until `BYTERIPPER_CAS` names a built tool.
+3. **Process per command.** Each call starts a process (10–15 ms). A
+   session of thousands of calls would want a long-lived mode — a `--serve`
+   reading commands from standard input — before it wants a daemon.
+4. **Two readings of one module.** `conflicts/` keeps both; choosing between
+   them needs the app's interface (phase 4) or a command line, neither designed
+   yet.

@@ -1,4 +1,5 @@
-"""The local CAS, without Ghidra and without a dump.
+"""The local CAS, without Ghidra and without a dump: the skill's client
+against the real `byteripper-cas`, which `cas.tool()` builds once.
 
     python3 -m unittest discover -s Skills/ghidra-uefi/tests
 """
@@ -61,7 +62,7 @@ class CASTests(unittest.TestCase):
 
     def testACorruptObjectIsRefusedOnRead(self):
         value = self.store.put_object(b"hello")
-        path = self.store.object_path(value)
+        path = self.store.root / "objects" / value
         path.write_bytes(b"HELLO")
         with self.assertRaises(cas.CASError):
             self.store.get_object(value)
@@ -69,7 +70,7 @@ class CASTests(unittest.TestCase):
 
     def testAPathThatIsNotADigestIsRefused(self):
         with self.assertRaises(cas.CASError):
-            self.store.object_path("../../etc/passwd")
+            self.store.get_object("../../etc/passwd")
 
     # -- analyses -------------------------------------------------------
 
@@ -140,7 +141,7 @@ class CASTests(unittest.TestCase):
         self.store.put_object(b"orphan")
         report = self.store.gc(dry_run=False)
         self.assertEqual(report["objects"], 1)
-        self.assertFalse(self.store.objects.joinpath(digest(b"orphan")).exists())
+        self.assertFalse((self.store.root / "objects" / digest(b"orphan")).exists())
 
     # -- moving analyses ------------------------------------------------
 
@@ -153,10 +154,48 @@ class CASTests(unittest.TestCase):
 
         other = cas.Store(Path(self.directory.name) / "other")
         imported = other.import_bundle(bundle)
-        self.assertEqual(len(imported), 1)
+        self.assertEqual(len(imported["imported"]), 1)
         found = other.analysis(module["sha256"])
         self.assertEqual(found["artifact"], manifest["artifact"])
         self.assertEqual(other.verify(), [])
+
+    # -- readings -------------------------------------------------------
+
+    def testALaterReadingReplacesAndAMechanicalRunDoesNot(self):
+        self.store.put_analysis(self.module(), self.recipe(), artifact(1),
+                                reading={"project": "p", "rev": 1})
+        second = self.store.put_analysis(self.module(), self.recipe(), artifact(2),
+                                         reading={"project": "p", "rev": 2})
+        self.assertEqual(second["reading"]["rev"], 2)
+        with self.assertRaises(cas.CASError):
+            self.store.put_analysis(self.module(), self.recipe(), artifact(3), replace=True)
+        discarded = self.store.put_analysis(self.module(), self.recipe(), artifact(3),
+                                            discard_reading=True)
+        self.assertNotIn("reading", discarded)
+
+    def testTheUEFIFieldsSurviveTheTool(self):
+        recipe = {**self.recipe(), "types": "edk2-stable202608", "passes": ["ApplyUefi.java"]}
+        module = {**self.module(), "phase": "pei"}
+        manifest = self.store.put_analysis(module, recipe, artifact())
+        self.assertEqual(manifest["recipe"]["types"], "edk2-stable202608")
+        self.assertEqual(manifest["module"]["phase"], "pei")
+
+    def testAFieldTheStoreDoesNotKnowIsRefusedNotDropped(self):
+        with self.assertRaises(cas.CASError):
+            self.store.put_analysis({**self.module(), "colour": "red"}, self.recipe(), artifact())
+
+    def testAnotherProjectsReadingIsKeptAside(self):
+        source = cas.Store(Path(self.directory.name) / "source")
+        manifest = source.put_analysis(self.module(), self.recipe(), artifact(2),
+                                       reading={"project": "q", "rev": 1})
+        bundle = Path(self.directory.name) / "q.zip"
+        source.export_bundle([source.key(manifest)], bundle)
+        self.store.put_analysis(self.module(), self.recipe(), artifact(1),
+                                reading={"project": "p", "rev": 1})
+        result = self.store.import_bundle(bundle)
+        self.assertEqual(len(result["conflicts"]), 1)
+        self.assertEqual(self.store.conflicts()[0]["reading"]["project"], "q")
+        self.assertEqual(self.store.analysis(self.module()["sha256"])["reading"]["project"], "p")
 
 
 if __name__ == "__main__":

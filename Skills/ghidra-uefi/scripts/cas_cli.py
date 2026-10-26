@@ -7,12 +7,16 @@
     cas_cli.py gc --apply
     cas_cli.py export --all --out analyses.zip
     cas_cli.py import analyses.zip
+    cas_cli.py conflicts
     cas_cli.py verify
 
 The store defaults to `~/Library/Application Support/ByteRipper/Analysis`.
 `gc` is a dry run unless `--apply`; with `--analyses` it also removes analyses
 no reference names, and refuses to do that unless a reference exists (or
 `--force` is given, which is meant for a store being thrown away).
+
+The store is `byteripper-cas` underneath (`cas.py`); this is the skill's
+spelling of its commands.
 """
 
 from __future__ import annotations
@@ -72,9 +76,18 @@ def main(argv: list[str]) -> int:
     import_ = sub.add_parser("import", help="read a zip into the store")
     import_.add_argument("bundle", type=Path)
     import_.add_argument("--json", action="store_true")
+    sub.add_parser("conflicts", help="readings an import kept aside").add_argument("--json", action="store_true")
 
     args = parser.parse_args(argv)
     store = cas.Store(args.store)
+    try:
+        return run(args, store)
+    except cas.CASError as error:
+        print(error, file=sys.stderr)
+        return 1
+
+
+def run(args, store: cas.Store) -> int:
 
     if args.command == "list":
         rows = []
@@ -187,11 +200,29 @@ def main(argv: list[str]) -> int:
         return 0
 
     if args.command == "import":
-        imported = store.import_bundle(args.bundle)
+        result = store.import_bundle(args.bundle)
         if args.json:
-            print(json.dumps([store.key(m) for m in imported], indent=2))
+            print(json.dumps(result, indent=2))
         else:
-            print(f"{len(imported)} analyses imported")
+            print(f"{len(result['imported'])} analyses imported, "
+                  f"{len(result['unchanged'])} already here")
+            for entry in result["skipped"]:
+                print(f"skipped {entry['key']}: {entry['reason']}")
+            for entry in result["conflicts"]:
+                print(f"kept aside {entry['key']}: {entry['reason']}")
+        return 0
+
+    if args.command == "conflicts":
+        manifests = store.conflicts()
+        if args.json:
+            print(json.dumps(manifests, indent=2))
+        else:
+            for manifest in manifests:
+                reading = manifest.get("reading") or {}
+                print(f"{store.key(manifest)}  project {reading.get('project')} "
+                      f"rev {reading.get('rev')}  artifact {manifest['artifact']['sha256'][:16]}")
+            if not manifests:
+                print("no conflicting readings")
         return 0
 
     return 0

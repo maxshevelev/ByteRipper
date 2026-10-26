@@ -34,7 +34,7 @@ final class ContentStoreTests: XCTestCase {
             "post_codes": [],
             "status_code_calls": []
         ]
-        return try! JSONSerialization.data(withJSONObject: document)
+        return try! JSONSerialization.data(withJSONObject: document, options: .sortedKeys)
     }
 
     private func module(_ label: String = "module") -> ModuleIdentity {
@@ -177,7 +177,7 @@ final class ContentStoreTests: XCTestCase {
 
         let other = try ContentStore(root: directory.appendingPathComponent("other", isDirectory: true))
         let imported = try other.importBundle(from: bundle)
-        XCTAssertEqual(imported.count, 1)
+        XCTAssertEqual(imported.imported.count, 1)
         XCTAssertEqual(try other.analysis(module: manifest.module.sha256)?.artifact,
                        manifest.artifact)
         XCTAssertEqual(other.verify(), [])
@@ -188,7 +188,7 @@ final class ContentStoreTests: XCTestCase {
     func testAPythonBundleImports() throws {
         let url = try XCTUnwrap(Bundle.module.url(forResource: "bundle", withExtension: "zip",
                                                   subdirectory: "Fixtures"))
-        let imported = try store.importBundle(from: url)
+        let imported = try store.importBundle(from: url).imported
         XCTAssertEqual(imported.count, 1)
         let manifest = try XCTUnwrap(imported.first)
         XCTAssertEqual(manifest.module.name, "Fixture")
@@ -199,6 +199,117 @@ final class ContentStoreTests: XCTestCase {
         XCTAssertEqual(manifest.stats.postCodeWrites, 1)
         XCTAssertEqual(manifest.stats.statusCodeCandidates, 1)
         XCTAssertEqual(store.verify(), [])
+    }
+
+    // MARK: - Readings
+
+    private func reading(_ rev: Int, project: String = "p") -> AnalysisReading {
+        AnalysisReading(project: project, rev: rev)
+    }
+
+    func testTheOrderOfTwoReadings() {
+        XCTAssertEqual(ReadingOrder(incoming: nil, stored: nil), .unreviewed)
+        XCTAssertEqual(ReadingOrder(incoming: reading(1), stored: nil), .newer)
+        XCTAssertEqual(ReadingOrder(incoming: nil, stored: reading(1)), .unreviewedOverReviewed)
+        XCTAssertEqual(ReadingOrder(incoming: reading(2), stored: reading(1)), .newer)
+        XCTAssertEqual(ReadingOrder(incoming: reading(1), stored: reading(1)), .notNewer)
+        XCTAssertEqual(ReadingOrder(incoming: reading(1), stored: reading(2)), .notNewer)
+        XCTAssertEqual(ReadingOrder(incoming: reading(9, project: "q"), stored: reading(1)), .otherProject)
+    }
+
+    func testALaterPublishReplacesTheReadingAndAnEarlierOneIsRefused() throws {
+        try store.putAnalysis(module: module(), recipe: recipe(), artifact: artifact(functions: 1),
+                              reading: reading(1))
+        let second = try store.putAnalysis(module: module(), recipe: recipe(),
+                                           artifact: artifact(functions: 2), reading: reading(2))
+        XCTAssertEqual(try store.analysis(module: module().sha256)?.artifact, second.artifact)
+        XCTAssertThrowsError(try store.putAnalysis(module: module(), recipe: recipe(),
+                                                   artifact: artifact(functions: 3), reading: reading(2)))
+    }
+
+    func testAMechanicalRunDoesNotReplaceAReadingUnlessTold() throws {
+        try store.putAnalysis(module: module(), recipe: recipe(), artifact: artifact(functions: 1),
+                              reading: reading(1))
+        XCTAssertThrowsError(try store.putAnalysis(module: module(), recipe: recipe(),
+                                                   artifact: artifact(functions: 2), replace: true))
+        let replaced = try store.putAnalysis(module: module(), recipe: recipe(),
+                                             artifact: artifact(functions: 2), discardReading: true)
+        XCTAssertNil(replaced.reading)
+    }
+
+    func testAReadingReplacesAMechanicalArtifact() throws {
+        try store.putAnalysis(module: module(), recipe: recipe(), artifact: artifact(functions: 1))
+        let read = try store.putAnalysis(module: module(), recipe: recipe(),
+                                         artifact: artifact(functions: 2), reading: reading(1))
+        XCTAssertEqual(try store.analysis(module: module().sha256)?.reading, read.reading)
+    }
+
+    func testTheSameArtifactAdoptsAReadingButKeepsAnExistingOne() throws {
+        try store.putAnalysis(module: module(), recipe: recipe(), artifact: artifact())
+        let adopted = try store.putAnalysis(module: module(), recipe: recipe(), artifact: artifact(),
+                                            reading: reading(1))
+        XCTAssertEqual(adopted.reading, reading(1))
+        let kept = try store.putAnalysis(module: module(), recipe: recipe(), artifact: artifact(),
+                                         reading: reading(5))
+        XCTAssertEqual(kept.reading, reading(1))
+    }
+
+    /// The table of `Design/GHIDRA_SHARED_PLAN.md` §5.6, at bundle import.
+    func testABundleImportTakesEachAnalysisByItsReading() throws {
+        let other = try ContentStore(root: directory.appendingPathComponent("other", isDirectory: true))
+        func bundle(_ reading: AnalysisReading?, functions: Int, module label: String) throws -> URL {
+            let source = try ContentStore(root: directory.appendingPathComponent(UUID().uuidString))
+            let manifest = try source.putAnalysis(module: module(label), recipe: recipe(),
+                                                  artifact: artifact(functions: functions),
+                                                  reading: reading)
+            let url = directory.appendingPathComponent("\(UUID().uuidString).zip")
+            try source.exportBundle([manifest.key!], to: url)
+            return url
+        }
+        // An older revision is skipped, a newer one replaces.
+        try other.putAnalysis(module: module("a"), recipe: recipe(), artifact: artifact(functions: 2),
+                              reading: reading(2))
+        XCTAssertEqual(try other.importBundle(from: bundle(reading(1), functions: 1, module: "a")).skipped.count, 1)
+        XCTAssertEqual(try other.importBundle(from: bundle(reading(3), functions: 3, module: "a")).imported.count, 1)
+        XCTAssertEqual(try other.analysis(module: module("a").sha256)?.reading?.rev, 3)
+        // A mechanical artifact never replaces a reading.
+        XCTAssertEqual(try other.importBundle(from: bundle(nil, functions: 4, module: "a")).skipped.count, 1)
+        // Another project's reading is kept aside, and its object survives gc.
+        let conflict = try other.importBundle(from: bundle(reading(1, project: "q"), functions: 5, module: "a"))
+        XCTAssertEqual(conflict.conflicts.count, 1)
+        XCTAssertEqual(other.conflicts().count, 1)
+        XCTAssertEqual(try other.analysis(module: module("a").sha256)?.reading?.project, "p")
+        try other.collectGarbage(dryRun: false)
+        XCTAssertTrue(other.hasObject(other.conflicts()[0].artifact.sha256))
+        XCTAssertEqual(other.verify(), [])
+    }
+
+    func testOneBadEntryDoesNotStopTheRestOfABundle() throws {
+        let first = try store.putAnalysis(module: module("a"), recipe: recipe(), artifact: artifact(functions: 1))
+        let second = try store.putAnalysis(module: module("b"), recipe: recipe(), artifact: artifact(functions: 2))
+        let url = directory.appendingPathComponent("two.zip")
+        try store.exportBundle([first.key!, second.key!], to: url)
+        let other = try ContentStore(root: directory.appendingPathComponent("other", isDirectory: true))
+        try other.putAnalysis(module: module("a"), recipe: recipe(), artifact: artifact(functions: 9))
+        let result = try other.importBundle(from: url)
+        XCTAssertEqual(result.skipped.map(\.key), [first.key!.description])
+        XCTAssertEqual(result.imported.map(\.key), [second.key])
+        // The skipped artifact's object is stored all the same.
+        XCTAssertTrue(other.hasObject(first.artifact.sha256))
+    }
+
+    func testTheUEFIRecipeAndPhaseSurviveARebind() throws {
+        var uefi = recipe()
+        uefi.types = "edk2-stable202608"
+        uefi.passes = ["ApplyUefi.java"]
+        var identity = module()
+        identity.phase = "pei"
+        try store.putAnalysis(module: identity, recipe: uefi, artifact: artifact())
+        let rebound = try store.putAnalysis(module: identity, recipe: uefi, artifact: artifact(),
+                                            source: SourceIdentity(node: "0.1"))
+        XCTAssertEqual(rebound.recipe.types, "edk2-stable202608")
+        XCTAssertEqual(rebound.recipe.passes, ["ApplyUefi.java"])
+        XCTAssertEqual(try store.analysis(module: identity.sha256)?.module.phase, "pei")
     }
 
     func testTheTimestampMatchesThePythonStoresShape() {

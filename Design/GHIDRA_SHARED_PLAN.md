@@ -109,12 +109,14 @@ Verified against Ghidra 12.1.2 on this machine, the installed GhydraMCP
 - **A recipe is more than its id.** The manifest's recipe carries the exporter
   version, the Ghidra version, the EDK2 type archive (`types`) and the passes
   (`passes`) — `code_artifact.py:205`.
-- **Same key, different artifact is refused** by `putAnalysis`
-  (`ContentStore.swift:104`, `cas.py:168`) unless the caller says replace, and
-  by bundle import with no override at all (`cas.py:453`,
-  `ContentStore.swift:428`). The app imports a project's `Analyses.bundle` on
-  open and ignores a failure (`CodeAnalysisStore.swift:42`). Swift therefore
-  does write to the store, through import.
+- **The store is implemented once, and already knows readings.** `ContentStore`
+  (`Packages/CodeAnalysis`) is the only implementation; the skill's `cas.py`
+  runs it as `byteripper-cas` (`Design/CAS_SERVICE_PLAN.md`). The manifest's
+  optional `reading`, the table of §5.6 at put and at bundle import,
+  per-key import with a report, and `conflicts/` exist since `CAS_SERVICE_PLAN`
+  phase 3. The app imports a project's `Analyses.bundle` on open but does not
+  yet show what the import skipped or kept aside
+  (`CodeAnalysisStore.swift:42`).
 - **The badge matches by SHA.** `UEFICodeScan.scan` hashes candidate bodies and
   looks the digest up; `source.document`/`source.node` only say which branches
   to open first. A moved dump costs nothing.
@@ -537,9 +539,9 @@ GhidraProjects/review-types.gdt                types shared by reviews (§6.5)
 - The store holds artifacts and review documents — what the product reads, and
   the copy of the review. Never firmware bytes.
 - A project lives beside the store, not in it.
-- Writers: the Python client library (`cas.py`), and the app through bundle
-  import, until the CAS service exists (`Design/CAS_SERVICE_PLAN.md`); both
-  apply §5.6 the same way. The owner writes nothing.
+- Writers: `byteripper-cas` (the skill's `cas.py` is its client), and the app
+  through bundle import — one implementation, `ContentStore`, so §5.6 is one
+  rule. The owner writes nothing.
 - A bundle carries the review documents its analyses' readings name, so a
   project bundle carries the reading as well as its rendering.
 
@@ -590,12 +592,11 @@ person or an agent made (`USER_DEFINED`), not what the passes produced:
 | `Skills/ghidra-uefi/scripts/ghidra_review.py` | new: a review session client (lease, rename, comment, publish, store) |
 | `Skills/ghidra-uefi/scripts/ghidra_mcp.py` | new: MCP wrapper over `/v1`, owner of the lease |
 | `Skills/ghidra-uefi/scripts/ghidra_service.py` | new in phase 3: supervisor — pool, routing, network auth |
-| `Skills/ghidra-uefi/scripts/cas.py` | `reading` in the manifest, §5.6 at put and import, `reviews/`, `conflicts/`, documents in bundles |
+| `Packages/CodeAnalysis` (`ContentStore`, `byteripper-cas`) | done: `reading`, §5.6 at put and import, `conflicts/`; to do: `reviews/` and documents in bundles |
 | `Skills/ghidra-uefi/scripts/code_artifact.py` | refuses to put a mechanical artifact over a reading; `--review` in phase 5 |
 | `Skills/ghidra-uefi/scripts/cas_cli.py` | `gh projects list/purge`, `review list/export`; `review import/diff` in phase 5 |
 | `Skills/ghidra-uefi/reference/review.md` | new: the review document's contract |
 | `Skills/ghidra-uefi/reference/ghidra.md`, `SKILL.md` | the owner, the bridge, the loop |
-| `Packages/CodeAnalysis` | `AnalysisManifest.reading` (optional field); `importBundle` per key with §5.6 and a report |
 | `ByteRipperApp/Pane/CodeAnalysisStore.swift` | report skipped and conflicting keys of a project's bundle |
 | Code panel (`Packages/CodeView`, `MainViewController+CodeScreen.swift`) | an open panel reloads when its analysis's manifest changes, keeping the function, the place and the history by address |
 | Code screen state (`FragmentPanels.swift`, workspace) | the place is kept by address (`CodeLocation`), not by index — independent of this plan, needed before it |
@@ -694,8 +695,8 @@ Each phase leaves something usable.
    shows it. No supervisor, no lease yet.
 2. **Writes, publish, readings.** Lease; rename function/parameter/local with
    author and reason; signature, comment, data, type with the review type
-   archive; save; `HarvestReview`; the manifest's `reading` and §5.6 in
-   `cas.py` and `ContentStore`; the open Code panel following a republish; the
+   archive; save; `HarvestReview`; `reviews/` and documents in bundles (the
+   manifest's `reading` and §5.6 already exist); the open Code panel following a republish; the
    place kept by address; `ghidra_review.py` and `ghidra_mcp.py`. The main
    workflow works end to end on one machine.
 3. **Supervisor and network.** Pool, routing, eviction by the rules of §6.4,

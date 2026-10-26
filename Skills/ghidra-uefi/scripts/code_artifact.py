@@ -129,7 +129,11 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--name", help="what to call the module (default: the file name)")
     parser.add_argument("--store", type=Path, default=default_store())
     parser.add_argument("--ghidra-home", help="the Ghidra installation")
-    parser.add_argument("--force", action="store_true", help="analyze even if the artifact exists")
+    parser.add_argument("--force", action="store_true",
+                        help="analyze even if the artifact exists, and replace it")
+    parser.add_argument("--discard-reading", action="store_true",
+                        help="with --force, replace even a reviewed reading of the module "
+                             "with Ghidra's own names")
     parser.add_argument(
         "--document",
         help="the ByteRipper document the module came from, by the file name the UEFI "
@@ -152,6 +156,14 @@ def main(argv: list[str]) -> int:
     digest = hashlib.sha256(blob).hexdigest()
     name = args.name or module.stem
     store = cas.Store(args.store)
+    try:
+        return run(args, module, blob, digest, name, store)
+    except cas.CASError as error:
+        print(f"the store refused: {error}", file=sys.stderr)
+        return 1
+
+
+def run(args, module: Path, blob: bytes, digest: str, name: str, store: cas.Store) -> int:
     # A stored analysis from the current exporter and the same UEFI pass
     # answers the question without starting Ghidra. One from an older
     # exporter is left alone and a new recipe is added beside it.
@@ -226,6 +238,7 @@ def main(argv: list[str]) -> int:
         artifact=raw,
         source={"path": str(module), "document": args.document, "node": args.node},
         replace=args.force,
+        discard_reading=args.force and args.discard_reading,
     )
     print(json.dumps(manifest, indent=2))
     return 0

@@ -7,8 +7,13 @@ import Foundation
 /// The layout is the one `Skills/ghidra-uefi/reference/cas.md` describes:
 /// immutable objects under `objects/<sha256>`, a manifest for each analysis
 /// under `analyses/<module-sha>/<recipe>/manifest.json`, and named references
-/// under `refs/`. The directory is the index; a reader walks it, and the
-/// Python collector and a Swift reader agree on the bytes.
+/// under `refs/`, and another project's reading of an analysis kept aside under
+/// `conflicts/<module-sha>/<recipe>/<artifact-sha>.json`. The directory is the
+/// index; a reader walks it.
+///
+/// This is the store's one implementation. The skill's Python reaches it
+/// through the `byteripper-cas` tool (`CASCommand`), so a rule — which reading
+/// replaces which — is written once.
 ///
 /// Writes are atomic and the writes that can race — a manifest, a reference, a
 /// collection — take a file lock. Reads verify an object against its hash. The
@@ -35,6 +40,7 @@ public struct ContentStore: Sendable {
     public var analysesURL: URL { root.appendingPathComponent("analyses", isDirectory: true) }
     public var refsURL: URL { root.appendingPathComponent("refs", isDirectory: true) }
     public var tmpURL: URL { root.appendingPathComponent("tmp", isDirectory: true) }
+    public var conflictsURL: URL { root.appendingPathComponent("conflicts", isDirectory: true) }
     private var lockURL: URL { root.appendingPathComponent(".lock") }
 
     public func objectURL(_ digest: SHA256Digest) -> URL {
@@ -100,10 +106,21 @@ public struct ContentStore: Sendable {
 
     // MARK: - Analyses
 
+    /// Store an artifact and the manifest that names it.
+    ///
+    /// The same artifact under the same key is the same analysis: what the
+    /// caller names of its source is merged in, and a reading is adopted only
+    /// by an analysis that had none. Another artifact replaces the stored one
+    /// when its reading is newer (`ReadingOrder.newer`). Otherwise it is
+    /// refused, except that `replace` lets a mechanical artifact replace a
+    /// mechanical one — a re-run by hand — and `discardReading` lets anything
+    /// replace anything.
     @discardableResult
     public func putAnalysis(module: ModuleIdentity, recipe: AnalysisRecipe,
                             artifact: Data, source: SourceIdentity = SourceIdentity(),
-                            replace: Bool = false) throws -> AnalysisManifest {
+                            reading: AnalysisReading? = nil,
+                            replace: Bool = false,
+                            discardReading: Bool = false) throws -> AnalysisManifest {
         guard SafeName.isSafe(recipe.id) else {
             throw CodeAnalysisError.invalidRecipe(recipe.id)
         }
@@ -115,7 +132,8 @@ public struct ContentStore: Sendable {
                                        mediaType: "application/json"),
             source: source,
             analyzedAt: Timestamps.now(),
-            stats: ArtifactStats.count(in: artifact))
+            stats: ArtifactStats.count(in: artifact),
+            reading: reading)
         let url = manifestURL(manifest.key!)
         return try withLock {
             if FileManager.default.fileExists(atPath: url.path) {
@@ -139,15 +157,36 @@ public struct ContentStore: Sendable {
                         merged.node = node
                         rebound = true
                     }
-                    guard rebound else { return existing }
                     var updated = existing
+                    if existing.reading == nil, let reading {
+                        updated.reading = reading
+                        rebound = true
+                    }
+                    guard rebound else { return existing }
                     updated.source = merged
                     try atomicWrite(try encoder.encode(updated), to: url)
                     return updated
                 }
-                if !replace {
-                    throw CodeAnalysisError.analysisMismatch(
-                        "\(manifest.key!) already exists with another artifact; pass replace")
+                if !discardReading {
+                    let key = manifest.key!
+                    switch ReadingOrder(incoming: reading, stored: existing.reading) {
+                    case .newer:
+                        break
+                    case .unreviewed:
+                        guard replace else {
+                            throw CodeAnalysisError.analysisMismatch(
+                                "\(key) already exists with another artifact; pass replace")
+                        }
+                    case .notNewer:
+                        throw CodeAnalysisError.analysisMismatch(
+                            "\(key) already holds revision \(existing.reading!.rev) of this reading")
+                    case .unreviewedOverReviewed:
+                        throw CodeAnalysisError.analysisMismatch(
+                            "\(key) holds a reviewed reading; pass discard-reading to replace it")
+                    case .otherProject:
+                        throw CodeAnalysisError.analysisMismatch(
+                            "\(key) holds another project's reading; pass discard-reading to replace it")
+                    }
                 }
             }
             try atomicWrite(try encoder.encode(manifest), to: url)
@@ -212,6 +251,29 @@ public struct ContentStore: Sendable {
     }
 
     public func key(of manifest: AnalysisManifest) -> AnalysisKey? { manifest.key }
+
+    /// The readings a bundle import kept aside, because another project's
+    /// reading of the same analysis is stored.
+    public func conflicts() -> [AnalysisManifest] {
+        var found: [AnalysisManifest] = []
+        for module in contents(of: conflictsURL) where isDirectory(module) {
+            for recipe in contents(of: module) where isDirectory(recipe) {
+                for url in contents(of: recipe) where url.pathExtension == "json" {
+                    if let manifest = try? decodeManifest(at: url) { found.append(manifest) }
+                }
+            }
+        }
+        return found.sorted {
+            ($0.key?.description ?? "", $0.artifact.sha256) < ($1.key?.description ?? "", $1.artifact.sha256)
+        }
+    }
+
+    private func conflictURL(for manifest: AnalysisManifest, key: AnalysisKey) -> URL {
+        conflictsURL
+            .appendingPathComponent(key.module.hex, isDirectory: true)
+            .appendingPathComponent(key.recipe, isDirectory: true)
+            .appendingPathComponent("\(manifest.artifact.sha256.hex).json", isDirectory: false)
+    }
 
     // MARK: - References
 
@@ -294,6 +356,11 @@ public struct ContentStore: Sendable {
             }
         }
 
+        for manifest in conflicts() where !hasObject(manifest.artifact.sha256) {
+            problems.append("conflicts/\(manifest.key?.description ?? "?"): artifact "
+                            + "\(manifest.artifact.sha256.hex) is missing")
+        }
+
         let refEntries = contents(of: refsURL).filter { $0.pathExtension == "json" }
         for url in refEntries {
             guard let data = try? Data(contentsOf: url),
@@ -331,7 +398,9 @@ public struct ContentStore: Sendable {
             keep = all
             drop = []
         }
+        // A reading kept aside is still a person's to choose; its object stays.
         let keepObjects = Set(keep.map(\.artifact.sha256))
+            .union(conflicts().map(\.artifact.sha256))
         let orphanObjects = contents(of: objectsURL).filter {
             guard let digest = SHA256Digest(hex: $0.lastPathComponent) else { return true }
             return !keepObjects.contains(digest)
@@ -389,10 +458,14 @@ public struct ContentStore: Sendable {
         return info
     }
 
-    /// Read a bundle, verify every object and store what is not already here.
-    /// An analysis already present with another artifact is refused.
+    /// Read a bundle and take each analysis it carries by the rule
+    /// `putAnalysis` follows: a new key or a newer reading is written, the
+    /// same artifact is left as it is, another project's reading is kept
+    /// aside under `conflicts/`, and the rest is skipped. Every object that
+    /// matches its hash is stored, so a workspace naming a skipped artifact
+    /// still opens it. Only a bundle with no readable `bundle.json` throws.
     @discardableResult
-    public func importBundle(from url: URL) throws -> [AnalysisManifest] {
+    public func importBundle(from url: URL) throws -> BundleImport {
         let entries = try BundleArchive.read(from: url)
         guard let bundleData = entries["bundle.json"],
               let bundle = try? decoder.decode(BundleInfo.self, from: bundleData) else {
@@ -401,41 +474,59 @@ public struct ContentStore: Sendable {
         guard bundle.schema == CodeAnalysisSchema.current else {
             throw CodeAnalysisError.bundleInvalid("schema \(bundle.schema) is not \(CodeAnalysisSchema.current)")
         }
-        var imported: [AnalysisManifest] = []
+        var result = BundleImport()
         for key in bundle.analyses {
-            let manifestPath = "analyses/\(key.description)/manifest.json"
+            let name = key.description
+            let manifestPath = "analyses/\(name)/manifest.json"
             guard let manifestData = entries[manifestPath],
                   let manifest = try? decoder.decode(AnalysisManifest.self, from: manifestData) else {
-                throw CodeAnalysisError.bundleInvalid("\(manifestPath) is missing or unreadable")
+                result.skipped.append(.init(key: name, reason: "\(manifestPath) is missing or unreadable"))
+                continue
             }
             guard manifest.schema == CodeAnalysisSchema.current else {
-                throw CodeAnalysisError.bundleInvalid("\(key.description): schema is not \(CodeAnalysisSchema.current)")
+                result.skipped.append(.init(key: name, reason: "schema is not \(CodeAnalysisSchema.current)"))
+                continue
             }
             guard manifest.key == key else {
-                throw CodeAnalysisError.bundleInvalid("\(key.description): manifest names another analysis")
+                result.skipped.append(.init(key: name, reason: "the manifest names another analysis"))
+                continue
             }
             let objectPath = "objects/\(manifest.artifact.sha256.hex)"
-            guard let artifact = entries[objectPath] else {
-                throw CodeAnalysisError.bundleInvalid("\(objectPath) is missing")
-            }
-            guard SHA256Digest(data: artifact) == manifest.artifact.sha256 else {
-                throw CodeAnalysisError.bundleInvalid("\(objectPath) does not match its hash")
+            guard let artifact = entries[objectPath],
+                  SHA256Digest(data: artifact) == manifest.artifact.sha256 else {
+                result.skipped.append(.init(key: name, reason: "\(objectPath) is missing or does not match its hash"))
+                continue
             }
             try putObject(artifact)
             let target = manifestURL(key)
-            if FileManager.default.fileExists(atPath: target.path) {
-                let existing = try decodeManifest(at: target)
-                if existing.artifact.sha256 != manifest.artifact.sha256 {
-                    throw CodeAnalysisError.analysisMismatch(
-                        "\(key.description) is already present with another artifact")
+            try withLock {
+                guard FileManager.default.fileExists(atPath: target.path) else {
+                    try atomicWrite(manifestData, to: target)
+                    result.imported.append(manifest)
+                    return
                 }
-                imported.append(existing)
-                continue
+                let existing = try decodeManifest(at: target)
+                if existing.artifact.sha256 == manifest.artifact.sha256 {
+                    result.unchanged.append(existing)
+                    return
+                }
+                switch ReadingOrder(incoming: manifest.reading, stored: existing.reading) {
+                case .newer:
+                    try atomicWrite(manifestData, to: target)
+                    result.imported.append(manifest)
+                case .notNewer:
+                    result.skipped.append(.init(key: name, reason: "the store holds a later revision of this reading"))
+                case .unreviewedOverReviewed:
+                    result.skipped.append(.init(key: name, reason: "the store holds a reviewed reading"))
+                case .unreviewed:
+                    result.skipped.append(.init(key: name, reason: "the store holds another analysis"))
+                case .otherProject:
+                    try atomicWrite(manifestData, to: conflictURL(for: manifest, key: key))
+                    result.conflicts.append(.init(key: name, reason: "the store holds another project's reading"))
+                }
             }
-            try atomicWrite(manifestData, to: target)
-            imported.append(manifest)
         }
-        return imported
+        return result
     }
 
     // MARK: - Files

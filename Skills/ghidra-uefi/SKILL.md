@@ -31,13 +31,13 @@ with no app running.
 | `scripts/ExportCode.java` | a Ghidra script | the full code artifact: every instruction, references, C with its token spans, named data, strings, POST writes and status-code candidates |
 | `scripts/code_artifact.py` | one Ghidra run per module | analyzes once and stores the artifact under the module's SHA-256 |
 | `scripts/code_query.py` | stdlib, no Ghidra | reads the stored artifact: functions, disassembly, C, xrefs, the uses of an address, search, post-codes |
-| `scripts/cas.py` | stdlib | the local content-addressed store: objects, analyses, references, GC, bundles |
-| `scripts/cas_cli.py` | stdlib | the store's command line: list, show, verify, gc, ref, export, import |
+| `scripts/cas.py` | `byteripper-cas` (built once with `swift build`) | the client of the local content-addressed store, which is implemented once in `Packages/CodeAnalysis` |
+| `scripts/cas_cli.py` | `cas.py` | the store's command line: list, show, verify, gc, ref, export, import, conflicts |
 | `scripts/module_scan.py` | stdlib, offline only | finds PE32/TE images in a dump without the app; opens LZMA, not Tiano |
 | `reference/uefi-images.md` | — | the structures and the addresses |
 | `reference/ghidra.md` | — | GhydraMCP tools, import rules, pitfalls |
 | `reference/code-artifact.md` | — | the artifact's schema, queries and limits |
-| `reference/cas.md` | — | the local CAS: layout, keys, references, GC, bundles |
+| `reference/cas.md` | — | the local CAS: the tool, layout, keys, readings, references, GC, bundles |
 
 ## 1. Find the module in ByteRipper
 
@@ -170,7 +170,8 @@ python3 Skills/ghidra-uefi/scripts/cas_cli.py import analyses.zip
 `gc` is a dry run unless `--apply`; `--analyses` also drops analyses no
 reference names and refuses to do that on a store with no references. The
 bundle is how a project carries its analyses; `reference/cas.md` has the layout
-and the rules. The CAS tests run without Ghidra:
+and the rules. The first store command builds `byteripper-cas` (about 20 s,
+once; it needs Xcode's `swift`). The CAS tests run without Ghidra:
 
 ```bash
 python3 -m unittest discover -s Skills/ghidra-uefi/tests
