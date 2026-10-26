@@ -32,11 +32,17 @@ def artifact(functions: int) -> bytes:
 
 
 class FakeOwner(BaseHTTPRequestHandler):
-    """Answers /v1/hello and /v1/publish with whatever `served` holds."""
+    """Answers the bridge's hello, publish and review with what the class
+    attributes hold."""
     served = artifact(1)
+    document = b'{"functions": {}}'
+    reviewed = False
 
     def do_GET(self):
-        self._answer(json.dumps({"protocol": 1}).encode() if self.path == "/v1/hello" else None)
+        if self.path == "/v1/hello":
+            self._answer(json.dumps({"protocol": 1}).encode())
+        else:
+            self._answer(FakeOwner.document if self.path == "/v1/review" else None)
 
     def do_POST(self):
         self._answer(FakeOwner.served if self.path == "/v1/publish" else None)
@@ -47,6 +53,7 @@ class FakeOwner(BaseHTTPRequestHandler):
             body = json.dumps({"error": "no such call"}).encode()
         else:
             self.send_response(200)
+            self.send_header("X-Owner-Reviewed", "true" if FakeOwner.reviewed else "false")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -57,6 +64,8 @@ class FakeOwner(BaseHTTPRequestHandler):
 
 class OwnerClientTests(unittest.TestCase):
     def setUp(self):
+        FakeOwner.reviewed = False
+        FakeOwner.document = b'{"functions": {}}'
         self.directory = tempfile.TemporaryDirectory()
         root = Path(self.directory.name)
         self.store = cas.Store(root / "store")
@@ -104,6 +113,25 @@ class OwnerClientTests(unittest.TestCase):
         FakeOwner.served = artifact(4)
         with self.assertRaises(cas.CASError):
             ghidra_owner.publish(self.project, self.store)
+
+    def testAReviewedProgramPublishesARevisionOfItsReading(self):
+        FakeOwner.served = artifact(1)
+        ghidra_owner.publish(self.project, self.store)       # before the review: mechanical
+        FakeOwner.reviewed = True
+        FakeOwner.document = b'{"functions": {"0x0": {"name": "Init"}}}'
+        FakeOwner.served = artifact(2)
+        first = ghidra_owner.publish(self.project, self.store)
+        self.assertEqual(first["reading"]["rev"], 1, "a reading replaces the mechanical artifact")
+        self.assertEqual(self.store.get_object(first["reading"]["review"]), FakeOwner.document)
+        again = ghidra_owner.publish(self.project, self.store)
+        self.assertEqual(again["reading"]["rev"], 1, "an unchanged program is the same revision")
+        # A comment: the document changes, the artifact need not.
+        FakeOwner.document = b'{"comments": [{"address": "0x0"}], "functions": {"0x0": {"name": "Init"}}}'
+        third = ghidra_owner.publish(self.project, self.store)
+        self.assertEqual(third["reading"]["rev"], 2)
+        self.assertEqual(third["artifact"], first["artifact"])
+        self.assertEqual(self.store.analysis(self.sha)["reading"]["rev"], 2)
+        self.assertTrue(self.project.state()["reviewed"])
 
     def testAnOwnerWhoseProcessIsGoneIsNotRunning(self):
         self.project.owner_path.write_text(json.dumps({"pid": 999999, "port": 1}))

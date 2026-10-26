@@ -123,7 +123,8 @@ byteripper-cas [--store <root>] [--no-create] <command>
 - Objects are named by their SHA-256, written atomically, verified on read.
 - A manifest is written atomically under the store's `flock`.
 - The same artifact under the same key is the same analysis: a put merges the
-  source it names and adopts a reading only where the stored analysis had none.
+  source it names and takes a newer reading — over none, or a later revision of
+  the same project.
 - Another artifact under the same key is decided by the readings — the table is
   in `Skills/ghidra-uefi/reference/cas.md` and in the Ghidra plan §5.6.
 - A bundle import goes analysis by analysis and reports what it did with each;

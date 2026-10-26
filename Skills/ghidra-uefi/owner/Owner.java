@@ -2,16 +2,19 @@
 // long-lived headless Ghidra that holds one program of a kept project and
 // serves the bridge (§7) on a loopback port.
 //
-// Phase 1: the reads and publish. Publish saves the program if it changed,
-// runs ExportCode on it in this process, and returns the artifact; the client
-// stores it. Nothing here writes to the store, and nothing here runs a script
-// a client names.
+// The reads; the writes of a review (phase 2a) — function and variable
+// names with who made them and why, signatures, comments, data, types — each
+// in a transaction of its own and only under the write lease; and publish,
+// which saves the program if it changed, runs ExportCode on it in this
+// process, harvests the review document (Harvest.java) and returns the
+// artifact. The client stores both. Nothing here writes to the store, and
+// nothing here runs a script a client names.
 //
 // How it is built and run is `scripts/ghidra_owner.py`'s business: javac
 // against every jar of the Ghidra install, then
 //
 //   java -cp <ghidra jars>:owner.jar Owner --project-dir D --project-name N
-//        --program P --module SHA [--port 0] [--idle SECONDS]
+//        --program P --module SHA --project-id UUID [--port 0] [--idle SECONDS]
 //
 // It prints `OWNER READY <port>` once it serves. The plain classpath and the
 // DomainFile open are the two findings of phase 0 (plan §3): a class on the
@@ -22,13 +25,18 @@
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import ghidra.GhidraApplicationLayout;
 import ghidra.app.decompiler.DecompInterface;
 import ghidra.app.decompiler.DecompileResults;
+import ghidra.app.cmd.function.ApplyFunctionSignatureCmd;
 import ghidra.app.script.GhidraState;
+import ghidra.app.util.cparser.C.CParser;
+import ghidra.app.util.cparser.C.CParserUtils;
 import ghidra.app.script.ScriptControls;
 import ghidra.base.project.GhidraProject;
 import ghidra.framework.Application;
@@ -36,6 +44,11 @@ import ghidra.framework.HeadlessGhidraApplicationConfiguration;
 import ghidra.framework.model.DomainFile;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.data.DataType;
+import ghidra.program.model.data.DataTypeConflictHandler;
+import ghidra.program.model.data.DataUtilities;
+import ghidra.program.model.data.FunctionDefinitionDataType;
+import ghidra.program.model.listing.CodeUnit;
+import ghidra.program.model.listing.CommentType;
 import ghidra.program.model.listing.Data;
 import ghidra.program.model.listing.DataIterator;
 import ghidra.program.model.listing.Function;
@@ -44,9 +57,14 @@ import ghidra.program.model.listing.InstructionIterator;
 import ghidra.program.model.listing.Parameter;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.pcode.HighFunction;
+import ghidra.program.model.pcode.HighFunctionDBUtil;
 import ghidra.program.model.pcode.HighSymbol;
 import ghidra.program.model.symbol.Reference;
 import ghidra.program.model.symbol.ReferenceIterator;
+import ghidra.program.model.symbol.SourceType;
+import ghidra.program.model.symbol.Symbol;
+import ghidra.program.model.util.StringPropertyMap;
+import ghidra.util.data.DataTypeParser;
 import ghidra.util.task.TaskMonitor;
 
 import java.io.File;
@@ -58,6 +76,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.UUID;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -72,6 +91,13 @@ public class Owner {
     private final Map<Address, DecompileResults> decompiled = new HashMap<>();
     private long decompiledAt = -1;
     private volatile long lastRequest = System.currentTimeMillis();
+    // The write lease (§7.3): one holder at a time, renewed by every write.
+    private String leaseToken;
+    private String leaseHolder;
+    private long leaseExpires;
+    private long leaseTtl;
+    // The review document of the last publish, for GET /v1/review.
+    private Harvest.Document published;
     private final Gson gson = new GsonBuilder().disableHtmlEscaping().setPrettyPrinting().create();
 
     Owner(Map<String, String> options) {
@@ -84,7 +110,7 @@ public class Owner {
             if (!args[i].startsWith("--")) throw new IllegalArgumentException("unexpected " + args[i]);
             options.put(args[i].substring(2), args[i + 1]);
         }
-        for (String required : new String[] {"project-dir", "project-name", "program", "module"}) {
+        for (String required : new String[] {"project-dir", "project-name", "program", "module", "project-id"}) {
             if (!options.containsKey(required)) throw new IllegalArgumentException("--" + required + " is required");
         }
         new Owner(options).run();
@@ -99,6 +125,16 @@ public class Owner {
         program = (Program) file.getDomainObject(this, true, false, TaskMonitor.DUMMY);
         decompiler = new DecompInterface();
         decompiler.openProgram(program);
+        // What the program held before anyone reviewed it — the loader's
+        // comments, ApplyUefi's types — so a harvest holds only the review.
+        int transaction = program.startTransaction("baseline");
+        boolean recorded = false;
+        try {
+            recorded = Harvest.recordBaseline(program);
+        } finally {
+            program.endTransaction(transaction, recorded);
+        }
+        if (recorded) program.save("baseline", TaskMonitor.DUMMY);
 
         int port = Integer.parseInt(options.getOrDefault("port", "0"));
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
@@ -117,6 +153,12 @@ public class Owner {
                 }
             }, idle, Math.max(1, idle / 4), TimeUnit.SECONDS);
         }
+        // An expired lease saves what its holder changed; it does not publish:
+        // there is no client to hand an artifact to (§5.4). Run on the server's
+        // own thread, so it never lands in the middle of a change.
+        Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(() -> {
+            server.getExecutor().execute(this::expireLease);
+        }, 5, 5, TimeUnit.SECONDS);
         System.out.println("OWNER READY " + server.getAddress().getPort());
         System.out.flush();
     }
@@ -156,8 +198,29 @@ public class Owner {
                 if (path.equals("/v1/xrefs")) { json(exchange, 200, xrefs(query)); return; }
                 if (path.equals("/v1/data")) { json(exchange, 200, data(query, false)); return; }
                 if (path.equals("/v1/strings")) { json(exchange, 200, data(query, true)); return; }
+                if (path.equals("/v1/review")) { review(exchange); return; }
+            } else if (method.equals("DELETE") && path.equals("/v1/lease")) {
+                json(exchange, 200, release(exchange));
+                return;
             } else if (method.equals("POST")) {
                 if (path.equals("/v1/publish")) { publish(exchange); return; }
+                if (path.equals("/v1/lease")) { lease(exchange, body(exchange)); return; }
+                JsonObject write = switch (path) {
+                    case "/v1/rename/function" -> write(exchange, this::renameFunction);
+                    case "/v1/rename/variable" -> write(exchange, this::renameVariable);
+                    case "/v1/set/signature" -> write(exchange, this::setSignature);
+                    case "/v1/set/comment" -> write(exchange, this::setComment);
+                    case "/v1/set/data" -> write(exchange, this::setData);
+                    case "/v1/type" -> write(exchange, this::addType);
+                    case "/v1/save" -> write(exchange, body -> {
+                        if (program.isChanged()) program.save("save", TaskMonitor.DUMMY);
+                        JsonObject answer = identity();
+                        answer.addProperty("saved", true);
+                        return answer;
+                    });
+                    default -> null;
+                };
+                if (write != null) { json(exchange, 200, write); return; }
                 if (path.equals("/v1/stop")) {
                     JsonObject answer = new JsonObject();
                     answer.addProperty("stopping", true);
@@ -181,6 +244,10 @@ public class Owner {
         answer.addProperty("functions", program.getFunctionManager().getFunctionCount());
         answer.addProperty("changed", program.isChanged());
         answer.addProperty("modification", program.getModificationNumber());
+        if (leaseToken != null) {
+            answer.addProperty("lease_holder", leaseHolder);
+            answer.addProperty("lease_expires_in", Math.max(0, (leaseExpires - System.currentTimeMillis()) / 1000));
+        }
         return answer;
     }
 
@@ -188,6 +255,7 @@ public class Owner {
     private JsonObject identity() {
         JsonObject answer = new JsonObject();
         answer.addProperty("module", options.get("module"));
+        answer.addProperty("project", options.get("project-id"));
         answer.addProperty("program", program.getName());
         answer.addProperty("language", program.getLanguageID().toString());
         answer.addProperty("image_base", hex(program.getImageBase()));
@@ -352,12 +420,296 @@ public class Owner {
                            new ScriptControls(log, log, TaskMonitor.DUMMY));
             byte[] artifact = Files.readAllBytes(out.toPath());
             if (artifact.length == 0) throw new Failure(500, "the export wrote nothing");
+            published = Harvest.of(program, options.get("module"), options.get("project-id"));
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.getResponseHeaders().set("X-Owner-Modification", Long.toString(program.getModificationNumber()));
+            exchange.getResponseHeaders().set("X-Owner-Reviewed", Boolean.toString(published.reviewed));
             exchange.sendResponseHeaders(200, artifact.length);
             try (OutputStream body = exchange.getResponseBody()) { body.write(artifact); }
         } finally {
             out.delete();
+        }
+    }
+
+    /** The review document harvested by the last publish. */
+    private void review(HttpExchange exchange) throws Exception {
+        if (published == null) throw new Failure(409, "nothing was published by this owner yet");
+        exchange.getResponseHeaders().set("Content-Type", "application/json");
+        exchange.getResponseHeaders().set("X-Owner-Reviewed", Boolean.toString(published.reviewed));
+        exchange.sendResponseHeaders(200, published.bytes.length);
+        try (OutputStream body = exchange.getResponseBody()) { body.write(published.bytes); }
+    }
+
+    // MARK: - The lease
+
+    private void lease(HttpExchange exchange, JsonObject body) throws Exception {
+        expireLease();
+        String holder = string(body, "holder", "a client");
+        if (leaseToken != null) {
+            JsonObject refused = new JsonObject();
+            refused.addProperty("error", "the module is leased to " + leaseHolder);
+            refused.addProperty("holder", leaseHolder);
+            refused.addProperty("expires_in", (leaseExpires - System.currentTimeMillis()) / 1000);
+            json(exchange, 409, refused);
+            return;
+        }
+        leaseTtl = Math.max(30, Math.min(integer(body, "ttl", 900), 86400)) * 1000L;
+        leaseToken = UUID.randomUUID().toString();
+        leaseHolder = holder;
+        leaseExpires = System.currentTimeMillis() + leaseTtl;
+        System.out.println("OWNER LEASE " + holder);
+        JsonObject answer = identity();
+        answer.addProperty("token", leaseToken);
+        answer.addProperty("expires_in", leaseTtl / 1000);
+        json(exchange, 200, answer);
+    }
+
+    private JsonObject release(HttpExchange exchange) throws Exception {
+        requireLease(exchange);
+        if (program.isChanged()) program.save("lease released by " + leaseHolder, TaskMonitor.DUMMY);
+        System.out.println("OWNER RELEASE " + leaseHolder);
+        leaseToken = null;
+        leaseHolder = null;
+        JsonObject answer = identity();
+        answer.addProperty("released", true);
+        return answer;
+    }
+
+    private void expireLease() {
+        if (leaseToken == null || System.currentTimeMillis() < leaseExpires) return;
+        System.out.println("OWNER EXPIRED " + leaseHolder);
+        try {
+            if (program.isChanged()) program.save("lease of " + leaseHolder + " expired", TaskMonitor.DUMMY);
+        } catch (Exception error) {
+            System.err.println("OWNER save on expiry: " + error);
+        }
+        leaseToken = null;
+        leaseHolder = null;
+    }
+
+    private void requireLease(HttpExchange exchange) throws Failure {
+        expireLease();
+        String token = exchange.getRequestHeaders().getFirst("X-Lease");
+        if (leaseToken == null) throw new Failure(403, "take the write lease first: POST /v1/lease");
+        if (!leaseToken.equals(token)) throw new Failure(403, "the module is leased to " + leaseHolder);
+        leaseExpires = System.currentTimeMillis() + leaseTtl;
+    }
+
+    // MARK: - Writes
+
+    private interface Change {
+        JsonObject apply(JsonObject body) throws Exception;
+    }
+
+    /**
+     * One change: under the lease, in a transaction of its own that is
+     * committed only if the change succeeded. A refused change rolls back
+     * itself and nothing before it — the lesson of phase 0.
+     */
+    private JsonObject write(HttpExchange exchange, Change change) throws Exception {
+        requireLease(exchange);
+        JsonObject body = body(exchange);
+        int transaction = program.startTransaction(exchange.getRequestURI().getPath());
+        boolean done = false;
+        try {
+            JsonObject answer = change.apply(body);
+            done = true;
+            System.out.println("OWNER CHANGE " + leaseHolder + " " + exchange.getRequestURI().getPath()
+                               + " " + body);
+            return answer;
+        } finally {
+            program.endTransaction(transaction, done);
+        }
+    }
+
+    private JsonObject renameFunction(JsonObject body) throws Exception {
+        Function function = functionAt(required(body, "address"));
+        String name = required(body, "name");
+        // Ghidra would make a duplicate `Foo_1`; a client gets the refusal.
+        for (Symbol other : program.getSymbolTable().getGlobalSymbols(name)) {
+            if (!other.getAddress().equals(function.getEntryPoint())) {
+                throw new Failure(409, name + " already names " + hex(other.getAddress()));
+            }
+        }
+        try {
+            function.setName(name, SourceType.USER_DEFINED);
+        } catch (Exception error) {
+            throw new Failure(400, error.getMessage());
+        }
+        why(function.getEntryPoint(), body);
+        JsonObject answer = identity();
+        answer.addProperty("entry", hex(function.getEntryPoint()));
+        answer.addProperty("name", function.getName());
+        return answer;
+    }
+
+    /** Who made a name and why, beside the reason ApplyUefi gives its own. */
+    private void why(Address address, JsonObject body) throws Exception {
+        String reason = string(body, "reason", null);
+        String by = string(body, "by", "agent");
+        if (!by.equals("agent") && !by.equals("person")) throw new Failure(400, "by is agent or person");
+        StringPropertyMap reasons = propertyMap(Harvest.REASON);
+        if (reason != null) reasons.add(address, reason); else reasons.remove(address);
+        propertyMap(Harvest.BY).add(address, by);
+    }
+
+    private StringPropertyMap propertyMap(String name) throws Exception {
+        StringPropertyMap map = program.getUsrPropertyManager().getStringPropertyMap(name);
+        return map != null ? map : program.getUsrPropertyManager().createStringPropertyMap(name);
+    }
+
+    /**
+     * A parameter (by ordinal, or by storage) or a local (by storage and, for
+     * a register, its first use), named and perhaps typed through the
+     * decompiler, which commits it to the program. Ghidra's own names for
+     * unnamed locals renumber, so they are never accepted as an address.
+     */
+    private JsonObject renameVariable(JsonObject body) throws Exception {
+        Function function = functionAt(required(body, "function"));
+        String name = required(body, "name");
+        String storage = string(body, "storage", null);
+        String firstUse = string(body, "first_use", null);
+        Integer ordinal = body.has("ordinal") && !body.get("ordinal").isJsonNull() ? body.get("ordinal").getAsInt() : null;
+        if (storage == null && ordinal == null) throw new Failure(400, "name the variable by storage (and first_use) or ordinal");
+        DataType type = body.has("type") && !body.get("type").isJsonNull() ? type(body.get("type").getAsString()) : null;
+        DecompileResults results = decompile(function);
+        HighFunction high = results == null ? null : results.getHighFunction();
+        if (high == null) throw new Failure(500, "the function does not decompile");
+        HighSymbol match = null;
+        Iterator<HighSymbol> symbols = high.getLocalSymbolMap().getSymbols();
+        while (symbols.hasNext()) {
+            HighSymbol symbol = symbols.next();
+            boolean fits;
+            if (ordinal != null) {
+                fits = symbol.isParameter() && symbol.getCategoryIndex() == ordinal;
+            } else {
+                fits = symbol.getStorage().toString().equals(storage)
+                    && (firstUse == null || symbol.isParameter()
+                        || (symbol.getPCAddress() != null && hex(symbol.getPCAddress()).equalsIgnoreCase(firstUse)));
+            }
+            if (!fits) continue;
+            if (match != null) throw new Failure(409, "several variables are stored in " + storage + "; give first_use");
+            match = symbol;
+        }
+        if (match == null) throw new Failure(404, "no such variable in " + function.getName());
+        try {
+            HighFunctionDBUtil.updateDBVariable(match, name, type, SourceType.USER_DEFINED);
+        } catch (Exception error) {
+            throw new Failure(400, error.getMessage());
+        }
+        // The storage as it is now: a decompiler temporary becomes HASH:… once
+        // it is named, and that is what names it from here on.
+        decompiled.remove(function.getEntryPoint());
+        JsonObject answer = identity();
+        answer.addProperty("function", hex(function.getEntryPoint()));
+        answer.addProperty("name", name);
+        HighFunction after = decompile(function).getHighFunction();
+        if (after != null) {
+            Iterator<HighSymbol> now = after.getLocalSymbolMap().getSymbols();
+            while (now.hasNext()) {
+                HighSymbol symbol = now.next();
+                if (!symbol.getName().equals(name)) continue;
+                answer.addProperty("storage", symbol.getStorage().toString());
+                Address first = symbol.getPCAddress();
+                answer.addProperty("first_use", first == null ? null : hex(first));
+                answer.addProperty("parameter", symbol.isParameter());
+            }
+        }
+        return answer;
+    }
+
+    private JsonObject setSignature(JsonObject body) throws Exception {
+        Function function = functionAt(required(body, "address"));
+        FunctionDefinitionDataType signature;
+        try {
+            signature = CParserUtils.parseSignature((ghidra.app.services.DataTypeManagerService) null,
+                                                    program, required(body, "signature"), false);
+        } catch (Exception error) {
+            throw new Failure(400, "the signature does not parse: " + error.getMessage());
+        }
+        if (signature == null) throw new Failure(400, "the signature does not parse");
+        ApplyFunctionSignatureCmd command =
+            new ApplyFunctionSignatureCmd(function.getEntryPoint(), signature, SourceType.USER_DEFINED);
+        if (!command.applyTo(program)) throw new Failure(400, command.getStatusMsg());
+        if (!function.getName().equals(signature.getName()) || function.getSymbol().getSource() == SourceType.USER_DEFINED) {
+            why(function.getEntryPoint(), body);
+        }
+        JsonObject answer = identity();
+        answer.addProperty("entry", hex(function.getEntryPoint()));
+        answer.addProperty("signature", function.getPrototypeString(false, false));
+        return answer;
+    }
+
+    private JsonObject setComment(JsonObject body) throws Exception {
+        Address address = address(required(body, "address"));
+        CommentType kind;
+        try {
+            kind = CommentType.valueOf(string(body, "kind", "pre").toUpperCase());
+        } catch (IllegalArgumentException error) {
+            throw new Failure(400, "kind is pre, post, eol, plate or repeatable");
+        }
+        CodeUnit unit = program.getListing().getCodeUnitAt(address);
+        if (unit == null) throw new Failure(404, "nothing starts at " + hex(address));
+        String text = string(body, "text", null);
+        unit.setComment(kind, text == null || text.isEmpty() ? null : text);
+        JsonObject answer = identity();
+        answer.addProperty("address", hex(address));
+        answer.addProperty("kind", kind.name().toLowerCase());
+        return answer;
+    }
+
+    private JsonObject setData(JsonObject body) throws Exception {
+        Address address = address(required(body, "address"));
+        if (body.has("type") && !body.get("type").isJsonNull()) {
+            DataType type = type(body.get("type").getAsString());
+            DataUtilities.createData(program, address, type, -1,
+                                     DataUtilities.ClearDataMode.CLEAR_ALL_CONFLICT_DATA);
+        }
+        String name = string(body, "name", null);
+        if (name != null) {
+            Symbol primary = program.getSymbolTable().getPrimarySymbol(address);
+            try {
+                if (primary != null && !primary.isDynamic()) primary.setName(name, SourceType.USER_DEFINED);
+                else program.getSymbolTable().createLabel(address, name, SourceType.USER_DEFINED);
+            } catch (Exception error) {
+                throw new Failure(400, error.getMessage());
+            }
+        }
+        JsonObject answer = identity();
+        answer.addProperty("address", hex(address));
+        Data datum = program.getListing().getDefinedDataAt(address);
+        if (datum != null) answer.addProperty("type", datum.getDataType().getDisplayName());
+        return answer;
+    }
+
+    /** A structure, union, enum or typedef from C, into the program. */
+    private JsonObject addType(JsonObject body) throws Exception {
+        String c = required(body, "c");
+        DataType parsed;
+        try {
+            parsed = new CParser(program.getDataTypeManager(), true, null).parse(c);
+        } catch (Exception error) {
+            throw new Failure(400, "the C does not parse: " + error.getMessage());
+        }
+        if (parsed == null) throw new Failure(400, "the C declares no type");
+        DataType resolved = program.getDataTypeManager().resolve(parsed, DataTypeConflictHandler.REPLACE_HANDLER);
+        Harvest.recordType(program, resolved.getName(), c);
+        JsonObject answer = identity();
+        answer.addProperty("name", resolved.getName());
+        answer.addProperty("path", resolved.getPathName());
+        return answer;
+    }
+
+    private DataType type(String text) throws Failure {
+        try {
+            DataType type = new DataTypeParser(program.getDataTypeManager(), program.getDataTypeManager(),
+                                               null, DataTypeParser.AllowedDataTypes.ALL).parse(text);
+            if (type == null) throw new Failure(400, "no type " + text);
+            return type;
+        } catch (Failure failure) {
+            throw failure;
+        } catch (Exception error) {
+            throw new Failure(400, "no type " + text + ": " + error.getMessage());
         }
     }
 
@@ -420,6 +772,41 @@ public class Owner {
             builder.append(String.format("%02X", value & 0xFF));
         }
         return builder.toString();
+    }
+
+    private static JsonObject body(HttpExchange exchange) throws Failure {
+        try {
+            String text = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            if (text.isBlank()) return new JsonObject();
+            JsonElement element = JsonParser.parseString(text);
+            if (!element.isJsonObject()) throw new Failure(400, "the body is not a JSON object");
+            return element.getAsJsonObject();
+        } catch (Failure failure) {
+            throw failure;
+        } catch (Exception error) {
+            throw new Failure(400, "the body is not JSON: " + error.getMessage());
+        }
+    }
+
+    private static String required(JsonObject body, String name) throws Failure {
+        String value = string(body, name, null);
+        if (value == null || value.isEmpty()) throw new Failure(400, name + " is required");
+        return value;
+    }
+
+    private static String string(JsonObject body, String name, String fallback) {
+        JsonElement value = body.get(name);
+        return value == null || value.isJsonNull() ? fallback : value.getAsString();
+    }
+
+    private static int integer(JsonObject body, String name, int fallback) throws Failure {
+        JsonElement value = body.get(name);
+        if (value == null || value.isJsonNull()) return fallback;
+        try {
+            return value.getAsInt();
+        } catch (Exception error) {
+            throw new Failure(400, name + " is not a number");
+        }
     }
 
     private static int integer(Map<String, String> query, String name, int fallback) throws Failure {

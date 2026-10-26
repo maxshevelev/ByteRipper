@@ -90,7 +90,8 @@ project (`Design/GHIDRA_SHARED_PLAN.md` §5.6).
   find other functions, so it gets a second recipe rather than overwriting the
   first. `code_artifact.py` reuses an analysis only from the current exporter.
 - The same artifact under the same key is the same analysis: a put merges the
-  source it names, and adopts a reading only if the stored analysis had none.
+  source it names, and takes a newer reading (over none, or a later revision of
+  the same project) — a comment changes the review document, not the artifact.
 - Another artifact under the same key is decided by the two readings:
 
   | stored | incoming | put | import |

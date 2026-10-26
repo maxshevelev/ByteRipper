@@ -244,14 +244,22 @@ final class ContentStoreTests: XCTestCase {
         XCTAssertEqual(try store.analysis(module: module().sha256)?.reading, read.reading)
     }
 
-    func testTheSameArtifactAdoptsAReadingButKeepsAnExistingOne() throws {
+    /// A comment changes the review document and not the artifact: the same
+    /// artifact takes a newer reading of the same project, and nothing else.
+    func testTheSameArtifactTakesANewerReadingOnly() throws {
         try store.putAnalysis(module: module(), recipe: recipe(), artifact: artifact())
         let adopted = try store.putAnalysis(module: module(), recipe: recipe(), artifact: artifact(),
                                             reading: reading(1))
         XCTAssertEqual(adopted.reading, reading(1))
-        let kept = try store.putAnalysis(module: module(), recipe: recipe(), artifact: artifact(),
-                                         reading: reading(5))
-        XCTAssertEqual(kept.reading, reading(1))
+        let newer = try store.putAnalysis(module: module(), recipe: recipe(), artifact: artifact(),
+                                          reading: reading(5))
+        XCTAssertEqual(newer.reading, reading(5))
+        let older = try store.putAnalysis(module: module(), recipe: recipe(), artifact: artifact(),
+                                          reading: reading(2))
+        XCTAssertEqual(older.reading, reading(5))
+        let other = try store.putAnalysis(module: module(), recipe: recipe(), artifact: artifact(),
+                                          reading: reading(9, project: "q"))
+        XCTAssertEqual(other.reading, reading(5))
     }
 
     /// The table of `Design/GHIDRA_SHARED_PLAN.md` §5.6, at bundle import.

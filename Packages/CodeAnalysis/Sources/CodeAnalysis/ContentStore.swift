@@ -109,8 +109,9 @@ public struct ContentStore: Sendable {
     /// Store an artifact and the manifest that names it.
     ///
     /// The same artifact under the same key is the same analysis: what the
-    /// caller names of its source is merged in, and a reading is adopted only
-    /// by an analysis that had none. Another artifact replaces the stored one
+    /// caller names of its source is merged in, and a newer reading — over
+    /// none, or a later revision of the same project — replaces the stored
+    /// one. Another artifact replaces the stored one
     /// when its reading is newer (`ReadingOrder.newer`). Otherwise it is
     /// refused, except that `replace` lets a mechanical artifact replace a
     /// mechanical one — a re-run by hand — and `discardReading` lets anything
@@ -157,8 +158,12 @@ public struct ContentStore: Sendable {
                         merged.node = node
                         rebound = true
                     }
+                    // A newer revision of the same reading may render to the
+                    // same artifact — a comment is in the review document, not
+                    // in the artifact — and still has to name its document.
                     var updated = existing
-                    if existing.reading == nil, let reading {
+                    if let reading, reading != existing.reading,
+                       ReadingOrder(incoming: reading, stored: existing.reading) == .newer {
                         updated.reading = reading
                         rebound = true
                     }

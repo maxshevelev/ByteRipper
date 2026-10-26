@@ -642,18 +642,20 @@ GhidraProjects/review-types.gdt                types shared by reviews (§6.5)
 
 ### 9.1 The review document
 
-A JSON document per module, written by `HarvestReview.java` at every publish.
-It holds decisions only — no code, no bytes, no instructions — and only those a
-person or an agent made (`USER_DEFINED`), not what the passes produced:
+A JSON document per module, written by `owner/Harvest.java` at every publish.
+It holds decisions only — no code, no bytes, no instructions — and only those
+made after the owner first opened the program: the harvest subtracts the
+baseline it recorded then, since a pass's decisions carry `USER_DEFINED` too.
+The revision is not inside: it is the manifest's, so an unchanged review
+harvests to the same bytes whatever revision names it.
 
 ```json
 {
   "schema": 1,
   "module": { "sha256": "9c1f…", "name": "AmdSocFp6CznPei", "kind": "TE",
               "language": "x86:LE:32:default", "image_base": "0x0" },
-  "made_with": { "ghidra": "12.1.2", "exporter": 4, "types": "edk2-stable202608",
-                 "passes": ["ApplyUefi.java"] },
-  "reading": { "project": "6f0c…", "rev": 3 },
+  "made_with": { "ghidra": "12.1.2" },
+  "project": "6f0c…",
   "functions": {
     "0x9a889ee": {
       "name": "AgesaAssert", "by": "agent", "reason": "…",
@@ -827,10 +829,17 @@ already: a re-run analysis shifts indices as well.
    last publish and nothing else (§5.4). Costs on BdsDxe: step 1 54 s, owner
    start 3 s and 480 MB, a publish 12 s. No supervisor, no lease yet.
 2. **Writes, publish, readings**, in three parts that land separately:
-   - **2a — the owner writes.** Lease; rename function/parameter/local with
-     author and reason; signature, comment, data, type; save; `HarvestReview`;
-     the publish answer with artifact, document and revision; the review type
-     archive merged at publish.
+   - **2a — the owner writes — done except the type archive.** Lease; rename
+     function/parameter/local with author and reason; signature, comment,
+     data, type; save; `owner/Harvest.java`; publish with artifact and
+     document, the client numbering the revision. Still to do: the review type
+     archive merged at publish (§6.5) — a type lives in its program until then.
+     What 2a found: a pass's decisions are `USER_DEFINED` too (`ApplyUefi`
+     types the entry's parameters that way, the PE loader writes section
+     comments), so the owner records a **baseline** of the program's decisions
+     at its first open and a harvest is the program minus that baseline; and
+     Ghidra's decompiler prints `pre` comments in the C, so a comment changes
+     the artifact as well as the document.
    - **2b — the store and the app follow.** `reviews/` history with the commit
      order of §5.4 and its `gc`/`verify` rules; documents in bundles; the open
      Code panel following a republish; a code annotation's label read from the

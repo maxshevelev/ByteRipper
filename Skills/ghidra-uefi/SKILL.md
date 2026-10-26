@@ -136,8 +136,15 @@ owner that holds it open; a later `open` reuses a running one. The read calls
 decompiled C and every local's storage and first use. `publish` stores the
 program's artifact in the CAS the app reads; for an unchanged program it is
 byte for byte what `code_artifact.py` stores. The owner saves and exits after
-`--idle` seconds without a call (1800 by default). Renames through the owner
-are phase 2 of `Design/GHIDRA_SHARED_PLAN.md`.
+`--idle` seconds without a call (1800 by default).
+
+The review is made through the same owner: `rename`, `rename-var` (a local by
+`--storage` and `--first-use` as `/v1/function` lists them, a parameter by
+`--ordinal`), `comment`, `signature`, `data` and `type`. The first write takes
+the module's write lease; `publish` stores the artifact with a `reading` —
+this project's revision — and the review document; `release` publishes and
+gives the lease back. A name Ghidra would make unique (`Foo_1`) is refused,
+and so is a local named by a storage several locals share.
 
 ## The one-time code artifact
 

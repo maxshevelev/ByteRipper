@@ -1,13 +1,25 @@
 #!/usr/bin/env python3
 """A kept Ghidra project per module, and the long-lived owner that serves it.
 
-Phase 1 of `Design/GHIDRA_SHARED_PLAN.md`: one owner, the reads, and publish.
+Phases 1 and 2 of `Design/GHIDRA_SHARED_PLAN.md`: one owner, the reads, the
+review's writes, and publish.
 
     python3 ghidra_owner.py open CpuPei.te --name CpuPei --document "CSME 15.bin" --node 0.5.5.2
     python3 ghidra_owner.py status
     python3 ghidra_owner.py get <module-sha> /v1/function/0x355
+    python3 ghidra_owner.py rename <module-sha> 0x68A FindMicrocodePatch --reason "walks the FIT"
+    python3 ghidra_owner.py rename-var <module-sha> 0x68A Patch --storage EAX:4 --first-use 0x6E5
+    python3 ghidra_owner.py comment <module-sha> 0x6E5 "the patch's header"
+    python3 ghidra_owner.py signature <module-sha> 0x68A "UINT32 *FindMicrocodePatch(UINT32 Signature)"
+    python3 ghidra_owner.py data <module-sha> 0x1F2C0 --name gPatchTable --type "UINT32[4]"
+    python3 ghidra_owner.py type <module-sha> "typedef struct { UINT32 Id; UINT32 Size; } PATCH;"
     python3 ghidra_owner.py publish <module-sha>
+    python3 ghidra_owner.py release <module-sha>
     python3 ghidra_owner.py stop <module-sha>
+
+A write takes the module's write lease the first time and keeps its token in
+`lease.json` beside the project, so a run of commands shares one lease;
+`release` publishes and gives it back.
 
 `open` makes the module's project the first time — Ghidra's analysis and the
 UEFI pass in one `analyzeHeadless` run that keeps the project (step 1, §5.2) —
@@ -57,6 +69,7 @@ import uefi_types
 SCHEMA = 1
 PROJECT_NAME = "module"
 OWNER_SOURCES = [Path(__file__).resolve().parents[1] / "owner" / "Owner.java",
+                 Path(__file__).resolve().parents[1] / "owner" / "Harvest.java",
                  Path(__file__).resolve().parent / "ExportCode.java"]
 
 
@@ -132,6 +145,7 @@ class Project:
         self.dir = root / self.sha
         self.state_path = self.dir / "state.json"
         self.owner_path = self.dir / "owner.json"
+        self.lease_path = self.dir / "lease.json"
 
     @property
     def exists(self) -> bool:
@@ -208,6 +222,7 @@ class Project:
                    "-cp", os.pathsep.join([*classpath(ghidra), str(jar)]), "Owner",
                    "--project-dir", str(self.dir), "--project-name", PROJECT_NAME,
                    "--program", state["program"], "--module", self.sha,
+                   "--project-id", state["project"],
                    "--port", "0", "--idle", str(idle)]
         handle = open(log, "w", encoding="utf-8")
         process = subprocess.Popen(command, stdout=handle, stderr=subprocess.STDOUT,
@@ -249,11 +264,17 @@ class Project:
         return True
 
 
-def call(port: int, method: str, path: str, timeout: float = 600) -> bytes:
-    request = urllib.request.Request(f"http://127.0.0.1:{port}{path}", method=method,
-                                     data=b"" if method == "POST" else None)
+def call(port: int, method: str, path: str, timeout: float = 600,
+         body: dict | None = None, lease: str | None = None, headers: dict | None = None) -> bytes:
+    """One call of the bridge. `headers`, when given, receives the answer's."""
+    data = json.dumps(body).encode("utf-8") if body is not None else (b"" if method == "POST" else None)
+    request = urllib.request.Request(f"http://127.0.0.1:{port}{path}", method=method, data=data)
+    if lease:
+        request.add_header("X-Lease", lease)
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
+            if headers is not None:
+                headers.update({key.lower(): value for key, value in response.headers.items()})
             return response.read()
     except urllib.error.HTTPError as error:
         try:
@@ -265,23 +286,93 @@ def call(port: int, method: str, path: str, timeout: float = 600) -> bytes:
         raise OwnerError(f"the owner on port {port} does not answer: {error}") from error
 
 
+# -- the lease and the writes -----------------------------------------------
+
+def lease(project: Project, record: dict) -> str:
+    """The write lease's token: the one this machine's commands already hold,
+    or a new one. A lease someone else holds is refused with its holder."""
+    if project.lease_path.is_file():
+        token = json.loads(project.lease_path.read_text(encoding="utf-8")).get("token")
+        hello = json.loads(call(record["port"], "GET", "/v1/hello"))
+        if token and hello.get("lease_holder") == lease_holder():
+            return token
+    answer = json.loads(call(record["port"], "POST", "/v1/lease",
+                             body={"holder": lease_holder(), "ttl": 3600}))
+    project.lease_path.write_text(json.dumps({"token": answer["token"]}) + "\n", encoding="utf-8")
+    return answer["token"]
+
+
+def lease_holder() -> str:
+    return f"{os.environ.get('USER', 'someone')} via ghidra_owner"
+
+
+def write(project: Project, path: str, body: dict) -> dict:
+    """One change of the review, under the lease."""
+    record = project.owner()
+    if not record:
+        raise OwnerError("no owner is running for this module; open it first")
+    token = lease(project, record)
+    try:
+        answer = json.loads(call(record["port"], "POST", path, body=body, lease=token))
+    except OwnerError as error:
+        if "lease" not in str(error):
+            raise
+        # The lease expired between two commands: take it again once.
+        project.lease_path.unlink(missing_ok=True)
+        token = lease(project, record)
+        answer = json.loads(call(record["port"], "POST", path, body=body, lease=token))
+    state = project.state()
+    if not state.get("reviewed"):
+        state["reviewed"] = True
+        project.write_state(state)
+    return answer
+
+
+def release(project: Project, store: cas.Store) -> dict | None:
+    """Publish what the lease changed, then give the lease back (§7.3)."""
+    record = project.owner()
+    if not record or not project.lease_path.is_file():
+        return None
+    manifest = publish(project, store)
+    token = json.loads(project.lease_path.read_text(encoding="utf-8")).get("token")
+    try:
+        call(record["port"], "DELETE", "/v1/lease", lease=token)
+    finally:
+        project.lease_path.unlink(missing_ok=True)
+    return manifest
+
+
 # -- publish ------------------------------------------------------------------
 
 def publish(project: Project, store: cas.Store) -> dict:
-    """The program's artifact, from the owner, into the store.
+    """The program's artifact and its review document, from the owner, into
+    the store.
 
-    Phase 1 has no writes, so what is published is the mechanical reading:
-    no `reading` in the manifest. The recipe takes the exporter and the
-    Ghidra from the artifact, the types and passes from what made the project
-    (§5.2).
+    A program nobody has reviewed publishes the mechanical reading: no
+    `reading` in the manifest. A reviewed one publishes a revision of this
+    project's reading — one more than the last whenever the artifact or the
+    document changed — naming the document, which is stored first (§5.4's
+    order). The recipe takes the exporter and the Ghidra from the artifact,
+    the types and passes from what made the project (§5.2).
     """
     record = project.owner()
     if not record:
         raise OwnerError("no owner is running for this module; open it first")
     state = project.state()
+    headers: dict = {}
     with progress.Step(f"Publishing {state['module']['name']}"):
-        raw = call(record["port"], "POST", "/v1/publish", timeout=3600)
+        raw = call(record["port"], "POST", "/v1/publish", timeout=3600, headers=headers)
+        document = call(record["port"], "GET", "/v1/review")
     artifact = json.loads(raw)
+    reviewed = headers.get("x-owner-reviewed") == "true"
+    last = state.get("published") or {}
+    reading = None
+    review = None
+    if reviewed:
+        review = store.put_object(document)
+        changed = (last.get("artifact") != cas.sha256_bytes(raw) or last.get("review") != review)
+        rev = max(1, (last.get("rev") or 0) + (1 if changed else 0))
+        reading = {"project": state["project"], "rev": rev, "review": review}
     made = state["made_with"]
     recipe = code_artifact.recipe_for(artifact, made.get("types"), made.get("passes"))
     program = artifact.get("program", {})
@@ -295,9 +386,12 @@ def publish(project: Project, store: cas.Store) -> dict:
     ours = bool(stored and state.get("published")
                 and stored["artifact"]["sha256"] == state["published"].get("artifact"))
     manifest = store.put_analysis(module=module, recipe=recipe, artifact=raw,
-                                  source=state.get("source") or None, replace=ours)
+                                  source=state.get("source") or None, replace=ours,
+                                  reading=reading)
     state["published"] = {"artifact": manifest["artifact"]["sha256"], "recipe": recipe["id"],
+                          "review": review, "rev": reading["rev"] if reading else None,
                           "at": now()}
+    state["reviewed"] = reviewed
     project.write_state(state)
     return manifest
 
@@ -328,6 +422,41 @@ def main(argv: list[str]) -> int:
     get.add_argument("path")
     pub = sub.add_parser("publish", help="store the artifact of the program as it stands")
     pub.add_argument("module")
+    rename = sub.add_parser("rename", help="name a function")
+    rename.add_argument("module")
+    rename.add_argument("address")
+    rename.add_argument("name")
+    rename.add_argument("--reason")
+    rename.add_argument("--by", choices=["agent", "person"], default="agent")
+    variable = sub.add_parser("rename-var", help="name a parameter or a local, perhaps type it")
+    variable.add_argument("module")
+    variable.add_argument("function")
+    variable.add_argument("name")
+    variable.add_argument("--storage", help="as /v1/function lists it, e.g. EAX:4 or Stack[-0x18]:4")
+    variable.add_argument("--first-use", help="for a register local: the address of its first use")
+    variable.add_argument("--ordinal", type=int, help="a parameter by its position")
+    variable.add_argument("--type")
+    comment = sub.add_parser("comment", help="set or clear a listing comment")
+    comment.add_argument("module")
+    comment.add_argument("address")
+    comment.add_argument("text", help="empty clears it")
+    comment.add_argument("--kind", choices=["pre", "post", "eol", "plate", "repeatable"], default="pre")
+    signature = sub.add_parser("signature", help="a function's C signature")
+    signature.add_argument("module")
+    signature.add_argument("address")
+    signature.add_argument("signature")
+    signature.add_argument("--reason")
+    signature.add_argument("--by", choices=["agent", "person"], default="agent")
+    datum = sub.add_parser("data", help="name or type a datum")
+    datum.add_argument("module")
+    datum.add_argument("address")
+    datum.add_argument("--name")
+    datum.add_argument("--type")
+    type_ = sub.add_parser("type", help="add a structure, union, enum or typedef from C")
+    type_.add_argument("module")
+    type_.add_argument("c", help="the C text, or @file to read it from a file")
+    rel = sub.add_parser("release", help="publish and give the write lease back")
+    rel.add_argument("module")
     stop = sub.add_parser("stop", help="save and stop the module's owner")
     stop.add_argument("module")
     args = parser.parse_args(argv)
@@ -376,6 +505,32 @@ def main(argv: list[str]) -> int:
             return 0
         if args.command == "publish":
             print(json.dumps(publish(project, cas.Store(args.store)), indent=2))
+            return 0
+        writes = {
+            "rename": lambda: ("/v1/rename/function",
+                               {"address": args.address, "name": args.name,
+                                "reason": args.reason, "by": args.by}),
+            "rename-var": lambda: ("/v1/rename/variable",
+                                   {"function": args.function, "name": args.name,
+                                    "storage": args.storage, "first_use": args.first_use,
+                                    "ordinal": args.ordinal, "type": args.type}),
+            "comment": lambda: ("/v1/set/comment",
+                                {"address": args.address, "kind": args.kind, "text": args.text}),
+            "signature": lambda: ("/v1/set/signature",
+                                  {"address": args.address, "signature": args.signature,
+                                   "reason": args.reason, "by": args.by}),
+            "data": lambda: ("/v1/set/data",
+                             {"address": args.address, "name": args.name, "type": args.type}),
+            "type": lambda: ("/v1/type",
+                             {"c": Path(args.c[1:]).read_text() if args.c.startswith("@") else args.c}),
+        }
+        if args.command in writes:
+            path, body = writes[args.command]()
+            print(json.dumps(write(project, path, body), indent=2))
+            return 0
+        if args.command == "release":
+            manifest = release(project, cas.Store(args.store))
+            print(json.dumps(manifest, indent=2) if manifest else "no lease held from here")
             return 0
         if args.command == "stop":
             print("stopped" if project.stop() else "not running")
