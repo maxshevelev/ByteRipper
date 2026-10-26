@@ -13,6 +13,9 @@ final class CodeLineView: NSView {
     private var attributed = NSAttributedString()
     private var line: CTLine?
     private var links: [CodeLink] = []
+    /// The link under the pointer: drawn underlined, as a link in an IDE.
+    private(set) var hoveredLink: NSRange?
+    private var tracking: NSTrackingArea?
     /// Called with the link a click landed on.
     var onLink: ((CodeLink) -> Void)?
 
@@ -24,8 +27,35 @@ final class CodeLineView: NSView {
         attributed = CodeColors.attributed(text, tokens: tokens, font: font,
                                            links: &links, asTextLinks: false)
         line = CTLineCreateWithAttributedString(attributed)
+        hoveredLink = nil
         needsDisplay = true
         window?.invalidateCursorRects(for: self)
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let tracking { removeTrackingArea(tracking) }
+        let area = NSTrackingArea(rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited,
+                                                         .activeInActiveApp, .inVisibleRect],
+                                  owner: self, userInfo: nil)
+        addTrackingArea(area)
+        tracking = area
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        hover(at: convert(event.locationInWindow, from: nil))
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        hover(at: nil)
+    }
+
+    /// Underlines the link under `point`, or none.
+    func hover(at point: NSPoint?) {
+        let range = point.flatMap(linkRange(at:))
+        guard range != hoveredLink else { return }
+        hoveredLink = range
+        needsDisplay = true
     }
 
     override func viewDidChangeEffectiveAppearance() {
@@ -34,12 +64,27 @@ final class CodeLineView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        let height = attributed.size().height
-        attributed.draw(at: NSPoint(x: 0, y: ((bounds.height - height) / 2).rounded(.down)))
+        var shown = attributed
+        if let hoveredLink {
+            let underlined = NSMutableAttributedString(attributedString: attributed)
+            underlined.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: hoveredLink)
+            shown = underlined
+        }
+        let height = shown.size().height
+        shown.draw(at: NSPoint(x: 0, y: ((bounds.height - height) / 2).rounded(.down)))
     }
 
     /// The link under a point of the view, if the point is on one.
     func link(at point: NSPoint) -> CodeLink? {
+        guard let range = linkRange(at: point),
+              let number = attributed.attribute(CodeColors.linkKey, at: range.location,
+                                                effectiveRange: nil) as? Int,
+              links.indices.contains(number) else { return nil }
+        return links[number]
+    }
+
+    /// The characters of the link under `point`.
+    func linkRange(at point: NSPoint) -> NSRange? {
         guard let line, point.x >= 0 else { return nil }
         let index = CTLineGetStringIndexForPosition(line, CGPoint(x: point.x, y: 0))
         guard index != kCFNotFound, index < attributed.length else { return nil }
@@ -48,10 +93,13 @@ final class CodeLineView: NSView {
         var character = index
         let offset = CTLineGetOffsetForStringIndex(line, index, nil)
         if offset > point.x, character > 0 { character -= 1 }
-        guard let number = attributed.attribute(CodeColors.linkKey, at: character,
-                                                effectiveRange: nil) as? Int,
-              links.indices.contains(number) else { return nil }
-        return links[number]
+        var range = NSRange()
+        guard attributed.attribute(CodeColors.linkKey, at: character, effectiveRange: &range) != nil,
+              range.location + range.length <= attributed.length else { return nil }
+        // Past the end of the line's text is not on the link.
+        let end = CTLineGetOffsetForStringIndex(line, range.location + range.length, nil)
+        guard point.x <= end else { return nil }
+        return range
     }
 
     override func mouseDown(with event: NSEvent) {

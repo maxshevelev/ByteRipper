@@ -298,7 +298,6 @@
 "Close the tool panel" = "Закрыть инструментальную панель";
 "Close “%1$@”" = "Закрыть «%1$@»";
 "Close “%1$@”?" = "Закрыть «%1$@»?";
-"Code analysis" = "Разбор кода";
 "Code Partition ($CPD)" = "Кодовый раздел ($CPD)";
 "Collapse into the dock" = "Свернуть в Dock";
 "Collapse panel" = "Свернуть панель";
@@ -1692,8 +1691,8 @@
 "The annotation is shown beside the code and listed in the Annotations window. A double-click on it opens the code here." = "Заметка показывается рядом с кодом и в окне «Заметки». Двойной клик по ней открывает код в этом месте.";
 "The module of this code was not found in the dump it was opened over." = "Модуль этого кода не найден в дампе, над которым открыта панель.";
 "The note was made on other bytes of this module." = "Заметка сделана для других байтов этого модуля.";
+"The calls to this function; choosing one shows the call" = "Вызовы этой функции; выбор вызова показывает место вызова";
 "Callers" = "Вызывающие";
-"Functions that call this one" = "Функции, которые вызывают эту";
 "POST" = "POST";
 "POST writes" = "Записи POST";
 "Status" = "Статус";

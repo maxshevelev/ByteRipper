@@ -156,10 +156,21 @@ extension MainViewController {
 
     /// The code pane that has the keyboard — the tab's code screen or a code
     /// panel in the dock — when one has.
+    ///
+    /// Failing that, the code in front: a Code panel raised over the dump, or
+    /// the tab's own code screen with no panel over it. A click on a link
+    /// leaves the keyboard where it was, and ⌘[ must still walk the code the
+    /// reader is looking at, not the dump behind it.
     func focusedCodePane() -> CodePaneView? {
-        guard let responder = view.window?.firstResponder as? NSView else { return nil }
         let panes = [codeScreenView].compactMap { $0 } + fragments.codePanes
-        return panes.first { responder.isDescendant(of: $0) }
+        if let responder = view.window?.firstResponder as? NSView,
+           let focused = panes.first(where: { responder.isDescendant(of: $0) }) {
+            return focused
+        }
+        if let front = fragments.expanded {
+            return fragments.codePane(front)
+        }
+        return codeScreenView
     }
 
     // MARK: - Drawing the screen

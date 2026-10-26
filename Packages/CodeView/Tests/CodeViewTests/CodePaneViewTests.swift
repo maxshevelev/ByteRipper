@@ -2,6 +2,7 @@ import ALSplitView
 import AppKit
 import XCTest
 import CodeAnalysis
+import ToolModuleKit
 @testable import CodeView
 
 /// The pane the app puts beside a module's bytes: functions, the disassembly,
@@ -80,18 +81,38 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertGreaterThan(modeRect.minY, view.bounds.maxY - 80,
                              "and at the top")
 
+        // The module is the title; the versions are the small grey line
+        // under it, with no brackets.
         let name = try XCTUnwrap(first(NSTextField.self, in: view) {
             $0.stringValue == "CpuPei"
         })
         let versions = try XCTUnwrap(first(NSTextField.self, in: view) {
-            $0.stringValue == "(code-v2 · Ghidra 12.1.2)"
+            $0.stringValue == "code-v2 · Ghidra 12.1.2"
         })
         XCTAssertEqual(versions.textColor, .secondaryLabelColor)
+        XCTAssertLessThan(versions.font?.pointSize ?? 99, name.font?.pointSize ?? 0)
         let nameRect = view.convert(name.bounds, from: name)
         let versionsRect = view.convert(versions.bounds, from: versions)
-        XCTAssertEqual(nameRect.midY, versionsRect.midY, accuracy: 1,
-                       "the name and the versions share one line")
-        XCTAssertLessThan(nameRect.maxX, versionsRect.minX)
+        XCTAssertGreaterThan(nameRect.minY, versionsRect.maxY - 1, "the versions are under the name")
+        XCTAssertEqual(nameRect.minX, versionsRect.minX, accuracy: 1)
+
+        // Then, on one line and centred on it: Back, Forward, Callers; the
+        // ASM/C switch at the right.
+        let buttons = all(NSButton.self, in: view).filter { !($0 is NSPopUpButton) }
+        let back = try XCTUnwrap(buttons.first { $0.accessibilityLabel() == "Back" })
+        let forward = try XCTUnwrap(buttons.first { $0.accessibilityLabel() == "Forward" })
+        let callers = try XCTUnwrap(all(NSPopUpButton.self, in: view).first {
+            $0.menu?.items.first?.title.hasPrefix("Callers") == true
+        })
+        let rects = [back, forward, callers, mode].map { view.convert($0.bounds, from: $0) }
+        let row = nameRect.union(versionsRect)
+        for rect in rects {
+            XCTAssertEqual(rect.midY, row.midY, accuracy: 1.5, "every control is centred on the header")
+        }
+        XCTAssertLessThan(nameRect.maxX, rects[0].minX)
+        XCTAssertLessThan(rects[0].maxX, rects[1].minX + 1)
+        XCTAssertLessThan(rects[1].maxX, rects[2].minX)
+        XCTAssertLessThan(rects[2].maxX, rects[3].minX)
     }
 
 
@@ -146,7 +167,7 @@ final class CodePaneViewTests: XCTestCase {
                        "and starts where the row text does")
 
         let codeTitle = try XCTUnwrap(first(NSTextField.self, in: view) {
-            $0.stringValue == "Code analysis"
+            $0.stringValue == "CpuPei"
         })
         let headingY = view.convert(heading.alignmentRect(forFrame: heading.bounds),
                                     from: heading).midY
@@ -363,6 +384,80 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertNil(view.clickedPlace(in: functions))
         view.menuNeedsUpdate(menu)
         XCTAssertTrue(menu.items.isEmpty)
+    }
+
+    /// Callers lists calls, not callers: a function that calls twice is
+    /// two items, and choosing one goes to that call — its instruction in
+    /// the listing, the call itself in the C.
+    func testCallersListsEachCallAndGoesToIt() throws {
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        {"script_version":4,"program":{"image_base":"0x0"},
+         "functions":[
+          {"entry":"0x220","name":"FUN_00000220","callers":[],
+           "c":"void FUN_00000220(void)\\n{\\n  entry();\\n  entry();\\n}\\n",
+           "instructions":[
+            {"address":"0x220","bytes":"E8 00","mnemonic":"CALL","text":"CALL 0x00000230",
+             "references":[{"to":"0x230","type":"UNCONDITIONAL_CALL"}]},
+            {"address":"0x222","bytes":"E8 00","mnemonic":"CALL","text":"CALL 0x00000230",
+             "references":[{"to":"0x230","type":"UNCONDITIONAL_CALL"}]}]},
+          {"entry":"0x230","name":"entry","callers":["0x220"],"c":"void entry(void)\\n{\\n}\\n",
+           "instructions":[{"address":"0x230","bytes":"C3","mnemonic":"RET","text":"RET"}]}]}
+        """.utf8))
+        let view = CodePaneView(manifest: manifest(), artifact: artifact,
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 1, instruction: nil, showsC: true)
+        let callers = try XCTUnwrap(all(NSPopUpButton.self, in: view).first {
+            $0.menu?.items.first?.title.hasPrefix("Callers") == true
+        })
+        let items = try XCTUnwrap(callers.menu?.items)
+        XCTAssertEqual(items.map(\.title), ["Callers (2)", "FUN_00000220 @ 0x68", "FUN_00000220 @ 0x6A"])
+
+        _ = items[2].target?.perform(items[2].action, with: items[2])
+        XCTAssertEqual(view.selectedFunction?.name, "FUN_00000220")
+        XCTAssertEqual(view.selectedInstruction?.address, CodeAddress(0x222))
+        let textView = try XCTUnwrap(first(NSTextView.self, in: view) { _ in true })
+        let selected = (textView.string as NSString).substring(with: textView.selectedRange())
+        XCTAssertEqual(selected, "entry")
+        let second = (textView.string as NSString).range(of: "entry", options: .backwards)
+        XCTAssertEqual(textView.selectedRange(), second, "the second call, not the first")
+        XCTAssertTrue(view.canGoBack)
+    }
+
+    /// A link underlines under the pointer, in the listing and in the C.
+    func testALinkUnderlinesUnderThePointer() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try linkedArtifact(),
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
+        view.layoutSubtreeIfNeeded()
+        let listing = try XCTUnwrap(first(NSTableView.self, in: view) {
+            $0.tableColumns.first?.identifier.rawValue == "instruction"
+        })
+        let cell = try XCTUnwrap(listing.view(atColumn: 0, row: 1, makeIfNecessary: true) as? CodeLineCell)
+        cell.line.frame = NSRect(x: 0, y: 0, width: 600, height: 18)
+        let text = cell.line.string as NSString
+        let target = text.range(of: "0x6A", options: .backwards)
+        let font = NSFont.monospacedSystemFont(ofSize: ToolPanelFont.size, weight: .regular)
+        let x = NSAttributedString(string: text.substring(to: target.location + 1), attributes: [.font: font]).size().width
+        cell.line.hover(at: NSPoint(x: x, y: 9))
+        XCTAssertEqual(cell.line.hoveredLink, target)
+        cell.line.hover(at: NSPoint(x: 1, y: 9))
+        XCTAssertNil(cell.line.hoveredLink, "the address column is no link")
+
+        view.restore(function: 0, instruction: nil, showsC: true)
+        view.layoutSubtreeIfNeeded()
+        let code = try XCTUnwrap(first(CodeTextView.self, in: view) { _ in true })
+        let call = (code.string as NSString).range(of: "entry")
+        let layout = try XCTUnwrap(code.layoutManager)
+        let glyphs = layout.glyphRange(forCharacterRange: call, actualCharacterRange: nil)
+        let box = layout.boundingRect(forGlyphRange: glyphs, in: try XCTUnwrap(code.textContainer))
+        code.hover(at: NSPoint(x: box.midX + code.textContainerOrigin.x, y: box.midY + code.textContainerOrigin.y))
+        XCTAssertEqual(code.hoveredLink, call)
+        XCTAssertNotNil(layout.temporaryAttribute(.underlineStyle, atCharacterIndex: call.location,
+                                                  effectiveRange: nil))
+        code.hover(at: nil)
+        XCTAssertNil(code.hoveredLink)
     }
 
     private func linkedArtifact() throws -> CodeArtifact {

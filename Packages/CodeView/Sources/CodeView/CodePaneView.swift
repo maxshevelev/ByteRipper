@@ -56,10 +56,9 @@ import ToolModuleKit
     /// Which link each `code:N` in the C text is.
     private var cLinks: [CodeLink] = []
     private var drawnC: Int?
-    private let referencesRow = NSStackView()
     private let table = NSTableView()
     private let tableScroll = NSScrollView()
-    private let cTextView = NSTextView()
+    private let cTextView = CodeTextView()
     private let cScroll = NSScrollView()
     private let modeControl: NSSegmentedControl
     private let recipePopUp = NSPopUpButton(frame: .zero, pullsDown: false)
@@ -374,33 +373,76 @@ import ToolModuleKit
         drawNavigator()
     }
 
-    /// The callers and callees of the selected function, as short menus: a
-    /// target is one click away, and an address with no function still names
-    /// itself rather than disappearing.
+    /// The calls to the selected function, one item each: a caller that
+    /// calls it three times is three items, each naming the call's place.
+    /// Choosing one goes to the call — its instruction in the listing, the
+    /// call itself in the C. A caller Ghidra knows but whose call it could not
+    /// place (through a pointer) still leads to its function.
     private func updateReferences() {
-        guard let function = state.selectedFunction else {
-            referencesRow.isHidden = true
+        guard let index = state.function else {
+            callersButton.isHidden = true
             return
         }
-        // The callees are in the code itself: every call is a link there.
-        fill(callersButton, title: L("Callers"), with: function.callers)
-        referencesRow.isHidden = function.callers.isEmpty
+        let function = model.functions[index]
+        let calls = calls(to: index)
+        callersButton.removeAllItems()
+        let placed = Set(calls.map(\.function))
+        let unplaced = function.callers.compactMap(model.function(at:)).filter { !placed.contains($0) }
+        callersButton.menu?.addItem(NSMenuItem(title: "\(L("Callers")) (\(calls.count + unplaced.count))",
+                                               action: nil, keyEquivalent: ""))
+        for use in calls {
+            let item = NSMenuItem(title: "\(model.functions[use.function].name) @ \(model.displayAddress(use.from))",
+                                  action: #selector(callChosen(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = CallBox(use: use, callee: index)
+            callersButton.menu?.addItem(item)
+        }
+        for caller in unplaced {
+            let item = NSMenuItem(title: model.functions[caller].name,
+                                  action: #selector(callTargetChosen(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = NSNumber(value: model.functions[caller].entry.value)
+            callersButton.menu?.addItem(item)
+        }
+        callersButton.isHidden = calls.isEmpty && unplaced.isEmpty
     }
 
-    private func fill(_ button: NSPopUpButton, title: String,
-                      with addresses: [CodeAddress]) {
-        button.removeAllItems()
-        let heading = NSMenuItem(title: "\(title) (\(addresses.count))",
-                                 action: nil, keyEquivalent: "")
-        button.menu?.addItem(heading)
-        for address in addresses {
-            let item = NSMenuItem(title: model.name(for: address),
-                                  action: #selector(callTargetChosen(_:)),
-                                  keyEquivalent: "")
-            item.target = self
-            item.representedObject = NSNumber(value: address.value)
-            button.menu?.addItem(item)
+    /// The instructions that call function `index` — or jump to its entry
+    /// from another function, a tail call — in listing order.
+    private func calls(to index: Int) -> [CodeModel.Use] {
+        model.uses(of: model.functions[index].entry).filter { use in
+            let type = use.type.uppercased()
+            return type.contains("CALL") || (type.contains("JUMP") && use.function != index)
         }
+    }
+
+    @objc private func callChosen(_ sender: NSMenuItem) {
+        guard let box = sender.representedObject as? CallBox else { return }
+        goToCall(box.use, of: box.callee)
+    }
+
+    /// Goes to one call of `callee`: the calling instruction is selected, its
+    /// bytes too, and in the C the call to `callee` it is — the first, second…
+    /// of that caller's calls to it, in address order — is selected and shown.
+    func goToCall(_ use: CodeModel.Use, of callee: Int) {
+        jump {
+            select(line: use.line)
+            notifyInstruction()
+        }
+        guard showsDecompiledC, let storage = cTextView.textStorage else { return }
+        let ordinal = calls(to: callee).filter { $0.function == use.function }
+            .firstIndex { $0.line == use.line } ?? 0
+        var ranges: [NSRange] = []
+        storage.enumerateAttribute(.link, in: NSRange(location: 0, length: storage.length)) { value, range, _ in
+            guard let text = value as? String, text.hasPrefix("code:"), let number = Int(text.dropFirst(5)),
+                  cLinks.indices.contains(number), cLinks[number] == .function(callee) else { return }
+            ranges.append(range)
+        }
+        guard !ranges.isEmpty else { return }
+        let range = ranges[min(ordinal, ranges.count - 1)]
+        cTextView.setSelectedRange(range)
+        cTextView.scrollRangeToVisible(range)
+        cTextView.showFindIndicator(for: range)
     }
 
     @objc private func callTargetChosen(_ sender: NSMenuItem) {
@@ -423,6 +465,9 @@ import ToolModuleKit
     /// bytes, data selects its bytes in the hex view. The first two are
     /// places Back returns from.
     func follow(_ link: CodeLink) {
+        // The code the reader just moved in has the keyboard: ⌘[ goes back
+        // here, and the arrows move in the listing.
+        takeKeyboard()
         switch link {
         case .function(let index):
             jump { selectFunction(at: index) }
@@ -506,6 +551,14 @@ import ToolModuleKit
         } else if let function = place.function {
             follow(.function(function))
         }
+    }
+
+    /// Makes the listing — or the C, when that is showing — the first
+    /// responder, unless something in this pane already is.
+    private func takeKeyboard() {
+        guard let window else { return }
+        if let responder = window.firstResponder as? NSView, responder.isDescendant(of: self) { return }
+        window.makeFirstResponder(showsDecompiledC ? cTextView : table)
     }
 
     /// Back: the place before the last jump. View ▸ Back (⌘[) calls this
@@ -626,14 +679,23 @@ import ToolModuleKit
         codeContent.wantsLayer = true
         applyCodeBackground()
 
-        let titleLabel = label(L("Code analysis"), font: ToolPanelFont.title())
+        // The module is the title; what produced its analysis is the small
+        // grey line under it.
         let nameLabel = label(
             manifest.module.name.isEmpty ? manifest.recipe.id : manifest.module.name,
-            font: ToolPanelFont.body(weight: .medium))
-        let recipeLabel = label(recipeSummary(), font: ToolPanelFont.body(),
+            font: ToolPanelFont.title())
+        let recipeLabel = label(recipeSummary(), font: .systemFont(ofSize: max(9, ToolPanelFont.size - 2)),
                                 color: .secondaryLabelColor)
-        recipeLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         recipeLabel.lineBreakMode = .byTruncatingMiddle
+        for field in [nameLabel, recipeLabel] {
+            field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        }
+        let titleBlock = NSStackView(views: [nameLabel, recipeLabel])
+        titleBlock.orientation = .vertical
+        titleBlock.alignment = .leading
+        titleBlock.spacing = 1
+        titleBlock.setContentHuggingPriority(.required, for: .horizontal)
+        titleBlock.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         modeControl.target = self
         modeControl.action = #selector(modeChanged)
@@ -641,49 +703,55 @@ import ToolModuleKit
         modeControl.setContentHuggingPriority(.required, for: .horizontal)
         modeControl.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-        // The ASM/C switch is the screen's only format control and belongs in
-        // its top-right corner, level with the title; the dump bar carries the
-        // analysis and the fold.
-        let titleSpacer = NSView()
-        titleSpacer.setContentHuggingPriority(.init(1), for: .horizontal)
         for (button, symbol, action) in [
             (backButton, "chevron.backward", #selector(goBackClicked)),
             (forwardButton, "chevron.forward", #selector(goForwardClicked))
         ] {
-            button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+            // Large enough to hit at a glance: the size of the title's text,
+            // in the weight of the title.
+            button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
+                .withSymbolConfiguration(.init(pointSize: ToolPanelFont.titleSize + 3, weight: .semibold))
             button.imagePosition = .imageOnly
             button.isBordered = false
             button.bezelStyle = .inline
-            button.controlSize = .small
+            button.controlSize = .regular
             button.target = self
             button.action = action
             button.setContentHuggingPriority(.required, for: .horizontal)
+            button.setContentCompressionResistancePriority(.required, for: .horizontal)
         }
         // help: panel.code.navigate
         ControlHelp.describe(backButton, name: L("Back"),
                              tooltip: L("Go back to the previous place in the code (⌘[)"))
         ControlHelp.describe(forwardButton, name: L("Forward"),
                              tooltip: L("Go forward again (⌘])"))
-        let titleRow = NSStackView(views: [titleLabel, titleSpacer, backButton, forwardButton,
-                                           modeControl])
+
+        callersButton.bezelStyle = .inline
+        callersButton.isBordered = false
+        callersButton.controlSize = .small
+        callersButton.font = .systemFont(ofSize: 11)
+        callersButton.contentTintColor = .linkColor
+        // Each call item carries its own action; the button's would be sent
+        // with the button, not an item, as its sender.
+        callersButton.setContentHuggingPriority(.required, for: .horizontal)
+        ControlHelp.describe(callersButton, name: L("Callers"),
+                             tooltip: L("The calls to this function; choosing one shows the call"))
+
+        // One line, every control centred on it: the module, the way back and
+        // forward, the calls to the function; the ASM/C switch at the right.
+        let titleSpacer = NSView()
+        titleSpacer.setContentHuggingPriority(.init(1), for: .horizontal)
+        let titleRow = NSStackView(views: [titleBlock, backButton, forwardButton, callersButton,
+                                           titleSpacer, modeControl])
         titleRow.orientation = .horizontal
-        titleRow.alignment = .top
+        titleRow.alignment = .centerY
         titleRow.spacing = 8
+        titleRow.setCustomSpacing(12, after: titleBlock)
+        titleRow.setCustomSpacing(6, after: backButton)
+        titleRow.setCustomSpacing(10, after: forwardButton)
         titleRow.setContentHuggingPriority(.required, for: .vertical)
         titleRow.setContentCompressionResistancePriority(.required, for: .vertical)
-        titleLabel.setContentCompressionResistancePriority(.required, for: .vertical)
         titleRow.translatesAutoresizingMaskIntoConstraints = false
-
-        // The module and what produced the analysis read as one line: its
-        // name, then the plugin and Ghidra versions in grey parentheses.
-        let detailSpacer = NSView()
-        detailSpacer.setContentHuggingPriority(.init(1), for: .horizontal)
-        let detailRow = NSStackView(views: [nameLabel, recipeLabel, detailSpacer])
-        detailRow.orientation = .horizontal
-        detailRow.alignment = .firstBaseline
-        detailRow.spacing = 6
-        detailRow.translatesAutoresizingMaskIntoConstraints = false
-        detailRow.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         // The analysis dropdown, in the dump bar's right side. It shows the
         // recipe in front; the others are its menu.
@@ -705,26 +773,6 @@ import ToolModuleKit
         ControlHelp.describe(recipePopUp, name: L("Analysis"),
                              tooltip: L("Choose the stored analysis shown here"))
 
-        for button in [callersButton] {
-            button.bezelStyle = .inline
-            button.isBordered = false
-            button.controlSize = .small
-            button.font = .systemFont(ofSize: 11)
-            button.contentTintColor = .linkColor
-            // Each target item carries its own action; the button's would be
-            // sent with the button, not an item, as its sender.
-            button.translatesAutoresizingMaskIntoConstraints = false
-        }
-        ControlHelp.describe(callersButton, name: L("Callers"),
-                             tooltip: L("Functions that call this one"))
-        referencesRow.orientation = .horizontal
-        referencesRow.alignment = .centerY
-        referencesRow.spacing = 12
-        referencesRow.translatesAutoresizingMaskIntoConstraints = false
-        referencesRow.addArrangedSubview(callersButton)
-        referencesRow.addArrangedSubview(NSView())
-        referencesRow.isHidden = true
-
         staleLabel.font = ToolPanelFont.body()
         staleLabel.textColor = .systemOrange
         staleLabel.lineBreakMode = .byWordWrapping
@@ -732,7 +780,7 @@ import ToolModuleKit
         staleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         staleLabel.isHidden = true
 
-        let header = NSStackView(views: [titleRow, detailRow, referencesRow, staleLabel])
+        let header = NSStackView(views: [titleRow, staleLabel])
         header.orientation = .vertical
         header.alignment = .width
         header.spacing = 4
@@ -778,8 +826,6 @@ import ToolModuleKit
         ])
         header.widthAnchor.constraint(equalTo: codeStack.widthAnchor).isActive = true
         titleRow.widthAnchor.constraint(equalTo: header.widthAnchor).isActive = true
-        detailRow.widthAnchor.constraint(equalTo: header.widthAnchor).isActive = true
-        referencesRow.widthAnchor.constraint(equalTo: header.widthAnchor).isActive = true
         staleLabel.widthAnchor.constraint(equalTo: header.widthAnchor).isActive = true
 
         // The bar is part of the code panel: it stays when the dump is folded
@@ -931,7 +977,7 @@ import ToolModuleKit
         if let ghidra = manifest.recipe.ghidra, !ghidra.isEmpty {
             parts.append("Ghidra \(ghidra)")
         }
-        return "(" + parts.joined(separator: " · ") + ")"
+        return parts.joined(separator: " · ")
     }
 
     private func label(_ text: String, font: NSFont,
@@ -1003,6 +1049,7 @@ import ToolModuleKit
                 .font: font, .foregroundColor: NSColor.secondaryLabelColor
             ])
         }
+        cTextView.hover(at: nil)
         cTextView.textStorage?.setAttributedString(text)
     }
 }
@@ -1226,6 +1273,17 @@ extension CodePaneView: NSMenuDelegate {
     @objc private func annotateChosen(_ sender: NSMenuItem) {
         guard let box = sender.representedObject as? CodePlaceBox else { return }
         onAnnotate?(box.location, box.name)
+    }
+}
+
+/// A Callers item's call: where it is, and the function it calls.
+private final class CallBox: NSObject {
+    let use: CodeModel.Use
+    let callee: Int
+
+    init(use: CodeModel.Use, callee: Int) {
+        self.use = use
+        self.callee = callee
     }
 }
 

@@ -155,6 +155,27 @@ final class CodeAgentTests: XCTestCase {
         XCTAssertTrue(unknown.isError)
     }
 
+    /// View ▸ Back and Forward (⌘[ ⌘]) walk the code's own jumps while a
+    /// Code panel is in front — even with the keyboard somewhere else, as it
+    /// is after a click on a link — and the tab's places after them.
+    func testBackAndForwardWalkTheCodeInFront() async throws {
+        let controller = try open()
+        let node = try await moduleNode()
+        _ = try await client.answer("open_code", ["node": .string(node), "function": "entry"])
+        let panel = try XCTUnwrap(controller.fragments.expanded)
+        let pane = try XCTUnwrap(controller.fragments.codePane(panel))
+        pane.go(to: CodeLocation(function: CodeAddress(0x220)))
+        XCTAssertEqual(pane.selectedFunction?.name, "FUN_00000220")
+
+        controller.view.window?.makeFirstResponder(nil)
+        XCTAssertTrue(controller.canNavigateBack)
+        controller.navigateBack()
+        XCTAssertEqual(pane.selectedFunction?.name, "entry", "back in the code, not in the dump")
+        XCTAssertTrue(controller.canNavigateForward)
+        controller.navigateForward()
+        XCTAssertEqual(pane.selectedFunction?.name, "FUN_00000220")
+    }
+
     // MARK: - Annotations on code
 
     func testAnAnnotationOnCodeOpensTheCodePanelThere() async throws {

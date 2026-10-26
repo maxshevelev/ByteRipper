@@ -2,25 +2,53 @@ import AppKit
 import AppPalette
 import CodeAnalysis
 
-/// The colours a token kind is drawn in. System colours, so light and dark
-/// appearance and the accessibility contrast settings come with them.
+/// How a token kind is drawn: Xcode's own source editor theme — Default
+/// (Light) and Default (Dark), switching with the appearance — with keywords
+/// in bold, so the code reads the way a reader of C in Xcode expects.
+///
+/// The module's own functions and data take Xcode's *project* colours (its
+/// function names, its globals); the types and the rest of the language its
+/// *other* colours. Locals and parameters are plain text, as in Xcode.
 enum CodeColors {
     static func color(for kind: CodeToken.Kind) -> NSColor {
         switch kind {
-        case .keyword, .mnemonic: .systemPink
-        case .type: .systemPurple
-        case .function: .linkColor
-        case .global: .systemTeal
-        case .label: .systemTeal
-        case .constant: .systemOrange
-        case .string: .systemRed
-        case .comment: .systemGreen
-        case .parameter: .systemBrown
-        case .local: .labelColor
+        case .keyword, .mnemonic: keyword
+        case .type: type
+        case .function: function
+        case .global, .label: global
+        case .constant: number
+        case .string: string
+        case .comment: comment
+        case .parameter, .local: .labelColor
         case .address: .secondaryLabelColor
         case .bytes: .tertiaryLabelColor
         case .note: ZoneColors.agent
         case .personNote: ZoneColors.person
+        }
+    }
+
+    /// Whether a kind is set in bold: the keywords, and an instruction's
+    /// mnemonic, which is the listing's keyword.
+    static func isBold(_ kind: CodeToken.Kind) -> Bool {
+        kind == .keyword || kind == .mnemonic
+    }
+
+    // Xcode's Default (Light) and Default (Dark) source colours.
+    static let keyword = themed(light: 0x9B2393, dark: 0xFC5FA3)
+    static let type = themed(light: 0x3900A0, dark: 0xD0A8FF)
+    static let function = themed(light: 0x326D74, dark: 0x67B7A4)
+    static let global = themed(light: 0x0F68A0, dark: 0x41A1C0)
+    static let number = themed(light: 0x1C00CF, dark: 0xD0BF69)
+    static let string = themed(light: 0xC41A16, dark: 0xFC6A5D)
+    static let comment = themed(light: 0x5D6C79, dark: 0x6C7986)
+
+    private static func themed(light: UInt32, dark: UInt32) -> NSColor {
+        NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            let value = isDark ? dark : light
+            return NSColor(srgbRed: CGFloat((value >> 16) & 0xFF) / 255,
+                           green: CGFloat((value >> 8) & 0xFF) / 255,
+                           blue: CGFloat(value & 0xFF) / 255, alpha: 1)
         }
     }
 
@@ -33,9 +61,11 @@ enum CodeColors {
             .font: font, .foregroundColor: NSColor.labelColor
         ])
         let length = string.length
+        let bold = NSFont.monospacedSystemFont(ofSize: font.pointSize, weight: .bold)
         for token in tokens where token.start + token.length <= length {
             let range = NSRange(location: token.start, length: token.length)
             string.addAttribute(.foregroundColor, value: color(for: token.kind), range: range)
+            if isBold(token.kind) { string.addAttribute(.font, value: bold, range: range) }
             guard let link = token.link else { continue }
             string.addAttribute(linkKey, value: links.count, range: range)
             if asTextLinks {

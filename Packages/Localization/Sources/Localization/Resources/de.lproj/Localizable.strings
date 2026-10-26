@@ -298,7 +298,6 @@
 "Close the tool panel" = "Werkzeugbereich schließen";
 "Close “%1$@”" = "„%1$@“ schließen";
 "Close “%1$@”?" = "„%1$@“ schließen?";
-"Code analysis" = "Codeanalyse";
 "Code Partition ($CPD)" = "Code-Partition ($CPD)";
 "Collapse into the dock" = "Ins Dock einklappen";
 "Collapse panel" = "Bereich einklappen";
@@ -1692,8 +1691,8 @@
 "The annotation is shown beside the code and listed in the Annotations window. A double-click on it opens the code here." = "Die Anmerkung erscheint neben dem Code und im Fenster „Anmerkungen“. Ein Doppelklick darauf öffnet den Code an dieser Stelle.";
 "The module of this code was not found in the dump it was opened over." = "Das Modul dieses Codes wurde in dem Dump, über dem der Bereich geöffnet ist, nicht gefunden.";
 "The note was made on other bytes of this module." = "Die Anmerkung wurde zu anderen Bytes dieses Moduls angelegt.";
+"The calls to this function; choosing one shows the call" = "Die Aufrufe dieser Funktion; die Auswahl zeigt die Stelle des Aufrufs";
 "Callers" = "Aufrufer";
-"Functions that call this one" = "Funktionen, die diese aufrufen";
 "POST" = "POST";
 "POST writes" = "POST-Schreibzugriffe";
 "Status" = "Status";
