@@ -74,6 +74,10 @@ import ToolModuleKit
     private static let hexDumpHeight: CGFloat = 220
     private static let dumpBarHeight: CGFloat = 24
     private let staleLabel = NSTextField(labelWithString: "")
+    /// The module's name and the recipe under it: kept to follow the zoom.
+    private var nameLabel: NSTextField?
+    private var recipeLabel: NSTextField?
+    private var zoomObserver: NSObjectProtocol?
     /// Set while the view moves a table's selection itself, so the table's
     /// delegate does not take the move for a click.
     private var syncingSelection = false
@@ -128,6 +132,13 @@ import ToolModuleKit
         drawNavigator()
         drawSelection()
         resetHistory()
+        // The code is read at the size of the dump beside it: View ▸ Zoom In
+        // and Zoom Out move both.
+        zoomObserver = ToolPanelFont.observeZoom { [weak self] in self?.zoomChanged() }
+    }
+
+    deinit {
+        if let zoomObserver { NotificationCenter.default.removeObserver(zoomObserver) }
     }
 
     @available(*, unavailable)
@@ -737,12 +748,13 @@ import ToolModuleKit
         let nameLabel = label(
             manifest.module.name.isEmpty ? manifest.recipe.id : manifest.module.name,
             font: ToolPanelFont.title())
-        let recipeLabel = label(recipeSummary(), font: .systemFont(ofSize: max(9, ToolPanelFont.size - 2)),
-                                color: .secondaryLabelColor)
+        let recipeLabel = label(recipeSummary(), font: Self.recipeFont(), color: .secondaryLabelColor)
         recipeLabel.lineBreakMode = .byTruncatingMiddle
         for field in [nameLabel, recipeLabel] {
             field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         }
+        self.nameLabel = nameLabel
+        self.recipeLabel = recipeLabel
         let titleBlock = NSStackView(views: [nameLabel, recipeLabel])
         titleBlock.orientation = .vertical
         titleBlock.alignment = .leading
@@ -756,14 +768,10 @@ import ToolModuleKit
         modeControl.setContentHuggingPriority(.required, for: .horizontal)
         modeControl.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-        for (button, symbol, action) in [
-            (backButton, "chevron.backward", #selector(goBackClicked)),
-            (forwardButton, "chevron.forward", #selector(goForwardClicked))
+        for (button, action) in [
+            (backButton, #selector(goBackClicked)),
+            (forwardButton, #selector(goForwardClicked))
         ] {
-            // Large enough to hit at a glance: the size of the title's text,
-            // in the weight of the title.
-            button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
-                .withSymbolConfiguration(.init(pointSize: ToolPanelFont.titleSize + 3, weight: .semibold))
             button.imagePosition = .imageOnly
             button.isBordered = false
             button.bezelStyle = .inline
@@ -773,6 +781,7 @@ import ToolModuleKit
             button.setContentHuggingPriority(.required, for: .horizontal)
             button.setContentCompressionResistancePriority(.required, for: .horizontal)
         }
+        drawNavigationImages()
         // help: panel.code.navigate
         ControlHelp.describe(backButton, name: L("Back"),
                              tooltip: L("Go back to the previous place in the code (⌘[)"))
@@ -952,6 +961,50 @@ import ToolModuleKit
         ])
     }
 
+    /// Back and Forward, large enough to hit at a glance: the size of the
+    /// title's text, in the weight of the title.
+    private func drawNavigationImages() {
+        for (button, symbol) in [(backButton, "chevron.backward"), (forwardButton, "chevron.forward")] {
+            button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
+                .withSymbolConfiguration(.init(pointSize: ToolPanelFont.titleSize + 3, weight: .semibold))
+        }
+    }
+
+    /// The grey line under the module's name: two points under the body.
+    private static func recipeFont() -> NSFont {
+        .systemFont(ofSize: max(9, ToolPanelFont.size - 2))
+    }
+
+    /// The listing and the C at the zoom's new size, and the titles and rows
+    /// around them. Where the reader is stays: the function, the instruction,
+    /// the selected row.
+    private func zoomChanged() {
+        navigatorLabel.font = ToolPanelFont.title()
+        nameLabel?.font = ToolPanelFont.title()
+        recipeLabel?.font = Self.recipeFont()
+        staleLabel.font = ToolPanelFont.body()
+        drawNavigationImages()
+        cTextView.font = Self.codeFont()
+        syncingSelection = true
+        for table in [functionTable, table] {
+            let selected = table.selectedRow
+            table.rowHeight = ToolPanelFont.rowHeight
+            table.reloadData()
+            if selected >= 0, selected < table.numberOfRows {
+                table.selectRowIndexes(IndexSet(integer: selected), byExtendingSelection: false)
+                table.scrollRowToVisible(selected)
+            }
+        }
+        syncingSelection = false
+        drawnC = nil
+        if !cScroll.isHidden { updateC() }
+    }
+
+    /// The listing's and the C's type: monospaced, at the zoom.
+    static func codeFont() -> NSFont {
+        .monospacedSystemFont(ofSize: ToolPanelFont.size, weight: .regular)
+    }
+
     private func applyCodeBackground() {
         codeContent.layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
     }
@@ -1011,7 +1064,7 @@ import ToolModuleKit
         // shows the hand; no underline over every call.
         cTextView.linkTextAttributes = [.cursor: NSCursor.pointingHand]
         cTextView.drawsBackground = false
-        cTextView.font = .monospacedSystemFont(ofSize: ToolPanelFont.size, weight: .regular)
+        cTextView.font = Self.codeFont()
         cTextView.textContainerInset = NSSize(width: 8, height: 8)
         cTextView.isVerticallyResizable = true
         cTextView.isHorizontallyResizable = false
@@ -1072,7 +1125,7 @@ import ToolModuleKit
     private func updateC() {
         guard drawnC != state.function || cTextView.string.isEmpty else { return }
         drawnC = state.function
-        let font = NSFont.monospacedSystemFont(ofSize: ToolPanelFont.size, weight: .regular)
+        let font = Self.codeFont()
         cLinks = []
         let text: NSAttributedString
         if let index = state.function, let c = model.functions[index].c {
@@ -1117,6 +1170,8 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
         if tableView === functionTable {
             guard row >= 0, row < state.rowCount else { return nil }
             let cell = cell(in: tableView, identifier: .init("code-navigator"), monospaced: false)
+            // A cell from the queue was made at the size before a zoom.
+            cell.textField?.font = ToolPanelFont.body()
             cell.textField?.stringValue = navigatorText(at: row)
             // A name the module's own evidence gave reads as a name; Ghidra's
             // FUN_ placeholder reads quieter. The reason is one hover away.
@@ -1156,8 +1211,7 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
                                           length: mark.utf16.count - 4, kind: note.kind))
             shown.text += mark
         }
-        cell.line.show(shown.text, tokens: shown.tokens,
-                       font: .monospacedSystemFont(ofSize: ToolPanelFont.size, weight: .regular))
+        cell.line.show(shown.text, tokens: shown.tokens, font: Self.codeFont())
         cell.line.onLink = { [weak self] link in self?.follow(link) }
         return cell
     }
@@ -1207,9 +1261,7 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
         let cell = NSTableCellView()
         cell.identifier = identifier
         let field = NSTextField(labelWithString: "")
-        field.font = monospaced
-            ? .monospacedSystemFont(ofSize: ToolPanelFont.size, weight: .regular)
-            : ToolPanelFont.body()
+        field.font = monospaced ? Self.codeFont() : ToolPanelFont.body()
         field.lineBreakMode = .byTruncatingTail
         field.maximumNumberOfLines = 1
         field.translatesAutoresizingMaskIntoConstraints = false

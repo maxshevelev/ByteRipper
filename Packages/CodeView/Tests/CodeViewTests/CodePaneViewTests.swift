@@ -64,6 +64,64 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertFalse(view.hasAmbiguousLayout)
     }
 
+    /// View ▸ Zoom In and Zoom Out move the code with the dump beside it:
+    /// the C, the listing's rows and the list of functions, and the reader
+    /// stays where they were.
+    func testTheCodeFollowsTheZoom() throws {
+        let suite = "CodePaneViewTests.zoom"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        let saved = ToolPanelFont.defaults
+        ToolPanelFont.defaults = defaults
+        defer {
+            ToolPanelFont.defaults = saved
+            defaults.removePersistentDomain(forName: suite)
+        }
+        defaults.set(13.0, forKey: ToolPanelFont.zoomSizeKey)
+
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 1, instruction: nil, showsC: true)
+        let tables = tables(in: view)
+        XCTAssertEqual(tables.count, 2)
+        let smallRow = ToolPanelFont.rowHeight
+        XCTAssertEqual(codeFontSize(of: view.decompiledAttributedText), 13)
+
+        defaults.set(18.0, forKey: ToolPanelFont.zoomSizeKey)
+        NotificationCenter.default.post(name: ToolPanelFont.zoomDidChangeNotification, object: nil)
+        view.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(codeFontSize(of: view.decompiledAttributedText), 18, "the C is drawn at the new size")
+        XCTAssertEqual(view.decompiledText, "return 0;")
+        XCTAssertEqual(view.selectedFunction?.name, "entry", "the reader stays in the same function")
+        XCTAssertGreaterThan(ToolPanelFont.rowHeight, smallRow)
+        for table in tables {
+            XCTAssertEqual(table.rowHeight, ToolPanelFont.rowHeight, "a row is as tall as the new size needs")
+        }
+        let functions = try XCTUnwrap(tables.first { $0.tableColumns.first?.identifier.rawValue == "function" })
+        let cell = try XCTUnwrap(functions.view(atColumn: 0, row: 0, makeIfNecessary: true) as? NSTableCellView)
+        XCTAssertEqual(cell.textField?.font?.pointSize, 18, "a function's name is drawn at the new size")
+    }
+
+    private func tables(in view: NSView) -> [NSTableView] {
+        var found: [NSTableView] = []
+        func walk(_ view: NSView) {
+            if let table = view as? NSTableView { found.append(table) }
+            view.subviews.forEach(walk)
+        }
+        walk(view)
+        return found
+    }
+
+    /// The size the C's code is set in — the last character's, past any
+    /// annotation heading it.
+    private func codeFontSize(of text: NSAttributedString) -> CGFloat? {
+        guard text.length > 0 else { return nil }
+        return (text.attribute(.font, at: text.length - 1, effectiveRange: nil) as? NSFont)?.pointSize
+    }
+
     func testTheHeaderKeepsTheVersionsInOneLine() throws {
         let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
                                 moduleBytes: moduleBytes, hexView: NSView())
