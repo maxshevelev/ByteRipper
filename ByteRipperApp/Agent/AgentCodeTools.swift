@@ -23,7 +23,8 @@ final class AgentCodeTools {
 
     nonisolated func tools() -> [AgentTool] { [queryTool, modulesTool, openTool] }
 
-    private static let lists = ["functions", "instructions", "c", "uses", "strings", "symbols", "references"]
+    private static let lists = ["functions", "instructions", "c", "uses", "strings", "symbols", "references",
+                                "post_codes"]
 
     private nonisolated static let whereProperties: [String: JSONValue] = [
         "document": AgentSchema.string("A Code panel or tab, or the dump the module is in. Default: the focused one."),
@@ -50,8 +51,11 @@ final class AgentCodeTools {
                 alone. No panel needs to be open. `what` picks the list (default "functions"): \
                 "functions"; one function's "instructions" or decompiled "c"; a function's callers and \
                 callees ("references"); the instructions that "uses" an address — who calls a function, \
-                jumps to a label, or reads a global or a string; "strings"; or "symbols", the named data — \
-                GUIDs, service tables, interfaces. A function's `name_source` says where its name came \
+                jumps to a label, or reads a global or a string; "strings"; "symbols", the named data — \
+                GUIDs, service tables, interfaces; or "post_codes", the values written to port 0x80 (what a \
+                POST card shows), each at the call that supplies it, with the functions it passes through \
+                (`via`) — `search` narrows by value — and, last, the writes whose value or port the code does \
+                not say (`unresolved`). A function's `name_source` says where its name came \
                 from: DEFAULT is Ghidra's FUN_ placeholder, ANALYSIS a name the UEFI pass read from the \
                 module (`name_reason` says from what), IMPORTED the image's own. Addresses come twice: \
                 `entry`/`address` is Ghidra's virtual address, `offset` the same byte's offset in the \
@@ -358,6 +362,29 @@ final class AgentCodeTools {
                     "type": .string(entry.type),
                     "value": .string(entry.value)
                 ])
+            })
+
+        case "post_codes":
+            // By value, the places that send one together, what could not
+            // be told last — as the panel's POST list shows them.
+            let wanted = search.flatMap { UInt64($0.lowercased().replacingOccurrences(of: "0x", with: ""), radix: 16) }
+            let codes = source.artifact.postCodes
+                .filter { wanted == nil || $0.value == wanted }
+                .sorted { ($0.value ?? .max, $0.address.value) < ($1.value ?? .max, $1.address.value) }
+            body["total"] = .int(Int64(codes.count))
+            body["post_codes"] = .array(codes.prefix(limit).map { code in
+                var entry: [String: JSONValue] = [
+                    "address": .string(code.address.description),
+                    "offset": offsetText(code.address),
+                    "function": code.function.flatMap(model.function(at:)).map { .string(model.functions[$0].name) } ?? .null,
+                    "port": .string(code.port),
+                    "value": code.value.map { .string(String(format: "0x%llX", $0)) } ?? .null,
+                    "via": .array(code.via.map { .string($0.name ?? $0.function.description) }),
+                    "text": .string(code.text)
+                ]
+                if let width = code.width { entry["width"] = .int(Int64(width)) }
+                if let unresolved = code.unresolved { entry["unresolved"] = .string(unresolved.rawValue) }
+                return .object(entry)
             })
 
         default:

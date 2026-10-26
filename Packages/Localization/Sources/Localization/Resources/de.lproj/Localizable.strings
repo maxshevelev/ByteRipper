@@ -1694,7 +1694,16 @@
 "The calls to this function; choosing one shows the call" = "Die Aufrufe dieser Funktion; die Auswahl zeigt die Stelle des Aufrufs";
 "Callers" = "Aufrufer";
 "POST" = "POST";
-"POST writes" = "POST-Schreibzugriffe";
+"POST codes" = "POST-Codes";
+"Port unknown" = "Port unbekannt";
+"Value unknown" = "Wert unbekannt";
+"Sent at %1$@" = "Gesendet bei %1$@";
+"Through %1$@" = "Über %1$@";
+"%1$@-byte write to port %2$@" = "Schreibzugriff mit %1$@ Byte auf Port %2$@";
+"The port comes from a caller this module does not show: a service other modules call." = "Den Port bestimmt ein Aufrufer, der nicht in diesem Modul liegt: ein Dienst, den andere Module aufrufen.";
+"The port is worked out at run time." = "Der Port wird zur Laufzeit ermittelt.";
+"The value comes from a caller this module does not show." = "Den Wert bestimmt ein Aufrufer, der nicht in diesem Modul liegt.";
+"The value is worked out at run time: from a table, a loop or a read." = "Der Wert wird zur Laufzeit ermittelt: aus einer Tabelle, in einer Schleife oder aus einem Lesezugriff.";
 "Status" = "Status";
 "Status codes" = "Statuscodes";
 "Strings" = "Zeichenketten";

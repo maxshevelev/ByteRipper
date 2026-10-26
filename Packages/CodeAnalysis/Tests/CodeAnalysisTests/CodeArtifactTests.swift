@@ -94,10 +94,43 @@ final class CodeArtifactTests: XCTestCase {
     // MARK: - Refusals
 
     func testAnUnknownScriptVersionIsRefused() {
-        let json = #"{"script_version": 5, "ghidra": "12.1.2", "functions": []}"#
+        let json = #"{"script_version": 6, "ghidra": "12.1.2", "functions": []}"#
         XCTAssertThrowsError(try decoded(json)) { error in
-            XCTAssertEqual(error as? CodeArtifactError, .unsupportedVersion(5))
+            XCTAssertEqual(error as? CodeArtifactError, .unsupportedVersion(6))
         }
+    }
+
+    // MARK: - POST codes (v5)
+
+    /// A v5 POST code is the place that supplies the value, with the value,
+    /// the wrappers it went through and, when it is missing, why; the writes
+    /// to other ports are a list of their own; a function places its calls
+    /// in its C.
+    func testAVersion5PostCodeCarriesItsValueAndItsWrappers() throws {
+        let artifact = try decoded("""
+        {"script_version": 5, "ghidra": "12.1.2",
+         "functions": [{"entry": "0x10", "name": "Caller", "c": "  Halt(0x20320120);\\n",
+                        "c_sites": [[2, 4, "0x14"]], "instructions": []}],
+         "post_codes": [
+          {"address": "0x14", "function": "0x10", "port": "0x80", "value": "0x20320120", "width": 4,
+           "via": [{"function": "0x40", "name": "Halt"}], "text": "CALL 0x40"},
+          {"address": "0x44", "function": "0x40", "port": "0x80", "value": null, "width": 4,
+           "unresolved": "value-computed", "via": [], "text": "OUT DX,EAX"}],
+         "port_writes": [{"address": "0x50", "function": "0x10", "port": "0x70", "value": "0x8F",
+                          "width": 1, "via": [], "text": "OUT 0x70,AL"}]}
+        """)
+        let sent = try XCTUnwrap(artifact.postCodes.first)
+        XCTAssertEqual(sent.value, 0x2032_0120)
+        XCTAssertEqual(sent.width, 4)
+        XCTAssertEqual(sent.portNumber, 0x80)
+        XCTAssertEqual(sent.via.map(\.name), ["Halt"])
+        XCTAssertNil(sent.unresolved)
+        XCTAssertNil(artifact.postCodes[1].value)
+        XCTAssertEqual(artifact.postCodes[1].unresolved, .valueComputed)
+        XCTAssertEqual(artifact.portWrites.map(\.portNumber), [0x70])
+        let site = try XCTUnwrap(artifact.functions.first?.cSites.first)
+        XCTAssertEqual([site.start, site.length], [2, 4])
+        XCTAssertEqual(site.address, CodeAddress(0x14))
     }
 
     // MARK: - Status-code candidates

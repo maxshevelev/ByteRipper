@@ -483,6 +483,55 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(view.selectedFunction?.name, "FUN_00000220")
     }
 
+    /// A v5 POST list is by value, the codes it could not tell last; a row
+    /// says the code and who sends it, and a click goes to the call that
+    /// sends it — in the listing and in the C — while the list stays.
+    func testAPostCodeGoesToTheCallThatSendsIt() throws {
+        let c = "void Caller(void)\n{\n  Halt(0x20320120);\n  Halt(0x10195);\n}\n"
+        let first = (c as NSString).range(of: "Halt")
+        let second = (c as NSString).range(of: "Halt", range: NSRange(location: NSMaxRange(first), length: (c as NSString).length - NSMaxRange(first)))
+        let json: [String: Any] = [
+            "script_version": 5, "ghidra": "12.1.2", "program": ["image_base": "0x0"],
+            "functions": [
+                ["entry": "0x220", "name": "Caller", "c": c,
+                 "c_sites": [[first.location, first.length, "0x221"], [second.location, second.length, "0x222"]],
+                 "instructions": [
+                    ["address": "0x220", "bytes": "56", "mnemonic": "PUSH", "text": "PUSH ESI"],
+                    ["address": "0x221", "bytes": "E8", "mnemonic": "CALL", "text": "CALL 0x355"],
+                    ["address": "0x222", "bytes": "E8", "mnemonic": "CALL", "text": "CALL 0x355"]]],
+                ["entry": "0x355", "name": "Halt", "c": "void Halt(int Code)\n{\n}\n",
+                 "instructions": [["address": "0x355", "bytes": "EE", "mnemonic": "OUT", "text": "OUT DX,EAX"]]]
+            ],
+            "post_codes": [
+                ["address": "0x221", "function": "0x220", "port": "0x80", "value": "0x20320120", "width": 4,
+                 "via": [["function": "0x355", "name": "Halt"]], "text": "CALL 0x355"],
+                ["address": "0x222", "function": "0x220", "port": "0x80", "value": "0x10195", "width": 4,
+                 "via": [["function": "0x355", "name": "Halt"]], "text": "CALL 0x355"],
+                ["address": "0x355", "function": "0x355", "port": "0x80", "width": 4,
+                 "unresolved": "value-computed", "via": [], "text": "OUT DX,EAX"]
+            ]
+        ]
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        let view = CodePaneView(manifest: manifest(), artifact: artifact, moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.layoutSubtreeIfNeeded()
+        var ranges: [Range<UInt64>] = []
+        view.onSelectRange = { ranges.append($0) }
+
+        view.selectList(.postCodes)
+        XCTAssertEqual(view.listedPostCodeCount, 3)
+        XCTAssertEqual((0..<3).map { view.navigatorRowText($0) },
+                       ["0x00010195  Caller", "0x20320120  Caller", "Value unknown  Halt"],
+                       "by value, the unknown last")
+        XCTAssertEqual(view.selectedPostCode?.value, 0x10195)
+        XCTAssertEqual(view.selectedInstruction?.address, CodeAddress(0x222), "the call that sends it")
+        XCTAssertEqual(view.selectedFunction?.name, "Caller")
+        let code = try XCTUnwrap(all(CodeTextView.self, in: view).first)
+        XCTAssertEqual(code.selectedRange(), second, "the call in the C")
+        XCTAssertEqual(view.navigatorTitle, "POST codes", "the list stays in front")
+        XCTAssertEqual(ranges.last, 0x6A..<0x6B, "the call's bytes")
+    }
+
     /// Search narrows functions by their instructions as well as their names,
     /// and the two reference lists by their text.
     func testSearchNarrowsTheListInFront() throws {

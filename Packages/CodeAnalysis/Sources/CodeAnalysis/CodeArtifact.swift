@@ -62,7 +62,12 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
     /// spans (what each token is, and what a call or a global names), and the
     /// named data — the GUIDs, service tables and interfaces the UEFI pass
     /// named.
-    public static let supportedScriptVersions: Set<Int> = [2, 3, 4]
+    ///
+    /// 5 follows each port write back to the call that supplies its value:
+    /// `post_codes` are the writes to port 0x80 with the value and the
+    /// wrappers it went through, `port_writes` the other ports, and each
+    /// function's `c_sites` place its calls in the C.
+    public static let supportedScriptVersions: Set<Int> = [2, 3, 4, 5]
 
     public let scriptVersion: Int
     public let ghidra: String
@@ -70,7 +75,13 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
     public let blocks: [Block]
     public let strings: [StringEntry]
     public let functions: [Function]
+    /// Before v5, every OUT instruction, as it reads; from v5, the writes to
+    /// port 0x80 — and to a port the analysis could not tell — at the place
+    /// that supplies the value.
     public let postCodes: [PostCode]
+    /// The writes to every other port (v5): CMOS, PCI configuration, the
+    /// keyboard controller.
+    public let portWrites: [PostCode]
     public let statusCodeCalls: [StatusCodeCall]
     /// Named data, from v4 on: what the UEFI pass named, and what the image's
     /// own symbols did. Empty for an older artifact.
@@ -89,6 +100,7 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         strings = try container.decodeIfPresent([StringEntry].self, forKey: .strings) ?? []
         functions = try container.decodeIfPresent([Function].self, forKey: .functions) ?? []
         postCodes = try container.decodeIfPresent([PostCode].self, forKey: .postCodes) ?? []
+        portWrites = try container.decodeIfPresent([PostCode].self, forKey: .portWrites) ?? []
         let calls = try container.decodeIfPresent(
             [StatusCodeCall].self, forKey: .statusCodeCalls) ?? []
         // The v2 exporter took any call through `[reg + 0x58]` for
@@ -103,6 +115,7 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         case scriptVersion = "script_version"
         case ghidra, program, blocks, strings, functions
         case postCodes = "post_codes"
+        case portWrites = "port_writes"
         case statusCodeCalls = "status_code_calls"
         case symbols
     }
@@ -195,6 +208,9 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         public let c: String?
         /// What each token of `c` is, from v4 on; empty before.
         public let cSpans: [CSpan]
+        /// Where each call is made, by the call's own address (v5): the place
+        /// of an instruction of the listing in the C.
+        public let cSites: [CSite]
         /// Where the name came from (v4): `DEFAULT` for Ghidra's FUN_
         /// placeholder, `ANALYSIS` for the UEFI pass, `IMPORTED` for the
         /// image's own symbols, `USER_DEFINED` for a person's.
@@ -220,6 +236,7 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             callees = try container.decodeIfPresent([CodeAddress].self, forKey: .callees) ?? []
             c = try container.decodeIfPresent(String.self, forKey: .c)
             cSpans = try container.decodeIfPresent([CSpan].self, forKey: .cSpans) ?? []
+            cSites = try container.decodeIfPresent([CSite].self, forKey: .cSites) ?? []
             nameSource = try container.decodeIfPresent(String.self, forKey: .nameSource)
             nameReason = try container.decodeIfPresent(String.self, forKey: .nameReason)
             instructions = try container.decodeIfPresent(
@@ -230,6 +247,7 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             case entry, name, size, signature, external, thunk
             case callers, callees, c, instructions
             case cSpans = "c_spans"
+            case cSites = "c_sites"
             case nameSource = "name_source"
             case nameReason = "name_reason"
         }
@@ -266,6 +284,25 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             guard start >= 0, length > 0 else {
                 throw DecodingError.dataCorruptedError(
                     in: container, debugDescription: "a span must have a place and a length")
+            }
+        }
+    }
+
+    /// The called name of a call in the C and the call's address, written as
+    /// `[start, length, address]` in UTF-16 units into `c`.
+    public struct CSite: Decodable, Equatable, Sendable {
+        public let start: Int
+        public let length: Int
+        public let address: CodeAddress
+
+        public init(from decoder: Decoder) throws {
+            var container = try decoder.unkeyedContainer()
+            start = try container.decode(Int.self)
+            length = try container.decode(Int.self)
+            address = try container.decode(CodeAddress.self)
+            guard start >= 0, length > 0 else {
+                throw DecodingError.dataCorruptedError(
+                    in: container, debugDescription: "a site must have a place and a length")
             }
         }
     }
@@ -355,23 +392,64 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         }
     }
 
-    /// A write to the POST port.
+    /// A write to an I/O port. Before v5 an OUT instruction as it reads, its
+    /// `port` the operand (`DX` mostly). From v5 the place that supplies the
+    /// value — the OUT itself, or the call of IoWrite8, of a PostCode(), of a
+    /// halt routine that writes it — with the port and the value as numbers
+    /// when the code says them, and what is left when it does not.
     public struct PostCode: Decodable, Equatable, Sendable {
+        /// Why a port or a value is missing (v5).
+        public enum Unresolved: String, Sendable {
+            /// The function writes a port its caller names, and no caller
+            /// was found: a service another module calls through a table.
+            case portParameter = "port-parameter"
+            case portComputed = "port-computed"
+            /// The value comes from a caller that was not found.
+            case valueParameter = "value-parameter"
+            /// The value is worked out at run time: a table, a loop, a read.
+            case valueComputed = "value-computed"
+        }
+
+        /// A function the value went through on its way to the OUT,
+        /// innermost last.
+        public struct Wrapper: Decodable, Equatable, Sendable {
+            public let function: CodeAddress
+            public let name: String?
+        }
+
         public let address: CodeAddress
         public let function: CodeAddress?
         public let port: String
+        /// The value written (v5); nil when the code does not say it.
+        public let value: UInt64?
+        /// The width of the write in bytes (v5).
+        public let width: Int?
+        public let unresolved: Unresolved?
+        /// The functions between this place and the OUT, outermost first.
+        public let via: [Wrapper]
         public let text: String
+
+        /// The port as a number, when it is one.
+        public var portNumber: UInt64? {
+            port.lowercased().hasPrefix("0x") ? UInt64(port.dropFirst(2), radix: 16) : nil
+        }
 
         public init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             address = try container.decode(CodeAddress.self, forKey: .address)
             function = try container.decodeIfPresent(CodeAddress.self, forKey: .function)
             port = try container.decodeIfPresent(String.self, forKey: .port) ?? ""
-            text = try container.decode(String.self, forKey: .text)
+            value = try container.decodeIfPresent(String.self, forKey: .value).flatMap { text in
+                text.lowercased().hasPrefix("0x") ? UInt64(text.dropFirst(2), radix: 16) : UInt64(text)
+            }
+            width = try container.decodeIfPresent(Int.self, forKey: .width)
+            unresolved = try container.decodeIfPresent(String.self, forKey: .unresolved).flatMap(Unresolved.init)
+            via = try container.decodeIfPresent([Wrapper].self, forKey: .via) ?? []
+            text = try container.decodeIfPresent(String.self, forKey: .text) ?? ""
         }
 
         private enum CodingKeys: String, CodingKey {
-            case address, function, port, text
+            case address, function, port, value, width, unresolved, via, text
         }
     }
 

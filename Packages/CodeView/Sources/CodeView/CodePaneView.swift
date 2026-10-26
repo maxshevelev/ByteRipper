@@ -64,6 +64,9 @@ import ToolModuleKit
     /// The function a highlighted variable belongs to.
     private var highlightedIn: Int?
     private var drawnC: Int?
+    /// How far the function's own C starts into the text shown: the
+    /// annotations' comments head it.
+    private var cShift = 0
     private let table = NSTableView()
     private let tableScroll = NSScrollView()
     private let cTextView = CodeTextView()
@@ -170,6 +173,9 @@ import ToolModuleKit
     public var listedStringCount: Int { state.listedStrings.count }
     public var listedPostCodeCount: Int { state.listedPostCodes.count }
     public var listedStatusCodeCount: Int { state.listedStatusCodes.count }
+    /// What a navigator row reads, for tests.
+    func navigatorRowText(_ row: Int) -> String { navigatorText(at: row) }
+    var navigatorTitle: String { navigatorLabel.stringValue }
 
     public var selectedInstruction: CodeArtifact.Instruction? { state.selectedLine?.instruction }
     public var selectedFunction: CodeArtifact.Function? { state.selectedFunction }
@@ -345,6 +351,34 @@ import ToolModuleKit
 
     // MARK: - Drawing the state
 
+    /// Goes to the place a POST code or a status code is sent from, keeping
+    /// the list it was chosen in: the instruction in the listing, the call in
+    /// the C, its bytes in the hex view. A place Back returns from.
+    private func showSite(_ address: CodeAddress) {
+        guard let line = model.line(at: address) else {
+            // An address the listing does not hold: its byte, as before.
+            if let range = model.moduleRange(of: address, count: 1) { onSelectRange?(range) }
+            return
+        }
+        jump {
+            state.selectLine(line)
+            drawSelection()
+        }
+        selectSiteInC(address)
+        notifyInstruction()
+    }
+
+    /// Selects the call made at `address` in the C showing, when the
+    /// artifact places it (v5).
+    private func selectSiteInC(_ address: CodeAddress) {
+        guard let function = state.selectedFunction,
+              let site = function.cSites.first(where: { $0.address == address }) else { return }
+        let range = NSRange(location: site.start + cShift, length: site.length)
+        guard NSMaxRange(range) <= (cTextView.string as NSString).length else { return }
+        cTextView.setSelectedRange(range)
+        cTextView.scrollRangeToVisible(range)
+    }
+
     /// Shows the function holding `line` and selects that instruction.
     private func select(line: Int) {
         revealInNavigator(model.lines[line].function)
@@ -407,7 +441,7 @@ import ToolModuleKit
         switch list {
         case .functions: L("Functions")
         case .strings: L("Strings")
-        case .postCodes: L("POST writes")
+        case .postCodes: L("POST codes")
         case .statusCodes: L("Status codes")
         }
     }
@@ -693,11 +727,11 @@ import ToolModuleKit
         case .strings:
             range = model.moduleRange(of: artifact.strings[state.listedStrings[row]])
         case .postCodes:
-            range = model.moduleRange(
-                of: artifact.postCodes[state.listedPostCodes[row]].address, count: 1)
+            showSite(artifact.postCodes[state.listedPostCodes[row]].address)
+            return
         case .statusCodes:
-            range = model.moduleRange(
-                of: artifact.statusCodeCalls[state.listedStatusCodes[row]].address, count: 1)
+            showSite(artifact.statusCodeCalls[state.listedStatusCodes[row]].address)
+            return
         }
         if let range { onSelectRange?(range) }
     }
@@ -1169,6 +1203,7 @@ import ToolModuleKit
             }
             if !header.isEmpty { header += "\n" }
             let shift = header.utf16.count
+            cShift = shift
             tokens += model.cTokens(ofFunction: index).map {
                 CodeToken(start: $0.start + shift, length: $0.length, kind: $0.kind, link: $0.link)
             }
@@ -1327,6 +1362,11 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
                 if function.hasPlaceholderName { color = .secondaryLabelColor }
                 reason = function.nameReason
             }
+            if state.list == .postCodes {
+                let entry = artifact.postCodes[state.listedPostCodes[row]]
+                if entry.value == nil, entry.unresolved != nil { color = .secondaryLabelColor }
+                reason = postCodeDetail(entry)
+            }
             cell.textField?.textColor = color
             cell.toolTip = reason
             if state.list == .functions, let notes = notesByFunction[state.listedFunctions[row]], !notes.isEmpty,
@@ -1388,12 +1428,56 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
                 ? model.displayAddress(entry.address)
                 : "\(model.displayAddress(entry.address))  \(entry.value)"
         case .postCodes:
-            let entry = artifact.postCodes[state.listedPostCodes[row]]
-            return "\(model.displayAddress(entry.address))  \(entry.text)"
+            return postCodeText(artifact.postCodes[state.listedPostCodes[row]])
         case .statusCodes:
             let entry = artifact.statusCodeCalls[state.listedStatusCodes[row]]
             return "\(model.displayAddress(entry.address))  \(entry.text)"
         }
+    }
+
+    // help: panel.code.post-codes
+    /// A POST code's row: the value, at the width it is written, and the
+    /// function that sends it. One the analysis could not tell says what it
+    /// lacks. An artifact before v5 lists its OUT instructions as they read.
+    private func postCodeText(_ entry: CodeArtifact.PostCode) -> String {
+        let place = entry.function.flatMap(model.function(at:)).map { model.functions[$0].name }
+            ?? model.displayAddress(entry.address)
+        if let value = entry.value {
+            let digits = max(2, 2 * (entry.width ?? 1))
+            let port = entry.portNumber.map { $0 == 0x80 ? "" : String(format: " → 0x%llX", $0) } ?? ""
+            return String(format: "0x%0\(digits)llX", value) + port + "  " + place
+        }
+        switch entry.unresolved {
+        case .portParameter, .portComputed:
+            return L("Port unknown") + "  " + place
+        case .valueParameter, .valueComputed:
+            return L("Value unknown") + "  " + place
+        case nil:
+            return "\(model.displayAddress(entry.address))  \(entry.text)"
+        }
+    }
+
+    /// What a POST code's row says on hover: where it is sent, through what,
+    /// and why a value is missing.
+    private func postCodeDetail(_ entry: CodeArtifact.PostCode) -> String? {
+        guard entry.value != nil || entry.unresolved != nil else { return nil }
+        var lines = [String(format: L("Sent at %1$@"), model.displayAddress(entry.address))]
+        if !entry.via.isEmpty {
+            lines.append(String(format: L("Through %1$@"),
+                                entry.via.map { $0.name ?? model.displayAddress($0.function) }.joined(separator: " → ")))
+        }
+        if let width = entry.width {
+            lines.append(String(format: L("%1$@-byte write to port %2$@"), "\(width)",
+                                entry.portNumber.map { String(format: "0x%llX", $0) } ?? "?"))
+        }
+        switch entry.unresolved {
+        case .portParameter: lines.append(L("The port comes from a caller this module does not show: a service other modules call."))
+        case .portComputed: lines.append(L("The port is worked out at run time."))
+        case .valueParameter: lines.append(L("The value comes from a caller this module does not show."))
+        case .valueComputed: lines.append(L("The value is worked out at run time: from a table, a loop or a read."))
+        case nil: break
+        }
+        return lines.joined(separator: "\n")
     }
 
     /// A row's cell, reused from the table's queue when it has one: a listing

@@ -319,7 +319,11 @@ public struct ContentStore: Sendable {
     public func usableAnalyses() -> [AnalysisManifest] {
         // A mirror fetches an object on first read, so every manifest it holds
         // is usable; a fetch that fails says so when the panel opens it.
-        analyses().filter { canRead($0.artifact.sha256) }
+        // One a newer exporter wrote is left to the build that reads it, so
+        // the newest this build can read is the one it opens.
+        analyses().filter {
+            canRead($0.artifact.sha256) && CodeArtifact.supportedScriptVersions.contains($0.recipe.exporter)
+        }
     }
 
     public func key(of manifest: AnalysisManifest) -> AnalysisKey? { manifest.key }

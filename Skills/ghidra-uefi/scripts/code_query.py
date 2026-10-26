@@ -50,7 +50,7 @@ def normalize_address(text: str) -> int | None:
 
 # The exporter versions this reader understands; the Swift reader keeps the
 # same set (`CodeArtifact.supportedScriptVersions`). 3 has the shape of 2.
-SUPPORTED_SCRIPT_VERSIONS = {2, 3, 4}
+SUPPORTED_SCRIPT_VERSIONS = {2, 3, 4, 5}
 
 
 class Artifact:
@@ -329,16 +329,42 @@ def main(argv: list[str]) -> int:
         return 0
 
     if args.command == "post-codes":
-        port = args.argument
-        writes = [w for w in artifact.code.get("post_codes", [])
-                  if port is None or w.get("port", "").lower() == port.lower()]
+        # From exporter v5 a POST code is the place that supplies the value,
+        # the argument narrows by value; before, every OUT as it reads, the
+        # argument narrows by its port operand.
+        codes = artifact.code.get("post_codes", [])
+        names = {f.get("entry"): f.get("name") for f in artifact.code.get("functions", [])}
+        wanted = args.argument
+        if artifact.code.get("script_version", 0) >= 5:
+            def number(text):
+                return int(text, 16)  # "0x80" and "80" alike
+            if wanted is not None:
+                codes = [w for w in codes if w.get("value") and number(w["value"]) == number(wanted)]
+            codes = sorted(codes, key=lambda w: (w.get("value") is None,
+                                                 number(w["value"]) if w.get("value") else 0, w.get("address")))
+            if args.json:
+                print(json.dumps(codes, indent=2))
+                return 0
+            for code in codes:
+                width = code.get("width") or 1
+                value = (f"0x{number(code['value']):0{2 * width}X}" if code.get("value")
+                         else f"? ({code.get('unresolved', 'unknown')})")
+                via = " via " + " -> ".join(v.get("name") or v.get("function") for v in code["via"]) \
+                    if code.get("via") else ""
+                port = "" if code.get("port") in ("0x80", None) else f" port {code['port']}"
+                print(f"{value:<24} {code.get('address'):>10}  {names.get(code.get('function'), code.get('function'))}"
+                      f"{via}{port}")
+            if not codes:
+                print("no write to port 0x80 found")
+            return 0
+        codes = [w for w in codes if wanted is None or w.get("port", "").lower() == wanted.lower()]
         if args.json:
-            print(json.dumps(writes, indent=2))
+            print(json.dumps(codes, indent=2))
         else:
-            for write in writes:
+            for write in codes:
                 print(f"{write.get('address'):>10}  {write.get('port'):>8}  "
                       f"{write.get('function')}  {write.get('text')}")
-            if not writes:
+            if not codes:
                 print("no OUT instruction in the analyzed code")
         return 0
 

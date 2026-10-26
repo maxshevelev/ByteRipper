@@ -157,6 +157,21 @@ final class CodeAgentTests: XCTestCase {
         XCTAssertTrue(missing.isError)
     }
 
+    /// The POST codes come by value, each at the place that sends it, the
+    /// one the code does not say last; `search` narrows by value.
+    func testThePostCodesAreReadByValue() async throws {
+        let sha = SHA256Digest(data: Self.teModule()).hex
+        let all = try await client.answer("code_query", ["module": .string(sha), "what": "post_codes"])
+        let codes = all["post_codes"]?.arrayValue ?? []
+        XCTAssertEqual(codes.map { $0["value"]?.stringValue }, ["0x23B", "0x2F9", nil])
+        XCTAssertEqual(codes[1]["via"]?.arrayValue?.first?.stringValue, "entry")
+        XCTAssertEqual(codes[1]["function"]?.stringValue, "FUN_00000220")
+        XCTAssertEqual(codes[2]["unresolved"]?.stringValue, "value-computed")
+
+        let one = try await client.answer("code_query", ["module": .string(sha), "what": "post_codes", "search": "0x2f9"])
+        XCTAssertEqual(one["post_codes"]?.arrayValue?.map { $0["address"]?.stringValue }, ["0x221"])
+    }
+
     func testANodeWithNoAnalysisIsRefusedWithTheWayOn() async throws {
         try open()
         let refused = try await client.call("code_query", ["node": "0"])
@@ -328,7 +343,13 @@ final class CodeAgentTests: XCTestCase {
     // MARK: - The test module
 
     static let artifact = """
-        {"script_version":4,"ghidra":"12.1.2","program":{"image_base":"0x0","language":"x86:LE:32:default"},
+        {"script_version":5,"ghidra":"12.1.2","program":{"image_base":"0x0","language":"x86:LE:32:default"},
+         "post_codes":[
+          {"address":"0x221","function":"0x220","port":"0x80","value":"0x2F9","width":4,
+           "via":[{"function":"0x230","name":"entry"}],"text":"PUSH EDI"},
+          {"address":"0x230","function":"0x230","port":"0x80","value":null,"width":4,
+           "unresolved":"value-computed","via":[],"text":"RET"},
+          {"address":"0x220","function":"0x220","port":"0x80","value":"0x23B","width":4,"via":[],"text":"PUSH ESI"}],
          "functions":[
           {"entry":"0x220","name":"FUN_00000220","name_source":"DEFAULT","instructions":[
             {"address":"0x220","bytes":"56","mnemonic":"PUSH","text":"PUSH ESI"},

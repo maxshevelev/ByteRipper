@@ -80,8 +80,9 @@ output changes.
   instruction. UEFI names its variables and menus in UTF-16; the v2 exporter
   kept only types whose name says `string`, so a v2 BdsDxe has 86 strings and
   no `L"BootOrder"`, a v3 one 328.
-- `post_codes` is every `OUT` instruction, with its port and text. A board's
-  POST card shows what these write.
+- `post_codes` is, before v5, every `OUT` instruction with its port operand
+  and text; from v5, what the code writes to port 0x80 — what a board's POST
+  card shows — at the place that supplies the value (v5, below).
 - `status_code_calls` is a **candidate** list: a call through a table entry at
   `+0x58`, which is `ReportStatusCode` in a 32-bit PEI services table. The
   eight instructions before it are kept as `context`; for CpuPei they are the
@@ -100,6 +101,51 @@ output changes.
 | 2 | The first artifact the Code panel reads. |
 | 3 | Same shape. UTF-16 strings kept and scanned for; status-code candidates only in a 32-bit image. |
 | 4 | Adds, all optional: a function's `name_source` and `name_reason`, its `c_spans`, and the top-level `symbols`. `c` is written from the decompiler's tokens. |
+| 5 | `post_codes` are the POST codes followed back through their wrappers, with `value`, `width`, `via` and `unresolved`; the other ports' writes are `port_writes`; a function's `c_sites` place its calls in `c`. |
+
+### v5: POST codes
+
+A POST code is seldom `OUT 0x80, imm` where it is sent. The constant is an
+argument of `IoWrite8`, of a `PostCode()`, of a vendor's halt routine that
+writes it and spins, and the `OUT` itself reads two parameters. So the
+exporter reads each `OUT`'s port and value from the decompiler's p-code — a
+constant, a parameter of its function, or computed — and where one is a
+parameter, reads every call of the function with the argument in that place,
+up to four wrappers deep. A value passed by pointer (`IoWrite(Width, Port,
+&Value)`) is the constant stored to that local before the call.
+
+```json
+"post_codes": [
+  {"address": "0x9A8596A", "function": "0x9A8595E", "port": "0x80",
+   "value": "0x20320120", "width": 4,
+   "via": [{"function": "0x9A85BE0", "name": "FUN_09a85be0"}], "text": "CALL 0x09a85be0"},
+  {"address": "0x9A85C33", "function": "0x9A85BE0", "port": "0x80", "value": null,
+   "width": 4, "unresolved": "value-computed", "via": [], "text": "OUT DX,EAX"}],
+"port_writes": [{"address": "0x2A1F3", "function": "0x2A1C0", "port": "0x70", "value": "0x8F", …}],
+"c_sites": [[122, 12, "0x9A8596A"]]
+```
+
+- `address` is the place that supplies the value: the call of the outermost
+  wrapper, or the `OUT` when the value is there. `via` lists the functions
+  between it and the `OUT`, outermost first.
+- `port` is `0x80`, or null when the port is not known: such a write is kept
+  in `post_codes`, since it may be one. Writes to any other known port are in
+  `port_writes`.
+- `value` is null when the code does not say it; `unresolved` says why:
+  `value-parameter` (a caller this module does not show), `value-computed`
+  (a table, a loop, a read), `port-parameter` (a service other modules call,
+  such as CpuIoPei's I/O PPI), `port-computed`. Several values at one place —
+  `Code = Error ? 0x10 : 0x20` — are several entries.
+- `c_sites` are `[start, length, address]` in UTF-16 units of `c`: the called
+  name of each call and the call's address, so a place in the listing is
+  found in the C.
+
+What it finds on modules at hand: BdsDxe 33 codes with their places, an AMD
+PEIM's halt routine with 29 callers and their codes (`0xDF390148` …), CpuIoPei
+none known (its writes are the I/O PPI, the port a caller's). PeiCore writes
+nothing to a port: its codes are status codes, reported through
+`ReportStatusCode`, and which byte reaches port 0x80 for one is the platform's
+status-code module's choice.
 
 ### v4: names, spans, symbols
 

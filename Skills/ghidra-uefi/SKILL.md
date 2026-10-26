@@ -251,11 +251,14 @@ python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te decompile 0x4BF
 python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te search 0x11004
 python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te uses 0x4BF
 python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te status-codes
+python3 Skills/ghidra-uefi/scripts/code_query.py BdsDxe.efi post-codes
+python3 Skills/ghidra-uefi/scripts/code_query.py BdsDxe.efi post-codes 0x23B
 ```
 
-The exporter writes `script_version: 4` (`reference/code-artifact.md`): a
+The exporter writes `script_version: 5` (`reference/code-artifact.md`): a
 module analyzed by an older exporter is analyzed again as a new recipe beside
-the old one. Before the export, `ApplyUefi.java` types and names the module
+the old one. A module with a kept project needs no new analysis: a publish
+exports the program as it stands, the review with it, under the new recipe. Before the export, `ApplyUefi.java` types and names the module
 from EDK2 (`reference/uefi-pass.md`); the first run builds its type archives,
 about a minute. `--phase pei|dxe` overrides the guess (TE or 32-bit is PEI);
 `--no-uefi` keeps Ghidra's names only, as a `-plain-` recipe of its own.
@@ -273,7 +276,9 @@ version), so the same PEIM from another dump reuses the analysis, and a new
 Ghidra is a second analysis beside it. `--force` re-runs; `SCRIPT_VERSION` in
 both the script and `ExportCode.java` is the invalidation when the exporter
 changes. The artifact holds functions, every instruction with its bytes and
-references, the decompiled C, strings, `OUT` writes, and candidates for
+references, the decompiled C, strings, the POST codes with the place that
+sends each — followed back through `IoWrite8`, a `PostCode()` or a halt
+routine to the constant — and candidates for
 `ReportStatusCode` calls (a call through a PEI services table entry at `+0x58`,
 with the pushes before it kept as context).
 

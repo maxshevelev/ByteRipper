@@ -76,9 +76,22 @@ public struct CodeReaderState: Sendable {
             let entry = artifact.strings[index]
             return matches(entry.value, entry.type, entry.address.description)
         }
+        // POST codes by value, the places that send one together, and what
+        // the analysis could not tell after the codes it could.
         listedPostCodes = artifact.postCodes.indices.filter { index in
             let entry = artifact.postCodes[index]
-            return matches(entry.text, entry.port, entry.address.description)
+            let function = entry.function.flatMap(model.function(at:)).map { model.functions[$0].name } ?? ""
+            return matches(entry.text, entry.port, entry.address.description, function,
+                           entry.value.map { String(format: "0x%llX", $0) } ?? "")
+                || entry.via.contains { matches($0.name ?? "") }
+        }.sorted { left, right in
+            let a = artifact.postCodes[left], b = artifact.postCodes[right]
+            switch (a.value, b.value) {
+            case let (x?, y?) where x != y: return x < y
+            case (.some, nil): return true
+            case (nil, .some): return false
+            default: return left < right
+            }
         }
         listedStatusCodes = artifact.statusCodeCalls.indices.filter { index in
             let entry = artifact.statusCodeCalls[index]

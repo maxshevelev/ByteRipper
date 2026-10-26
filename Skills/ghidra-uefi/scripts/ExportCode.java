@@ -15,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import ghidra.app.decompiler.ClangFuncNameToken;
 import ghidra.app.decompiler.ClangLine;
@@ -45,7 +46,9 @@ import ghidra.program.model.symbol.Symbol;
 import ghidra.program.model.symbol.SymbolIterator;
 import ghidra.program.model.symbol.SymbolType;
 import ghidra.program.model.util.StringPropertyMap;
-import ghidra.program.model.scalar.Scalar;
+import ghidra.program.model.pcode.HighParam;
+import ghidra.program.model.pcode.PcodeOpAST;
+import ghidra.program.model.listing.Program;
 
 public class ExportCode extends GhidraScript {
 
@@ -61,7 +64,7 @@ public class ExportCode extends GhidraScript {
         Listing listing = currentProgram.getListing();
         StringBuilder json = new StringBuilder(1 << 22);
         json.append("{\n");
-        json.append("  \"script_version\": 4,\n");
+        json.append("  \"script_version\": 5,\n");
         json.append("  \"ghidra\": ").append(quote(Application.getApplicationVersion())).append(",\n");
         json.append("  \"program\": {\n");
         json.append("    \"name\": ").append(quote(currentProgram.getName())).append(",\n");
@@ -182,7 +185,7 @@ public class ExportCode extends GhidraScript {
         FunctionIterator iterator = currentProgram.getFunctionManager().getFunctions(true);
         while (iterator.hasNext() && !monitor.isCancelled()) functions.add(iterator.next());
 
-        List<String> postCodes = new ArrayList<>();
+        PortWrites ports = new PortWrites(currentProgram);
         List<String> statusCodeCalls = new ArrayList<>();
         // `[reg + 0x58]` is ReportStatusCode in the 32-bit PEI services
         // table. In a 64-bit image the same slot is Boot Services' SetTimer or
@@ -223,6 +226,9 @@ public class ExportCode extends GhidraScript {
                 if (results != null && results.decompileCompleted()
                         && results.getCCodeMarkup() != null) {
                     appendC(json, function, results);
+                }
+                if (results != null && results.decompileCompleted() && results.getHighFunction() != null) {
+                    ports.collect(function, results.getHighFunction());
                 }
             }
 
@@ -265,20 +271,6 @@ public class ExportCode extends GhidraScript {
                     + ", \"flow\": " + quote(instruction.getFlowType().toString())
                     + ", \"references\": [" + String.join(", ", references) + "]}");
 
-                // A write to the POST port is what a board's POST card shows.
-                if ("OUT".equalsIgnoreCase(instruction.getMnemonicString())) {
-                    String port = "";
-                    Object[] operands = instruction.getOpObjects(0);
-                    if (operands.length > 0 && operands[0] instanceof Scalar) {
-                        port = hex(((Scalar) operands[0]).getUnsignedValue());
-                    } else if (operands.length > 0) {
-                        port = operands[0].toString();
-                    }
-                    postCodes.add("{\"address\": " + quote(hex(instruction.getAddress()))
-                        + ", \"function\": " + quote(hex(function.getEntryPoint()))
-                        + ", \"port\": " + quote(port)
-                        + ", \"text\": " + quote(text) + "}");
-                }
                 recent.add(text);
                 if (recent.size() > 8) recent.remove(0);
             }
@@ -289,7 +281,33 @@ public class ExportCode extends GhidraScript {
             json.append("\n");
         }
         json.append("  ],\n");
+        // The POST codes: what the code writes to port 0x80, at the place it
+        // supplies the value — through IoWrite8, a PostCode() or a halt
+        // routine — and the writes to every other port the same way.
+        List<String> postCodes = new ArrayList<>();
+        List<String> portWrites = new ArrayList<>();
+        for (PortWrites.Write write : ports.resolve()) {
+            Instruction at = listing.getInstructionAt(write.site);
+            Function in = currentProgram.getFunctionManager().getFunctionContaining(write.site);
+            List<String> via = new ArrayList<>();
+            for (Address wrapper : write.via) {
+                Function called = currentProgram.getFunctionManager().getFunctionAt(wrapper);
+                via.add("{\"function\": " + quote(hex(wrapper))
+                    + ", \"name\": " + quote(called == null ? null : called.getName()) + "}");
+            }
+            String entry = "{\"address\": " + quote(hex(write.site))
+                + ", \"function\": " + quote(in == null ? null : hex(in.getEntryPoint()))
+                + ", \"port\": " + quote(write.port == null ? null : hex(write.port))
+                + ", \"value\": " + quote(write.value == null ? null : hex(write.value))
+                + ", \"width\": " + write.width
+                + (write.unresolved == null ? "" : ", \"unresolved\": " + quote(write.unresolved))
+                + ", \"via\": [" + String.join(", ", via) + "]"
+                + ", \"text\": " + quote(at == null ? null : at.toString()) + "}";
+            if (write.port == null || write.port == PortWrites.POST_PORT) postCodes.add(entry);
+            else portWrites.add(entry);
+        }
         json.append("  \"post_codes\": [").append(String.join(", ", postCodes)).append("],\n");
+        json.append("  \"port_writes\": [").append(String.join(", ", portWrites)).append("],\n");
         json.append("  \"status_code_calls\": [")
             .append(String.join(", ", statusCodeCalls)).append("]\n");
         json.append("}\n");
@@ -311,6 +329,10 @@ public class ExportCode extends GhidraScript {
         HighFunction high = results.getHighFunction();
         StringBuilder text = new StringBuilder();
         List<String> spans = new ArrayList<>();
+        // Where each call in the text is made: the call's own address, so a
+        // place in the listing — a POST code's call, a status-code call —
+        // is found in the C too.
+        List<String> sites = new ArrayList<>();
         for (ClangLine line : printer.getLines()) {
             text.append(line.getIndentString());
             for (ClangToken token : line.getAllTokens()) {
@@ -318,6 +340,13 @@ public class ExportCode extends GhidraScript {
                 int start = text.length();
                 text.append(piece);
                 if (piece.isEmpty() || piece.isBlank()) continue;
+                PcodeOp callOp = token.getPcodeOp();
+                if (callOp != null && (callOp.getOpcode() == PcodeOp.CALL || callOp.getOpcode() == PcodeOp.CALLIND
+                        || callOp.getOpcode() == PcodeOp.CALLOTHER)
+                        && token.getSyntaxType() == ClangToken.FUNCTION_COLOR) {
+                    sites.add("[" + start + ", " + piece.length() + ", "
+                        + quote(hex(callOp.getSeqnum().getTarget())) + "]");
+                }
                 String kind = null;
                 String target = null;
                 switch (token.getSyntaxType()) {
@@ -345,6 +374,7 @@ public class ExportCode extends GhidraScript {
         }
         json.append("      \"c\": ").append(quote(text.toString())).append(",\n");
         json.append("      \"c_spans\": [").append(String.join(", ", spans)).append("],\n");
+        json.append("      \"c_sites\": [").append(String.join(", ", sites)).append("],\n");
     }
 
     // The entry a function-name token calls, or names: the CALL's target, or
@@ -431,5 +461,297 @@ public class ExportCode extends GhidraScript {
             }
         }
         return builder.append("\"").toString();
+    }
+
+    // The writes to I/O ports, followed back to the place that supplies the
+    // value. A POST code is seldom `OUT 0x80, imm` where it is sent: the
+    // constant is an argument of IoWrite8, of a PostCode(), of a vendor's
+    // halt routine that writes it and spins, and the OUT itself reads two
+    // parameters. So each OUT's port and value are read from the
+    // decompiler's p-code as constants or as parameters of its function;
+    // where one is a parameter, the function is a wrapper, and each call of
+    // it is read the same way with the argument in that place — up to four
+    // wrappers deep. A value passed by pointer (`IoWrite(Width, Port,
+    // &Value)`) is the constant stored to that local before the call. What
+    // stays a parameter or is computed is kept, as unresolved, so a list of
+    // the module's codes says where it could not tell.
+    static final class PortWrites {
+        static final long POST_PORT = 0x80;
+        static final int DEPTH = 4;
+        static final int MOST = 16;
+
+        // What a varnode holds: a few constants, a parameter, what a
+        // parameter points at, or something computed.
+        static final class Value {
+            final java.util.TreeSet<Long> constants = new java.util.TreeSet<>();
+            int parameter = -1;
+            int pointee = -1;
+            boolean computed;
+
+            boolean open() { return parameter >= 0 || pointee >= 0; }
+
+            static Value constant(long value) { Value v = new Value(); v.constants.add(value); return v; }
+            static Value computed() { Value v = new Value(); v.computed = true; return v; }
+
+            void merge(Value other) {
+                constants.addAll(other.constants);
+                if (other.parameter >= 0) parameter = parameter < 0 || parameter == other.parameter ? other.parameter : parameter;
+                if (other.pointee >= 0) pointee = pointee < 0 || pointee == other.pointee ? other.pointee : pointee;
+                computed |= other.computed;
+                if (constants.size() > MOST) { constants.clear(); computed = true; }
+            }
+
+            Value masked(int size) {
+                Value v = new Value();
+                long mask = size >= 8 ? -1L : (1L << (8 * size)) - 1;
+                for (long c : constants) v.constants.add(c & mask);
+                v.parameter = parameter; v.pointee = pointee; v.computed = computed;
+                return v;
+            }
+        }
+
+        // A call of a function with a known entry: each argument, and what
+        // it points at when it is the address of a local.
+        static final class Call {
+            Address site;
+            Address target;
+            List<Value> arguments = new ArrayList<>();
+            List<Value> pointees = new ArrayList<>();
+        }
+
+        static final class Sink {
+            Address site;
+            Address function;
+            Value port;
+            Value value;
+            int width;
+            List<Address> via = new ArrayList<>();
+        }
+
+        static final class Write {
+            Address site;
+            Long port;
+            Long value;
+            int width;
+            String unresolved;
+            List<Address> via;
+        }
+
+        private final Program program;
+        private final List<Sink> sinks = new ArrayList<>();
+        private final Map<Address, List<Call>> callsTo = new java.util.HashMap<>();
+
+        PortWrites(Program program) { this.program = program; }
+
+        void collect(Function function, HighFunction high) {
+            java.util.Iterator<PcodeOpAST> ops = high.getPcodeOps();
+            while (ops.hasNext()) {
+                PcodeOpAST op = ops.next();
+                if (op.getOpcode() == PcodeOp.CALLOTHER && op.getNumInputs() >= 3
+                        && "out".equals(program.getLanguage().getUserDefinedOpName((int) op.getInput(0).getOffset()))) {
+                    Sink sink = new Sink();
+                    sink.site = op.getSeqnum().getTarget();
+                    sink.function = function.getEntryPoint();
+                    sink.port = value(op.getInput(1), 0);
+                    sink.value = value(op.getInput(2), 0);
+                    sink.width = op.getInput(2).getSize();
+                    sinks.add(sink);
+                } else if (op.getOpcode() == PcodeOp.CALL && op.getInput(0).isAddress()) {
+                    Call call = new Call();
+                    call.site = op.getSeqnum().getTarget();
+                    call.target = op.getInput(0).getAddress();
+                    for (int i = 1; i < op.getNumInputs(); i++) {
+                        call.arguments.add(value(op.getInput(i), 0));
+                        call.pointees.add(pointee(op.getInput(i), high));
+                    }
+                    callsTo.computeIfAbsent(call.target, key -> new ArrayList<>()).add(call);
+                }
+            }
+        }
+
+        private static Value value(Varnode varnode, int depth) {
+            int size = varnode.getSize();
+            if (varnode.isConstant()) return Value.constant(varnode.getOffset()).masked(size);
+            if (varnode.getHigh() instanceof HighParam param && varnode.getDef() == null) {
+                Value v = new Value(); v.parameter = param.getSlot(); return v;
+            }
+            PcodeOp def = varnode.getDef();
+            if (def == null || depth > 12) return Value.computed();
+            switch (def.getOpcode()) {
+                case PcodeOp.COPY: case PcodeOp.CAST: case PcodeOp.INT_ZEXT: case PcodeOp.INDIRECT:
+                    return value(def.getInput(0), depth + 1).masked(size);
+                case PcodeOp.INT_SEXT: {
+                    Value inner = value(def.getInput(0), depth + 1);
+                    int from = def.getInput(0).getSize();
+                    Value v = new Value();
+                    for (long c : inner.constants) v.constants.add((c << (64 - 8 * from)) >> (64 - 8 * from));
+                    v.parameter = inner.parameter; v.pointee = inner.pointee; v.computed = inner.computed;
+                    return v.masked(size);
+                }
+                case PcodeOp.SUBPIECE: {
+                    Value inner = value(def.getInput(0), depth + 1);
+                    long shift = def.getInput(1).getOffset() * 8;
+                    if (shift != 0 && inner.open()) return Value.computed();
+                    Value v = new Value();
+                    for (long c : inner.constants) v.constants.add(c >>> shift);
+                    v.parameter = inner.parameter; v.pointee = inner.pointee; v.computed = inner.computed;
+                    return v.masked(size);
+                }
+                case PcodeOp.MULTIEQUAL: {
+                    Value v = new Value();
+                    for (int i = 0; i < def.getNumInputs(); i++) v.merge(value(def.getInput(i), depth + 1));
+                    return v.masked(size);
+                }
+                case PcodeOp.LOAD: {
+                    Value pointer = value(def.getInput(1), depth + 1);
+                    Value v = new Value();
+                    if (pointer.parameter >= 0 && pointer.constants.isEmpty()) v.pointee = pointer.parameter;
+                    else v.computed = true;
+                    return v;
+                }
+                case PcodeOp.INT_OR: case PcodeOp.INT_AND: case PcodeOp.INT_XOR: case PcodeOp.INT_ADD:
+                case PcodeOp.INT_LEFT: case PcodeOp.INT_RIGHT: {
+                    Value left = value(def.getInput(0), depth + 1);
+                    Value right = value(def.getInput(1), depth + 1);
+                    if (left.open() || right.open() || left.computed || right.computed
+                            || left.constants.size() * right.constants.size() > MOST) return Value.computed();
+                    Value v = new Value();
+                    for (long a : left.constants) for (long b : right.constants) {
+                        v.constants.add(switch (def.getOpcode()) {
+                            case PcodeOp.INT_OR -> a | b;
+                            case PcodeOp.INT_AND -> a & b;
+                            case PcodeOp.INT_XOR -> a ^ b;
+                            case PcodeOp.INT_ADD -> a + b;
+                            case PcodeOp.INT_LEFT -> a << b;
+                            default -> a >>> b;
+                        });
+                    }
+                    return v.masked(size);
+                }
+                default:
+                    return Value.computed();
+            }
+        }
+
+        // What an argument points at when it is the address of a local of
+        // the caller (`&local_8`): every constant the function stores there.
+        private static Value pointee(Varnode argument, HighFunction high) {
+            PcodeOp def = argument.getDef();
+            while (def != null && (def.getOpcode() == PcodeOp.COPY || def.getOpcode() == PcodeOp.CAST)) {
+                def = def.getInput(0).getDef();
+            }
+            if (def == null || def.getOpcode() != PcodeOp.PTRSUB || !def.getInput(1).isConstant()) {
+                Value passed = value(argument, 0);
+                Value v = new Value();
+                if (passed.parameter >= 0) v.parameter = passed.parameter;
+                else v.computed = true;
+                return v;
+            }
+            int bits = argument.getSize() * 8;
+            long offset = (def.getInput(1).getOffset() << (64 - bits)) >> (64 - bits);
+            Value v = new Value();
+            boolean found = false;
+            java.util.Iterator<PcodeOpAST> ops = high.getPcodeOps();
+            while (ops.hasNext()) {
+                PcodeOpAST op = ops.next();
+                Varnode out = op.getOutput();
+                if (out == null || !out.getAddress().isStackAddress() || out.getAddress().getOffset() != offset) continue;
+                if (op.getOpcode() == PcodeOp.INDIRECT || op.getOpcode() == PcodeOp.MULTIEQUAL) continue;
+                found = true;
+                v.merge(value(out, 0));
+            }
+            if (!found) v.computed = true;
+            return v;
+        }
+
+        // A parameter (or what it points at) of a wrapper, as a call of it
+        // passes it.
+        private static Value substitute(Value value, Call call) {
+            Value v = new Value();
+            v.constants.addAll(value.constants);
+            v.computed = value.computed;
+            if (value.parameter >= 0) {
+                if (value.parameter < call.arguments.size()) v.merge(call.arguments.get(value.parameter));
+                else v.computed = true;
+            }
+            if (value.pointee >= 0) {
+                if (value.pointee < call.pointees.size()) {
+                    Value pointed = call.pointees.get(value.pointee);
+                    // The caller passed its own pointer parameter along.
+                    if (pointed.parameter >= 0) { Value p = new Value(); p.pointee = pointed.parameter; pointed = p; }
+                    v.merge(pointed);
+                } else {
+                    v.computed = true;
+                }
+            }
+            return v;
+        }
+
+        List<Write> resolve() {
+            List<Sink> done = new ArrayList<>();
+            java.util.ArrayDeque<Sink> queue = new java.util.ArrayDeque<>(sinks);
+            while (!queue.isEmpty()) {
+                Sink sink = queue.removeFirst();
+                List<Call> calls = callsTo.getOrDefault(sink.function, List.of());
+                boolean open = sink.port.open() || sink.value.open();
+                // A port known not to be POST's is not followed further
+                // than the value needs; a wrapper with no known caller, or
+                // past the depth, stays as it is.
+                if (!open || calls.isEmpty() || sink.via.size() >= DEPTH) { done.add(sink); continue; }
+                boolean followed = false;
+                for (Call call : calls) {
+                    Function caller = program.getFunctionManager().getFunctionContaining(call.site);
+                    if (caller == null || sink.via.contains(caller.getEntryPoint()) || caller.getEntryPoint().equals(sink.function)) continue;
+                    Sink next = new Sink();
+                    next.site = call.site;
+                    next.function = caller.getEntryPoint();
+                    next.port = substitute(sink.port, call);
+                    next.value = substitute(sink.value, call);
+                    next.width = sink.width;
+                    next.via.add(sink.function);
+                    next.via.addAll(sink.via);
+                    queue.addLast(next);
+                    followed = true;
+                }
+                if (!followed) done.add(sink);
+            }
+            List<Write> writes = new ArrayList<>();
+            for (Sink sink : done) {
+                List<Long> portValues = new ArrayList<>(sink.port.constants);
+                if (portValues.isEmpty()) portValues.add(null);
+                List<Long> values = new ArrayList<>(sink.value.constants);
+                if (values.isEmpty() || sink.value.open() || sink.value.computed) values.add(null);
+                for (Long port : portValues) {
+                    for (Long value : values) {
+                        Write write = new Write();
+                        write.site = sink.site;
+                        write.port = port;
+                        write.value = value;
+                        write.width = sink.width;
+                        write.via = sink.via;
+                        if (port == null) write.unresolved = sink.port.open() ? "port-parameter" : "port-computed";
+                        else if (value == null) write.unresolved = sink.value.open() ? "value-parameter" : "value-computed";
+                        writes.add(write);
+                    }
+                }
+            }
+            // One OUT reached through a width switch (IoWrite of 1, 2 or 4
+            // bytes) is one write: the widest is kept.
+            Map<String, Write> unique = new java.util.LinkedHashMap<>();
+            for (Write write : writes) {
+                String key = write.site + "/" + write.port + "/" + write.value + "/" + write.via;
+                Write kept = unique.get(key);
+                if (kept == null || kept.width < write.width) unique.put(key, write);
+            }
+            writes = new ArrayList<>(unique.values());
+            writes.sort((a, b) -> {
+                int bySite = a.site.compareTo(b.site);
+                if (bySite != 0) return bySite;
+                int byPort = Long.compare(a.port == null ? -1 : a.port, b.port == null ? -1 : b.port);
+                if (byPort != 0) return byPort;
+                return Long.compare(a.value == null ? -1 : a.value, b.value == null ? -1 : b.value);
+            });
+            return writes;
+        }
     }
 }
