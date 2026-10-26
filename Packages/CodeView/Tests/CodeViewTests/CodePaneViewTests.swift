@@ -315,6 +315,25 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(view.decompiledText, "return 0;")
     }
 
+    /// The side can be chosen without moving the reader — what `open_code`'s
+    /// `view` asks for when the panel is opened on the C.
+    func testTheSideCanBeChosenWithoutMovingTheReader() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 480, height: 320)
+        view.layoutSubtreeIfNeeded()
+        view.selectInstruction(at: 2)
+
+        view.showDecompiledC(true)
+        XCTAssertTrue(view.showsDecompiledC)
+        XCTAssertEqual(view.decompiledText, "return 0;")
+        XCTAssertEqual(view.selectedInstructionIndex, 2, "and the place is where it was")
+
+        view.showDecompiledC(false)
+        XCTAssertFalse(view.showsDecompiledC)
+        XCTAssertEqual(view.selectedInstructionIndex, 2)
+    }
+
     /// A place kept by address wins over indices that name another place —
     /// what an artifact numbered differently, another recipe or a re-run,
     /// does to them; a place this artifact lacks falls back to the indices.

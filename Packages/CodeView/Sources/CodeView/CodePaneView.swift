@@ -280,6 +280,15 @@ import ToolModuleKit
         resetHistory()
     }
 
+    /// Shows the decompiled C instead of the assembly, or the other way round,
+    /// without moving the reader's place: what a Code panel opened with the
+    /// listing already showing asks for.
+    public func showDecompiledC(_ showsC: Bool) {
+        guard showsDecompiledC != showsC else { return }
+        modeControl.selectedSegment = showsC ? 1 : 0
+        applyMode()
+    }
+
     /// Shows the stale banner. The app calls this when the module's current
     /// bytes no longer match the manifest.
     public func setStale(_ stale: Bool, reason: String? = nil) {

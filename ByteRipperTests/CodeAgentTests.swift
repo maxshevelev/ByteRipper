@@ -190,6 +190,29 @@ final class CodeAgentTests: XCTestCase {
         XCTAssertTrue(unknown.isError)
     }
 
+    /// `view` lands the reader on the decompiled listing without moving the
+    /// place, and the answer names the side the panel shows.
+    func testOpenCodeCanLandOnTheDecompiledC() async throws {
+        let controller = try open()
+        let node = try await moduleNode()
+        let opened = try await client.answer("open_code", ["node": .string(node), "function": "entry",
+                                                           "view": "c"])
+        let panel = try XCTUnwrap(controller.fragments.expanded)
+        let pane = try XCTUnwrap(controller.fragments.codePane(panel))
+        XCTAssertTrue(pane.showsDecompiledC)
+        XCTAssertEqual(pane.selectedFunction?.name, "entry", "the place did not move")
+        XCTAssertEqual(opened["view"]?.stringValue, "c")
+
+        // The same panel, asked for the other side.
+        let document = try XCTUnwrap(opened["document"]?.stringValue)
+        let again = try await client.answer("open_code", ["document": .string(document), "view": "asm"])
+        XCTAssertFalse(pane.showsDecompiledC)
+        XCTAssertEqual(again["view"]?.stringValue, "asm")
+
+        let wrong = try await client.call("open_code", ["node": .string(node), "view": "text"])
+        XCTAssertTrue(wrong.isError)
+    }
+
     /// View ▸ Back and Forward (⌘[ ⌘]) walk the code's own jumps while a
     /// Code panel is in front — even with the keyboard somewhere else, as it
     /// is after a click on a link — and the tab's places after them.

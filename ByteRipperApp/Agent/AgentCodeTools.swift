@@ -93,15 +93,18 @@ final class AgentCodeTools {
                 Opens the Code panel of a module — its functions, ASM and C beside its bytes — over the \
                 dump, at a `function` or an instruction `address` when given, and brings it forward: what \
                 the person's Open with Code does. Give the dump `document` and the image `node` \
-                (`code_modules`), or a Code panel as `document` to move it to another place. A panel of the \
-                same module already open is raised rather than opened twice. Answers the panel's \
-                `document` id, which `code_query` reads.
+                (`code_modules`), or a Code panel as `document` to move it to another place. `view` \
+                chooses the side the reader lands on: `c` for the decompiled listing, `asm` for the \
+                assembly. A panel of the same module already open is raised rather than opened twice. \
+                Answers the panel's `document` id, which `code_query` reads.
                 """,
             inputSchema: AgentSchema.object([
                 "document": AgentSchema.string("The dump, or a Code panel. Default: the focused one."),
                 "node": AgentSchema.string("The module's PE32/TE image node in the dump."),
                 "function": AgentSchema.string("A function name or Ghidra entry address to open at."),
-                "address": AgentSchema.string("Or an instruction's Ghidra address to open at.")
+                "address": AgentSchema.string("Or an instruction's Ghidra address to open at."),
+                "view": AgentSchema.string("Which side to show: \"c\" for the decompiled listing, "
+                    + "\"asm\" for the assembly. Default: the panel keeps the side it has.")
             ]),
             annotations: AgentTool.Annotations(readOnly: false, idempotent: true)
         ) { call in
@@ -425,11 +428,15 @@ final class AgentCodeTools {
     private func open(_ arguments: AgentArguments) async throws -> AgentAnswer {
         let place = try place(arguments)
         let controller = try place.onScreen()
+        let showingC = try wantedC(arguments)
         // A Code panel already: move it.
         if let screen = controller.codeScreen(for: place.pane), let view = controller.codePaneView(for: place.pane) {
             if let location = try location(arguments, in: screen.artifact) { view.go(to: location) }
+            if let showingC { view.showDecompiledC(showingC) }
             desk.bringForward(place)
-            return .json(.object(openAnswer(place.id, manifest: screen.manifest, view: view)))
+            var answer = openAnswer(place.id, manifest: screen.manifest, view: view)
+            answer["view"] = .string(view.showsDecompiledC ? "c" : "asm")
+            return .json(.object(answer))
         }
         guard let node = try arguments.optionalString("node") else {
             throw AgentToolError("Give the module's image `node` in \(place.named) — `code_modules` lists them — "
@@ -445,9 +452,23 @@ final class AgentCodeTools {
               let pane = controller.fragments.pane(panel),
               let opened = desk.places().first(where: { $0.pane === pane })
         else { throw AgentToolError("The Code panel could not be opened over \(place.named).") }
-        var answer = openAnswer(opened.id, manifest: opening.manifest, view: controller.fragments.codePane(panel))
+        let openedView = controller.fragments.codePane(panel)
+        if let showingC { openedView?.showDecompiledC(showingC) }
+        var answer = openAnswer(opened.id, manifest: opening.manifest, view: openedView)
         answer["node"] = .string(node)
+        if let openedView { answer["view"] = .string(openedView.showsDecompiledC ? "c" : "asm") }
         return .json(.object(answer))
+    }
+
+    /// `view` as `true` for the decompiled C side, `false` for the assembly;
+    /// nil when the call does not name one and the panel keeps its own.
+    private func wantedC(_ arguments: AgentArguments) throws -> Bool? {
+        guard let text = try arguments.optionalString("view") else { return nil }
+        switch text.lowercased() {
+        case "c": return true
+        case "asm": return false
+        default: throw AgentToolError("`view` is \"c\" or \"asm\", not \"\(text)\".")
+        }
     }
 
     private func openAnswer(_ document: String, manifest: AnalysisManifest, view: CodePaneView?) -> [String: JSONValue] {
