@@ -62,7 +62,7 @@ public struct RemoteStore: Sendable {
 
     /// Waits on this thread for an async call. Only off the main actor, and
     /// never from inside a task the call would need: it blocks the thread.
-    static func blocking<T>(_ body: @escaping @Sendable () async throws -> T) throws -> T {
+    public static func blocking<T>(_ body: @escaping @Sendable () async throws -> T) throws -> T {
         let box = BlockingResult<T>()
         let semaphore = DispatchSemaphore(value: 0)
         Task.detached {

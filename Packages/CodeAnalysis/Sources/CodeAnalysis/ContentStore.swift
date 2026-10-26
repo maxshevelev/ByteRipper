@@ -31,6 +31,7 @@ public struct ContentStore: Sendable {
 
     public init(root: URL, create: Bool = true) throws {
         self.root = root.standardizedFileURL
+        self.objectSource = Self.registeredSource(for: self.root)
         if create {
             for folder in [self.root, objectsURL, analysesURL, refsURL, tmpURL] {
                 try FileManager.default.createDirectory(
@@ -39,6 +40,38 @@ public struct ContentStore: Sendable {
                 try? FileManager.default.setAttributes(
                     [.posixPermissions: 0o700], ofItemAtPath: folder.path)
             }
+        }
+    }
+
+    // MARK: - Mirrors
+
+    private static let sources = SourceRegistry()
+
+    /// Every store opened at `root` from now on fetches what it lacks from
+    /// `source` — how a mirror is read by code that only knows a directory.
+    /// Nil makes the root an ordinary store again.
+    public static func register(objectSource source: ObjectSource?, forRoot root: URL) {
+        sources.set(source, for: root.standardizedFileURL.path)
+    }
+
+    static func registeredSource(for root: URL) -> ObjectSource? {
+        sources.get(root.path)
+    }
+
+    private final class SourceRegistry: @unchecked Sendable {
+        private let lock = NSLock()
+        private var sources: [String: ObjectSource] = [:]
+
+        func set(_ source: ObjectSource?, for path: String) {
+            lock.lock()
+            defer { lock.unlock() }
+            sources[path] = source
+        }
+
+        func get(_ path: String) -> ObjectSource? {
+            lock.lock()
+            defer { lock.unlock() }
+            return sources[path]
         }
     }
 
@@ -81,6 +114,12 @@ public struct ContentStore: Sendable {
         return FileManager.default.fileExists(atPath: objectURL(digest).path,
                                               isDirectory: &isDirectory)
             && !isDirectory.boolValue
+    }
+
+    /// Whether `object` can return these bytes: they are here, or the store
+    /// is a mirror that fetches them on read.
+    public func canRead(_ digest: SHA256Digest) -> Bool {
+        objectSource != nil || hasObject(digest)
     }
 
     @discardableResult
@@ -280,7 +319,7 @@ public struct ContentStore: Sendable {
     public func usableAnalyses() -> [AnalysisManifest] {
         // A mirror fetches an object on first read, so every manifest it holds
         // is usable; a fetch that fails says so when the panel opens it.
-        analyses().filter { objectSource != nil || hasObject($0.artifact.sha256) }
+        analyses().filter { canRead($0.artifact.sha256) }
     }
 
     public func key(of manifest: AnalysisManifest) -> AnalysisKey? { manifest.key }

@@ -1,4 +1,5 @@
 import Cocoa
+import CodeAnalysis
 import Localization
 import UniformTypeIdentifiers
 import Workspace
@@ -125,8 +126,12 @@ extension AppDelegate {
             return
         }
         // A project carries its Code analyses beside `Project.json`: bring
-        // them into the local store before the screens that read them open.
+        // them into the store before the screens that read them open. With
+        // the analyses on a server they go into the mirror at once, so the
+        // screens open, and to the server after: the server's answer is the
+        // report, and the mirror is brought to what the server decided.
         let imported = CodeAnalysisStore.importProjectBundle(at: url)
+        let location = CodeAnalysisLocation.shared
         leaveCurrentSession { [weak self] in
             guard let self else { return }
             recorder.switchTo(project: folder)
@@ -135,9 +140,22 @@ extension AppDelegate {
             }
             self.projectOpened(url)
             // help: code.project-analyses
-            if let imported, let lines = CodeAnalysisStore.noticeLines(for: imported) {
-                self.windowControllers.last?.mainViewController
-                    .showNotice(symbol: "exclamationmark.triangle", lines: lines)
+            let notice: (BundleImport?) -> Void = { [weak self] report in
+                if let report, let lines = CodeAnalysisStore.noticeLines(for: report) {
+                    self?.windowControllers.last?.mainViewController
+                        .showNotice(symbol: "exclamationmark.triangle", lines: lines)
+                }
+            }
+            guard location.remote != nil, imported != nil else { return notice(imported) }
+            Task { @MainActor in
+                do {
+                    notice(try await location.sendBundle(at: CodeAnalysisStore.bundleURL(in: url)))
+                } catch {
+                    self.windowControllers.last?.mainViewController.showNotice(
+                        symbol: "exclamationmark.triangle",
+                        lines: [L("The project's code analyses did not reach the analysis server"),
+                                "\(error)"])
+                }
             }
         }
     }

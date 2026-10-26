@@ -61,7 +61,8 @@ public enum HelpContents {
             .provenance
         ]),
         ("agent", [
-            .agent
+            .agent,
+            .codeAnalyses
         ]),
         ("bench", [
             .recipeDonor,

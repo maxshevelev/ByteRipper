@@ -424,6 +424,10 @@ targets:
       # The manifest and bytes a code-part test builds and opens.
       - package: CodeAnalysis
       - package: CodeView
+      # A served store in the test, for the app reading its analyses from a
+      # server (`CodeAnalysisLocationTests`).
+      - package: CASService
+      - package: HTTPService
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.maxik.ByteRipperTests

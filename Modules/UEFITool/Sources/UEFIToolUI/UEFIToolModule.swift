@@ -34,7 +34,12 @@ public enum UEFIToolModule: ToolModule {
     /// it, or a test points it at a temporary store: a panel with no store is a
     /// panel with no code badges, not an error. The app sets it to the skill's
     /// own Application Support folder at launch.
-    public static var codeAnalysisRoot: URL?
+    public static var codeAnalysisRoot: URL? {
+        didSet {
+            guard codeAnalysisRoot != oldValue else { return }
+            NotificationCenter.default.post(name: CodeAnalysisPaths.rootDidChange, object: nil)
+        }
+    }
 
     /// Use the local store the Ghidra skill writes to
     /// (`~/Library/Application Support/ByteRipper/Analysis`).
@@ -237,6 +242,7 @@ private struct ChecksumPass: Sendable {
     /// analysis appear without the reader reopening the panel, and an idle
     /// store costs nothing at all.
     private var codeStoreWatcher: CodeStoreWatcher?
+    private var codeStoreRootObserver: NSObjectProtocol?
     /// The store changed while a scan was running. The scan is not cancelled
     /// for it — a long one would never finish under a stream of writes — and
     /// runs again from the top once it is done.
@@ -484,6 +490,20 @@ private struct ChecksumPass: Sendable {
                 MainActor.assumeIsolated { self?.codeStoreChanged() }
             }
         }
+        if codeStoreRootObserver == nil {
+            // The analyses moved — to a server's mirror, or back to this Mac.
+            codeStoreRootObserver = NotificationCenter.default.addObserver(
+                forName: CodeAnalysisPaths.rootDidChange, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.codeStoreWatcher?.stop()
+                    self.codeStoreWatcher = nil
+                    self.watchCodeAnalysis()
+                    self.codeStoreChanged()
+                }
+            }
+        }
         if codeAnalysisFallback == nil {
             codeAnalysisFallback = Task { [weak self] in
                 while !Task.isCancelled {
@@ -633,6 +653,10 @@ private struct ChecksumPass: Sendable {
         codeAnalysisRequest = nil
         codeStoreWatcher?.stop()
         codeStoreWatcher = nil
+        if let observer = codeStoreRootObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        codeStoreRootObserver = nil
         codeAnalysisFallback?.cancel()
         codeAnalysisFallback = nil
         if let observer = codeStoreActivationObserver {

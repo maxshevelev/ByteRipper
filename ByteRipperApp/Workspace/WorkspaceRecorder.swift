@@ -83,8 +83,13 @@ final class WorkspaceRecorder {
     /// written is in the folder it leaves.
     func switchTo(project: WorkspaceFolder?) {
         if let old = self.project, old.url != project?.url {
-            let store = try? ContentStore(root: CodeAnalysisStore.root, create: false)
-            try? store?.removeRef(CodeAnalysisStore.projectRefName(for: old.url))
+            let ref = CodeAnalysisStore.projectRefName(for: old.url)
+            if let remote = CodeAnalysisLocation.shared.remote {
+                Task { try? await remote.removeRef(CodeAnalysisLocation.serverRefName(ref)) }
+            } else {
+                let store = try? ContentStore(root: CodeAnalysisStore.root, create: false)
+                try? store?.removeRef(ref)
+            }
         }
         if self.project?.url != project?.url { bundledAnalyses = nil }
         // What the keeper being left still writes goes on in its own queue,
@@ -229,14 +234,27 @@ final class WorkspaceRecorder {
         let root = CodeAnalysisStore.root
         let ref = CodeAnalysisStore.projectRefName(for: project.url)
         let bundleURL = CodeAnalysisStore.bundleURL(in: project.url)
+        // With the analyses on a server, the reference is the server's — it is
+        // what keeps the server's collection from taking them — and the bundle
+        // is written from the mirror, which fetches what it has not read yet.
+        let remote = CodeAnalysisLocation.shared.remote
+        let serverRef = CodeAnalysisLocation.serverRefName(ref)
         keeper.writer.enqueue { _ in
             guard let store = try? ContentStore(root: root, create: !keys.isEmpty) else { return }
             if keys.isEmpty {
                 try? FileManager.default.removeItem(at: bundleURL)
-                try? store.removeRef(ref)
+                if let remote {
+                    try? RemoteStore.blocking { try await remote.removeRef(serverRef) }
+                } else {
+                    try? store.removeRef(ref)
+                }
             } else {
                 let ordered = keys.sorted()
-                try? store.setRef(ref, analyses: ordered)
+                if let remote {
+                    _ = try? RemoteStore.blocking { try await remote.setRef(serverRef, analyses: ordered) }
+                } else {
+                    try? store.setRef(ref, analyses: ordered)
+                }
                 try? store.exportBundle(ordered, to: bundleURL)
             }
         }

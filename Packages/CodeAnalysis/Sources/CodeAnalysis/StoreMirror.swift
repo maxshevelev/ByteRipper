@@ -74,6 +74,19 @@ public actor StoreMirror {
         return changes.modules
     }
 
+    /// Copy these modules as the server holds them now — after a write whose
+    /// result the feed may not report, such as a bundle the server left as
+    /// it was.
+    public func refresh(_ modules: [SHA256Digest]) async throws {
+        guard let store = mirror else { return }
+        for module in Set(modules) {
+            try store.mirror(try await remote.module(module))
+        }
+    }
+
+    /// The served store this mirror copies, once it has connected or opened.
+    public var servedStoreID: String? { storeID }
+
     /// Drop the objects no mirrored manifest or history names.
     public func collectGarbage() throws {
         guard var store = mirror else { return }
@@ -86,9 +99,12 @@ public actor StoreMirror {
     private func open(_ id: String) throws -> ContentStore {
         guard SafeName.isSafe(id) else { throw CodeAnalysisError.invalidName(id) }
         if let mirror, storeID == id { return mirror }
-        var store = try ContentStore(root: Self.root(of: id, in: mirrorsRoot))
+        let root = Self.root(of: id, in: mirrorsRoot)
         let remote = self.remote
-        store.objectSource = { try remote.objectBlocking($0) }
+        // Registered, not only set: the app opens the store by its root in
+        // many places, and each of them must fetch what the mirror lacks.
+        ContentStore.register(objectSource: { try remote.objectBlocking($0) }, forRoot: root)
+        let store = try ContentStore(root: root)
         mirror = store
         storeID = id
         epoch = nil

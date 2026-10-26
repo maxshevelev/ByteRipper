@@ -837,6 +837,7 @@ final class MainViewController: NSViewController {
     /// screen or panel redraws when its analysis is published again
     /// (`MainViewController+CodeScreen.swift`, "Following the store").
     var codeStoreWatcher: CodeStoreWatcher?
+    var codeStoreRootObserver: NSObjectProtocol?
     /// Whether this tab is a code screen rather than an ordinary dump.
     var hasCodeScreen: Bool { codeScreen != nil }
     /// The map's state before a code screen hid it, put back when the tab

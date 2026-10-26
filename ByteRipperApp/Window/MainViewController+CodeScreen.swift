@@ -109,6 +109,23 @@ extension MainViewController {
         codeStoreWatcher = CodeStoreWatcher(root: CodeAnalysisStore.root) { [weak self] in
             MainActor.assumeIsolated { self?.codeStoreChanged() }
         }
+        // The analyses moved — to a server's mirror, or back to this Mac:
+        // follow the new folder, and read what it holds.
+        codeStoreRootObserver = NotificationCenter.default.addObserver(
+            forName: CodeAnalysisPaths.rootDidChange, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.codeStoreWatcher?.stop()
+                self.codeStoreWatcher = nil
+                if let observer = self.codeStoreRootObserver {
+                    NotificationCenter.default.removeObserver(observer)
+                }
+                self.codeStoreRootObserver = nil
+                self.followCodeStore()
+                self.codeStoreChanged()
+            }
+        }
     }
 
     /// The store changed: every code screen and panel of this tab whose
@@ -134,7 +151,7 @@ extension MainViewController {
                 var found: [AnalysisKey: (AnalysisManifest, [AnalysisManifest])] = [:]
                 for key in keys {
                     guard let manifest = try? store.analysis(module: key.module, recipe: key.recipe),
-                          store.hasObject(manifest.artifact.sha256) else { continue }
+                          store.canRead(manifest.artifact.sha256) else { continue }
                     found[key] = (manifest, index.manifests(for: key.module))
                 }
                 return found

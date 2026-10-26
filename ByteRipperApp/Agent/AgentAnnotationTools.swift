@@ -50,6 +50,7 @@ final class AgentAnnotationTools {
     /// The store, followed while a code annotation exists: a review
     /// published again renames what such an annotation is about.
     private var codeNamesWatcher: CodeStoreWatcher?
+    private var codeNamesRootObserver: NSObjectProtocol?
     private var codeNamesTask: Task<Void, Never>?
     /// Bumped by every change, so a pane knows its drawn list is stale.
     private(set) var generation = 0
@@ -221,6 +222,20 @@ final class AgentAnnotationTools {
         if codeNamesWatcher == nil {
             codeNamesWatcher = CodeStoreWatcher(root: root) { [weak self] in
                 MainActor.assumeIsolated { self?.refreshCodeNames() }
+            }
+            codeNamesRootObserver = NotificationCenter.default.addObserver(
+                forName: CodeAnalysisPaths.rootDidChange, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.codeNamesWatcher?.stop()
+                    self.codeNamesWatcher = nil
+                    if let observer = self.codeNamesRootObserver {
+                        NotificationCenter.default.removeObserver(observer)
+                    }
+                    self.codeNamesRootObserver = nil
+                    self.refreshCodeNames()
+                }
             }
         }
         codeNamesTask?.cancel()

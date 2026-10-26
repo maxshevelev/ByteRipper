@@ -86,6 +86,7 @@ extension HelpTopicID {
 
     // Working with an agent
     public static let agent = HelpTopicID("agent")
+    public static let codeAnalyses = HelpTopicID("code-analyses")
 
     // Settings
     public static let settings = HelpTopicID("settings")

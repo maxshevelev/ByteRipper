@@ -225,6 +225,7 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
     private let fileTypesController = FileTypesSettingsViewController()
     private let favoritesController = FavoritePatternsSettingsViewController()
     private let agentController = AgentSettingsViewController()
+    private let codeAnalysisController = CodeAnalysisSettingsViewController()
 
     private static let generalItemID = NSToolbarItem.Identifier("General")
     private static let viewItemID = NSToolbarItem.Identifier("View")
@@ -232,6 +233,7 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
     private static let fileTypesItemID = NSToolbarItem.Identifier("FileTypes")
     private static let favoritesItemID = NSToolbarItem.Identifier("Favorites")
     private static let agentItemID = NSToolbarItem.Identifier("Agent")
+    private static let codeAnalysisItemID = NSToolbarItem.Identifier("CodeAnalysis")
 
     init() {
         let window = SettingsWindow(
@@ -339,6 +341,7 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         case favoritesItemID: return L("Search Patterns")
         case fileTypesItemID: return L("File Types")
         case agentItemID: return L("Agent")
+        case codeAnalysisItemID: return L("Code Analysis")
         default: return ""
         }
     }
@@ -356,7 +359,7 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
 
     static let tabIdentifiers: [NSToolbarItem.Identifier] = [
         generalItemID, viewItemID,
-        textDecodingItemID, favoritesItemID, fileTypesItemID, agentItemID,
+        textDecodingItemID, favoritesItemID, fileTypesItemID, agentItemID, codeAnalysisItemID,
     ]
 
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
@@ -398,6 +401,13 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
             item.paletteLabel = item.label
             item.image = NSImage(systemSymbolName: AgentService.symbolName(connected: false),
                                  accessibilityDescription: L("Agent"))
+            item.target = self
+            item.action = #selector(tabTapped(_:))
+        // help: settings.code-analysis
+        case Self.codeAnalysisItemID:
+            item.label = Self.label(for: itemIdentifier)
+            item.paletteLabel = item.label
+            item.image = NSImage(systemSymbolName: "server.rack", accessibilityDescription: item.label)
             item.target = self
             item.action = #selector(tabTapped(_:))
         // help: settings.text-decoding
@@ -444,6 +454,7 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         case Self.favoritesItemID: return favoritesController
         case Self.fileTypesItemID: return fileTypesController
         case Self.agentItemID: return agentController
+        case Self.codeAnalysisItemID: return codeAnalysisController
         default: return nil
         }
     }

@@ -4,6 +4,17 @@ import Foundation
 /// default is the same path, so an analysis written there is found here without
 /// configuration.
 public enum CodeAnalysisPaths {
+    /// Posted on the main queue when the app reads its analyses from another
+    /// directory — the local store, or a served store's mirror — so whatever
+    /// follows the store follows the new one.
+    public static let rootDidChange = Notification.Name("CodeAnalysisRootDidChange")
+
+    /// Where the mirrors of served stores are kept, one folder per store.
+    public static var mirrorsRoot: URL {
+        defaultRoot.deletingLastPathComponent()
+            .appendingPathComponent("Analysis Mirrors", isDirectory: true)
+    }
+
     public static var defaultRoot: URL {
         let support = FileManager.default.urls(
             for: .applicationSupportDirectory, in: .userDomainMask).first

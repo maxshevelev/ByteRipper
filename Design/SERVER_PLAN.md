@@ -219,11 +219,19 @@ them).
 
 ## 10. Phases
 
-1. **The store served.** `HTTPService`, `CASService`, `byteripper-server
-   --cas`, `RemoteStore`; `byteripper-cas --server <url>` so the skill's
-   scripts can write to a served store.
-2. **The app on a served store.** The mirror, the setting, the first-switch
-   upload, the help page.
+1. **The store served — done.** `HTTPService`, `CASService`,
+   `byteripper-server --cas`, `RemoteStore`, `StoreMirror`; `byteripper-cas
+   --server <url>`, and `--store http://host:port` in every script of the
+   skill. A write made on the server's own directory reaches a waiting client
+   through the server's FSEvents stream in under a second.
+2. **The app on a served store — done.** Settings ▸ Code Analysis, the mirror
+   read through every place that opens the store by its root (an object
+   source registered for the mirror's root), the three watchers following a
+   changed root, a project's bundle sent to the server with the server's
+   report as the notice, project references kept on the server per Mac,
+   *Send This Mac's Analyses*, the help page. The token is a 0600 file shared
+   with the scripts, not a keychain item (an ad-hoc signed app would be asked
+   again after every update).
 3. **The Ghidra host in Swift.** `GhidraHost` doing what `ghidra_owner.py`
    does, parity with its artifacts on CpuPei and BdsDxe; `ghidra_owner.py`
    becomes a thin client of the host.
