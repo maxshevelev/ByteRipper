@@ -313,17 +313,51 @@ final class ZoomToFitTests: XCTestCase {
         window.layoutIfNeeded()
         let defaultFrame = NSRect(x: 0, y: 0, width: 3000, height: 2000)
 
+        let margins = FragmentPanelLayout.sideInset * 2
+
         let hidden = mainVC.windowWillUseStandardFrame(window, defaultFrame: defaultFrame)
-        XCTAssertEqual(hidden.width, expectedFrameWidth(for: part.contentFitWidth, window: window),
-                       accuracy: 1, "fitted around the part, with no map")
+        XCTAssertEqual(hidden.width, expectedFrameWidth(for: part.contentFitWidth + margins, window: window),
+                       accuracy: 1, "fitted around the part and the panel's margins, with no map")
 
         surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         let shown = mainVC.windowWillUseStandardFrame(window, defaultFrame: defaultFrame)
-        let expected = part.contentFitWidth + surface.minimapPreferredPanelWidth
+        let expected = part.contentFitWidth + margins + surface.minimapPreferredPanelWidth
             + surface.panelSplit.dividerThickness
         XCTAssertEqual(shown.width, expectedFrameWidth(for: expected, window: window),
                        accuracy: 1, "and with room for the panel's map")
+    }
+
+    /// Measured rather than added up: once the window takes the fitted frame,
+    /// the part's dump has the width its grid needs, margins and all.
+    func testZoomGivesTheFragmentPanelsDumpItsGrid() throws {
+        let url = try tempFile([UInt8](repeating: 0x41, count: 256))
+        let controller = makeController()
+        let window = controller.window!
+        let mainVC = controller.mainViewController
+        defer {
+            for id in mainVC.fragments.dock.panels { mainVC.fragments.close(id, animated: false) }
+            cleanup(mainVC, url)
+        }
+        try mainVC.windowModel.pane1.open(url: url)
+        mainVC.apply(mode: .singleFile)
+        window.setContentSize(NSSize(width: 1400, height: 700))
+        window.layoutIfNeeded()
+        let id = try XCTUnwrap(mainVC.openFragment([UInt8](repeating: 0x42, count: 64),
+                                                   named: "part", animated: false))
+        let surface = try XCTUnwrap(mainVC.fragments.surface(id))
+        let part = try XCTUnwrap(surface.paneViewsInMapOrder().first)
+        window.layoutIfNeeded()
+
+        let fitted = mainVC.windowWillUseStandardFrame(window, defaultFrame: NSRect(x: 0, y: 0, width: 3000, height: 2000))
+        window.setFrame(fitted, display: false)
+        window.layoutIfNeeded()
+
+        // Within the point the window's rounding and the hidden tool panel's
+        // divider take: the fit has 16 pt of slack past the grid for exactly
+        // that. Without the margins counted it came out 32 pt short.
+        XCTAssertEqual(surface.contentHost.frame.width, part.contentFitWidth, accuracy: 1.5,
+                       "the dump gets the width its grid needs")
     }
 
     /// The height follows the panel too: its own title bar, rows and status bar,

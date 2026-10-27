@@ -7582,9 +7582,11 @@ final class MainViewController: NSViewController {
     /// stacked comparison keeps the wider of the two panes' grids.
     private func standardContentWidth() -> CGFloat {
         // A panel that is up covers the whole content area, so the window is
-        // fitted around it: its one dump's grid.
+        // fitted around it: its one dump's grid, and the margins it stands in
+        // by at either side — without them the grid came out that much short.
         if let front = fragments.frontSurface {
-            return front.paneViewsInMapOrder().first?.contentFitWidth ?? 0
+            guard let fit = front.paneViewsInMapOrder().first?.contentFitWidth else { return 0 }
+            return fit + FragmentPanelLayout.sideInset * 2
         }
         switch mode {
         case .singleFile:
@@ -7614,9 +7616,13 @@ final class MainViewController: NSViewController {
         let tools = surface.tools
         guard tools.isPanelVisible else { return 0 }
         let live = surface.toolPanelWidth()
+        // The width it will open at is at the tab's scale; a fragment panel
+        // draws its tool narrower by its margins (`toolPanelWidthAllowance`),
+        // which the fit has already counted.
         let width = live > 0
             ? live
-            : (tools.activeModule.map { tools.preferredWidth(for: $0) } ?? 0)
+            : (tools.activeModule.map { max(0, tools.preferredWidth(for: $0)
+                                               - surface.toolPanelWidthAllowance) } ?? 0)
         guard width > 0 else { return 0 }
         return width + surface.panelSplit.dividerThickness
     }
