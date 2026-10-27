@@ -76,14 +76,16 @@ which analysis recipe produced which object:
   "analyzed_at": "2026-10-25T15:19:41+00:00",
   "stats": {"functions": 13, "instructions": 508, "strings": 0,
             "post_code_writes": 0, "status_code_candidates": 1},
-  "reading": {"project": "6f0c…", "rev": 3, "review": "…"}
+  "reading": {"project": "6f0c…", "rev": 3, "review": "…", "description": "…"}
 }
 ```
 
 `module.phase`, `recipe.types`, `recipe.passes` and `reading` are optional:
 `types` and `passes` say the UEFI pass ran and with which EDK2 headers, and
 `reading` is present only on an artifact published from a reviewed Ghidra
-project (`Design/GHIDRA_SHARED_PLAN.md` §5.6).
+project (`Design/GHIDRA_SHARED_PLAN.md` §5.6). Inside it, `description` names
+the module description — the review's Markdown, an object of its own
+(`reference/description.md`) — and is absent while the review has written none.
 
 - The module key is the **whole module's bytes**, not its GUID: the same GUID
   can be a different build.
@@ -92,7 +94,8 @@ project (`Design/GHIDRA_SHARED_PLAN.md` §5.6).
   first. `code_artifact.py` reuses an analysis only from the current exporter.
 - The same artifact under the same key is the same analysis: a put merges the
   source it names, and takes a newer reading (over none, or a later revision of
-  the same project) — a comment changes the review document, not the artifact.
+  the same project) — a comment changes the review document, and a description
+  is an object of its own; neither changes the artifact.
 - Another artifact under the same key is decided by the two readings:
 
   | stored | incoming | put | import |
@@ -109,11 +112,12 @@ project (`Design/GHIDRA_SHARED_PLAN.md` §5.6).
 ### The review history
 
 `reviews/<module-sha>/manifest.json` lists every revision a publish recorded,
-oldest first: project, revision, review document, when and by whom. It is an
+oldest first: project, revision, review document, description (when there is
+one), when and by whom. It is an
 index for diffs and pruning; the analysis manifest's `reading` alone says which
-reading is current. A publish stores, in this order, the document
-(`put-object`), the revision (`record-revision`, which refuses a document the
-store does not hold), and the analysis naming it (`put-analysis`). A publish
+reading is current. A publish stores, in this order, the document and the
+description (`put-object`), the revision (`record-revision`, which refuses an
+object the store does not hold), and the analysis naming it (`put-analysis`). A publish
 that stops after the revision leaves an entry ahead of its analysis, which
 `verify` reports and the next publish of the same revision overwrites.
 
@@ -139,12 +143,13 @@ bundle analysis by analysis: it verifies and stores each object, then writes,
 skips or keeps the manifest aside by the table above, and reports
 `{imported, unchanged, skipped, conflicts}`. One entry the store cannot take
 does not stop the others; only an unreadable `bundle.json` fails the import.
-A bundle carries the review document each reading names, and the import
-stores it beside the artifact; a bundle written before documents travelled
-still imports. `gc` keeps every object a kept manifest names — its artifact
-and its reading's review document — the objects of readings kept aside, and
-every document a review history names; `verify` reports a review document a
-reading or a history names but the store does not hold, and a history entry
+A bundle carries the review document and the description each reading names,
+and the import stores them beside the artifact; a bundle written before
+documents travelled still imports. `gc` keeps every object a kept manifest
+names — its artifact and its reading's review document and description — the
+objects of readings kept aside, and every document and description a review
+history names; `verify` reports a review document or a description a reading
+or a history names but the store does not hold, and a history entry
 ahead of its analysis. A project can carry a bundle with
 it, or the store can be shared by putting the same directory on a synced
 folder. Entries are written stored, not deflated, so the Swift store in

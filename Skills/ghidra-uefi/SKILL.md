@@ -40,6 +40,7 @@ with no app running.
 | `reference/ghidra.md` | — | import rules, the headless recipe, the owner's Java, pitfalls |
 | `reference/code-artifact.md` | — | the artifact's schema, queries and limits |
 | `reference/cas.md` | — | the local CAS: the tool, layout, keys, readings, references, GC, bundles |
+| `reference/description.md` | — | the module description a review writes: where it lives, its sections, its Markdown, its links into the code |
 
 ## 1. Find the module in ByteRipper
 
@@ -108,8 +109,9 @@ type as the program, the shared review archive and EDK2 hold it — what a
 `ghidra_function_create` (a function where only a table points — a services
 table's or a PPI's slot), `ghidra_rename_variable`, `ghidra_signature`,
 `ghidra_type`, `ghidra_set_data`,
-`ghidra_comment`; `ghidra_publish` at a coherent checkpoint, `ghidra_done` at
-the end. The rules a review keeps are in "What a review makes of the code".
+`ghidra_comment`; `ghidra_description` and `ghidra_describe` for the module
+description (the whole document, or one `## ` section); `ghidra_publish` at a
+coherent checkpoint, `ghidra_done` at the end. The rules a review keeps are in "What a review makes of the code".
 
 Never review in a Ghidra window of your own: what it holds is not in the CAS,
 no other Mac sees it, and Ghidra's project lock keeps the owner off a project
@@ -156,7 +158,8 @@ byte for byte what `code_artifact.py` stores. The owner saves and exits after
 
 The review is made through the same owner: `rename`, `rename-var` (a local by
 `--storage` and `--first-use` as `/v1/function` lists them, a parameter by
-`--ordinal`), `comment`, `signature`, `data` and `type`. The first write takes
+`--ordinal`), `comment`, `signature`, `data`, `type` and `describe` (the module
+description, whole or `--section`; `@file` reads it from a file). The first write takes
 the module's write lease; `publish` stores the artifact with a `reading` —
 this project's revision — and the review document; `release` publishes and
 gives the lease back. A name Ghidra would make unique (`Foo_1`) is refused,
@@ -218,6 +221,19 @@ Names alone do not get there. Every review applies these rules:
    at its place and in the report to the person. It never shapes a name: the
    function is named for what it was meant to do, and the comment says what it
    actually does.
+7. **The module is described, not only its functions.** The review writes the
+   module description — what the module is for, how it works, how it is built
+   — in the structure `reference/description.md` sets: a summary, then
+   `Identity`, `Purpose`, `Interfaces`, `Flow`, `Internal structure`,
+   `Hardware and data`, `Errors and diagnostics`, `Findings`,
+   `Open questions`, `Review status`. Start it on the first pass, change it a
+   section at a time with `ghidra_describe` as the review learns, and keep it
+   true at every publish: a rename or a refuted guess is corrected there
+   before publishing. It is published with the review as an object of its own,
+   and the app shows it under **Description** beside ASM and C; a function
+   linked as `[Name](0xADDRESS)` or written as `` `Name` `` opens there.
+   A review is not finished while its description says nothing of what the
+   review found.
 
 ### On an analysis server
 
