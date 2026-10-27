@@ -335,12 +335,41 @@ import ToolModuleKit
 
 /// The text view under the description: a link is the view's to follow, and
 /// the right-click menu is what read-only text needs.
-private final class DescriptionTextView: NSTextView {
+final class DescriptionTextView: NSTextView {
     var onLink: ((Any, Int) -> Bool)?
 
     override func clicked(onLink link: Any, at charIndex: Int) {
         if onLink?(link, charIndex) == true { return }
         super.clicked(onLink: link, at: charIndex)
+    }
+
+    /// A table row is as tall as its tallest cell, and AppKit draws the view
+    /// in tiles — while scrolling, a tile at a time. The text view picks what
+    /// to draw from the line fragments inside the tile, so a tile that cuts a
+    /// row leaves out a cell whose lines lie outside it: its last line half
+    /// drawn, its background and borders missing. Asking for whole rows
+    /// draws every cell the tile crosses; the tile's clip keeps the rest off.
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(tableRows(crossing: dirtyRect))
+    }
+
+    func tableRows(crossing rect: NSRect) -> NSRect {
+        guard let storage = textStorage, let layout = layoutManager, storage.length > 0 else { return rect }
+        var rows: [NSRect] = []
+        storage.enumerateAttribute(.paragraphStyle, in: NSRange(location: 0, length: storage.length)) { value, range, _ in
+            guard let cell = (value as? NSParagraphStyle)?.textBlocks.last as? NSTextTableBlock else { return }
+            let glyphs = layout.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+            let bounds = layout.boundsRect(for: cell, glyphRange: glyphs)
+                .offsetBy(dx: textContainerOrigin.x, dy: textContainerOrigin.y)
+            rows.append(bounds)
+        }
+        // A row's cells share its top: a cell crossing the rect brings in
+        // every cell of its row.
+        var out = rect
+        for crossed in rows where crossed.intersects(rect) {
+            for cell in rows where abs(cell.minY - crossed.minY) < 0.5 { out = out.union(cell) }
+        }
+        return out
     }
 
     override func menu(for event: NSEvent) -> NSMenu? {

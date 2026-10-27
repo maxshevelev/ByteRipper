@@ -953,6 +953,39 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(view.descriptionPlaceholder, "")
     }
 
+    /// A tile that crosses a tall table row — scrolling draws the view a
+    /// tile at a time — is drawn as the whole row, so a cell with no line
+    /// inside the tile still gets its text, background and borders.
+    func testATileThatCutsATableRowDrawsTheWholeRow() throws {
+        let view = CodeDescriptionView()
+        view.frame = NSRect(x: 0, y: 0, width: 760, height: 600)
+        view.layoutSubtreeIfNeeded()
+        view.show("""
+            | Sees | When | Where |
+            |---|---|---|
+            | short | one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty | x |
+            | next | row | y |
+            """)
+        let text = try XCTUnwrap(view.textView as? DescriptionTextView)
+        let layout = try XCTUnwrap(text.layoutManager)
+        let string = text.string as NSString
+        func line(of words: String) -> NSRect {
+            let glyph = layout.glyphIndexForCharacter(at: string.range(of: words).location)
+            return layout.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+                .offsetBy(dx: text.textContainerOrigin.x, dy: text.textContainerOrigin.y)
+        }
+        let first = line(of: "short"), last = line(of: "twenty"), next = line(of: "next")
+        XCTAssertGreaterThan(last.minY, first.maxY, "the middle cell wraps below the others")
+
+        let tile = NSRect(x: 0, y: last.minY, width: 760, height: last.height)
+        let drawn = text.tableRows(crossing: tile)
+        XCTAssertLessThanOrEqual(drawn.minY, first.minY, "the row's top, where its short cells have their only line")
+        XCTAssertLessThanOrEqual(drawn.minX, first.minX)
+        XCTAssertLessThan(drawn.maxY, next.minY, "not the next row")
+        let margin = NSRect(x: 0, y: 0, width: 760, height: 2)
+        XCTAssertEqual(text.tableRows(crossing: margin), margin, "the inset above the table stays as it is")
+    }
+
     func testAModuleWithoutADescriptionSaysSo() throws {
         let view = try describedPane()
         view.showDescription(true)
