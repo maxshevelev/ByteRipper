@@ -368,6 +368,8 @@ public class Owner {
             while (symbols.hasNext()) {
                 HighSymbol symbol = symbols.next();
                 if (symbol.isParameter()) continue;
+                // An equate's name lives in the local map too: it is a constant, not a local.
+                if (symbol instanceof ghidra.program.model.pcode.EquateSymbol) continue;
                 JsonObject item = new JsonObject();
                 item.addProperty("name", symbol.getName());
                 DataType type = symbol.getDataType();
@@ -957,6 +959,7 @@ public class Owner {
         Iterator<HighSymbol> symbols = high.getLocalSymbolMap().getSymbols();
         while (symbols.hasNext()) {
             HighSymbol symbol = symbols.next();
+            if (symbol instanceof ghidra.program.model.pcode.EquateSymbol) continue;
             boolean fits;
             if (ordinal != null) {
                 fits = symbol.isParameter() && symbol.getCategoryIndex() == ordinal;
