@@ -12,9 +12,12 @@ public struct CodeExplanation: Equatable, Sendable {
         case constant(name: String, value: UInt64)
         case type(String)
         case field(type: String, offset: Int)
+        /// The decompiler's one line for the blocks it left out of the C
+        /// as unreachable; `uses` are the blocks.
+        case unreachable(blocks: Int)
     }
 
-    /// An instruction that holds the constant.
+    /// An instruction that holds the constant, or a removed block's first.
     public struct Use: Equatable, Sendable {
         /// The instruction's place in `CodeModel.lines`.
         public let line: Int
@@ -75,6 +78,10 @@ extension CodeModel {
             return equate.map(explanation(of:))
         case .type:
             return typeExplanation(named: text)
+        case .comment:
+            guard let removed = functions[index].cUnreachable,
+                  removed.start == token.start, removed.length == token.length else { return nil }
+            return unreachableExplanation(removed, text: text)
         default:
             if let field = functions[index].cFields.first(where: { $0.start == token.start && $0.length == token.length }) {
                 return fieldExplanation(field, name: text)
@@ -125,6 +132,15 @@ extension CodeModel {
         return CodeExplanation(subject: .constant(name: equate.name, value: equate.value),
                                name: equate.name, enumName: equate.enumName, kind: nil, size: 0,
                                declaration: nil, text: equate.comment.flatMap(Self.nonEmpty), c: nil, uses: uses)
+    }
+
+    private func unreachableExplanation(_ removed: CodeArtifact.CUnreachable, text: String) -> CodeExplanation {
+        let uses = removed.blocks.sorted().compactMap { address -> CodeExplanation.Use? in
+            guard let line = line(at: address) else { return nil }
+            return CodeExplanation.Use(line: line, function: lines[line].function, address: address)
+        }
+        return CodeExplanation(subject: .unreachable(blocks: removed.blocks.count), name: text, enumName: nil,
+                               kind: nil, size: 0, declaration: nil, text: nil, c: nil, uses: uses)
     }
 
     private func typeExplanation(named name: String) -> CodeExplanation? {

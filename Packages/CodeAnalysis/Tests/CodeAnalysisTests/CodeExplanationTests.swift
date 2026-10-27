@@ -92,6 +92,35 @@ final class CodeExplanationTests: XCTestCase {
         XCTAssertNil(model.field(atC: at - 3, inFunction: 0))
     }
 
+    /// The decompiler's warnings for removed blocks, folded into one line,
+    /// open the list of the blocks, each a way to its instructions.
+    func testTheRemovedBlocksLineListsTheBlocks() throws {
+        let c = "void Entry(void)\n{\n  /* WARNING: Removing 2 unreachable blocks */\n  return;\n}\n"
+        let at = (c as NSString).range(of: "/* WARNING: Removing 2 unreachable blocks */")
+        let json: [String: Any] = [
+            "script_version": 5,
+            "functions": [[
+                "entry": "0x100", "name": "Entry", "c": c,
+                "c_spans": [[at.location, at.length, "comment"]],
+                "c_unreachable": [at.location, at.length, ["0x106", "0x102"]],
+                "instructions": [
+                    ["address": "0x100", "bytes": "90", "mnemonic": "NOP", "text": "NOP"],
+                    ["address": "0x102", "bytes": "90", "mnemonic": "NOP", "text": "NOP"],
+                    ["address": "0x106", "bytes": "C3", "mnemonic": "RET", "text": "RET"]
+                ]
+            ]]
+        ]
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        let model = CodeModel(artifact: artifact, layout: nil)
+        let line = try XCTUnwrap(model.cTokens(ofFunction: 0).first { $0.kind == .comment })
+        let explained = try XCTUnwrap(model.explanation(ofC: line, inFunction: 0))
+        XCTAssertEqual(explained.subject, .unreachable(blocks: 2))
+        XCTAssertEqual(explained.uses.map(\.address), [CodeAddress(0x102), CodeAddress(0x106)], "in address order")
+        XCTAssertEqual(explained.uses.map(\.line), [1, 2])
+        XCTAssertNil(model.explanation(ofC: CodeToken(start: 0, length: 4, kind: .comment), inFunction: 0),
+                     "another comment explains nothing")
+    }
+
     func testAnArtifactWithoutThemStillReads() throws {
         let artifact = try JSONDecoder().decode(CodeArtifact.self, from: Data(#"{"script_version":5,"functions":[]}"#.utf8))
         XCTAssertEqual(artifact.equates, [])

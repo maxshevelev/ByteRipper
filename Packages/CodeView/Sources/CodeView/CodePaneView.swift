@@ -1722,13 +1722,13 @@ import ToolModuleKit
 
     // help: panel.code.explain
     /// A click on a name the review explained — a constant's name, a type, a
-    /// field — opens what it stands for beside it. After the click is done:
+    /// field, the line for the blocks the decompiler removed — opens what it stands for beside it. After the click is done:
     /// the text view's own tracking of it would otherwise close the popover.
     private func explainC(at character: Int, token: CodeToken?) {
         guard let index = state.function else { return }
         let local = character - cShift
         var found: (CodeExplanation, NSRange)?
-        if let token, token.kind == .constant || token.kind == .type,
+        if let token, token.kind == .constant || token.kind == .type || token.kind == .comment,
            let explained = model.explanation(ofC: CodeToken(start: token.start - cShift, length: token.length,
                                                             kind: token.kind), inFunction: index) {
             found = (explained, NSRange(location: token.start, length: token.length))
@@ -1760,7 +1760,7 @@ import ToolModuleKit
     private func explainableInC() -> [NSRange] {
         guard let index = state.function else { return [] }
         var ranges = shownCTokens.compactMap { token -> NSRange? in
-            guard token.kind == .constant || token.kind == .type,
+            guard token.kind == .constant || token.kind == .type || token.kind == .comment,
                   model.explanation(ofC: CodeToken(start: token.start - cShift, length: token.length,
                                                    kind: token.kind), inFunction: index) != nil
             else { return nil }

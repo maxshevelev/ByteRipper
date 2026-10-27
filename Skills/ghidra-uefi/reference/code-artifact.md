@@ -149,7 +149,8 @@ know):
              "references": [["0x9DFE6F5", 1]]}],
 "types": [{"name": "SEC_SERIAL_DEVICE_INFO", "path": "/SEC_SERIAL_DEVICE_INFO",
            "kind": "typedef", "size": 32, "description": "…", "c": "typedef struct …"}],
-"c_fields": [[1449, 3, "EFI_SYSTEM_CONTEXT_IA32", 628]]
+"c_fields": [[1449, 3, "EFI_SYSTEM_CONTEXT_IA32", 628]],
+"c_unreachable": [2310, 45, ["0x9DFF3F0", "0x9DFF16E", "…"]]
 ```
 
 - `equates` are the names a review gave constants (`ghidra_equate`): the
@@ -160,6 +161,12 @@ know):
   enums of the equates, as C with every field's offset and comment.
 - a function's `c_fields` are `[start, length, type, offset]`: a structure
   field named in `c`, the type it belongs to and its offset in it.
+- a function's `c_unreachable`, present only when the decompiler removed two
+  or more blocks as unreachable, is `[start, length, [address, …]]`: the one
+  line `/* WARNING: Removing 74 unreachable blocks */` that `c` holds in place
+  of a warning per block, and the blocks' addresses in the decompiler's
+  order. One removed block keeps Ghidra's own line. The owner's
+  `/v1/function` still answers every warning.
 
 The Code panel shows these when a name is clicked (`CodeExplanation`).
 

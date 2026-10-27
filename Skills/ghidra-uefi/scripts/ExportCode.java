@@ -16,6 +16,8 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import ghidra.app.decompiler.ClangFieldToken;
 import ghidra.app.decompiler.ClangFuncNameToken;
@@ -356,7 +358,30 @@ public class ExportCode extends GhidraScript {
         // Where each field of a structure is named: the structure and the
         // field's offset in it, so a reader can show the field's line.
         List<String> fields = new ArrayList<>();
-        for (ClangLine line : printer.getLines()) {
+        // The blocks the decompiler left out because, with the values it
+        // knows, they cannot run: one warning line each, dozens in a hand-
+        // written routine. Two or more are written as one line, and their
+        // addresses go to `c_unreachable`.
+        List<ClangLine> lines = printer.getLines();
+        List<String> unreachable = new ArrayList<>();
+        for (ClangLine line : lines) {
+            String block = unreachableBlock(line);
+            if (block != null) unreachable.add(block);
+        }
+        boolean fold = unreachable.size() > 1;
+        String folded = null;
+        for (ClangLine line : lines) {
+            if (fold && unreachableBlock(line) != null) {
+                if (folded == null) {
+                    text.append(line.getIndentString());
+                    String summary = "/* WARNING: Removing " + unreachable.size() + " unreachable blocks */";
+                    int start = text.length();
+                    text.append(summary).append('\n');
+                    spans.add("[" + start + ", " + summary.length() + ", " + quote("comment") + "]");
+                    folded = "[" + start + ", " + summary.length() + ", [" + String.join(", ", unreachable) + "]]";
+                }
+                continue;
+            }
             text.append(line.getIndentString());
             for (ClangToken token : line.getAllTokens()) {
                 String piece = token.getText();
@@ -407,6 +432,20 @@ public class ExportCode extends GhidraScript {
         json.append("      \"c_spans\": [").append(String.join(", ", spans)).append("],\n");
         json.append("      \"c_sites\": [").append(String.join(", ", sites)).append("],\n");
         json.append("      \"c_fields\": [").append(String.join(", ", fields)).append("],\n");
+        if (folded != null) json.append("      \"c_unreachable\": ").append(folded).append(",\n");
+    }
+
+    private static final Pattern UNREACHABLE =
+        Pattern.compile("/\\* WARNING: Removing unreachable block \\([^,()]*,0x([0-9a-fA-F]+)\\) \\*/");
+
+    // The block's address, quoted, when the line is the decompiler's
+    // `/* WARNING: Removing unreachable block (ram,0x09dff3f0) */`.
+    private static String unreachableBlock(ClangLine line) {
+        StringBuilder text = new StringBuilder();
+        for (ClangToken token : line.getAllTokens()) text.append(token.getText());
+        Matcher matcher = UNREACHABLE.matcher(text.toString().trim());
+        if (!matcher.matches()) return null;
+        return quote(hex(Long.parseUnsignedLong(matcher.group(1), 16)));
     }
 
     // The type a token names, kept for `types` when it is one a reader wants

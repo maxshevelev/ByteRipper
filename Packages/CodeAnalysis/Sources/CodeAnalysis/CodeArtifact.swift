@@ -226,6 +226,10 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         /// Where each structure field is named in `c`: the structure and the
         /// field's offset in it.
         public let cFields: [CField]
+        /// The one line of `c` that stands for the blocks the decompiler
+        /// left out as unreachable, when there were two or more; nil
+        /// otherwise.
+        public let cUnreachable: CUnreachable?
         /// Where the name came from (v4): `DEFAULT` for Ghidra's FUN_
         /// placeholder, `ANALYSIS` for the UEFI pass, `IMPORTED` for the
         /// image's own symbols, `USER_DEFINED` for a person's.
@@ -253,6 +257,7 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             cSpans = try container.decodeIfPresent([CSpan].self, forKey: .cSpans) ?? []
             cSites = try container.decodeIfPresent([CSite].self, forKey: .cSites) ?? []
             cFields = try container.decodeIfPresent([CField].self, forKey: .cFields) ?? []
+            cUnreachable = try container.decodeIfPresent(CUnreachable.self, forKey: .cUnreachable)
             nameSource = try container.decodeIfPresent(String.self, forKey: .nameSource)
             nameReason = try container.decodeIfPresent(String.self, forKey: .nameReason)
             instructions = try container.decodeIfPresent(
@@ -265,6 +270,7 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             case cSpans = "c_spans"
             case cSites = "c_sites"
             case cFields = "c_fields"
+            case cUnreachable = "c_unreachable"
             case nameSource = "name_source"
             case nameReason = "name_reason"
         }
@@ -320,6 +326,28 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             guard start >= 0, length > 0 else {
                 throw DecodingError.dataCorruptedError(
                     in: container, debugDescription: "a site must have a place and a length")
+            }
+        }
+    }
+
+    /// The blocks Ghidra's decompiler removed as unreachable — with the
+    /// values it knows, no path runs them — and the line of the C that says
+    /// so, written as `[start, length, [address, …]]`. The instructions are
+    /// still in the listing; only the C leaves them out.
+    public struct CUnreachable: Decodable, Equatable, Sendable {
+        public let start: Int
+        public let length: Int
+        /// The removed blocks' first addresses, in the decompiler's order.
+        public let blocks: [CodeAddress]
+
+        public init(from decoder: Decoder) throws {
+            var container = try decoder.unkeyedContainer()
+            start = try container.decode(Int.self)
+            length = try container.decode(Int.self)
+            blocks = try container.decode([CodeAddress].self)
+            guard start >= 0, length > 0 else {
+                throw DecodingError.dataCorruptedError(
+                    in: container, debugDescription: "the line must have a place and a length")
             }
         }
     }

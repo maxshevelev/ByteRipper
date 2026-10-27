@@ -4,7 +4,8 @@ import Localization
 
 /// What a name in the code stands for, in a popover off the name: a constant
 /// a review named (`PCI_CONFIG_ADDRESS`), a type the C names, a field of a
-/// structure.
+/// structure — or the one line that stands for the blocks the decompiler left
+/// out as unreachable.
 ///
 /// The reader clicked a name because the code does not say what it is. The
 /// answer is the review's words for it and where they come from, the facts
@@ -17,6 +18,7 @@ import Localization
     /// Goes to a use: the instruction's line in the listing.
     var onUse: ((Int) -> Void)?
 
+    /// More uses than this scroll inside the popover.
     private static let mostUses = 12
 
     /// The popover's type follows the code's zoom: the body a little larger
@@ -56,7 +58,7 @@ import Localization
         stack.spacing = (size * 0.6).rounded()
         stack.edgeInsets = NSEdgeInsets(top: Self.inset, left: Self.inset, bottom: Self.inset, right: Self.inset)
 
-        let name = NSTextField(labelWithString: explanation.name)
+        let name = NSTextField(labelWithString: title())
         name.font = .systemFont(ofSize: (size * 1.35).rounded(), weight: .bold)
         name.isSelectable = true
         name.lineBreakMode = .byTruncatingMiddle
@@ -71,10 +73,10 @@ import Localization
         facts.widthAnchor.constraint(lessThanOrEqualToConstant: inner).isActive = true
         stack.addArrangedSubview(facts)
 
-        let words = NSTextField(wrappingLabelWithString: explanation.text
-                                ?? L("The review has not explained this name yet."))
+        let said = wordsText()
+        let words = NSTextField(wrappingLabelWithString: said ?? L("The review has not explained this name yet."))
         words.font = .systemFont(ofSize: size + 1)
-        words.textColor = explanation.text == nil ? .secondaryLabelColor : .labelColor
+        words.textColor = said == nil ? .secondaryLabelColor : .labelColor
         words.isSelectable = true
         words.preferredMaxLayoutWidth = inner
         stack.addArrangedSubview(words)
@@ -87,34 +89,77 @@ import Localization
         }
 
         if !explanation.uses.isEmpty {
-            let header = NSTextField(labelWithString: L("Used at"))
+            let removed: Bool
+            if case .unreachable = explanation.subject { removed = true } else { removed = false }
+            let header = NSTextField(labelWithString: removed ? L("Removed blocks") : L("Used at"))
             header.font = .systemFont(ofSize: size + 1, weight: .semibold)
             stack.addArrangedSubview(header)
-            for use in explanation.uses.prefix(Self.mostUses) {
-                let title = "\(model.functions[use.function].name) · \(model.displayAddress(use.address))"
+            let list = NSStackView()
+            list.orientation = .vertical
+            list.alignment = .leading
+            list.spacing = stack.spacing / 2
+            for use in explanation.uses {
+                // The removed blocks are all the function's own: the address says it.
+                let title = removed ? model.displayAddress(use.address)
+                    : "\(model.functions[use.function].name) · \(model.displayAddress(use.address))"
                 let button = NSButton(title: title, target: self, action: #selector(goToUse(_:)))
                 button.isBordered = false
                 button.font = .monospacedSystemFont(ofSize: size, weight: .regular)
                 button.contentTintColor = .linkColor
                 button.tag = use.line
-                stack.addArrangedSubview(button)
+                list.addArrangedSubview(button)
             }
-            if explanation.uses.count > Self.mostUses {
-                let more = NSTextField(labelWithString: String(
-                    format: L("and %1$@ more"), "\(explanation.uses.count - Self.mostUses)"))
-                more.font = .systemFont(ofSize: size)
-                more.textColor = .secondaryLabelColor
-                stack.addArrangedSubview(more)
-            }
+            stack.addArrangedSubview(explanation.uses.count > Self.mostUses ? scrolling(list, width: inner) : list)
         }
         stack.widthAnchor.constraint(equalToConstant: Self.width).isActive = true
         view = stack
     }
 
+    /// A long list of uses in a box of its own height that scrolls, so the
+    /// popover stays on the screen.
+    private func scrolling(_ list: NSStackView, width: CGFloat) -> NSView {
+        let scroll = NSScrollView()
+        scroll.hasVerticalScroller = true
+        scroll.autohidesScrollers = true
+        scroll.drawsBackground = false
+        scroll.borderType = .noBorder
+        list.translatesAutoresizingMaskIntoConstraints = false
+        let clip = FlippedClipView()
+        clip.drawsBackground = false
+        scroll.contentView = clip
+        scroll.documentView = list
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        let rows = list.fittingSize.height
+        NSLayoutConstraint.activate([
+            list.leadingAnchor.constraint(equalTo: clip.leadingAnchor),
+            list.topAnchor.constraint(equalTo: clip.topAnchor),
+            list.widthAnchor.constraint(equalToConstant: width),
+            scroll.widthAnchor.constraint(equalToConstant: width),
+            scroll.heightAnchor.constraint(equalToConstant: min(rows, (Self.size * 18).rounded()))
+        ])
+        return scroll
+    }
+
+    /// The name as the code writes it; the removed blocks' line has a title.
+    func title() -> String {
+        if case .unreachable = explanation.subject { return L("Unreachable blocks") }
+        return explanation.name
+    }
+
+    /// The review's words; for the removed blocks, what the decompiler did.
+    func wordsText() -> String? {
+        if case .unreachable = explanation.subject {
+            return L("Ghidra's decompiler found that, with the values it knows, no path runs these blocks, and left them out of the C. Their instructions are still in the listing. A block that depends on what the hardware answers, such as a check Ghidra's model cannot fail, may still run on the board.")
+        }
+        return explanation.text
+    }
+
     /// The number and its enum; a type's kind and size; a field's
-    /// declaration and offset.
+    /// declaration and offset; how many blocks were removed.
     func factsText() -> String {
         switch explanation.subject {
+        case .unreachable(let blocks):
+            return String(format: L("%1$@ blocks removed from the C"), "\(blocks)")
         case .constant(_, let value):
             let number = CodeModel.number(value)
             guard let owner = explanation.enumName else { return number }
@@ -207,6 +252,11 @@ import Localization
         close()
         onUse?(sender.tag)
     }
+}
+
+/// A clip view whose list starts at the top, as a list is read.
+final class FlippedClipView: NSClipView {
+    override var isFlipped: Bool { true }
 }
 
 /// The light rounded ground a code snippet sits on in the popover: the

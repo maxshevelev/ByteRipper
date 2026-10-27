@@ -1318,6 +1318,53 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertNil(CodePaneView.listingNumber("DX"))
     }
 
+    /// The one line for the blocks the decompiler removed explains itself:
+    /// a click lists the blocks, a long list scrolls, a block goes to its line.
+    func testTheRemovedBlocksLineListsWhereTheyAre() throws {
+        let summary = "/* WARNING: Removing 20 unreachable blocks */"
+        let c = "void Entry(void)\n{\n  \(summary)\n  return;\n}\n"
+        let at = (c as NSString).range(of: summary)
+        let instructions = (0..<21).map { index -> [String: Any] in
+            ["address": String(format: "0x%X", 0x220 + index), "bytes": "90", "mnemonic": "NOP", "text": "NOP"]
+        }
+        let json: [String: Any] = [
+            "script_version": 5, "program": ["image_base": "0x0"],
+            "functions": [[
+                "entry": "0x220", "name": "Entry", "c": c,
+                "c_spans": [[at.location, at.length, "comment"]],
+                "c_unreachable": [at.location, at.length, (1...20).map { String(format: "0x%X", 0x220 + $0) }],
+                "instructions": instructions
+            ]]
+        ]
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        let view = CodePaneView(manifest: manifest(), artifact: artifact, moduleBytes: teModule(), hexView: NSView())
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 480),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 0, instruction: nil, showsC: true)
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil) }
+
+        let textView = try XCTUnwrap(first(CodeTextView.self, in: view) { _ in true })
+        let shown = textView.string as NSString
+        XCTAssertEqual(textView.explainable.map { shown.substring(with: $0) }, [summary])
+        let place = shown.range(of: summary).location
+        XCTAssertFalse(view.clickC(at: place + 3, event: try click(count: 1)))
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        let removed = try XCTUnwrap(view.shownExplanation)
+        XCTAssertEqual(removed.subject, .unreachable(blocks: 20))
+        XCTAssertEqual(removed.uses.map(\.line), Array(1...20))
+        let popover = CodeExplanationPopover(explanation: removed, model: CodeModel(artifact: artifact, layout: nil))
+        XCTAssertEqual(popover.title(), "Unreachable blocks")
+        XCTAssertEqual(popover.factsText(), "20 blocks removed from the C")
+        XCTAssertNotNil(popover.wordsText())
+        let scroll = try XCTUnwrap(first(NSScrollView.self, in: popover.view) { $0.documentView is NSStackView },
+                                   "twenty blocks scroll")
+        XCTAssertEqual((scroll.documentView as? NSStackView)?.arrangedSubviews.count, 20)
+        view.shownExplanationClose()
+    }
+
     /// A type's line longer than the popover scrolls sideways in its box.
     func testALongLineOfATypeScrollsSideways() throws {
         let long = "struct T {\n    /* 0x00 */ UINT32 Size; // " + String(repeating: "a long comment ", count: 20) + "\n};"

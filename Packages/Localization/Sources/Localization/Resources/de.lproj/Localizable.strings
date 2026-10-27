@@ -1766,6 +1766,9 @@
 /* The popover that explains a name in the code panel */
 "The review has not explained this name yet." = "Die Analyse hat diesen Namen noch nicht erklärt.";
 "Used at" = "Verwendet bei";
-"and %1$@ more" = "und %1$@ weitere";
+"Removed blocks" = "Entfernte Blöcke";
+"Unreachable blocks" = "Unerreichbare Blöcke";
+"%1$@ blocks removed from the C" = "Aus dem C entfernte Blöcke: %1$@";
+"Ghidra's decompiler found that, with the values it knows, no path runs these blocks, and left them out of the C. Their instructions are still in the listing. A block that depends on what the hardware answers, such as a check Ghidra's model cannot fail, may still run on the board." = "Der Decompiler von Ghidra hat festgestellt, dass bei den ihm bekannten Werten kein Pfad diese Blöcke ausführt, und hat sie aus dem C weggelassen. Ihre Befehle stehen weiterhin im Listing. Ein Block, der von der Antwort der Hardware abhängt – etwa eine Prüfung, die im Modell von Ghidra nicht fehlschlagen kann –, kann auf der Platine dennoch ausgeführt werden.";
 "%1$@ · %2$@ bytes" = "%1$@ · %2$@ Bytes";
 "at +0x%1$@ in %2$@" = "bei +0x%1$@ in %2$@";
