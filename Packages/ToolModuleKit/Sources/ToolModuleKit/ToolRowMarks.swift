@@ -48,6 +48,10 @@ public struct ToolRowMarks: Hashable, Sendable {
         /// A usable code analysis is stored for this module
         /// (`Design/CODE_PANEL_PLAN.md`).
         case codeAnalysis
+        /// A shut row a module with a stored code analysis lies under — a
+        /// file, or a section in it, so a list of shut files says which are
+        /// analyzed. The badge moves down to the module as the rows open.
+        case codeAnalysisInside
         /// Holds compressed data — `decoded` when this project opens it.
         case compressed(algorithm: String, decoded: Bool)
         /// Holds what other structures are checked against: protected ranges,

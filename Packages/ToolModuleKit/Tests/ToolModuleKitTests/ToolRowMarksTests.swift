@@ -122,6 +122,24 @@ final class ToolRowMarksTests: XCTestCase {
         XCTAssertNil(code.toolTip)
     }
 
+    /// A shut file holding an analyzed module wears the same badge in the same
+    /// place, and says the analysis is further in.
+    func testTheBadgeOnAShutFileSaysTheCodeIsInside() throws {
+        let cell = ToolPanelTable.makeCell(identifier: .init("name"),
+                                           warning: true, badges: true)
+        ToolPanelTable.dress(cell, with: ToolRowMarks(roles: [.codeAnalysisInside]))
+
+        let leading = ToolPanelTable.badgeTags.compactMap {
+            cell.viewWithTag($0) as? NSImageView
+        }
+        XCTAssertEqual(leading.map(\.isHidden), [true, true])
+        let code = try XCTUnwrap(
+            cell.viewWithTag(ToolPanelTable.codeBadgeTag) as? NSImageView)
+        XCTAssertFalse(code.isHidden)
+        XCTAssertNotEqual(code.toolTip, ToolRowMark.codeAnalysis.meaning)
+        XCTAssertEqual(code.toolTip, ToolRowMarks.Role.codeAnalysisInside.toolTip)
+    }
+
     /// The FIT panel's existing call still shows the red octagon, even on a
     /// cell last dressed with a caution.
     func testTheOldWarningCallStillShowsAnError() throws {

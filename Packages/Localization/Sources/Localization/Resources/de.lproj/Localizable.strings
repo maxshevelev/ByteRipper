@@ -108,6 +108,7 @@
 "8 Bytes" = "8 Bytes";
 "A code analysis is a snapshot; edit the dump and analyze the module again." = "Eine Codeanalyse ist eine Momentaufnahme; ändern Sie den Dump und analysieren Sie das Modul erneut.";
 "A code analysis is stored for this module; Open with Code opens it" = "Für dieses Modul ist eine Codeanalyse gespeichert; „Mit Code öffnen“ öffnet sie.";
+"A module inside has a stored code analysis; open the row to reach it" = "Darin liegt ein Modul mit gespeicherter Codeanalyse; die Zeile aufklappen, um es zu erreichen.";
 "A FIT needs at least one microcode entry." = "Eine FIT braucht mindestens einen Microcode-Eintrag.";
 "A file is open in one place at a time, so it cannot be opened here as well. Show it where it is, or move that pane into this tab." = "Eine Datei ist immer nur an einer Stelle geöffnet, hier also nicht zusätzlich. Zeigen Sie sie dort, wo sie ist, oder bewegen Sie jenen Bereich in diesen Tab.";
 "A second header entry, where there may be only one" = "Ein zweiter Kopfeintrag, obwohl es nur einen geben darf";

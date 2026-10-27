@@ -2594,9 +2594,12 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         guard let image else { return .none }
         // The bytes, only for a row whose marks are read off them.
         let reader = node.kind == .lenvBlock ? tree?.spaceReaders.reader(for: node.space) : nil
+        let isOpen = outline.isItemExpanded(row(node.id))
         return UEFITreeMarks.marks(for: node, in: image, badChecksums: badChecksums[node.id] ?? [],
-                                   isOpen: outline.isItemExpanded(row(node.id)), reader: reader,
+                                   isOpen: isOpen, reader: reader,
                                    hasCode: codeAnalysis.contains(node.id),
+                                   hidesCode: UEFITreeMarks.hidesCode(node, isOpen: isOpen,
+                                                                      analyzed: codeAnalysis),
                                    in: Localization.appLanguage)
     }
 

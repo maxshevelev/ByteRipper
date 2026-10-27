@@ -100,7 +100,11 @@ the node's name rather than in the leading badge slots:
 
 - tint `secondaryLabelColor`, like the other role badges;
 - tooltip: "A code analysis is stored for this module; Open with Code opens it";
-- only on the image node, never rolled up to the FFS file or the volume;
+- on the image node; while a row above it inside the FFS file is collapsed —
+  the file, or a compressed section in it — that row wears it instead, with the
+  tooltip "A module inside has a stored code analysis; open the row to reach
+  it", so a list of collapsed files shows which are analyzed. Never rolled up to
+  a volume or a region: nearly every one would wear it;
 - the badge is present only when the manifest is readable **and** its artifact
   object exists. A manifest whose object is missing is a `verify` problem, not a
   dead menu item.

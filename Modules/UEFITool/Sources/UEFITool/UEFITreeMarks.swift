@@ -29,6 +29,8 @@ public enum UEFITreeMarks {
     ///     whether a LENV block is stored encoded. Without it those are left off.
     ///   - hasCode: a usable code analysis is stored for this image node
     ///     (`Design/CODE_PANEL_PLAN.md`).
+    ///   - hidesCode: the row is shut on an image that has one
+    ///     (`hidesCode(_:isOpen:analyzed:)`).
     public static func marks(
         for node: UEFINode,
         in image: UEFIImage,
@@ -36,6 +38,7 @@ public enum UEFITreeMarks {
         isOpen: Bool = false,
         reader: ImageReader? = nil,
         hasCode: Bool = false,
+        hidesCode: Bool = false,
         in language: AppLanguage
     ) -> ToolRowMarks {
         var errors: [String] = []
@@ -89,6 +92,8 @@ public enum UEFITreeMarks {
         // no other role badge, so this only matters if a future mark joins one.
         if hasCode {
             roles.insert(.codeAnalysis, at: 0)
+        } else if hidesCode {
+            roles.insert(.codeAnalysisInside, at: 0)
         }
 
         return ToolRowMarks(
@@ -98,6 +103,16 @@ public enum UEFITreeMarks {
             problem: .worst(errors: errors, cautions: cautions),
             roles: roles
         )
+    }
+
+    /// Whether a shut row stands for an analyzed image below it: a file, or a
+    /// section in one, so a list of shut files says which modules are
+    /// analyzed. A volume or a region does not wear it — every one of them
+    /// would. Open, the row hands the badge down to what it shows.
+    public static func hidesCode(_ node: UEFINode, isOpen: Bool, analyzed: Set<NodeID>) -> Bool {
+        guard !isOpen, node.kind == .file || node.kind == .section else { return false }
+        let path = node.id.path
+        return analyzed.contains { $0.path.count > path.count && $0.path.starts(with: path) }
     }
 
     /// Which of a node's checksums is wrong, since "invalid" alone leaves the

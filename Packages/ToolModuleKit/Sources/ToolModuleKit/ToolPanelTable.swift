@@ -234,7 +234,7 @@ import Localization
     /// need. Set per row, like the warning: cells are recycled. The code badge
     /// is the one role drawn after the text.
     public static func setBadges(_ roles: [ToolRowMarks.Role], on cell: NSTableCellView) {
-        let leadingRoles = roles.filter { $0 != .codeAnalysis }
+        let leadingRoles = roles.filter { !$0.isCode }
         for (index, tag) in badgeTags.enumerated() {
             guard let badge = cell.viewWithTag(tag) as? NSImageView else { continue }
             guard index < leadingRoles.count else {
@@ -252,19 +252,19 @@ import Localization
             ControlHelp.describe(badge, role.toolTip)
             badge.isHidden = false
         }
-        setCodeBadge(roles.contains(.codeAnalysis), on: cell)
+        setCodeBadge(roles.first(where: \.isCode), on: cell)
     }
 
-    private static func setCodeBadge(_ shown: Bool, on cell: NSTableCellView) {
+    private static func setCodeBadge(_ role: ToolRowMarks.Role?, on cell: NSTableCellView) {
         guard let badge = cell.viewWithTag(codeBadgeTag) as? NSImageView else { return }
-        guard shown else {
+        guard let role else {
             badge.isHidden = true
             badge.image = nil
             ControlHelp.describe(badge, nil)
             return
         }
         let mark = ToolRowMark.codeAnalysis
-        let toolTip = ToolRowMarks.Role.codeAnalysis.toolTip
+        let toolTip = role.toolTip
         badge.image = NSImage(systemSymbolName: mark.symbol ?? "",
                               accessibilityDescription: toolTip)
         badge.image?.isTemplate = true

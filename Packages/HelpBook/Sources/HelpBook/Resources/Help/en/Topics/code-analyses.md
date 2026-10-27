@@ -6,7 +6,7 @@
 @covers settings.code-analysis.server
 @covers settings.code-analysis.send
 
-An analysis is made by the Ghidra skill, outside ByteRipper. ByteRipper reads what the skill stored: a module of a UEFI tree with a stored analysis carries a code badge, and **Open with Code** shows its code beside its bytes. An analysis is keyed by the module's bytes, not by the dump, so the same module in another dump opens the same analysis.
+An analysis is made by the Ghidra skill, outside ByteRipper. ByteRipper reads what the skill stored: a module of a UEFI tree with a stored analysis carries a code badge, and **Open with Code** shows its code beside its bytes. While the module's file is collapsed, the badge stands after the file's name, so a list of collapsed files shows which modules have an analysis; expanding the file moves it to the section that holds the module. An analysis is keyed by the module's bytes, not by the dump, so the same module in another dump opens the same analysis.
 
 ## Where the analyses are kept
 

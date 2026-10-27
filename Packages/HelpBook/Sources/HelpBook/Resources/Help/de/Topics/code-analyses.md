@@ -1,9 +1,9 @@
-@source-sha 1dad8e6e85dc4057d62c921521d0cf23701e21e5460ee5dca516565cda12c87c
+@source-sha 5f191b6e03b116cd1c3f93e1fd09bf166069743df98ff104a21c8b7ea8a12ec5
 # Codeanalysen und der Analyseserver
 
 > Eine Codeanalyse ist das, was Ghidra in einem PEI- oder DXE-Modul gefunden hat: seine Funktionen, Befehle und den dekompilierten C-Code sowie die Namen, die eine Durchsicht ihnen gegeben hat. ByteRipper liest Analysen aus einem Speicher — einem Ordner auf diesem Mac oder einem Analyseserver, den alle Macs eines Netzwerks gemeinsam nutzen.
 
-Eine Analyse erstellt der Ghidra-Skill außerhalb von ByteRipper. ByteRipper liest, was der Skill gespeichert hat: Ein Modul des UEFI-Baums, zu dem eine Analyse vorliegt, trägt ein Code-Symbol, und **Mit Code öffnen** zeigt seinen Code neben seinen Bytes. Eine Analyse ist den Bytes des Moduls zugeordnet, nicht dem Dump; dasselbe Modul in einem anderen Dump öffnet daher dieselbe Analyse.
+Eine Analyse erstellt der Ghidra-Skill außerhalb von ByteRipper. ByteRipper liest, was der Skill gespeichert hat: Ein Modul des UEFI-Baums, zu dem eine Analyse vorliegt, trägt ein Code-Symbol, und **Mit Code öffnen** zeigt seinen Code neben seinen Bytes. Solange die Datei des Moduls zugeklappt ist, steht das Symbol hinter dem Namen der Datei; eine Liste zugeklappter Dateien zeigt so, für welche Module eine Analyse vorliegt. Beim Aufklappen der Datei wandert das Symbol zu dem Abschnitt, der das Modul enthält. Eine Analyse ist den Bytes des Moduls zugeordnet, nicht dem Dump; dasselbe Modul in einem anderen Dump öffnet daher dieselbe Analyse.
 
 ## Wo die Analysen liegen
 

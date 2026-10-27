@@ -46,9 +46,12 @@ public extension ToolRowMark {
 }
 
 extension ToolRowMarks.Role {
+    /// Drawn in the badge after the name rather than in the leading slots.
+    var isCode: Bool { self == .codeAnalysis || self == .codeAnalysisInside }
+
     var mark: ToolRowMark {
         switch self {
-        case .codeAnalysis: return .codeAnalysis
+        case .codeAnalysis, .codeAnalysisInside: return .codeAnalysis
         case .compressed(_, let decoded): return decoded ? .compressed : .compressedUndecoded
         case .holdsChecks: return .holdsChecks
         case .partlyProtected: return .partlyProtected
@@ -60,6 +63,8 @@ extension ToolRowMarks.Role {
     var toolTip: String {
         switch self {
         case .codeAnalysis: return ToolRowMark.codeAnalysis.meaning
+        case .codeAnalysisInside:
+            return L("A module inside has a stored code analysis; open the row to reach it")
         case .compressed(let algorithm, let decoded):
             return decoded
                 ? L("%1$@ compressed data that opens here", algorithm)

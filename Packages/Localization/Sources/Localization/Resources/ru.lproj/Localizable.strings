@@ -108,6 +108,7 @@
 "8 Bytes" = "8 байт";
 "A code analysis is a snapshot; edit the dump and analyze the module again." = "Разбор кода — это снимок; измените дамп и разберите модуль заново.";
 "A code analysis is stored for this module; Open with Code opens it" = "Для этого модуля сохранён разбор кода; «Открыть с кодом» открывает его.";
+"A module inside has a stored code analysis; open the row to reach it" = "Внутри есть модуль с сохранённым разбором кода; разверните строку, чтобы перейти к нему.";
 "A FIT needs at least one microcode entry." = "В FIT должна быть хотя бы одна запись микрокода.";
 "A file is open in one place at a time, so it cannot be opened here as well. Show it where it is, or move that pane into this tab." = "Файл открыт в одном месте за раз, поэтому открыть его ещё и здесь нельзя. Покажите его там, где он есть, или перенесите ту файловую панель в эту вкладку.";
 "A second header entry, where there may be only one" = "Вторая запись-заголовок, хотя она может быть только одна";
