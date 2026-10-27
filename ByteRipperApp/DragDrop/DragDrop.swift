@@ -5,7 +5,7 @@ import ByteRipperCore
 /// The targeted drop destinations in single-file mode (§4.3, amended by §22.4).
 /// The "this file" half is divided into three horizontal bands — the two join
 /// strips at the top and bottom, and the replace band in the middle — and the
-/// "second file" half is the single Open-as-Second target.
+/// "second file" half is the single Open for Comparison target.
 enum SingleFileDropTarget {
     case insertAtStart
     case replace
@@ -17,7 +17,7 @@ enum SingleFileDropTarget {
         case .insertAtStart: return L("Insert at Start")
         case .replace: return L("Replace Current File")
         case .appendAtEnd: return L("Append at End")
-        case .addSecond: return L("Open as Second File")
+        case .addSecond: return L("Open for Comparison")
         }
     }
 
@@ -29,6 +29,64 @@ enum SingleFileDropTarget {
         case .replace, .addSecond: return false
         }
     }
+}
+
+/// Where a file drag stands with one of the window's drop zones, as the zone
+/// reports it to the window (§4.3).
+///
+/// AppKit tells only the destination under the pointer about a drag, so no zone
+/// can know on its own that the file is over the window at all. The window
+/// gathers this from every zone and shows all of them for as long as the file
+/// is over any one: what the drop can do is read before the pointer gets there,
+/// not discovered zone by zone.
+enum FileDragPresence {
+    /// A file drag came over the zone.
+    case entered
+    /// It left the zone — for another zone, or out of the window.
+    case exited
+    /// The drag is over: dropped or cancelled.
+    case ended
+}
+
+/// What lies under all of a window's drop zones and catches a file drag in the
+/// gaps between them — the minimap, a divider, a panel's margin — so the
+/// window knows the file is still over it (§4.3).
+///
+/// AppKit picks the deepest registered view under the pointer, so this one is
+/// reached only where no zone is. It takes nothing: a drop in a gap is no drop.
+/// Files only — a pane drag has zones of its own and its own way of keeping
+/// track of them.
+final class FileDragBackstopView: NSView {
+    var onFileDragPresence: ((FileDragPresence) -> Void)?
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        registerForDraggedTypes([.fileURL, .fileNames])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) is not supported")
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard sender.draggingPasteboard.draggedPaneID == nil,
+              !sender.draggingPasteboard.droppedFileURLs.isEmpty else { return [] }
+        onFileDragPresence?(.entered)
+        return []
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation { [] }
+
+    override func draggingExited(_ sender: NSDraggingInfo?) {
+        onFileDragPresence?(.exited)
+    }
+
+    override func draggingEnded(_ sender: NSDraggingInfo) {
+        onFileDragPresence?(.ended)
+    }
+
+    override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool { false }
 }
 
 /// The layout of the three bands inside one pane's half of the drop overlay

@@ -270,16 +270,17 @@ final class MainViewController: NSViewController {
     /// Gives a fragment panel's surface a map of its own: what it maps, what it
     /// scrolls, and the state it opens in (`Design/FRAGMENT_PANELS_PLAN.md`).
     ///
-    /// The panel opens with the map the tab has. Someone who works with the
-    /// minimap on wants it on the part too, and a part — a volume, a body, a
-    /// region — is exactly where a map earns its place.
+    /// The panel opens with its map hidden, whatever the tab's is. Opening a
+    /// part must not move the window: a map shown on the way in takes its
+    /// width from the window whenever the panel's dump has none to spare, and
+    /// the window grew by a minimap nobody asked for. The toolbar button shows
+    /// and hides the map of the panel in front.
     func prepareFragmentMinimap(of surface: DocumentSurface, pane: PaneViewModel,
                                 paneView: FilePaneView) {
         surface.panesInMapOrder = { [pane] }
         surface.paneViewsInMapOrder = { [paneView] }
         surface.minimap.wire()
         surface.minimap.track(paneView)
-        surface.minimap.setPanelVisible(minimapPanelVisible, animated: false)
         surface.minimap.refreshMaps()
         surface.minimap.updateLayout()
         surface.minimap.updateViewports()
@@ -811,7 +812,15 @@ final class MainViewController: NSViewController {
     /// content fills the window again.
     private let findBar = FindBarView()
     /// Host for the mode content (`setContentView` swaps what's inside).
-    private let contentContainer = NSView()
+    /// Under every drop zone, it catches a file drag in the gaps between them
+    /// so the zones stay up while the file is over the window (§4.3).
+    private let contentContainer = FileDragBackstopView()
+    /// Whether a file drag is over one of the window's zones at this moment.
+    private var fileDragIsOverZone = false
+    /// Whether the zones are up for a file drag.
+    private var fileDropZonesShown = false
+    /// Takes the zones down once a file drag has left the window.
+    private var fileDragHideTimer: Timer?
     /// The tab's own content surface: the split that shares the content area
     /// between the tool panel, the dump and the minimap, and the three of them
     /// (`Design/FRAGMENT_PANELS_PLAN.md`). One today; a fragment panel is
@@ -1261,6 +1270,12 @@ final class MainViewController: NSViewController {
         newTabDropStrip.onCopyModifierChanged = { [weak self] copying in
             self?.setPaneDragCopyingEverywhere(copying)
         }
+        newTabDropStrip.onFileDragPresence = { [weak self] presence in
+            self?.fileDragPresenceChanged(presence)
+        }
+        contentContainer.onFileDragPresence = { [weak self] presence in
+            self?.fileDragPresenceChanged(presence)
+        }
         newTabDropStrip.onPaneDropped = { [weak self] paneID, copying in
             self?.tearOffPaneToNewTab(draggedPaneID: paneID, copying: copying)
         }
@@ -1511,6 +1526,9 @@ final class MainViewController: NSViewController {
                 dropView.onCopyModifierChanged = { [weak self] copying in
                     self?.setPaneDragCopyingEverywhere(copying)
                 }
+                dropView.onFileDragPresence = { [weak self] presence in
+                    self?.fileDragPresenceChanged(presence)
+                }
                 // A dragged pane gets the same four zones a file gets, and they
                 // mean the same four things: the far half opens it as the second
                 // pane, and the three bands over this file join it at either end or
@@ -1607,6 +1625,9 @@ final class MainViewController: NSViewController {
                 }
                 bands.onCopyModifierChanged = { [weak self] copying in
                     self?.setPaneDragCopyingEverywhere(copying)
+                }
+                bands.onFileDragPresence = { [weak self] presence in
+                    self?.fileDragPresenceChanged(presence)
                 }
             }
             pane1View.onClose = { [weak self] in self?.closePane(at: 0) }
@@ -1820,8 +1841,9 @@ final class MainViewController: NSViewController {
         let view = FilePaneView(viewModel: model)
         // A pane drag raises every window's strip, since any of them could take
         // the pane, and lowers them all when the session ends.
-        view.onDragSessionChanged = { [weak self] active in
+        view.onDragSessionChanged = { [weak self, weak model] active in
             self?.setNewTabStripVisibleEverywhere(active)
+            self?.showPaneDropZonesEverywhere(active ? model?.dragID : nil)
         }
         // The window is named after the files its panes hold, so the title
         // follows the very signal the pane headers follow — a file opened,
@@ -1945,6 +1967,88 @@ final class MainViewController: NSViewController {
         singleFileDropView?.setPaneDragCopying(copying)
         comparisonView?.bands1.setPaneDragCopying(copying)
         comparisonView?.bands2.setPaneDragCopying(copying)
+    }
+
+    // MARK: - Every zone while a file is over the window (§4.3)
+
+    /// A file drag coming over one of the window's zones, leaving it, or
+    /// ending, as the zone reports it.
+    ///
+    /// While the file is over the window every zone it could go to is up and
+    /// unlit, and the one under the pointer lights itself over that. Moving
+    /// from one zone to the next is an exit and an entry in the same step, so
+    /// an exit takes nothing down by itself: the zones go only when nothing in
+    /// the window has taken the drag up again a moment later — the pointer has
+    /// left the window — or when the drag ends.
+    func fileDragPresenceChanged(_ presence: FileDragPresence) {
+        fileDragHideTimer?.invalidate()
+        fileDragHideTimer = nil
+        switch presence {
+        case .entered:
+            fileDragIsOverZone = true
+            // The strip too, wherever the file came in — the minimap, say,
+            // which is no zone of its own.
+            setNewTabStripVisible(true)
+            showFileDropZones(true)
+        case .exited:
+            fileDragIsOverZone = false
+            // The zone just left took itself down; it is still on offer.
+            showFileDropZones(true)
+            let timer = Timer(timeInterval: 0.12, repeats: false) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, !self.fileDragIsOverZone else { return }
+                    self.showFileDropZones(false)
+                }
+            }
+            // The drag runs its own event-tracking loop; a timer in the
+            // default mode would not fire until the drag was over.
+            RunLoop.main.add(timer, forMode: .common)
+            fileDragHideTimer = timer
+        case .ended:
+            fileDragIsOverZone = false
+            setNewTabStripVisible(false)
+            showFileDropZones(false)
+        }
+    }
+
+    /// Puts up, or takes down, every zone a file can go to in this window.
+    ///
+    /// A fragment panel that is up covers the tab's panes and their tool
+    /// panel, so their zones stay down; the panel's own tool panel takes no
+    /// files. The New Tab strip has its own way up (`setNewTabStripVisible`).
+    private func showFileDropZones(_ shown: Bool) {
+        guard shown || fileDropZonesShown else { return }
+        fileDropZonesShown = shown
+        let panes = shown && windowPanesAreReachable
+        singleFileDropView?.showForFileDrag(panes)
+        comparisonView?.bands1.showForFileDrag(panes)
+        comparisonView?.bands2.showForFileDrag(panes)
+        surface.tools.panel.showForFileDrag(panes && surface.tools.isPanelVisible)
+        fragments.frontSurface?.tools.panel.showForFileDrag(shown && fragments.frontSurface?.tools.isPanelVisible == true)
+    }
+
+    /// Puts up, in every open window, every zone the pane with `dragID` can be
+    /// let go on, unlit — or takes them all down for nil (§4.3).
+    ///
+    /// The pane drag has a source, which says when the drag starts and ends,
+    /// so unlike a file's this needs no guessing from the zones: they are up
+    /// from the first movement to the drop. A zone that would refuse the pane
+    /// is not put up; it shows its refusal only under the pointer.
+    private func showPaneDropZonesEverywhere(_ dragID: UUID?) {
+        for controller in openDocuments?.controllers ?? [self] {
+            controller.showPaneDropZones(dragID)
+        }
+    }
+
+    /// This window's share of `showPaneDropZonesEverywhere`. A fragment panel
+    /// that is up covers the tab's panes and their tool panel, so their zones
+    /// stay down; the panel's own tool panel takes no pane.
+    func showPaneDropZones(_ dragID: UUID?) {
+        let tab = windowPanesAreReachable ? dragID : nil
+        singleFileDropView?.showForPaneDrag(tab, copying: false)
+        comparisonView?.bands1.showForPaneDrag(tab, copying: false)
+        comparisonView?.bands2.showForPaneDrag(tab, copying: false)
+        surface.tools.panel.showForPaneDrag(surface.tools.isPanelVisible ? tab : nil)
     }
 
     private func setNewTabStripVisible(_ visible: Bool, forPane isPane: Bool = false) {
@@ -2492,6 +2596,8 @@ final class MainViewController: NSViewController {
         } else {
             activeFilePane?.focusHexView()
         }
+        // The minimap button reads the map in front, which has just changed.
+        revalidateToolbar()
     }
 
     /// Whether the tab's own panes are taking orders. They are not while a
@@ -3028,6 +3134,7 @@ final class MainViewController: NSViewController {
     @objc func toggleMinimap() {
         guard minimapAllowed else { return }
         frontSurface.minimap.togglePanel(animated: true)
+        revalidateToolbar()
     }
 
     /// The surface the commands about "the minimap" mean: the fragment panel in
@@ -7752,9 +7859,11 @@ final class MainViewController: NSViewController {
     /// stacked comparison keeps the wider of the two panes' grids.
     private func standardContentWidth() -> CGFloat {
         // A panel that is up covers the whole content area, so the window is
-        // fitted around it: its one dump's grid.
+        // fitted around it: its one dump's grid, and the margins it stands in
+        // by at either side — without them the grid came out that much short.
         if let front = fragments.frontSurface {
-            return front.paneViewsInMapOrder().first?.contentFitWidth ?? 0
+            guard let fit = front.paneViewsInMapOrder().first?.contentFitWidth else { return 0 }
+            return fit + FragmentPanelLayout.sideInset * 2
         }
         switch mode {
         case .singleFile:
@@ -7784,9 +7893,13 @@ final class MainViewController: NSViewController {
         let tools = surface.tools
         guard tools.isPanelVisible else { return 0 }
         let live = surface.toolPanelWidth()
+        // The width it will open at is at the tab's scale; a fragment panel
+        // draws its tool narrower by its margins (`toolPanelWidthAllowance`),
+        // which the fit has already counted.
         let width = live > 0
             ? live
-            : (tools.activeModule.map { tools.preferredWidth(for: $0) } ?? 0)
+            : (tools.activeModule.map { max(0, tools.preferredWidth(for: $0)
+                                               - surface.toolPanelWidthAllowance) } ?? 0)
         guard width > 0 else { return 0 }
         return width + surface.panelSplit.dividerThickness
     }
@@ -8052,9 +8165,14 @@ extension MainViewController: NSToolbarItemValidation {
             (item.view as? NSPopUpButton)?.selectItem(withTag: WordSize.current.rawValue)
             return true
         case #selector(toggleMinimap):
-            // No file open, no map to show: the empty window's panel is hidden
-            // and the toggle has nothing to switch (§19). A code screen has no
-            // map at all.
+            // The icon says whether the map in front is showing — the panel's
+            // when one is up, the tab's otherwise — since that is the one the
+            // click toggles. No file open, no map to show: the empty window's
+            // panel is hidden and the toggle has nothing to switch (§19). A
+            // code screen has no map at all.
+            let shown = frontSurface.minimapPanelVisible
+            item.image = NSImage(systemSymbolName: shown ? "rectangle.righthalf.inset.filled" : "sidebar.right",
+                                 accessibilityDescription: shown ? L("Hide Minimap") : L("Show Minimap"))
             return mode != .empty && minimapAllowed
         case #selector(togglePaneLayout):
             // The icon names the arrangement the click will produce, the way the
@@ -8155,7 +8273,7 @@ extension MainViewController: NSMenuItemValidation {
             // the panel's state (§19). Disabled with no file open: the empty
             // window's panel is hidden and the item has nothing to toggle (§19).
             guard mode != .empty else { return false }
-            menuItem.title = surface.minimapPanelVisible ? L("Hide Minimap") : L("Show Minimap")
+            menuItem.title = frontSurface.minimapPanelVisible ? L("Hide Minimap") : L("Show Minimap")
             return minimapAllowed
         case #selector(toggleInsertMode):
             // A checked toggle reading the ACTIVE pane's mode: the mode is per

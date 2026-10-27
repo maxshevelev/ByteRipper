@@ -200,6 +200,9 @@ import ALSplitView
         tools.panel.onSelectPane = { [weak self] index in
             self?.tools.selectPane(at: index)
         }
+        tools.panel.onFileDragPresence = { [weak self] presence in
+            self?.host?.fileDragPresenceChanged(presence)
+        }
         tools.panel.paneDropTitle = { [weak self] dragID in
             self?.tools.paneDropTitle(forPaneWith: dragID)
         }

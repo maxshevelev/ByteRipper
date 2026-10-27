@@ -1,4 +1,4 @@
-@source-sha ba1d5cb2bfae501be82f4bd9f4dc4005663b71411ad7b8a326488de39aa390d8
+@source-sha 2c89201b87505b80c967b9b8670e2134350f76a8008f53149d93ef416834fc1c
 # Fragment-Bereiche: ein Stück eines Dumps als eigene Datei
 
 > Einen Teil eines Images entnehmen, als eigene Datei bearbeiten und zurückschreiben.
@@ -20,7 +20,7 @@ Ein Fragment trägt den Namen dessen, was geöffnet wurde – des Knotens oder d
 
 Ein Fragment-Bereich ist eine eigenständige Lesefläche und nicht eine zweite Ansicht der Quelle; er trägt dieselben zwei Instrumente wie das Fenster:
 
-- **Eine eigene Minimap.** **Darstellung ▸ Minimap einblenden** (⇧⌘M) und die Taste ganz rechts in der Symbolleiste wirken auf den jeweils vordersten Bereich, sodass die Spalte neben einem Fragment das Fragment selbst abbildet: dessen Lesezeichen, dessen Segmentstreifen und die Zonen, die ein Werkzeug darin veröffentlicht hat.
+- **Eine eigene Minimap.** **Darstellung ▸ Minimap einblenden** (⇧⌘M) und die Taste ganz rechts in der Symbolleiste wirken auf den jeweils vordersten Bereich, sodass die Spalte neben einem Fragment das Fragment selbst abbildet: dessen Lesezeichen, dessen Segmentstreifen und die Zonen, die ein Werkzeug darin veröffentlicht hat. Ein Bereich öffnet sich mit ausgeblendeter Minimap, unabhängig davon, was der Tab zeigt; das Öffnen eines Fragments ändert die Fenstergröße daher nie. Die Taste in der Symbolleiste zeigt an, ob die Minimap des vordersten Bereichs eingeblendet ist.
 - **Ein eigener Werkzeugbereich.** Das Menü **Werkzeuge** und die Werkzeugtaste der Symbolleiste wirken ebenso auf den vordersten Bereich, und das dort geöffnete Werkzeug liest die Bytes des Fragments. Es ist an dieses eine Fragment gebunden: Wo sich ein Werkzeug im Fenster auf jede der geöffneten Dateien richten lässt, hat eines im Bereich eine einzige und bietet keinen Wechsel an.
 
 ## Wenn das Zurückschreiben abgelehnt wird
@@ -57,7 +57,7 @@ Hier ist es nützlich, eine komprimierte Sektion entpackt zu öffnen. Im Bereich
 
 ## Ein Fragment in einem eigenen Tab
 
-**In neuem Tab öffnen** im Menü der Kopfzeile oder im Menü der Pille im Dock, oder das Ziehen des Bereichs an seiner Kopfzeile oder an seiner Pille im Dock auf den Streifen für einen neuen Tab, verschiebt das Fragment in einen eigenen Tab. Die Pille zieht ein eingeklapptes Fragment so, wie die Kopfzeile ein aufgeklapptes zieht. Dort ist es kein Fragment-Bereich mehr, sondern die Datei des Tabs, und daneben lässt sich eine zweite Datei zum Vergleich öffnen, auch ein anderes Fragment: Dessen Bereich wird an der Kopfzeile oder an der Pille auf den Tab gezogen und über **Als zweite Datei öffnen** losgelassen. Der Bereich verlässt das Dock und wird die zweite Datei des Tabs; mit gedrückter ⌥-Taste wird das Fragment kopiert und bleibt im Dock. Die Streifen zum Anfügen nehmen ein Fragment nicht an: Seine Bytes gelangen über **In der Quelle aktualisieren** in die Quelle zurück.
+**In neuem Tab öffnen** im Menü der Kopfzeile oder im Menü der Pille im Dock, oder das Ziehen des Bereichs an seiner Kopfzeile oder an seiner Pille im Dock auf den Streifen für einen neuen Tab, verschiebt das Fragment in einen eigenen Tab. Die Pille zieht ein eingeklapptes Fragment so, wie die Kopfzeile ein aufgeklapptes zieht. Dort ist es kein Fragment-Bereich mehr, sondern die Datei des Tabs, und daneben lässt sich eine zweite Datei zum Vergleich öffnen, auch ein anderes Fragment: Dessen Bereich wird an der Kopfzeile oder an der Pille auf den Tab gezogen und über **Zum Vergleich öffnen** losgelassen. Der Bereich verlässt das Dock und wird die zweite Datei des Tabs; mit gedrückter ⌥-Taste wird das Fragment kopiert und bleibt im Dock. Die Streifen zum Anfügen nehmen ein Fragment nicht an: Seine Bytes gelangen über **In der Quelle aktualisieren** in die Quelle zurück.
 
 ## Lesezeichen zwischen Quelle und Fragmenten
 

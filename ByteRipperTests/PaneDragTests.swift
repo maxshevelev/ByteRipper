@@ -451,7 +451,7 @@ final class PaneDragTests: XCTestCase {
     func testTheStripLeavesTheBandsRoom() {
         let layout = DropBandLayout(halfHeight: 400, topInset: NewTabDropStrip.height)
 
-        XCTAssertEqual(NewTabDropStrip.height, 44)
+        XCTAssertEqual(NewTabDropStrip.height, 52)
         XCTAssertGreaterThan(layout.replaceRange.upperBound, layout.replaceRange.lowerBound,
                              "the middle band survives the strip's share")
     }
@@ -734,10 +734,36 @@ final class PaneDragTests: XCTestCase {
 
     // MARK: - Crossing a zone with nothing to offer
 
-    /// The overlay must not forget what is in flight when it hides its bands.
+    /// Over the band with nothing to offer the other bands stay up, and that
+    /// band is not shown at all — under the pointer included.
+    func testTheRefusedBandLeavesTheOtherBandsUp() {
+        let bands = PaneDropBandsView(paneView: FilePaneView(viewModel: PaneViewModel()))
+        bands.frame = NSRect(x: 0, y: 0, width: 300, height: 400)
+        bands.layout()
+        bands.paneDropOutcome = { _, band, _ in
+            switch band {
+            case .insertAtStart: return .join(intoPane: 0, at: .start)
+            case .appendAtEnd: return .join(intoPane: 0, at: .end)
+            default: return .none
+            }
+        }
+
+        XCTAssertEqual(bands.paneDragEnteredForTesting(UUID(), at: .replace), [])
+
+        let insert = bands.bandForTesting(.insertAtStart)
+        let middle = bands.bandForTesting(.replace)
+        let append = bands.bandForTesting(.appendAtEnd)
+        XCTAssertFalse(insert.isHidden, "the ends stay up")
+        XCTAssertFalse(append.isHidden)
+        XCTAssertTrue(middle.isHidden, "the refused middle is not shown, though the pointer is on it")
+        XCTAssertFalse([insert, middle, append].contains(where: \.isHighlightedForTesting),
+                       "nothing is lit over a refusal")
+    }
+
+    /// The overlay must not forget what is in flight over a refused band.
     ///
     /// The middle band of a pane's own slot is the one zone with nothing to
-    /// offer, so the bands go away there. Clearing the dragged pane at the same
+    /// offer. Clearing the dragged pane at the same
     /// time meant the overlay answered "no" for the rest of the drag: entering
     /// from outside worked, moving out of the middle band did not.
     func testCrossingTheRefusedMiddleBandDoesNotEndTheDrag() throws {
@@ -874,20 +900,20 @@ final class PaneDragTests: XCTestCase {
         XCTAssertEqual(PaneDropBandsView.paneBandTitle(for: .move(intoPane: 1)), "Move Here")
     }
 
-    /// A band with nothing to offer has no caption to give, and says so with a
-    /// symbol rather than with an empty plate.
-    func testARefusingBandShowsTheRefusalSymbol() {
+    /// A band with nothing to offer has no caption to give: it is refused, and
+    /// a caption takes the refusal back.
+    func testARefusingBandIsMarkedRefused() {
         XCTAssertNil(PaneDropBandsView.paneBandTitle(for: .none),
-                     "nothing to say means the symbol, not an empty caption")
+                     "nothing to say means refused, not an empty caption")
 
         let zone = DropTargetView(title: "Swap Panes")
-        XCTAssertFalse(zone.isShowingRefusal)
+        XCTAssertFalse(zone.isRefused)
 
         zone.setRefused()
-        XCTAssertTrue(zone.isShowingRefusal)
+        XCTAssertTrue(zone.isRefused)
 
         zone.setTitle("Move Here")
-        XCTAssertFalse(zone.isShowingRefusal, "a caption puts the symbol away again")
+        XCTAssertFalse(zone.isRefused, "a caption takes the refusal back")
     }
 
     /// Over its own slot a pane can join at either end and nothing else, so the
@@ -922,10 +948,10 @@ final class PaneDragTests: XCTestCase {
             }
         }
 
-        XCTAssertFalse(bands.bandForTesting(.insertAtStart).isShowingRefusal,
+        XCTAssertFalse(bands.bandForTesting(.insertAtStart).isRefused,
                        "the end bands have something to offer and say so")
-        XCTAssertFalse(bands.bandForTesting(.appendAtEnd).isShowingRefusal)
-        XCTAssertTrue(bands.bandForTesting(.replace).isShowingRefusal,
+        XCTAssertFalse(bands.bandForTesting(.appendAtEnd).isRefused)
+        XCTAssertTrue(bands.bandForTesting(.replace).isRefused,
                       "only the band with nothing to offer shows the symbol")
     }
 

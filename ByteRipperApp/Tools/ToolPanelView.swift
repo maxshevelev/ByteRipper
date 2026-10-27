@@ -38,6 +38,10 @@ final class ToolPanelView: NSView, ToolPanelFrame {
     /// What dropping the pane with this id would do, for the caption — nil for
     /// a pane the panel will not take, which is its own.
     var paneDropTitle: ((UUID) -> String?)?
+    /// Fired as a file drag comes over the panel, leaves it, and ends. See
+    /// `PaneDropBandsView.onFileDragPresence`.
+    var onFileDragPresence: ((FileDragPresence) -> Void)?
+    private var carryingFiles = false
 
     /// Whether anything may be dropped on the panel at all. False on a fragment
     /// panel: what the panel reads is a *part*, which has no file to replace
@@ -273,17 +277,20 @@ final class ToolPanelView: NSView, ToolPanelFrame {
         // *own* pins. It broke the rule's, and the body it is measured from
         // then kept whatever width it last had, so a panel dragged narrower
         // laid its tool-module out for the old width.
-        let zoneLeading = dropZone.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8)
+        let zoneLeading = dropZone.leadingAnchor.constraint(equalTo: leadingAnchor,
+                                                             constant: DropTargetView.edgePadding)
         zoneLeading.priority = .defaultHigh
         let zoneTrailing = dropZone.trailingAnchor.constraint(
-            equalTo: trailingSeparator.leadingAnchor, constant: -8
+            equalTo: trailingSeparator.leadingAnchor, constant: -DropTargetView.edgePadding
         )
         zoneTrailing.priority = .defaultHigh
         // The same on the other axis: a collapsed panel is no taller than the
         // header it does not draw either.
-        let zoneTop = dropZone.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 8)
+        let zoneTop = dropZone.topAnchor.constraint(equalTo: header.bottomAnchor,
+                                                     constant: DropTargetView.edgePadding)
         zoneTop.priority = .defaultHigh
-        let zoneBottom = dropZone.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8)
+        let zoneBottom = dropZone.bottomAnchor.constraint(equalTo: bottomAnchor,
+                                                           constant: -DropTargetView.edgePadding)
         zoneBottom.priority = .defaultHigh
 
         // And the body's own edge against the rule, for the same reason: a
@@ -380,29 +387,33 @@ final class ToolPanelView: NSView, ToolPanelFrame {
     // MARK: - Dropping on the panel
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        if sender.draggingPasteboard.draggedPaneID == nil,
+           !sender.draggingPasteboard.droppedFileURLs.isEmpty {
+            // Even where the panel refuses: the file is still over the window,
+            // and its other zones stay in view.
+            carryingFiles = true
+            onFileDragPresence?(.entered)
+        }
         guard takesDrops else {
-            // Wearing the refusal rather than staying blank, for the reason the
-            // pane refusal below gives: an area that does nothing and says
-            // nothing does not say why.
-            show(dropZone: true, refused: true)
+            // Nothing is shown where nothing can land; the cursor refuses.
+            show(dropZone: false)
             return []
         }
         if let paneID = sender.draggingPasteboard.draggedPaneID {
             draggedPaneID = paneID
             guard let title = paneDropTitle?(paneID) else {
-                // Its own pane. The zone still appears, wearing the refusal —
-                // an area that stays blank says nothing about why nothing will
-                // happen (§4.3).
-                show(dropZone: true, refused: true)
+                // Its own pane: nothing is shown where nothing can land, and
+                // the cursor refuses (§4.3).
+                show(dropZone: false)
                 return []
             }
             dropZone.setTitle(title)
-            show(dropZone: true, refused: false)
+            show(dropZone: true)
             return .move
         }
         guard !sender.draggingPasteboard.droppedFileURLs.isEmpty else { return [] }
         dropZone.setTitle(SingleFileDropTarget.replace.title)
-        show(dropZone: true, refused: false)
+        show(dropZone: true)
         return .copy
     }
 
@@ -415,11 +426,24 @@ final class ToolPanelView: NSView, ToolPanelFrame {
     }
 
     override func draggingExited(_ sender: NSDraggingInfo?) {
+        // A pane's zone stays up unlit while its drag goes on: the window put it
+        // up for it.
+        if paneSessionShown, let paneID = draggedPaneID {
+            showForPaneDrag(paneID)
+            return
+        }
         endDrag()
+        if carryingFiles {
+            carryingFiles = false
+            onFileDragPresence?(.exited)
+        }
     }
 
     override func draggingEnded(_ sender: NSDraggingInfo) {
+        paneSessionShown = false
         endDrag()
+        carryingFiles = false
+        onFileDragPresence?(.ended)
     }
 
     override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
@@ -432,6 +456,7 @@ final class ToolPanelView: NSView, ToolPanelFrame {
             return false
         }
         if let paneID = sender.draggingPasteboard.draggedPaneID {
+            paneSessionShown = false
             let accepted = paneDropTitle?(paneID) != nil
             endDrag()
             guard accepted else { return false }
@@ -440,30 +465,68 @@ final class ToolPanelView: NSView, ToolPanelFrame {
         }
         let urls = sender.draggingPasteboard.droppedFileURLs
         endDrag()
+        carryingFiles = false
+        onFileDragPresence?(.ended)
         guard !urls.isEmpty else { return false }
         onDropFiles?(urls)
         return true
     }
 
-    private func show(dropZone shown: Bool, refused: Bool) {
+    private func show(dropZone shown: Bool) {
         dropZone.isHidden = !shown
-        dropZone.setHighlighted(shown && !refused)
-        if refused { dropZone.setRefused() }
+        dropZone.setHighlighted(shown)
+    }
+
+    /// Whether the window has put the zone up for a pane drag in flight
+    /// anywhere. See `PaneDropBandsView.showForPaneDrag`.
+    private var paneSessionShown = false
+
+    /// Puts the zone up, unlit, for the pane with `paneID` being dragged
+    /// anywhere in the app, when the panel would take it; nil takes it down.
+    /// A panel that would refuse the pane shows nothing until the pointer
+    /// reaches it.
+    func showForPaneDrag(_ paneID: UUID?) {
+        guard let paneID else {
+            guard paneSessionShown else { return }
+            paneSessionShown = false
+            endDrag()
+            return
+        }
+        paneSessionShown = true
+        draggedPaneID = paneID
+        guard takesDrops, let title = paneDropTitle?(paneID) else {
+            show(dropZone: false)
+            return
+        }
+        dropZone.setTitle(title)
+        dropZone.setHighlighted(false)
+        dropZone.isHidden = false
+    }
+
+    /// Shows the zone unlit for a file that is over another of the window's
+    /// zones, or takes it down when it has gone (§4.3). Only where the panel
+    /// takes a file: a zone that would refuse is not one of the places the file
+    /// can go, and says so only when the pointer reaches it.
+    func showForFileDrag(_ shown: Bool) {
+        guard draggedPaneID == nil, takesDrops else { return }
+        if shown {
+            guard dropZone.isHidden else { return }
+            dropZone.setTitle(SingleFileDropTarget.replace.title)
+            dropZone.setHighlighted(false)
+            dropZone.isHidden = false
+        } else {
+            show(dropZone: false)
+        }
     }
 
     private func endDrag() {
         draggedPaneID = nil
-        show(dropZone: false, refused: false)
+        show(dropZone: false)
     }
 
     /// What the drop zone is saying, for tests. Nil while it is not shown.
     var dropZoneCaption: String? {
         dropZone.isHidden ? nil : dropZone.titleForTesting
-    }
-
-    /// Whether the zone is refusing what is being carried, for tests.
-    var dropZoneIsRefusing: Bool {
-        !dropZone.isHidden && dropZone.isShowingRefusal
     }
 
     @objc private func closeClicked() {

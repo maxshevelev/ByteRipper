@@ -24,7 +24,7 @@ A fragment is named after what was opened — the node or the zone — and nothi
 
 A fragment panel is a reading surface in its own right rather than a second view of the parent's, and it carries the same two instruments the window carries:
 
-- **Its own minimap.** **View ▸ Show Minimap** (⇧⌘M) and the button at the right end of the toolbar act on whichever panel is in front, so the column beside a fragment maps the fragment: its own bookmarks, its own segment strip, and the zones a tool published in it.
+- **Its own minimap.** **View ▸ Show Minimap** (⇧⌘M) and the button at the right end of the toolbar act on whichever panel is in front, so the column beside a fragment maps the fragment: its own bookmarks, its own segment strip, and the zones a tool published in it. A panel opens with its minimap hidden, whatever the tab shows, so opening a fragment never changes the window's size; the toolbar button shows whether the minimap of the panel in front is on.
 - **Its own tool panel.** The **Tools** menu and the toolbar's tool button act on the panel in front in the same way, and the tool that opens there reads the fragment's bytes. It is bound to that one fragment: where a tool in the window can be pointed at either of the open files, a tool in a panel has one and offers no switch.
 
 ## When putting it back is refused
@@ -61,7 +61,7 @@ Opening a compressed section decompressed is useful here. In the parent's pane a
 
 ## A fragment in a tab of its own
 
-**Open in New Tab** in the panel's header menu or the pill's menu, or dragging the panel by its header or by its pill in the dock onto the New Tab strip, moves the fragment into a tab of its own. The pill drags a folded fragment just as the header drags one that is up. There it is no longer a panel but the tab's file, and a second file can be opened beside it for comparison — another fragment included: drag that panel by its header or its pill onto the tab and release it over **Open as Second File**. The panel leaves the dock and becomes the tab's second file; with ⌥ held it is copied instead and stays in the dock. A fragment released over the bands that join files is not accepted: its bytes go back into the parent through **Update in Parent**.
+**Open in New Tab** in the panel's header menu or the pill's menu, or dragging the panel by its header or by its pill in the dock onto the New Tab strip, moves the fragment into a tab of its own. The pill drags a folded fragment just as the header drags one that is up. There it is no longer a panel but the tab's file, and a second file can be opened beside it for comparison — another fragment included: drag that panel by its header or its pill onto the tab and release it over **Open for Comparison**. The panel leaves the dock and becomes the tab's second file; with ⌥ held it is copied instead and stays in the dock. A fragment released over the bands that join files is not accepted: its bytes go back into the parent through **Update in Parent**.
 
 ## Bookmarks across a parent and its fragments
 

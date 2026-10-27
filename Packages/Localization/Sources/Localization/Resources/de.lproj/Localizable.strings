@@ -605,7 +605,6 @@
 "No results" = "Keine Ergebnisse";
 "Non-UEFI data" = "Nicht-UEFI-Daten";
 "None" = "Keine";
-"Not allowed here" = "Hier nicht erlaubt";
 "Not checked" = "Nicht geprüft";
 "Not found" = "Nicht gefunden";
 "Not found." = "Nicht gefunden.";
@@ -650,7 +649,7 @@
 "Open Recent" = "Benutzte Dokumente";
 "Open With ByteRipper" = "Mit ByteRipper öffnen";
 "Open Zone" = "Zone öffnen";
-"Open as Second File" = "Als zweite Datei öffnen";
+"Open for Comparison" = "Zum Vergleich öffnen";
 "Open in Help" = "In der Hilfe öffnen";
 "Open in New Tab" = "In neuem Tab öffnen";
 "Open “%1$@”" = "„%1$@“ öffnen";
