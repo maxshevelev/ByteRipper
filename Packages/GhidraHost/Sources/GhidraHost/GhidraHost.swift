@@ -212,7 +212,7 @@ public actor GhidraHost {
         if (try? await Self.call(record.port, "POST", "/v1/stop", timeout: 30)) == nil {
             kill(record.pid, SIGTERM)
         }
-        for _ in 0..<100 where kill(record.pid, 0) == 0 {
+        for _ in 0..<100 where Subprocess.isAlive(record.pid) {
             try? await Task.sleep(nanoseconds: 100_000_000)
         }
         try? FileManager.default.removeItem(at: project.ownerURL)
@@ -233,7 +233,7 @@ public actor GhidraHost {
         // large module — not gone: a second one would only fail on Ghidra's
         // project lock.
         if let data = try? Data(contentsOf: project.ownerURL),
-           let record = try? JSONDecoder().decode(OwnerRecord.self, from: data), kill(record.pid, 0) == 0 {
+           let record = try? JSONDecoder().decode(OwnerRecord.self, from: data), Subprocess.isAlive(record.pid) {
             throw GhidraHostError(.owner, "the module's owner is busy — a publish of a large module can take a "
                                   + "while; try again shortly", status: 503)
         }
@@ -253,7 +253,7 @@ public actor GhidraHost {
     func runningOwner(_ project: GhidraProject, replacingStale: Bool = false) async -> OwnerRecord? {
         guard let data = try? Data(contentsOf: project.ownerURL),
               let record = try? JSONDecoder().decode(OwnerRecord.self, from: data) else { return nil }
-        guard kill(record.pid, 0) == 0 else {
+        guard Subprocess.isAlive(record.pid) else {
             try? FileManager.default.removeItem(at: project.ownerURL)
             leases[project.module] = nil
             return nil
@@ -265,7 +265,7 @@ public actor GhidraHost {
         let running = (try? JSONSerialization.jsonObject(with: hello.data) as? [String: Any])?["build"] as? Int
         guard running != current else { return record }
         _ = try? await Self.call(record.port, "POST", "/v1/stop", timeout: 60)
-        for _ in 0..<120 where kill(record.pid, 0) == 0 {
+        for _ in 0..<120 where Subprocess.isAlive(record.pid) {
             try? await Task.sleep(nanoseconds: 500_000_000)
         }
         try? FileManager.default.removeItem(at: project.ownerURL)

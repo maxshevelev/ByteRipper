@@ -18,6 +18,17 @@ final class GhidraHostUnitTests: XCTestCase {
         XCTAssertEqual(GhidraHost.safeRecipe("///"), "unknown")
     }
 
+    /// An owner that exited on its idle timeout is the host's zombie until
+    /// reaped; it must read as gone, not as an owner too busy to answer.
+    func testAnExitedChildReadsAsGone() throws {
+        let log = FileManager.default.temporaryDirectory.appendingPathComponent("zombie-\(UUID()).log")
+        defer { try? FileManager.default.removeItem(at: log) }
+        let child = try Subprocess.spawn(URL(fileURLWithPath: "/bin/sh"), ["-c", "exit 0"], log: log, ownSession: true)
+        Thread.sleep(forTimeInterval: 0.5)
+        XCTAssertEqual(kill(child.pid, 0), 0, "a zombie answers kill(pid, 0)")
+        XCTAssertFalse(Subprocess.isAlive(child.pid))
+    }
+
     func testAStateWrittenByPythonReadsAndWritesBackTheSameFields() throws {
         let json = """
         {"schema": 1, "project": "p", "module": {"sha256": "ab", "size": 1, "name": "M", "kind": "TE", "phase": "pei"},

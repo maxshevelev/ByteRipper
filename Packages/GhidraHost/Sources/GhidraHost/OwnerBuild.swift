@@ -91,6 +91,16 @@ enum OwnerBuild {
 
 /// Starting a program with its output in a log file.
 enum Subprocess {
+    /// Whether a process is still running. An owner this host started and
+    /// that has exited — on its idle timeout — stays a zombie until reaped,
+    /// and a zombie answers `kill(pid, 0)` as if it lived: it is reaped here
+    /// first, so it reads as gone and not as an owner too busy to answer.
+    static func isAlive(_ pid: pid_t) -> Bool {
+        var status: Int32 = 0
+        if waitpid(pid, &status, WNOHANG) == pid { return false }
+        return kill(pid, 0) == 0
+    }
+
     /// Runs to the end, or is killed after `timeout`; the exit status.
     static func run(_ executable: URL, _ arguments: [String], log: URL, timeout: TimeInterval,
                     environment: [String: String]? = nil) throws -> Int32 {
