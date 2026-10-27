@@ -1694,7 +1694,8 @@
 "The annotation is shown beside the code and listed in the Annotations window. A double-click on it opens the code here." = "Die Anmerkung erscheint neben dem Code und im Fenster „Anmerkungen“. Ein Doppelklick darauf öffnet den Code an dieser Stelle.";
 "The module of this code was not found in the dump it was opened over." = "Das Modul dieses Codes wurde in dem Dump, über dem der Bereich geöffnet ist, nicht gefunden.";
 "The note was made on other bytes of this module." = "Die Anmerkung wurde zu anderen Bytes dieses Moduls angelegt.";
-"Show Callers" = "Aufrufe anzeigen";
+"Show Callers…" = "Aufrufe anzeigen…";
+"Jump to Definition" = "Gehe zu Definition";
 "Callers of %1$@" = "Aufrufe von %1$@";
 "Calls: %1$@" = "Aufrufe: %1$@";
 "Caller" = "Aufrufende Funktion";

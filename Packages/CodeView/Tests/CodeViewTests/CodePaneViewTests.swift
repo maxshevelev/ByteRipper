@@ -662,7 +662,7 @@ final class CodePaneViewTests: XCTestCase {
         let c = textView.string as NSString
 
         let own = try XCTUnwrap(view.cMenu(at: c.range(of: "entry").location))
-        XCTAssertEqual(own.items.map(\.title), ["Show Callers"])
+        XCTAssertEqual(own.items.map(\.title), ["Show Callers…"])
         XCTAssertTrue(own.items[0].isEnabled)
         XCTAssertNil(view.cMenu(at: c.range(of: "void").location), "nothing to offer off a name")
         textView.setSelectedRange(c.range(of: "void"))
@@ -673,13 +673,13 @@ final class CodePaneViewTests: XCTestCase {
         let event = try XCTUnwrap(NSEvent.mouseEvent(with: .rightMouseDown, location: .zero, modifierFlags: [],
                                                      timestamp: 0, windowNumber: 0, context: nil,
                                                      eventNumber: 0, clickCount: 1, pressure: 1))
-        XCTAssertEqual(header.menu(for: event)?.items.map(\.title), ["Show Callers"])
+        XCTAssertEqual(header.menu(for: event)?.items.map(\.title), ["Show Callers…"])
         // Selected, the name is the field editor's: Copy, then the function's.
         let editor = NSTextView()
         editor.string = "entry"
         editor.setSelectedRange(NSRange(location: 0, length: 5))
         XCTAssertEqual(header.textView(editor, menu: NSMenu(), for: event, at: 0)?.items.map(\.title),
-                       ["Copy", "", "Show Callers"])
+                       ["Copy", "", "Show Callers…"])
 
         // Nothing calls FUN_00000220: the item is there, and off.
         view.selectFunction(at: 0)
@@ -687,21 +687,49 @@ final class CodePaneViewTests: XCTestCase {
     }
 
     /// The function's own name in its signature is not a link: ⌘-click and
-    /// a double click would only open the function already open.
-    func testTheFunctionsOwnNameLeadsNowhere() throws {
+    /// a double click show who calls it rather than reopen the function.
+    func testTheFunctionsOwnNameShowsItsCallers() throws {
         let view = CodePaneView(manifest: manifest(), artifact: try selfNamedArtifact(),
                                 moduleBytes: teModule(), hexView: NSView())
         view.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
         view.layoutSubtreeIfNeeded()
+        let window = NSWindow(contentRect: view.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
         view.restore(function: 1, instruction: nil, showsC: true)
         let text = view.decompiledAttributedText
         let signature = (text.string as NSString).range(of: "entry")
         XCTAssertNil(text.attribute(.link, at: signature.location, effectiveRange: nil),
                      "drawn as a name, not a link")
-        XCTAssertFalse(view.clickC(at: signature.location, event: try click(count: 1, flags: .command)))
-        XCTAssertFalse(view.clickC(at: signature.location, event: try click(count: 2)))
+        for event in [try click(count: 1, flags: .command), try click(count: 2)] {
+            XCTAssertTrue(view.clickC(at: signature.location, event: event))
+            let sheet = try XCTUnwrap(window.attachedSheet, "Show Callers…")
+            XCTAssertTrue(sheet.contentViewController is CodeCallersSheet)
+            window.endSheet(sheet)
+        }
         XCTAssertFalse(view.canGoBack, "no jump was made")
         XCTAssertEqual(view.highlightedSymbol, .target(.function(1)), "the name is highlighted, as a click does")
+    }
+
+    /// A call's menu leads with Jump to Definition — what ⌘-click does — and
+    /// then Show Callers… of the function called.
+    func testACallsMenuJumpsToTheDefinition() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try selfNamedArtifact(),
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 0, instruction: nil, showsC: true)
+        let c = view.decompiledAttributedText.string as NSString
+        let call = c.range(of: "entry")
+        let menu = try XCTUnwrap(view.cMenu(at: call.location))
+        XCTAssertEqual(menu.items.map(\.title), ["Jump to Definition", "Show Callers…"])
+        let signature = try XCTUnwrap(view.cMenu(at: c.range(of: "FUN_00000220").location))
+        XCTAssertEqual(signature.items.map(\.title), ["Show Callers…"], "the function's own name is no call")
+
+        let jump = menu.items[0]
+        _ = (jump.target as? NSObject)?.perform(jump.action, with: jump)
+        XCTAssertEqual(view.selectedFunction?.name, "entry")
+        view.goBack()
+        XCTAssertEqual(view.lastFlash, .c(call), "Back returns to the call")
     }
 
     /// FUN_00000220 calls entry; entry's C names itself in its signature.

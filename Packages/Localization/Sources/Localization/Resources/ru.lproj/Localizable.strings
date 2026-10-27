@@ -1694,7 +1694,8 @@
 "The annotation is shown beside the code and listed in the Annotations window. A double-click on it opens the code here." = "Заметка показывается рядом с кодом и в окне «Заметки». Двойной клик по ней открывает код в этом месте.";
 "The module of this code was not found in the dump it was opened over." = "Модуль этого кода не найден в дампе, над которым открыта панель.";
 "The note was made on other bytes of this module." = "Заметка сделана для других байтов этого модуля.";
-"Show Callers" = "Показать вызовы";
+"Show Callers…" = "Показать вызовы…";
+"Jump to Definition" = "Перейти к определению";
 "Callers of %1$@" = "Вызовы функции %1$@";
 "Calls: %1$@" = "Вызовов: %1$@";
 "Caller" = "Вызывающая функция";

@@ -1563,16 +1563,27 @@ import ToolModuleKit
 
     // help: panel.code.highlight
     /// A click in the C: on a name, it highlights the name's every
-    /// occurrence; ⌘-click or a double click on a call or a global goes there.
+    /// occurrence; ⌘-click or a double click on a call or a global goes there,
+    /// and on the function's own name in its signature shows its callers.
     func clickC(at character: Int?, event: NSEvent) -> Bool {
         let token = character.flatMap { index in
             shownCTokens.filter { $0.start <= index && index < $0.start + $0.length }
                 .min { $0.length < $1.length }
         }
-        // The function on screen is where a jump to it would go: ⌘-click on
-        // its name — in the signature, in a recursive call — only highlights.
-        if let token, let link = token.link, link != .function(state.function ?? -1), Self.isJump(event) {
-            leavingCMark = NSRange(location: token.start, length: token.length)
+        if let token, let link = token.link, Self.isJump(event) {
+            let range = NSRange(location: token.start, length: token.length)
+            if case .function(let index) = link {
+                // ⌘-click on the function's own name in its signature asks
+                // who calls it; on a call it goes to the function.
+                if range == signatureName()?.range {
+                    highlight(.target(link))
+                    if callers(of: index).isEmpty { NSSound.beep() } else { showCallers(of: index) }
+                } else {
+                    jumpToDefinition(of: index, from: range)
+                }
+                return true
+            }
+            leavingCMark = range
             follow(link)
             return true
         }
@@ -1583,6 +1594,28 @@ import ToolModuleKit
             return true
         }
         return false
+    }
+
+    /// The function on screen's own name in its signature: the first token
+    /// that names it.
+    private func signatureName() -> (function: Int, range: NSRange)? {
+        guard let index = state.function,
+              let own = shownCTokens.first(where: { $0.link == .function(index) }) else { return nil }
+        return (index, NSRange(location: own.start, length: own.length))
+    }
+
+    /// Jump to Definition on a call in the C at `call`: opens the function
+    /// called, a place Back returns from. A recursive call's definition is
+    /// the signature above it, selected and flashed without a jump.
+    func jumpToDefinition(of index: Int, from call: NSRange) {
+        guard index != state.function else {
+            guard let own = signatureName()?.range else { return }
+            cTextView.setSelectedRange(own)
+            flashArrival(cMark: own)
+            return
+        }
+        leavingCMark = call
+        follow(.function(index))
     }
 
     /// ⌘-click or a double click on a parameter or a local selects where it
@@ -1934,11 +1967,20 @@ extension CodePaneView: NSMenuDelegate {
 
     /// The menu of a function's name — in the header, in the C: Show
     /// Callers, off when nothing calls it.
-    func functionMenu(for index: Int?) -> NSMenu? {
+    /// `call` is the name's range in the C when the name is a call: then
+    /// Jump to Definition, what ⌘-click and a double click on it do, comes
+    /// first.
+    func functionMenu(for index: Int?, call: NSRange? = nil) -> NSMenu? {
         guard let index, model.functions.indices.contains(index) else { return nil }
         let menu = NSMenu()
         menu.autoenablesItems = false
-        let item = menu.addItem(withTitle: L("Show Callers"), action: #selector(showCallersChosen(_:)),
+        if let call {
+            let jump = menu.addItem(withTitle: L("Jump to Definition"), action: #selector(jumpToDefinitionChosen(_:)),
+                                    keyEquivalent: "")
+            jump.target = self
+            jump.representedObject = CodeCallBox(function: index, range: call)
+        }
+        let item = menu.addItem(withTitle: L("Show Callers…"), action: #selector(showCallersChosen(_:)),
                                 keyEquivalent: "")
         item.target = self
         item.representedObject = NSNumber(value: index)
@@ -1953,12 +1995,20 @@ extension CodePaneView: NSMenuDelegate {
             shownCTokens.filter { $0.start <= index && index < $0.start + $0.length }
                 .min { $0.length < $1.length }
         }
-        if case .function(let index)? = token?.link { return functionMenu(for: index) }
+        if let token, case .function(let index)? = token.link {
+            let range = NSRange(location: token.start, length: token.length)
+            return functionMenu(for: index, call: range == signatureName()?.range ? nil : range)
+        }
         guard cTextView.selectedRange().length > 0 else { return nil }
         let menu = NSMenu()
         menu.addItem(withTitle: L("Copy"), action: #selector(NSText.copy(_:)), keyEquivalent: "")
             .target = cTextView
         return menu
+    }
+
+    @objc private func jumpToDefinitionChosen(_ sender: NSMenuItem) {
+        guard let call = sender.representedObject as? CodeCallBox else { return }
+        jumpToDefinition(of: call.function, from: call.range)
     }
 
     @objc private func showCallersChosen(_ sender: NSMenuItem) {
@@ -1979,6 +2029,17 @@ extension CodePaneView: NSMenuDelegate {
     @objc private func annotateChosen(_ sender: NSMenuItem) {
         guard let box = sender.representedObject as? CodePlaceBox else { return }
         onAnnotate?(box.location, box.name)
+    }
+}
+
+/// Jump to Definition's call: the function called, and where in the C.
+private final class CodeCallBox: NSObject {
+    let function: Int
+    let range: NSRange
+
+    init(function: Int, range: NSRange) {
+        self.function = function
+        self.range = range
     }
 }
 
