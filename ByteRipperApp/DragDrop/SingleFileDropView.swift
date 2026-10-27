@@ -30,6 +30,7 @@ final class SingleFileDropView: NSView {
         bandsShareHalf?.isActive = offered
         bandsTakeAll?.isActive = !offered
         addTarget.isHidden = !offered
+        applyAdjoiningEdges()
         layoutSubtreeIfNeeded()
     }
 
@@ -182,12 +183,26 @@ final class SingleFileDropView: NSView {
         }
         bandsShareHalf = half
         bandsTakeAll = all
+        splitIsVertical = isVertical
         // The half is the resting state; `setSecondHalfOffered` swaps to `all`
         // when a drop has nothing to put in the second half.
         half.isActive = true
         constraints.append(half)
         NSLayoutConstraint.activate(constraints)
         splitConstraints = constraints
+        applyAdjoiningEdges()
+    }
+
+    /// Which way the halves are split, for the edge they share.
+    private var splitIsVertical = true
+
+    /// Tells both halves which edge they share, so the gap between their
+    /// plates is the padding once rather than twice. With the second half not
+    /// on offer, the bands have every edge to themselves.
+    private func applyAdjoiningEdges() {
+        let shared = bandsShareHalf?.isActive ?? true
+        thisFileBands.adjoiningEdge = shared ? (splitIsVertical ? .maxX : .minY) : nil
+        addTarget.setAdjoiningEdge(splitIsVertical ? .minX : .maxY)
     }
 
     /// The "second file" half, so a test can read whether it is up and lit.

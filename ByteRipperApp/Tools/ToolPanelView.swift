@@ -277,17 +277,20 @@ final class ToolPanelView: NSView, ToolPanelFrame {
         // *own* pins. It broke the rule's, and the body it is measured from
         // then kept whatever width it last had, so a panel dragged narrower
         // laid its tool-module out for the old width.
-        let zoneLeading = dropZone.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8)
+        let zoneLeading = dropZone.leadingAnchor.constraint(equalTo: leadingAnchor,
+                                                             constant: DropTargetView.edgePadding)
         zoneLeading.priority = .defaultHigh
         let zoneTrailing = dropZone.trailingAnchor.constraint(
-            equalTo: trailingSeparator.leadingAnchor, constant: -8
+            equalTo: trailingSeparator.leadingAnchor, constant: -DropTargetView.edgePadding
         )
         zoneTrailing.priority = .defaultHigh
         // The same on the other axis: a collapsed panel is no taller than the
         // header it does not draw either.
-        let zoneTop = dropZone.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 8)
+        let zoneTop = dropZone.topAnchor.constraint(equalTo: header.bottomAnchor,
+                                                     constant: DropTargetView.edgePadding)
         zoneTop.priority = .defaultHigh
-        let zoneBottom = dropZone.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8)
+        let zoneBottom = dropZone.bottomAnchor.constraint(equalTo: bottomAnchor,
+                                                           constant: -DropTargetView.edgePadding)
         zoneBottom.priority = .defaultHigh
 
         // And the body's own edge against the rule, for the same reason: a

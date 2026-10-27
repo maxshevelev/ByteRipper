@@ -16,6 +16,12 @@ final class DropTargetView: NSView {
     /// one's fill says which.
     static let idleFillAlpha: CGFloat = 0.5
 
+    /// How far a zone's plate stands in from the edges of the panel it lies
+    /// over, and how far apart two zones side by side stand: the plate never
+    /// meets a pane's border, a divider or its neighbour, so each reads as a
+    /// place of its own. Where two zones meet, each takes half.
+    static let edgePadding: CGFloat = 10
+
     /// Whether the zone is showing its hover fill. Held so a theme switch can
     /// repaint the plate without forgetting whether it was lit (§3.1).
     private var highlighted = false
@@ -27,7 +33,6 @@ final class DropTargetView: NSView {
         // hover only (§4.3). The caption sits on its own frosted plate, so
         // neither fill ever bleeds into the text.
         layer?.cornerRadius = 8
-        layer?.borderWidth = 1
         applyPlateColors()
 
         // The frosted plate: the standard popover material, rounded, hugging
@@ -151,14 +156,16 @@ final class DropTargetView: NSView {
     /// it is painted for (§3.1).
     private func applyPlateColors() {
         // Hover is also signalled by the accent border and a thicker stroke.
-        layer?.borderWidth = highlighted ? 2 : 1
+        // An idle zone's edge is a firm line too, if a quiet one: with every
+        // zone up at once, the edges are what tell them apart.
+        layer?.borderWidth = highlighted ? 2 : 1.5
         effectiveAppearance.performAsCurrentDrawingAppearance {
             layer?.backgroundColor = (highlighted
                 ? NSColor.controlAccentColor.withAlphaComponent(0.25)
                 : NSColor.windowBackgroundColor.withAlphaComponent(Self.idleFillAlpha)).cgColor
             layer?.borderColor = (highlighted
                 ? NSColor.controlAccentColor
-                : NSColor.separatorColor).cgColor
+                : NSColor.tertiaryLabelColor).cgColor
         }
     }
 }
@@ -172,18 +179,33 @@ final class DropZoneView: NSView {
     private let target: DropTargetView
     private var dragActive = false
 
+    private var insets: [NSRectEdge: NSLayoutConstraint] = [:]
+
     init(title: String) {
         self.target = DropTargetView(title: title)
         super.init(frame: .zero)
         target.translatesAutoresizingMaskIntoConstraints = false
         addSubview(target)
-        NSLayoutConstraint.activate([
-            target.leadingAnchor.constraint(equalTo: leadingAnchor),
-            target.trailingAnchor.constraint(equalTo: trailingAnchor),
-            target.topAnchor.constraint(equalTo: topAnchor),
-            target.bottomAnchor.constraint(equalTo: bottomAnchor),
-        ])
+        let p = DropTargetView.edgePadding
+        // Breakable, as the tool panel's are: a half squeezed to nothing has
+        // no room for padding either side of it.
+        insets = [
+            .minX: target.leadingAnchor.constraint(equalTo: leadingAnchor, constant: p),
+            .maxX: trailingAnchor.constraint(equalTo: target.trailingAnchor, constant: p),
+            .maxY: target.topAnchor.constraint(equalTo: topAnchor, constant: p),
+            .minY: bottomAnchor.constraint(equalTo: target.bottomAnchor, constant: p),
+        ]
+        for inset in insets.values { inset.priority = .defaultHigh }
+        NSLayoutConstraint.activate(Array(insets.values))
         hide()
+    }
+
+    /// The edge this half shares with the bands beside it, which takes half
+    /// the padding so the gap between the two zones is the padding once.
+    func setAdjoiningEdge(_ edge: NSRectEdge?) {
+        for (side, inset) in insets {
+            inset.constant = side == edge ? DropTargetView.edgePadding / 2 : DropTargetView.edgePadding
+        }
     }
 
     @available(*, unavailable)
@@ -287,6 +309,17 @@ final class PaneDropBandsView: NSView {
         }
     }
 
+    /// The edge this overlay shares with another zone — the second half
+    /// beside it in single-file mode — which takes half the padding so the
+    /// gap between the two is the padding once. Nil where every edge is a
+    /// panel's.
+    var adjoiningEdge: NSRectEdge? {
+        didSet {
+            guard adjoiningEdge != oldValue else { return }
+            needsLayout = true
+        }
+    }
+
     /// The pane this overlay covers, when the view owns it (comparison mode
     /// wraps each pane). Nil in single-file mode, where the pane sits behind
     /// the overlay in the parent `SingleFileDropView`.
@@ -370,12 +403,22 @@ final class PaneDropBandsView: NSView {
         // Top-down in the layout, bottom-up on screen: the bands start below the
         // New Tab strip's share, which is measured from the top.
         let bandsTop = h - topInset
-        insertTarget.frame = NSRect(x: 0, y: bandsTop - strip, width: bounds.width, height: strip)
-        appendTarget.frame = NSRect(x: 0, y: 0, width: bounds.width, height: strip)
+        // The plates stand in from the overlay's edges and from each other
+        // (`DropTargetView.edgePadding`); the bands they stand for still meet,
+        // so a drop between two plates lands in the band it is in.
+        let p = DropTargetView.edgePadding
+        let gap = p / 2
+        func pad(_ edge: NSRectEdge) -> CGFloat { adjoiningEdge == edge ? gap : p }
+        let x = pad(.minX)
+        let width = max(0, bounds.width - x - pad(.maxX))
+        func plate(from bottom: CGFloat, to top: CGFloat) -> NSRect {
+            NSRect(x: x, y: bottom, width: width, height: max(0, top - bottom))
+        }
+        insertTarget.frame = plate(from: bandsTop - strip + gap, to: bandsTop - pad(.maxY))
+        appendTarget.frame = plate(from: pad(.minY), to: strip - gap)
         // The replace band runs from the top strip's bottom edge to the bottom
         // strip's top edge; it collapses to zero in a very short view.
-        replaceTarget.frame = NSRect(x: 0, y: strip, width: bounds.width,
-                                     height: max(0, bandsTop - 2 * strip))
+        replaceTarget.frame = plate(from: strip + gap, to: max(strip + gap, bandsTop - strip - gap))
     }
 
     // MARK: - Drag targeting
@@ -728,7 +771,7 @@ extension PaneDropBandsView {
 final class NewTabDropStrip: NSView {
     /// How much of the content's top the strip takes. Deep enough to be aimed
     /// at without care, shallow enough to leave the pane's own bands room.
-    static let height: CGFloat = 44
+    static let height: CGFloat = 52
 
     /// Fired when files are dropped on the strip.
     var onDropFiles: (([URL]) -> Void)?
@@ -760,16 +803,17 @@ final class NewTabDropStrip: NSView {
         addSubview(target)
         // The strip's height is 0 while no drag is in flight and animates to
         // `height` when one starts, so the vertical inset cannot be required:
-        // 4 + a plate + 4 does not fit in nothing, and the solver said so on
+        // the padding, a plate and the padding do not fit in nothing, and the solver said so on
         // every launch. The bottom pin yields — which is the one AppKit was
         // breaking anyway — and at any real height both hold exactly. Same
         // shape as the pane header's breakable chain (§3.4), same reason.
-        let bottomInset = target.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4)
+        let p = DropTargetView.edgePadding
+        let bottomInset = target.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -p)
         bottomInset.priority = .defaultHigh
         NSLayoutConstraint.activate([
-            target.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
-            target.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
-            target.topAnchor.constraint(equalTo: topAnchor, constant: 4),
+            target.leadingAnchor.constraint(equalTo: leadingAnchor, constant: p),
+            target.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -p),
+            target.topAnchor.constraint(equalTo: topAnchor, constant: p),
             bottomInset,
         ])
         // Both payloads mean the same thing here — this goes into a tab of its

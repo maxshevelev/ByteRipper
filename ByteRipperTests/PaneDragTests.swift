@@ -451,7 +451,7 @@ final class PaneDragTests: XCTestCase {
     func testTheStripLeavesTheBandsRoom() {
         let layout = DropBandLayout(halfHeight: 400, topInset: NewTabDropStrip.height)
 
-        XCTAssertEqual(NewTabDropStrip.height, 44)
+        XCTAssertEqual(NewTabDropStrip.height, 52)
         XCTAssertGreaterThan(layout.replaceRange.upperBound, layout.replaceRange.lowerBound,
                              "the middle band survives the strip's share")
     }
