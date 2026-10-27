@@ -718,6 +718,15 @@ final class CodePaneViewTests: XCTestCase {
         RunLoop.main.run(until: Date().addingTimeInterval(0.05))
         let shown = try XCTUnwrap(view.shownCallers, "a click shows the callers")
         XCTAssertEqual(shown.rowText(shown.callers[0]), "FUN_00000220 · 0x68 · CALL 0x00000222")
+        // The table fits: every cell inside the popover, none cut.
+        shown.view.layoutSubtreeIfNeeded()
+        let cells = all(NSButton.self, in: shown.view)
+        XCTAssertEqual(cells.map(\.title), ["FUN_00000220", "0x68", "CALL 0x00000222"])
+        for cell in cells {
+            let frame = cell.convert(cell.bounds, to: shown.view)
+            XCTAssertTrue(shown.view.bounds.contains(frame), "\(cell.title) inside the popover")
+            XCTAssertGreaterThanOrEqual(cell.frame.width, cell.fittingSize.width, "\(cell.title) not cut")
+        }
         shown.close()
         for event in [try click(count: 1, flags: .command), try click(count: 2)] {
             XCTAssertTrue(view.clickC(at: signature.location, event: event))

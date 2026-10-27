@@ -131,7 +131,7 @@ import Localization
 
     /// A long list of uses in a box of its own height that scrolls, so the
     /// popover stays on the screen.
-    static func scrolling(_ list: NSStackView, width: CGFloat, height: CGFloat) -> NSView {
+    static func scrolling(_ list: NSView, width: CGFloat, height: CGFloat) -> NSView {
         let scroll = NSScrollView()
         scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true

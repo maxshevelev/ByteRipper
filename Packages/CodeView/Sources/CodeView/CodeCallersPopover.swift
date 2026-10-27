@@ -100,22 +100,42 @@ struct CodeCaller: Equatable {
         count.textColor = .secondaryLabelColor
         stack.addArrangedSubview(count)
 
-        let list = NSStackView()
-        list.orientation = .vertical
-        list.alignment = .leading
-        list.spacing = stack.spacing / 2
+        // A table: the caller, the call's address and its instruction in
+        // columns of their own, every cell a way to the call.
+        let font = NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+        let grid = NSGridView()
+        grid.rowSpacing = stack.spacing / 2
+        grid.columnSpacing = size
         for (row, caller) in callers.enumerated() {
-            let button = NSButton(title: rowText(caller), target: self, action: #selector(rowChosen(_:)))
-            button.isBordered = false
-            button.font = .monospacedSystemFont(ofSize: size, weight: .regular)
-            button.contentTintColor = caller.use == nil ? .secondaryLabelColor : .linkColor
-            button.tag = row
-            list.addArrangedSubview(button)
+            let cells: [String]
+            if caller.use == nil {
+                cells = [text(caller, .caller), text(caller, .kind), ""]
+            } else {
+                var instruction = text(caller, .instruction)
+                if text(caller, .kind) == L("Jump") { instruction += " (\(L("Jump")))" }
+                cells = [text(caller, .caller), text(caller, .address), instruction]
+            }
+            grid.addRow(with: cells.map { cell -> NSView in
+                let button = NSButton(title: cell, target: self, action: #selector(rowChosen(_:)))
+                button.isBordered = false
+                button.font = font
+                button.contentTintColor = caller.use == nil ? .secondaryLabelColor : .linkColor
+                button.tag = row
+                button.setContentCompressionResistancePriority(.required, for: .horizontal)
+                return button
+            })
         }
-        let width = max(list.fittingSize.width, title.fittingSize.width, (size * 24).rounded())
-        stack.addArrangedSubview(callers.count > Self.mostRows
-                                 ? CodeExplanationPopover.scrolling(list, width: width, height: (size * 18).rounded())
-                                 : list)
+        grid.translatesAutoresizingMaskIntoConstraints = false
+        let table = grid.fittingSize
+        let width = ceil(max(table.width, title.fittingSize.width, count.fittingSize.width))
+        if callers.count > Self.mostRows {
+            stack.addArrangedSubview(CodeExplanationPopover.scrolling(grid, width: width,
+                                                                       height: (size * 18).rounded()))
+        } else {
+            stack.addArrangedSubview(grid)
+        }
+        // The popover is as wide as its table: no row is cut.
+        stack.widthAnchor.constraint(equalToConstant: width + 2 * inset).isActive = true
         view = stack
     }
 
