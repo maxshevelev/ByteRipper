@@ -57,7 +57,7 @@ import Localization
         stack.edgeInsets = NSEdgeInsets(top: Self.inset, left: Self.inset, bottom: Self.inset, right: Self.inset)
 
         let name = NSTextField(labelWithString: explanation.name)
-        name.font = .systemFont(ofSize: (size * 1.6).rounded(), weight: .bold)
+        name.font = .systemFont(ofSize: (size * 1.35).rounded(), weight: .bold)
         name.isSelectable = true
         name.lineBreakMode = .byTruncatingMiddle
         name.widthAnchor.constraint(lessThanOrEqualToConstant: inner).isActive = true
@@ -73,7 +73,7 @@ import Localization
 
         let words = NSTextField(wrappingLabelWithString: explanation.text
                                 ?? L("The review has not explained this name yet."))
-        words.font = .systemFont(ofSize: size + 2)
+        words.font = .systemFont(ofSize: size + 1)
         words.textColor = explanation.text == nil ? .secondaryLabelColor : .labelColor
         words.isSelectable = true
         words.preferredMaxLayoutWidth = inner
@@ -88,7 +88,7 @@ import Localization
 
         if !explanation.uses.isEmpty {
             let header = NSTextField(labelWithString: L("Used at"))
-            header.font = .systemFont(ofSize: size + 2, weight: .semibold)
+            header.font = .systemFont(ofSize: size + 1, weight: .semibold)
             stack.addArrangedSubview(header)
             for use in explanation.uses.prefix(Self.mostUses) {
                 let title = "\(model.functions[use.function].name) · \(model.displayAddress(use.address))"
