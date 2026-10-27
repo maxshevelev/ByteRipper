@@ -384,12 +384,45 @@ public class Owner {
             }
         }
         answer.add("locals", locals);
+        answer.add("equates", equatesIn(function));
         answer.addProperty("c", results != null && results.getDecompiledFunction() != null
                            ? results.getDecompiledFunction().getC() : null);
         if (results != null && !results.decompileCompleted()) {
             answer.addProperty("decompile_error", results.getErrorMessage());
         }
         return answer;
+    }
+
+    /**
+     * The names the function's instructions give their constants, once each:
+     * the value, the enum, the member's comment, and where it is used.
+     */
+    private JsonArray equatesIn(Function function) {
+        java.util.TreeMap<String, JsonObject> found = new java.util.TreeMap<>();
+        InstructionIterator iterator = program.getListing().getInstructions(function.getBody(), true);
+        while (iterator.hasNext()) {
+            Address at = iterator.next().getAddress();
+            for (ghidra.program.model.symbol.Equate equate : program.getEquateTable().getEquates(at)) {
+                JsonObject item = found.computeIfAbsent(equate.getDisplayName(), name -> {
+                    JsonObject entry = new JsonObject();
+                    entry.addProperty("name", name);
+                    entry.addProperty("value", "0x" + Long.toHexString(equate.getValue()).toUpperCase());
+                    DataType type = equate.isEnumBased() && equate.isValidUUID()
+                        ? program.getDataTypeManager().findDataTypeForID(equate.getEnumUUID()) : null;
+                    if (type instanceof ghidra.program.model.data.Enum values) {
+                        entry.addProperty("enum", values.getName());
+                        String comment = values.getComment(name);
+                        if (comment != null && !comment.isEmpty()) entry.addProperty("comment", comment);
+                    }
+                    entry.add("at", new JsonArray());
+                    return entry;
+                });
+                item.getAsJsonArray("at").add(hex(at));
+            }
+        }
+        JsonArray list = new JsonArray();
+        found.values().forEach(list::add);
+        return list;
     }
 
     private JsonObject disassembly(String text) throws Failure {
@@ -418,6 +451,17 @@ public class Owner {
                 if (reference.getToAddress().isMemoryAddress()) references.add(reference(reference));
             }
             item.add("references", references);
+            JsonArray named = new JsonArray();
+            for (ghidra.program.model.symbol.Equate equate
+                     : program.getEquateTable().getEquates(instruction.getAddress())) {
+                for (ghidra.program.model.symbol.EquateReference use : equate.getReferences(instruction.getAddress())) {
+                    JsonObject name = new JsonObject();
+                    name.addProperty("operand", use.getOpIndex());
+                    name.addProperty("name", equate.getDisplayName());
+                    named.add(name);
+                }
+            }
+            if (named.size() > 0) item.add("equates", named);
             instructions.add(item);
         }
         JsonObject answer = identity();
@@ -537,8 +581,13 @@ public class Owner {
                         if (there.isEmpty()) {
                             shared.resolve(here.get(0), DataTypeConflictHandler.KEEP_HANDLER);
                             changed = true;
+                        } else if (there.get(0) instanceof ghidra.program.model.data.Enum theirs
+                                   && here.get(0) instanceof ghidra.program.model.data.Enum own) {
+                            int merged = mergeEnum(own, theirs);
+                            if (merged < 0) conflicts.add(name); else if (merged > 0) changed = true;
                         } else if (!there.get(0).isEquivalent(here.get(0))) {
-                            conflicts.add(name);
+                            int merged = mergeComments(here.get(0), there.get(0));
+                            if (merged < 0) conflicts.add(name); else if (merged > 0) changed = true;
                         }
                     }
                 } finally {
@@ -550,6 +599,84 @@ public class Owner {
             }
         }
         return conflicts;
+    }
+
+    /**
+     * An enum grows from module to module — the ports one module writes,
+     * then the ports the next one does — so the shared one takes this
+     * review's members it lacks, and this review's comment where it has one
+     * and the shared one's differs: the review that published last read
+     * the code last. A member whose value differs, or a value another name
+     * holds, is a conflict, and nothing of that enum is merged. Answers the
+     * number of changes, or -1 for a conflict.
+     */
+    private static int mergeEnum(ghidra.program.model.data.Enum own, ghidra.program.model.data.Enum shared) {
+        for (String name : own.getNames()) {
+            long value = own.getValue(name);
+            if (shared.contains(name) ? shared.getValue(name) != value : shared.contains(value)) return -1;
+        }
+        int changes = 0;
+        for (String name : own.getNames()) {
+            long value = own.getValue(name);
+            String comment = own.getComment(name);
+            boolean commented = comment != null && !comment.isEmpty();
+            if (!shared.contains(name)) {
+                shared.add(name, value, commented ? comment : "");
+                changes++;
+            } else if (commented && !comment.equals(shared.getComment(name))) {
+                shared.remove(name);
+                shared.add(name, value, comment);
+                changes++;
+            }
+        }
+        String description = own.getDescription();
+        if (description != null && !description.isEmpty() && !description.equals(shared.getDescription())) {
+            shared.setDescription(description);
+            changes++;
+        }
+        return changes;
+    }
+
+    /**
+     * A structure that differs from the shared one only in its comments and
+     * description is the same structure better explained: the shared one
+     * takes this review's comments. Answers the number of changes, or -1
+     * when the structures differ in more than that.
+     */
+    private static int mergeComments(DataType own, DataType shared) {
+        DataType ownBase = own instanceof ghidra.program.model.data.TypeDef def ? def.getBaseDataType() : own;
+        DataType sharedBase = shared instanceof ghidra.program.model.data.TypeDef def ? def.getBaseDataType() : shared;
+        if (!(ownBase instanceof ghidra.program.model.data.Composite mine)
+            || !(sharedBase instanceof ghidra.program.model.data.Composite theirs)) return -1;
+        if (!uncommented(mine).isEquivalent(uncommented(theirs))) return -1;
+        int changes = 0;
+        ghidra.program.model.data.DataTypeComponent[] from = mine.getDefinedComponents();
+        ghidra.program.model.data.DataTypeComponent[] to = theirs.getDefinedComponents();
+        for (int i = 0; i < from.length && i < to.length; i++) {
+            String comment = from[i].getComment();
+            if (comment != null && !comment.isEmpty() && !comment.equals(to[i].getComment())) {
+                to[i].setComment(comment);
+                changes++;
+            }
+        }
+        for (DataType[] pair : new DataType[][] {{own, shared}, {ownBase, sharedBase}}) {
+            String description = pair[0].getDescription();
+            if (description != null && !description.isEmpty() && !description.equals(pair[1].getDescription())) {
+                pair[1].setDescription(description);
+                changes++;
+            }
+        }
+        return changes;
+    }
+
+    /** A copy of a structure with no comments and no description: its shape alone. */
+    private static DataType uncommented(ghidra.program.model.data.Composite composite) {
+        ghidra.program.model.data.Composite copy = (ghidra.program.model.data.Composite) composite.copy(null);
+        for (ghidra.program.model.data.DataTypeComponent component : copy.getDefinedComponents()) {
+            component.setComment(null);
+        }
+        copy.setDescription(null);
+        return copy;
     }
 
     /** The review document harvested by the last publish. */
@@ -858,7 +985,14 @@ public class Owner {
      * listing and the decompiler show instead of the number. `value` picks
      * the operand when `operand` is not given. An empty `name` removes the
      * equate there. A name already standing for another value is refused:
-     * one name, one value, as an enum member.
+     * one name, one value.
+     *
+     * With `enum`, the name is a member of that enum — made in the program,
+     * or brought from the shared review archive, when the program has none —
+     * and `comment` is the member's: what the name stands for and where it
+     * comes from, which the artifact carries to the reader. A member another
+     * review commented keeps that comment unless a new one is given. Without
+     * `enum`, a name the program's enums already hold is that member.
      */
     private JsonObject setEquate(JsonObject body) throws Exception {
         Address at = address(required(body, "address"));
@@ -868,6 +1002,12 @@ public class Owner {
         if (!name.isEmpty() && !name.matches("[A-Za-z_][A-Za-z0-9_]*")) {
             throw new Failure(400, name + " is not a C identifier");
         }
+        String enumName = string(body, "enum", null);
+        if (enumName != null && !enumName.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            throw new Failure(400, enumName + " is not a C identifier");
+        }
+        String comment = string(body, "comment", null);
+        String enumComment = string(body, "enum_comment", null);
         String valueText = string(body, "value", null);
         Long value = null;
         if (valueText != null) {
@@ -898,29 +1038,147 @@ public class Owner {
                               + (value == null ? "a constant" : valueText));
         }
         long held = scalar.getUnsignedValue();
+        long signed = scalar.getSignedValue();
 
         ghidra.program.model.symbol.EquateTable table = program.getEquateTable();
-        for (ghidra.program.model.symbol.Equate other : table.getEquates(at, operand)) {
-            other.removeReference(at, operand);
-            if (other.getReferenceCount() == 0) table.removeEquate(other.getName());
-        }
         JsonObject answer = identity();
         answer.addProperty("address", hex(at));
         answer.addProperty("operand", operand);
         answer.addProperty("value", "0x" + Long.toHexString(held).toUpperCase());
         if (name.isEmpty()) {
+            dropEquates(table, at, operand);
             answer.addProperty("removed", true);
             return answer;
         }
-        ghidra.program.model.symbol.Equate equate = table.getEquate(name);
-        if (equate != null && equate.getValue() != held && equate.getValue() != scalar.getSignedValue()) {
-            throw new Failure(409, name + " already stands for 0x" + Long.toHexString(equate.getValue()).toUpperCase());
+
+        // A name the program's enums already hold is that member.
+        ghidra.program.model.data.Enum owner = null;
+        if (enumName != null) {
+            owner = enumFor(enumName, held);
+        } else {
+            for (DataType type : allTypes()) {
+                if (type instanceof ghidra.program.model.data.Enum values && values.contains(name)) {
+                    owner = values;
+                    break;
+                }
+            }
         }
-        if (equate == null) equate = table.createEquate(name, held);
+        ghidra.program.model.symbol.Equate equate;
+        if (owner != null) {
+            long member = member(owner, name, held, signed, comment);
+            if (enumComment != null) owner.setDescription(enumComment.isBlank() ? null : enumComment);
+            Harvest.recordType(program, owner.getName(), ExportCode.typeC(owner));
+            String formatted = ghidra.program.database.symbol.EquateManager
+                .formatNameForEquate(owner.getUniversalID(), member);
+            dropEquates(table, at, operand);
+            equate = table.getEquate(formatted);
+            if (equate == null) equate = table.createEquate(formatted, member);
+            // The same name given before without its enum moves to the member.
+            ghidra.program.model.symbol.Equate plain = table.getEquate(name);
+            if (plain != null) {
+                for (ghidra.program.model.symbol.EquateReference reference : plain.getReferences()) {
+                    equate.addReference(reference.getAddress(), reference.getOpIndex());
+                }
+                table.removeEquate(name);
+            }
+            answer.addProperty("enum", owner.getName());
+            String kept = owner.getComment(name);
+            if (kept != null && !kept.isEmpty()) answer.addProperty("comment", kept);
+        } else {
+            if (comment != null) throw new Failure(400, "a comment is a member's: name the enum");
+            equate = table.getEquate(name);
+            if (equate != null && equate.getValue() != held && equate.getValue() != signed) {
+                throw new Failure(409, name + " already stands for 0x" + Long.toHexString(equate.getValue()).toUpperCase());
+            }
+            dropEquates(table, at, operand);
+            if (equate == null) equate = table.createEquate(name, held);
+        }
         equate.addReference(at, operand);
-        answer.addProperty("name", equate.getName());
+        answer.addProperty("name", equate.getDisplayName());
         answer.addProperty("references", equate.getReferenceCount());
         return answer;
+    }
+
+    /** Removes whatever equate names the operand, and an equate it leaves unused. */
+    private static void dropEquates(ghidra.program.model.symbol.EquateTable table, Address at, int operand)
+            throws Exception {
+        for (ghidra.program.model.symbol.Equate other : table.getEquates(at, operand)) {
+            other.removeReference(at, operand);
+            if (other.getReferenceCount() == 0) table.removeEquate(other.getName());
+        }
+    }
+
+    private java.util.List<DataType> allTypes() {
+        java.util.List<DataType> all = new java.util.ArrayList<>();
+        program.getDataTypeManager().getAllDataTypes(all);
+        return all;
+    }
+
+    /**
+     * The program's enum of that name; else the shared archive's, brought in;
+     * else a new one in /ByteRipper, four bytes wide, or eight for a value
+     * that needs them.
+     */
+    private ghidra.program.model.data.Enum enumFor(String name, long held) throws Exception {
+        ghidra.program.model.data.DataTypeManager manager = program.getDataTypeManager();
+        DataType found = find(manager, name);
+        if (found == null && reviewArchive != null) {
+            DataType shared = find(reviewArchive, name);
+            if (shared instanceof ghidra.program.model.data.Enum) {
+                found = manager.resolve(shared, DataTypeConflictHandler.DEFAULT_HANDLER);
+            }
+        }
+        if (found == null) {
+            int size = held > 0xFFFFFFFFL ? 8 : 4;
+            found = manager.resolve(new ghidra.program.model.data.EnumDataType(
+                new ghidra.program.model.data.CategoryPath("/ByteRipper"), name, size, manager),
+                DataTypeConflictHandler.DEFAULT_HANDLER);
+        }
+        if (!(found instanceof ghidra.program.model.data.Enum values)) {
+            throw new Failure(409, name + " is a " + TypeText.kind(found) + ", not an enum");
+        }
+        return values;
+    }
+
+    /**
+     * Makes `name` a member of `owner` for the value the operand holds, or
+     * checks the member that is there; answers the member's value. A member
+     * the shared archive's enum of the same name holds brings its comment.
+     * One value, one name in an enum: an equate shows the first name of its
+     * value, so a second would show as the first.
+     */
+    private long member(ghidra.program.model.data.Enum owner, String name, long held, long signed,
+                        String comment) throws Exception {
+        if (owner.contains(name)) {
+            long member = owner.getValue(name);
+            if (member != held && member != signed) {
+                throw new Failure(409, owner.getName() + "." + name + " is 0x"
+                                  + Long.toHexString(member).toUpperCase() + ", not 0x" + Long.toHexString(held).toUpperCase());
+            }
+            if (comment != null && !comment.equals(owner.getComment(name))) {
+                owner.remove(name);
+                owner.add(name, member, comment);
+            }
+            return member;
+        }
+        long member = held;
+        if (owner.getLength() < 8 && held > 0xFFFFFFFFL) {
+            if (signed >= Integer.MIN_VALUE && signed < 0) member = signed;
+            else throw new Failure(409, owner.getName() + " is " + owner.getLength() + " bytes wide; 0x"
+                                   + Long.toHexString(held).toUpperCase() + " does not fit");
+        }
+        if (owner.contains(member)) {
+            throw new Failure(409, owner.getName() + " already names 0x" + Long.toHexString(held).toUpperCase()
+                              + " " + owner.getName(member) + "; one value has one name in an enum");
+        }
+        String text = comment;
+        if (text == null && reviewArchive != null
+                && find(reviewArchive, owner.getName()) instanceof ghidra.program.model.data.Enum shared
+                && shared.contains(name) && shared.getValue(name) == member) {
+            text = shared.getComment(name);
+        }
+        owner.add(name, member, text == null ? "" : text);
+        return member;
     }
 
     /** Who made a name and why, beside the reason ApplyUefi gives its own. */
@@ -1197,25 +1455,81 @@ public class Owner {
         return out.toString();
     }
 
-    /** A structure, union, enum or typedef from C, into the program. */
+    /**
+     * A structure, union, enum or typedef from C, into the program; or, with
+     * `name` and no C, a type the program holds. Either way `description`
+     * says what the type is, and `comments` gives a field or an enum member
+     * its comment — what it holds, and where that is known from — which the
+     * artifact carries to the reader. An empty comment removes one.
+     */
     private JsonObject addType(JsonObject body) throws Exception {
-        String c = required(body, "c");
-        // The fields may name what only an archive holds — `CHAR8`, a PI
-        // structure, another review's type — as a signature may.
-        importTypes(c);
-        DataType parsed;
-        try {
-            parsed = new CParser(program.getDataTypeManager(), true, null).parse(tagAnonymous(c));
-        } catch (Exception error) {
-            throw new Failure(400, "the C does not parse: " + error.getMessage());
+        String c = string(body, "c", null);
+        DataType resolved;
+        if (c != null) {
+            // The fields may name what only an archive holds — `CHAR8`, a PI
+            // structure, another review's type — as a signature may.
+            importTypes(c);
+            DataType parsed;
+            try {
+                parsed = new CParser(program.getDataTypeManager(), true, null).parse(tagAnonymous(c));
+            } catch (Exception error) {
+                throw new Failure(400, "the C does not parse: " + error.getMessage());
+            }
+            if (parsed == null) throw new Failure(400, "the C declares no type");
+            resolved = program.getDataTypeManager().resolve(parsed, DataTypeConflictHandler.REPLACE_HANDLER);
+        } else {
+            String name = required(body, "name");
+            importTypes(name);
+            resolved = find(program.getDataTypeManager(), name.trim());
+            if (resolved == null) throw new Failure(404, "no type " + name + " in the program or its archives");
         }
-        if (parsed == null) throw new Failure(400, "the C declares no type");
-        DataType resolved = program.getDataTypeManager().resolve(parsed, DataTypeConflictHandler.REPLACE_HANDLER);
-        Harvest.recordType(program, resolved.getName(), c);
         JsonObject answer = identity();
+        if (body.has("description") && !body.get("description").isJsonNull()) {
+            String description = body.get("description").getAsString();
+            // A typedef keeps no description of its own in Ghidra: the type it names does.
+            DataType described = resolved instanceof ghidra.program.model.data.TypeDef def
+                ? def.getBaseDataType() : resolved;
+            described.setDescription(description.isBlank() ? null : description);
+        }
+        if (body.has("comments") && body.get("comments").isJsonObject()) {
+            JsonObject comments = body.getAsJsonObject("comments");
+            DataType base = resolved instanceof ghidra.program.model.data.TypeDef def ? def.getBaseDataType() : resolved;
+            java.util.List<String> missing = new java.util.ArrayList<>();
+            for (String member : comments.keySet()) {
+                String text = comments.get(member).isJsonNull() ? "" : comments.get(member).getAsString();
+                if (!comment(base, member, text)) missing.add(member);
+            }
+            if (!missing.isEmpty()) {
+                throw new Failure(404, resolved.getName() + " has no " + String.join(", ", missing));
+            }
+        }
+        Harvest.recordType(program, resolved.getName(), c != null && !body.has("comments") && !body.has("description")
+                           ? c : ExportCode.typeC(resolved));
         answer.addProperty("name", resolved.getName());
         answer.addProperty("path", resolved.getPathName());
+        answer.addProperty("c", ExportCode.typeC(resolved));
         return answer;
+    }
+
+    /** A field's or an enum member's comment; false when the type has no such member. */
+    private static boolean comment(DataType type, String member, String text) {
+        String value = text.isBlank() ? null : text;
+        if (type instanceof ghidra.program.model.data.Composite composite) {
+            for (ghidra.program.model.data.DataTypeComponent component : composite.getDefinedComponents()) {
+                if (member.equals(ExportCode.fieldName(component))) {
+                    component.setComment(value);
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (type instanceof ghidra.program.model.data.Enum values && values.contains(member)) {
+            long number = values.getValue(member);
+            values.remove(member);
+            values.add(member, number, value == null ? "" : value);
+            return true;
+        }
+        return false;
     }
 
     /**

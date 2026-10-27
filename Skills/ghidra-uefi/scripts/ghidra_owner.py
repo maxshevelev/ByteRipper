@@ -473,7 +473,11 @@ def main(argv: list[str]) -> int:
     datum.add_argument("--type")
     type_ = sub.add_parser("type", help="add a structure, union, enum or typedef from C")
     type_.add_argument("module")
-    type_.add_argument("c", help="the C text, or @file to read it from a file")
+    type_.add_argument("c", nargs="?", help="the C text, or @file to read it from a file")
+    type_.add_argument("--name", help="without C: a type the module or its archives hold")
+    type_.add_argument("--description", help="what the type is, and its source")
+    type_.add_argument("--comment", action="append", default=[], metavar="MEMBER=TEXT",
+                       help="a field's or an enum member's comment; repeatable")
     describe = sub.add_parser("describe", help="write the module's description, whole or one section")
     describe.add_argument("module")
     describe.add_argument("text", help="the Markdown, or @file to read it from a file; empty clears")
@@ -491,6 +495,9 @@ def main(argv: list[str]) -> int:
     equate.add_argument("name", help="empty removes the name there")
     equate.add_argument("--value", help="the constant, to pick the operand that holds it")
     equate.add_argument("--operand", type=int, help="or the operand by its index")
+    equate.add_argument("--enum", help="the enum the name is a member of; made when missing")
+    equate.add_argument("--comment", help="what the name stands for, and its source")
+    equate.add_argument("--enum-comment", help="what the enum groups")
     rel = sub.add_parser("release", help="publish and give the write lease back")
     rel.add_argument("module")
     rel.add_argument("--by", choices=["agent", "person"], default="agent")
@@ -570,14 +577,18 @@ def main(argv: list[str]) -> int:
             "data": lambda: ("/v1/set/data",
                              {"address": args.address, "name": args.name, "type": args.type}),
             "type": lambda: ("/v1/type",
-                             {"c": Path(args.c[1:]).read_text() if args.c.startswith("@") else args.c}),
+                             {"c": None if args.c is None
+                              else Path(args.c[1:]).read_text() if args.c.startswith("@") else args.c,
+                              "name": args.name, "description": args.description,
+                              "comments": dict(item.split("=", 1) for item in args.comment) or None}),
             "describe": lambda: ("/v1/set/description",
                                  {"text": Path(args.text[1:]).read_text(encoding="utf-8")
                                   if args.text.startswith("@") else args.text,
                                   "section": args.section}),
             "equate": lambda: ("/v1/set/equate",
                                {"address": args.address, "name": args.name,
-                                "value": args.value, "operand": args.operand}),
+                                "value": args.value, "operand": args.operand, "enum": args.enum,
+                                "comment": args.comment, "enum_comment": args.enum_comment}),
             "code-mode": lambda: ("/v1/set/code-mode",
                                   {"start": args.start, "end": args.end, "bits": args.bits,
                                    "reason": args.reason, "by": args.by}),

@@ -112,7 +112,7 @@ extension CodeModel {
     /// numbers; keywords and types; a function's name as a link to it; and
     /// Ghidra's `DAT_0001f2c0`, `PTR_…`, `LAB_…` as links to the address they
     /// spell.
-    func lexC(_ text: String) -> [CodeToken] {
+    public func lexC(_ text: String) -> [CodeToken] {
         let units = Array(text.utf16)
         var tokens: [CodeToken] = []
         var index = 0

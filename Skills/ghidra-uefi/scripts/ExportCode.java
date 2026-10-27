@@ -17,9 +17,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import ghidra.app.decompiler.ClangFieldToken;
 import ghidra.app.decompiler.ClangFuncNameToken;
 import ghidra.app.decompiler.ClangLine;
 import ghidra.app.decompiler.ClangToken;
+import ghidra.app.decompiler.ClangTypeToken;
 import ghidra.app.decompiler.DecompInterface;
 import ghidra.app.decompiler.DecompileResults;
 import ghidra.app.decompiler.PrettyPrinter;
@@ -27,7 +29,17 @@ import ghidra.app.script.GhidraScript;
 import ghidra.framework.Application;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressSet;
+import ghidra.program.model.data.Array;
+import ghidra.program.model.data.BitFieldDataType;
+import ghidra.program.model.data.Composite;
 import ghidra.program.model.data.DataType;
+import ghidra.program.model.data.DataTypeComponent;
+import ghidra.program.model.data.Enum;
+import ghidra.program.model.data.FunctionDefinition;
+import ghidra.program.model.data.Pointer;
+import ghidra.program.model.data.Structure;
+import ghidra.program.model.data.TypeDef;
+import ghidra.program.model.data.Union;
 import ghidra.program.model.listing.Data;
 import ghidra.program.model.listing.DataIterator;
 import ghidra.program.model.listing.Function;
@@ -40,6 +52,8 @@ import ghidra.program.model.pcode.HighFunction;
 import ghidra.program.model.pcode.HighSymbol;
 import ghidra.program.model.pcode.PcodeOp;
 import ghidra.program.model.pcode.Varnode;
+import ghidra.program.model.symbol.Equate;
+import ghidra.program.model.symbol.EquateReference;
 import ghidra.program.model.symbol.Reference;
 import ghidra.program.model.symbol.SourceType;
 import ghidra.program.model.symbol.Symbol;
@@ -51,6 +65,10 @@ import ghidra.program.model.pcode.PcodeOpAST;
 import ghidra.program.model.listing.Program;
 
 public class ExportCode extends GhidraScript {
+
+    // The types the C names, by name: what a reader opens a type, a field or
+    // an enum-backed constant to read.
+    private final java.util.TreeMap<String, DataType> namedTypes = new java.util.TreeMap<>();
 
     @Override
     public void run() throws Exception {
@@ -281,6 +299,8 @@ public class ExportCode extends GhidraScript {
             json.append("\n");
         }
         json.append("  ],\n");
+        appendEquates(json);
+        appendTypes(json);
         // The POST codes: what the code writes to port 0x80, at the place it
         // supplies the value — through IoWrite8, a PostCode() or a halt
         // routine — and the writes to every other port the same way.
@@ -333,6 +353,9 @@ public class ExportCode extends GhidraScript {
         // place in the listing — a POST code's call, a status-code call —
         // is found in the C too.
         List<String> sites = new ArrayList<>();
+        // Where each field of a structure is named: the structure and the
+        // field's offset in it, so a reader can show the field's line.
+        List<String> fields = new ArrayList<>();
         for (ClangLine line : printer.getLines()) {
             text.append(line.getIndentString());
             for (ClangToken token : line.getAllTokens()) {
@@ -346,6 +369,14 @@ public class ExportCode extends GhidraScript {
                         && token.getSyntaxType() == ClangToken.FUNCTION_COLOR) {
                     sites.add("[" + start + ", " + piece.length() + ", "
                         + quote(hex(callOp.getSeqnum().getTarget())) + "]");
+                }
+                if (token instanceof ClangTypeToken typeToken) note(typeToken.getDataType());
+                if (token instanceof ClangFieldToken field) {
+                    DataType parent = note(field.getDataType());
+                    if (parent != null) {
+                        fields.add("[" + start + ", " + piece.length() + ", " + quote(parent.getName())
+                            + ", " + field.getOffset() + "]");
+                    }
                 }
                 String kind = null;
                 String target = null;
@@ -375,6 +406,179 @@ public class ExportCode extends GhidraScript {
         json.append("      \"c\": ").append(quote(text.toString())).append(",\n");
         json.append("      \"c_spans\": [").append(String.join(", ", spans)).append("],\n");
         json.append("      \"c_sites\": [").append(String.join(", ", sites)).append("],\n");
+        json.append("      \"c_fields\": [").append(String.join(", ", fields)).append("],\n");
+    }
+
+    // The type a token names, kept for `types` when it is one a reader wants
+    // explained — a structure, a union, an enum, a typedef, a function type —
+    // through its pointers and arrays. Answers what it kept.
+    private DataType note(DataType type) {
+        DataType base = named(type);
+        if (base != null) namedTypes.putIfAbsent(base.getName(), base);
+        return base;
+    }
+
+    private static DataType named(DataType type) {
+        while (type instanceof Pointer || type instanceof Array) {
+            type = type instanceof Pointer pointer ? pointer.getDataType() : ((Array) type).getDataType();
+        }
+        if (type instanceof Composite || type instanceof Enum || type instanceof TypeDef
+                || type instanceof FunctionDefinition) return type;
+        return null;
+    }
+
+    // The program's equates — the names a review gave the constants its
+    // instructions hold — with what each is: its value, the enum it is a
+    // member of, the member's comment (what the name stands for, and where it
+    // comes from), and every operand that carries it. Sorted by name, then
+    // value; an equate nothing uses any more is left out.
+    private void appendEquates(StringBuilder json) {
+        List<Equate> all = new ArrayList<>();
+        java.util.Iterator<Equate> equates = currentProgram.getEquateTable().getEquates();
+        while (equates.hasNext()) {
+            Equate equate = equates.next();
+            if (equate.getReferenceCount() > 0) all.add(equate);
+        }
+        all.sort((a, b) -> {
+            int byName = a.getDisplayName().compareTo(b.getDisplayName());
+            return byName != 0 ? byName : Long.compare(a.getValue(), b.getValue());
+        });
+        List<String> entries = new ArrayList<>();
+        for (Equate equate : all) {
+            Enum owner = null;
+            if (equate.isEnumBased() && equate.isValidUUID()) {
+                DataType type = currentProgram.getDataTypeManager().findDataTypeForID(equate.getEnumUUID());
+                if (type instanceof Enum values) owner = values;
+            }
+            String name = equate.getDisplayName();
+            String comment = owner == null ? null : owner.getComment(name);
+            if (owner != null) namedTypes.putIfAbsent(owner.getName(), owner);
+            List<String> references = new ArrayList<>();
+            List<EquateReference> sorted = new ArrayList<>(List.of(equate.getReferences()));
+            sorted.sort((a, b) -> {
+                int byAddress = a.getAddress().compareTo(b.getAddress());
+                return byAddress != 0 ? byAddress : Integer.compare(a.getOpIndex(), b.getOpIndex());
+            });
+            for (EquateReference reference : sorted) {
+                references.add("[" + quote(hex(reference.getAddress())) + ", " + reference.getOpIndex() + "]");
+            }
+            entries.add("{\"name\": " + quote(name)
+                + ", \"value\": " + quote(hex(equate.getValue()))
+                + ", \"enum\": " + quote(owner == null ? null : owner.getName())
+                + ", \"comment\": " + quote(comment == null || comment.isEmpty() ? null : comment)
+                + ", \"references\": [" + String.join(", ", references) + "]}");
+        }
+        json.append("  \"equates\": [").append(String.join(", ", entries)).append("],\n");
+    }
+
+    // The types the C names, as C: the declaration with every field's
+    // offset and comment, the type's description, where it lives.
+    private void appendTypes(StringBuilder json) {
+        List<String> entries = new ArrayList<>();
+        for (DataType type : namedTypes.values()) {
+            String description = type.getDescription();
+            // A typedef's words are the type's it names.
+            if ((description == null || description.isEmpty()) && type instanceof TypeDef def) {
+                description = def.getBaseDataType().getDescription();
+            }
+            entries.add("{\"name\": " + quote(type.getName())
+                + ", \"path\": " + quote(type.getPathName())
+                + ", \"kind\": " + quote(typeKind(type))
+                + ", \"size\": " + Math.max(type.getLength(), 0)
+                + ", \"description\": " + quote(description == null || description.isEmpty() ? null : description)
+                + ", \"c\": " + quote(typeC(type)) + "}");
+        }
+        json.append("  \"types\": [").append(String.join(", ", entries)).append("],\n");
+    }
+
+    // MARK: - A type as C
+
+    static String typeKind(DataType type) {
+        if (type instanceof TypeDef) return "typedef";
+        if (type instanceof Structure) return "struct";
+        if (type instanceof Union) return "union";
+        if (type instanceof Enum) return "enum";
+        if (type instanceof Pointer) return "pointer";
+        if (type instanceof Array) return "array";
+        if (type instanceof FunctionDefinition) return "function";
+        return "builtin";
+    }
+
+    /**
+     * The declaration: `typedef struct _X { … } X;` for a typedef of a tagged
+     * type. Every field carries its offset, and a field's or an enum
+     * member's comment follows it.
+     */
+    static String typeC(DataType type) {
+        if (type instanceof TypeDef def) {
+            DataType base = def.getDataType();
+            if (base instanceof Composite || base instanceof Enum) {
+                return "typedef " + typeBody(base) + " " + def.getName() + ";";
+            }
+            return "typedef " + declarator(base, def.getName()) + ";";
+        }
+        if (type instanceof Composite || type instanceof Enum) return typeBody(type) + ";";
+        if (type instanceof FunctionDefinition function) return function.getPrototypeString() + ";";
+        return type.getDisplayName();
+    }
+
+    private static String typeBody(DataType type) {
+        StringBuilder out = new StringBuilder();
+        if (type instanceof Enum values) {
+            out.append("enum ").append(type.getName()).append(" {\n");
+            long[] all = values.getValues();
+            List<String> lines = new ArrayList<>();
+            for (long value : all) {
+                for (String name : values.getNames(value)) {
+                    String line = "    " + name + " = 0x" + Long.toHexString(value).toUpperCase();
+                    String comment = values.getComment(name);
+                    lines.add(comment == null || comment.isEmpty() ? line
+                              : line + ", // " + comment.replace('\n', ' '));
+                }
+            }
+            // A comment follows its member's comma, so only the last line
+            // has none to drop.
+            for (int i = 0; i < lines.size(); i++) {
+                String line = lines.get(i);
+                boolean commented = line.contains(", // ");
+                boolean last = i + 1 == lines.size();
+                if (commented && last) line = line.replaceFirst(", // ", " // ");
+                else if (!commented && !last) line = line + ",";
+                out.append(line).append('\n');
+            }
+            out.append("}");
+            return out.toString();
+        }
+        Composite composite = (Composite) type;
+        out.append(composite instanceof Union ? "union " : "struct ").append(type.getName()).append(" {\n");
+        for (DataTypeComponent component : composite.getDefinedComponents()) {
+            out.append("    /* 0x").append(String.format("%02X", component.getOffset())).append(" */ ");
+            if (component.isBitFieldComponent()) {
+                BitFieldDataType bits = (BitFieldDataType) component.getDataType();
+                out.append(bits.getBaseDataType().getDisplayName()).append(' ').append(fieldName(component))
+                   .append(" : ").append(bits.getBitSize());
+            } else {
+                out.append(declarator(component.getDataType(), fieldName(component)));
+            }
+            out.append(";");
+            if (component.getComment() != null) out.append(" // ").append(component.getComment().replace('\n', ' '));
+            out.append('\n');
+        }
+        out.append("} /* size 0x").append(Integer.toHexString(type.getLength()).toUpperCase()).append(" */");
+        return out.toString();
+    }
+
+    /** `UINT8 Unknown01[7]` — an array's bounds after the name, outer first. */
+    static String declarator(DataType type, String name) {
+        if (type instanceof Array array) {
+            return declarator(array.getDataType(), name + "[" + array.getNumElements() + "]");
+        }
+        return type.getDisplayName() + " " + name;
+    }
+
+    static String fieldName(DataTypeComponent component) {
+        String name = component.getFieldName();
+        return name != null ? name : component.getDefaultFieldName();
     }
 
     // The entry a function-name token calls, or names: the CALL's target, or

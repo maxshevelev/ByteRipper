@@ -38,11 +38,13 @@ public enum GhidraTools {
         1. Names, not constants: a value of a set becomes an enum member and the parameter, field or return \
         type carries the enum (EFI_STATUS values, DEBUG levels, POST and halt codes, vendor ids). Write the \
         tag of a typedef: `typedef enum _NAME { … } NAME;`. A constant an instruction holds — an I/O port, \
-        an MSR, a PCI config address — gets its name with `ghidra_equate`, and every port write an \
-        end-of-line comment saying what the register and the bits are and where that is known from.
+        an MSR, a PCI config address — gets its name with `ghidra_equate`, as a member of an enum that \
+        groups it, with a comment saying what it stands for and where that is known from; every port \
+        write also gets an end-of-line comment saying what the register and the bits are.
         2. Structures, not pointer arithmetic: define the header, entry or record the code walks and type \
         the pointer with it, so the C says `Entry->Size` and `Entries[Index]`. Lay a type out from what the \
-        instructions prove; a field nobody can name is `Unknown08`. Fix signatures first: a typed \
+        instructions prove; a field nobody can name is `Unknown08`. Give a type a `description` and its \
+        fields `comments` with `ghidra_type`: the reader sees them by clicking the name in the C. Fix signatures first: a typed \
         parameter retypes the locals that follow from it, here and in the callers.
         3. Names for what stays: functions, parameters, locals, in the module's convention (EDK2 \
         CamelCase), a function named for what it does for its caller. After a signature change, read the \
@@ -362,13 +364,22 @@ public enum GhidraTools {
                   + "reaches an `out()` through a register. `value` picks the operand that holds it; "
                   + "`operand` picks one by index instead. Empty `name` removes it. One name stands for "
                   + "one value: a name already used for another is refused. A number the code computes "
-                  + "(`ADD DL,4` to reach 0xCFC) is in no operand and gets a comment instead.",
+                  + "(`ADD DL,4` to reach 0xCFC) is in no operand and gets a comment instead. "
+                  + "Give every name an `enum` that groups it (`FCH_IO_PORT`, `AMD_MSR`, `LPC_DECODE_BITS`) "
+                  + "and a `comment`: what the name stands for and where that is known from (a spec and "
+                  + "its section, a coreboot or EDK2 header, the PPR, or `not confirmed`). The app shows "
+                  + "the comment when the reader clicks the name, and the enum is shared with the next "
+                  + "module reviewed, so a name given once brings its comment along: later, `name` and "
+                  + "`enum` are enough. One value has one name in an enum.",
                   ["address": AgentSchema.string("The instruction's address."),
                    "name": AgentSchema.string("A C identifier, in the module's convention; empty removes it."),
                    "value": AgentSchema.string("The constant, e.g. \"0xCF8\", to pick the operand that holds it."),
-                   "operand": AgentSchema.integer("Or the operand by its index, from 0.")],
+                   "operand": AgentSchema.integer("Or the operand by its index, from 0."),
+                   "enum": AgentSchema.string("The enum the name is a member of; made when missing."),
+                   "comment": AgentSchema.string("What the name stands for and its source; replaces the member's comment."),
+                   "enum_comment": AgentSchema.string("What the enum groups, e.g. \"FCH legacy I/O ports\".")],
                   required: ["address", "name"]) { arguments in
-                var body = try optional(arguments, ["address", "name", "value"])
+                var body = try optional(arguments, ["address", "name", "value", "enum", "comment", "enum_comment"])
                 if arguments.has("operand") { body["operand"] = .int(try arguments.integer("operand")) }
                 return body
             },
@@ -396,10 +407,28 @@ public enum GhidraTools {
             },
             write("ghidra_type", "type", "Define a type",
                   "Adds a structure, union, enum or typedef from C to the module, shared with modules opened "
-                  + "after the next publish. Write the tag: `typedef struct _NAME { … } NAME;`.",
-                  ["c": AgentSchema.string("The C text.")],
-                  required: ["c"]) { arguments in
-                ["c": .string(try arguments.string("c"))]
+                  + "after the next publish. Write the tag: `typedef struct _NAME { … } NAME;`. Without `c`, "
+                  + "`name` picks a type the module or its archives hold. `description` says what the type is "
+                  + "and where its layout is known from; `comments` gives fields or enum members theirs — what "
+                  + "each holds and its source. The app shows them when the reader clicks the type or a field; "
+                  + "an empty comment removes one. Comments are set after the C, which drops its own.",
+                  ["c": AgentSchema.string("The C text."),
+                   "name": AgentSchema.string("Without `c`: the type to describe or comment."),
+                   "description": AgentSchema.string("What the type is, and its source."),
+                   "comments": ["type": "object", "additionalProperties": ["type": "string"],
+                                "description": "A comment per field or enum member, by its name."]],
+                  required: []) { arguments in
+                var body = try optional(arguments, ["c", "name", "description"])
+                guard body["c"] != nil || body["name"] != nil else {
+                    throw AgentToolError("Give the type's `c`, or the `name` of one the module holds.")
+                }
+                if let comments = arguments["comments"] {
+                    guard let members = comments.objectValue, members.values.allSatisfy({ $0.stringValue != nil }) else {
+                        throw AgentToolError("Argument `comments`: expected an object of strings.")
+                    }
+                    body["comments"] = .object(members)
+                }
+                return body
             }
         ]
     }

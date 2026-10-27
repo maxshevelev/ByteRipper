@@ -68,6 +68,8 @@ import ToolModuleKit
     /// How far the function's own C starts into the text shown: the
     /// annotations' comments head it.
     private var cShift = 0
+    /// The explanation open over the code, if one is.
+    private var explanationPopover: CodeExplanationPopover?
     private let table = NSTableView()
     private let tableScroll = NSScrollView()
     private let cTextView = CodeTextView()
@@ -1711,7 +1713,91 @@ import ToolModuleKit
             selectDefinition(of: clicked)
             return true
         }
+        if !Self.isJump(event), let character { explainC(at: character, token: token) }
         return false
+    }
+
+    // MARK: - What a name stands for
+
+    // help: panel.code.explain
+    /// A click on a name the review explained — a constant's name, a type, a
+    /// field — opens what it stands for beside it. After the click is done:
+    /// the text view's own tracking of it would otherwise close the popover.
+    private func explainC(at character: Int, token: CodeToken?) {
+        guard let index = state.function else { return }
+        let local = character - cShift
+        var found: (CodeExplanation, NSRange)?
+        if let token, token.kind == .constant || token.kind == .type,
+           let explained = model.explanation(ofC: CodeToken(start: token.start - cShift, length: token.length,
+                                                            kind: token.kind), inFunction: index) {
+            found = (explained, NSRange(location: token.start, length: token.length))
+        } else if let field = model.field(atC: local, inFunction: index),
+                  let explained = model.explanation(ofField: field, inFunction: index) {
+            found = (explained, NSRange(location: field.start + cShift, length: field.length))
+        }
+        guard let (explained, range) = found, let rect = cRect(range) else { return }
+        RunLoop.main.perform(inModes: [.default]) { [weak self] in
+            guard let self else { return }
+            self.showExplanation(explained, relativeTo: rect, of: self.cTextView)
+        }
+    }
+
+    /// A click on a number of the listing that the review named: the same
+    /// explanation as the name in the C.
+    private func explainListing(line: Int, token: CodeToken, text: String, rect: NSRect, in view: NSView) {
+        guard token.kind == .constant, let value = Self.listingNumber(text),
+              let explained = model.explanation(ofConstant: value, onLine: line) else { return }
+        let inTable = table.convert(rect, from: view)
+        RunLoop.main.perform(inModes: [.default]) { [weak self] in
+            guard let self else { return }
+            self.showExplanation(explained, relativeTo: inTable, of: self.table)
+        }
+    }
+
+    /// A number as the listing writes it: `0xcf8`, `-0x1`, `12`.
+    static func listingNumber(_ text: String) -> UInt64? {
+        var digits = Substring(text.trimmingCharacters(in: .whitespaces))
+        let negative = digits.hasPrefix("-")
+        if negative { digits = digits.dropFirst() }
+        let value: UInt64?
+        if digits.hasPrefix("0x") || digits.hasPrefix("0X") {
+            value = UInt64(digits.dropFirst(2), radix: 16)
+        } else {
+            value = UInt64(digits)
+        }
+        guard let value else { return nil }
+        return negative ? UInt64(bitPattern: -Int64(bitPattern: value)) : value
+    }
+
+    private func showExplanation(_ explained: CodeExplanation, relativeTo rect: NSRect, of view: NSView) {
+        guard view.window != nil else { return }
+        explanationPopover?.close()
+        let popover = CodeExplanationPopover(explanation: explained, model: model)
+        popover.onUse = { [weak self] line in self?.follow(.line(line)) }
+        popover.show(relativeTo: rect, of: view)
+        explanationPopover = popover
+    }
+
+    /// What the popover open over the code explains, if one is open.
+    var shownExplanation: CodeExplanation? {
+        guard let explanationPopover, explanationPopover.isShown else { return nil }
+        return explanationPopover.explanationShown
+    }
+
+    func shownExplanationClose() {
+        explanationPopover?.close()
+        explanationPopover = nil
+    }
+
+    /// Where characters of the C are drawn, in the text view's coordinates.
+    private func cRect(_ range: NSRange) -> NSRect? {
+        guard let layout = cTextView.layoutManager, let container = cTextView.textContainer,
+              range.location + range.length <= (cTextView.string as NSString).length else { return nil }
+        let glyphs = layout.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+        var rect = layout.boundingRect(forGlyphRange: glyphs, in: container)
+        rect.origin.x += cTextView.textContainerOrigin.x
+        rect.origin.y += cTextView.textContainerOrigin.y
+        return rect
     }
 
     /// The function on screen's own name in its signature: the first token
@@ -1853,6 +1939,10 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
                        highlighted: highlightedRanges(in: shown.tokens, of: shown.text))
         cell.line.onClick = { [weak self] link, event in
             self?.clickListing(on: link, event: event, line: global) ?? false
+        }
+        cell.line.onExplain = { [weak self, weak view = cell.line] token, text, rect in
+            guard let self, let view else { return }
+            self.explainListing(line: global, token: token, text: text, rect: rect, in: view)
         }
         return cell
     }

@@ -52,6 +52,26 @@ named: say it in the end-of-line comment. Every port write gets one: which
 register, which bits, and the source of the names (a PPR, coreboot, EDK2), or
 that they are not known.
 
+A name is a member of an enum that groups it — `enum: "FCH_IO_PORT"` for the
+legacy ports, `AMD_MSR` for MSR numbers, `LPC_DECODE_BITS` for a register's
+bits — with a `comment` that says what it stands for and where that is known
+from: `"PCI configuration address port: bit 31 enable, 23:16 bus … Source:
+PCI Local Bus Specification 3.0, 3.2.2.3.2."`, or `not confirmed`. The app
+shows the comment, the value and the instructions that use the name when the
+reader clicks it, in the C or on the number in the listing; a name without
+one shows only its value. The enum is a type of the review: it is shared at
+publish (`review-types-*.gdt`) and grows member by member from module to
+module, so in the next module `name` and `enum` alone bring the comment along,
+and a name the program's enums hold needs no `enum` at all. One value has one
+name in an enum (an equate shows the first name of its value): a second
+meaning of the same number belongs in another enum. A name given before
+without an enum moves to the member with all its uses.
+
+Types are explained the same way: `ghidra_type` with `description` (what the
+type is, where its layout is known from) and `comments` (a field's or an enum
+member's), with the C or with `name` for a type the module holds. The reader
+clicks the type or a field in the C and sees the definition with its comments.
+
 ### 16-bit code in a 32-bit module
 
 The reset vector's code runs in real mode before the switch to protected mode,

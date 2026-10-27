@@ -1762,3 +1762,10 @@
 "The server does not answer: %1$@" = "Der Server antwortet nicht: %1$@";
 "The server is not an analysis server of this version." = "Der Server ist kein Analyseserver dieser Version.";
 "No description of this module yet. A review writes one — what the module is for, how it works and how it is built — and it appears here when the review is published." = "Für dieses Modul gibt es noch keine Beschreibung. Sie entsteht bei der Analyse – wozu das Modul dient, wie es arbeitet und wie es aufgebaut ist – und erscheint hier, sobald die Analyse veröffentlicht ist.";
+
+/* The popover that explains a name in the code panel */
+"The review has not explained this name yet." = "Die Analyse hat diesen Namen noch nicht erklärt.";
+"Used at" = "Verwendet bei";
+"and %1$@ more" = "und %1$@ weitere";
+"%1$@ · %2$@ bytes" = "%1$@ · %2$@ Bytes";
+"at +0x%1$@ in %2$@" = "bei +0x%1$@ in %2$@";

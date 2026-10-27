@@ -158,6 +158,33 @@ final class MCPEndpointTests: XCTestCase {
         body = try JSONSerialization.jsonObject(with: sent) as? [String: Any]
         XCTAssertEqual(body?["operand"] as? Int, 0)
         XCTAssertNil(body?["value"])
+
+        _ = try await call(13, "ghidra_equate", [
+            "module": .string(module), "address": "0x9DFE6F5", "name": "PCI_CONFIG_ADDRESS",
+            "enum": "FCH_IO_PORT", "comment": "PCI configuration address port. Source: PCI 3.0",
+            "enum_comment": "FCH legacy I/O ports"])
+        sent = try XCTUnwrap(backend.writes.all.last { $0.0 == "set/equate" }?.1)
+        body = try JSONSerialization.jsonObject(with: sent) as? [String: Any]
+        XCTAssertEqual(body?["enum"] as? String, "FCH_IO_PORT")
+        XCTAssertEqual(body?["comment"] as? String, "PCI configuration address port. Source: PCI 3.0")
+        XCTAssertEqual(body?["enum_comment"] as? String, "FCH legacy I/O ports")
+    }
+
+    /// A type's description and its fields' comments reach the owner; a
+    /// type is named by its C or, to comment one the module holds, by name.
+    func testATypeCarriesItsDescriptionAndComments() async throws {
+        _ = try await call(14, "ghidra_type", [
+            "module": .string(module), "name": "SEC_SERIAL_DEVICE_INFO",
+            "description": "The UART SEC reports through.",
+            "comments": ["BaudRate": "bits per second"]])
+        let sent = try XCTUnwrap(backend.writes.all.last { $0.0 == "type" }?.1)
+        let body = try JSONSerialization.jsonObject(with: sent) as? [String: Any]
+        XCTAssertEqual(body?["name"] as? String, "SEC_SERIAL_DEVICE_INFO")
+        XCTAssertNil(body?["c"])
+        XCTAssertEqual(body?["description"] as? String, "The UART SEC reports through.")
+        XCTAssertEqual(body?["comments"] as? [String: String], ["BaudRate": "bits per second"])
+        let refused = try await call(15, "ghidra_type", ["module": .string(module), "description": "x"])
+        XCTAssertEqual(refused["isError"], true)
     }
 
     func testALegacyClientAndANotification() async throws {

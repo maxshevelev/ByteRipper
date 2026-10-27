@@ -140,6 +140,29 @@ up to four wrappers deep. A value passed by pointer (`IoWrite(Width, Port,
   name of each call and the call's address, so a place in the listing is
   found in the C.
 
+Later exporters of v5 add, all optional (a reader ignores what it does not
+know):
+
+```json
+"equates": [{"name": "PCI_CONFIG_ADDRESS", "value": "0xCF8", "enum": "FCH_IO_PORT",
+             "comment": "PCI configuration address port … Source: PCI 3.0",
+             "references": [["0x9DFE6F5", 1]]}],
+"types": [{"name": "SEC_SERIAL_DEVICE_INFO", "path": "/SEC_SERIAL_DEVICE_INFO",
+           "kind": "typedef", "size": 32, "description": "…", "c": "typedef struct …"}],
+"c_fields": [[1449, 3, "EFI_SYSTEM_CONTEXT_IA32", 628]]
+```
+
+- `equates` are the names a review gave constants (`ghidra_equate`): the
+  value, the enum the name is a member of and the member's comment, and every
+  operand that holds it as `[instruction address, operand index]`. The C
+  writes the name where the number was, as a `constant` span.
+- `types` are the types the C names — through pointers and arrays — and the
+  enums of the equates, as C with every field's offset and comment.
+- a function's `c_fields` are `[start, length, type, offset]`: a structure
+  field named in `c`, the type it belongs to and its offset in it.
+
+The Code panel shows these when a name is clicked (`CodeExplanation`).
+
 What it finds on modules at hand: BdsDxe 33 codes with their places, an AMD
 PEIM's halt routine with 29 callers and their codes (`0xDF390148` …), CpuIoPei
 none known (its writes are the I/O PPI, the port a caller's). PeiCore writes

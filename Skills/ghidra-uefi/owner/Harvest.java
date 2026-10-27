@@ -86,12 +86,16 @@ final class Harvest {
         JsonArray comments = now.getAsJsonArray("comments");
         JsonObject data = now.getAsJsonObject("data");
         JsonArray types = now.getAsJsonArray("types");
+        JsonObject equates = now.getAsJsonObject("equates");
         String description = description(program);
         boolean reviewed = functions.size() > 0 || comments.size() > 0 || data.size() > 0 || types.size() > 0
-            || description != null;
+            || equates.size() > 0 || description != null;
         JsonObject document = new JsonObject();
         document.add("comments", comments);
         document.add("data", data);
+        // Only when there are any: a review that names no constant harvests
+        // to the bytes it did before equates were harvested.
+        if (equates.size() > 0) document.add("equates", equates);
         document.add("functions", functions);
         JsonObject made = new JsonObject();
         made.addProperty("ghidra", Application.getApplicationVersion());
@@ -223,6 +227,12 @@ final class Harvest {
         for (String address : new java.util.ArrayList<>(data.keySet())) {
             if (data.get(address).equals(oldData.get(address))) data.remove(address);
         }
+        // A baseline recorded before equates were harvested holds none.
+        JsonObject equates = now.getAsJsonObject("equates");
+        JsonObject oldEquates = baseline.has("equates") ? baseline.getAsJsonObject("equates") : new JsonObject();
+        for (String address : new java.util.ArrayList<>(equates.keySet())) {
+            if (equates.get(address).equals(oldEquates.get(address))) equates.remove(address);
+        }
     }
 
     /** Every decision the program holds, from whoever made it. */
@@ -306,6 +316,28 @@ final class Harvest {
             data.put(symbol.getAddress().getOffset(), item);
         }
 
+        // The names given to constants, by the instruction that holds them:
+        // the operand, the name, and the enum it is a member of.
+        TreeMap<Long, JsonObject> equates = new TreeMap<>();
+        java.util.Iterator<ghidra.program.model.symbol.Equate> table = program.getEquateTable().getEquates();
+        while (table.hasNext()) {
+            ghidra.program.model.symbol.Equate equate = table.next();
+            String owner = null;
+            if (equate.isEnumBased() && equate.isValidUUID()) {
+                ghidra.program.model.data.DataType type =
+                    program.getDataTypeManager().findDataTypeForID(equate.getEnumUUID());
+                if (type != null) owner = type.getName();
+            }
+            for (ghidra.program.model.symbol.EquateReference reference : equate.getReferences()) {
+                JsonObject item = new JsonObject();
+                item.addProperty("name", equate.getDisplayName());
+                put(item, "enum", owner);
+                item.addProperty("value", String.format("0x%X", equate.getValue()));
+                equates.computeIfAbsent(reference.getAddress().getOffset(), key -> new JsonObject())
+                       .add(Integer.toString(reference.getOpIndex()), item);
+            }
+        }
+
         JsonArray types = new JsonArray();
         for (Map.Entry<String, String> type : reviewTypes(program).entrySet()) {
             JsonObject item = new JsonObject();
@@ -317,6 +349,7 @@ final class Harvest {
         JsonObject all = new JsonObject();
         all.add("comments", comments);
         all.add("data", keyed(data));
+        all.add("equates", keyed(equates));
         all.add("functions", keyed(functions));
         all.add("types", types);
         return all;

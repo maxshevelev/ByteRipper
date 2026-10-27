@@ -1247,6 +1247,62 @@ final class CodePaneViewTests: XCTestCase {
         return try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
     }
 
+    /// A click on a name the review explained opens what it stands for: a
+    /// constant's value, enum and words with the instructions that hold it;
+    /// a type's C; a field's line in it. A name nobody explained opens nothing.
+    func testAClickOnAnExplainedNameOpensWhatItStandsFor() throws {
+        let c = "void ResetEntry(SEC_SERIAL_DEVICE_INFO *Info)\n{\n  out(PCI_CONFIG_ADDRESS,Info->BaudRate);\n}\n"
+        let text = c as NSString
+        func at(_ word: String) -> Int { text.range(of: word).location }
+        let structC = "struct SEC_SERIAL_DEVICE_INFO {\n    /* 0x00 */ UINT32 Base; // I/O base\n"
+            + "    /* 0x04 */ UINT32 BaudRate; // bits per second\n} /* size 0x8 */;"
+        let json: [String: Any] = [
+            "script_version": 5, "program": ["image_base": "0x0"],
+            "functions": [[
+                "entry": "0x220", "name": "ResetEntry", "c": c,
+                "c_spans": [[at("SEC_SERIAL_DEVICE_INFO"), 22, "type"], [at("PCI_CONFIG_ADDRESS"), 18, "constant"],
+                            [at("Info->"), 4, "parameter"]],
+                "c_fields": [[at("BaudRate"), 8, "SEC_SERIAL_DEVICE_INFO", 4]],
+                "instructions": [["address": "0x220", "bytes": "66 BA F8 0C", "mnemonic": "MOV", "text": "MOV DX,0xcf8"]]
+            ]],
+            "equates": [["name": "PCI_CONFIG_ADDRESS", "value": "0xCF8", "enum": "FCH_IO_PORT",
+                         "comment": "PCI configuration address port.", "references": [["0x220", 1]]]],
+            "types": [["name": "SEC_SERIAL_DEVICE_INFO", "kind": "struct", "size": 8, "c": structC]]
+        ]
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        let view = CodePaneView(manifest: manifest(), artifact: artifact, moduleBytes: teModule(), hexView: NSView())
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 480),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 0, instruction: nil, showsC: true)
+        // A popover shows only off a window on screen.
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil) }
+        func clickOn(_ word: String) throws -> CodeExplanation? {
+            XCTAssertFalse(view.clickC(at: at(word) + 1, event: try click(count: 1)))
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+            return view.shownExplanation
+        }
+
+        let constant = try XCTUnwrap(try clickOn("PCI_CONFIG_ADDRESS"))
+        XCTAssertEqual(constant.text, "PCI configuration address port.")
+        XCTAssertEqual(constant.uses.map(\.line), [0])
+        XCTAssertEqual(CodeExplanationPopover(explanation: constant, model: CodeModel(artifact: artifact, layout: nil))
+                        .factsText(), "0xCF8 = 3320 · enum FCH_IO_PORT")
+        XCTAssertEqual(try clickOn("SEC_SERIAL_DEVICE_INFO")?.c?.hasPrefix("struct SEC_SERIAL_DEVICE_INFO"), true)
+        let field = try XCTUnwrap(try clickOn("BaudRate"))
+        XCTAssertEqual(field.name, "SEC_SERIAL_DEVICE_INFO.BaudRate")
+        XCTAssertEqual(field.text, "bits per second")
+        XCTAssertEqual(CodeExplanationPopover.lineRange(in: structC, offset: 4, name: "BaudRate").map {
+            (structC as NSString).substring(with: $0) }, "    /* 0x04 */ UINT32 BaudRate; // bits per second")
+        view.shownExplanationClose()
+        XCTAssertNil(try clickOn("Info"), "a parameter explains nothing")
+        XCTAssertEqual(CodePaneView.listingNumber("0xcf8"), 0xCF8)
+        XCTAssertEqual(CodePaneView.listingNumber("-0x1"), UInt64.max)
+        XCTAssertNil(CodePaneView.listingNumber("DX"))
+    }
+
     private func click(count: Int, flags: NSEvent.ModifierFlags = []) throws -> NSEvent {
         try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseDown, location: .zero, modifierFlags: flags,
                                          timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0,

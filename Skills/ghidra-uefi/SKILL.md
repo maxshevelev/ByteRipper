@@ -111,7 +111,9 @@ table's or a PPI's slot), `ghidra_rename_variable`, `ghidra_signature`,
 `ghidra_type`, `ghidra_set_data`,
 `ghidra_comment`, `ghidra_code_mode` (a range read as 16-bit or 32-bit code — the
 reset vector's real-mode code in a 32-bit module), `ghidra_equate` (a name for a
-constant an instruction holds: an I/O port, an MSR, a PCI config address);
+constant an instruction holds: an I/O port, an MSR, a PCI config address — as
+an enum member with a comment saying what it is and its source, which the app
+shows when the name is clicked);
 `ghidra_description` and `ghidra_describe` for the module
 description (the whole document, or one `## ` section); `ghidra_publish` at a
 coherent checkpoint, `ghidra_done` at the end. The rules a review keeps are in "What a review makes of the code".
@@ -162,7 +164,8 @@ byte for byte what `code_artifact.py` stores. The owner saves and exits after
 The review is made through the same owner: `rename`, `rename-var` (a local by
 `--storage` and `--first-use` as `/v1/function` lists them, a parameter by
 `--ordinal`), `comment`, `signature`, `data`, `type`, `equate` (`address name
---value 0xCF8`), `code-mode` (`start end
+--value 0xCF8 --enum FCH_IO_PORT --comment …`; `type` also takes `--name`,
+`--description` and `--comment FIELD=TEXT`), `code-mode` (`start end
 16|32`: the range [start, end) decoded again as 16-bit or 32-bit x86) and
 `describe` (the module description, whole or `--section`; `@file` reads it
 from a file). The first write takes
@@ -193,7 +196,9 @@ Names alone do not get there. Every review applies these rules:
    `EFI_SUCCESS`, `EFI_NOT_FOUND`; `DEBUG` levels; POST and halt codes; group
    and type ids of a vendor table. A constant an instruction holds — an I/O
    port, an MSR number, a PCI config address — gets its name with
-   `ghidra_equate`, and each port write an end-of-line comment: the register,
+   `ghidra_equate`, as a member of an enum that groups it with a comment
+   saying what it is and where that is known from, and each port write an
+   end-of-line comment: the register,
    the bits, and where the names come from (`reference/ghidra.md`, "I/O ports
    and other constants"). A signature or a magic size used once gets a named
    global or an end-of-line comment that names it. A GUID gets its name from the GUID table or a label. Write the tag of

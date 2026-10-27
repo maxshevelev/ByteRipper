@@ -66,7 +66,10 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
     /// 5 follows each port write back to the call that supplies its value:
     /// `post_codes` are the writes to port 0x80 with the value and the
     /// wrappers it went through, `port_writes` the other ports, and each
-    /// function's `c_sites` place its calls in the C.
+    /// function's `c_sites` place its calls in the C. Later, and optional:
+    /// `equates` — the names a review gave its constants, with the enum each
+    /// is a member of and what it stands for — `types`, the C of the types
+    /// the decompiled C names, and each function's `c_fields`.
     public static let supportedScriptVersions: Set<Int> = [2, 3, 4, 5]
 
     public let scriptVersion: Int
@@ -86,6 +89,13 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
     /// Named data, from v4 on: what the UEFI pass named, and what the image's
     /// own symbols did. Empty for an older artifact.
     public let symbols: [Symbol]
+    /// The names a review gave the constants instructions hold — an I/O
+    /// port, an MSR, a register bit — and what each stands for. Empty when
+    /// the exporter wrote none.
+    public let equates: [Equate]
+    /// The types the decompiled C names, as C, with their comments. Empty
+    /// when the exporter wrote none.
+    public let types: [TypeDefinition]
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -109,6 +119,8 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         // Services' SetVariable, so the list is noise and is not shown.
         statusCodeCalls = version == 2 && (program?.is64Bit ?? false) ? [] : calls
         symbols = try container.decodeIfPresent([Symbol].self, forKey: .symbols) ?? []
+        equates = try container.decodeIfPresent([Equate].self, forKey: .equates) ?? []
+        types = try container.decodeIfPresent([TypeDefinition].self, forKey: .types) ?? []
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -117,7 +129,7 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         case postCodes = "post_codes"
         case portWrites = "port_writes"
         case statusCodeCalls = "status_code_calls"
-        case symbols
+        case symbols, equates, types
     }
 
     /// What Ghidra says about the program it read. `sha256` is the hash of the
@@ -211,6 +223,9 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         /// Where each call is made, by the call's own address (v5): the place
         /// of an instruction of the listing in the C.
         public let cSites: [CSite]
+        /// Where each structure field is named in `c`: the structure and the
+        /// field's offset in it.
+        public let cFields: [CField]
         /// Where the name came from (v4): `DEFAULT` for Ghidra's FUN_
         /// placeholder, `ANALYSIS` for the UEFI pass, `IMPORTED` for the
         /// image's own symbols, `USER_DEFINED` for a person's.
@@ -237,6 +252,7 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             c = try container.decodeIfPresent(String.self, forKey: .c)
             cSpans = try container.decodeIfPresent([CSpan].self, forKey: .cSpans) ?? []
             cSites = try container.decodeIfPresent([CSite].self, forKey: .cSites) ?? []
+            cFields = try container.decodeIfPresent([CField].self, forKey: .cFields) ?? []
             nameSource = try container.decodeIfPresent(String.self, forKey: .nameSource)
             nameReason = try container.decodeIfPresent(String.self, forKey: .nameReason)
             instructions = try container.decodeIfPresent(
@@ -248,6 +264,7 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             case callers, callees, c, instructions
             case cSpans = "c_spans"
             case cSites = "c_sites"
+            case cFields = "c_fields"
             case nameSource = "name_source"
             case nameReason = "name_reason"
         }
@@ -304,6 +321,93 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
                 throw DecodingError.dataCorruptedError(
                     in: container, debugDescription: "a site must have a place and a length")
             }
+        }
+    }
+
+    /// A structure field named in the C, written as `[start, length, type,
+    /// offset]`: UTF-16 units into `c`, the structure's name, and the
+    /// field's offset in it.
+    public struct CField: Decodable, Equatable, Sendable {
+        public let start: Int
+        public let length: Int
+        public let type: String
+        public let offset: Int
+
+        public init(from decoder: Decoder) throws {
+            var container = try decoder.unkeyedContainer()
+            start = try container.decode(Int.self)
+            length = try container.decode(Int.self)
+            type = try container.decode(String.self)
+            offset = try container.decode(Int.self)
+            guard start >= 0, length > 0, offset >= 0 else {
+                throw DecodingError.dataCorruptedError(
+                    in: container, debugDescription: "a field must have a place, a length and an offset")
+            }
+        }
+    }
+
+    /// A name a review gave a constant: an I/O port, an MSR, a register bit.
+    /// `comment` is what the name stands for and where it is known from, as
+    /// the enum member it belongs to says; `references` are the operands
+    /// that hold it, by instruction address and operand index.
+    public struct Equate: Decodable, Equatable, Sendable {
+        public struct Use: Equatable, Sendable {
+            public let address: CodeAddress
+            public let operand: Int
+        }
+
+        public let name: String
+        public let value: UInt64
+        /// The enum the name is a member of; nil for a bare name.
+        public let enumName: String?
+        public let comment: String?
+        public let references: [Use]
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            name = try container.decode(String.self, forKey: .name)
+            value = try container.decode(CodeAddress.self, forKey: .value).value
+            enumName = try container.decodeIfPresent(String.self, forKey: .enumName)
+            comment = try container.decodeIfPresent(String.self, forKey: .comment)
+            var list = try container.nestedUnkeyedContainer(forKey: .references)
+            var uses: [Use] = []
+            while !list.isAtEnd {
+                var pair = try list.nestedUnkeyedContainer()
+                uses.append(Use(address: try pair.decode(CodeAddress.self), operand: try pair.decode(Int.self)))
+            }
+            references = uses
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case name, value, comment, references
+            case enumName = "enum"
+        }
+    }
+
+    /// A type the C names, as C: every field with its offset and comment.
+    public struct TypeDefinition: Decodable, Equatable, Sendable {
+        public let name: String
+        /// Where Ghidra keeps it: `/ByteRipper/…` for a review's, the EDK2
+        /// archive's category for one of EDK2's.
+        public let path: String?
+        /// `struct`, `union`, `enum`, `typedef`, `function`.
+        public let kind: String
+        public let size: Int
+        public let description: String?
+        public let c: String
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            name = try container.decode(String.self, forKey: .name)
+            path = try container.decodeIfPresent(String.self, forKey: .path)
+            kind = try container.decodeIfPresent(String.self, forKey: .kind) ?? "builtin"
+            size = try container.decodeIfPresent(Int.self, forKey: .size) ?? 0
+            description = try container.decodeIfPresent(String.self, forKey: .description)
+            c = try container.decode(String.self, forKey: .c)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case name, path, kind, size, description, c
         }
     }
 

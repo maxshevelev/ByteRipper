@@ -19,6 +19,10 @@ final class CodeLineView: NSView {
     /// A click on the line: the link it landed on, if any, and the event.
     /// True when the pane took it — a jump — and the row is not selected.
     var onClick: ((CodeLink?, NSEvent) -> Bool)?
+    /// A plain click the pane did not take, on a token: the token, its text
+    /// and where it is drawn — for the pane to say what the token stands for.
+    var onExplain: ((CodeToken, String, NSRect) -> Void)?
+    private var tokens: [CodeToken] = []
     /// The occurrences of the symbol the reader clicked, drawn behind the text.
     private(set) var highlighted: [NSRange] = []
 
@@ -26,6 +30,7 @@ final class CodeLineView: NSView {
 
     func show(_ text: String, tokens: [CodeToken], font: NSFont, highlighted: [NSRange] = []) {
         string = text
+        self.tokens = tokens
         self.highlighted = highlighted
         links = []
         attributed = CodeColors.attributed(text, tokens: tokens, font: font,
@@ -120,7 +125,35 @@ final class CodeLineView: NSView {
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         if onClick?(link(at: point), event) == true { return }
+        if let onExplain, let token = token(at: point) {
+            let units = Array(string.utf16)
+            if token.start + token.length <= units.count {
+                let text = String(decoding: units[token.start..<token.start + token.length], as: UTF16.self)
+                onExplain(token, text, rect(of: NSRange(location: token.start, length: token.length)))
+            }
+        }
         super.mouseDown(with: event)
+    }
+
+    /// The token under a point of the view, if the point is on one.
+    func token(at point: NSPoint) -> CodeToken? {
+        guard let line, point.x >= 0 else { return nil }
+        let index = CTLineGetStringIndexForPosition(line, CGPoint(x: point.x, y: 0))
+        guard index != kCFNotFound else { return nil }
+        var character = index
+        if CTLineGetOffsetForStringIndex(line, index, nil) > point.x, character > 0 { character -= 1 }
+        guard let token = tokens.first(where: { $0.start <= character && character < $0.start + $0.length })
+        else { return nil }
+        let end = CTLineGetOffsetForStringIndex(line, token.start + token.length, nil)
+        return point.x <= end ? token : nil
+    }
+
+    /// Where characters of the line are drawn.
+    func rect(of range: NSRange) -> NSRect {
+        guard let line else { return bounds }
+        let start = CTLineGetOffsetForStringIndex(line, range.location, nil)
+        let end = CTLineGetOffsetForStringIndex(line, range.location + range.length, nil)
+        return NSRect(x: start, y: 0, width: max(end - start, 1), height: bounds.height)
     }
 
     override func resetCursorRects() {
