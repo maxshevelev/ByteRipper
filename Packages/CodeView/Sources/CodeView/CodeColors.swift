@@ -83,4 +83,9 @@ enum CodeColors {
     /// wears, drawn as a rounded box around each name.
     static let symbolHighlight = themed(light: 0xEEF1F9, dark: 0x3A3E4A)
     static let symbolHighlightRadius: CGFloat = 3
+
+    /// Behind code in the module's description: a block and a span.
+    static let descriptionCodeBackground = themed(light: 0xF2F3F5, dark: 0x2C2D31)
+    /// Behind the header row of a table in the description.
+    static let descriptionTableHeader = themed(light: 0xF4F5F7, dark: 0x303136)
 }

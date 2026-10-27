@@ -238,6 +238,7 @@ import ToolModuleKit
             codePane = nil
         }
         if let codePane {
+            codePane.loadModuleDescription()
             // The code screen is its own surface: no tool strip, no minimap —
             // the functions and the code are the screen.
             surface.tools.activate(nil, animated: false, movesWindow: false)
@@ -487,6 +488,7 @@ import ToolModuleKit
         codePane.onChooseRecipe = { [weak self] manifest in
             self?.chooseRecipe(id, manifest: manifest)
         }
+        codePane.loadModuleDescription()
         host?.applyCodeNotes()
         wireCodeScreen(codePane, to: pane, owner: host) { [weak pane, weak host] range in
             guard let pane else { return }

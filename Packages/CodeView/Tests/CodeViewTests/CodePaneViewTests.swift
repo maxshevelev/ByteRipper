@@ -261,20 +261,20 @@ final class CodePaneViewTests: XCTestCase {
 
     /// The header reads where the reader is: Back and Forward first, then
     /// the module, its review's revision, ▸ and the function; the versions
-    /// are the small grey line under them, ASM/C at the right.
+    /// are the small grey line under them, ASM/C/Description at the right.
     func testTheHeaderReadsModuleRevisionAndFunction() throws {
         var reviewed = manifest()
         reviewed.reading = AnalysisReading(project: "p", rev: 14)
         let view = CodePaneView(manifest: reviewed, artifact: try artifact(),
                                 moduleBytes: moduleBytes, hexView: NSView())
-        view.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
+        view.frame = NSRect(x: 0, y: 0, width: 720, height: 360)
         view.layoutSubtreeIfNeeded()
 
         let mode = try XCTUnwrap(first(NSSegmentedControl.self, in: view) {
             $0.label(forSegment: 0) == "ASM"
         })
         XCTAssertEqual((0..<mode.segmentCount).map { mode.label(forSegment: $0) ?? "" },
-                       ["ASM", "C"])
+                       ["ASM", "C", "Description"])
         let modeRect = view.convert(mode.bounds, from: mode)
         XCTAssertGreaterThan(modeRect.minX, view.bounds.midX,
                              "the switch is on the code side")
@@ -893,6 +893,144 @@ final class CodePaneViewTests: XCTestCase {
         second.goBack()
         XCTAssertEqual(try scrollOrigin(of: secondText), scrolled, accuracy: 0.5)
         XCTAssertEqual(second.lastFlash, .c(call), "the same C, so the same mark")
+    }
+
+    // MARK: - The module's description
+
+    private let sampleDescription = """
+        # CpuPei
+
+        Initialises the **CPU** in PEI; *probably* AMD's.
+
+        ## Interfaces
+
+        | Interface | Kind |
+        |---|---|
+        | gEfiPeiStallPpiGuid | consumes |
+
+        ## Flow
+
+        1. [The caller](0x220) runs first.
+           - then `entry` returns
+        2. See <https://example.com> and [a file](notes.md).
+        """
+
+    private func describedPane() throws -> CodePaneView {
+        let view = CodePaneView(manifest: manifest(), artifact: try longCallerArtifact(),
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 1, instruction: nil, showsC: true)
+        return view
+    }
+
+    private func link(in text: NSAttributedString, at words: String) -> Any? {
+        let range = (text.string as NSString).range(of: words)
+        guard range.location != NSNotFound else { return nil }
+        return text.attribute(.link, at: range.location, effectiveRange: nil)
+    }
+
+    /// The Markdown is set as a document: a table, a list with its markers,
+    /// links to the code by address and by a function's name, a link to the
+    /// web; a link to a file leads nowhere.
+    func testTheDescriptionIsDrawnWithItsLinks() throws {
+        let view = try describedPane()
+        view.setModuleDescription(sampleDescription)
+        view.showDescription(true)
+        XCTAssertTrue(view.showsDescription)
+        XCTAssertTrue(view.showsDecompiledC, "the code side it goes back to")
+        let text = view.descriptionAttributedText
+        XCTAssertTrue(text.string.hasPrefix("CpuPei\nInitialises the CPU in PEI"), text.string)
+        XCTAssertFalse(text.string.contains("|"), "the table is a table")
+        XCTAssertTrue(text.string.contains("1.\tThe caller runs first."), text.string)
+        let cell = (text.string as NSString).range(of: "gEfiPeiStallPpiGuid")
+        let style = try XCTUnwrap(text.attribute(.paragraphStyle, at: cell.location, effectiveRange: nil) as? NSParagraphStyle)
+        XCTAssertTrue(style.textBlocks.first is NSTextTableBlock)
+        XCTAssertEqual((link(in: text, at: "The caller") as? URL)?.absoluteString, "code-address:0x220")
+        XCTAssertEqual((link(in: text, at: "entry") as? URL)?.absoluteString, "code-address:0x300")
+        XCTAssertEqual((link(in: text, at: "https://example.com") as? URL)?.host, "example.com")
+        XCTAssertNil(link(in: text, at: "a file"))
+        XCTAssertEqual(view.descriptionPlaceholder, "")
+    }
+
+    func testAModuleWithoutADescriptionSaysSo() throws {
+        let view = try describedPane()
+        view.showDescription(true)
+        XCTAssertEqual(view.descriptionPlaceholder, "", "nothing while the store has not answered")
+        view.setModuleDescription(nil)
+        XCTAssertTrue(view.descriptionPlaceholder.hasPrefix("No description of this module yet"))
+        XCTAssertEqual(view.descriptionText, "")
+    }
+
+    /// A link in the description opens the function in the code; Back
+    /// returns to the description where it was scrolled.
+    func testALinkInTheDescriptionLeadsToTheCodeAndBackReturns() throws {
+        let view = try describedPane()
+        view.setModuleDescription(sampleDescription + String(repeating: "\n\nMore words.", count: 60))
+        view.showDescription(true)
+        view.layoutSubtreeIfNeeded()
+        view.scrollDescription(to: NSPoint(x: 0, y: 40))
+        let scrolled = view.descriptionScrollOrigin.y
+        XCTAssertGreaterThan(scrolled, 0)
+        let at = (view.descriptionText as NSString).range(of: "The caller").location
+        XCTAssertTrue(view.followDescriptionLink(at: at))
+        XCTAssertFalse(view.showsDescription)
+        XCTAssertTrue(view.showsDecompiledC)
+        XCTAssertEqual(view.selectedFunction?.name, "FUN_00000220")
+
+        view.goBack()
+        XCTAssertTrue(view.showsDescription)
+        XCTAssertEqual(view.selectedFunction?.name, "entry")
+        XCTAssertEqual(view.descriptionScrollOrigin.y, scrolled, accuracy: 0.5)
+        view.goForward()
+        XCTAssertFalse(view.showsDescription)
+        XCTAssertEqual(view.selectedFunction?.name, "FUN_00000220")
+    }
+
+    /// The code's own function named in the description is a move too: Back
+    /// returns from its C to the description.
+    func testFollowingTheFunctionOnScreenFromTheDescriptionCanBeUndone() throws {
+        let view = try describedPane()
+        view.setModuleDescription(sampleDescription)
+        view.showDescription(true)
+        let at = (view.descriptionText as NSString).range(of: "entry").location
+        XCTAssertTrue(view.followDescriptionLink(at: at))
+        XCTAssertFalse(view.showsDescription)
+        XCTAssertTrue(view.canGoBack)
+        view.goBack()
+        XCTAssertTrue(view.showsDescription)
+    }
+
+    /// A republished review keeps the reader in the description, scrolled
+    /// where they were, even when its text arrives after the history.
+    func testTheCarriedHistoryKeepsTheDescriptionOnScreen() throws {
+        let first = try describedPane()
+        let long = sampleDescription + String(repeating: "\n\nMore words.", count: 60)
+        first.setModuleDescription(long)
+        first.showDescription(true)
+        first.layoutSubtreeIfNeeded()
+        first.scrollDescription(to: NSPoint(x: 0, y: 40))
+        let scrolled = first.descriptionScrollOrigin.y
+        let carried = first.carriedHistory
+
+        let second = try describedPane()
+        second.adoptHistory(carried)
+        XCTAssertTrue(second.showsDescription)
+        second.setModuleDescription(long)
+        XCTAssertEqual(second.descriptionScrollOrigin.y, scrolled, accuracy: 0.5)
+    }
+
+    /// A click on a function in the list leaves the description for its code.
+    func testChoosingAFunctionLeavesTheDescription() throws {
+        let view = try describedPane()
+        view.setModuleDescription(sampleDescription)
+        view.showDescription(true)
+        let list = try XCTUnwrap(first(NSTableView.self, in: view) {
+            $0.tableColumns.first?.identifier.rawValue == "function"
+        })
+        list.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        XCTAssertFalse(view.showsDescription)
+        XCTAssertEqual(view.selectedFunction?.name, "FUN_00000220")
     }
 
     /// A call in the listing is a link too.

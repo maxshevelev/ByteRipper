@@ -1,4 +1,5 @@
 import CodeAnalysis
+import CodeView
 import Foundation
 import Localization
 import UEFIToolUI
@@ -17,6 +18,15 @@ enum CodeAnalysisStore {
         let root = root ?? self.root
         return await Task.detached(priority: .userInitiated) { () -> CodeArtifact? in
             try? ContentStore(root: root, create: false).artifact(for: manifest)
+        }.value
+    }
+
+    /// The module description a manifest's reading names, read off the main
+    /// actor; nil when it has none or the store cannot give it.
+    static func moduleDescription(for manifest: AnalysisManifest, root: URL? = nil) async -> String? {
+        let root = root ?? self.root
+        return await Task.detached(priority: .userInitiated) { () -> String? in
+            (try? ContentStore(root: root, create: false).moduleDescription(for: manifest)) ?? nil
         }.value
     }
 
@@ -64,5 +74,17 @@ enum CodeAnalysisStore {
             lines.append(L("Damaged in the project and not read: %1$@", String(damaged)))
         }
         return lines
+    }
+}
+
+extension CodePaneView {
+    /// Reads the description the pane's reading names and shows it: after
+    /// the pane is drawn, so the code never waits for the store.
+    func loadModuleDescription() {
+        let manifest = self.manifest
+        Task { @MainActor [weak self] in
+            let text = await CodeAnalysisStore.moduleDescription(for: manifest)
+            self?.setModuleDescription(text)
+        }
     }
 }

@@ -1761,3 +1761,4 @@
 "The server does not accept the token." = "Сервер не принимает токен.";
 "The server does not answer: %1$@" = "Сервер не отвечает: %1$@";
 "The server is not an analysis server of this version." = "Сервер не является сервером разборов этой версии.";
+"No description of this module yet. A review writes one — what the module is for, how it works and how it is built — and it appears here when the review is published." = "Описания этого модуля пока нет. Его составляют при разборе — назначение модуля, логика работы и внутреннее устройство, — и оно появится здесь после публикации разбора.";

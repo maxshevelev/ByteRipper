@@ -11,6 +11,11 @@ struct CodeViewPosition: Equatable {
     var cMark: NSRange?
     /// The function's C the mark is in; a mark into other text is dropped.
     var cText: String?
+    /// Where the module's description was scrolled, when it was on screen:
+    /// a place left from the description is returned to in it.
+    var description: NSPoint?
+    /// The link in the description the reader followed, flashed on the way back.
+    var descriptionMark: NSRange?
 }
 
 /// Back and Forward, carried from one Code panel to another drawing the same

@@ -73,6 +73,14 @@ import ToolModuleKit
     private let cTextView = CodeTextView()
     private let cScroll = NSScrollView()
     private let modeControl: NSSegmentedControl
+    private let descriptionView = CodeDescriptionView()
+    /// The code side the description returns to: the C, or the listing.
+    private var codeShowsC = true
+    /// Where the description is to be scrolled once its text arrives: a
+    /// place adopted before the store answered.
+    private var pendingDescriptionScroll: NSPoint?
+    /// The link in the description the reader just followed.
+    private var leavingDescriptionMark: NSRange?
     private let recipePopUp = NSPopUpButton(frame: .zero, pullsDown: false)
     /// Turns while the app reads another analysis the reader chose.
     private let recipeSpinner = NSProgressIndicator()
@@ -136,7 +144,7 @@ import ToolModuleKit
         self.recipes = allRecipes
         // ASM and C are names of formats, not words to translate.
         modeControl = NSSegmentedControl(
-            labels: ["ASM", "C"], trackingMode: .selectOne,
+            labels: ["ASM", "C", L("Description")], trackingMode: .selectOne,
             target: nil, action: nil)
         listControl = NSSegmentedControl(
             labels: [L("Functions"), L("Strings"), L("POST"), L("Status")],
@@ -225,7 +233,49 @@ import ToolModuleKit
         return listed[row]
     }
 
-    public var showsDecompiledC: Bool { modeControl.selectedSegment == 1 }
+    /// The C rather than the listing: what is on screen, or — while the
+    /// description is — what the code shows when the reader goes back to it.
+    public var showsDecompiledC: Bool { showsDescription ? codeShowsC : modeControl.selectedSegment == 1 }
+    /// The module's description is on screen in place of the code.
+    public var showsDescription: Bool { modeControl.selectedSegment == Self.descriptionSegment }
+    private static let descriptionSegment = 2
+
+    /// The description, as drawn, for tests.
+    var descriptionText: String { descriptionView.shownText }
+    var descriptionAttributedText: NSAttributedString { descriptionView.attributedText }
+    var descriptionPlaceholder: String { descriptionView.placeholderText }
+    var descriptionScrollOrigin: NSPoint { descriptionView.scrollOrigin }
+    func scrollDescription(to origin: NSPoint) { descriptionView.scroll(to: origin) }
+    /// Follows the link at `index` of the description, as a click would.
+    @discardableResult
+    func followDescriptionLink(at index: Int) -> Bool { descriptionView.followLink(at: index) }
+
+    /// The module's description, Markdown, as the reading names it; nil
+    /// when it has none. The app reads it from the store after the pane is
+    /// made, so the code is never kept waiting for it.
+    public func setModuleDescription(_ markdown: String?) {
+        descriptionView.show(markdown)
+        if let origin = pendingDescriptionScroll {
+            pendingDescriptionScroll = nil
+            layoutSubtreeIfNeeded()
+            descriptionView.scroll(to: origin)
+        }
+    }
+
+    /// Shows the module's description in place of the code, or the code
+    /// again — as the segment does.
+    public func showDescription(_ shows: Bool) {
+        guard shows != showsDescription else { return }
+        modeControl.selectedSegment = shows ? Self.descriptionSegment : (codeShowsC ? 1 : 0)
+        applyMode()
+    }
+
+    /// Back to the code from the description, on the side it was left on.
+    private func leaveDescription() {
+        guard showsDescription else { return }
+        modeControl.selectedSegment = codeShowsC ? 1 : 0
+        applyMode()
+    }
     /// The analyses the header can offer, the chosen one first.
     public var offeredRecipes: [AnalysisManifest] { recipes }
 
@@ -304,7 +354,7 @@ import ToolModuleKit
     /// without moving the reader's place: what a Code panel opened with the
     /// listing already showing asks for.
     public func showDecompiledC(_ showsC: Bool) {
-        guard showsDecompiledC != showsC else { return }
+        guard showsDecompiledC != showsC || showsDescription else { return }
         modeControl.selectedSegment = showsC ? 1 : 0
         applyMode()
     }
@@ -613,7 +663,9 @@ import ToolModuleKit
         return CodeViewPosition(listing: tableScroll.contentView.bounds.origin,
                                 c: cScroll.contentView.bounds.origin,
                                 cMark: mark,
-                                cText: state.function.flatMap { model.functions[$0].c })
+                                cText: state.function.flatMap { model.functions[$0].c },
+                                description: showsDescription ? descriptionView.scrollOrigin : nil,
+                                descriptionMark: showsDescription ? leavingDescriptionMark : nil)
     }
 
     /// Keeps the current place as the reader has it now, before they leave it.
@@ -628,10 +680,13 @@ import ToolModuleKit
     private func jump(_ move: () -> Void) {
         recordCurrentPlace()
         leavingCMark = nil
+        leavingDescriptionMark = nil
         move()
         guard let place = currentPlace else { return }
+        // Leaving the description for the function on screen is still a
+        // move: Back returns to the description.
         if historyIndex >= 0, history[historyIndex].function == place.function,
-           history[historyIndex].line == place.line { return }
+           history[historyIndex].line == place.line, history[historyIndex].view.description == nil { return }
         history = Array(history.prefix(historyIndex + 1)) + [place]
         historyIndex = history.count - 1
         updateHistoryButtons()
@@ -683,6 +738,14 @@ import ToolModuleKit
         if here.function == adopted[current].function {
             here.view = adopted[current].view
             show(here.view)
+            if let origin = here.view.description {
+                showDescription(true)
+                if descriptionView.hasDescription {
+                    descriptionView.scroll(to: origin)
+                } else {
+                    pendingDescriptionScroll = origin
+                }
+            }
         }
         adopted[current] = here
         history = adopted
@@ -741,6 +804,7 @@ import ToolModuleKit
         guard canGoBack else { return }
         recordCurrentPlace()
         leavingCMark = nil
+        leavingDescriptionMark = nil
         historyIndex -= 1
         go(to: history[historyIndex])
     }
@@ -749,6 +813,7 @@ import ToolModuleKit
         guard canGoForward else { return }
         recordCurrentPlace()
         leavingCMark = nil
+        leavingDescriptionMark = nil
         historyIndex += 1
         go(to: history[historyIndex])
     }
@@ -762,9 +827,42 @@ import ToolModuleKit
             select(line: line)
             notifyInstruction()
         }
+        if let origin = place.view.description {
+            showDescription(true)
+            descriptionView.scroll(to: origin)
+            updateHistoryButtons()
+            if let mark = place.view.descriptionMark { descriptionView.flash(mark) }
+            return
+        }
+        leaveDescription()
         show(place.view)
         updateHistoryButtons()
         flashArrival(cMark: place.view.cMark)
+    }
+
+    /// A link in the description: the function it names opens in the code,
+    /// or the instruction with its function, as a click on a call would. The
+    /// description is the place Back returns to.
+    private func followFromDescription(_ address: CodeAddress, link: NSRange) {
+        let function = model.function(at: address)
+        let line = function == nil ? model.line(at: address) : nil
+        guard function != nil || line != nil else {
+            NSSound.beep()
+            return
+        }
+        // The jump keeps it with the place it leaves.
+        leavingDescriptionMark = link
+        jump {
+            leaveDescription()
+            if let function {
+                selectFunction(at: function)
+            } else if let line {
+                select(line: line)
+                notifyInstruction()
+            }
+        }
+        takeKeyboard()
+        flashArrival()
     }
 
     /// Scrolls the listing and the C as a place had them, and selects its
@@ -1091,11 +1189,26 @@ import ToolModuleKit
         cScroll.translatesAutoresizingMaskIntoConstraints = false
         cScroll.isHidden = true
 
+        descriptionView.translatesAutoresizingMaskIntoConstraints = false
+        descriptionView.isHidden = true
+        descriptionView.onFollow = { [weak self] address, link in self?.followFromDescription(address, link: link) }
+        descriptionView.resolveName = { [weak self] name in
+            guard let self, let index = self.model.functions.firstIndex(where: { $0.name == name }) else { return nil }
+            return self.model.functions[index].entry
+        }
+        descriptionView.resolvesAddress = { [weak self] address in
+            guard let self else { return false }
+            return self.model.function(at: address) != nil || self.model.line(at: address) != nil
+        }
+        // Until the app has read it: nothing, not "no description".
+        descriptionView.show(nil, loaded: false)
+
         let content = NSView()
         content.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(tableScroll)
         content.addSubview(cScroll)
-        for scroll in [tableScroll, cScroll] {
+        content.addSubview(descriptionView)
+        for scroll in [tableScroll, cScroll, descriptionView] {
             NSLayoutConstraint.activate([
                 scroll.topAnchor.constraint(equalTo: content.topAnchor),
                 scroll.bottomAnchor.constraint(equalTo: content.bottomAnchor),
@@ -1228,6 +1341,7 @@ import ToolModuleKit
         syncingSelection = false
         drawnC = nil
         if !cScroll.isHidden { updateC() }
+        descriptionView.redraw()
     }
 
     /// The listing's and the C's type: monospaced, at the zoom.
@@ -1439,10 +1553,14 @@ import ToolModuleKit
         chooseRecipe(at: recipePopUp.indexOfSelectedItem)
     }
 
+    // help: panel.code.description
     private func applyMode() {
-        let c = modeControl.selectedSegment == 1
-        tableScroll.isHidden = c
+        let segment = modeControl.selectedSegment
+        if segment != Self.descriptionSegment { codeShowsC = segment == 1 }
+        let c = segment == 1
+        tableScroll.isHidden = segment != 0
         cScroll.isHidden = !c
+        descriptionView.isHidden = segment != Self.descriptionSegment
         if c { updateC() }
     }
 
@@ -1744,6 +1862,7 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
         if table === functionTable {
             let row = functionTable.selectedRow
             guard row >= 0 else { return }
+            leaveDescription()
             selectNavigatorRow(row)
         } else if table === self.table {
             let lines = state.lines

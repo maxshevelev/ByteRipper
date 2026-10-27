@@ -129,8 +129,8 @@ extension MainViewController {
     }
 
     /// The store changed: every code screen and panel of this tab whose
-    /// analysis now names another artifact — a review published again, a
-    /// re-run that replaced it — is drawn from that artifact, where the reader
+    /// analysis now names another artifact or reading — a review published
+    /// again, a re-run that replaced it — is drawn from it, where the reader
     /// was. A screen whose analysis is unchanged, or gone, stays as it is.
     func codeStoreChanged() {
         var shown: [(pane: PaneViewModel?, panel: FragmentDock.PanelID?, manifest: AnalysisManifest)] = []
@@ -158,8 +158,11 @@ extension MainViewController {
             }.value
             guard let self else { return }
             for item in shown {
+                // A new reading over the same artifact — a description, a
+                // comment — is a new revision to show too.
                 guard let key = item.manifest.key, let now = stored[key],
-                      now.manifest.artifact.sha256 != item.manifest.artifact.sha256 else { continue }
+                      now.manifest.artifact.sha256 != item.manifest.artifact.sha256
+                        || now.manifest.reading != item.manifest.reading else { continue }
                 if let pane = item.pane {
                     self.redrawCodeScreen(with: now.manifest, recipes: now.recipes, for: pane)
                 } else if let id = item.panel {
@@ -276,6 +279,7 @@ extension MainViewController {
                                     hexView: pane,
                                     recipes: screen.recipes)
         codeScreenView = codePane
+        codePane.loadModuleDescription()
         followCodeStore()
         codePane.onChooseRecipe = { [weak self, weak paneModel] manifest in
             guard let self, let paneModel else { return }

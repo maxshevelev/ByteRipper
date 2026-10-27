@@ -1761,3 +1761,4 @@
 "The server does not accept the token." = "Der Server nimmt das Token nicht an.";
 "The server does not answer: %1$@" = "Der Server antwortet nicht: %1$@";
 "The server is not an analysis server of this version." = "Der Server ist kein Analyseserver dieser Version.";
+"No description of this module yet. A review writes one — what the module is for, how it works and how it is built — and it appears here when the review is published." = "Für dieses Modul gibt es noch keine Beschreibung. Sie entsteht bei der Analyse – wozu das Modul dient, wie es arbeitet und wie es aufgebaut ist – und erscheint hier, sobald die Analyse veröffentlicht ist.";
