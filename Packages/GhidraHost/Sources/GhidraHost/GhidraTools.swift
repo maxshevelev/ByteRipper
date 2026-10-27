@@ -265,12 +265,27 @@ public enum GhidraTools {
             write("ghidra_signature", "set/signature", "Set a function's signature",
                   "Sets the C signature of the function at `address`, the EDK2 way if wanted "
                   + "(`EFI_STATUS EFIAPI Foo (IN CONST EFI_PEI_SERVICES **PeiServices)`). Types the module "
-                  + "lacks come from the EDK2 archive or from types a review defined.",
+                  + "lacks come from the EDK2 archive or from types a review defined. For a function no "
+                  + "calling convention fits — a linker's clone that takes an argument in EDX, or returns "
+                  + "through a pointer in ECX — give `storage`, one place per parameter as `ghidra_function` "
+                  + "lists storage (`[\"ECX:4\", \"Stack[0x4]:4\"]`), and `return_storage` if the result is "
+                  + "not where the convention puts it (`EDX:4,EAX:4` for 64 bits, high part first, `void`). "
+                  + "Then no dummy parameter is needed for a register the function does not read.",
                   ["address": AgentSchema.string("The function's entry address."),
                    "signature": AgentSchema.string("The C prototype."),
+                   "storage": .object(["type": "array", "items": .object(["type": "string"]),
+                                       "description": "Where each parameter is, in order: \"EDX:4\", \"Stack[0x4]:4\"."]),
+                   "return_storage": AgentSchema.string("Where the result is: \"EAX:4\", \"EDX:4,EAX:4\", \"void\"."),
                    "reason": AgentSchema.string("Why, in a few words.")],
                   required: ["address", "signature"]) { arguments in
-                var body = try optional(arguments, ["address", "signature", "reason"])
+                var body = try optional(arguments, ["address", "signature", "return_storage", "reason"])
+                if arguments.has("storage") {
+                    guard case .array(let places)? = arguments["storage"],
+                          places.allSatisfy({ $0.stringValue != nil }) else {
+                        throw AgentToolError("`storage` is a list of places, one string per parameter.")
+                    }
+                    body["storage"] = .array(places)
+                }
                 body["by"] = "agent"
                 return body
             },

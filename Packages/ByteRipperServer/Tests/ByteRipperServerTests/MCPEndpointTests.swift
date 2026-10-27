@@ -102,6 +102,24 @@ final class MCPEndpointTests: XCTestCase {
         XCTAssertEqual(unknown["isError"], true)
     }
 
+    /// A signature can say where each parameter and the result are, for a
+    /// function no calling convention fits; the places reach the owner as a
+    /// list, and anything but strings is refused.
+    func testASignatureCarriesItsStorage() async throws {
+        _ = try await call(7, "ghidra_signature", [
+            "module": .string(module), "address": "0x9A18526",
+            "signature": "VOID GetPstateFrequencyMHz(UINT64 *FrequencyMHz, UINT32 Pstate)",
+            "storage": ["ECX:4", "Stack[0x4]:4"], "return_storage": "void"])
+        let sent = try XCTUnwrap(backend.writes.all.last { $0.0 == "set/signature" }?.1)
+        let body = try JSONSerialization.jsonObject(with: sent) as? [String: Any]
+        XCTAssertEqual(body?["storage"] as? [String], ["ECX:4", "Stack[0x4]:4"])
+        XCTAssertEqual(body?["return_storage"] as? String, "void")
+
+        let wrong = try await call(8, "ghidra_signature", [
+            "module": .string(module), "address": "0x10", "signature": "VOID F(UINT32 A)", "storage": [4]])
+        XCTAssertEqual(wrong["isError"], true)
+    }
+
     func testALegacyClientAndANotification() async throws {
         let (_, hello) = try await post(["jsonrpc": "2.0", "id": 1, "method": "initialize",
                                          "params": ["protocolVersion": "2025-06-18", "capabilities": [:],

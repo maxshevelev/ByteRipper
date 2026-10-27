@@ -160,7 +160,11 @@ The review is made through the same owner: `rename`, `rename-var` (a local by
 the module's write lease; `publish` stores the artifact with a `reading` —
 this project's revision — and the review document; `release` publishes and
 gives the lease back. A name Ghidra would make unique (`Foo_1`) is refused,
-and so is a local named by a storage several locals share. A signature or a
+and so is a local named by a storage several locals share. A function no calling convention fits — a linker's clone that takes its
+argument in EDX, or returns through a pointer in ECX — gets `storage`, one place
+per parameter as `/v1/function` lists them (`["ECX:4", "Stack[0x4]:4"]`), and
+`return_storage` (`EDX:4,EAX:4`, `void`), instead of dummy parameters for
+registers it does not read. A signature or a
 type may be written the EDK2 way (`VOID`, `IN`, `EFI_FIRMWARE_VOLUME_HEADER`):
 the owner takes what the program lacks from the EDK2 archive. A type added
 with `type` is shared at publish through `GhidraProjects/review-types-*.gdt`,

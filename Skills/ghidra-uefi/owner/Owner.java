@@ -814,13 +814,92 @@ public class Owner {
                 throw new Failure(409, error.getMessage());
             }
         }
+        if (body.has("storage") || body.has("return_storage")) applyStorage(function, body);
         if (!function.getName().equals(signature.getName()) || function.getSymbol().getSource() == SourceType.USER_DEFINED) {
             why(function.getEntryPoint(), body);
         }
         JsonObject answer = identity();
         answer.addProperty("entry", hex(function.getEntryPoint()));
         answer.addProperty("signature", function.getPrototypeString(false, false));
+        if (function.hasCustomVariableStorage()) {
+            JsonArray storage = new JsonArray();
+            for (Parameter parameter : function.getParameters()) storage.add(parameter.getVariableStorage().toString());
+            answer.add("storage", storage);
+            answer.addProperty("return_storage", function.getReturn().getVariableStorage().toString());
+        }
         return answer;
+    }
+
+    /**
+     * Where each parameter and the result really are, for a function no
+     * calling convention describes: a linker's clone that takes its argument
+     * in EDX, or hands its result back through a pointer in ECX. `storage`
+     * has one entry per parameter of the signature just applied, written as
+     * `ghidra_function` lists storage — `EDX:4`, `Stack[0x4]:4`, `EDX:4,EAX:4`
+     * for a value split over two; `return_storage` the result's, `EAX:4` by
+     * default as the convention put it.
+     */
+    private void applyStorage(Function function, JsonObject body) throws Exception {
+        Parameter[] current = function.getParameters();
+        java.util.List<ghidra.program.model.listing.Variable> parameters = new java.util.ArrayList<>();
+        JsonArray storage = body.has("storage") && body.get("storage").isJsonArray()
+            ? body.getAsJsonArray("storage") : null;
+        if (storage != null && storage.size() != current.length) {
+            throw new Failure(400, "storage names " + storage.size() + " places for " + current.length
+                + " parameters of the signature");
+        }
+        for (int index = 0; index < current.length; index++) {
+            ghidra.program.model.listing.VariableStorage place = storage == null
+                ? current[index].getVariableStorage()
+                : storage(storage.get(index).getAsString(), current[index].getLength());
+            parameters.add(new ghidra.program.model.listing.ParameterImpl(
+                current[index].getName(), current[index].getDataType(), place, program, SourceType.USER_DEFINED));
+        }
+        ghidra.program.model.listing.Parameter result = function.getReturn();
+        ghidra.program.model.listing.VariableStorage resultPlace = body.has("return_storage")
+            ? storage(body.get("return_storage").getAsString(), result.getLength())
+            : result.getVariableStorage();
+        ghidra.program.model.listing.ReturnParameterImpl returned =
+            new ghidra.program.model.listing.ReturnParameterImpl(result.getDataType(), resultPlace, program);
+        try {
+            function.updateFunction(function.getCallingConventionName(), returned, parameters,
+                Function.FunctionUpdateType.CUSTOM_STORAGE, true, SourceType.USER_DEFINED);
+        } catch (Exception error) {
+            throw new Failure(400, "the storage does not fit: " + error.getMessage());
+        }
+    }
+
+    /** `EDX:4`, `Stack[0x4]:4`, `EDX:4,EAX:4` (high part first), or `void`. */
+    private ghidra.program.model.listing.VariableStorage storage(String text, int length) throws Exception {
+        text = text.trim();
+        if (text.isEmpty() || text.equalsIgnoreCase("void")) return ghidra.program.model.listing.VariableStorage.VOID_STORAGE;
+        java.util.List<ghidra.program.model.pcode.Varnode> pieces = new java.util.ArrayList<>();
+        int total = 0;
+        for (String piece : text.split(",")) {
+            piece = piece.trim();
+            java.util.regex.Matcher stack = java.util.regex.Pattern
+                .compile("(?i)stack\\[(-?)(0x[0-9a-f]+|\\d+)\\](?::(\\d+))?").matcher(piece);
+            if (stack.matches()) {
+                long offset = Long.decode(stack.group(2));
+                if (!stack.group(1).isEmpty()) offset = -offset;
+                int size = stack.group(3) != null ? Integer.parseInt(stack.group(3)) : length;
+                pieces.add(new ghidra.program.model.pcode.Varnode(
+                    program.getAddressFactory().getStackSpace().getAddress(offset), size));
+                total += size;
+                continue;
+            }
+            String[] parts = piece.split(":");
+            ghidra.program.model.lang.Register register = program.getRegister(parts[0].trim());
+            if (register == null) throw new Failure(400, "no register or stack place " + piece);
+            int size = parts.length > 1 ? Integer.parseInt(parts[1].trim()) : register.getMinimumByteSize();
+            pieces.add(new ghidra.program.model.pcode.Varnode(register.getAddress(), size));
+            total += size;
+        }
+        if (length > 0 && total != length) {
+            throw new Failure(400, text + " holds " + total + " bytes for a value of " + length);
+        }
+        return new ghidra.program.model.listing.VariableStorage(program,
+            pieces.toArray(new ghidra.program.model.pcode.Varnode[0]));
     }
 
     private JsonObject setComment(JsonObject body) throws Exception {
