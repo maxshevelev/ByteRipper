@@ -309,7 +309,7 @@
 "Configurations" = "Конфигурации";
 "Copy hex size" = "Скопировать размер в hex";
 "Copy size" = "Скопировать размер";
-"Connection" = "Соединение";
+"Slot" = "Слот";
 "Copy" = "Скопировать";
 "Copy Name" = "Скопировать имя";
 "Copy CPUID" = "Скопировать CPUID";

@@ -422,7 +422,8 @@ final class AgentService {
         connections[key] = socket
         let number = nextConnectionNumber
         nextConnectionNumber += 1
-        let label = Self.connectionLabel(number: number, peer: socket.peerPID.map(AgentPeer.of(relayPID:)))
+        let label = AgentConnectionTag(number: number,
+                                       about: Self.connectionAbout(socket.peerPID.map(AgentPeer.of(relayPID:))))
         let connection = connect(connection: label, send: { socket.write($0) }, onFirstMessage: { [weak self] in
             Task { @MainActor in
                 guard let self, self.connections[key] != nil else { return }
@@ -450,17 +451,16 @@ final class AgentService {
 
     /// A connection to the service over whatever carries the bytes — the
     /// socket, or a test's own pipe.
-    /// What the log calls a connection: its number this launch, and the
+    /// What is behind a connection, for the log's hover and details: the
     /// client process behind the relay with its process id — for a Claude
     /// Code session, the number its own address carries.
-    static func connectionLabel(number: Int, peer: AgentPeer?) -> String {
-        guard let peer, let pid = peer.clientPID else {
-            return peer.map { "\(number) · \($0.relayPID)" } ?? "\(number)"
-        }
-        return "\(number) · \(peer.clientName ?? "?") \(pid)"
+    static func connectionAbout(_ peer: AgentPeer?) -> String? {
+        guard let peer else { return nil }
+        guard let pid = peer.clientPID else { return "PID \(peer.relayPID)" }
+        return "\(peer.clientName ?? "?"), PID \(pid)"
     }
 
-    func connect(connection: String? = nil, send: @escaping @Sendable (Data) -> Void,
+    func connect(connection: AgentConnectionTag? = nil, send: @escaping @Sendable (Data) -> Void,
                  onFirstMessage: @escaping @Sendable () -> Void = {}) -> AgentConnection {
         AgentConnection(server: server, connection: connection, send: send, observer: { [weak self] record in
             Task { @MainActor in self?.record(record) }

@@ -131,7 +131,7 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         var title: String {
             switch self {
             case .time: return L("Time")
-            case .connection: return L("Connection")
+            case .connection: return L("Slot")
             case .tool: return L("Tool")
             case .arguments: return L("Arguments")
             case .duration: return L("Took")
@@ -143,7 +143,7 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         var width: CGFloat {
             switch self {
             case .time: return 64
-            case .connection: return 110
+            case .connection: return 36
             case .tool: return 90
             case .arguments: return 250
             case .duration: return 60
@@ -371,6 +371,9 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         field.stringValue = Self.text(of: rows[row], column)
         field.textColor = column == .result && Self.isProblem(rows[row]) ? SemanticColors.bad : .labelColor
         cell.toolTip = column == .arguments || column == .result ? field.stringValue : nil
+        if column == .connection, let connection = rows[row].connection {
+            cell.toolTip = Self.slotText(connection)
+        }
         return cell
     }
 
@@ -380,7 +383,7 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
             // A call still running has no end yet: the row says when it came in.
             return timeFormatter.string(from: record.isRunning ? record.started : record.finished)
         case .connection:
-            return record.connection ?? ""
+            return record.connection.map { "\($0.number)" } ?? ""
         case .tool:
             return record.tool
         case .arguments:
@@ -484,9 +487,15 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
             fields.insert(DetailField(label: L("Client"), value: client), at: 1)
         }
         if let connection = record.connection {
-            fields.insert(DetailField(label: L("Connection"), value: connection), at: record.client == nil ? 1 : 2)
+            fields.insert(DetailField(label: L("Slot"), value: slotText(connection)), at: record.client == nil ? 1 : 2)
         }
         return fields
+    }
+
+    /// A slot as the hover and the details say it: its number and what is
+    /// behind it.
+    static func slotText(_ connection: AgentConnectionTag) -> String {
+        connection.about.map { "\(connection.number) — \($0)" } ?? "\(connection.number)"
     }
 
     private static func isProblem(_ record: AgentCallRecord) -> Bool {

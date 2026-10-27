@@ -73,10 +73,9 @@ public struct AgentCallRecord: Equatable, Sendable {
     public let started: Date
     /// The client's own name for itself, when it gave one.
     public let client: String?
-    /// Which connection the call came on, as the host labels it — the
-    /// number of the connection and the process behind it — so calls from
+    /// Which connection the call came on, as the host tags it, so calls from
     /// two clients of the same name are told apart.
-    public let connection: String?
+    public let connection: AgentConnectionTag?
     public let tool: String
     public let arguments: JSONValue
     public let duration: Duration
@@ -86,7 +85,7 @@ public struct AgentCallRecord: Equatable, Sendable {
     public let answerBytes: Int
     public let outcome: Outcome
 
-    public init(id: UUID = UUID(), client: String?, connection: String? = nil, tool: String, arguments: JSONValue,
+    public init(id: UUID = UUID(), client: String?, connection: AgentConnectionTag? = nil, tool: String, arguments: JSONValue,
                 started: Date? = nil, duration: Duration, finished: Date,
                 answerBytes: Int, outcome: Outcome) {
         self.id = id
@@ -103,4 +102,16 @@ public struct AgentCallRecord: Equatable, Sendable {
 
     /// Whether the tool is still working on the call.
     public var isRunning: Bool { outcome == .running }
+}
+
+/// A connection as the host's log names it: its number since the host
+/// started, and what is behind it — the client process and its id.
+public struct AgentConnectionTag: Equatable, Sendable {
+    public let number: Int
+    public let about: String?
+
+    public init(number: Int, about: String?) {
+        self.number = number
+        self.about = about
+    }
 }

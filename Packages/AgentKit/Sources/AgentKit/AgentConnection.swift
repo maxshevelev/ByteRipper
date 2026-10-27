@@ -29,7 +29,7 @@ public actor AgentConnection {
     /// its latest modern request.
     private(set) var clientName: String?
     /// The host's label for this connection, carried into every record.
-    private let connection: String?
+    private let connection: AgentConnectionTag?
     private var inFlight: [RequestKey: InFlight] = [:]
     /// Calls that were cancelled and have not stopped yet. Nobody will hear
     /// their answer, but they are still work in progress, and
@@ -51,7 +51,7 @@ public actor AgentConnection {
     /// holds a connection open and never says a word.
     public init(
         server: AgentServer,
-        connection: String? = nil,
+        connection: AgentConnectionTag? = nil,
         send: @escaping @Sendable (Data) -> Void,
         observer: @escaping @Sendable (AgentCallRecord) -> Void = { _ in },
         onFirstMessage: @escaping @Sendable () -> Void = {},
