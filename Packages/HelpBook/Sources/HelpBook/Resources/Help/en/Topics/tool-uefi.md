@@ -119,7 +119,7 @@ The layout of these files is not published. It was established from an ASUS upda
 
 ## Padding
 
-A dump holds erased space between its structures. The tree omits it unless **Show Empty Padding** is ticked in the filter menu, which the funnel icon in the title row opens, left of **the reveal button**. The icon is tinted while the tree lists anything it omits by default. Padding that holds data is listed in either case, as is a volume's free space, which reports how much room remains in that volume. Every erased row whose subtype reads **Empty (FFh)** — padding, and also a region of an Insyde [[term:flash-device-map|flash device map]] nobody has written, such as **Unused** or a password slot — free space and a pad file with an erased body (**Padding file**) are shown in grey: a place in the layout that holds nothing.
+A dump holds erased space between its structures. The tree omits it, and a pad file with an erased body with it, unless **Show Empty Padding** is ticked in the filter menu, which the funnel icon in the title row opens, left of **the reveal button**. The icon is tinted while the tree lists anything it omits by default. Padding that holds data is listed in either case, as is a volume's free space, which reports how much room remains in that volume. Every erased row whose subtype reads **Empty (FFh)** — padding, and also a region of an Insyde [[term:flash-device-map|flash device map]] nobody has written, such as **Unused** or a password slot — free space and a pad file with an erased body (**Padding file**) are shown in grey: a place in the layout that holds nothing.
 
 ## Variable values
 

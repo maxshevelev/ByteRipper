@@ -1,4 +1,4 @@
-@source-sha 0cc6d95fb0f0713297b1278eef25373794b371bbebccbabb251dab61bb66767e
+@source-sha eb1459c41bf1d6d7a815bb2559e44ecc48d8944a45a18a547beb709281e256b4
 @term flash-descriptor
 @name Flash Descriptor
 @short Die ersten `0x1000` Bytes eines Intel-Flash-Images: die Karte des Chips.
@@ -153,7 +153,7 @@ Das Statusbyte im Header hält fest, wie weit das Schreiben der Datei gekommen i
 @name Padding-Datei
 @short Eine Datei, die es nur gibt, damit die nächste echte Datei dort beginnt, wo sie soll.
 
-Eine GUID hat sie nur, weil jeder Datei-Header eine hat — in der Regel lauter Einsen —, und sie benennt nichts. Ist sie leer, kann sie unbedenklich übergangen werden.
+Eine GUID hat sie nur, weil jeder Datei-Header eine hat — in der Regel lauter Einsen —, und sie benennt nichts. Ist sie leer, kann sie unbedenklich übergangen werden; der Baum führt sie nur auf, wenn **Leeres Padding anzeigen** abgehakt ist.
 
 Leer ist eine Padding-Datei allerdings nicht immer. Die Datei unmittelbar vor der Volume Top File enthält häufig die Startup AP data: einen Sprung, den die übrigen Prozessorkerne beim Start als Erstes ausführen und der sie zu ihrem Einsprungpunkt in der Volume Top File führt. Ihre Adresse ist fest vorgegeben. ByteRipper zeigt eine solche Datei als **Padding-Datei mit Startup AP data** an; sie darf weder verschoben noch überschrieben werden. Andere Daten in einer Padding-Datei erscheinen als **Nicht-UEFI-Daten**, die Datei selbst als **Nicht leere Padding-Datei**, und die Analyse meldet dies. Mitunter legt der Hersteller dort eigene Strukturen ab, etwa ein Boot-Guard-Key-Manifest; in anderen Fällen handelt es sich um eine Beschädigung.
 

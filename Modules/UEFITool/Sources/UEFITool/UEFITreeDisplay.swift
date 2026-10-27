@@ -88,9 +88,16 @@ public enum UEFITreeDisplay {
     /// Padding that holds data stays, and so does free space inside a volume,
     /// which says how much room the volume has. So does erased padding with
     /// rows read inside it — an Insyde map's region nobody has written yet —
-    /// since hiding it would hide them.
+    /// since hiding it would hide them. A pad file whose body is erased is
+    /// the same nothing in an FFS file's clothes, and goes with them; one that
+    /// holds data, or the Startup AP data, has rows under it and stays.
     public static func isEmptyPadding(_ node: UEFINode) -> Bool {
-        node.kind == .padding && node.isErased && node.children.isEmpty
+        guard node.children.isEmpty else { return false }
+        switch node.kind {
+        case .padding: return node.isErased
+        case .file: return node.subtype == 0xF0
+        default: return false
+        }
     }
 
     /// A row that stands for room rather than for content: every row the

@@ -1,4 +1,4 @@
-@source-sha de810545d96552cc62af13d9fc52fe356bfe366d769e480d12cbd1601112e2b2
+@source-sha a92404c208e76c9ac5b8eb7aba808553685901fcab69c963873b2111415daab6
 # UEFI-Struktur
 
 > Die Karte eines Firmware-Images: welche Region, welches Volume, welche Datei und wo.
@@ -93,7 +93,7 @@ Der Aufbau dieser Dateien ist nicht veröffentlicht. Er wurde durch den Vergleic
 
 ## Padding
 
-Zwischen den Strukturen eines Dumps liegt gelöschter Raum. Der Baum lässt ihn weg, solange im Filtermenü **Leeres Padding anzeigen** nicht abgehakt ist. Das Menü öffnet das Trichtersymbol in der Titelzeile, links neben **der Schaltfläche in Form einer Zielscheibe**. Solange der Baum etwas anzeigt, das er standardmäßig weglässt, ist das Symbol farbig hervorgehoben. Padding mit Daten wird in jedem Fall aufgeführt, ebenso der freie Speicher eines Volumes, der angibt, wie viel Platz darin noch frei ist. Jede gelöschte Zeile mit dem Subtyp **Empty (FFh)** — Padding, aber auch eine nie beschriebene Region einer Insyde-[[term:flash-device-map|Flash Device Map]], etwa **Unused** oder ein Passwortfeld —, freier Speicher und eine Padding-Datei mit gelöschtem Inhalt (**Padding-Datei**) werden grau dargestellt: ein Platz in der Aufteilung, der nichts enthält.
+Zwischen den Strukturen eines Dumps liegt gelöschter Raum. Der Baum lässt ihn weg, ebenso eine Padding-Datei mit gelöschtem Inhalt, solange im Filtermenü **Leeres Padding anzeigen** nicht abgehakt ist. Das Menü öffnet das Trichtersymbol in der Titelzeile, links neben **der Schaltfläche in Form einer Zielscheibe**. Solange der Baum etwas anzeigt, das er standardmäßig weglässt, ist das Symbol farbig hervorgehoben. Padding mit Daten wird in jedem Fall aufgeführt, ebenso der freie Speicher eines Volumes, der angibt, wie viel Platz darin noch frei ist. Jede gelöschte Zeile mit dem Subtyp **Empty (FFh)** — Padding, aber auch eine nie beschriebene Region einer Insyde-[[term:flash-device-map|Flash Device Map]], etwa **Unused** oder ein Passwortfeld —, freier Speicher und eine Padding-Datei mit gelöschtem Inhalt (**Padding-Datei**) werden grau dargestellt: ein Platz in der Aufteilung, der nichts enthält.
 
 ## Variablenwerte
 

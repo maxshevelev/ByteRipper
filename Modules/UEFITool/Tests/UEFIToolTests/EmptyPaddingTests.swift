@@ -47,4 +47,19 @@ final class EmptyPaddingTests: XCTestCase {
         XCTAssertEqual(UEFITreeDisplay.listed(image.roots, showsEmptyPadding: false, hiding: [ids[0]]).map(\.name),
                        ["Padding", "Free space"])
     }
+
+    /// An erased pad file is hidden with the empty padding; one holding data stays.
+    func testAnErasedPadFileIsEmptyPadding() {
+        let empty = UEFINode(kind: .file, subtype: 0xF0, name: "Padding file", guid: .zero,
+                             header: 0..<0x18, body: 0x18..<0x100)
+        var holding = empty
+        holding.children = [UEFINode(kind: .padding, name: "Non-UEFI data", range: 0x40..<0x100)]
+        let raw = UEFINode(kind: .file, subtype: 0x01, name: "", guid: .zero,
+                           header: 0..<0x18, body: 0x18..<0x100)
+        XCTAssertTrue(UEFITreeDisplay.isEmptyPadding(empty))
+        XCTAssertFalse(UEFITreeDisplay.isEmptyPadding(holding))
+        XCTAssertFalse(UEFITreeDisplay.isEmptyPadding(raw))
+        XCTAssertEqual(UEFITreeDisplay.listed([empty, holding, raw], showsEmptyPadding: false).count, 2)
+        XCTAssertEqual(UEFITreeDisplay.listed([empty, holding, raw], showsEmptyPadding: true).count, 3)
+    }
 }
