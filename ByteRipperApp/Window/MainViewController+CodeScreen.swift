@@ -76,7 +76,7 @@ extension MainViewController {
         captureCodeScreenState()
         guard let current = codeScreen else { return }
         let screen = current.screen
-        let history = codeScreenView?.historyLocations
+        let history = codeScreenView?.carriedHistory
         let dumpVisible = codeScreenView?.isHexDumpVisible ?? true
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -95,7 +95,7 @@ extension MainViewController {
             self.codeScreen = (pane, pane.document, next)
             self.apply(mode: .singleFile)
             self.codeScreenView?.setHexDumpVisible(dumpVisible, animated: false)
-            if let history { self.codeScreenView?.adoptHistory(history.places, index: history.index) }
+            if let history { self.codeScreenView?.adoptHistory(history) }
         }
     }
 

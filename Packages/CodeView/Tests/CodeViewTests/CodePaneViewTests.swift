@@ -467,7 +467,7 @@ final class CodePaneViewTests: XCTestCase {
         first.restore(function: 0, instruction: nil, showsC: false)
         first.go(to: CodeLocation(address: CodeAddress(0x355)))
         XCTAssertTrue(first.canGoBack)
-        let carried = first.historyLocations
+        let carried = first.carriedHistory
         XCTAssertEqual(carried.places.count, 2)
 
         let second = CodePaneView(manifest: manifest(), artifact: try artifact(),
@@ -475,7 +475,7 @@ final class CodePaneViewTests: XCTestCase {
         second.frame = first.frame
         second.layoutSubtreeIfNeeded()
         second.restore(at: first.selectedLocation, function: nil, instruction: nil, showsC: false)
-        second.adoptHistory(carried.places, index: carried.index)
+        second.adoptHistory(carried)
         XCTAssertTrue(second.canGoBack)
         second.goBack()
         XCTAssertEqual(second.selectedFunctionIndex, 0)
@@ -747,6 +747,124 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertTrue(view.canGoForward)
         view.goForward()
         XCTAssertEqual(view.selectedFunction?.name, "entry")
+    }
+
+    /// FUN_00000220 is sixty PUSHes and a call to entry at its end, in the
+    /// listing and in the C: far enough down that both scroll.
+    private func longCallerArtifact() throws -> CodeArtifact {
+        var c = "void FUN_00000220(void)\n{\n"
+        for index in 0..<60 { c += "  Value\(index) = \(index);\n" }
+        let call = c.utf16.count + 2
+        c += "  entry();\n}\n"
+        var instructions: [[String: Any]] = (0..<60).map { index in
+            ["address": String(format: "0x%X", 0x220 + index), "bytes": "56", "mnemonic": "PUSH", "text": "PUSH ESI"]
+        }
+        instructions.append(["address": "0x25C", "bytes": "E8 00", "mnemonic": "CALL", "text": "CALL 0x00000300",
+                             "references": [["to": "0x300", "type": "UNCONDITIONAL_CALL"]]])
+        let json: [String: Any] = [
+            "script_version": 4, "ghidra": "12.1.2", "program": ["image_base": "0x0"],
+            "functions": [
+                ["entry": "0x220", "name": "FUN_00000220", "c": c,
+                 "c_spans": [[5, 12, "function", "0x220"], [call, 5, "function", "0x300"]],
+                 "instructions": instructions],
+                ["entry": "0x300", "name": "entry", "c": "void entry(void)\n{\n}\n",
+                 "c_spans": [[5, 5, "function", "0x300"]],
+                 "instructions": [["address": "0x300", "bytes": "C3", "mnemonic": "RET", "text": "RET"]]]
+            ]
+        ]
+        return try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+    }
+
+    private func scrollOrigin(of document: NSView) throws -> CGFloat {
+        try XCTUnwrap(document.enclosingScrollView).contentView.bounds.origin.y
+    }
+
+    /// Back returns to the listing where it was scrolled, not to its top, and
+    /// flashes the row the jump left from; the function arrived at flashes its
+    /// first row.
+    func testBackKeepsTheListingWhereItWasAndFlashesTheRow() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try longCallerArtifact(),
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 0, instruction: nil, showsC: false)
+        let listing = try XCTUnwrap(first(NSTableView.self, in: view) {
+            $0.tableColumns.first?.identifier.rawValue == "instruction"
+        })
+        listing.scrollRowToVisible(60)
+        let scrolled = try scrollOrigin(of: listing)
+        XCTAssertGreaterThan(scrolled, 0)
+        let cell = try XCTUnwrap(listing.view(atColumn: 0, row: 60, makeIfNecessary: true) as? CodeLineCell)
+        XCTAssertEqual(cell.line.onClick?(.function(1), try click(count: 1, flags: .command)), true)
+        XCTAssertEqual(view.selectedFunction?.name, "entry")
+        XCTAssertEqual(view.lastFlash, .row(0), "where the jump arrived")
+
+        view.goBack()
+        XCTAssertEqual(view.selectedFunction?.name, "FUN_00000220")
+        XCTAssertEqual(view.selectedInstructionIndex, 60, "the row the jump left from")
+        XCTAssertEqual(try scrollOrigin(of: listing), scrolled, accuracy: 0.5)
+        XCTAssertEqual(view.lastFlash, .row(60))
+
+        view.goForward()
+        XCTAssertEqual(view.lastFlash, .row(0))
+        view.goBack()
+        XCTAssertEqual(try scrollOrigin(of: listing), scrolled, accuracy: 0.5, "again after Forward")
+    }
+
+    /// In the C, the function arrived at reads from its top with its name
+    /// flashed; Back puts the caller's C where it was scrolled and flashes the
+    /// call that was followed.
+    func testBackKeepsTheCWhereItWasAndFlashesTheCall() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try longCallerArtifact(),
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 0, instruction: nil, showsC: true)
+        let textView = try XCTUnwrap(first(CodeTextView.self, in: view) { _ in true })
+        let call = (textView.string as NSString).range(of: "entry")
+        textView.scrollRangeToVisible(call)
+        let scrolled = try scrollOrigin(of: textView)
+        XCTAssertGreaterThan(scrolled, 0)
+
+        XCTAssertTrue(view.clickC(at: call.location, event: try click(count: 1, flags: .command)))
+        XCTAssertEqual(view.selectedFunction?.name, "entry")
+        XCTAssertEqual(try scrollOrigin(of: textView), 0, "another function reads from its top")
+        XCTAssertEqual(view.lastFlash, .c(NSRange(location: 5, length: 5)), "its name in the signature")
+
+        view.goBack()
+        XCTAssertEqual(view.selectedFunction?.name, "FUN_00000220")
+        XCTAssertEqual(try scrollOrigin(of: textView), scrolled, accuracy: 0.5)
+        XCTAssertEqual(view.lastFlash, .c(call))
+        XCTAssertEqual(textView.selectedRange(), call)
+    }
+
+    /// A pane over a republished artifact takes each place's scroll along.
+    func testTheCarriedHistoryKeepsWhereEachPlaceWasScrolled() throws {
+        let first = CodePaneView(manifest: manifest(), artifact: try longCallerArtifact(),
+                                 moduleBytes: teModule(), hexView: NSView())
+        first.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
+        first.layoutSubtreeIfNeeded()
+        first.restore(function: 0, instruction: nil, showsC: true)
+        let firstText = try XCTUnwrap(self.first(CodeTextView.self, in: first) { _ in true })
+        let call = (firstText.string as NSString).range(of: "entry")
+        firstText.scrollRangeToVisible(call)
+        let scrolled = try scrollOrigin(of: firstText)
+        XCTAssertTrue(first.clickC(at: call.location, event: try click(count: 1, flags: .command)))
+        let carried = first.carriedHistory
+
+        let second = CodePaneView(manifest: manifest(), artifact: try longCallerArtifact(),
+                                  moduleBytes: teModule(), hexView: NSView())
+        second.frame = first.frame
+        second.layoutSubtreeIfNeeded()
+        second.restore(at: first.selectedLocation, function: nil, instruction: nil, showsC: true)
+        let secondText = try XCTUnwrap(self.first(CodeTextView.self, in: second) { _ in true })
+        secondText.scrollRangeToVisible(NSRange(location: 0, length: 0))
+        let entryOrigin = try scrollOrigin(of: firstText)
+        second.adoptHistory(carried)
+        XCTAssertEqual(try scrollOrigin(of: secondText), entryOrigin, accuracy: 0.5, "the place on screen too")
+        second.goBack()
+        XCTAssertEqual(try scrollOrigin(of: secondText), scrolled, accuracy: 0.5)
+        XCTAssertEqual(second.lastFlash, .c(call), "the same C, so the same mark")
     }
 
     /// A call in the listing is a link too.

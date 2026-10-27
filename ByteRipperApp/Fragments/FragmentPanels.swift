@@ -449,7 +449,7 @@ import ToolModuleKit
                               recipes: [AnalysisManifest]? = nil) {
         guard let entry = entries[id], case .code(let current) = entry.screen,
               let view = entry.codePane else { return }
-        let history = view.historyLocations
+        let history = view.carriedHistory
         var screen = current
         screen.selectedFunction = view.selectedFunctionIndex
         screen.selectedInstruction = view.selectedInstructionIndex
@@ -470,7 +470,7 @@ import ToolModuleKit
                                   showsC: screen.showsC,
                                   recipes: recipes ?? screen.recipes)
             self.replaceCodeScreen(id, with: next)
-            self.entries[id]?.codePane?.adoptHistory(history.places, index: history.index)
+            self.entries[id]?.codePane?.adoptHistory(history)
         }
     }
 

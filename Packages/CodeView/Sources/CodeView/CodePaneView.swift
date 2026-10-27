@@ -20,10 +20,12 @@ import ToolModuleKit
 @MainActor public final class CodePaneView: NSView {
     public typealias List = CodeReaderState.List
 
-    /// A place in the code Back and Forward return to.
-    private struct Place: Equatable {
+    /// A place in the code Back and Forward return to: the function, the
+    /// instruction, and how the reader had it on screen when they left.
+    private struct Place {
         var function: Int
         var line: Int?
+        var view = CodeViewPosition()
     }
 
     public let manifest: AnalysisManifest
@@ -377,6 +379,7 @@ import ToolModuleKit
         }
         selectSiteInC(address)
         notifyInstruction()
+        flashArrival()
     }
 
     /// Selects the call made at `address` in the C showing, when the
@@ -535,7 +538,10 @@ import ToolModuleKit
             select(line: use.line)
             notifyInstruction()
         }
-        guard showsDecompiledC, let storage = cTextView.textStorage else { return }
+        guard showsDecompiledC, let storage = cTextView.textStorage else {
+            flashArrival()
+            return
+        }
         let ordinal = calls(to: callee).filter { $0.function == use.function }
             .firstIndex { $0.line == use.line } ?? 0
         var ranges: [NSRange] = []
@@ -544,11 +550,13 @@ import ToolModuleKit
                   cLinks.indices.contains(number), cLinks[number] == .function(callee) else { return }
             ranges.append(range)
         }
-        guard !ranges.isEmpty else { return }
+        guard !ranges.isEmpty else {
+            flashArrival()
+            return
+        }
         let range = ranges[min(ordinal, ranges.count - 1)]
         cTextView.setSelectedRange(range)
-        cTextView.scrollRangeToVisible(range)
-        cTextView.showFindIndicator(for: range)
+        flashArrival(cMark: range)
     }
 
     // MARK: - Following links, and the way back
@@ -565,11 +573,13 @@ import ToolModuleKit
         switch link {
         case .function(let index):
             jump { selectFunction(at: index) }
+            flashArrival()
         case .line(let line):
             jump {
                 select(line: line)
                 notifyInstruction()
             }
+            flashArrival()
         case .bytes(let address):
             if let range = dataRange(at: address) { onSelectRange?(range) }
         }
@@ -591,10 +601,33 @@ import ToolModuleKit
         state.function.map { Place(function: $0, line: state.line) }
     }
 
+    /// The C the reader acted on last — the call they ⌘-clicked — which the
+    /// place they leave keeps as its mark.
+    private var leavingCMark: NSRange?
+
+    /// How the reader has the code on screen now: both scroll positions, and
+    /// in the C the call they followed, or what they selected.
+    private var currentView: CodeViewPosition {
+        let selected = cTextView.selectedRange()
+        let mark = leavingCMark ?? (selected.length > 0 ? selected : nil)
+        return CodeViewPosition(listing: tableScroll.contentView.bounds.origin,
+                                c: cScroll.contentView.bounds.origin,
+                                cMark: mark,
+                                cText: state.function.flatMap { model.functions[$0].c })
+    }
+
+    /// Keeps the current place as the reader has it now, before they leave it.
+    private func recordCurrentPlace() {
+        guard historyIndex >= 0, var place = currentPlace else { return }
+        place.view = currentView
+        history[historyIndex] = place
+    }
+
     /// Moves somewhere new: the place left is kept, what was ahead of it is
     /// dropped, and the new place becomes the current one.
     private func jump(_ move: () -> Void) {
-        if historyIndex >= 0, let place = currentPlace { history[historyIndex] = place }
+        recordCurrentPlace()
+        leavingCMark = nil
         move()
         guard let place = currentPlace else { return }
         if historyIndex >= 0, history[historyIndex].function == place.function,
@@ -610,33 +643,47 @@ import ToolModuleKit
         updateHistoryButtons()
     }
 
-    /// Back and forward by address, and where in it the reader is: what a
-    /// pane drawing another artifact of the same module — a republished
-    /// review, another recipe — takes over with `adoptHistory`.
-    public var historyLocations: (places: [CodeLocation], index: Int) {
-        if historyIndex >= 0, let place = currentPlace { history[historyIndex] = place }
+    /// Back and forward by address, where in it the reader is, and how each
+    /// place was on screen: what a pane drawing another artifact of the same
+    /// module — a republished review, another recipe — takes over with
+    /// `adoptHistory`.
+    public var carriedHistory: CodeHistory {
+        recordCurrentPlace()
         let places = history.map { place in
             CodeLocation(function: artifact.functions.indices.contains(place.function)
                             ? artifact.functions[place.function].entry : nil,
                          address: place.line.flatMap { model.lines.indices.contains($0)
                             ? model.lines[$0].instruction.address : nil })
         }
-        return (places, historyIndex)
+        return CodeHistory(places: places, index: historyIndex, views: history.map(\.view))
     }
 
     /// Takes over another pane's history, place by place, through this
     /// artifact's own numbering; a place this artifact no longer has drops
-    /// out. The current place stays where `restore` put it.
-    public func adoptHistory(_ places: [CodeLocation], index: Int) {
+    /// out. The current place stays where `restore` put it. A place keeps its
+    /// scroll positions; its mark in the C only while the function's C is the
+    /// same text, since a renamed local moves every offset after it.
+    public func adoptHistory(_ carried: CodeHistory) {
         var adopted: [Place] = []
         var current = -1
-        for (position, location) in places.enumerated() {
+        for (position, location) in carried.places.enumerated() {
             let found = artifact.indices(of: location)
             guard let function = found.function else { continue }
-            if position == index { current = adopted.count }
-            adopted.append(Place(function: function, line: found.line))
+            if position == carried.index { current = adopted.count }
+            var view = carried.views.indices.contains(position) ? carried.views[position] : CodeViewPosition()
+            let c = model.functions[function].c
+            if view.cText != c {
+                view.cMark = nil
+                view.cText = c
+            }
+            adopted.append(Place(function: function, line: found.line, view: view))
         }
-        guard current >= 0, let here = currentPlace else { return }
+        guard current >= 0, var here = currentPlace else { return }
+        // The place on screen stays scrolled as it was in the other pane.
+        if here.function == adopted[current].function {
+            here.view = adopted[current].view
+            show(here.view)
+        }
         adopted[current] = here
         history = adopted
         historyIndex = current
@@ -692,25 +739,121 @@ import ToolModuleKit
     /// while the code pane has the keyboard.
     public func goBack() {
         guard canGoBack else { return }
-        if let place = currentPlace { history[historyIndex] = place }
+        recordCurrentPlace()
+        leavingCMark = nil
         historyIndex -= 1
         go(to: history[historyIndex])
     }
 
     public func goForward() {
         guard canGoForward else { return }
-        if let place = currentPlace { history[historyIndex] = place }
+        recordCurrentPlace()
+        leavingCMark = nil
         historyIndex += 1
         go(to: history[historyIndex])
     }
 
+    /// Returns to a place as the reader left it: the same function and
+    /// instruction, both scrolled where they were, and the place itself — the
+    /// call followed in the C, the instruction in the listing — flashed.
     private func go(to place: Place) {
         selectFunction(at: place.function)
         if let line = place.line, model.lines.indices.contains(line) {
             select(line: line)
             notifyInstruction()
         }
+        show(place.view)
         updateHistoryButtons()
+        flashArrival(cMark: place.view.cMark)
+    }
+
+    /// Scrolls the listing and the C as a place had them, and selects its
+    /// mark in the C.
+    private func show(_ view: CodeViewPosition) {
+        if let origin = view.listing {
+            table.layoutSubtreeIfNeeded()
+            scroll(tableScroll, to: origin)
+        }
+        if let mark = view.cMark, NSMaxRange(mark) <= (cTextView.string as NSString).length {
+            cTextView.setSelectedRange(mark)
+        }
+        if let origin = view.c {
+            if let layout = cTextView.layoutManager, let container = cTextView.textContainer {
+                layout.ensureLayout(for: container)
+            }
+            scroll(cScroll, to: origin)
+        }
+    }
+
+    private func scroll(_ scrollView: NSScrollView, to origin: NSPoint) {
+        guard let document = scrollView.documentView else { return }
+        let visible = scrollView.contentView.bounds.size
+        let y = max(0, min(origin.y, document.frame.height - visible.height))
+        let x = max(0, min(origin.x, document.frame.width - visible.width))
+        scrollView.contentView.scroll(to: NSPoint(x: x, y: y))
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+    }
+
+    // MARK: - Showing where the reader arrived
+
+    /// What the last arrival flashed, for tests: a row of the listing, or a
+    /// range of the C.
+    enum Flash: Equatable {
+        case row(Int)
+        case c(NSRange)
+    }
+    private(set) var lastFlash: Flash?
+    private var flashView: NSView?
+
+    /// Flashes the place the reader just arrived at, in whichever of the
+    /// listing and the C is showing: in the C `cMark` when there is one, else
+    /// the call made at the selected instruction, else — a function arrived at
+    /// from its start — its name in the signature; in the listing the
+    /// selected instruction's row.
+    private func flashArrival(cMark: NSRange? = nil) {
+        lastFlash = nil
+        if showsDecompiledC {
+            let length = (cTextView.string as NSString).length
+            var range = cMark
+            if range == nil, let line = state.line, let function = state.selectedFunction,
+               let site = function.cSites.first(where: { $0.address == model.lines[line].instruction.address }) {
+                range = NSRange(location: site.start + cShift, length: site.length)
+            }
+            if range == nil, let index = state.function,
+               let own = shownCTokens.first(where: { $0.link == .function(index) }) {
+                range = NSRange(location: own.start, length: own.length)
+            }
+            guard let range, range.length > 0, NSMaxRange(range) <= length else { return }
+            lastFlash = .c(range)
+            cTextView.scrollRangeToVisible(range)
+            if cTextView.window != nil { cTextView.showFindIndicator(for: range) }
+        } else {
+            guard let row = state.selectedRow, row < table.numberOfRows else { return }
+            lastFlash = .row(row)
+            flashRow(row)
+        }
+    }
+
+    /// A box over one row of the listing that fades out, as the find
+    /// indicator does in the C.
+    private func flashRow(_ row: Int) {
+        flashView?.removeFromSuperview()
+        let rect = table.rect(ofRow: row)
+        guard !rect.isEmpty else { return }
+        let box = NSView(frame: rect.insetBy(dx: 2, dy: 0))
+        box.wantsLayer = true
+        box.layer?.backgroundColor = NSColor.findHighlightColor.withAlphaComponent(0.55).cgColor
+        box.layer?.cornerRadius = CodeColors.symbolHighlightRadius
+        table.addSubview(box)
+        flashView = box
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.9
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            box.animator().alphaValue = 0
+        } completionHandler: { [weak self, weak box] in
+            box?.removeFromSuperview()
+            if self?.flashView === box { self?.flashView = nil }
+        }
     }
 
     private func updateHistoryButtons() {
@@ -1357,6 +1500,10 @@ import ToolModuleKit
         }
         cTextView.hover(at: nil)
         cTextView.textStorage?.setAttributedString(text)
+        // Another function's C is read from its top; Back puts a place left
+        // further down back where it was.
+        cTextView.setSelectedRange(NSRange(location: 0, length: 0))
+        cTextView.scroll(.zero)
         shownCTokens = tokensShown
         // A parameter or a local is its function's alone: another function's
         // `Status` is another variable.
@@ -1424,7 +1571,8 @@ import ToolModuleKit
         }
         // The function on screen is where a jump to it would go: ⌘-click on
         // its name — in the signature, in a recursive call — only highlights.
-        if let link = token?.link, link != .function(state.function ?? -1), Self.isJump(event) {
+        if let token, let link = token.link, link != .function(state.function ?? -1), Self.isJump(event) {
+            leavingCMark = NSRange(location: token.start, length: token.length)
             follow(link)
             return true
         }
@@ -1453,8 +1601,11 @@ import ToolModuleKit
     /// A click in the listing: on a reference, it highlights the instructions
     /// that refer to the same place; ⌘-click or a double click goes there.
     /// Anywhere else it clears the highlight. The row is selected either way.
-    func clickListing(on link: CodeLink?, event: NSEvent) -> Bool {
+    func clickListing(on link: CodeLink?, event: NSEvent, line: Int? = nil) -> Bool {
         if let link, Self.isJump(event) {
+            // The row clicked is the place Back returns to, though the jump
+            // leaves before the table selects it.
+            if let line, model.lines.indices.contains(line), line != state.line { select(line: line) }
             follow(link)
             return true
         }
@@ -1549,7 +1700,9 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
         }
         cell.line.show(shown.text, tokens: shown.tokens, font: Self.codeFont(),
                        highlighted: highlightedRanges(in: shown.tokens, of: shown.text))
-        cell.line.onClick = { [weak self] link, event in self?.clickListing(on: link, event: event) ?? false }
+        cell.line.onClick = { [weak self] link, event in
+            self?.clickListing(on: link, event: event, line: global) ?? false
+        }
         return cell
     }
 
