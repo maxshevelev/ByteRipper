@@ -343,7 +343,8 @@ final class AgentCodeTools {
                     "name": .string(symbol.name),
                     "type": symbol.type.map(JSONValue.string) ?? .null,
                     "source": symbol.source.map(JSONValue.string) ?? .null,
-                    "reason": symbol.reason.map(JSONValue.string) ?? .null
+                    "reason": symbol.reason.map(JSONValue.string) ?? .null,
+                    "comment": symbol.comment.map(JSONValue.string) ?? .null
                 ])
             })
 
