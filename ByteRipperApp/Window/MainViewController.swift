@@ -254,16 +254,17 @@ final class MainViewController: NSViewController {
     /// Gives a fragment panel's surface a map of its own: what it maps, what it
     /// scrolls, and the state it opens in (`Design/FRAGMENT_PANELS_PLAN.md`).
     ///
-    /// The panel opens with the map the tab has. Someone who works with the
-    /// minimap on wants it on the part too, and a part — a volume, a body, a
-    /// region — is exactly where a map earns its place.
+    /// The panel opens with its map hidden, whatever the tab's is. Opening a
+    /// part must not move the window: a map shown on the way in takes its
+    /// width from the window whenever the panel's dump has none to spare, and
+    /// the window grew by a minimap nobody asked for. The toolbar button shows
+    /// and hides the map of the panel in front.
     func prepareFragmentMinimap(of surface: DocumentSurface, pane: PaneViewModel,
                                 paneView: FilePaneView) {
         surface.panesInMapOrder = { [pane] }
         surface.paneViewsInMapOrder = { [paneView] }
         surface.minimap.wire()
         surface.minimap.track(paneView)
-        surface.minimap.setPanelVisible(minimapPanelVisible, animated: false)
         surface.minimap.refreshMaps()
         surface.minimap.updateLayout()
         surface.minimap.updateViewports()
@@ -2326,6 +2327,8 @@ final class MainViewController: NSViewController {
         } else {
             activeFilePane?.focusHexView()
         }
+        // The minimap button reads the map in front, which has just changed.
+        revalidateToolbar()
     }
 
     /// Whether the tab's own panes are taking orders. They are not while a
@@ -2861,6 +2864,7 @@ final class MainViewController: NSViewController {
     /// user's chosen width between shows.
     @objc func toggleMinimap() {
         frontSurface.minimap.togglePanel(animated: true)
+        revalidateToolbar()
     }
 
     /// The surface the commands about "the minimap" mean: the fragment panel in
@@ -7876,8 +7880,13 @@ extension MainViewController: NSToolbarItemValidation {
             (item.view as? NSPopUpButton)?.selectItem(withTag: WordSize.current.rawValue)
             return true
         case #selector(toggleMinimap):
-            // No file open, no map to show: the empty window's panel is hidden
-            // and the toggle has nothing to switch (§19).
+            // The icon says whether the map in front is showing — the panel's
+            // when one is up, the tab's otherwise — since that is the one the
+            // click toggles. No file open, no map to show: the empty window's
+            // panel is hidden and the toggle has nothing to switch (§19).
+            let shown = frontSurface.minimapPanelVisible
+            item.image = NSImage(systemSymbolName: shown ? "rectangle.righthalf.inset.filled" : "sidebar.right",
+                                 accessibilityDescription: shown ? L("Hide Minimap") : L("Show Minimap"))
             return mode != .empty
         case #selector(togglePaneLayout):
             // The icon names the arrangement the click will produce, the way the
@@ -7971,7 +7980,7 @@ extension MainViewController: NSMenuItemValidation {
             // the panel's state (§19). Disabled with no file open: the empty
             // window's panel is hidden and the item has nothing to toggle (§19).
             guard mode != .empty else { return false }
-            menuItem.title = surface.minimapPanelVisible ? L("Hide Minimap") : L("Show Minimap")
+            menuItem.title = frontSurface.minimapPanelVisible ? L("Hide Minimap") : L("Show Minimap")
             return true
         case #selector(toggleInsertMode):
             // A checked toggle reading the ACTIVE pane's mode: the mode is per

@@ -1,4 +1,5 @@
 import ByteRipperCore
+import Localization
 import XCTest
 import ToolModuleKit
 import UEFIImage
@@ -83,20 +84,59 @@ final class FragmentMinimapTests: XCTestCase {
                        "and the tab's own map still maps the dump")
     }
 
-    /// It opens with the map the tab has: on if the tab's is on, off if not.
-    func testThePanelOpensWithTheMapTheTabHas() throws {
+    /// It opens with its map hidden, even over a tab whose map is on, and the
+    /// window keeps its width: opening a part is not a reason to move the window.
+    func testThePanelOpensWithItsMapHiddenAndTheWindowStill() throws {
         let (controller, window, url) = try makeController()
         defer { cleanup(controller, url) }
 
-        let closed = try XCTUnwrap(controller.openFragment([0x01], named: "shut", animated: false))
-        XCTAssertFalse(try XCTUnwrap(controller.fragments.surface(closed)).minimapPanelVisible)
-
         controller.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
-        let open = try XCTUnwrap(controller.openFragment([0x01], named: "open", animated: false))
+        let before = window.frame
+        let id = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x400),
+                                                       named: "part", animated: false))
+        window.layoutIfNeeded()
 
-        XCTAssertTrue(try XCTUnwrap(controller.fragments.surface(open)).minimapPanelVisible,
-                      "someone working with the map on wants it on the part too")
+        XCTAssertFalse(try XCTUnwrap(controller.fragments.surface(id)).minimapPanelVisible,
+                       "the part's map stays hidden")
+        XCTAssertEqual(window.frame, before, "the window did not move")
+
+        controller.fragments.collapse(animated: false)
+        controller.fragments.expand(id, animated: false)
+        window.layoutIfNeeded()
+        XCTAssertEqual(window.frame, before, "raising it from the dock does not move it either")
+    }
+
+    /// The toolbar button and the View menu item read the map in front: the
+    /// panel's while it is up, the tab's once it is folded.
+    func testTheToggleShowsTheStateOfTheMapInFront() throws {
+        let (controller, window, url) = try makeController()
+        defer { cleanup(controller, url) }
+        controller.surface.minimap.setPanelVisible(true, animated: false)
+        _ = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x80),
+                                   named: "part", animated: false))
+        window.layoutIfNeeded()
+
+        let item = NSToolbarItem(itemIdentifier: .toggleMinimap)
+        item.action = #selector(MainViewController.toggleMinimap)
+        let menuItem = NSMenuItem(title: "", action: #selector(MainViewController.toggleMinimap),
+                                  keyEquivalent: "")
+        func reads() -> (button: String?, menu: String) {
+            _ = controller.validateToolbarItem(item)
+            _ = controller.validateMenuItem(menuItem)
+            return (item.image?.accessibilityDescription, menuItem.title)
+        }
+
+        XCTAssertEqual(reads().button, L("Show Minimap"), "the panel's map is hidden")
+        XCTAssertEqual(reads().menu, L("Show Minimap"))
+
+        controller.toggleMinimap()
+        XCTAssertEqual(reads().button, L("Hide Minimap"), "the panel's map is shown")
+
+        controller.toggleMinimap()
+        controller.fragments.collapse(animated: false)
+        XCTAssertEqual(reads().button, L("Hide Minimap"), "folded: the tab's map, which is on")
+        XCTAssertEqual(reads().menu, L("Hide Minimap"))
     }
 
     /// The toggle means the panel while one is up, and the tab again once it is
