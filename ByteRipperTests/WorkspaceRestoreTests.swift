@@ -290,8 +290,103 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertEqual(pane.manifest.reading?.rev, 1)
     }
 
+    /// A code panel torn off into a tab of its own still follows its
+    /// analysis: published again, the tab draws the new reading.
+    func testACodeTabFollowsARepublishedReading() async throws {
+        let codeBytes = [UInt8](repeating: 0x90, count: 0x100)
+        let parentURL = try dump(0x1000, 0x77)
+        func artifactData(_ name: String) -> Data {
+            Data(#"{"script_version":2,"ghidra":"12.1.2","functions":[{"entry":"0x0","name":"\#(name)","c":"return 0;","instructions":[{"address":"0x0","bytes":"90","mnemonic":"NOP","text":"NOP"}]}]}"#.utf8)
+        }
+        let storeRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CodeTabStore-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: storeRoot, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: storeRoot) }
+        let store = try ContentStore(root: storeRoot)
+        let module = ModuleIdentity(sha256: SHA256Digest(data: Data(codeBytes)),
+                                    size: codeBytes.count, name: "SecCore", kind: "PE32",
+                                    language: "x86:LE:32:default", imageBase: "0x0")
+        let recipe = AnalysisRecipe(id: "code-v2-ghidra-12.1.2", exporter: 2,
+                                    ghidra: "12.1.2", script: "ExportCode.java")
+        let manifest = try store.putAnalysis(module: module, recipe: recipe, artifact: artifactData("entry"),
+                                             reading: AnalysisReading(project: "p", rev: 24))
+        let previousRoot = UEFIToolModule.codeAnalysisRoot
+        UEFIToolModule.codeAnalysisRoot = storeRoot
+        addTeardownBlock { UEFIToolModule.codeAnalysisRoot = previousRoot }
+
+        let source = shownWindow().mainViewController
+        let tab = shownWindow().mainViewController
+        source.makeSiblingTab = { tab }
+        source.openFiles([parentURL])
+        source.openCode(
+            named: "SecCore ▸ PE32", from: source.windowModel.pane1,
+            source: 0x100..<0x200, manifest: manifest,
+            artifact: try JSONDecoder().decode(CodeArtifact.self, from: artifactData("entry")),
+            codec: ReadOnlyPartCodec(codeBytes, title: L("This cannot be put back"),
+                                     reason: L("A code analysis is a snapshot; edit the dump and analyze the module again.")),
+            at: CodeLocation(function: CodeAddress(0x0)))
+        let id = try XCTUnwrap(source.fragments.expanded)
+        source.tearOffFragment(id)
+        XCTAssertEqual(tab.currentCodeScreen()?.manifest.reading?.rev, 24)
+
+        try store.putAnalysis(module: module, recipe: recipe, artifact: artifactData("SecStartup"),
+                              reading: AnalysisReading(project: "p", rev: 25))
+        tab.codeStoreChanged()
+        for _ in 0..<100 where tab.currentCodeScreen()?.manifest.reading?.rev != 25 {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertEqual(tab.currentCodeScreen()?.manifest.reading?.rev, 25, "the tab drew the new reading")
+        XCTAssertEqual(tab.focusedCodePane()?.selectedFunction?.name, "SecStartup")
+    }
+
     /// A code panel comes back as a code panel: the analysis from the store,
     /// the function and the ASM/C side the reader left, not a plain part.
+    /// A session keeps which analysis a code panel shows, not which
+    /// revision: published again while the app was closed, the panel comes
+    /// back with the new reading.
+    func testACodePanelComesBackAtTheLatestReading() async throws {
+        let codeBytes = [UInt8](repeating: 0x90, count: 0x100)
+        let parentURL = try dump(0x1000, 0x77)
+        func artifactData(_ name: String) -> Data {
+            Data(#"{"script_version":2,"ghidra":"12.1.2","functions":[{"entry":"0x0","name":"\#(name)","c":"return 0;","instructions":[{"address":"0x0","bytes":"90","mnemonic":"NOP","text":"NOP"}]}]}"#.utf8)
+        }
+        let storeRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CodeLatestStore-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: storeRoot, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: storeRoot) }
+        let store = try ContentStore(root: storeRoot)
+        let module = ModuleIdentity(sha256: SHA256Digest(data: Data(codeBytes)),
+                                    size: codeBytes.count, name: "SecCore", kind: "PE32",
+                                    language: "x86:LE:32:default", imageBase: "0x0")
+        let recipe = AnalysisRecipe(id: "code-v2-ghidra-12.1.2", exporter: 2,
+                                    ghidra: "12.1.2", script: "ExportCode.java")
+        let manifest = try store.putAnalysis(module: module, recipe: recipe, artifact: artifactData("entry"),
+                                             reading: AnalysisReading(project: "p", rev: 24))
+        let previousRoot = UEFIToolModule.codeAnalysisRoot
+        UEFIToolModule.codeAnalysisRoot = storeRoot
+        addTeardownBlock { UEFIToolModule.codeAnalysisRoot = previousRoot }
+
+        let source = shownWindow().mainViewController
+        source.openFiles([parentURL])
+        source.openCode(
+            named: "SecCore ▸ PE32", from: source.windowModel.pane1,
+            source: 0x100..<0x200, manifest: manifest,
+            artifact: try JSONDecoder().decode(CodeArtifact.self, from: artifactData("entry")),
+            codec: ReadOnlyPartCodec(codeBytes, title: L("This cannot be put back"),
+                                     reason: L("A code analysis is a snapshot; edit the dump and analyze the module again.")))
+        let tab = source.workspaceTab()
+
+        try store.putAnalysis(module: module, recipe: recipe, artifact: artifactData("SecStartup"),
+                              reading: AnalysisReading(project: "p", rev: 25))
+        let target = shownWindow().mainViewController
+        let issues = await restore([(tab, target)])
+        XCTAssertEqual(issues, [])
+        let restoredID = try XCTUnwrap(target.fragments.expanded)
+        let restored = try XCTUnwrap(target.fragments.codePane(restoredID))
+        XCTAssertEqual(restored.manifest.reading?.rev, 25, "the reading published since, not the one saved")
+        XCTAssertEqual(restored.selectedFunction?.name, "SecStartup")
+    }
+
     func testCodePanelComesBackAsCode() async throws {
         let codeBytes = [UInt8](repeating: 0x90, count: 0x100)
         let parentURL = try dump(0x1000, 0x77)

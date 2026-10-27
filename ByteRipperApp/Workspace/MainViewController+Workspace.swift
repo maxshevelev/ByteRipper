@@ -136,20 +136,30 @@ extension MainViewController {
     @MainActor
     func restoredCodeScreen(_ state: CodeScreenState, bytes: [UInt8]) async -> CodeScreen? {
         guard let text = state.manifest.data(using: .utf8),
-              let manifest = try? JSONDecoder().decode(AnalysisManifest.self, from: text)
+              let saved = try? JSONDecoder().decode(AnalysisManifest.self, from: text)
         else { return nil }
         let root = CodeAnalysisStore.root
         let loaded = await Task.detached(priority: .userInitiated)
-        { () -> (artifact: CodeArtifact, recipes: [AnalysisManifest])? in
-            guard let store = try? ContentStore(root: root, create: false),
-                  let artifact = try? store.artifact(for: manifest)
-            else { return nil }
+        { () -> (manifest: AnalysisManifest, artifact: CodeArtifact, recipes: [AnalysisManifest])? in
+            guard let store = try? ContentStore(root: root, create: false) else { return nil }
+            // The analysis as the store holds it now: a review published
+            // again while the session was closed is what the screen shows,
+            // not the revision the session saw last.
+            let current = saved.key.flatMap { try? store.analysis(module: $0.module, recipe: $0.recipe) }
+            var found: (AnalysisManifest, CodeArtifact)?
+            for manifest in [current, saved].compactMap({ $0 }) {
+                if let artifact = try? store.artifact(for: manifest) {
+                    found = (manifest, artifact)
+                    break
+                }
+            }
+            guard let (manifest, artifact) = found else { return nil }
             let recipes = CodeAnalysisIndex(manifests: store.usableAnalyses())
                 .manifests(for: manifest.module.sha256)
-            return (artifact, recipes)
+            return (manifest, artifact, recipes)
         }.value
         guard let loaded else { return nil }
-        return CodeScreen(manifest: manifest, artifact: loaded.artifact, bytes: Data(bytes),
+        return CodeScreen(manifest: loaded.manifest, artifact: loaded.artifact, bytes: Data(bytes),
                           selectedFunction: state.selectedFunction,
                           selectedInstruction: state.selectedInstruction,
                           place: state.place.map {
