@@ -1186,6 +1186,14 @@ final class CodePaneViewTests: XCTestCase {
         let second = (textView.string as NSString).range(of: "entry", options: .backwards)
         XCTAssertEqual(textView.selectedRange(), second, "the second call, not the first")
         XCTAssertTrue(view.canGoBack)
+
+        // Back returns where the callers were asked: the function's own
+        // name in its signature, selected.
+        view.goBack()
+        XCTAssertEqual(view.selectedFunction?.name, "entry")
+        let back = textView.string as NSString
+        XCTAssertEqual(back.substring(with: textView.selectedRange()), "entry")
+        XCTAssertEqual(textView.selectedRange(), back.range(of: "entry"), "the signature's name")
     }
 
     /// A link underlines under the pointer, in the listing and in the C.

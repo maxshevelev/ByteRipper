@@ -557,13 +557,17 @@ import ToolModuleKit
         guard model.functions.indices.contains(index) else { return nil }
         explanationPopover?.close()
         callersPopover?.close()
+        // The name the callers were asked at is where Back returns: it is
+        // the place's mark, selected and flashed on the way back.
+        let own = signatureName().flatMap { $0.function == index ? $0.range : nil }
+        let asked = name ?? own
         let popover = CodeCallersPopover(model: model, callee: index, callers: callers(of: index)) { [weak self] caller in
+            self?.leavingCMark = asked
             self?.goToCaller(caller, of: index)
         }
         callersPopover = popover
         guard window != nil else { return popover }
-        let own = signatureName().flatMap { $0.function == index ? $0.range : nil }
-        if let range = name ?? own, !cTextView.isHiddenOrHasHiddenAncestor, let rect = cRect(range) {
+        if let range = asked, !cTextView.isHiddenOrHasHiddenAncestor, let rect = cRect(range) {
             popover.show(relativeTo: rect, of: cTextView)
         } else {
             popover.show(relativeTo: functionLabel.bounds, of: functionLabel)
