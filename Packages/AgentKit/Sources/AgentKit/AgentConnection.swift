@@ -28,6 +28,8 @@ public actor AgentConnection {
     /// What the client called itself — in `initialize`, or in the `_meta` of
     /// its latest modern request.
     private(set) var clientName: String?
+    /// The host's label for this connection, carried into every record.
+    private let connection: String?
     private var inFlight: [RequestKey: InFlight] = [:]
     /// Calls that were cancelled and have not stopped yet. Nobody will hear
     /// their answer, but they are still work in progress, and
@@ -49,12 +51,14 @@ public actor AgentConnection {
     /// holds a connection open and never says a word.
     public init(
         server: AgentServer,
+        connection: String? = nil,
         send: @escaping @Sendable (Data) -> Void,
         observer: @escaping @Sendable (AgentCallRecord) -> Void = { _ in },
         onFirstMessage: @escaping @Sendable () -> Void = {},
         onCallStarted: @escaping @Sendable (AgentCallRecord) -> Void = { _ in }
     ) {
         self.server = server
+        self.connection = connection
         self.send = send
         self.observer = observer
         self.onFirstMessage = onFirstMessage
@@ -288,7 +292,7 @@ public actor AgentConnection {
         let callID = UUID()
         let startedAt = Date()
         onCallStarted(AgentCallRecord(
-            id: callID, client: client, tool: name, arguments: .object(arguments),
+            id: callID, client: client, connection: connection, tool: name, arguments: .object(arguments),
             started: startedAt, duration: .zero, finished: startedAt, answerBytes: 0, outcome: .running))
         let task = Task { [weak self] in
             let clock = ContinuousClock()
@@ -322,7 +326,8 @@ public actor AgentConnection {
     ) {
         func log(_ outcome: AgentCallRecord.Outcome, bytes: Int) {
             observer(AgentCallRecord(
-                id: record.id, client: record.client, tool: record.tool, arguments: record.arguments,
+                id: record.id, client: record.client, connection: connection, tool: record.tool,
+                arguments: record.arguments,
                 started: record.started, duration: record.duration, finished: Date(),
                 answerBytes: bytes, outcome: outcome))
         }

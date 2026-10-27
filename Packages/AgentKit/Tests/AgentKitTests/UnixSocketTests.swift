@@ -41,6 +41,26 @@ final class UnixSocketTests: XCTestCase {
         XCTAssertEqual(String(decoding: read(fd, count: 10), as: UTF8.self), "echo:ping\n")
     }
 
+    /// The connection knows the process at the other end, and that
+    /// process's parent: the relay, and the client session that started it.
+    func testAConnectionNamesTheProcessBehindIt() throws {
+        let accepted = expectation(description: "accepted")
+        nonisolated(unsafe) var peer: pid_t?
+        let listener = UnixSocketListener(path: path)
+        try listener.start { connection in
+            peer = connection.peerPID
+            accepted.fulfill()
+        }
+        defer { listener.stop() }
+        let fd = try UnixSocket.connect(to: path)
+        defer { close(fd) }
+        wait(for: [accepted], timeout: 5)
+        XCTAssertEqual(peer, getpid(), "this test process is the one at the other end")
+        let behind = AgentPeer.of(relayPID: getpid())
+        XCTAssertEqual(behind.clientPID, getppid())
+        XCTAssertNotNil(behind.clientName)
+    }
+
     func testOnlyTheOwnerMayOpenTheSocket() throws {
         let listener = UnixSocketListener(path: path)
         try listener.start { _ in }

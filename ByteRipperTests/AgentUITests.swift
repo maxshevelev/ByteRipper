@@ -281,6 +281,28 @@ final class AgentUITests: XCTestCase {
         _ = connection
     }
 
+    /// Each request says which connection it came on — its number and the
+    /// client process behind the relay — so two Claude Code sessions, both
+    /// called `claude-code`, are told apart.
+    func testTheLogSaysWhichConnectionARequestCameOn() {
+        XCTAssertEqual(AgentService.connectionLabel(
+            number: 3, peer: AgentPeer(relayPID: 65490, clientPID: 42531, clientName: "claude")), "3 · claude 42531")
+        XCTAssertEqual(AgentService.connectionLabel(
+            number: 4, peer: AgentPeer(relayPID: 65490, clientPID: nil, clientName: nil)), "4 · 65490")
+        XCTAssertEqual(AgentService.connectionLabel(number: 5, peer: nil), "5")
+
+        let controller = AgentWindowController(service: service)
+        _ = controller.window
+        let record = AgentCallRecord(client: "claude-code", connection: "3 · claude 42531", tool: "read",
+                                     arguments: [:], duration: .milliseconds(3), finished: Date(),
+                                     answerBytes: 10, outcome: .answered)
+        service.recordForTesting(record)
+        controller.refresh()
+        XCTAssertEqual(controller.shownText(row: 0, column: "connection"), "3 · claude 42531")
+        let fields = AgentWindowController.detailFields(of: record)
+        XCTAssertEqual(fields.first { $0.label == "Connection" }?.value, "3 · claude 42531")
+    }
+
     /// The service is active while a call runs, and for `activityHold` after
     /// the last one ends: the toolbar's red dot blinks over that stretch.
     func testTheServiceIsActiveWhileACallRunsAndAMomentAfter() async throws {

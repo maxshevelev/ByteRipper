@@ -73,6 +73,10 @@ public struct AgentCallRecord: Equatable, Sendable {
     public let started: Date
     /// The client's own name for itself, when it gave one.
     public let client: String?
+    /// Which connection the call came on, as the host labels it — the
+    /// number of the connection and the process behind it — so calls from
+    /// two clients of the same name are told apart.
+    public let connection: String?
     public let tool: String
     public let arguments: JSONValue
     public let duration: Duration
@@ -82,11 +86,12 @@ public struct AgentCallRecord: Equatable, Sendable {
     public let answerBytes: Int
     public let outcome: Outcome
 
-    public init(id: UUID = UUID(), client: String?, tool: String, arguments: JSONValue,
+    public init(id: UUID = UUID(), client: String?, connection: String? = nil, tool: String, arguments: JSONValue,
                 started: Date? = nil, duration: Duration, finished: Date,
                 answerBytes: Int, outcome: Outcome) {
         self.id = id
         self.client = client
+        self.connection = connection
         self.tool = tool
         self.arguments = arguments
         self.started = started ?? finished

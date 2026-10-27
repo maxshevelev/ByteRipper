@@ -245,6 +245,8 @@ final class AgentService {
 
     private var listener: UnixSocketListener?
     private var connections: [ObjectIdentifier: UnixSocketConnection] = [:]
+    /// The number the next connection gets in the log, from 1 each launch.
+    private var nextConnectionNumber = 1
     /// The connections whose client has sent a message. A socket alone is
     /// not an agent: Claude Desktop, starting its servers, launches the relay,
     /// abandons it a second later for a fresh one, and leaves the first
@@ -418,7 +420,10 @@ final class AgentService {
         }
         let key = ObjectIdentifier(socket)
         connections[key] = socket
-        let connection = connect(send: { socket.write($0) }, onFirstMessage: { [weak self] in
+        let number = nextConnectionNumber
+        nextConnectionNumber += 1
+        let label = Self.connectionLabel(number: number, peer: socket.peerPID.map(AgentPeer.of(relayPID:)))
+        let connection = connect(connection: label, send: { socket.write($0) }, onFirstMessage: { [weak self] in
             Task { @MainActor in
                 guard let self, self.connections[key] != nil else { return }
                 self.clients.insert(key)
@@ -445,9 +450,19 @@ final class AgentService {
 
     /// A connection to the service over whatever carries the bytes — the
     /// socket, or a test's own pipe.
-    func connect(send: @escaping @Sendable (Data) -> Void,
+    /// What the log calls a connection: its number this launch, and the
+    /// client process behind the relay with its process id — for a Claude
+    /// Code session, the number its own address carries.
+    static func connectionLabel(number: Int, peer: AgentPeer?) -> String {
+        guard let peer, let pid = peer.clientPID else {
+            return peer.map { "\(number) · \($0.relayPID)" } ?? "\(number)"
+        }
+        return "\(number) · \(peer.clientName ?? "?") \(pid)"
+    }
+
+    func connect(connection: String? = nil, send: @escaping @Sendable (Data) -> Void,
                  onFirstMessage: @escaping @Sendable () -> Void = {}) -> AgentConnection {
-        AgentConnection(server: server, send: send, observer: { [weak self] record in
+        AgentConnection(server: server, connection: connection, send: send, observer: { [weak self] record in
             Task { @MainActor in self?.record(record) }
         }, onFirstMessage: onFirstMessage, onCallStarted: { [weak self] record in
             Task { @MainActor in self?.record(record) }

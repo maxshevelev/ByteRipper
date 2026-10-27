@@ -77,7 +77,7 @@ final class AgentConnectionTests: XCTestCase {
         let server = AgentServer(
             info: info, instructions: "Ask about the dump.", tools: tools ?? [echo], limits: limits)
         let connection = AgentConnection(
-            server: server, send: { wire.send($0) }, observer: { wire.record($0) },
+            server: server, connection: "7 · claude 42531", send: { wire.send($0) }, observer: { wire.record($0) },
             onCallStarted: { wire.callStarted($0) })
         return (connection, wire)
     }
@@ -164,6 +164,7 @@ final class AgentConnectionTests: XCTestCase {
         XCTAssertEqual(messages[2]["result"]?["resultType"], "complete")
         XCTAssertEqual(messages[2]["result"]?["content"], [["type": "text", "text": #"{"said":"hi"}"#]])
         XCTAssertEqual(wire.calls.first?.client, "test-client")
+        XCTAssertEqual(wire.calls.first?.connection, "7 · claude 42531", "the host's label for the connection")
     }
 
     func testAModernRequestForAnUnknownVersionListsTheOnesSpoken() async {

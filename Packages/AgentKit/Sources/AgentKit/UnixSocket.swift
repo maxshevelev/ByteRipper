@@ -211,6 +211,15 @@ public final class UnixSocketConnection: @unchecked Sendable {
         self.fd = fd
     }
 
+    /// The process at the other end: on this Mac's agent socket, the relay a
+    /// client started.
+    public var peerPID: pid_t? {
+        var pid: pid_t = 0
+        var size = socklen_t(MemoryLayout<pid_t>.size)
+        guard getsockopt(fd, SOL_LOCAL, LOCAL_PEERPID, &pid, &size) == 0, pid > 0 else { return nil }
+        return pid
+    }
+
     /// Reads until the client goes, handing over each chunk as it arrives, and
     /// then calls `onClose` once.
     public func startReading(onData: @escaping @Sendable (Data) -> Void, onClose: @escaping @Sendable () -> Void) {
@@ -247,5 +256,48 @@ public final class UnixSocketConnection: @unchecked Sendable {
         // Wakes the reading thread, which ends, releases the descriptor and
         // reports the close.
         shutdown(fd, SHUT_RDWR)
+    }
+}
+
+/// Who is behind a connection to the agent socket: the relay process, and the
+/// client that started it — a Claude Code session, whose process id is also
+/// the number its own address carries — so the log can tell two sessions
+/// with the same client name apart.
+public struct AgentPeer: Equatable, Sendable {
+    public let relayPID: pid_t
+    public let clientPID: pid_t?
+    public let clientName: String?
+
+    public init(relayPID: pid_t, clientPID: pid_t?, clientName: String?) {
+        self.relayPID = relayPID
+        self.clientPID = clientPID
+        self.clientName = clientName
+    }
+
+    /// The relay at `pid`, and its parent.
+    public static func of(relayPID pid: pid_t) -> AgentPeer {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        guard sysctl(&mib, 4, &info, &size, nil, 0) == 0, size > 0 else {
+            return AgentPeer(relayPID: pid, clientPID: nil, clientName: nil)
+        }
+        let parent = info.kp_eproc.e_ppid
+        guard parent > 1 else { return AgentPeer(relayPID: pid, clientPID: nil, clientName: nil) }
+        return AgentPeer(relayPID: pid, clientPID: parent, clientName: name(of: parent))
+    }
+
+    /// A process's name. Claude Code runs as a binary named for its version
+    /// (`…/claude/versions/2.1.290`); it is called what it is.
+    static func name(of pid: pid_t) -> String? {
+        var path = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
+        if proc_pidpath(pid, &path, UInt32(path.count)) > 0 {
+            let text = String(cString: path)
+            if text.contains("/claude/") || text.hasSuffix("/claude") { return "claude" }
+            return (text as NSString).lastPathComponent
+        }
+        var name = [CChar](repeating: 0, count: 256)
+        guard proc_name(pid, &name, UInt32(name.count)) > 0 else { return nil }
+        return String(cString: name)
     }
 }

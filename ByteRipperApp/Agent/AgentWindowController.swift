@@ -126,11 +126,12 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     // MARK: - Content
 
     private enum Column: String, CaseIterable {
-        case time, tool, arguments, duration, size, result
+        case time, connection, tool, arguments, duration, size, result
 
         var title: String {
             switch self {
             case .time: return L("Time")
+            case .connection: return L("Connection")
             case .tool: return L("Tool")
             case .arguments: return L("Arguments")
             case .duration: return L("Took")
@@ -142,6 +143,7 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         var width: CGFloat {
             switch self {
             case .time: return 64
+            case .connection: return 110
             case .tool: return 90
             case .arguments: return 250
             case .duration: return 60
@@ -377,6 +379,8 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         case .time:
             // A call still running has no end yet: the row says when it came in.
             return timeFormatter.string(from: record.isRunning ? record.started : record.finished)
+        case .connection:
+            return record.connection ?? ""
         case .tool:
             return record.tool
         case .arguments:
@@ -478,6 +482,9 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         }
         if let client = record.client {
             fields.insert(DetailField(label: L("Client"), value: client), at: 1)
+        }
+        if let connection = record.connection {
+            fields.insert(DetailField(label: L("Connection"), value: connection), at: record.client == nil ? 1 : 2)
         }
         return fields
     }
