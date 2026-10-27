@@ -12,7 +12,9 @@ import ToolModuleKit
 final class FragmentPillView: NSView {
     static let height: CGFloat = 24
     /// Past this the name truncates rather than the pill taking the whole dock.
-    static let maximumWidth: CGFloat = 220
+    /// Wide enough for a module's section with its codec badge,
+    /// `S3RestoreAcpiPei ▸ LZMA compressed section` with **LZMA**.
+    static let maximumWidth: CGFloat = 360
     private static let textInset: CGFloat = 10
     private static let iconGap: CGFloat = 5
 
