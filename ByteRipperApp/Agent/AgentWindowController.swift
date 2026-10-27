@@ -187,6 +187,7 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         table.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
         AgentTableStyle.apply(to: table)
         keepColumnWidths(of: table, as: "AgentLogTable")
+        Self.placeSlotAfterTime(in: table)
         table.dataSource = self
         table.delegate = self
         table.allowsMultipleSelection = true
@@ -490,6 +491,16 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
             fields.insert(DetailField(label: L("Slot"), value: slotText(connection)), at: record.client == nil ? 1 : 2)
         }
         return fields
+    }
+
+    /// Slot sits right after Time. The table restores the order it saved, and
+    /// a column that order does not know yet — Slot, for a log laid out
+    /// before it existed — would land at the end.
+    static func placeSlotAfterTime(in table: NSTableView) {
+        let time = table.column(withIdentifier: NSUserInterfaceItemIdentifier(Column.time.rawValue))
+        let slot = table.column(withIdentifier: NSUserInterfaceItemIdentifier(Column.connection.rawValue))
+        guard time >= 0, slot >= 0, slot != time + 1 else { return }
+        table.moveColumn(slot, toColumn: slot > time ? time + 1 : time)
     }
 
     /// A slot as the hover and the details say it: its number and what is

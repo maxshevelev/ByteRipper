@@ -285,6 +285,17 @@ final class AgentUITests: XCTestCase {
     /// the column, the client process behind the relay on hover and in the
     /// details — so two Claude Code sessions, both called `claude-code`, are
     /// told apart.
+    /// A layout saved before Slot existed puts it at the end; it is moved
+    /// back beside Time.
+    func testSlotStaysRightAfterTime() {
+        let table = NSTableView()
+        for id in ["time", "tool", "arguments", "connection"] {
+            table.addTableColumn(NSTableColumn(identifier: NSUserInterfaceItemIdentifier(id)))
+        }
+        AgentWindowController.placeSlotAfterTime(in: table)
+        XCTAssertEqual(table.tableColumns.map(\.identifier.rawValue), ["time", "connection", "tool", "arguments"])
+    }
+
     func testTheLogSaysWhichConnectionARequestCameOn() {
         XCTAssertEqual(AgentService.connectionAbout(
             AgentPeer(relayPID: 65490, clientPID: 42531, clientName: "claude")), "claude, PID 42531")
