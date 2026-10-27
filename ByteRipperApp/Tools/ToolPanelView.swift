@@ -38,6 +38,10 @@ final class ToolPanelView: NSView, ToolPanelFrame {
     /// What dropping the pane with this id would do, for the caption — nil for
     /// a pane the panel will not take, which is its own.
     var paneDropTitle: ((UUID) -> String?)?
+    /// Fired as a file drag comes over the panel, leaves it, and ends. See
+    /// `PaneDropBandsView.onFileDragPresence`.
+    var onFileDragPresence: ((FileDragPresence) -> Void)?
+    private var carryingFiles = false
 
     /// Whether anything may be dropped on the panel at all. False on a fragment
     /// panel: what the panel reads is a *part*, which has no file to replace
@@ -380,6 +384,13 @@ final class ToolPanelView: NSView, ToolPanelFrame {
     // MARK: - Dropping on the panel
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        if sender.draggingPasteboard.draggedPaneID == nil,
+           !sender.draggingPasteboard.droppedFileURLs.isEmpty {
+            // Even where the panel refuses: the file is still over the window,
+            // and its other zones stay in view.
+            carryingFiles = true
+            onFileDragPresence?(.entered)
+        }
         guard takesDrops else {
             // Wearing the refusal rather than staying blank, for the reason the
             // pane refusal below gives: an area that does nothing and says
@@ -416,10 +427,16 @@ final class ToolPanelView: NSView, ToolPanelFrame {
 
     override func draggingExited(_ sender: NSDraggingInfo?) {
         endDrag()
+        if carryingFiles {
+            carryingFiles = false
+            onFileDragPresence?(.exited)
+        }
     }
 
     override func draggingEnded(_ sender: NSDraggingInfo) {
         endDrag()
+        carryingFiles = false
+        onFileDragPresence?(.ended)
     }
 
     override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
@@ -440,6 +457,8 @@ final class ToolPanelView: NSView, ToolPanelFrame {
         }
         let urls = sender.draggingPasteboard.droppedFileURLs
         endDrag()
+        carryingFiles = false
+        onFileDragPresence?(.ended)
         guard !urls.isEmpty else { return false }
         onDropFiles?(urls)
         return true
@@ -449,6 +468,22 @@ final class ToolPanelView: NSView, ToolPanelFrame {
         dropZone.isHidden = !shown
         dropZone.setHighlighted(shown && !refused)
         if refused { dropZone.setRefused() }
+    }
+
+    /// Shows the zone unlit for a file that is over another of the window's
+    /// zones, or takes it down when it has gone (§4.3). Only where the panel
+    /// takes a file: a zone that would refuse is not one of the places the file
+    /// can go, and says so only when the pointer reaches it.
+    func showForFileDrag(_ shown: Bool) {
+        guard draggedPaneID == nil, takesDrops else { return }
+        if shown {
+            guard dropZone.isHidden else { return }
+            dropZone.setTitle(SingleFileDropTarget.replace.title)
+            dropZone.setHighlighted(false)
+            dropZone.isHidden = false
+        } else {
+            show(dropZone: false, refused: false)
+        }
     }
 
     private func endDrag() {

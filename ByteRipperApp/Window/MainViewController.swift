@@ -724,7 +724,15 @@ final class MainViewController: NSViewController {
     /// content fills the window again.
     private let findBar = FindBarView()
     /// Host for the mode content (`setContentView` swaps what's inside).
-    private let contentContainer = NSView()
+    /// Under every drop zone, it catches a file drag in the gaps between them
+    /// so the zones stay up while the file is over the window (§4.3).
+    private let contentContainer = FileDragBackstopView()
+    /// Whether a file drag is over one of the window's zones at this moment.
+    private var fileDragIsOverZone = false
+    /// Whether the zones are up for a file drag.
+    private var fileDropZonesShown = false
+    /// Takes the zones down once a file drag has left the window.
+    private var fileDragHideTimer: Timer?
     /// The tab's own content surface: the split that shares the content area
     /// between the tool panel, the dump and the minimap, and the three of them
     /// (`Design/FRAGMENT_PANELS_PLAN.md`). One today; a fragment panel is
@@ -1135,6 +1143,12 @@ final class MainViewController: NSViewController {
         newTabDropStrip.onCopyModifierChanged = { [weak self] copying in
             self?.setPaneDragCopyingEverywhere(copying)
         }
+        newTabDropStrip.onFileDragPresence = { [weak self] presence in
+            self?.fileDragPresenceChanged(presence)
+        }
+        contentContainer.onFileDragPresence = { [weak self] presence in
+            self?.fileDragPresenceChanged(presence)
+        }
         newTabDropStrip.onPaneDropped = { [weak self] paneID, copying in
             self?.tearOffPaneToNewTab(draggedPaneID: paneID, copying: copying)
         }
@@ -1357,6 +1371,9 @@ final class MainViewController: NSViewController {
             dropView.onCopyModifierChanged = { [weak self] copying in
                 self?.setPaneDragCopyingEverywhere(copying)
             }
+            dropView.onFileDragPresence = { [weak self] presence in
+                self?.fileDragPresenceChanged(presence)
+            }
             // A dragged pane gets the same four zones a file gets, and they
             // mean the same four things: the far half opens it as the second
             // pane, and the three bands over this file join it at either end or
@@ -1454,6 +1471,9 @@ final class MainViewController: NSViewController {
                 }
                 bands.onCopyModifierChanged = { [weak self] copying in
                     self?.setPaneDragCopyingEverywhere(copying)
+                }
+                bands.onFileDragPresence = { [weak self] presence in
+                    self?.fileDragPresenceChanged(presence)
                 }
             }
             pane1View.onClose = { [weak self] in self?.closePane(at: 0) }
@@ -1792,6 +1812,64 @@ final class MainViewController: NSViewController {
         singleFileDropView?.setPaneDragCopying(copying)
         comparisonView?.bands1.setPaneDragCopying(copying)
         comparisonView?.bands2.setPaneDragCopying(copying)
+    }
+
+    // MARK: - Every zone while a file is over the window (§4.3)
+
+    /// A file drag coming over one of the window's zones, leaving it, or
+    /// ending, as the zone reports it.
+    ///
+    /// While the file is over the window every zone it could go to is up and
+    /// unlit, and the one under the pointer lights itself over that. Moving
+    /// from one zone to the next is an exit and an entry in the same step, so
+    /// an exit takes nothing down by itself: the zones go only when nothing in
+    /// the window has taken the drag up again a moment later — the pointer has
+    /// left the window — or when the drag ends.
+    func fileDragPresenceChanged(_ presence: FileDragPresence) {
+        fileDragHideTimer?.invalidate()
+        fileDragHideTimer = nil
+        switch presence {
+        case .entered:
+            fileDragIsOverZone = true
+            // The strip too, wherever the file came in — the minimap, say,
+            // which is no zone of its own.
+            setNewTabStripVisible(true)
+            showFileDropZones(true)
+        case .exited:
+            fileDragIsOverZone = false
+            // The zone just left took itself down; it is still on offer.
+            showFileDropZones(true)
+            let timer = Timer(timeInterval: 0.12, repeats: false) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, !self.fileDragIsOverZone else { return }
+                    self.showFileDropZones(false)
+                }
+            }
+            // The drag runs its own event-tracking loop; a timer in the
+            // default mode would not fire until the drag was over.
+            RunLoop.main.add(timer, forMode: .common)
+            fileDragHideTimer = timer
+        case .ended:
+            fileDragIsOverZone = false
+            setNewTabStripVisible(false)
+            showFileDropZones(false)
+        }
+    }
+
+    /// Puts up, or takes down, every zone a file can go to in this window.
+    ///
+    /// A fragment panel that is up covers the tab's panes and their tool
+    /// panel, so their zones stay down; the panel's own tool panel takes no
+    /// files. The New Tab strip has its own way up (`setNewTabStripVisible`).
+    private func showFileDropZones(_ shown: Bool) {
+        guard shown || fileDropZonesShown else { return }
+        fileDropZonesShown = shown
+        let panes = shown && windowPanesAreReachable
+        singleFileDropView?.showForFileDrag(panes)
+        comparisonView?.bands1.showForFileDrag(panes)
+        comparisonView?.bands2.showForFileDrag(panes)
+        surface.tools.panel.showForFileDrag(panes && surface.tools.isPanelVisible)
+        fragments.frontSurface?.tools.panel.showForFileDrag(shown && fragments.frontSurface?.tools.isPanelVisible == true)
     }
 
     private func setNewTabStripVisible(_ visible: Bool, forPane isPane: Bool = false) {

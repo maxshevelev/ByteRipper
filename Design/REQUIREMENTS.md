@@ -167,6 +167,9 @@ General:
 - The app must accept file URLs from drag-and-drop.
 - Dropping more files than can be opened must result in a notification.
 - Only the first two dropped files may be opened.
+- While a file drag is over the window, every zone it can be dropped on is
+  shown at once, semi-transparent; only the zone under the pointer is
+  highlighted. The zones go when the drag leaves the window or ends.
 
 Drop in empty mode:
 

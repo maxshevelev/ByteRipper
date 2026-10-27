@@ -14,6 +14,12 @@ final class DropTargetView: NSView {
     private var plateSquareWidth: NSLayoutConstraint?
     private var plateSquareHeight: NSLayoutConstraint?
 
+    /// How much of the dump an idle zone lets through. Every zone a file can go
+    /// to is up while it is over the window (§4.3), so an idle plate has to
+    /// leave the dump readable under it: it marks where a zone is, the hovered
+    /// one's fill says which.
+    static let idleFillAlpha: CGFloat = 0.5
+
     /// The side of the square plate a refusal wears.
     static let refusalPlateSide: CGFloat = 56
 
@@ -144,6 +150,9 @@ final class DropTargetView: NSView {
     /// Whether the zone is showing its refusal symbol (for tests).
     var isShowingRefusal: Bool { !refusalIcon.isHidden }
 
+    /// Whether the zone is lit as the one under the pointer (for tests).
+    var isHighlightedForTesting: Bool { highlighted }
+
     /// The caption the zone is showing (for tests).
     var titleForTesting: String { label.stringValue }
 
@@ -176,7 +185,7 @@ final class DropTargetView: NSView {
         effectiveAppearance.performAsCurrentDrawingAppearance {
             layer?.backgroundColor = (highlighted
                 ? NSColor.controlAccentColor.withAlphaComponent(0.25)
-                : NSColor.windowBackgroundColor.withAlphaComponent(0.9)).cgColor
+                : NSColor.windowBackgroundColor.withAlphaComponent(Self.idleFillAlpha)).cgColor
             layer?.borderColor = (highlighted
                 ? NSColor.controlAccentColor
                 : NSColor.separatorColor).cgColor
@@ -233,6 +242,9 @@ final class DropZoneView: NSView {
         target.setHighlighted(highlighted)
     }
 
+    /// The plate, so a test can read whether it is up and lit.
+    var targetForTesting: DropTargetView { target }
+
     /// Renames the zone. What lands here can be a file or a pane, and the two
     /// are worth different words.
     func setTitle(_ title: String) {
@@ -287,6 +299,13 @@ final class PaneDropBandsView: NSView {
     /// an overlay, show the strip, the panes move down, and the pointer is out
     /// again.
     var onDragSessionChanged: ((Bool) -> Void)?
+
+    /// Fired as a file drag comes over these bands, leaves them, and ends, so
+    /// the window can show every zone while the file is over any of them.
+    var onFileDragPresence: ((FileDragPresence) -> Void)?
+
+    /// Whether a file, not a pane, is over these bands now.
+    private var carryingFiles = false
 
     /// How much of this overlay's top the window's New Tab strip covers. The
     /// bands divide what is left, so the two never claim the same points
@@ -417,6 +436,15 @@ final class PaneDropBandsView: NSView {
             target.alphaValue = 0
         }
         retitleBandsForFile()
+    }
+
+    /// Shows the bands unlit for a file that is over another of the window's
+    /// zones, or takes them down when it has gone (§4.3). The band the pointer
+    /// is over lights itself; this leaves its highlight alone. Silent while a
+    /// pane is in flight here: its bands say what the pane would do.
+    func showForFileDrag(_ shown: Bool) {
+        guard draggedPaneID == nil else { return }
+        setDragActive(shown)
     }
 
     /// A pane drag arriving over a band, the way `draggingEntered` does — the
@@ -569,7 +597,11 @@ extension PaneDropBandsView {
             return paneOperation(at: sender.draggingLocation)
         }
         guard !sender.draggingPasteboard.droppedFileURLs.isEmpty else { return [] }
+        carryingFiles = true
         onDragSessionChanged?(true)
+        // Before the bands light their own: the window raises every zone unlit,
+        // and the one under the pointer is then lit over that.
+        onFileDragPresence?(.entered)
         setDragActive(true)
         updateHover(at: sender.draggingLocation)
         return .copy
@@ -625,15 +657,23 @@ extension PaneDropBandsView {
 
     override func draggingExited(_ sender: NSDraggingInfo?) {
         // This overlay's own bands go — the pointer is no longer choosing among
-        // them — but the session is not over, so the strip stays up.
+        // them — but the session is not over, so the strip stays up. A file's
+        // bands come back unlit at once: the window shows every zone while the
+        // file is over any of them.
         setDragActive(false)
         forgetDraggedPane()
+        if carryingFiles {
+            carryingFiles = false
+            onFileDragPresence?(.exited)
+        }
     }
 
     override func draggingEnded(_ sender: NSDraggingInfo) {
         setDragActive(false)
         forgetDraggedPane()
+        carryingFiles = false
         onDragSessionChanged?(false)
+        onFileDragPresence?(.ended)
     }
 
     override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
@@ -651,6 +691,8 @@ extension PaneDropBandsView {
             return true
         }
         setDragActive(false)
+        carryingFiles = false
+        onFileDragPresence?(.ended)
         let urls = sender.draggingPasteboard.droppedFileURLs
         guard !urls.isEmpty else { return true }
         // No band, no act. The points above the bands belong to the New Tab
@@ -696,6 +738,11 @@ final class NewTabDropStrip: NSView {
     /// the pane overlays cannot hear it then, and their bands would go on
     /// promising a move. See `PaneDropBandsView.onCopyModifierChanged`.
     var onCopyModifierChanged: ((Bool) -> Void)?
+
+    /// Fired as a file drag comes over the strip, leaves it, and ends. See
+    /// `PaneDropBandsView.onFileDragPresence`.
+    var onFileDragPresence: ((FileDragPresence) -> Void)?
+    private var carryingFiles = false
 
     private let target = DropTargetView(title: L("Open in New Tab"))
     private var dragActive = false
@@ -792,6 +839,8 @@ extension NewTabDropStrip {
             return copying ? .copy : .move
         }
         guard !sender.draggingPasteboard.droppedFileURLs.isEmpty else { return [] }
+        carryingFiles = true
+        onFileDragPresence?(.entered)
         setDragActive(true, forPane: false)
         target.setHighlighted(true)
         return .copy
@@ -817,10 +866,16 @@ extension NewTabDropStrip {
         // Left the strip, not the window: the plate stays up, unlit, because the
         // drag may well come back to it.
         target.setHighlighted(false)
+        if carryingFiles {
+            carryingFiles = false
+            onFileDragPresence?(.exited)
+        }
     }
 
     override func draggingEnded(_ sender: NSDraggingInfo) {
         setDragActive(false)
+        carryingFiles = false
+        onFileDragPresence?(.ended)
     }
 
     override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
@@ -834,6 +889,8 @@ extension NewTabDropStrip {
             return true
         }
         let urls = sender.draggingPasteboard.droppedFileURLs
+        carryingFiles = false
+        onFileDragPresence?(.ended)
         guard !urls.isEmpty else { return true }
         onDropFiles?(urls)
         return true

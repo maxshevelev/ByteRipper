@@ -1,4 +1,4 @@
-@source-sha 11815bef13460ecdcdcdd5ad9aa7582f97ee545074b05343a67683cd24962336
+@source-sha 378ec0b55d535671302f9da9179c7521ee46e2ac912810e6783d4ca0498ac5d2
 # Dateien öffnen: ein Bereich oder zwei
 
 > Ein Tab hält zwei Dateibereiche. Eine Datei ist schlicht ein Editor; eine zweite Datei fügt den Vergleich hinzu. Bearbeiten geht in beiden Bereichen, so oder so.
@@ -14,7 +14,7 @@ Der zweite Bereich ist optional. Außer dem Vergleich selbst braucht nichts eine
 
 - **Ablage ▸ Öffnen…** (⌘O). Die Datei ersetzt den **aktiven** Bereich; einen zweiten Bereich legt der Befehl nicht von selbst an. Nur wenn beide Bereiche leer sind, füllen die ersten beiden gewählten Dateien sie. Was darüber hinaus gewählt ist, wird nicht geöffnet.
 - **Ablage ▸ Vergleichen mit…** (⌥⌘O) öffnet die Datei im anderen Bereich: im freien, sonst im nicht aktiven. So kommt die zweite Datei für den Vergleich hinzu. Bei **Ablage ▸ Benutzte Dokumente** wird die Zeile mit gedrückter ⌥-Taste zum selben Befehl.
-- **Ziehen und Ablegen.** Ziehen Sie eine Datei aufs Fenster; die Ablagebänder zeigen, wo sie landet — diesen Bereich ersetzen, daneben öffnen, in einem neuen Tab öffnen. Zwei Dateien auf einmal: die zweite öffnet im anderen Bereich, sofern dieser frei ist.
+- **Ziehen und Ablegen.** Ziehen Sie eine Datei aufs Fenster; die Ablagebänder zeigen, wo sie abgelegt werden kann — diesen Bereich ersetzen, am Anfang oder am Ende anfügen, zum Vergleich öffnen oder in einem neuen Tab öffnen. Solange sich die Datei über dem Fenster befindet, sind alle Bänder halbtransparent sichtbar; das Band unter dem Zeiger ist hervorgehoben, und dort wird die Datei beim Loslassen abgelegt. Zwei Dateien auf einmal: die zweite öffnet im anderen Bereich, sofern dieser frei ist.
 - **Ablage ▸ Benutzte Dokumente** — die Dumps, die Sie zuletzt offen hatten.
 - **Aus dem Finder**, wenn ByteRipper als Programm für die Endung eingetragen ist (siehe [[topic:settings|Einstellungen]]).
 - **Ablage ▸ Neue Datei** (⌘N) legt eine leere unbenannte Datei an — ein Ort, in den sich Bytes einsetzen lassen.

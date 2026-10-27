@@ -6,7 +6,7 @@ import Localization
 /// the current or default pane layout (left/right ⇄ top/bottom). The "this
 /// file" half is divided into three horizontal bands — Insert at Start (top),
 /// Replace Current File (middle), Append at End (bottom) — and the "second
-/// file" half is the single Open-as-Second target.
+/// file" half is the single Open for Comparison target.
 ///
 /// This view is a plain container: it is NOT drop-registered. Each half is a
 /// self-contained drop region (`PaneDropBandsView` and `DropZoneView`) that is
@@ -67,6 +67,11 @@ final class SingleFileDropView: NSView {
     /// merely leaves. See `PaneDropBandsView.onDragSessionChanged`: leaving is
     /// what aiming at the New Tab strip looks like from here.
     var onDragSessionChanged: ((Bool) -> Void)?
+
+    /// Fired as a file drag comes over this view, leaves it, and ends. See
+    /// `PaneDropBandsView.onFileDragPresence`.
+    var onFileDragPresence: ((FileDragPresence) -> Void)?
+    private var carryingFiles = false
 
     let paneView: FilePaneView
 
@@ -141,7 +146,7 @@ final class SingleFileDropView: NSView {
     /// Divides the view into its two halves along `isVertical`: side by side
     /// (left/right) or stacked (top/bottom), matching how the panes themselves
     /// are arranged (§4.3). The "this file" half holds the three bands; the
-    /// "second file" half holds the single Open-as-Second target.
+    /// "second file" half holds the single Open for Comparison target.
     private func applySplit(isVertical: Bool) {
         NSLayoutConstraint.deactivate(splitConstraints)
         bandsShareHalf?.isActive = false
@@ -185,6 +190,9 @@ final class SingleFileDropView: NSView {
         splitConstraints = constraints
     }
 
+    /// The "second file" half, so a test can read whether it is up and lit.
+    var secondHalfForTesting: DropZoneView { addTarget }
+
     /// Which way this view is split (for tests).
     var isSplitVerticallyForTesting: Bool {
         bandsShareHalf?.firstAttribute == .width
@@ -207,7 +215,9 @@ final class SingleFileDropView: NSView {
             return paneOperation(at: sender.draggingLocation)
         }
         guard !sender.draggingPasteboard.droppedFileURLs.isEmpty else { return [] }
+        carryingFiles = true
         onDragSessionChanged?(true)
+        onFileDragPresence?(.entered)
         updateDragTarget(at: sender.draggingLocation)
         return .copy
     }
@@ -296,12 +306,34 @@ final class SingleFileDropView: NSView {
     override func draggingExited(_ sender: NSDraggingInfo?) {
         endPaneDrag()
         clearDragTarget()
+        // A file's zones come back unlit at once: the window shows every zone
+        // while the file is over any of them.
+        if carryingFiles {
+            carryingFiles = false
+            onFileDragPresence?(.exited)
+        }
     }
 
     override func draggingEnded(_ sender: NSDraggingInfo) {
         onDragSessionChanged?(false)
         endPaneDrag()
         clearDragTarget()
+        carryingFiles = false
+        onFileDragPresence?(.ended)
+    }
+
+    /// Shows both halves unlit for a file that is over another of the window's
+    /// zones, or takes them down when it has gone (§4.3). The zone under the
+    /// pointer lights itself; this leaves its highlight alone. Silent while a
+    /// pane is in flight here.
+    func showForFileDrag(_ shown: Bool) {
+        guard draggedPaneID == nil else { return }
+        if shown {
+            thisFileBands.setDragActive(true)
+            addTarget.setDragActive(true)
+        } else {
+            clearDragTarget()
+        }
     }
 
     /// Forgets the pane in flight and puts the zones' captions back to the ones
@@ -329,6 +361,8 @@ final class SingleFileDropView: NSView {
         let urls = sender.draggingPasteboard.droppedFileURLs
         onDragSessionChanged?(false)
         clearDragTarget()
+        carryingFiles = false
+        onFileDragPresence?(.ended)
         guard !urls.isEmpty else { return true }
         let target = dropTarget(at: sender.draggingLocation) ?? .addSecond
         onDrop?(target, urls)
@@ -336,7 +370,7 @@ final class SingleFileDropView: NSView {
     }
 
     /// The drop target under the window point: one of the three bands when the
-    /// pointer is in the "this file" half, or the Open-as-Second target when it
+    /// pointer is in the "this file" half, or the Open for Comparison target when it
     /// is in the "second file" half.
     private func dropTarget(at windowPoint: NSPoint) -> SingleFileDropTarget? {
         if let band = thisFileBands.band(at: windowPoint) { return band }
@@ -344,17 +378,16 @@ final class SingleFileDropView: NSView {
         return .addSecond
     }
 
-    /// Shows the overlay for the half under the pointer and highlights the
-    /// specific band or target; the other half is hidden.
+    /// Shows both halves and lights the band or target under the pointer; the
+    /// rest stay up, unlit, so every place the file can go is in view (§4.3).
     private func updateDragTarget(at windowPoint: NSPoint) {
+        thisFileBands.setDragActive(true)
+        addTarget.setDragActive(true)
         if thisFileBands.band(at: windowPoint) != nil {
-            thisFileBands.setDragActive(true)
             thisFileBands.updateHover(at: windowPoint)
-            addTarget.setDragActive(false)
+            addTarget.setHighlighted(false)
         } else {
-            thisFileBands.setDragActive(false)
             thisFileBands.clearHover()
-            addTarget.setDragActive(true)
             addTarget.setHighlighted(true)
         }
     }

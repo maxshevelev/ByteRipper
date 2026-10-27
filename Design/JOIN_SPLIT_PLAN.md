@@ -143,7 +143,7 @@ Two consequences worth stating here:
 ## Dropping a file to join it
 
 Today a drag over a pane already offers two targets in single-file mode —
-**Replace Current File** and **Open as Second File** — split along the current
+**Replace Current File** and **Open for Comparison** — split along the current
 pane arrangement (§4.3). Joining adds two more, so the geometry has to be
 deliberate rather than "two more strips somewhere".
 
@@ -166,7 +166,7 @@ The two join bands are strips at the top and bottom, sized 25 % of the half's
 height each and clamped to 48…120 pt so they stay hittable in a short window and
 do not swallow the middle in a tall one. In the stacked arrangement the same
 three bands divide the top half — worth looking at on screen, because the
-"Append at End" strip then sits directly above the "Open as Second File" target
+"Append at End" strip then sits directly above the "Open for Comparison" target
 and the two need to read as separate things.
 
 **Comparison mode.** Each pane takes the three bands (insert / replace / append)
