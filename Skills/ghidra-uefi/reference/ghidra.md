@@ -30,11 +30,26 @@ CAS, and its project lock keeps the owner off the project.
 | data, strings | `ghidra_data`, `ghidra_strings` |
 | rename a function, a parameter, a local | `ghidra_rename`, `ghidra_rename_variable` |
 | a function only a table's slot points at | `ghidra_function_create` |
+| 16-bit code in a 32-bit module (the reset vector) | `ghidra_code_mode` with `bits: 16` |
 | a linker's clone with arguments in other registers | `ghidra_signature` with `storage` / `return_storage` |
 | signature, comment, datum | `ghidra_signature`, `ghidra_comment`, `ghidra_set_data` |
 | read a type: program, shared archive, EDK2 | `ghidra_type_definition` |
 | define a type | `ghidra_type` |
 | make the review visible, end it | `ghidra_publish`, `ghidra_done` |
+
+### 16-bit code in a 32-bit module
+
+The reset vector's code runs in real mode before the switch to protected mode,
+in a module Ghidra loads as `x86:LE:32`. Ghidra decodes it as 32-bit:
+instructions overlap, and the C is noise. The operand and address size are
+not in the bytes but in the x86 context (`opsize`, `addrsize`): `ghidra_code_mode`
+sets them for [start, end), clears the instructions there, decodes the range
+again from `start` without leaving it, and fixes the bodies of the functions
+it touched. `ghidra_disassembly` marks such instructions `bits: 16`. Real-mode
+segments are not modelled: `cs:[F490h]` names F490h, not CS × 16 + F490h —
+say in a comment where an operand really points. The end of the range is
+where the far jump to protected mode is; the protected-mode code after it
+stays 32-bit.
 
 A program's addresses are the ones the PE header declares (see
 `uefi-images.md`, "Addresses"); every tool takes and gives them with the image

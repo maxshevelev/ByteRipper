@@ -115,6 +115,25 @@ final class GhidraHostOwnerTests: XCTestCase {
         XCTAssertEqual(unchanged.reading?.rev, described.reading?.rev)
         XCTAssertEqual(store.verify(), [])
 
+        // A range read as 16-bit code decodes again in that size, says so in
+        // the disassembly, and goes back to 32-bit the same way.
+        let start = try XCTUnwrap(UInt64(entry.dropFirst(2), radix: 16))
+        let range: [String: Any] = ["start": entry, "end": String(format: "0x%llX", start + 0x10), "by": "agent"]
+        func bitsOfFirst() async throws -> Int? {
+            let listing = try JSONSerialization.jsonObject(with: await host.read(module, "/v1/disassembly/\(entry)")) as! [String: Any]
+            return (listing["instructions"] as? [[String: Any]])?.first?["bits"] as? Int
+        }
+        let sixteen = try JSONSerialization.jsonObject(with: await host.write(
+            module, "/v1/set/code-mode", body: JSONSerialization.data(withJSONObject: range.merging(["bits": 16]) { $1 }))) as! [String: Any]
+        XCTAssertGreaterThan(sixteen["instructions"] as? Int ?? 0, 0)
+        XCTAssertEqual(sixteen["functions"] as? [String], [entry])
+        let sixteenBits = try await bitsOfFirst()
+        XCTAssertEqual(sixteenBits, 16)
+        _ = try await host.write(module, "/v1/set/code-mode",
+                                 body: JSONSerialization.data(withJSONObject: range.merging(["bits": 32]) { $1 }))
+        let thirtyTwoBits = try await bitsOfFirst()
+        XCTAssertNil(thirtyTwoBits, "32-bit code in a 32-bit program carries no mark")
+
         let stopped = await host.stop(module)
         XCTAssertTrue(stopped)
         let summaries = await host.summaries()

@@ -267,6 +267,7 @@ public class Owner {
                     case "/v1/set/comment" -> write(exchange, this::setComment);
                     case "/v1/set/data" -> write(exchange, this::setData);
                     case "/v1/set/description" -> write(exchange, this::setDescription);
+                    case "/v1/set/code-mode" -> write(exchange, this::setCodeMode);
                     case "/v1/type" -> write(exchange, this::addType);
                     case "/v1/save" -> write(exchange, body -> {
                         if (program.isChanged()) program.save("save", TaskMonitor.DUMMY);
@@ -402,6 +403,12 @@ public class Owner {
                 item.addProperty("bytes", "");
             }
             item.addProperty("text", instruction.toString());
+            // Code read as 16-bit in a 32-bit program (set/code-mode) says so.
+            ghidra.program.model.lang.Register opsize = program.getProgramContext().getRegister("opsize");
+            if (opsize != null && program.getDefaultPointerSize() == 4) {
+                java.math.BigInteger mode = instruction.getValue(opsize, false);
+                if (mode != null && mode.signum() == 0) item.addProperty("bits", 16);
+            }
             JsonArray references = new JsonArray();
             for (Reference reference : instruction.getReferencesFrom()) {
                 // A stack or register operand is not a place in the module.
@@ -758,6 +765,87 @@ public class Owner {
         answer.addProperty("name", function.getName());
         answer.addProperty("created", created);
         answer.addProperty("size", function.getBody().getNumAddresses());
+        return answer;
+    }
+
+    /**
+     * The code in [start, end) read as 16-bit or as 32-bit x86. A 32-bit
+     * program decodes the reset vector's real-mode code as 32-bit, which
+     * reads it wrongly: the operand and address size live in the x86
+     * context (`opsize`, `addrsize`), not in the bytes. The instructions in
+     * the range are cleared, the context set, the range disassembled again
+     * from `start` without leaving it, and every function that lost or
+     * gained instructions has its body fixed. The segment model is left as
+     * it is: an address is still an offset, not segment × 16 + offset.
+     */
+    private JsonObject setCodeMode(JsonObject body) throws Exception {
+        Address start = address(required(body, "start"));
+        Address end = address(required(body, "end"));
+        int bits = integer(body, "bits", 0);
+        if (bits != 16 && bits != 32) throw new Failure(400, "bits is 16 or 32");
+        if (end.compareTo(start) <= 0) throw new Failure(400, "end is past start: the range is [start, end)");
+        Address last = end.subtract(1);
+        if (!program.getMemory().contains(start, last)) {
+            throw new Failure(400, hex(start) + ".." + hex(end) + " is not all in the program's memory");
+        }
+        ghidra.program.model.lang.Register addrsize = program.getProgramContext().getRegister("addrsize");
+        ghidra.program.model.lang.Register opsize = program.getProgramContext().getRegister("opsize");
+        if (addrsize == null || opsize == null) {
+            throw new Failure(400, program.getLanguageID() + " has no x86 operand-size context");
+        }
+        ghidra.program.model.address.AddressSet range = new ghidra.program.model.address.AddressSet(start, last);
+
+        // Instructions that reach into the range from before it go too:
+        // their bytes are the range's.
+        java.util.Set<Address> touched = new java.util.TreeSet<>();
+        Instruction before = program.getListing().getInstructionContaining(start);
+        Address clearFrom = before != null ? before.getMinAddress() : start;
+        Instruction after = program.getListing().getInstructionContaining(last);
+        Address clearTo = after != null ? after.getMaxAddress() : last;
+        for (Instruction instruction : program.getListing().getInstructions(
+                 new ghidra.program.model.address.AddressSet(clearFrom, clearTo), true)) {
+            Function owner = program.getFunctionManager().getFunctionContaining(instruction.getMinAddress());
+            if (owner != null) touched.add(owner.getEntryPoint());
+        }
+        if (program.getListing().getDefinedDataContaining(start) != null
+            || program.getListing().getDefinedData(range, true).hasNext()) {
+            throw new Failure(409, "defined data lies in " + hex(start) + ".." + hex(end) + ": clear it first");
+        }
+        program.getListing().clearCodeUnits(clearFrom, clearTo, false);
+
+        java.math.BigInteger value = java.math.BigInteger.valueOf(bits == 16 ? 0 : 1);
+        program.getProgramContext().setValue(addrsize, start, last, value);
+        program.getProgramContext().setValue(opsize, start, last, value);
+
+        ghidra.app.cmd.disassemble.DisassembleCommand disassemble =
+            new ghidra.app.cmd.disassemble.DisassembleCommand(new ghidra.program.model.address.AddressSet(start), range, true);
+        disassemble.applyTo(program, TaskMonitor.DUMMY);
+        // What the range lost before `start` and after its last instruction
+        // is decoded again in the mode that was there.
+        if (clearFrom.compareTo(start) < 0) {
+            new ghidra.app.cmd.disassemble.DisassembleCommand(clearFrom, null, true).applyTo(program, TaskMonitor.DUMMY);
+        }
+
+        Function atStart = program.getFunctionManager().getFunctionAt(start);
+        if (atStart != null) touched.add(start);
+        JsonArray functions = new JsonArray();
+        for (Address entry : touched) {
+            Function function = program.getFunctionManager().getFunctionAt(entry);
+            if (function == null) continue;
+            ghidra.app.cmd.function.CreateFunctionCmd.fixupFunctionBody(program, function, TaskMonitor.DUMMY);
+            functions.add(hex(entry));
+        }
+        int decoded = 0;
+        for (Instruction instruction : program.getListing().getInstructions(range, true)) decoded++;
+        if (decoded == 0) throw new Failure(400, "no instruction decodes at " + hex(start) + " as " + bits + "-bit code");
+        why(start, body);
+
+        JsonObject answer = identity();
+        answer.addProperty("start", hex(start));
+        answer.addProperty("end", hex(end));
+        answer.addProperty("bits", bits);
+        answer.addProperty("instructions", decoded);
+        answer.add("functions", functions);
         return answer;
     }
 

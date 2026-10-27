@@ -30,7 +30,7 @@ public enum GhidraTools {
         or `ghidra_open`; read with `ghidra_functions`, `ghidra_function` (decompiled C, parameters and \
         locals with their storage), `ghidra_disassembly`, `ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_type_definition`, \
         `ghidra_description`; write with `ghidra_rename`, `ghidra_function_create`, `ghidra_rename_variable`, `ghidra_signature`, \
-        `ghidra_type`, `ghidra_set_data`, `ghidra_comment`, `ghidra_describe`. `ghidra_publish` makes the review visible to the app — every \
+        `ghidra_type`, `ghidra_set_data`, `ghidra_comment`, `ghidra_describe`, `ghidra_code_mode`. `ghidra_publish` makes the review visible to the app — every \
         ByteRipper that reads this store — as a new revision; publish at coherent checkpoints, not after \
         every rename. `ghidra_done` publishes and ends the session.
 
@@ -66,8 +66,8 @@ public enum GhidraTools {
         Its sections, in this order, headed exactly so: `# <ModuleName>` and a one-paragraph summary; \
         `## Identity` (file GUID, type, image, base, entry, the board and the module's place in the \
         firmware's layout — never the dump file it was read from, the same module is in every dump of \
-        the board — source package and how sure);`## Purpose`; `## Interfaces` (what it consumes and produces — PPIs, protocols, HOBs, \
-        variables, callbacks — a table: interface, GUID, kind, where); `## Flow` (numbered, from the \
+        the board — source package and how sure); `## Purpose`; `## Interfaces` (what it consumes and \
+        produces — PPIs, protocols, HOBs, variables, callbacks — a table: interface, GUID, kind, where); `## Flow` (numbered, from the \
         entry point); `## Internal structure` (functions by role, globals, tables, the review's types); \
         `## Hardware and data`; `## Errors and diagnostics` (status, POST and halt codes, messages, \
         what the bench sees); `## Findings`; `## Open questions`; `## Review status`. A section with \
@@ -331,6 +331,27 @@ public enum GhidraTools {
                    "kind": AgentSchema.choice(["pre", "post", "eol", "plate", "repeatable"], "Default \"pre\".")],
                   required: ["address", "text"]) { arguments in
                 try optional(arguments, ["address", "text", "kind"])
+            },
+            write("ghidra_code_mode", "set/code-mode", "Read a range as 16-bit or 32-bit code",
+                  "Reads the code in [`start`, `end`) as 16-bit or as 32-bit x86. A 32-bit module holds "
+                  + "16-bit code at its reset vector (real mode, before the switch to protected mode), "
+                  + "which Ghidra decodes as 32-bit and so gets wrong: overlapping instructions, nonsense "
+                  + "C. The instructions in the range are cleared and decoded again from `start` in the "
+                  + "given size, without leaving the range; functions there get their bodies fixed. "
+                  + "Addresses stay offsets: real-mode segments are not modelled, so a `cs:[F490h]` "
+                  + "operand names F490h, not where it lands. `ghidra_disassembly` marks 16-bit "
+                  + "instructions `bits: 16`. Defined data in the range is refused: clear it first.",
+                  ["start": AgentSchema.string("The first address of the code, e.g. \"0x9DFE6E0\"."),
+                   "end": AgentSchema.string("The first address past it: the range is [start, end)."),
+                   "bits": ["type": "integer", "enum": [16, 32], "description": "The operand and address size."],
+                   "reason": AgentSchema.string("Why, in a few words: what shows the code is 16-bit.")],
+                  required: ["start", "end", "bits"]) { arguments in
+                var body = try optional(arguments, ["start", "end", "reason"])
+                let bits = try arguments.integer("bits")
+                guard bits == 16 || bits == 32 else { throw AgentToolError("`bits` is 16 or 32.") }
+                body["bits"] = .int(bits)
+                body["by"] = "agent"
+                return body
             },
             write("ghidra_set_data", "set/data", "Name or type a datum",
                   "Names and/or types the datum at `address`, e.g. a GUID or a table.",

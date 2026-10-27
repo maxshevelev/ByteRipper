@@ -77,7 +77,7 @@ final class MCPEndpointTests: XCTestCase {
         XCTAssertEqual(status, 200)
         let names = listed?["result"]?["tools"]?.arrayValue?.compactMap { $0["name"]?.stringValue } ?? []
         XCTAssertTrue(names.contains("ghidra_rename_variable"), "\(names)")
-        XCTAssertEqual(names.count, 20)
+        XCTAssertEqual(names.count, 21)
 
         _ = try await call(7, "ghidra_describe", ["module": .string(module), "section": "Flow", "text": "1. Entry."])
         let sent = try XCTUnwrap(backend.writes.all.last { $0.0 == "set/description" }?.1)
@@ -122,6 +122,23 @@ final class MCPEndpointTests: XCTestCase {
 
         let wrong = try await call(8, "ghidra_signature", [
             "module": .string(module), "address": "0x10", "signature": "VOID F(UINT32 A)", "storage": [4]])
+        XCTAssertEqual(wrong["isError"], true)
+    }
+
+    /// A range read as 16-bit code reaches the owner with its size as a
+    /// number; any other size is refused before it gets there.
+    func testACodeModeCarriesItsRangeAndSize() async throws {
+        _ = try await call(9, "ghidra_code_mode", [
+            "module": .string(module), "start": "0x9DFE6E0", "end": "0x9DFE7D0", "bits": 16,
+            "reason": "reset vector, real mode"])
+        let sent = try XCTUnwrap(backend.writes.all.last { $0.0 == "set/code-mode" }?.1)
+        let body = try JSONSerialization.jsonObject(with: sent) as? [String: Any]
+        XCTAssertEqual(body?["start"] as? String, "0x9DFE6E0")
+        XCTAssertEqual(body?["end"] as? String, "0x9DFE7D0")
+        XCTAssertEqual(body?["bits"] as? Int, 16)
+
+        let wrong = try await call(10, "ghidra_code_mode", [
+            "module": .string(module), "start": "0x10", "end": "0x20", "bits": 64])
         XCTAssertEqual(wrong["isError"], true)
     }
 

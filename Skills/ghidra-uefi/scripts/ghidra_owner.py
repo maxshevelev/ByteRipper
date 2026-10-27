@@ -478,6 +478,13 @@ def main(argv: list[str]) -> int:
     describe.add_argument("module")
     describe.add_argument("text", help="the Markdown, or @file to read it from a file; empty clears")
     describe.add_argument("--section", help="the `## ` heading whose body the text replaces")
+    mode = sub.add_parser("code-mode", help="read [start, end) as 16-bit or 32-bit x86 code")
+    mode.add_argument("module")
+    mode.add_argument("start")
+    mode.add_argument("end", help="the first address past the range")
+    mode.add_argument("bits", type=int, choices=[16, 32])
+    mode.add_argument("--reason")
+    mode.add_argument("--by", choices=["agent", "person"], default="agent")
     rel = sub.add_parser("release", help="publish and give the write lease back")
     rel.add_argument("module")
     rel.add_argument("--by", choices=["agent", "person"], default="agent")
@@ -562,6 +569,9 @@ def main(argv: list[str]) -> int:
                                  {"text": Path(args.text[1:]).read_text(encoding="utf-8")
                                   if args.text.startswith("@") else args.text,
                                   "section": args.section}),
+            "code-mode": lambda: ("/v1/set/code-mode",
+                                  {"start": args.start, "end": args.end, "bits": args.bits,
+                                   "reason": args.reason, "by": args.by}),
         }
         if args.command in writes:
             path, body = writes[args.command]()

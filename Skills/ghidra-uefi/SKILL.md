@@ -109,7 +109,8 @@ type as the program, the shared review archive and EDK2 hold it — what a
 `ghidra_function_create` (a function where only a table points — a services
 table's or a PPI's slot), `ghidra_rename_variable`, `ghidra_signature`,
 `ghidra_type`, `ghidra_set_data`,
-`ghidra_comment`; `ghidra_description` and `ghidra_describe` for the module
+`ghidra_comment`, `ghidra_code_mode` (a range read as 16-bit or 32-bit code — the
+reset vector's real-mode code in a 32-bit module); `ghidra_description` and `ghidra_describe` for the module
 description (the whole document, or one `## ` section); `ghidra_publish` at a
 coherent checkpoint, `ghidra_done` at the end. The rules a review keeps are in "What a review makes of the code".
 
@@ -158,8 +159,10 @@ byte for byte what `code_artifact.py` stores. The owner saves and exits after
 
 The review is made through the same owner: `rename`, `rename-var` (a local by
 `--storage` and `--first-use` as `/v1/function` lists them, a parameter by
-`--ordinal`), `comment`, `signature`, `data`, `type` and `describe` (the module
-description, whole or `--section`; `@file` reads it from a file). The first write takes
+`--ordinal`), `comment`, `signature`, `data`, `type`, `code-mode` (`start end
+16|32`: the range [start, end) decoded again as 16-bit or 32-bit x86) and
+`describe` (the module description, whole or `--section`; `@file` reads it
+from a file). The first write takes
 the module's write lease; `publish` stores the artifact with a `reading` —
 this project's revision — and the review document; `release` publishes and
 gives the lease back. A name Ghidra would make unique (`Foo_1`) is refused,
