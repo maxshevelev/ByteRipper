@@ -1625,6 +1625,7 @@ import ToolModuleKit
         cTextView.setSelectedRange(NSRange(location: 0, length: 0))
         cTextView.scroll(.zero)
         shownCTokens = tokensShown
+        cTextView.explainable = explainableInC()
         // A parameter or a local is its function's alone: another function's
         // `Status` is another variable.
         if case .variable = highlightedSymbol, highlightedIn != state.function { highlightedSymbol = nil }
@@ -1751,6 +1752,36 @@ import ToolModuleKit
         RunLoop.main.perform(inModes: [.default]) { [weak self] in
             guard let self else { return }
             self.showExplanation(explained, relativeTo: inTable, of: self.table)
+        }
+    }
+
+    /// The names in the C on screen that a click explains: the named
+    /// constants and the types the artifact holds, and the fields of those.
+    private func explainableInC() -> [NSRange] {
+        guard let index = state.function else { return [] }
+        var ranges = shownCTokens.compactMap { token -> NSRange? in
+            guard token.kind == .constant || token.kind == .type,
+                  model.explanation(ofC: CodeToken(start: token.start - cShift, length: token.length,
+                                                   kind: token.kind), inFunction: index) != nil
+            else { return nil }
+            return NSRange(location: token.start, length: token.length)
+        }
+        for field in model.functions[index].cFields
+        where model.explanation(ofField: field, inFunction: index) != nil {
+            ranges.append(NSRange(location: field.start + cShift, length: field.length))
+        }
+        return ranges
+    }
+
+    /// The numbers of a listing row that the review named.
+    func explainableInListing(_ row: (text: String, tokens: [CodeToken]), line: Int) -> [NSRange] {
+        let units = Array(row.text.utf16)
+        return row.tokens.compactMap { token in
+            guard token.kind == .constant, token.start + token.length <= units.count,
+                  let value = Self.listingNumber(String(decoding: units[token.start..<token.start + token.length],
+                                                        as: UTF16.self)),
+                  model.explanation(ofConstant: value, onLine: line) != nil else { return nil }
+            return NSRange(location: token.start, length: token.length)
         }
     }
 
@@ -1936,7 +1967,8 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
             shown.text += mark
         }
         cell.line.show(shown.text, tokens: shown.tokens, font: Self.codeFont(),
-                       highlighted: highlightedRanges(in: shown.tokens, of: shown.text))
+                       highlighted: highlightedRanges(in: shown.tokens, of: shown.text),
+                       explainable: explainableInListing((shown.text, shown.tokens), line: global))
         cell.line.onClick = { [weak self] link, event in
             self?.clickListing(on: link, event: event, line: global) ?? false
         }

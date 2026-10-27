@@ -1285,6 +1285,21 @@ final class CodePaneViewTests: XCTestCase {
             return view.shownExplanation
         }
 
+        // What explains itself is marked: underlined under the pointer, with
+        // the question-mark pointer; a parameter is not.
+        let textView = try XCTUnwrap(first(CodeTextView.self, in: view) { _ in true })
+        let shown = textView.string as NSString
+        XCTAssertEqual(Set(textView.explainable.map { shown.substring(with: $0) }),
+                       ["SEC_SERIAL_DEVICE_INFO", "PCI_CONFIG_ADDRESS", "BaudRate"])
+        let name = try XCTUnwrap(textView.explainable.first { shown.substring(with: $0) == "PCI_CONFIG_ADDRESS" })
+        let glyphs = textView.layoutManager!.glyphRange(forCharacterRange: name, actualCharacterRange: nil)
+        let box = textView.layoutManager!.boundingRect(forGlyphRange: glyphs, in: textView.textContainer!)
+        textView.hover(at: NSPoint(x: box.midX + textView.textContainerOrigin.x,
+                                   y: box.midY + textView.textContainerOrigin.y))
+        XCTAssertEqual(textView.hoveredLink, name)
+        XCTAssertEqual(view.explainableInListing(("MOV DX,0xcf8", [CodeToken(start: 7, length: 5, kind: .constant)]),
+                                                 line: 0), [NSRange(location: 7, length: 5)])
+
         let constant = try XCTUnwrap(try clickOn("PCI_CONFIG_ADDRESS"))
         XCTAssertEqual(constant.text, "PCI configuration address port.")
         XCTAssertEqual(constant.uses.map(\.line), [0])

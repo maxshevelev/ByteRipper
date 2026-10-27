@@ -17,10 +17,13 @@ import Localization
     /// Goes to a use: the instruction's line in the listing.
     var onUse: ((Int) -> Void)?
 
-    /// The widest a popover gets; a type's long line scrolls inside it.
-    private static let width: CGFloat = 460
-    private static let codeHeight: CGFloat = 240
     private static let mostUses = 12
+
+    /// The popover's type follows the code's zoom: the body a little larger
+    /// than the code, as Xcode's Quick Help is, the name larger still.
+    private static var size: CGFloat { CodePaneView.codeFont().pointSize }
+    private static var width: CGFloat { (size * 40).rounded() }
+    private static var inset: CGFloat { (size * 1.3).rounded() }
 
     init(explanation: CodeExplanation, model: CodeModel) {
         self.explanation = explanation
@@ -45,49 +48,53 @@ import Localization
     func close() { popover.performClose(nil) }
 
     override func loadView() {
+        let size = Self.size
+        let inner = Self.width - 2 * Self.inset
         let stack = NSStackView()
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 6
-        stack.edgeInsets = NSEdgeInsets(top: 12, left: 14, bottom: 12, right: 14)
+        stack.spacing = (size * 0.6).rounded()
+        stack.edgeInsets = NSEdgeInsets(top: Self.inset, left: Self.inset, bottom: Self.inset, right: Self.inset)
 
         let name = NSTextField(labelWithString: explanation.name)
-        name.font = .monospacedSystemFont(ofSize: 13, weight: .semibold)
+        name.font = .systemFont(ofSize: (size * 1.6).rounded(), weight: .bold)
         name.isSelectable = true
         name.lineBreakMode = .byTruncatingMiddle
+        name.widthAnchor.constraint(lessThanOrEqualToConstant: inner).isActive = true
         stack.addArrangedSubview(name)
 
         let facts = NSTextField(labelWithString: factsText())
-        facts.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        facts.font = .monospacedSystemFont(ofSize: size, weight: .regular)
         facts.textColor = .secondaryLabelColor
         facts.isSelectable = true
+        facts.lineBreakMode = .byTruncatingTail
+        facts.widthAnchor.constraint(lessThanOrEqualToConstant: inner).isActive = true
         stack.addArrangedSubview(facts)
 
         let words = NSTextField(wrappingLabelWithString: explanation.text
                                 ?? L("The review has not explained this name yet."))
-        words.font = .systemFont(ofSize: 12)
+        words.font = .systemFont(ofSize: size + 2)
         words.textColor = explanation.text == nil ? .secondaryLabelColor : .labelColor
         words.isSelectable = true
-        words.preferredMaxLayoutWidth = Self.width - 28
+        words.preferredMaxLayoutWidth = inner
         stack.addArrangedSubview(words)
-        stack.setCustomSpacing(10, after: words)
 
         if let c = explanation.c {
-            let code = codeView(c)
+            stack.setCustomSpacing(size, after: words)
+            let code = codeBox(c, width: inner)
             stack.addArrangedSubview(code)
-            code.widthAnchor.constraint(equalToConstant: Self.width - 28).isActive = true
+            stack.setCustomSpacing(size, after: code)
         }
 
         if !explanation.uses.isEmpty {
             let header = NSTextField(labelWithString: L("Used at"))
-            header.font = .systemFont(ofSize: 11, weight: .semibold)
-            header.textColor = .secondaryLabelColor
+            header.font = .systemFont(ofSize: size + 2, weight: .semibold)
             stack.addArrangedSubview(header)
             for use in explanation.uses.prefix(Self.mostUses) {
                 let title = "\(model.functions[use.function].name) · \(model.displayAddress(use.address))"
                 let button = NSButton(title: title, target: self, action: #selector(goToUse(_:)))
                 button.isBordered = false
-                button.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+                button.font = .monospacedSystemFont(ofSize: size, weight: .regular)
                 button.contentTintColor = .linkColor
                 button.tag = use.line
                 stack.addArrangedSubview(button)
@@ -95,7 +102,7 @@ import Localization
             if explanation.uses.count > Self.mostUses {
                 let more = NSTextField(labelWithString: String(
                     format: L("and %1$@ more"), "\(explanation.uses.count - Self.mostUses)"))
-                more.font = .systemFont(ofSize: 11)
+                more.font = .systemFont(ofSize: size)
                 more.textColor = .secondaryLabelColor
                 stack.addArrangedSubview(more)
             }
@@ -123,9 +130,11 @@ import Localization
         }
     }
 
-    /// The type's C, coloured as the code is, the field asked about marked.
-    private func codeView(_ c: String) -> NSView {
-        let font = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
+    /// The type's C on the page's own light ground in a rounded box, as
+    /// Xcode sets a declaration: coloured as the code is, the field asked
+    /// about marked, a long line scrolling inside.
+    private func codeBox(_ c: String, width: CGFloat) -> NSView {
+        let font = CodePaneView.codeFont()
         var links: [CodeLink] = []
         let text = NSMutableAttributedString(attributedString: CodeColors.attributed(
             c, tokens: model.lexC(c), font: font, links: &links, asTextLinks: false))
@@ -135,13 +144,15 @@ import Localization
         }
         let scroll = NSTextView.scrollableTextView()
         scroll.hasHorizontalScroller = true
+        scroll.autohidesScrollers = true
         scroll.borderType = .noBorder
         scroll.drawsBackground = false
         let textView = scroll.documentView as! NSTextView
         textView.isEditable = false
         textView.isSelectable = true
         textView.drawsBackground = false
-        textView.textContainerInset = .zero
+        let pad = (font.pointSize * 0.8).rounded()
+        textView.textContainerInset = NSSize(width: pad, height: pad)
         textView.textContainer?.widthTracksTextView = false
         textView.textContainer?.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude,
                                                       height: CGFloat.greatestFiniteMagnitude)
@@ -149,9 +160,21 @@ import Localization
         textView.textStorage?.setAttributedString(text)
         textView.layoutManager?.ensureLayout(for: textView.textContainer!)
         let used = textView.layoutManager?.usedRect(for: textView.textContainer!).height ?? 0
-        let height = min(ceil(used) + 4, Self.codeHeight)
-        scroll.heightAnchor.constraint(equalToConstant: max(height, 16)).isActive = true
-        return scroll
+        let height = min(ceil(used) + 2 * pad + 2, (font.pointSize * 20).rounded())
+
+        let box = CodeSnippetBox()
+        box.translatesAutoresizingMaskIntoConstraints = false
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        box.addSubview(scroll)
+        NSLayoutConstraint.activate([
+            scroll.leadingAnchor.constraint(equalTo: box.leadingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: box.trailingAnchor),
+            scroll.topAnchor.constraint(equalTo: box.topAnchor),
+            scroll.bottomAnchor.constraint(equalTo: box.bottomAnchor),
+            box.widthAnchor.constraint(equalToConstant: width),
+            box.heightAnchor.constraint(equalToConstant: height)
+        ])
+        return box
     }
 
     /// The characters of a field's line in the type's C, `/* 0x04 */ … Name;`.
@@ -172,5 +195,29 @@ import Localization
     @objc private func goToUse(_ sender: NSButton) {
         close()
         onUse?(sender.tag)
+    }
+}
+
+/// The light rounded ground a code snippet sits on in the popover: the
+/// text background, a hairline border, as Xcode's Quick Help draws one.
+final class CodeSnippetBox: NSView {
+    override var wantsUpdateLayer: Bool { true }
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.cornerRadius = 6
+        layer?.borderWidth = 1
+        layer?.masksToBounds = true
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override func updateLayer() {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
+            layer?.borderColor = NSColor.separatorColor.cgColor
+        }
     }
 }

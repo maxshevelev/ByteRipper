@@ -18,9 +18,24 @@ final class CodeTextView: NSTextView {
         tracking = area
     }
 
+    /// The names that explain themselves on a click — a named constant, a
+    /// type, a field: underlined under the pointer like a link, with the
+    /// question-mark pointer.
+    var explainable: [NSRange] = [] {
+        didSet { underline(nil) }
+    }
+
     override func mouseMoved(with event: NSEvent) {
         super.mouseMoved(with: event)
-        underline(linkAt: convert(event.locationInWindow, from: nil))
+        let point = convert(event.locationInWindow, from: nil)
+        underline(linkAt: point)
+        if let hovered, explainable.contains(hovered) { CodeHelpCursor.cursor.set() }
+    }
+
+    /// The name that explains itself under `point`, if one is.
+    func explainableRange(at point: NSPoint) -> NSRange? {
+        guard let character = characterIndex(atViewPoint: point) else { return nil }
+        return explainable.first { NSLocationInRange(character, $0) }
     }
 
     override func mouseExited(with event: NSEvent) {
@@ -120,7 +135,7 @@ final class CodeTextView: NSTextView {
     }
 
     private func underline(linkAt point: NSPoint?) {
-        underline(point.flatMap(linkRange(at:)))
+        underline(point.flatMap { linkRange(at: $0) ?? explainableRange(at: $0) })
     }
 
     private func underline(_ range: NSRange?) {
@@ -141,6 +156,7 @@ final class CodeTextView: NSTextView {
         super.didChangeText()
         hovered = nil
         highlighted = []
+        explainable = []
     }
 
     func hover(at point: NSPoint?) { underline(linkAt: point) }

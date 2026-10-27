@@ -23,14 +23,19 @@ final class CodeLineView: NSView {
     /// and where it is drawn — for the pane to say what the token stands for.
     var onExplain: ((CodeToken, String, NSRect) -> Void)?
     private var tokens: [CodeToken] = []
+    /// The numbers the review named: underlined under the pointer like a
+    /// link, with the question-mark pointer; a click explains them.
+    private(set) var explainable: [NSRange] = []
     /// The occurrences of the symbol the reader clicked, drawn behind the text.
     private(set) var highlighted: [NSRange] = []
 
     override var isFlipped: Bool { true }
 
-    func show(_ text: String, tokens: [CodeToken], font: NSFont, highlighted: [NSRange] = []) {
+    func show(_ text: String, tokens: [CodeToken], font: NSFont, highlighted: [NSRange] = [],
+              explainable: [NSRange] = []) {
         string = text
         self.tokens = tokens
+        self.explainable = explainable
         self.highlighted = highlighted
         links = []
         attributed = CodeColors.attributed(text, tokens: tokens, font: font,
@@ -61,7 +66,7 @@ final class CodeLineView: NSView {
 
     /// Underlines the link under `point`, or none.
     func hover(at point: NSPoint?) {
-        let range = point.flatMap(linkRange(at:))
+        let range = point.flatMap { linkRange(at: $0) ?? explainableRange(at: $0) }
         guard range != hoveredLink else { return }
         hoveredLink = range
         needsDisplay = true
@@ -122,6 +127,13 @@ final class CodeLineView: NSView {
         return range
     }
 
+    /// The named number under `point`, if one is.
+    func explainableRange(at point: NSPoint) -> NSRange? {
+        guard let token = token(at: point) else { return nil }
+        let range = NSRange(location: token.start, length: token.length)
+        return explainable.contains(range) ? range : nil
+    }
+
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         if onClick?(link(at: point), event) == true { return }
@@ -165,6 +177,9 @@ final class CodeLineView: NSView {
             let end = CTLineGetOffsetForStringIndex(line, range.location + range.length, nil)
             addCursorRect(NSRect(x: start, y: 0, width: end - start, height: bounds.height),
                           cursor: .pointingHand)
+        }
+        for range in explainable where range.location + range.length <= attributed.length {
+            addCursorRect(rect(of: range), cursor: CodeHelpCursor.cursor)
         }
     }
 }
