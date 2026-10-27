@@ -85,7 +85,11 @@ A list of facts, each with its evidence:
 
 - file GUID and name, FFS file type (PEIM, DXE driver, SEC core…);
 - image: PE32/PE32+/TE, machine, image base, entry point, size;
-- where it was found: the dump and the path of the node in the tree;
+- the board (vendor, model, board number) and where the module sits in the
+  firmware's layout: the region, the volume, the path of names in the tree,
+  the offset in the volume or in an unpacked body. Never the dump file it was
+  read from: a module is the same in every dump of the board, the review is
+  of the module, and a file name tells the reader nothing about either;
 - source: the package it is built from (`MdeModulePkg/Core/Pei`, AMI
   `CpuPei`…) and how sure that is — matched strings, a DEBUG file name, a
   known GUID, the layout of a known library;

@@ -64,8 +64,9 @@ public enum GhidraTools {
     /// `reference/description.md` sets them; a model reads this.
     static let descriptionFormat = """
         Its sections, in this order, headed exactly so: `# <ModuleName>` and a one-paragraph summary; \
-        `## Identity` (file GUID, type, image, base, entry, where it was found, source package and how \
-        sure); `## Purpose`; `## Interfaces` (what it consumes and produces — PPIs, protocols, HOBs, \
+        `## Identity` (file GUID, type, image, base, entry, the board and the module's place in the \
+        firmware's layout — never the dump file it was read from, the same module is in every dump of \
+        the board — source package and how sure);`## Purpose`; `## Interfaces` (what it consumes and produces — PPIs, protocols, HOBs, \
         variables, callbacks — a table: interface, GUID, kind, where); `## Flow` (numbered, from the \
         entry point); `## Internal structure` (functions by role, globals, tables, the review's types); \
         `## Hardware and data`; `## Errors and diagnostics` (status, POST and halt codes, messages, \
