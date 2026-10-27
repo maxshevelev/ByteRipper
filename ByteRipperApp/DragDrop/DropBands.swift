@@ -1,13 +1,15 @@
 import Cocoa
 import Localization
 
-/// One targeted drop zone's visual: a quiet milky plate at idle, flooded with a
-/// translucent accent-blue fill on hover, and a caption on its own frosted-glass
+/// One targeted drop zone's visual: a pane of clear glass at idle (macOS 26 on;
+/// a quiet translucent plate before it), tinted accent-blue on hover, and a caption on its own frosted-glass
 /// plate so the label stays readable wherever the fill and the file content
 /// behind it are busy (§4.3). Purely visual — the drop handling lives in the
 /// owning region view.
 final class DropTargetView: NSView {
     private let plate = NSVisualEffectView()
+    /// The clear glass the zone is made of, from macOS 26.
+    private var glass: NSView?
     private let label = NSTextField(labelWithString: "")
 
     /// How much of the dump an idle zone lets through. Every zone a file can go
@@ -22,6 +24,9 @@ final class DropTargetView: NSView {
     /// place of its own. Where two zones meet, each takes half.
     static let edgePadding: CGFloat = 10
 
+    /// The plate's corners.
+    static let cornerRadius: CGFloat = 14
+
     /// Whether the zone is showing its hover fill. Held so a theme switch can
     /// repaint the plate without forgetting whether it was lit (§3.1).
     private var highlighted = false
@@ -29,10 +34,30 @@ final class DropTargetView: NSView {
     init(title: String) {
         super.init(frame: .zero)
         wantsLayer = true
-        // While idle the zone is a quiet milky plate; the blue fill appears on
-        // hover only (§4.3). The caption sits on its own frosted plate, so
-        // neither fill ever bleeds into the text.
-        layer?.cornerRadius = 8
+        // While idle the zone is a quiet plate; the blue fill appears on hover
+        // only (§4.3). The caption sits on its own frosted plate, so neither
+        // fill ever bleeds into the text.
+        layer?.cornerRadius = Self.cornerRadius
+        layer?.cornerCurve = .continuous
+        // From macOS 26 the plate is the system's clear glass: what lies
+        // under it shows through, lightly frosted, and the hover tints the
+        // glass rather than painting over it. Before 26 there is no glass with
+        // a blur that light — the materials blur the dump out of reading — so
+        // the plate is a translucent fill.
+        if #available(macOS 26.0, *) {
+            let glass = NSGlassEffectView()
+            glass.style = .clear
+            glass.cornerRadius = Self.cornerRadius
+            glass.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(glass)
+            NSLayoutConstraint.activate([
+                glass.leadingAnchor.constraint(equalTo: leadingAnchor),
+                glass.trailingAnchor.constraint(equalTo: trailingAnchor),
+                glass.topAnchor.constraint(equalTo: topAnchor),
+                glass.bottomAnchor.constraint(equalTo: bottomAnchor),
+            ])
+            self.glass = glass
+        }
         applyPlateColors()
 
         // The frosted plate: the standard popover material, rounded, hugging
@@ -43,7 +68,8 @@ final class DropTargetView: NSView {
         plate.blendingMode = .withinWindow
         plate.state = .active
         plate.wantsLayer = true
-        plate.layer?.cornerRadius = 6
+        plate.layer?.cornerRadius = 8
+        plate.layer?.cornerCurve = .continuous
         plate.layer?.masksToBounds = true
         plate.translatesAutoresizingMaskIntoConstraints = false
 
@@ -160,6 +186,14 @@ final class DropTargetView: NSView {
         // zone up at once, the edges are what tell them apart.
         layer?.borderWidth = highlighted ? 2 : 1.5
         effectiveAppearance.performAsCurrentDrawingAppearance {
+            if #available(macOS 26.0, *), let glass = glass as? NSGlassEffectView {
+                glass.tintColor = highlighted ? NSColor.controlAccentColor.withAlphaComponent(0.3) : nil
+                layer?.backgroundColor = nil
+                layer?.borderColor = (highlighted
+                    ? NSColor.controlAccentColor
+                    : NSColor.tertiaryLabelColor).cgColor
+                return
+            }
             layer?.backgroundColor = (highlighted
                 ? NSColor.controlAccentColor.withAlphaComponent(0.25)
                 : NSColor.windowBackgroundColor.withAlphaComponent(Self.idleFillAlpha)).cgColor
