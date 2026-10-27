@@ -111,7 +111,7 @@ tool-module's pure target (the query handlers).
   hex everywhere and should not convert them back.
 - The bounds: every list takes `limit` and returns `truncated` and `total`
   when it can count them; a byte read is capped at 4 KiB; an answer over
-  24 KiB is not sent, and the model is told to ask for less.
+  the bound (24 KiB by default, 96 KiB in the app) is not sent, and the model is told to ask for less.
 
 Nothing here knows about dumps.
 

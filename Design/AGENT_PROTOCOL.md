@@ -47,9 +47,11 @@ Recorded against: Claude Code 2.1.292 (modern; `RecordedClientTests`).
   what to do instead. Protocol errors (`-32602` unknown tool or bad params,
   `-32601` unknown method, `-32022` unsupported version) are for malformed
   requests only.
-- **Bounds**: an answer is at most 24 KiB; a byte read is at most 4096 bytes.
+- **Bounds**: an answer is at most 96 KiB (the library's default is 24 KiB;
+  the app and the analysis server raise it so a large function's C is one
+  answer); a byte read is at most 4096 bytes.
 - **Lists are paged.** A list takes `limit`, a ceiling: a page stops at
-  `limit` items or at the item that would take the answer over 24 KiB,
+  `limit` items or at the item that would take the answer over the bound,
   whichever comes first. Every page ends with `next` — null when nothing is
   left, otherwise a cursor to pass back as `after` — and a page the size cut
   short says `truncated: "size"`. A cursor is good while the documents and

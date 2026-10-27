@@ -61,7 +61,10 @@ final class AgentService {
     private(set) lazy var server = AgentServer(
         info: AgentServerInfo(name: "byteripper", version: Self.appVersion, title: "ByteRipper"),
         instructions: Self.instructions,
-        tools: catalogue.map { trimming(linking(noted($0.tool))) })
+        tools: catalogue.map { trimming(linking(noted($0.tool))) },
+        // The analysis server's bound: a large function's C or listing is one
+        // answer, which at 24 KiB a review could not read at all.
+        limits: .init(maxAnswerBytes: 96 << 10))
 
     /// Every tool, in the order `tools/list` gives them, with where it comes
     /// from and what it does — what the Agent window's Tools page lists.
