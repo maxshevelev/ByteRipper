@@ -25,7 +25,7 @@ CAS, and its project lock keeps the owner off the project.
 | open one, by node, image or SHA-256 | `ghidra_open` |
 | all functions | `ghidra_functions` |
 | C, parameters, locals and their storage | `ghidra_function` |
-| instructions around an address | `ghidra_disassembly` |
+| instructions around an address | `ghidra_disassembly` (a large function in pages: `limit`, then `from` = `next`) |
 | who refers to an address | `ghidra_xrefs` |
 | data, strings | `ghidra_data`, `ghidra_strings` |
 | rename a function, a parameter, a local | `ghidra_rename`, `ghidra_rename_variable` |

@@ -170,15 +170,22 @@ public enum GhidraTools {
             AgentTool(
                 name: "ghidra_disassembly",
                 title: "Read a function's instructions",
-                description: "The instructions of the function at `address`, with their bytes and references.",
+                description: "The instructions of the function at `address`, with their bytes, references and "
+                    + "the names of their constants (`equates`). A large function comes in pages: `limit` "
+                    + "instructions from `from`; `next` is the address to pass as `from` for the rest.",
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,
-                    "address": AgentSchema.string("An address in the function.")
+                    "address": AgentSchema.string("An address in the function."),
+                    "from": AgentSchema.string("The first instruction of the page. Default: the function's first."),
+                    "limit": AgentSchema.integer("The most instructions in the page. Default: all.")
                 ], required: ["module", "address"])
             ) { call in
                 let module = try module(call.arguments)
                 let address = try call.arguments.string("address")
-                return try await answer { try await backend.readCall(module, "disassembly/\(address)", query: [:]) }
+                var query: [String: String] = [:]
+                if let from = try call.arguments.optionalString("from") { query["from"] = from }
+                if call.arguments.has("limit") { query["limit"] = String(try call.arguments.integer("limit")) }
+                return try await answer { try await backend.readCall(module, "disassembly/\(address)", query: query) }
             },
             AgentTool(
                 name: "ghidra_xrefs",

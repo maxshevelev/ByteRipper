@@ -170,6 +170,15 @@ final class MCPEndpointTests: XCTestCase {
         XCTAssertEqual(body?["enum_comment"] as? String, "FCH legacy I/O ports")
     }
 
+    /// A large function's instructions come in pages: `limit` and `from` reach the owner.
+    func testADisassemblyIsReadInPages() async throws {
+        let result = try await call(16, "ghidra_disassembly", [
+            "module": .string(module), "address": "0x9DFE7D2", "from": "0x9DFE900", "limit": 50])
+        let text = String(decoding: try JSONEncoder().encode(result), as: UTF8.self)
+        XCTAssertTrue(text.contains(#"\"limit\":\"50\""#), text)
+        XCTAssertTrue(text.contains(#"disassembly\/0x9DFE7D2"#), text)
+    }
+
     /// A type's description and its fields' comments reach the owner; a
     /// type is named by its C or, to comment one the module holds, by name.
     func testATypeCarriesItsDescriptionAndComments() async throws {

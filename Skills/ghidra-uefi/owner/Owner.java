@@ -245,7 +245,7 @@ public class Owner {
                 if (path.equals("/v1/hello")) { json(exchange, 200, hello()); return; }
                 if (path.equals("/v1/functions")) { json(exchange, 200, functions(query)); return; }
                 if (path.startsWith("/v1/function/")) { json(exchange, 200, function(path.substring(13))); return; }
-                if (path.startsWith("/v1/disassembly/")) { json(exchange, 200, disassembly(path.substring(16))); return; }
+                if (path.startsWith("/v1/disassembly/")) { json(exchange, 200, disassembly(path.substring(16), query)); return; }
                 if (path.equals("/v1/xrefs")) { json(exchange, 200, xrefs(query)); return; }
                 if (path.equals("/v1/data")) { json(exchange, 200, data(query, false)); return; }
                 if (path.equals("/v1/strings")) { json(exchange, 200, data(query, true)); return; }
@@ -425,12 +425,34 @@ public class Owner {
         return list;
     }
 
-    private JsonObject disassembly(String text) throws Failure {
+    /**
+     * The function's instructions, all of them or a page: `from` (an address
+     * in the function) and `limit`. A page that stops short names the next
+     * instruction in `next`, which a client passes back as `from`: a large
+     * function does not fit in one answer.
+     */
+    private JsonObject disassembly(String text, Map<String, String> query) throws Failure {
         Function function = functionAt(text);
+        Address from = query.containsKey("from") ? address(query.get("from")) : null;
+        int limit = Integer.MAX_VALUE;
+        if (query.containsKey("limit")) {
+            try {
+                limit = Integer.parseInt(query.get("limit"));
+            } catch (NumberFormatException error) {
+                throw new Failure(400, "limit is a number");
+            }
+            if (limit < 1) throw new Failure(400, "limit is at least 1");
+        }
         JsonArray instructions = new JsonArray();
+        String next = null;
         InstructionIterator iterator = program.getListing().getInstructions(function.getBody(), true);
         while (iterator.hasNext()) {
             Instruction instruction = iterator.next();
+            if (from != null && instruction.getAddress().compareTo(from) < 0) continue;
+            if (instructions.size() == limit) {
+                next = hex(instruction.getAddress());
+                break;
+            }
             JsonObject item = new JsonObject();
             item.addProperty("address", hex(instruction.getAddress()));
             try {
@@ -467,6 +489,7 @@ public class Owner {
         JsonObject answer = identity();
         answer.addProperty("entry", hex(function.getEntryPoint()));
         answer.add("instructions", instructions);
+        if (next != null) answer.addProperty("next", next);
         return answer;
     }
 
