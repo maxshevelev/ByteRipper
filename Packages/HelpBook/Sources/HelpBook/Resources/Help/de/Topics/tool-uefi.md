@@ -1,4 +1,4 @@
-@source-sha 5f49eaf217276a64489766022cfe3b2ef052cb02974a3f0ead29587102c3419a
+@source-sha 619899ddf4a63025599c87472482113c714f1ead2536bb7b455f6b858358550e
 # UEFI-Struktur
 
 > Die Karte eines Firmware-Images: welche Region, welches Volume, welche Datei und wo.
@@ -53,7 +53,7 @@ Die Ergebnisse öffnen sich in einem Bereich unter dem Baum, so wie sich die **S
 Rechtsklick auf einen Knoten:
 
 - Den Knoten **öffnen**, oder nur seinen Rumpf, als [[topic:fragments|Fragment-Bereich]]. Bei einem Knoten in einer komprimierten Sektion nennen die Einträge die Bytes entpackt: **„…“ (entpackt) öffnen** und **Rumpf von „…“ (entpackt) öffnen**. Bei einem kodiert gespeicherten [[term:lenv|LENV]]-Block und seinen Einträgen sagen sie, dass es die Bytes sind, wie die Datei sie speichert: **„…“ (kodiert) öffnen** und **Rumpf von „…“ (kodiert) öffnen**; den dekodierten Block öffnet **„…“ (dekodiert) öffnen** ([[topic:lenovo-dmi|Lenovo DMI]]).
-- **Mit Code öffnen** bei einem TE/PE32-Image, für dessen Bytes eine Codeanalyse gespeichert ist: die Bytes des Moduls und der Code nebeneinander in einem Fragment-Bereich. Die Analyse ist schreibgeschützt; **Rumpf öffnen** wird für dieses Image nicht angeboten, **Rumpf sichern unter…** extrahiert das Modul weiterhin.
+- **Mit Code öffnen** bei einem TE/PE32-Image, für dessen Bytes eine Codeanalyse gespeichert ist: die Bytes des Moduls und der Code nebeneinander in einem Fragment-Bereich. Der Bereich trägt den Namen des Moduls und das Format des Images, etwa `SecCore ▸ PE32` oder `S3RestoreAcpiPei ▸ TE`. Die Analyse ist schreibgeschützt; **Rumpf öffnen** wird für dieses Image nicht angeboten, **Rumpf sichern unter…** extrahiert das Modul weiterhin.
 - **… sichern unter…** — den Knoten oder nur seinen Rumpf in eine Datei schreiben: dieselben Bytes, die das Öffnen zeigt; vorgeschlagen wird derselbe Name — der des Dumps, gefolgt von dem des Knotens. In einer komprimierten Sektion: **„…“ (entpackt) sichern unter…**; in einem kodiert gespeicherten LENV-Block: **„…“ (kodiert) sichern unter…**.
 - **Entpackten Rumpf öffnen** / **Entpackten Rumpf sichern unter…** bei einer komprimierten Sektion — das, wozu diese Bytes sich tatsächlich entfalten.
 - **Entpackte Variable öffnen** bei der Variable `overrides` des Apple-Systemspeichers — ihre Geräteüberschreibungen liegen als bzip2-Datenstrom vor und werden als Text in einem Tab geöffnet. Der Tab ist eine Kopie: Der Text wird hier nicht wieder komprimiert, eine Änderung der Kopie lässt den Dump daher unberührt.

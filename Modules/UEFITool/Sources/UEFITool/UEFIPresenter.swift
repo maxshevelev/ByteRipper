@@ -431,6 +431,37 @@ public enum UEFIPresenter {
         return body && !node.header.isEmpty ? name + " body" : name
     }
 
+    /// What a Code panel is called: the module and its image format,
+    /// `SecCore ▸ PE32`, `S3RestoreAcpiPei ▸ TE`. The image section alone is
+    /// `PE32 image` in every module; the FFS file the tree names is the
+    /// module. Nil when no file above the image has a name.
+    public static func codePartName(of id: NodeID, in image: UEFIImage, bytes: [UInt8]) -> String? {
+        guard let node = image.node(id) else { return nil }
+        var path = id.path
+        var module: String?
+        while true {
+            if let file = image.node(NodeID(path)), file.kind == .file {
+                let name = file.displayName(in: Localization.appLanguage)
+                if !name.isEmpty { module = name }
+                break
+            }
+            guard !path.isEmpty else { break }
+            path.removeLast()
+        }
+        guard let module else { return nil }
+        return module + " ▸ " + imageFormat(of: node, bytes: bytes)
+    }
+
+    /// The image format as the section type says it, or as the bytes do
+    /// for a file whose body is the image.
+    public static func imageFormat(of node: UEFINode, bytes: [UInt8]) -> String {
+        if node.kind == .section {
+            if node.subtype == UEFICodeCandidates.teSection { return "TE" }
+            if node.subtype == UEFICodeCandidates.pe32Section { return "PE32" }
+        }
+        return bytes.starts(with: [0x56, 0x5A]) ? "TE" : "PE32"
+    }
+
     /// Where a node's bytes are held in the file: its own range, or — for a
     /// node inside a compressed section — the outermost section's. What a tab
     /// opened from the node is linked to (`UPDATE_IN_PARENT.md` §2.1).

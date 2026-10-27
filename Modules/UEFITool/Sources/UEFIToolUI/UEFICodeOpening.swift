@@ -80,7 +80,8 @@ public struct UEFICodeOpening: Sendable {
             throw preferred == nil ? Failure.noAnalysis : Failure.changed
         }
         guard let artifact = loaded.artifact else { throw Failure.unreadableAnalysis }
-        return UEFICodeOpening(partName: open.partName, source: open.source, bytes: bytes,
+        return UEFICodeOpening(partName: UEFIPresenter.codePartName(of: id, in: image, bytes: bytes) ?? open.partName,
+                               source: open.source, bytes: bytes,
                                manifest: loaded.manifest, artifact: artifact,
                                recipes: loaded.recipes)
     }
