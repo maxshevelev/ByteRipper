@@ -156,11 +156,22 @@ import Localization
         textView.textContainer?.widthTracksTextView = false
         textView.textContainer?.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude,
                                                       height: CGFloat.greatestFiniteMagnitude)
+        // Wider than the box when a line is: the text view grows to its
+        // longest line instead of following the scroll view's width, and the
+        // box scrolls sideways.
         textView.isHorizontallyResizable = true
+        textView.isVerticallyResizable = true
+        textView.autoresizingMask = []
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         textView.textStorage?.setAttributedString(text)
         textView.layoutManager?.ensureLayout(for: textView.textContainer!)
-        let used = textView.layoutManager?.usedRect(for: textView.textContainer!).height ?? 0
-        let height = min(ceil(used) + 2 * pad + 2, (font.pointSize * 20).rounded())
+        let used = textView.layoutManager?.usedRect(for: textView.textContainer!) ?? .zero
+        textView.minSize = NSSize(width: width, height: 0)
+        textView.setFrameSize(NSSize(width: max(ceil(used.width) + 2 * pad, width), height: ceil(used.height) + 2 * pad))
+        let scroller = used.width + 2 * pad > width
+            ? NSScroller.scrollerWidth(for: .regular, scrollerStyle: NSScroller.preferredScrollerStyle) : 0
+        let height = min(ceil(used.height) + 2 * pad + 2 + (NSScroller.preferredScrollerStyle == .legacy ? scroller : 0),
+                         (font.pointSize * 20).rounded())
 
         let box = CodeSnippetBox()
         box.translatesAutoresizingMaskIntoConstraints = false

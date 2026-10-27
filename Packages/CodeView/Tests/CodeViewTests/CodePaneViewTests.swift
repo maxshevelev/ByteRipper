@@ -1318,6 +1318,30 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertNil(CodePaneView.listingNumber("DX"))
     }
 
+    /// A type's line longer than the popover scrolls sideways in its box.
+    func testALongLineOfATypeScrollsSideways() throws {
+        let long = "struct T {\n    /* 0x00 */ UINT32 Size; // " + String(repeating: "a long comment ", count: 20) + "\n};"
+        let json: [String: Any] = ["script_version": 5, "functions": []]
+        let model = CodeModel(artifact: try JSONDecoder().decode(CodeArtifact.self,
+                                                                 from: JSONSerialization.data(withJSONObject: json)),
+                              layout: nil)
+        let popover = CodeExplanationPopover(
+            explanation: CodeExplanation(subject: .type("T"), name: "T", enumName: nil, kind: "struct", size: 4,
+                                         declaration: nil, text: nil, c: long, uses: []),
+            model: model)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView = popover.view
+        popover.view.layoutSubtreeIfNeeded()
+        let scroll = try XCTUnwrap(all(NSScrollView.self, in: popover.view).first)
+        let document = try XCTUnwrap(scroll.documentView)
+        XCTAssertGreaterThan(document.frame.width, scroll.contentView.bounds.width + 100,
+                             "the text is as wide as its longest line")
+        scroll.contentView.scroll(to: NSPoint(x: 100, y: 0))
+        scroll.reflectScrolledClipView(scroll.contentView)
+        XCTAssertEqual(scroll.contentView.bounds.origin.x, 100)
+    }
+
     private func click(count: Int, flags: NSEvent.ModifierFlags = []) throws -> NSEvent {
         try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseDown, location: .zero, modifierFlags: flags,
                                          timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0,
