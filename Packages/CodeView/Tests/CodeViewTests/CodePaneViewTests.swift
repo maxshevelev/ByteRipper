@@ -1384,6 +1384,26 @@ final class CodePaneViewTests: XCTestCase {
     }
 
     /// A type's line longer than the popover scrolls sideways in its box.
+    /// What a name stands for reads first; its source is the last paragraph,
+    /// smaller, under the uses and the C.
+    func testTheSourceIsTheLastParagraph() throws {
+        let json: [String: Any] = ["script_version": 5, "functions": []]
+        let model = CodeModel(artifact: try JSONDecoder().decode(CodeArtifact.self,
+                                                                 from: JSONSerialization.data(withJSONObject: json)),
+                              layout: nil)
+        let popover = CodeExplanationPopover(
+            explanation: CodeExplanation(subject: .type("T"), name: "T", enumName: nil, kind: "struct", size: 4,
+                                         declaration: nil, text: "The UART SEC reports through. Source: EDK2 SerialPortLib.",
+                                         c: "struct T {\n};", uses: []),
+            model: model)
+        let stack = try XCTUnwrap(popover.view as? NSStackView)
+        let labels = stack.arrangedSubviews.compactMap { $0 as? NSTextField }
+        XCTAssertTrue(labels.contains { $0.stringValue == "The UART SEC reports through." })
+        let last = try XCTUnwrap(stack.arrangedSubviews.last as? NSTextField)
+        XCTAssertEqual(last.stringValue, "Source: EDK2 SerialPortLib.")
+        XCTAssertLessThan(last.font?.pointSize ?? 99, labels[2].font?.pointSize ?? 0, "smaller than the words")
+    }
+
     func testALongLineOfATypeScrollsSideways() throws {
         let long = "struct T {\n    /* 0x00 */ UINT32 Size; // " + String(repeating: "a long comment ", count: 20) + "\n};"
         let json: [String: Any] = ["script_version": 5, "functions": []]

@@ -73,7 +73,8 @@ import Localization
         facts.widthAnchor.constraint(lessThanOrEqualToConstant: inner).isActive = true
         stack.addArrangedSubview(facts)
 
-        let said = wordsText()
+        let split = wordsText().map(CodeExplanation.splitSource)
+        let said = split?.text.isEmpty == false ? split?.text : nil
         let words = NSTextField(wrappingLabelWithString: said ?? L("The review has not explained this name yet."))
         words.font = .systemFont(ofSize: size + 1)
         words.textColor = said == nil ? .secondaryLabelColor : .labelColor
@@ -111,6 +112,18 @@ import Localization
             }
             stack.addArrangedSubview(explanation.uses.count > Self.mostUses
                                      ? Self.scrolling(list, width: inner, height: (size * 18).rounded()) : list)
+        }
+
+        // Where the words come from, last and smaller: the meaning is what
+        // the reader came for, the reference is for checking it.
+        if let source = split?.source {
+            if let last = stack.arrangedSubviews.last { stack.setCustomSpacing(size, after: last) }
+            let reference = NSTextField(wrappingLabelWithString: source)
+            reference.font = .systemFont(ofSize: max(size - 2, 9))
+            reference.textColor = .secondaryLabelColor
+            reference.isSelectable = true
+            reference.preferredMaxLayoutWidth = inner
+            stack.addArrangedSubview(reference)
         }
         stack.widthAnchor.constraint(equalToConstant: Self.width).isActive = true
         view = stack

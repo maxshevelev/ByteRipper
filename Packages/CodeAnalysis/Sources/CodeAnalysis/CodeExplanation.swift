@@ -44,6 +44,18 @@ public struct CodeExplanation: Equatable, Sendable {
     /// The instructions that hold the constant, in address order.
     public let uses: [Use]
 
+    /// The review's words split where they name their source —
+    /// `… Source: PCI 3.0, 3.2.2.3.2`, `Source of the name: Linux …` — so the
+    /// meaning reads first and the reference can be set apart. Nil source
+    /// when the words name none.
+    public static func splitSource(_ text: String) -> (text: String, source: String?) {
+        guard let found = text.range(of: #"(^|(?<=[.;)]\s))Sources?( of the [a-z]+)?:"#, options: .regularExpression)
+        else { return (text, nil) }
+        let words = text[..<found.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
+        let source = text[found.lowerBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+        return (words, source.isEmpty ? nil : source)
+    }
+
     public init(subject: Subject, name: String, enumName: String?, kind: String?, size: Int,
                 declaration: String?, text: String?, c: String?, uses: [Use]) {
         self.subject = subject

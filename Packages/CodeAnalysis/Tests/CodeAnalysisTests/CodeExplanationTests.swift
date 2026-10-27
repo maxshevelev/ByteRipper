@@ -121,6 +121,19 @@ final class CodeExplanationTests: XCTestCase {
                      "another comment explains nothing")
     }
 
+    /// The words for a name read first; where they come from is set apart.
+    func testTheSourceIsSetApart() {
+        let msr = "C001_1023, the table-walker configuration. Source of the name: Linux msr-index.h; the bits: not confirmed."
+        XCTAssertEqual(CodeExplanation.splitSource(msr).text, "C001_1023, the table-walker configuration.")
+        XCTAssertEqual(CodeExplanation.splitSource(msr).source,
+                       "Source of the name: Linux msr-index.h; the bits: not confirmed.")
+        let port = CodeExplanation.splitSource("PCI configuration address port. Source: PCI Local Bus Spec 3.0")
+        XCTAssertEqual(port.text, "PCI configuration address port.")
+        XCTAssertEqual(port.source, "Source: PCI Local Bus Spec 3.0")
+        XCTAssertNil(CodeExplanation.splitSource("bits per second, 115200 on this board").source)
+        XCTAssertNil(CodeExplanation.splitSource("The open source of the port").source, "a word, not a reference")
+    }
+
     func testAnArtifactWithoutThemStillReads() throws {
         let artifact = try JSONDecoder().decode(CodeArtifact.self, from: Data(#"{"script_version":5,"functions":[]}"#.utf8))
         XCTAssertEqual(artifact.equates, [])
