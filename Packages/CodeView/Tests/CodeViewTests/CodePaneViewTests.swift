@@ -259,8 +259,13 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertGreaterThan(try brightness(), 0.9, "a white page in Light")
     }
 
-    func testTheHeaderKeepsTheVersionsInOneLine() throws {
-        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+    /// The header reads where the reader is: Back and Forward first, then
+    /// the module, its review's revision, ▸ and the function; the versions
+    /// are the small grey line under them, ASM/C at the right.
+    func testTheHeaderReadsModuleRevisionAndFunction() throws {
+        var reviewed = manifest()
+        reviewed.reading = AnalysisReading(project: "p", rev: 14)
+        let view = CodePaneView(manifest: reviewed, artifact: try artifact(),
                                 moduleBytes: moduleBytes, hexView: NSView())
         view.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
         view.layoutSubtreeIfNeeded()
@@ -276,38 +281,61 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertGreaterThan(modeRect.minY, view.bounds.maxY - 80,
                              "and at the top")
 
-        // The module is the title; the versions are the small grey line
-        // under it, with no brackets.
-        let name = try XCTUnwrap(first(NSTextField.self, in: view) {
-            $0.stringValue == "CpuPei"
-        })
-        let versions = try XCTUnwrap(first(NSTextField.self, in: view) {
-            $0.stringValue == "code-v2 · Ghidra 12.1.2"
-        })
+        func field(_ text: String) throws -> NSTextField {
+            try XCTUnwrap(first(NSTextField.self, in: view) { $0.stringValue == text && !$0.isHidden }, text)
+        }
+        let name = try field("CpuPei")
+        let revision = try field("(r14)")
+        let mark = try field("▸")
+        let function = try XCTUnwrap(first(CodeTitleField.self, in: view) { _ in true })
+        XCTAssertEqual(function.stringValue, "FUN_00000220")
+        XCTAssertTrue(name.isSelectable)
+        XCTAssertTrue(function.isSelectable, "the function's name can be copied too")
+        XCTAssertFalse(function.isEditable)
+        XCTAssertEqual(revision.textColor, .secondaryLabelColor)
+        let versions = try field("code-v2 · Ghidra 12.1.2")
         XCTAssertEqual(versions.textColor, .secondaryLabelColor)
         XCTAssertLessThan(versions.font?.pointSize ?? 99, name.font?.pointSize ?? 0)
-        let nameRect = view.convert(name.bounds, from: name)
-        let versionsRect = view.convert(versions.bounds, from: versions)
-        XCTAssertGreaterThan(nameRect.minY, versionsRect.maxY - 1, "the versions are under the name")
-        XCTAssertEqual(nameRect.minX, versionsRect.minX, accuracy: 1)
 
-        // Then, on one line and centred on it: Back, Forward, Callers; the
-        // ASM/C switch at the right.
         let buttons = all(NSButton.self, in: view).filter { !($0 is NSPopUpButton) }
         let back = try XCTUnwrap(buttons.first { $0.accessibilityLabel() == "Back" })
         let forward = try XCTUnwrap(buttons.first { $0.accessibilityLabel() == "Forward" })
-        let callers = try XCTUnwrap(all(NSPopUpButton.self, in: view).first {
-            $0.menu?.items.first?.title.hasPrefix("Callers") == true
-        })
-        let rects = [back, forward, callers, mode].map { view.convert($0.bounds, from: $0) }
-        let row = nameRect.union(versionsRect)
-        for rect in rects {
-            XCTAssertEqual(rect.midY, row.midY, accuracy: 1.5, "every control is centred on the header")
+        let rects = [back, forward, name, revision, mark, function, mode].map { view.convert($0.bounds, from: $0) }
+        for (left, right) in zip(rects, rects.dropFirst()) {
+            XCTAssertLessThan(left.maxX, right.minX + 1, "left to right in reading order")
         }
-        XCTAssertLessThan(nameRect.maxX, rects[0].minX)
-        XCTAssertLessThan(rects[0].maxX, rects[1].minX + 1)
-        XCTAssertLessThan(rects[1].maxX, rects[2].minX)
-        XCTAssertLessThan(rects[2].maxX, rects[3].minX)
+        for field in [name, revision, mark, function] {
+            XCTAssertGreaterThanOrEqual(field.frame.width, field.intrinsicContentSize.width - 1,
+                                        "\(field.stringValue) is shown whole while there is room")
+        }
+        let nameRect = rects[2]
+        let versionsRect = view.convert(versions.bounds, from: versions)
+        XCTAssertGreaterThan(nameRect.minY, versionsRect.maxY - 1, "the versions are under the name")
+        XCTAssertEqual(nameRect.minX, versionsRect.minX, accuracy: 1)
+        for rect in rects[3...5] {
+            XCTAssertEqual(rect.midY, nameRect.midY, accuracy: 1.5, "one line with the module's name")
+        }
+        let block = nameRect.union(versionsRect)
+        for rect in [rects[0], rects[1], rects[6]] {
+            XCTAssertEqual(rect.midY, block.midY, accuracy: 1.5, "the controls are centred on the header")
+        }
+
+        view.selectFunction(at: 1)
+        XCTAssertEqual(function.stringValue, "entry", "the function follows the selection")
+        XCTAssertTrue(all(NSPopUpButton.self, in: view).allSatisfy {
+            $0.menu?.items.first?.title.hasPrefix("Callers") != true
+        }, "no Callers dropdown: Show Callers is the function's menu")
+    }
+
+    /// A module with no published review has no revision to show.
+    func testTheHeaderHasNoRevisionWithoutAReview() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertFalse(all(NSTextField.self, in: view).contains {
+            $0.stringValue.hasPrefix("(r") && !$0.isHidden
+        })
     }
 
 
@@ -589,16 +617,19 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(view.listedStringCount, 0)
     }
 
-    /// A function's callers and callees are one click from it.
-    func testACalleeLeadsToItsFunction() throws {
+    /// A caller the analysis knows but whose call it could not place is
+    /// still listed, and leads to the caller's entry.
+    func testAnUnplacedCallerLeadsToItsFunction() throws {
         let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
                                 moduleBytes: teModule(), hexView: NSView())
         view.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
         view.layoutSubtreeIfNeeded()
 
-        let popup = try XCTUnwrap(first(NSPopUpButton.self, in: view) { _ in true })
-        let item = try XCTUnwrap(popup.menu?.items.first { $0.title == "entry" })
-        _ = item.target?.perform(item.action, with: item)
+        let sheet = try XCTUnwrap(view.showCallers(of: 0))
+        XCTAssertEqual(sheet.callers, [CodeCaller(function: 1, use: nil)])
+        XCTAssertEqual(sheet.text(sheet.callers[0], .address), "—")
+        XCTAssertEqual(sheet.text(sheet.callers[0], .kind), "Call site unknown")
+        sheet.choose(row: 0)
         XCTAssertEqual(view.selectedFunction?.name, "entry")
     }
 
@@ -618,14 +649,81 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertTrue(cell.line.string.hasPrefix("0x68"), "the module offset, as in the hex view")
     }
 
-    /// The callees are in the code, not in a menu: only Callers is offered.
-    func testThereIsNoCalleesMenu() throws {
-        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+    /// The function's name — in the header, in the C — has a menu of its
+    /// own: Show Callers, off when nothing calls the function. The text
+    /// view's own menu (Open Link, Font, Speech) is not offered.
+    func testAFunctionsNameOffersShowCallers() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try selfNamedArtifact(),
                                 moduleBytes: teModule(), hexView: NSView())
-        let titles = all(NSPopUpButton.self, in: view).compactMap { $0.menu?.items.first?.title }
-        XCTAssertTrue(titles.contains { $0.hasPrefix("Callers") })
-        XCTAssertFalse(titles.contains { $0.hasPrefix("Callees") })
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 1, instruction: nil, showsC: true)
+        let textView = try XCTUnwrap(first(CodeTextView.self, in: view) { _ in true })
+        let c = textView.string as NSString
+
+        let own = try XCTUnwrap(view.cMenu(at: c.range(of: "entry").location))
+        XCTAssertEqual(own.items.map(\.title), ["Show Callers"])
+        XCTAssertTrue(own.items[0].isEnabled)
+        XCTAssertNil(view.cMenu(at: c.range(of: "void").location), "nothing to offer off a name")
+        textView.setSelectedRange(c.range(of: "void"))
+        XCTAssertEqual(view.cMenu(at: c.range(of: "void").location)?.items.map(\.title), ["Copy"])
+
+        let header = try XCTUnwrap(first(CodeTitleField.self, in: view) { _ in true })
+        XCTAssertEqual(header.stringValue, "entry")
+        let event = try XCTUnwrap(NSEvent.mouseEvent(with: .rightMouseDown, location: .zero, modifierFlags: [],
+                                                     timestamp: 0, windowNumber: 0, context: nil,
+                                                     eventNumber: 0, clickCount: 1, pressure: 1))
+        XCTAssertEqual(header.menu(for: event)?.items.map(\.title), ["Show Callers"])
+        // Selected, the name is the field editor's: Copy, then the function's.
+        let editor = NSTextView()
+        editor.string = "entry"
+        editor.setSelectedRange(NSRange(location: 0, length: 5))
+        XCTAssertEqual(header.textView(editor, menu: NSMenu(), for: event, at: 0)?.items.map(\.title),
+                       ["Copy", "", "Show Callers"])
+
+        // Nothing calls FUN_00000220: the item is there, and off.
+        view.selectFunction(at: 0)
+        XCTAssertEqual(view.functionMenu(for: 0)?.items.first?.isEnabled, false)
     }
+
+    /// The function's own name in its signature is not a link: ⌘-click and
+    /// a double click would only open the function already open.
+    func testTheFunctionsOwnNameLeadsNowhere() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try selfNamedArtifact(),
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 1, instruction: nil, showsC: true)
+        let text = view.decompiledAttributedText
+        let signature = (text.string as NSString).range(of: "entry")
+        XCTAssertNil(text.attribute(.link, at: signature.location, effectiveRange: nil),
+                     "drawn as a name, not a link")
+        XCTAssertFalse(view.clickC(at: signature.location, event: try click(count: 1, flags: .command)))
+        XCTAssertFalse(view.clickC(at: signature.location, event: try click(count: 2)))
+        XCTAssertFalse(view.canGoBack, "no jump was made")
+        XCTAssertEqual(view.highlightedSymbol, .target(.function(1)), "the name is highlighted, as a click does")
+    }
+
+    /// FUN_00000220 calls entry; entry's C names itself in its signature.
+    private func selfNamedArtifact() throws -> CodeArtifact {
+        let caller = "void FUN_00000220(void)\n{\n  entry();\n}\n"
+        let callee = "void entry(void)\n{\n}\n"
+        let json: [String: Any] = [
+            "script_version": 4, "ghidra": "12.1.2", "program": ["image_base": "0x0"],
+            "functions": [
+                ["entry": "0x220", "name": "FUN_00000220", "c": caller,
+                 "c_spans": [[5, 12, "function", "0x220"], [28, 5, "function", "0x222"]],
+                 "instructions": [
+                    ["address": "0x220", "bytes": "E8 00", "mnemonic": "CALL", "text": "CALL 0x00000222",
+                     "references": [["to": "0x222", "type": "UNCONDITIONAL_CALL"]]]]],
+                ["entry": "0x222", "name": "entry", "callers": ["0x220"], "c": callee,
+                 "c_spans": [[5, 5, "function", "0x222"], [0, 4, "type"]],
+                 "instructions": [["address": "0x222", "bytes": "C3", "mnemonic": "RET", "text": "RET"]]]
+            ]
+        ]
+        return try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+    }
+
 
     /// A call in the C is a link: clicking it opens the called function, and
     /// Back returns to the caller.
@@ -707,8 +805,8 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertTrue(menu.items.isEmpty)
     }
 
-    /// Callers lists calls, not callers: a function that calls twice is
-    /// two items, and choosing one goes to that call — its instruction in
+    /// Show Callers lists calls, not callers: a function that calls twice
+    /// is two rows, and choosing one goes to that call — its instruction in
     /// the listing, the call itself in the C.
     func testCallersListsEachCallAndGoesToIt() throws {
         let artifact = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
@@ -729,13 +827,13 @@ final class CodePaneViewTests: XCTestCase {
         view.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
         view.layoutSubtreeIfNeeded()
         view.restore(function: 1, instruction: nil, showsC: true)
-        let callers = try XCTUnwrap(all(NSPopUpButton.self, in: view).first {
-            $0.menu?.items.first?.title.hasPrefix("Callers") == true
-        })
-        let items = try XCTUnwrap(callers.menu?.items)
-        XCTAssertEqual(items.map(\.title), ["Callers (2)", "FUN_00000220 @ 0x68", "FUN_00000220 @ 0x6A"])
+        let sheet = try XCTUnwrap(view.showCallers(of: 1))
+        XCTAssertEqual(sheet.callers.map { sheet.text($0, .caller) }, ["FUN_00000220", "FUN_00000220"])
+        XCTAssertEqual(sheet.callers.map { sheet.text($0, .address) }, ["0x68", "0x6A"])
+        XCTAssertEqual(sheet.callers.map { sheet.text($0, .instruction) }, ["CALL 0x00000230", "CALL 0x00000230"])
+        XCTAssertEqual(sheet.callers.map { sheet.text($0, .kind) }, ["Call", "Call"])
 
-        _ = items[2].target?.perform(items[2].action, with: items[2])
+        sheet.choose(row: 1)
         XCTAssertEqual(view.selectedFunction?.name, "FUN_00000220")
         XCTAssertEqual(view.selectedInstruction?.address, CodeAddress(0x222))
         let textView = try XCTUnwrap(first(NSTextView.self, in: view) { _ in true })

@@ -39,7 +39,6 @@ import ToolModuleKit
     private let navigatorLabel = NSTextField(labelWithString: "")
     private let listControl: NSSegmentedControl
     private let searchField = NSSearchField()
-    private let callersButton = NSPopUpButton(frame: .zero, pullsDown: true)
     private let backButton = NSButton()
     private let forwardButton = NSButton()
     /// The places the reader went to, oldest first, and which one is current:
@@ -85,8 +84,12 @@ import ToolModuleKit
     private static let hexDumpHeight: CGFloat = 220
     private static let dumpBarHeight: CGFloat = 24
     private let staleLabel = NSTextField(labelWithString: "")
-    /// The module's name and the recipe under it: kept to follow the zoom.
+    /// The header's first line — the module, its revision, the function —
+    /// and the recipe under it: kept to follow the zoom.
     private var nameLabel: NSTextField?
+    private var revisionLabel: NSTextField?
+    private var pathMark: NSTextField?
+    private let functionLabel = CodeTitleField(labelWithString: "")
     private var recipeLabel: NSTextField?
     private var zoomObserver: NSObjectProtocol?
     /// Set while the view moves a table's selection itself, so the table's
@@ -465,38 +468,54 @@ import ToolModuleKit
         drawNavigator()
     }
 
-    /// The calls to the selected function, one item each: a caller that
-    /// calls it three times is three items, each naming the call's place.
-    /// Choosing one goes to the call — its instruction in the listing, the
-    /// call itself in the C. A caller Ghidra knows but whose call it could not
-    /// place (through a pointer) still leads to its function.
+    /// The selected function's name in the header, after the module's.
     private func updateReferences() {
-        guard let index = state.function else {
-            callersButton.isHidden = true
-            return
-        }
-        let function = model.functions[index]
+        let name = state.selectedFunction.map {
+            $0.name.isEmpty ? model.displayAddress($0.entry) : $0.name
+        } ?? ""
+        functionLabel.stringValue = name
+        functionLabel.isHidden = name.isEmpty
+        pathMark?.isHidden = name.isEmpty
+    }
+
+    /// Every call to function `index`, one row each — a caller that calls it
+    /// three times is three rows — then the callers Ghidra knows whose call
+    /// it could not place (through a pointer).
+    func callers(of index: Int) -> [CodeCaller] {
         let calls = calls(to: index)
-        callersButton.removeAllItems()
         let placed = Set(calls.map(\.function))
-        let unplaced = function.callers.compactMap(model.function(at:)).filter { !placed.contains($0) }
-        callersButton.menu?.addItem(NSMenuItem(title: "\(L("Callers")) (\(calls.count + unplaced.count))",
-                                               action: nil, keyEquivalent: ""))
-        for use in calls {
-            let item = NSMenuItem(title: "\(model.functions[use.function].name) @ \(model.displayAddress(use.from))",
-                                  action: #selector(callChosen(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = CallBox(use: use, callee: index)
-            callersButton.menu?.addItem(item)
+        let unplaced = model.functions[index].callers.compactMap(model.function(at:))
+            .filter { !placed.contains($0) }
+        return calls.map { CodeCaller(function: $0.function, use: $0) }
+            + unplaced.map { CodeCaller(function: $0, use: nil) }
+    }
+
+    // help: panel.code.callers
+    /// Show Callers: a sheet listing every call to function `index`; a double
+    /// click on one opens the caller at that call. Without a window — in a
+    /// test — the sheet is made but not shown.
+    @discardableResult
+    func showCallers(of index: Int) -> CodeCallersSheet? {
+        guard model.functions.indices.contains(index) else { return nil }
+        let sheet = CodeCallersSheet(model: model, callee: index, callers: callers(of: index)) { [weak self] caller in
+            self?.goToCaller(caller, of: index)
         }
-        for caller in unplaced {
-            let item = NSMenuItem(title: model.functions[caller].name,
-                                  action: #selector(callTargetChosen(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = NSNumber(value: model.functions[caller].entry.value)
-            callersButton.menu?.addItem(item)
+        if let window {
+            let panel = NSWindow(contentViewController: sheet)
+            panel.styleMask = [.titled, .resizable]
+            window.beginSheet(panel)
         }
-        callersButton.isHidden = calls.isEmpty && unplaced.isEmpty
+        return sheet
+    }
+
+    /// Opens a caller: at its call when the call is placed, at its entry when
+    /// it is not.
+    func goToCaller(_ caller: CodeCaller, of callee: Int) {
+        if let use = caller.use {
+            goToCall(use, of: callee)
+        } else {
+            follow(.function(caller.function))
+        }
     }
 
     /// The instructions that call function `index` — or jump to its entry
@@ -506,11 +525,6 @@ import ToolModuleKit
             let type = use.type.uppercased()
             return type.contains("CALL") || (type.contains("JUMP") && use.function != index)
         }
-    }
-
-    @objc private func callChosen(_ sender: NSMenuItem) {
-        guard let box = sender.representedObject as? CallBox else { return }
-        goToCall(box.use, of: box.callee)
     }
 
     /// Goes to one call of `callee`: the calling instruction is selected, its
@@ -535,18 +549,6 @@ import ToolModuleKit
         cTextView.setSelectedRange(range)
         cTextView.scrollRangeToVisible(range)
         cTextView.showFindIndicator(for: range)
-    }
-
-    @objc private func callTargetChosen(_ sender: NSMenuItem) {
-        guard let number = sender.representedObject as? NSNumber else { return }
-        navigate(to: CodeAddress(number.uint64Value))
-    }
-
-    /// A reference goes to the function at its target when there is one, or to
-    /// the bytes there when the module holds them. An external target does
-    /// nothing rather than pretending to go somewhere.
-    private func navigate(to address: CodeAddress) {
-        if let link = model.link(to: address) { follow(link) }
     }
 
     // MARK: - Following links, and the way back
@@ -804,27 +806,59 @@ import ToolModuleKit
         codeContent.wantsLayer = true
         applyCodeBackground()
 
-        // The module is the title; what produced its analysis is the small
-        // grey line under it.
+        // The first line is where the reader is: the module, the revision
+        // of its review, the function. What produced the analysis is the
+        // small grey line under it.
         let nameLabel = label(
             manifest.module.name.isEmpty ? manifest.recipe.id : manifest.module.name,
             font: ToolPanelFont.title())
+        let revisionLabel = label(manifest.reading.map { "(r\($0.rev))" } ?? "",
+                                  font: ToolPanelFont.title(), color: .secondaryLabelColor)
+        revisionLabel.isHidden = manifest.reading == nil
+        let pathMark = label("▸", font: ToolPanelFont.title(), color: .tertiaryLabelColor)
+        functionLabel.font = ToolPanelFont.title()
+        functionLabel.textColor = .labelColor
+        functionLabel.lineBreakMode = .byTruncatingTail
+        functionLabel.maximumNumberOfLines = 1
+        functionLabel.translatesAutoresizingMaskIntoConstraints = false
+        functionLabel.onMenu = { [weak self] in self?.functionMenu(for: self?.state.function) }
         let recipeLabel = label(recipeSummary(), font: Self.recipeFont(), color: .secondaryLabelColor)
         recipeLabel.lineBreakMode = .byTruncatingMiddle
-        // The name is what one searches for elsewhere — in the tree, in a
-        // report — so it can be selected and copied.
+        // The names are what one searches for elsewhere — in the tree, in a
+        // report — so they can be selected and copied.
         nameLabel.isSelectable = true
-        for field in [nameLabel, recipeLabel] {
-            field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        functionLabel.isSelectable = true
+        // Above the stacks' own hugging (250), so a name is shown whole while
+        // the row has room for it; below required, so it is cut when there is
+        // none: the versions first, then the function's name — down to a few
+        // letters, enough to tell it — and the module's last.
+        recipeLabel.setContentCompressionResistancePriority(.init(498), for: .horizontal)
+        functionLabel.setContentCompressionResistancePriority(.init(499), for: .horizontal)
+        nameLabel.setContentCompressionResistancePriority(.init(500), for: .horizontal)
+        let functionMinimum = functionLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 80)
+        functionMinimum.priority = .init(502)
+        functionMinimum.isActive = true
+        let nameMinimum = nameLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 40)
+        nameMinimum.priority = .init(501)
+        nameMinimum.isActive = true
+        for field in [revisionLabel, pathMark] {
+            field.setContentCompressionResistancePriority(.required, for: .horizontal)
+            field.setContentHuggingPriority(.required, for: .horizontal)
         }
         self.nameLabel = nameLabel
+        self.revisionLabel = revisionLabel
+        self.pathMark = pathMark
         self.recipeLabel = recipeLabel
-        let titleBlock = NSStackView(views: [nameLabel, recipeLabel])
+        let pathLine = NSStackView(views: [nameLabel, revisionLabel, pathMark, functionLabel])
+        pathLine.orientation = .horizontal
+        pathLine.alignment = .firstBaseline
+        pathLine.spacing = 6
+        pathLine.setCustomSpacing(4, after: nameLabel)
+        let titleBlock = NSStackView(views: [pathLine, recipeLabel])
         titleBlock.orientation = .vertical
         titleBlock.alignment = .leading
         titleBlock.spacing = 1
-        titleBlock.setContentHuggingPriority(.required, for: .horizontal)
-        titleBlock.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        titleBlock.setContentHuggingPriority(.defaultHigh, for: .horizontal)
 
         modeControl.target = self
         modeControl.action = #selector(modeChanged)
@@ -853,29 +887,16 @@ import ToolModuleKit
         ControlHelp.describe(forwardButton, name: L("Forward"),
                              tooltip: L("Go forward again (⌘])"))
 
-        callersButton.bezelStyle = .inline
-        callersButton.isBordered = false
-        callersButton.controlSize = .small
-        callersButton.font = .systemFont(ofSize: 11)
-        callersButton.contentTintColor = .linkColor
-        // Each call item carries its own action; the button's would be sent
-        // with the button, not an item, as its sender.
-        callersButton.setContentHuggingPriority(.required, for: .horizontal)
-        ControlHelp.describe(callersButton, name: L("Callers"),
-                             tooltip: L("The calls to this function; choosing one shows the call"))
-
-        // One line, every control centred on it: the module, the way back and
-        // forward, the calls to the function; the ASM/C switch at the right.
+        // One line, every control centred on it: the way back and forward,
+        // then where the reader is; the ASM/C switch at the right.
         let titleSpacer = NSView()
         titleSpacer.setContentHuggingPriority(.init(1), for: .horizontal)
-        let titleRow = NSStackView(views: [titleBlock, backButton, forwardButton, callersButton,
-                                           titleSpacer, modeControl])
+        let titleRow = NSStackView(views: [backButton, forwardButton, titleBlock, titleSpacer, modeControl])
         titleRow.orientation = .horizontal
         titleRow.alignment = .centerY
         titleRow.spacing = 8
-        titleRow.setCustomSpacing(12, after: titleBlock)
         titleRow.setCustomSpacing(6, after: backButton)
-        titleRow.setCustomSpacing(10, after: forwardButton)
+        titleRow.setCustomSpacing(12, after: forwardButton)
         titleRow.setContentHuggingPriority(.required, for: .vertical)
         titleRow.setContentCompressionResistancePriority(.required, for: .vertical)
         titleRow.translatesAutoresizingMaskIntoConstraints = false
@@ -1045,7 +1066,7 @@ import ToolModuleKit
     /// the selected row.
     private func zoomChanged() {
         navigatorLabel.font = ToolPanelFont.title()
-        nameLabel?.font = ToolPanelFont.title()
+        for field in [nameLabel, revisionLabel, pathMark, functionLabel] { field?.font = ToolPanelFont.title() }
         recipeLabel?.font = Self.recipeFont()
         staleLabel.font = ToolPanelFont.body()
         drawNavigationImages()
@@ -1222,6 +1243,7 @@ import ToolModuleKit
     private func configureC() {
         cTextView.onClick = { [weak self] character, event in self?.clickC(at: character, event: event) ?? false }
         cTextView.onEscape = { [weak self] in self?.highlight(nil) }
+        cTextView.onMenu = { [weak self] character in self?.cMenu(at: character) }
         cTextView.isEditable = false
         cTextView.isSelectable = true
         cTextView.isRichText = true
@@ -1313,7 +1335,16 @@ import ToolModuleKit
             tokens += model.cTokens(ofFunction: index).map {
                 CodeToken(start: $0.start + shift, length: $0.length, kind: $0.kind, link: $0.link)
             }
-            text = CodeColors.attributed(header + c, tokens: tokens, font: font,
+            // The function's own name in its signature leads nowhere: it is
+            // drawn as a name, not a link, and its right-click menu is Show
+            // Callers. The token keeps its link, so a click still highlights
+            // every call to the function.
+            var drawn = tokens
+            if let own = drawn.firstIndex(where: { $0.link == .function(index) }) {
+                let token = drawn[own]
+                drawn[own] = CodeToken(start: token.start, length: token.length, kind: token.kind)
+            }
+            text = CodeColors.attributed(header + c, tokens: drawn, font: font,
                                          links: &cLinks, asTextLinks: true)
             tokensShown = tokens
         } else {
@@ -1391,7 +1422,9 @@ import ToolModuleKit
             shownCTokens.filter { $0.start <= index && index < $0.start + $0.length }
                 .min { $0.length < $1.length }
         }
-        if let link = token?.link, Self.isJump(event) {
+        // The function on screen is where a jump to it would go: ⌘-click on
+        // its name — in the signature, in a recursive call — only highlights.
+        if let link = token?.link, link != .function(state.function ?? -1), Self.isJump(event) {
             follow(link)
             return true
         }
@@ -1746,6 +1779,40 @@ extension CodePaneView: NSMenuDelegate {
         add.representedObject = CodePlaceBox(location: place.location, name: place.name)
     }
 
+    /// The menu of a function's name — in the header, in the C: Show
+    /// Callers, off when nothing calls it.
+    func functionMenu(for index: Int?) -> NSMenu? {
+        guard let index, model.functions.indices.contains(index) else { return nil }
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        let item = menu.addItem(withTitle: L("Show Callers"), action: #selector(showCallersChosen(_:)),
+                                keyEquivalent: "")
+        item.target = self
+        item.representedObject = NSNumber(value: index)
+        item.isEnabled = !callers(of: index).isEmpty
+        return menu
+    }
+
+    /// The C's right-click menu: a function's on a function's name, Copy on
+    /// a selection, nothing elsewhere.
+    func cMenu(at character: Int?) -> NSMenu? {
+        let token = character.flatMap { index in
+            shownCTokens.filter { $0.start <= index && index < $0.start + $0.length }
+                .min { $0.length < $1.length }
+        }
+        if case .function(let index)? = token?.link { return functionMenu(for: index) }
+        guard cTextView.selectedRange().length > 0 else { return nil }
+        let menu = NSMenu()
+        menu.addItem(withTitle: L("Copy"), action: #selector(NSText.copy(_:)), keyEquivalent: "")
+            .target = cTextView
+        return menu
+    }
+
+    @objc private func showCallersChosen(_ sender: NSMenuItem) {
+        guard let index = (sender.representedObject as? NSNumber)?.intValue else { return }
+        showCallers(of: index)
+    }
+
     @objc private func copyNameChosen(_ sender: NSMenuItem) {
         guard let name = sender.representedObject as? String else { return }
         Self.copyToPasteboard(name)
@@ -1762,17 +1829,6 @@ extension CodePaneView: NSMenuDelegate {
     }
 }
 
-/// A Callers item's call: where it is, and the function it calls.
-private final class CallBox: NSObject {
-    let use: CodeModel.Use
-    let callee: Int
-
-    init(use: CodeModel.Use, callee: Int) {
-        self.use = use
-        self.callee = callee
-    }
-}
-
 /// A menu item's place in the code.
 private final class CodePlaceBox: NSObject {
     let location: CodeLocation
@@ -1781,5 +1837,29 @@ private final class CodePlaceBox: NSObject {
     init(location: CodeLocation, name: String) {
         self.location = location
         self.name = name
+    }
+}
+
+/// The header's function name: selectable, so it can be copied, with the
+/// function's own right-click menu in place of the text field's — also while
+/// it is selected, when the field editor is what the click lands on.
+final class CodeTitleField: NSTextField {
+    var onMenu: (() -> NSMenu?)?
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        onMenu?() ?? super.menu(for: event)
+    }
+
+    /// The field editor's menu, while the name is selected: the function's,
+    /// with Copy first, so the selection can still be copied.
+    @objc func textView(_ textView: NSTextView, menu: NSMenu, for event: NSEvent, at charIndex: Int) -> NSMenu? {
+        guard let own = onMenu?() else { return menu }
+        if textView.selectedRange().length > 0 {
+            own.insertItem(.separator(), at: 0)
+            let copy = NSMenuItem(title: L("Copy"), action: #selector(NSText.copy(_:)), keyEquivalent: "")
+            copy.target = textView
+            own.insertItem(copy, at: 0)
+        }
+        return own
     }
 }

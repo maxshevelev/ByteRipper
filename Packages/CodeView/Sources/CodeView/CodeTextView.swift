@@ -40,11 +40,26 @@ final class CodeTextView: NSTextView {
         if onClick?(character, event) == true { return }
         // A link is followed by the pane, on ⌘-click or a double click; the
         // text view's own handling of a plain click would follow it too.
+        // A control-click is the right-click menu, which the text view shows.
+        if event.modifierFlags.contains(.control) {
+            super.mouseDown(with: event)
+            return
+        }
         if let character, textStorage?.attribute(.link, at: character, effectiveRange: nil) != nil {
             window?.makeFirstResponder(self)
             return
         }
         super.mouseDown(with: event)
+    }
+
+    /// The right-click menu for the character under the pointer, or nil off
+    /// the glyphs. The pane's own menu replaces the text view's — Open Link,
+    /// Font, Spelling, Speech mean nothing on read-only code.
+    var onMenu: ((Int?) -> NSMenu?)?
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        guard let onMenu else { return super.menu(for: event) }
+        return onMenu(characterIndex(atViewPoint: convert(event.locationInWindow, from: nil)))
     }
 
     override func complete(_ sender: Any?) {
