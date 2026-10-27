@@ -1886,11 +1886,13 @@ public enum UEFIDetail {
         if !expression.tokens.isEmpty {
             let rows = expression.tokens.map { token -> [UEFIDetailTable.Cell] in
                 let guid = token.operation.guid
+                // The name before the GUID: in a narrow panel it is the name
+                // that has to be read, and the GUID that may be cut.
                 return [
                     .init(hex(token.offset)),
                     .init(token.operation.name),
-                    .init(guid?.description ?? ""),
-                    .init(guid.flatMap { catalogue.name(of: $0) } ?? "")
+                    .init(guid.flatMap { catalogue.name(of: $0) } ?? ""),
+                    .init(guid?.description ?? "")
                 ]
             }
             // The GUID is a PPI in PEI and a protocol in DXE; the column says
@@ -1904,7 +1906,7 @@ public enum UEFIDetail {
                 title: L("Dependency expression", in: language),
                 symbol: "arrow.triangle.branch",
                 columns: [L("Offset", in: language), L("Operation", in: language),
-                          guidColumn, L("Name", in: language)],
+                          L("Name", in: language), guidColumn],
                 rows: rows
             ))
         }

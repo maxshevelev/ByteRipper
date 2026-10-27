@@ -62,10 +62,10 @@ final class DependencyDetailTests: XCTestCase {
         XCTAssertEqual(fields["Dependencies"]?.tone, .standard)
 
         let table = detail.tables.first { $0.title == "Dependency expression" }
-        XCTAssertEqual(table?.columns, ["Offset", "Operation", "PPI GUID", "Name"])
+        XCTAssertEqual(table?.columns, ["Offset", "Operation", "Name", "PPI GUID"])
         XCTAssertEqual(table?.rows.map { $0.map(\.text) }, [
-            ["0x1C", "PUSH", first.description, "First PPI"],
-            ["0x2D", "PUSH", second.description, "Second PPI"],
+            ["0x1C", "PUSH", "First PPI", first.description],
+            ["0x2D", "PUSH", "Second PPI", second.description],
             ["0x3E", "AND", "", ""],
             ["0x3F", "END", "", ""],
         ])
@@ -85,10 +85,10 @@ final class DependencyDetailTests: XCTestCase {
         XCTAssertEqual(fields["Dependencies"]?.value, "BEFORE EfiSomeProtocolGuid")
 
         let table = detail.tables.first { $0.title == "Dependency expression" }
-        XCTAssertEqual(table?.columns, ["Offset", "Operation", "Protocol GUID", "Name"])
+        XCTAssertEqual(table?.columns, ["Offset", "Operation", "Name", "Protocol GUID"])
         XCTAssertEqual(table?.rows.map { $0.map(\.text) }, [
             ["0x1C", "BEFORE", "", ""],
-            ["0x1D", "PUSH", first.description, "EfiSomeProtocolGuid"],
+            ["0x1D", "PUSH", "EfiSomeProtocolGuid", first.description],
             ["0x2E", "END", "", ""],
         ])
     }
