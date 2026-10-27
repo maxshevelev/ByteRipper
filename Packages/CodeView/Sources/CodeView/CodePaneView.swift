@@ -70,6 +70,7 @@ import ToolModuleKit
     private var cShift = 0
     /// The explanation open over the code, if one is.
     private var explanationPopover: CodeExplanationPopover?
+    private var callersPopover: CodeCallersPopover?
     private let table = NSTableView()
     private let tableScroll = NSScrollView()
     private let cTextView = CodeTextView()
@@ -546,21 +547,34 @@ import ToolModuleKit
     }
 
     // help: panel.code.callers
-    /// Show Callers: a sheet listing every call to function `index`; a double
-    /// click on one opens the caller at that call. Without a window — in a
-    /// test — the sheet is made but not shown.
+    /// Show Callers: a popover listing every call to function `index`, off
+    /// the name it was asked at — `at`, a call or the signature in the C —
+    /// or else off the function's name in the signature, or in the header;
+    /// a click on a row opens the caller at that call. Without a window — in
+    /// a test — the popover is made but not shown.
     @discardableResult
-    func showCallers(of index: Int) -> CodeCallersSheet? {
+    func showCallers(of index: Int, at name: NSRange? = nil) -> CodeCallersPopover? {
         guard model.functions.indices.contains(index) else { return nil }
-        let sheet = CodeCallersSheet(model: model, callee: index, callers: callers(of: index)) { [weak self] caller in
+        explanationPopover?.close()
+        callersPopover?.close()
+        let popover = CodeCallersPopover(model: model, callee: index, callers: callers(of: index)) { [weak self] caller in
             self?.goToCaller(caller, of: index)
         }
-        if let window {
-            let panel = NSWindow(contentViewController: sheet)
-            panel.styleMask = [.titled, .resizable]
-            window.beginSheet(panel)
+        callersPopover = popover
+        guard window != nil else { return popover }
+        let own = signatureName().flatMap { $0.function == index ? $0.range : nil }
+        if let range = name ?? own, !cTextView.isHiddenOrHasHiddenAncestor, let rect = cRect(range) {
+            popover.show(relativeTo: rect, of: cTextView)
+        } else {
+            popover.show(relativeTo: functionLabel.bounds, of: functionLabel)
         }
-        return sheet
+        return popover
+    }
+
+    /// The Show Callers popover open now, if one is.
+    var shownCallers: CodeCallersPopover? {
+        guard let callersPopover, callersPopover.isShown else { return nil }
+        return callersPopover
     }
 
     /// Opens a caller: at its call when the call is placed, at its entry when
@@ -1626,6 +1640,7 @@ import ToolModuleKit
         cTextView.scroll(.zero)
         shownCTokens = tokensShown
         cTextView.explainable = explainableInC()
+        cTextView.callable = signatureName().flatMap { callers(of: $0.function).isEmpty ? nil : $0.range }
         // A parameter or a local is its function's alone: another function's
         // `Status` is another variable.
         if case .variable = highlightedSymbol, highlightedIn != state.function { highlightedSymbol = nil }
@@ -1698,7 +1713,7 @@ import ToolModuleKit
                 // who calls it; on a call it goes to the function.
                 if range == signatureName()?.range {
                     highlight(.target(link))
-                    if callers(of: index).isEmpty { NSSound.beep() } else { showCallers(of: index) }
+                    if callers(of: index).isEmpty { NSSound.beep() } else { showCallers(of: index, at: range) }
                 } else {
                     jumpToDefinition(of: index, from: range)
                 }
@@ -1713,6 +1728,16 @@ import ToolModuleKit
         if let clicked, case .variable = clicked, Self.isJump(event) {
             selectDefinition(of: clicked)
             return true
+        }
+        // A plain click on the function's own name in its signature asks
+        // who calls it, as a click on an explained name asks what it is.
+        if !Self.isJump(event), let token, case .function(let index)? = token.link,
+           let own = signatureName(), own.function == index,
+           own.range == NSRange(location: token.start, length: token.length), !callers(of: index).isEmpty {
+            RunLoop.main.perform(inModes: [.default]) { [weak self] in
+                self?.showCallers(of: index, at: own.range)
+            }
+            return false
         }
         if !Self.isJump(event), let character { explainC(at: character, token: token) }
         return false
@@ -2211,7 +2236,7 @@ extension CodePaneView: NSMenuDelegate {
     /// `call` is the name's range in the C when the name is a call: then
     /// Jump to Definition, what ⌘-click and a double click on it do, comes
     /// first.
-    func functionMenu(for index: Int?, call: NSRange? = nil) -> NSMenu? {
+    func functionMenu(for index: Int?, call: NSRange? = nil, name: NSRange? = nil) -> NSMenu? {
         guard let index, model.functions.indices.contains(index) else { return nil }
         let menu = NSMenu()
         menu.autoenablesItems = false
@@ -2224,7 +2249,7 @@ extension CodePaneView: NSMenuDelegate {
         let item = menu.addItem(withTitle: L("Show Callers…"), action: #selector(showCallersChosen(_:)),
                                 keyEquivalent: "")
         item.target = self
-        item.representedObject = NSNumber(value: index)
+        item.representedObject = name.map { CodeCallBox(function: index, range: $0) } ?? NSNumber(value: index)
         item.isEnabled = !callers(of: index).isEmpty
         return menu
     }
@@ -2238,7 +2263,7 @@ extension CodePaneView: NSMenuDelegate {
         }
         if let token, case .function(let index)? = token.link {
             let range = NSRange(location: token.start, length: token.length)
-            return functionMenu(for: index, call: range == signatureName()?.range ? nil : range)
+            return functionMenu(for: index, call: range == signatureName()?.range ? nil : range, name: range)
         }
         guard cTextView.selectedRange().length > 0 else { return nil }
         let menu = NSMenu()
@@ -2253,8 +2278,11 @@ extension CodePaneView: NSMenuDelegate {
     }
 
     @objc private func showCallersChosen(_ sender: NSMenuItem) {
-        guard let index = (sender.representedObject as? NSNumber)?.intValue else { return }
-        showCallers(of: index)
+        if let name = sender.representedObject as? CodeCallBox {
+            showCallers(of: name.function, at: name.range)
+        } else if let index = (sender.representedObject as? NSNumber)?.intValue {
+            showCallers(of: index)
+        }
     }
 
     @objc private func copyNameChosen(_ sender: NSMenuItem) {

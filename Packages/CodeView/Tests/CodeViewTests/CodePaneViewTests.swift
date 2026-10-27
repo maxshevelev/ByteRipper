@@ -686,8 +686,10 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(view.functionMenu(for: 0)?.items.first?.isEnabled, false)
     }
 
-    /// The function's own name in its signature is not a link: ⌘-click and
-    /// a double click show who calls it rather than reopen the function.
+    /// The function's own name in its signature is not a link: a click,
+    /// ⌘-click or a double click shows who calls it, in a popover off the
+    /// name, rather than reopen the function. Under the pointer it
+    /// underlines as a call does.
     func testTheFunctionsOwnNameShowsItsCallers() throws {
         let view = CodePaneView(manifest: manifest(), artifact: try selfNamedArtifact(),
                                 moduleBytes: teModule(), hexView: NSView())
@@ -696,15 +698,31 @@ final class CodePaneViewTests: XCTestCase {
         let window = NSWindow(contentRect: view.frame, styleMask: [.titled], backing: .buffered, defer: false)
         window.contentView = view
         view.restore(function: 1, instruction: nil, showsC: true)
+        // A popover shows only off a window on screen.
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil) }
         let text = view.decompiledAttributedText
         let signature = (text.string as NSString).range(of: "entry")
         XCTAssertNil(text.attribute(.link, at: signature.location, effectiveRange: nil),
                      "drawn as a name, not a link")
+
+        let textView = try XCTUnwrap(first(CodeTextView.self, in: view) { _ in true })
+        XCTAssertEqual(textView.callable, signature)
+        let glyphs = textView.layoutManager!.glyphRange(forCharacterRange: signature, actualCharacterRange: nil)
+        let box = textView.layoutManager!.boundingRect(forGlyphRange: glyphs, in: textView.textContainer!)
+        textView.hover(at: NSPoint(x: box.midX + textView.textContainerOrigin.x,
+                                   y: box.midY + textView.textContainerOrigin.y))
+        XCTAssertEqual(textView.hoveredLink, signature, "underlined under the pointer")
+
+        XCTAssertFalse(view.clickC(at: signature.location, event: try click(count: 1)))
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        let shown = try XCTUnwrap(view.shownCallers, "a click shows the callers")
+        XCTAssertEqual(shown.rowText(shown.callers[0]), "FUN_00000220 · 0x68 · CALL 0x00000222")
+        shown.close()
         for event in [try click(count: 1, flags: .command), try click(count: 2)] {
             XCTAssertTrue(view.clickC(at: signature.location, event: event))
-            let sheet = try XCTUnwrap(window.attachedSheet, "Show Callers…")
-            XCTAssertTrue(sheet.contentViewController is CodeCallersSheet)
-            window.endSheet(sheet)
+            XCTAssertNotNil(view.shownCallers, "Show Callers…")
+            view.shownCallers?.close()
         }
         XCTAssertFalse(view.canGoBack, "no jump was made")
         XCTAssertEqual(view.highlightedSymbol, .target(.function(1)), "the name is highlighted, as a click does")

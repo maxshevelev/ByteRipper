@@ -109,7 +109,8 @@ import Localization
                 button.tag = use.line
                 list.addArrangedSubview(button)
             }
-            stack.addArrangedSubview(explanation.uses.count > Self.mostUses ? scrolling(list, width: inner) : list)
+            stack.addArrangedSubview(explanation.uses.count > Self.mostUses
+                                     ? Self.scrolling(list, width: inner, height: (size * 18).rounded()) : list)
         }
         stack.widthAnchor.constraint(equalToConstant: Self.width).isActive = true
         view = stack
@@ -117,7 +118,7 @@ import Localization
 
     /// A long list of uses in a box of its own height that scrolls, so the
     /// popover stays on the screen.
-    private func scrolling(_ list: NSStackView, width: CGFloat) -> NSView {
+    static func scrolling(_ list: NSStackView, width: CGFloat, height: CGFloat) -> NSView {
         let scroll = NSScrollView()
         scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true
@@ -135,7 +136,7 @@ import Localization
             list.topAnchor.constraint(equalTo: clip.topAnchor),
             list.widthAnchor.constraint(equalToConstant: width),
             scroll.widthAnchor.constraint(equalToConstant: width),
-            scroll.heightAnchor.constraint(equalToConstant: min(rows, (Self.size * 18).rounded()))
+            scroll.heightAnchor.constraint(equalToConstant: min(rows, height))
         ])
         return scroll
     }

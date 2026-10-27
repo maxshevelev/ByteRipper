@@ -1698,8 +1698,6 @@
 "Jump to Definition" = "Gehe zu Definition";
 "Callers of %1$@" = "Aufrufe von %1$@";
 "Calls: %1$@" = "Aufrufe: %1$@";
-"Caller" = "Aufrufende Funktion";
-"Instruction" = "Instruktion";
 "Call" = "Aufruf";
 "Jump" = "Sprung";
 "Call site unknown" = "Aufrufstelle unbekannt";

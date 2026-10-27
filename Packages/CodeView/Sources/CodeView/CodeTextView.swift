@@ -25,11 +25,26 @@ final class CodeTextView: NSTextView {
         didSet { underline(nil) }
     }
 
+    /// The function's own name in its signature when something calls it:
+    /// underlined under the pointer like a call, with the pointing hand; a
+    /// click shows its callers. Not a link, since it leads nowhere else.
+    var callable: NSRange? {
+        didSet { underline(nil) }
+    }
+
     override func mouseMoved(with event: NSEvent) {
         super.mouseMoved(with: event)
         let point = convert(event.locationInWindow, from: nil)
         underline(linkAt: point)
         if let hovered, explainable.contains(hovered) { CodeHelpCursor.cursor.set() }
+        if let hovered, hovered == callable { NSCursor.pointingHand.set() }
+    }
+
+    /// The signature's name under `point`, if it is callable.
+    func callableRange(at point: NSPoint) -> NSRange? {
+        guard let callable, let character = characterIndex(atViewPoint: point),
+              NSLocationInRange(character, callable) else { return nil }
+        return callable
     }
 
     /// The name that explains itself under `point`, if one is.
@@ -135,7 +150,7 @@ final class CodeTextView: NSTextView {
     }
 
     private func underline(linkAt point: NSPoint?) {
-        underline(point.flatMap { linkRange(at: $0) ?? explainableRange(at: $0) })
+        underline(point.flatMap { linkRange(at: $0) ?? explainableRange(at: $0) ?? callableRange(at: $0) })
     }
 
     private func underline(_ range: NSRange?) {
@@ -157,6 +172,7 @@ final class CodeTextView: NSTextView {
         hovered = nil
         highlighted = []
         explainable = []
+        callable = nil
     }
 
     func hover(at point: NSPoint?) { underline(linkAt: point) }
