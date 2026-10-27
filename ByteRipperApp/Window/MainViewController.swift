@@ -1687,8 +1687,9 @@ final class MainViewController: NSViewController {
         let view = FilePaneView(viewModel: model)
         // A pane drag raises every window's strip, since any of them could take
         // the pane, and lowers them all when the session ends.
-        view.onDragSessionChanged = { [weak self] active in
+        view.onDragSessionChanged = { [weak self, weak model] active in
             self?.setNewTabStripVisibleEverywhere(active)
+            self?.showPaneDropZonesEverywhere(active ? model?.dragID : nil)
         }
         // The window is named after the files its panes hold, so the title
         // follows the very signal the pane headers follow — a file opened,
@@ -1870,6 +1871,30 @@ final class MainViewController: NSViewController {
         comparisonView?.bands2.showForFileDrag(panes)
         surface.tools.panel.showForFileDrag(panes && surface.tools.isPanelVisible)
         fragments.frontSurface?.tools.panel.showForFileDrag(shown && fragments.frontSurface?.tools.isPanelVisible == true)
+    }
+
+    /// Puts up, in every open window, every zone the pane with `dragID` can be
+    /// let go on, unlit — or takes them all down for nil (§4.3).
+    ///
+    /// The pane drag has a source, which says when the drag starts and ends,
+    /// so unlike a file's this needs no guessing from the zones: they are up
+    /// from the first movement to the drop. A zone that would refuse the pane
+    /// is not put up; it shows its refusal only under the pointer.
+    private func showPaneDropZonesEverywhere(_ dragID: UUID?) {
+        for controller in openDocuments?.controllers ?? [self] {
+            controller.showPaneDropZones(dragID)
+        }
+    }
+
+    /// This window's share of `showPaneDropZonesEverywhere`. A fragment panel
+    /// that is up covers the tab's panes and their tool panel, so their zones
+    /// stay down; the panel's own tool panel takes no pane.
+    func showPaneDropZones(_ dragID: UUID?) {
+        let tab = windowPanesAreReachable ? dragID : nil
+        singleFileDropView?.showForPaneDrag(tab, copying: false)
+        comparisonView?.bands1.showForPaneDrag(tab, copying: false)
+        comparisonView?.bands2.showForPaneDrag(tab, copying: false)
+        surface.tools.panel.showForPaneDrag(surface.tools.isPanelVisible ? tab : nil)
     }
 
     private func setNewTabStripVisible(_ visible: Bool, forPane isPane: Bool = false) {

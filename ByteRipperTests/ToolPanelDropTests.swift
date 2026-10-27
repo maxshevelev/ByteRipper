@@ -112,8 +112,8 @@ final class ToolPanelDropTests: XCTestCase {
         let drag = FakeDraggingInfo(paneID: own.dragID, copying: false)
 
         XCTAssertEqual(panel.draggingEntered(drag), [], "nothing to do with it")
-        XCTAssertTrue(panel.dropZoneIsRefusing,
-                      "and the panel says so rather than staying blank")
+        XCTAssertNil(panel.dropZoneCaption,
+                     "and nothing is shown where nothing can land: the cursor refuses")
         XCTAssertFalse(panel.performDragOperation(drag), "letting go does nothing")
         XCTAssertTrue(controller.tools.boundPane === own, "the tool did not move")
     }

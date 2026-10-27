@@ -245,16 +245,10 @@ final class SingleFileDropView: NSView {
         let target = dropTarget(at: windowPoint) ?? .addSecond
         let outcome = paneDropOutcome?(paneID, target, draggedPaneIsCopying) ?? .none
         retitlePaneZones(for: paneID, secondHalf: secondHalf)
-        // A zone with nothing to offer wears the refusal and stays unlit, and
-        // the cursor refuses too. The other zones stay up: taking them all down
-        // there hid the places the pane could go.
-        guard outcome != .none else {
-            thisFileBands.setDragActive(true)
-            thisFileBands.clearHover()
-            addTarget.setDragActive(true)
-            addTarget.setHighlighted(false)
-            return []
-        }
+        // A zone with nothing to offer is not shown, and the cursor refuses;
+        // the other zones stay up — taking them all down there hid the places
+        // the pane could go. The second half with nothing to offer is not there
+        // at all.
         updateDragTarget(at: windowPoint)
         switch outcome {
         // A join and a duplicate both copy — the pane they came from is left
@@ -307,6 +301,13 @@ final class SingleFileDropView: NSView {
     }
 
     override func draggingExited(_ sender: NSDraggingInfo?) {
+        // A pane's zones stay up unlit while its drag goes on: the window put
+        // them up for it.
+        if paneSessionShown {
+            thisFileBands.clearHover()
+            addTarget.setHighlighted(false)
+            return
+        }
         endPaneDrag()
         clearDragTarget()
         // A file's zones come back unlit at once: the window shows every zone
@@ -319,10 +320,38 @@ final class SingleFileDropView: NSView {
 
     override func draggingEnded(_ sender: NSDraggingInfo) {
         onDragSessionChanged?(false)
+        paneSessionShown = false
         endPaneDrag()
         clearDragTarget()
         carryingFiles = false
         onFileDragPresence?(.ended)
+    }
+
+    /// Whether the window has put the zones up for a pane drag in flight
+    /// anywhere. See `PaneDropBandsView.showForPaneDrag`.
+    private var paneSessionShown = false
+
+    /// Puts the zones up, unlit, for the pane with `paneID` being dragged
+    /// anywhere in the app — each saying what letting it go there would do, a
+    /// zone that would refuse it left off — or takes them down for nil.
+    func showForPaneDrag(_ paneID: UUID?, copying: Bool) {
+        guard let paneID else {
+            guard paneSessionShown else { return }
+            paneSessionShown = false
+            endPaneDrag()
+            clearDragTarget()
+            return
+        }
+        paneSessionShown = true
+        draggedPaneID = paneID
+        draggedPaneIsCopying = copying
+        let secondHalf = paneDropOutcome?(paneID, .addSecond, copying) ?? .none
+        setSecondHalfOffered(secondHalf != .none)
+        retitlePaneZones(for: paneID, secondHalf: secondHalf)
+        thisFileBands.setDragActive(true)
+        thisFileBands.clearHover()
+        addTarget.setDragActive(true)
+        addTarget.setHighlighted(false)
     }
 
     /// Shows both halves unlit for a file that is over another of the window's
@@ -356,6 +385,7 @@ final class SingleFileDropView: NSView {
         if let paneID = sender.draggingPasteboard.draggedPaneID {
             let target = dropTarget(at: sender.draggingLocation) ?? .addSecond
             let copying = sender.isCopyRequested
+            paneSessionShown = false
             endPaneDrag()
             clearDragTarget()
             onPaneDropped?(paneID, target, copying)

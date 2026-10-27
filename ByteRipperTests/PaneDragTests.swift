@@ -734,8 +734,8 @@ final class PaneDragTests: XCTestCase {
 
     // MARK: - Crossing a zone with nothing to offer
 
-    /// Over the band with nothing to offer the other bands stay up: that band
-    /// wears the refusal, unlit, and the ones the pane can go to keep saying so.
+    /// Over the band with nothing to offer the other bands stay up, and that
+    /// band is not shown at all — under the pointer included.
     func testTheRefusedBandLeavesTheOtherBandsUp() {
         let bands = PaneDropBandsView(paneView: FilePaneView(viewModel: PaneViewModel()))
         bands.frame = NSRect(x: 0, y: 0, width: 300, height: 400)
@@ -755,9 +755,7 @@ final class PaneDragTests: XCTestCase {
         let append = bands.bandForTesting(.appendAtEnd)
         XCTAssertFalse(insert.isHidden, "the ends stay up")
         XCTAssertFalse(append.isHidden)
-        XCTAssertFalse(insert.isShowingRefusal)
-        XCTAssertFalse(middle.isHidden, "the middle shows its refusal")
-        XCTAssertTrue(middle.isShowingRefusal)
+        XCTAssertTrue(middle.isHidden, "the refused middle is not shown, though the pointer is on it")
         XCTAssertFalse([insert, middle, append].contains(where: \.isHighlightedForTesting),
                        "nothing is lit over a refusal")
     }
@@ -902,20 +900,20 @@ final class PaneDragTests: XCTestCase {
         XCTAssertEqual(PaneDropBandsView.paneBandTitle(for: .move(intoPane: 1)), "Move Here")
     }
 
-    /// A band with nothing to offer has no caption to give, and says so with a
-    /// symbol rather than with an empty plate.
-    func testARefusingBandShowsTheRefusalSymbol() {
+    /// A band with nothing to offer has no caption to give: it is refused, and
+    /// a caption takes the refusal back.
+    func testARefusingBandIsMarkedRefused() {
         XCTAssertNil(PaneDropBandsView.paneBandTitle(for: .none),
-                     "nothing to say means the symbol, not an empty caption")
+                     "nothing to say means refused, not an empty caption")
 
         let zone = DropTargetView(title: "Swap Panes")
-        XCTAssertFalse(zone.isShowingRefusal)
+        XCTAssertFalse(zone.isRefused)
 
         zone.setRefused()
-        XCTAssertTrue(zone.isShowingRefusal)
+        XCTAssertTrue(zone.isRefused)
 
         zone.setTitle("Move Here")
-        XCTAssertFalse(zone.isShowingRefusal, "a caption puts the symbol away again")
+        XCTAssertFalse(zone.isRefused, "a caption takes the refusal back")
     }
 
     /// Over its own slot a pane can join at either end and nothing else, so the
@@ -950,10 +948,10 @@ final class PaneDragTests: XCTestCase {
             }
         }
 
-        XCTAssertFalse(bands.bandForTesting(.insertAtStart).isShowingRefusal,
+        XCTAssertFalse(bands.bandForTesting(.insertAtStart).isRefused,
                        "the end bands have something to offer and say so")
-        XCTAssertFalse(bands.bandForTesting(.appendAtEnd).isShowingRefusal)
-        XCTAssertTrue(bands.bandForTesting(.replace).isShowingRefusal,
+        XCTAssertFalse(bands.bandForTesting(.appendAtEnd).isRefused)
+        XCTAssertTrue(bands.bandForTesting(.replace).isRefused,
                       "only the band with nothing to offer shows the symbol")
     }
 

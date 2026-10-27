@@ -9,19 +9,12 @@ import Localization
 final class DropTargetView: NSView {
     private let plate = NSVisualEffectView()
     private let label = NSTextField(labelWithString: "")
-    private let refusalIcon = NSImageView()
-    /// Held so the plate can be squared for a refusal and let go for a caption.
-    private var plateSquareWidth: NSLayoutConstraint?
-    private var plateSquareHeight: NSLayoutConstraint?
 
     /// How much of the dump an idle zone lets through. Every zone a file can go
     /// to is up while it is over the window (§4.3), so an idle plate has to
     /// leave the dump readable under it: it marks where a zone is, the hovered
     /// one's fill says which.
     static let idleFillAlpha: CGFloat = 0.5
-
-    /// The side of the square plate a refusal wears.
-    static let refusalPlateSide: CGFloat = 56
 
     /// Whether the zone is showing its hover fill. Held so a theme switch can
     /// repaint the plate without forgetting whether it was lit (§3.1).
@@ -58,19 +51,6 @@ final class DropTargetView: NSView {
         label.translatesAutoresizingMaskIntoConstraints = false
         plate.addSubview(label)
 
-        // Shown in the label's place when the zone refuses what is being
-        // carried. A caption would have to find words for "nothing"; the symbol
-        // says it without any, and an empty plate says nothing at all — which is
-        // what the middle band looked like when a pane was dragged over its own
-        // slot.
-        refusalIcon.translatesAutoresizingMaskIntoConstraints = false
-        refusalIcon.image = NSImage(systemSymbolName: "nosign",
-                                    accessibilityDescription: L("Not allowed here"))?
-            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 30, weight: .semibold))
-        refusalIcon.contentTintColor = .secondaryLabelColor
-        refusalIcon.isHidden = true
-        plate.addSubview(refusalIcon)
-
         addSubview(plate)
         NSLayoutConstraint.activate([
             plate.centerXAnchor.constraint(equalTo: centerXAnchor),
@@ -88,8 +68,6 @@ final class DropTargetView: NSView {
             label.topAnchor.constraint(equalTo: plate.topAnchor, constant: 5),
             label.bottomAnchor.constraint(equalTo: plate.bottomAnchor, constant: -5),
 
-            refusalIcon.centerXAnchor.constraint(equalTo: plate.centerXAnchor),
-            refusalIcon.centerYAnchor.constraint(equalTo: plate.centerYAnchor),
         ])
 
         // Keep the plate inside the zone even when the zone gets narrow: it
@@ -108,19 +86,13 @@ final class DropTargetView: NSView {
         // What the plate is *for* is hugging the caption, and only inequalities
         // say that: they bound the plate's width without choosing one, which is
         // no width at all as far as the engine is concerned — `hasAmbiguousLayout`
-        // on the plate, the label and the icon under it. These say which of the
-        // allowed widths it is, below the clamps above so a squeezed zone still
-        // wins, and below the square a refusal puts on.
+        // on the plate and the label under it. These say which of the allowed
+        // widths it is, below the clamps above so a squeezed zone still wins.
         for hug in [label.leadingAnchor.constraint(equalTo: plate.leadingAnchor, constant: 10),
                     label.trailingAnchor.constraint(equalTo: plate.trailingAnchor, constant: -10)] {
             hug.priority = .defaultHigh - 1
             hug.isActive = true
         }
-
-        // A refusal is a symbol, not a sentence, so its plate is a square rather
-        // than the lozenge a caption needs.
-        plateSquareWidth = plate.widthAnchor.constraint(equalToConstant: Self.refusalPlateSide)
-        plateSquareHeight = plate.heightAnchor.constraint(equalToConstant: Self.refusalPlateSide)
     }
 
     @available(*, unavailable)
@@ -132,23 +104,21 @@ final class DropTargetView: NSView {
     /// (`Design/PANE_DRAG_PLAN.md`), and one plate says whichever it is.
     func setTitle(_ title: String) {
         label.stringValue = title
-        label.isHidden = false
-        refusalIcon.isHidden = true
-        plateSquareWidth?.isActive = false
-        plateSquareHeight?.isActive = false
+        isRefused = false
     }
 
-    /// Marks the zone as one that will not take what is being carried: a
-    /// no-entry symbol in place of a caption.
+    /// Marks the zone as one that will not take what is being carried.
+    ///
+    /// Its owner keeps a refusing zone off screen altogether, under the pointer
+    /// as much as anywhere: it is not a place the drop can go, and anything
+    /// drawn there — a plate, or a symbol on the bare content — would say it
+    /// was one, or would not be seen. The cursor is what refuses (§4.3).
     func setRefused() {
-        label.isHidden = true
-        refusalIcon.isHidden = false
-        plateSquareWidth?.isActive = true
-        plateSquareHeight?.isActive = true
+        isRefused = true
     }
 
-    /// Whether the zone is showing its refusal symbol (for tests).
-    var isShowingRefusal: Bool { !refusalIcon.isHidden }
+    /// Whether the zone is refusing what is being carried.
+    private(set) var isRefused = false
 
     /// Whether the zone is lit as the one under the pointer (for tests).
     var isHighlightedForTesting: Bool { highlighted }
@@ -158,8 +128,6 @@ final class DropTargetView: NSView {
 
     func setHighlighted(_ highlighted: Bool) {
         self.highlighted = highlighted
-        // Hover is also signalled by the accent border and a thicker stroke.
-        layer?.borderWidth = highlighted ? 2 : 1
         // Hover floods the zone with a translucent accent-blue fill; idle keeps
         // the quiet milky plate. The caption's frosted plate is untouched — its
         // material and label adapt on their own (§4.3).
@@ -182,6 +150,8 @@ final class DropTargetView: NSView {
     /// colours as the current drawing appearance so the bake matches the theme
     /// it is painted for (§3.1).
     private func applyPlateColors() {
+        // Hover is also signalled by the accent border and a thicker stroke.
+        layer?.borderWidth = highlighted ? 2 : 1
         effectiveAppearance.performAsCurrentDrawingAppearance {
             layer?.backgroundColor = (highlighted
                 ? NSColor.controlAccentColor.withAlphaComponent(0.25)
@@ -360,7 +330,7 @@ final class PaneDropBandsView: NSView {
             target.translatesAutoresizingMaskIntoConstraints = true
             addSubview(target)
         }
-        hideBands()
+        applyBands()
         // Only the comparison-mode overlay (which wraps a pane) is a drop
         // destination. In single-file mode the parent `SingleFileDropView` owns
         // the drop, so this overlay must NOT register: AppKit resolves the drop
@@ -415,27 +385,61 @@ final class PaneDropBandsView: NSView {
     /// otherwise they swallow every click over the pane (§4.3).
     func setDragActive(_ active: Bool) {
         dragActive = active
-        if active {
-            showBands()
-        } else {
-            hideBands()
+        if !active {
+            hoveredBand = nil
+            retitleBandsForFile()
+        }
+        applyBands()
+    }
+
+    /// The band under the pointer, while a drag is over this overlay.
+    private var hoveredBand: SingleFileDropTarget?
+
+    private var bandTargets: [(SingleFileDropTarget, DropTargetView)] {
+        [(.insertAtStart, insertTarget), (.replace, replaceTarget), (.appendAtEnd, appendTarget)]
+    }
+
+    /// Puts each band on screen or off it, lit or unlit, from the drag's state.
+    ///
+    /// A band that would take what is carried is up for the drag's lifetime
+    /// and lit under the pointer. One that refuses is not a place to go and is
+    /// never shown, under the pointer included: the cursor says no.
+    private func applyBands() {
+        for (band, target) in bandTargets {
+            let hovered = hoveredBand == band
+            let shown = dragActive && !target.isRefused
+            target.isHidden = !shown
+            target.alphaValue = shown ? 1 : 0
+            target.setHighlighted(shown && hovered && !target.isRefused)
         }
     }
 
-    private func showBands() {
-        for target in [insertTarget, replaceTarget, appendTarget] {
-            target.isHidden = false
-            target.alphaValue = 1
-        }
-    }
+    /// Whether the window has put these bands up for a pane drag in flight
+    /// anywhere — so that leaving them unlights them rather than takes them
+    /// down. The pane drag has a source to say when it starts and ends, which
+    /// a file from the Finder has not (`MainViewController.showPaneDropZones`).
+    private var paneSessionShown = false
 
-    private func hideBands() {
-        for target in [insertTarget, replaceTarget, appendTarget] {
-            target.setHighlighted(false)
-            target.isHidden = true
-            target.alphaValue = 0
+    /// Puts the bands up, unlit, for the pane with `paneID` being dragged
+    /// anywhere in the app, each saying what letting it go there would do; nil
+    /// takes them down when the drag is over.
+    func showForPaneDrag(_ paneID: UUID?, copying: Bool) {
+        guard let paneID else {
+            guard paneSessionShown else { return }
+            paneSessionShown = false
+            forgetDraggedPane()
+            setDragActive(false)
+            return
         }
-        retitleBandsForFile()
+        paneSessionShown = true
+        draggedPaneID = paneID
+        draggedPaneIsCopying = copying
+        dragActive = true
+        hoveredBand = nil
+        retitleBands(forPane: paneID) { [weak self] band in
+            guard let self else { return .none }
+            return self.paneDropOutcome?(paneID, band, self.draggedPaneIsCopying) ?? .none
+        }
     }
 
     /// Shows the bands unlit for a file that is over another of the window's
@@ -502,6 +506,7 @@ final class PaneDropBandsView: NSView {
         insertTarget.setTitle(SingleFileDropTarget.insertAtStart.title)
         replaceTarget.setTitle(SingleFileDropTarget.replace.title)
         appendTarget.setTitle(SingleFileDropTarget.appendAtEnd.title)
+        applyBands()
     }
 
     /// Captions every band from **its own** outcome, not from the one under the
@@ -511,12 +516,11 @@ final class PaneDropBandsView: NSView {
     /// the others captioned for something they do not do — the middle band went
     /// blank, an empty grey plate saying nothing, whenever an end band was
     /// hovered over a pane's own slot. A band that will not take what is carried
-    /// now says so with the refusal symbol instead of saying nothing.
+    /// is marked refused, and is then not shown at all.
     /// `outcomeForBand` is passed in rather than read from this view's own
     /// `paneDropOutcome`, which is not always the one that knows: in single-file
     /// mode the container owns the provider and this overlay's is nil, so asking
-    /// itself returned "nothing" for every band and put the refusal symbol on
-    /// all three.
+    /// itself returned "nothing" for every band and refused all three.
     func retitleBands(forPane paneID: UUID,
                       outcomeForBand: (SingleFileDropTarget) -> PaneDrop.Outcome) {
         for (band, target) in [(SingleFileDropTarget.insertAtStart, insertTarget),
@@ -528,6 +532,7 @@ final class PaneDropBandsView: NSView {
                 target.setRefused()
             }
         }
+        applyBands()
     }
 
     /// One band's plate, so a test can read what it is showing.
@@ -540,7 +545,7 @@ final class PaneDropBandsView: NSView {
     }
 
     /// What a band says for the outcome it would produce, or nil when it would
-    /// produce nothing and should show the refusal symbol instead.
+    /// produce nothing and the band is refused instead.
     ///
     /// The ends read exactly as they do for a file, and take their words from
     /// the same place: it is the same operation — `join(contentsOf:at:)` either
@@ -563,18 +568,15 @@ final class PaneDropBandsView: NSView {
     func updateHover(at windowPoint: NSPoint) {
         let point = convert(windowPoint, from: nil)
         let topDownY = bounds.height - point.y
-        let band = DropBandLayout(halfHeight: bounds.height, topInset: topInset)
+        hoveredBand = DropBandLayout(halfHeight: bounds.height, topInset: topInset)
             .band(atTopDownY: topDownY)
-        insertTarget.setHighlighted(band == .insertAtStart)
-        replaceTarget.setHighlighted(band == .replace)
-        appendTarget.setHighlighted(band == .appendAtEnd)
+        applyBands()
     }
 
     /// Clears the hover highlight on all three bands.
     func clearHover() {
-        insertTarget.setHighlighted(false)
-        replaceTarget.setHighlighted(false)
-        appendTarget.setHighlighted(false)
+        hoveredBand = nil
+        applyBands()
     }
 
     /// The band under the window point, or nil when the point is outside the
@@ -625,7 +627,7 @@ extension PaneDropBandsView {
     /// the cursor carries the + that says so — while the middle band moves.
     private func paneOperation(at windowPoint: NSPoint) -> NSDragOperation {
         let operation = paneOperation(forBand: band(at: windowPoint) ?? .replace)
-        if operation != [] { updateHover(at: windowPoint) }
+        updateHover(at: windowPoint)
         return operation
     }
 
@@ -637,14 +639,9 @@ extension PaneDropBandsView {
             guard let self else { return .none }
             return self.paneDropOutcome?(paneID, band, self.draggedPaneIsCopying) ?? .none
         }
-        // A band with nothing to offer wears the refusal and stays unlit, and
-        // the cursor refuses too. The other bands stay up: taking them all
-        // down there hid the very places the pane could go, at the moment the
-        // pointer was nearest them.
-        guard outcome != .none else {
-            clearHover()
-            return []
-        }
+        // A band with nothing to offer is not shown, and the cursor refuses.
+        // The other bands stay up: taking them all down there hid the very
+        // places the pane could go, at the moment the pointer was nearest them.
         switch outcome {
         // A join and a duplicate both copy — the pane they came from is left
         // as it was — so the cursor carries the + that says so.
@@ -658,7 +655,12 @@ extension PaneDropBandsView {
         // This overlay's own bands go — the pointer is no longer choosing among
         // them — but the session is not over, so the strip stays up. A file's
         // bands come back unlit at once: the window shows every zone while the
-        // file is over any of them.
+        // file is over any of them. A pane's stay up unlit while its drag goes
+        // on: the window put them up for it.
+        if paneSessionShown {
+            clearHover()
+            return
+        }
         setDragActive(false)
         forgetDraggedPane()
         if carryingFiles {
@@ -668,6 +670,7 @@ extension PaneDropBandsView {
     }
 
     override func draggingEnded(_ sender: NSDraggingInfo) {
+        paneSessionShown = false
         setDragActive(false)
         forgetDraggedPane()
         carryingFiles = false
@@ -684,6 +687,7 @@ extension PaneDropBandsView {
         if let paneID = sender.draggingPasteboard.draggedPaneID {
             let band = band(at: sender.draggingLocation) ?? .replace
             let copying = sender.isCopyRequested
+            paneSessionShown = false
             setDragActive(false)
             forgetDraggedPane()
             onPaneDropped?(paneID, band, copying)

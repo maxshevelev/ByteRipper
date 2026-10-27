@@ -170,6 +170,10 @@ General:
 - While a file drag is over the window, every zone it can be dropped on is
   shown at once, semi-transparent; only the zone under the pointer is
   highlighted. The zones go when the drag leaves the window or ends.
+- A pane drag shows, from its start to its end and in every window, every zone
+  the pane can be dropped on, the same way.
+- A zone that would refuse what is dragged is never shown, not even under the
+  pointer; the cursor alone says the drop is refused.
 
 Drop in empty mode:
 
