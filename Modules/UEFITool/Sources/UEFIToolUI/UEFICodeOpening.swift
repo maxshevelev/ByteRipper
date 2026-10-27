@@ -50,8 +50,8 @@ public struct UEFICodeOpening: Sendable {
     /// Reads node `id`'s module and the analysis stored for it.
     ///
     /// - Parameter preferred: the analysis to open when it still matches the
-    ///   bytes — the one the tree's badge was drawn from; otherwise the
-    ///   newest the store has for them.
+    ///   bytes — the one the tree's badge was drawn from — at its recipe's
+    ///   latest revision; otherwise the newest the store has for them.
     @MainActor
     public static func prepare(node id: NodeID, in tree: LazyUEFITree, store root: URL?,
                                preferred: AnalysisManifest? = nil) async throws -> UEFICodeOpening {
@@ -70,8 +70,11 @@ public struct UEFICodeOpening: Sendable {
         { () -> (manifest: AnalysisManifest, artifact: CodeArtifact?, recipes: [AnalysisManifest])? in
             let digest = SHA256Digest(data: Data(bytes))
             let index = CodeAnalysisIndex.load(from: root)
-            let manifest = preferred.flatMap { $0.module.sha256 == digest ? $0 : nil }
-                ?? index.newest(for: digest)
+            let manifest = preferred.flatMap { preferred in
+                // The preferred analysis as the store has it now: the tree
+                // drew its badge from a revision a publish has since replaced.
+                index.manifests(for: digest).first { $0.recipe.id == preferred.recipe.id }
+            } ?? index.newest(for: digest)
             guard let manifest else { return nil }
             let artifact = try? ContentStore(root: root, create: false).artifact(for: manifest)
             return (manifest, artifact, index.manifests(for: digest))
