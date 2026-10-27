@@ -2085,7 +2085,7 @@ private struct ChecksumPass: Sendable {
             }
         }
         guard let tree, tree.isReady, let node = tree.image().node(nodeID),
-              let decompressed = UEFIPresenter.decompressedBody(for: node), let source
+              let decompressed = UEFIPresenter.decompressedBody(for: node, in: tree.image()), let source
         else {
             fail(L("There is nothing decompressed to open here."))
             return
@@ -2155,7 +2155,7 @@ private struct ChecksumPass: Sendable {
             return
         }
         guard match.fileRange == nil, let id = match.section, let node = image.node(id),
-              let decompressed = UEFIPresenter.decompressedBody(for: node),
+              let decompressed = UEFIPresenter.decompressedBody(for: node, in: image),
               let source = UEFIPresenter.fileSource(of: node, in: image)
         else { return }
         let codec = UEFIPartCodec(
@@ -2185,7 +2185,7 @@ private struct ChecksumPass: Sendable {
         let readers = tree.spaceReaders
         let body = node.body
         let space = node.space
-        let name = UEFIPresenter.partName(of: node, body: true)
+        let name = UEFIPresenter.partName(of: node, body: true, image: tree.image())
         controller.showBusy()
         Task { [weak self] in
             let text = await Task.detached(priority: .userInitiated) {

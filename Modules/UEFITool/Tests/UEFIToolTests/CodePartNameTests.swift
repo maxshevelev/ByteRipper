@@ -26,5 +26,14 @@ final class CodePartNameTests: XCTestCase {
         XCTAssertEqual(UEFIPresenter.codePartName(of: peim.id, in: image, bytes: [0x56, 0x5A]), "S3RestoreAcpiPei ▸ TE",
                        "a file whose body is the image: the bytes say the format")
         XCTAssertNil(UEFIPresenter.codePartName(of: volume.id, in: image, bytes: []), "no file, no module name")
+
+        // Any section of a module opens under the module's name.
+        let ui = secCore.children[0]
+        XCTAssertEqual(UEFIPresenter.partName(of: ui, body: true, image: image), "SecCore ▸ UI")
+        XCTAssertEqual(UEFIPresenter.partName(of: ui, body: false, image: image), "SecCore ▸ UI with header")
+        XCTAssertEqual(UEFIPresenter.nodeOpen(for: pe32, in: image, body: true)?.partName, "SecCore ▸ PE32")
+        XCTAssertEqual(UEFIPresenter.partName(of: secCore, body: true, image: image), "SecCore body",
+                       "the file itself keeps its own name")
+        XCTAssertEqual(UEFIPresenter.partName(of: pe32, body: true), "PE32 image body", "without the image, as before")
     }
 }

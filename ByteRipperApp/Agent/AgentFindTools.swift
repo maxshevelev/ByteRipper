@@ -491,7 +491,7 @@ final class AgentFindTools {
     /// section opens to, linked to the section and compressed again on the way
     /// back.
     private static func decompressedPart(_ found: UEFIAgentNodeData.Bytes, in image: UEFIImage) throws -> PartPlan {
-        guard let body = UEFIPresenter.decompressedBody(for: found.node),
+        guard let body = UEFIPresenter.decompressedBody(for: found.node, in: image),
               let source = UEFIPresenter.fileSource(of: found.node, in: image) else {
             throw AgentToolError("Node \(found.node.id) is not a compressed section; part \"decompressed\" is a compressed section's.")
         }

@@ -289,7 +289,7 @@ public enum UEFIPresenter {
             // A picture or a sound saves as what it is, so the file opens in
             // a viewer or a player.
             suggestedName: base + decompressed + suffix + "." + fileExtension(of: node),
-            partName: partName(of: node, body: body),
+            partName: partName(of: node, body: body, image: image),
             menuTitle: title
         )
     }
@@ -361,7 +361,7 @@ public enum UEFIPresenter {
     /// decoded buffer needs no second item: opening or saving it is reading
     /// those bytes (`nodeOpenTitle`). Nothing else has anything decompressed
     /// to offer — its bytes are the file's, and the dump already has those.
-    public static func decompressedBody(for node: UEFINode) -> DecompressedBody? {
+    public static func decompressedBody(for node: UEFINode, in image: UEFIImage? = nil) -> DecompressedBody? {
         let opened = node.children.contains { $0.space != node.space }
         let closed = node.compression?.decodes == true && node.isExpandable && node.children.isEmpty
         guard node.kind == .section || node.kind == .biosGuardUpdate
@@ -375,7 +375,7 @@ public enum UEFIPresenter {
                 space: node.space.inside(sectionAt: node.header.lowerBound),
                 layout: .image,
                 suggestedName: "BIOS region.bin",
-                partName: partName(of: node, body: true),
+                partName: partName(of: node, body: true, image: image),
                 saveTitle: L("Save Assembled BIOS Region as…"),
                 openTitle: L("Open Assembled BIOS Region")
             )
@@ -395,7 +395,7 @@ public enum UEFIPresenter {
             space: node.space.inside(sectionAt: node.header.lowerBound),
             layout: node.kind == .section ? .decompressedBody : .image,
             suggestedName: marked + ".bin",
-            partName: partName(of: node, body: true),
+            partName: partName(of: node, body: true, image: image),
             saveTitle: L("Save Decompressed Body as…"),
             openTitle: L("Open Decompressed Body")
         )
@@ -422,13 +422,49 @@ public enum UEFIPresenter {
     /// the panel's link names, and not what was done to the bytes, which the
     /// codec's badge on the pill says.
     ///
-    /// `body` is English in every language, as it is in a saved file's name:
-    /// the name is the file's, and a file's name is not translated.
-    public static func partName(of node: UEFINode, body: Bool = false,
+    /// A section of a module's file is named after the module first, since
+    /// `Raw` or `PE32 image` alone is the same in every module:
+    /// `SecCore ▸ PE32`, `AmdSpiRom ▸ Raw`. Its body is the section the tree
+    /// shows, an image type shortened to its format; the whole section, header
+    /// and all, says `with header`. That needs the `image` to find the file.
+    ///
+    /// `body` and `with header` are English in every language, as in a saved
+    /// file's name: the name is the file's, and a file's name is not translated.
+    public static func partName(of node: UEFINode, body: Bool = false, image: UEFIImage? = nil,
                                 in language: AppLanguage = Localization.appLanguage) -> String {
         let shown = node.displayName(in: language)
         let name = shown.isEmpty ? L("Node", in: language) : shown
+        if node.kind == .section, let image, let module = moduleName(above: node.id, in: image, language: language) {
+            let section = imageFormat(ofSection: node) ?? name
+            return module + " ▸ " + section + (body || node.header.isEmpty ? "" : " with header")
+        }
         return body && !node.header.isEmpty ? name + " body" : name
+    }
+
+    /// The name of the FFS file at or above node `id`, as the tree shows it;
+    /// nil when there is none or it has no name.
+    static func moduleName(above id: NodeID, in image: UEFIImage,
+                           language: AppLanguage = Localization.appLanguage) -> String? {
+        var path = id.path
+        while true {
+            if let file = image.node(NodeID(path)), file.kind == .file {
+                let name = file.displayName(in: language)
+                return name.isEmpty ? nil : name
+            }
+            guard !path.isEmpty else { return nil }
+            path.removeLast()
+        }
+    }
+
+    /// An image section's format, `PE32`, `PIC`, `TE`; nil for any other.
+    static func imageFormat(ofSection node: UEFINode) -> String? {
+        guard node.kind == .section else { return nil }
+        switch node.subtype {
+        case UEFICodeCandidates.pe32Section: return "PE32"
+        case 0x11: return "PIC"
+        case UEFICodeCandidates.teSection: return "TE"
+        default: return nil
+        }
     }
 
     /// What a Code panel is called: the module and its image format,
@@ -436,30 +472,14 @@ public enum UEFIPresenter {
     /// `PE32 image` in every module; the FFS file the tree names is the
     /// module. Nil when no file above the image has a name.
     public static func codePartName(of id: NodeID, in image: UEFIImage, bytes: [UInt8]) -> String? {
-        guard let node = image.node(id) else { return nil }
-        var path = id.path
-        var module: String?
-        while true {
-            if let file = image.node(NodeID(path)), file.kind == .file {
-                let name = file.displayName(in: Localization.appLanguage)
-                if !name.isEmpty { module = name }
-                break
-            }
-            guard !path.isEmpty else { break }
-            path.removeLast()
-        }
-        guard let module else { return nil }
+        guard let node = image.node(id), let module = moduleName(above: id, in: image) else { return nil }
         return module + " ▸ " + imageFormat(of: node, bytes: bytes)
     }
 
     /// The image format as the section type says it, or as the bytes do
     /// for a file whose body is the image.
     public static func imageFormat(of node: UEFINode, bytes: [UInt8]) -> String {
-        if node.kind == .section {
-            if node.subtype == UEFICodeCandidates.teSection { return "TE" }
-            if node.subtype == UEFICodeCandidates.pe32Section { return "PE32" }
-        }
-        return bytes.starts(with: [0x56, 0x5A]) ? "TE" : "PE32"
+        imageFormat(ofSection: node) ?? (bytes.starts(with: [0x56, 0x5A]) ? "TE" : "PE32")
     }
 
     /// Where a node's bytes are held in the file: its own range, or — for a
