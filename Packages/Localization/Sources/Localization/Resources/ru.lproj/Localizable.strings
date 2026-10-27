@@ -1767,6 +1767,9 @@
 "Removed blocks" = "Удалённые блоки";
 "Unreachable blocks" = "Недостижимые блоки";
 "%1$@ blocks removed from the C" = "Блоков, убранных из C: %1$@";
+"%1$@ at address %2$@" = "%1$@ по адресу %2$@";
+"Data" = "Данные";
+"In the image: %1$@" = "В образе: %1$@";
 "Ghidra's decompiler found that, with the values it knows, no path runs these blocks, and left them out of the C. Their instructions are still in the listing. A block that depends on what the hardware answers, such as a check Ghidra's model cannot fail, may still run on the board." = "Декомпилятор Ghidra установил, что при известных ему значениях ни один путь не ведёт в эти блоки, и не включил их в C. Их инструкции по-прежнему есть в листинге. Блок, который зависит от ответа оборудования, например проверка, которая в модели Ghidra не может не пройти, на плате всё же может выполниться.";
 "%1$@ · %2$@ bytes" = "%1$@ · %2$@ байт";
 "at +0x%1$@ in %2$@" = "по смещению +0x%1$@ в %2$@";

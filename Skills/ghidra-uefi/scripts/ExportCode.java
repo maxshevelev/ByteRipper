@@ -30,6 +30,7 @@ import ghidra.app.decompiler.PrettyPrinter;
 import ghidra.app.script.GhidraScript;
 import ghidra.framework.Application;
 import ghidra.program.model.address.Address;
+import ghidra.program.model.listing.CommentType;
 import ghidra.program.model.address.AddressSet;
 import ghidra.program.model.data.Array;
 import ghidra.program.model.data.BitFieldDataType;
@@ -187,11 +188,13 @@ public class ExportCode extends GhidraScript {
                     || !symbol.getAddress().isMemoryAddress()) continue;
             Data item = listing.getDataAt(symbol.getAddress());
             String why = reasons == null ? null : reasons.getString(symbol.getAddress());
+            String said = dataComment(listing, symbol.getAddress());
             symbols.add("{\"address\": " + quote(hex(symbol.getAddress()))
                 + ", \"name\": " + quote(symbol.getName())
                 + ", \"type\": " + quote(item == null ? null : item.getDataType().getDisplayName())
                 + ", \"source\": " + quote(symbol.getSource().name())
-                + (why == null ? "" : ", \"reason\": " + quote(why)) + "}");
+                + (why == null ? "" : ", \"reason\": " + quote(why))
+                + (said == null ? "" : ", \"comment\": " + quote(said)) + "}");
         }
         json.append("  \"symbols\": [").append(String.join(", ", symbols)).append("],\n");
 
@@ -433,6 +436,17 @@ public class ExportCode extends GhidraScript {
         json.append("      \"c_sites\": [").append(String.join(", ", sites)).append("],\n");
         json.append("      \"c_fields\": [").append(String.join(", ", fields)).append("],\n");
         if (folded != null) json.append("      \"c_unreachable\": ").append(folded).append(",\n");
+    }
+
+    // What a review wrote at a named datum: its plate comment, else its pre,
+    // end-of-line or repeatable one — what the name stands for.
+    private static String dataComment(Listing listing, Address address) {
+        for (CommentType kind : new CommentType[] {
+                CommentType.PLATE, CommentType.PRE, CommentType.EOL, CommentType.REPEATABLE }) {
+            String text = listing.getComment(kind, address);
+            if (text != null && !text.isBlank()) return text.strip();
+        }
+        return null;
     }
 
     private static final Pattern UNREACHABLE =

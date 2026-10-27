@@ -32,6 +32,8 @@ public struct CodeModel: Sendable {
     /// The original module's headers, when the module bytes were given and
     /// could be trusted. Without it no address has a module offset.
     public let layout: ModuleLayout?
+    /// The module's bytes, when given: what a global holds in the image.
+    public let moduleBytes: Data?
     public let lines: [Line]
 
     private let imageBase: UInt64?
@@ -53,12 +55,13 @@ public struct CodeModel: Sendable {
 
     public init(artifact: CodeArtifact, moduleBytes: Data?) {
         self.init(artifact: artifact,
-                  layout: moduleBytes.flatMap { try? ModuleLayout(module: $0) })
+                  layout: moduleBytes.flatMap { try? ModuleLayout(module: $0) }, moduleBytes: moduleBytes)
     }
 
-    public init(artifact: CodeArtifact, layout: ModuleLayout?) {
+    public init(artifact: CodeArtifact, layout: ModuleLayout?, moduleBytes: Data? = nil) {
         self.artifact = artifact
         self.layout = layout
+        self.moduleBytes = layout == nil ? nil : moduleBytes
         let base = artifact.program?.imageBase?.value
         imageBase = base
 

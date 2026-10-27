@@ -655,15 +655,13 @@ import ToolModuleKit
         }
     }
 
-    /// The bytes a click on a global selects: a GUID's 16, a pointer's width,
-    /// or the one byte at the address when the artifact does not say.
+    /// The bytes a click on a global selects: a GUID's 16, an integer's or a
+    /// pointer's width, or the one byte at the address when the type does
+    /// not say.
     private func dataRange(at address: CodeAddress) -> Range<UInt64>? {
+        // As wide as its type: a UINT64 is eight bytes, not its first.
         let symbol = artifact.symbols.first { $0.address == address }
-        var count = 1
-        if let type = symbol?.type {
-            if type == "EFI_GUID" { count = 16 }
-            else if type.hasSuffix("*") { count = (artifact.program?.is64Bit ?? false) ? 8 : 4 }
-        }
+        let count = symbol?.type.flatMap(model.width(ofType:)) ?? 1
         return model.moduleRange(of: address, count: count) ?? model.moduleRange(of: address, count: 1)
     }
 
@@ -1757,9 +1755,9 @@ import ToolModuleKit
         guard let index = state.function else { return }
         let local = character - cShift
         var found: (CodeExplanation, NSRange)?
-        if let token, token.kind == .constant || token.kind == .type || token.kind == .comment,
+        if let token, [.constant, .type, .comment, .global].contains(token.kind),
            let explained = model.explanation(ofC: CodeToken(start: token.start - cShift, length: token.length,
-                                                            kind: token.kind), inFunction: index) {
+                                                            kind: token.kind, link: token.link), inFunction: index) {
             found = (explained, NSRange(location: token.start, length: token.length))
         } else if let field = model.field(atC: local, inFunction: index),
                   let explained = model.explanation(ofField: field, inFunction: index) {
@@ -1789,9 +1787,9 @@ import ToolModuleKit
     private func explainableInC() -> [NSRange] {
         guard let index = state.function else { return [] }
         var ranges = shownCTokens.compactMap { token -> NSRange? in
-            guard token.kind == .constant || token.kind == .type || token.kind == .comment,
+            guard [.constant, .type, .comment, .global].contains(token.kind),
                   model.explanation(ofC: CodeToken(start: token.start - cShift, length: token.length,
-                                                   kind: token.kind), inFunction: index) != nil
+                                                   kind: token.kind, link: token.link), inFunction: index) != nil
             else { return nil }
             return NSRange(location: token.start, length: token.length)
         }

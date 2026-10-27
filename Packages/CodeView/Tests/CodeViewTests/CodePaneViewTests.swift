@@ -1401,6 +1401,59 @@ final class CodePaneViewTests: XCTestCase {
     }
 
     /// A type's line longer than the popover scrolls sideways in its box.
+    /// A named global in the C is a link that explains itself on a click:
+    /// its type and place, what the image holds there, the review's words
+    /// and the instructions that use it. ⌘-click still selects its bytes.
+    func testAClickOnAGlobalSaysWhatItIs() throws {
+        let c = "void F(void)\n{\n  Port = mPort;\n}\n"
+        let at = (c as NSString).range(of: "mPort")
+        let json: [String: Any] = [
+            "script_version": 5, "program": ["image_base": "0x0"],
+            "functions": [[
+                "entry": "0x220", "name": "F", "c": c,
+                "c_spans": [[at.location, at.length, "global", "0x230"]],
+                "instructions": [["address": "0x220", "bytes": "66 A1", "mnemonic": "MOV", "text": "MOV AX,[0x220]",
+                                  "references": [["to": "0x230", "type": "READ"]]]]
+            ]],
+            "symbols": [["address": "0x230", "name": "mPort", "type": "UINT16", "source": "USER_DEFINED",
+                         "comment": "The port the board's EC answers on. Source: the board's schematic."]]
+        ]
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        var module = teModule()
+        module[0x78] = 0x56
+        module[0x79] = 0x57
+        let view = CodePaneView(manifest: manifest(), artifact: artifact, moduleBytes: module, hexView: NSView())
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 480),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 0, instruction: nil, showsC: true)
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil) }
+
+        let textView = try XCTUnwrap(first(CodeTextView.self, in: view) { _ in true })
+        let shown = textView.string as NSString
+        XCTAssertEqual(textView.explainable.map { shown.substring(with: $0) }, ["mPort"])
+        XCTAssertFalse(view.clickC(at: shown.range(of: "mPort").location + 1, event: try click(count: 1)))
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        let global = try XCTUnwrap(view.shownExplanation)
+        XCTAssertEqual(global.subject, .global(CodeAddress(0x230)))
+        XCTAssertEqual(global.value, "0x5756 = 22358", "the two bytes at 0x78, little-endian")
+        XCTAssertEqual(global.uses.map(\.line), [0])
+        let popover = CodeExplanationPopover(explanation: global, model: CodeModel(artifact: artifact, moduleBytes: module))
+        XCTAssertEqual(popover.factsText(), "UINT16 at address 0x78\nIn the image: 0x5756 = 22358")
+        let stack = try XCTUnwrap(popover.view as? NSStackView)
+        XCTAssertEqual((stack.arrangedSubviews.last as? NSTextField)?.stringValue, "Source: the board's schematic.")
+        view.shownExplanationClose()
+
+        // A double click selects the global's bytes in the dump: both of a
+        // UINT16, not its first.
+        var selected: Range<UInt64>?
+        view.onSelectRange = { selected = $0 }
+        XCTAssertTrue(view.clickC(at: shown.range(of: "mPort").location + 1, event: try click(count: 2)))
+        XCTAssertEqual(selected, 0x78..<0x7A)
+    }
+
     /// What a name stands for reads first; its source is the last paragraph,
     /// smaller, under the uses and the C.
     func testTheSourceIsTheLastParagraph() throws {

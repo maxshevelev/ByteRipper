@@ -15,6 +15,8 @@ public struct CodeExplanation: Equatable, Sendable {
         /// The decompiler's one line for the blocks it left out of the C
         /// as unreachable; `uses` are the blocks.
         case unreachable(blocks: Int)
+        /// A named global: its address.
+        case global(CodeAddress)
     }
 
     /// An instruction that holds the constant, or a removed block's first.
@@ -43,6 +45,9 @@ public struct CodeExplanation: Equatable, Sendable {
     public let c: String?
     /// The instructions that hold the constant, in address order.
     public let uses: [Use]
+    /// What a global holds in the image, `0xF8000000 = 4160749568` or a
+    /// GUID; nil for anything else, or when the bytes are not at hand.
+    public var value: String?
 
     /// The review's words split where they name their source —
     /// `… Source: PCI 3.0, 3.2.2.3.2`, `Source of the name: Linux …` — so the
@@ -57,7 +62,8 @@ public struct CodeExplanation: Equatable, Sendable {
     }
 
     public init(subject: Subject, name: String, enumName: String?, kind: String?, size: Int,
-                declaration: String?, text: String?, c: String?, uses: [Use]) {
+                declaration: String?, text: String?, c: String?, uses: [Use], value: String? = nil) {
+        self.value = value
         self.subject = subject
         self.name = name
         self.enumName = enumName
@@ -90,6 +96,11 @@ extension CodeModel {
             return equate.map(explanation(of:))
         case .type:
             return typeExplanation(named: text)
+        case .global:
+            // By the address it links to; one with no bytes in the module
+            // links nowhere and is found by its name.
+            if case .bytes(let address)? = token.link { return explanation(ofGlobal: address) }
+            return artifact.symbols.first { $0.name == text }.flatMap { explanation(ofGlobal: $0.address) }
         case .comment:
             guard let removed = functions[index].cUnreachable,
                   removed.start == token.start, removed.length == token.length else { return nil }
@@ -127,6 +138,52 @@ extension CodeModel {
                 && (equate.value == value || equate.value & width == value & width)
         }
         return equate.map(explanation(of:))
+    }
+
+    /// The explanation for a named global at `address`: its type, where it
+    /// is, what the image holds there, the review's words for it and the
+    /// instructions that read or write it. Nil for an address no symbol names.
+    public func explanation(ofGlobal address: CodeAddress) -> CodeExplanation? {
+        guard let symbol = artifact.symbols.first(where: { $0.address == address }) else { return nil }
+        let uses = uses(of: address).map {
+            CodeExplanation.Use(line: $0.line, function: $0.function, address: $0.from)
+        }
+        let words = (symbol.comment ?? symbol.reason).flatMap(Self.nonEmpty)
+        return CodeExplanation(subject: .global(address), name: symbol.name, enumName: nil,
+                               kind: symbol.type, size: 0, declaration: nil, text: words, c: nil,
+                               uses: uses, value: value(of: symbol))
+    }
+
+    /// How many bytes a datum of `type` takes: a GUID's 16, an integer's
+    /// width, a pointer's; nil for a type this reader does not size.
+    public func width(ofType type: String) -> Int? {
+        let pointer = (artifact.program?.is64Bit ?? false) ? 8 : 4
+        switch type {
+        case "EFI_GUID", "GUID": return 16
+        case "UINT8", "INT8", "BOOLEAN", "CHAR8", "byte", "uchar", "char", "bool": return 1
+        case "UINT16", "INT16", "CHAR16", "word", "ushort", "short", "wchar16": return 2
+        case "UINT32", "INT32", "dword", "uint", "int": return 4
+        case "UINT64", "INT64", "qword", "ulonglong", "longlong", "EFI_PHYSICAL_ADDRESS": return 8
+        case "UINTN", "INTN", "EFI_STATUS": return pointer
+        default: return type.hasSuffix("*") ? pointer : nil
+        }
+    }
+
+    /// What the image holds at a symbol whose type says how to read it.
+    private func value(of symbol: CodeArtifact.Symbol) -> String? {
+        guard let bytes = moduleBytes, let width = symbol.type.flatMap(width(ofType:)),
+              let range = moduleRange(of: symbol.address, count: width),
+              range.upperBound <= UInt64(bytes.count) else { return nil }
+        let raw = [UInt8](bytes[bytes.startIndex + Int(range.lowerBound)..<bytes.startIndex + Int(range.upperBound)])
+        if width == 16 {
+            func hex(_ slice: ArraySlice<UInt8>) -> String { slice.map { String(format: "%02X", $0) }.joined() }
+            let d1 = raw[0..<4].reversed().map { String(format: "%02X", $0) }.joined()
+            let d2 = raw[4..<6].reversed().map { String(format: "%02X", $0) }.joined()
+            let d3 = raw[6..<8].reversed().map { String(format: "%02X", $0) }.joined()
+            return "\(d1)-\(d2)-\(d3)-\(hex(raw[8..<10]))-\(hex(raw[10..<16]))"
+        }
+        let number = raw.reversed().reduce(UInt64(0)) { $0 << 8 | UInt64($1) }
+        return Self.number(number)
     }
 
     /// A type by name, as the artifact holds it.

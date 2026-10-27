@@ -446,6 +446,9 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         public let type: String?
         public let source: String?
         public let reason: String?
+        /// What a review wrote at the datum — its plate, pre, end-of-line or
+        /// repeatable comment: what the name stands for.
+        public let comment: String?
 
         public init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -454,10 +457,11 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             type = try container.decodeIfPresent(String.self, forKey: .type)
             source = try container.decodeIfPresent(String.self, forKey: .source)
             reason = try container.decodeIfPresent(String.self, forKey: .reason)
+            comment = try container.decodeIfPresent(String.self, forKey: .comment)
         }
 
         private enum CodingKeys: String, CodingKey {
-            case address, name, type, source, reason
+            case address, name, type, source, reason, comment
         }
     }
 

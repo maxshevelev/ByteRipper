@@ -195,7 +195,10 @@ status-code module's choice.
   `parameter`, `local`, `function` (target: the called entry), `global`
   (target: its address). The Code panel colours by kind and makes a target a
   link; without spans (v2, v3) it lexes the C and links names it knows.
-- `symbols` is the named data: GUIDs, service tables, interfaces.
+- `symbols` is the named data: GUIDs, service tables, interfaces. A symbol
+  the review commented (`ghidra_comment` at its address: plate, pre, eol or
+  repeatable, the first there is) carries it as `comment`; the Code panel
+  shows it when the name is clicked, with the value the image holds.
 
 The Swift reader (`CodeArtifact.supportedScriptVersions`) and `code_query.py`
 (`SUPPORTED_SCRIPT_VERSIONS`) accept the same set and refuse any other. A v3

@@ -70,6 +70,7 @@ import Localization
         facts.textColor = .secondaryLabelColor
         facts.isSelectable = true
         facts.lineBreakMode = .byTruncatingTail
+        facts.maximumNumberOfLines = 0
         facts.widthAnchor.constraint(lessThanOrEqualToConstant: inner).isActive = true
         stack.addArrangedSubview(facts)
 
@@ -174,6 +175,10 @@ import Localization
         switch explanation.subject {
         case .unreachable(let blocks):
             return String(format: L("%1$@ blocks removed from the C"), "\(blocks)")
+        case .global(let address):
+            let place = String(format: L("%1$@ at address %2$@"), explanation.kind ?? L("Data"), model.displayAddress(address))
+            guard let value = explanation.value else { return place }
+            return place + "\n" + String(format: L("In the image: %1$@"), value)
         case .constant(_, let value):
             let number = CodeModel.number(value)
             guard let owner = explanation.enumName else { return number }
