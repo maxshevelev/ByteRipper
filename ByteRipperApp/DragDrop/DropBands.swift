@@ -632,19 +632,18 @@ extension PaneDropBandsView {
     private func paneOperation(forBand band: SingleFileDropTarget) -> NSDragOperation {
         guard let paneID = draggedPaneID else { return [] }
         let outcome = paneDropOutcome?(paneID, band, draggedPaneIsCopying) ?? .none
-        // Nothing to offer, so nothing is shown. The zones are the offer: a
-        // pane over the one band with no meaning is refused by the cursor, and
-        // lighting the bands anyway would put a choice on screen that does not
-        // exist. What is *not* forgotten here is the pane itself — the drag is
-        // still in flight, and the next band may well have something to offer.
-        guard outcome != .none else {
-            setDragActive(false)
-            return []
-        }
         setDragActive(true)
         retitleBands(forPane: paneID) { [weak self] band in
             guard let self else { return .none }
             return self.paneDropOutcome?(paneID, band, self.draggedPaneIsCopying) ?? .none
+        }
+        // A band with nothing to offer wears the refusal and stays unlit, and
+        // the cursor refuses too. The other bands stay up: taking them all
+        // down there hid the very places the pane could go, at the moment the
+        // pointer was nearest them.
+        guard outcome != .none else {
+            clearHover()
+            return []
         }
         switch outcome {
         // A join and a duplicate both copy — the pane they came from is left

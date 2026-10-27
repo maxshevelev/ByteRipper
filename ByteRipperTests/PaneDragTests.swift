@@ -734,10 +734,38 @@ final class PaneDragTests: XCTestCase {
 
     // MARK: - Crossing a zone with nothing to offer
 
-    /// The overlay must not forget what is in flight when it hides its bands.
+    /// Over the band with nothing to offer the other bands stay up: that band
+    /// wears the refusal, unlit, and the ones the pane can go to keep saying so.
+    func testTheRefusedBandLeavesTheOtherBandsUp() {
+        let bands = PaneDropBandsView(paneView: FilePaneView(viewModel: PaneViewModel()))
+        bands.frame = NSRect(x: 0, y: 0, width: 300, height: 400)
+        bands.layout()
+        bands.paneDropOutcome = { _, band, _ in
+            switch band {
+            case .insertAtStart: return .join(intoPane: 0, at: .start)
+            case .appendAtEnd: return .join(intoPane: 0, at: .end)
+            default: return .none
+            }
+        }
+
+        XCTAssertEqual(bands.paneDragEnteredForTesting(UUID(), at: .replace), [])
+
+        let insert = bands.bandForTesting(.insertAtStart)
+        let middle = bands.bandForTesting(.replace)
+        let append = bands.bandForTesting(.appendAtEnd)
+        XCTAssertFalse(insert.isHidden, "the ends stay up")
+        XCTAssertFalse(append.isHidden)
+        XCTAssertFalse(insert.isShowingRefusal)
+        XCTAssertFalse(middle.isHidden, "the middle shows its refusal")
+        XCTAssertTrue(middle.isShowingRefusal)
+        XCTAssertFalse([insert, middle, append].contains(where: \.isHighlightedForTesting),
+                       "nothing is lit over a refusal")
+    }
+
+    /// The overlay must not forget what is in flight over a refused band.
     ///
     /// The middle band of a pane's own slot is the one zone with nothing to
-    /// offer, so the bands go away there. Clearing the dragged pane at the same
+    /// offer. Clearing the dragged pane at the same
     /// time meant the overlay answered "no" for the rest of the drag: entering
     /// from outside worked, moving out of the middle band did not.
     func testCrossingTheRefusedMiddleBandDoesNotEndTheDrag() throws {

@@ -244,14 +244,17 @@ final class SingleFileDropView: NSView {
         setSecondHalfOffered(secondHalf != .none)
         let target = dropTarget(at: windowPoint) ?? .addSecond
         let outcome = paneDropOutcome?(paneID, target, draggedPaneIsCopying) ?? .none
-        // Nothing to offer, so nothing is shown — a window's own pane has
-        // nowhere to go here, and lighting the zones for it would offer a
-        // choice that does not exist.
+        retitlePaneZones(for: paneID, secondHalf: secondHalf)
+        // A zone with nothing to offer wears the refusal and stays unlit, and
+        // the cursor refuses too. The other zones stay up: taking them all down
+        // there hid the places the pane could go.
         guard outcome != .none else {
-            clearDragTarget()
+            thisFileBands.setDragActive(true)
+            thisFileBands.clearHover()
+            addTarget.setDragActive(true)
+            addTarget.setHighlighted(false)
             return []
         }
-        retitlePaneZones(for: paneID, secondHalf: secondHalf)
         updateDragTarget(at: windowPoint)
         switch outcome {
         // A join and a duplicate both copy — the pane they came from is left
