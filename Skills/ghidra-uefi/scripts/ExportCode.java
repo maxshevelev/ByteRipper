@@ -539,11 +539,23 @@ public class ExportCode extends GhidraScript {
 
         private final Program program;
         private final List<Sink> sinks = new ArrayList<>();
+        // One function's varnodes, each read once: a loop joins its values in
+        // MULTIEQUALs, and read again at every join the walk is exponential
+        // (a 2.7 KB function never finished). A varnode met again while it
+        // is still being read is the loop itself: computed. A budget per
+        // function bounds what is left.
+        private final Map<Varnode, Value> memo = new java.util.HashMap<>();
+        private final java.util.Set<Varnode> reading = new java.util.HashSet<>();
+        private int budget;
+        static final int BUDGET = 200_000;
         private final Map<Address, List<Call>> callsTo = new java.util.HashMap<>();
 
         PortWrites(Program program) { this.program = program; }
 
         void collect(Function function, HighFunction high) {
+            memo.clear();
+            reading.clear();
+            budget = BUDGET;
             java.util.Iterator<PcodeOpAST> ops = high.getPcodeOps();
             while (ops.hasNext()) {
                 PcodeOpAST op = ops.next();
@@ -569,7 +581,18 @@ public class ExportCode extends GhidraScript {
             }
         }
 
-        private static Value value(Varnode varnode, int depth) {
+        private Value value(Varnode varnode, int depth) {
+            Value known = memo.get(varnode);
+            if (known != null) return known;
+            if (reading.contains(varnode) || --budget < 0) return Value.computed();
+            reading.add(varnode);
+            Value found = read(varnode, depth);
+            reading.remove(varnode);
+            memo.put(varnode, found);
+            return found;
+        }
+
+        private Value read(Varnode varnode, int depth) {
             int size = varnode.getSize();
             if (varnode.isConstant()) return Value.constant(varnode.getOffset()).masked(size);
             if (varnode.getHigh() instanceof HighParam param && varnode.getDef() == null) {
@@ -635,7 +658,7 @@ public class ExportCode extends GhidraScript {
 
         // What an argument points at when it is the address of a local of
         // the caller (`&local_8`): every constant the function stores there.
-        private static Value pointee(Varnode argument, HighFunction high) {
+        private Value pointee(Varnode argument, HighFunction high) {
             PcodeOp def = argument.getDef();
             while (def != null && (def.getOpcode() == PcodeOp.COPY || def.getOpcode() == PcodeOp.CAST)) {
                 def = def.getInput(0).getDef();

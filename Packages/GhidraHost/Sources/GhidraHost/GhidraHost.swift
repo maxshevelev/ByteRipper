@@ -229,6 +229,14 @@ public actor GhidraHost {
         }
         if let running = await runningOwner(project, replacingStale: true) { return running }
         if let pending = starting[module] { return try await pending.value }
+        // A live owner that does not answer is busy — a publish exporting a
+        // large module — not gone: a second one would only fail on Ghidra's
+        // project lock.
+        if let data = try? Data(contentsOf: project.ownerURL),
+           let record = try? JSONDecoder().decode(OwnerRecord.self, from: data), kill(record.pid, 0) == 0 {
+            throw GhidraHostError(.owner, "the module's owner is busy — a publish of a large module can take a "
+                                  + "while; try again shortly", status: 503)
+        }
         let task = Task { try await self.start(project) }
         starting[module] = task
         defer { starting[module] = nil }
