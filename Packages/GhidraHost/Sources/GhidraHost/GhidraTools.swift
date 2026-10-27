@@ -30,14 +30,16 @@ public enum GhidraTools {
         or `ghidra_open`; read with `ghidra_functions`, `ghidra_function` (decompiled C, parameters and \
         locals with their storage), `ghidra_disassembly`, `ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_type_definition`, \
         `ghidra_description`; write with `ghidra_rename`, `ghidra_function_create`, `ghidra_rename_variable`, `ghidra_signature`, \
-        `ghidra_type`, `ghidra_set_data`, `ghidra_comment`, `ghidra_describe`, `ghidra_code_mode`. `ghidra_publish` makes the review visible to the app — every \
+        `ghidra_type`, `ghidra_set_data`, `ghidra_comment`, `ghidra_describe`, `ghidra_code_mode`, `ghidra_equate`. `ghidra_publish` makes the review visible to the app — every \
         ByteRipper that reads this store — as a new revision; publish at coherent checkpoints, not after \
         every rename. `ghidra_done` publishes and ends the session.
 
         A review aims at decompiled C that reads like the module's source:
         1. Names, not constants: a value of a set becomes an enum member and the parameter, field or return \
         type carries the enum (EFI_STATUS values, DEBUG levels, POST and halt codes, vendor ids). Write the \
-        tag of a typedef: `typedef enum _NAME { … } NAME;`.
+        tag of a typedef: `typedef enum _NAME { … } NAME;`. A constant an instruction holds — an I/O port, \
+        an MSR, a PCI config address — gets its name with `ghidra_equate`, and every port write an \
+        end-of-line comment saying what the register and the bits are and where that is known from.
         2. Structures, not pointer arithmetic: define the header, entry or record the code walks and type \
         the pointer with it, so the C says `Entry->Size` and `Entries[Index]`. Lay a type out from what the \
         instructions prove; a field nobody can name is `Unknown08`. Fix signatures first: a typed \
@@ -351,6 +353,23 @@ public enum GhidraTools {
                 guard bits == 16 || bits == 32 else { throw AgentToolError("`bits` is 16 or 32.") }
                 body["bits"] = .int(bits)
                 body["by"] = "agent"
+                return body
+            },
+            write("ghidra_equate", "set/equate", "Name a constant in an instruction",
+                  "Names a constant an instruction holds — an I/O port (`PCI_CONFIG_ADDRESS` for 0xCF8), "
+                  + "an MSR or register index, a magic value — as a Ghidra equate on that operand; the "
+                  + "disassembly and the C show the name instead of the number, also where the number "
+                  + "reaches an `out()` through a register. `value` picks the operand that holds it; "
+                  + "`operand` picks one by index instead. Empty `name` removes it. One name stands for "
+                  + "one value: a name already used for another is refused. A number the code computes "
+                  + "(`ADD DL,4` to reach 0xCFC) is in no operand and gets a comment instead.",
+                  ["address": AgentSchema.string("The instruction's address."),
+                   "name": AgentSchema.string("A C identifier, in the module's convention; empty removes it."),
+                   "value": AgentSchema.string("The constant, e.g. \"0xCF8\", to pick the operand that holds it."),
+                   "operand": AgentSchema.integer("Or the operand by its index, from 0.")],
+                  required: ["address", "name"]) { arguments in
+                var body = try optional(arguments, ["address", "name", "value"])
+                if arguments.has("operand") { body["operand"] = .int(try arguments.integer("operand")) }
                 return body
             },
             write("ghidra_set_data", "set/data", "Name or type a datum",

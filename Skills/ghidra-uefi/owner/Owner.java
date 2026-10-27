@@ -268,6 +268,7 @@ public class Owner {
                     case "/v1/set/data" -> write(exchange, this::setData);
                     case "/v1/set/description" -> write(exchange, this::setDescription);
                     case "/v1/set/code-mode" -> write(exchange, this::setCodeMode);
+                    case "/v1/set/equate" -> write(exchange, this::setEquate);
                     case "/v1/type" -> write(exchange, this::addType);
                     case "/v1/save" -> write(exchange, body -> {
                         if (program.isChanged()) program.save("save", TaskMonitor.DUMMY);
@@ -846,6 +847,77 @@ public class Owner {
         answer.addProperty("bits", bits);
         answer.addProperty("instructions", decoded);
         answer.add("functions", functions);
+        return answer;
+    }
+
+    /**
+     * A name for a constant an instruction holds — an I/O port, a register
+     * index, a magic value — as a Ghidra equate on that operand, which the
+     * listing and the decompiler show instead of the number. `value` picks
+     * the operand when `operand` is not given. An empty `name` removes the
+     * equate there. A name already standing for another value is refused:
+     * one name, one value, as an enum member.
+     */
+    private JsonObject setEquate(JsonObject body) throws Exception {
+        Address at = address(required(body, "address"));
+        Instruction instruction = program.getListing().getInstructionAt(at);
+        if (instruction == null) throw new Failure(404, "no instruction at " + hex(at));
+        String name = string(body, "name", "");
+        if (!name.isEmpty() && !name.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            throw new Failure(400, name + " is not a C identifier");
+        }
+        String valueText = string(body, "value", null);
+        Long value = null;
+        if (valueText != null) {
+            try {
+                value = valueText.startsWith("0x") || valueText.startsWith("0X")
+                    ? Long.parseUnsignedLong(valueText.substring(2), 16) : Long.parseLong(valueText);
+            } catch (NumberFormatException error) {
+                throw new Failure(400, valueText + " is not a number");
+            }
+        }
+        int operand = integer(body, "operand", -1);
+
+        // The operand and its scalar: the one asked for, or the one holding the value.
+        ghidra.program.model.scalar.Scalar scalar = null;
+        for (int index = 0; index < instruction.getNumOperands() && scalar == null; index++) {
+            if (operand >= 0 && index != operand) continue;
+            for (Object object : instruction.getOpObjects(index)) {
+                if (!(object instanceof ghidra.program.model.scalar.Scalar candidate)) continue;
+                if (value == null || candidate.getUnsignedValue() == value || candidate.getSignedValue() == value) {
+                    scalar = candidate;
+                    operand = index;
+                    break;
+                }
+            }
+        }
+        if (scalar == null) {
+            throw new Failure(409, "no operand of `" + instruction + "` at " + hex(at) + " holds "
+                              + (value == null ? "a constant" : valueText));
+        }
+        long held = scalar.getUnsignedValue();
+
+        ghidra.program.model.symbol.EquateTable table = program.getEquateTable();
+        for (ghidra.program.model.symbol.Equate other : table.getEquates(at, operand)) {
+            other.removeReference(at, operand);
+            if (other.getReferenceCount() == 0) table.removeEquate(other.getName());
+        }
+        JsonObject answer = identity();
+        answer.addProperty("address", hex(at));
+        answer.addProperty("operand", operand);
+        answer.addProperty("value", "0x" + Long.toHexString(held).toUpperCase());
+        if (name.isEmpty()) {
+            answer.addProperty("removed", true);
+            return answer;
+        }
+        ghidra.program.model.symbol.Equate equate = table.getEquate(name);
+        if (equate != null && equate.getValue() != held && equate.getValue() != scalar.getSignedValue()) {
+            throw new Failure(409, name + " already stands for 0x" + Long.toHexString(equate.getValue()).toUpperCase());
+        }
+        if (equate == null) equate = table.createEquate(name, held);
+        equate.addReference(at, operand);
+        answer.addProperty("name", equate.getName());
+        answer.addProperty("references", equate.getReferenceCount());
         return answer;
     }
 

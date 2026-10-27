@@ -77,7 +77,7 @@ final class MCPEndpointTests: XCTestCase {
         XCTAssertEqual(status, 200)
         let names = listed?["result"]?["tools"]?.arrayValue?.compactMap { $0["name"]?.stringValue } ?? []
         XCTAssertTrue(names.contains("ghidra_rename_variable"), "\(names)")
-        XCTAssertEqual(names.count, 21)
+        XCTAssertEqual(names.count, 22)
 
         _ = try await call(7, "ghidra_describe", ["module": .string(module), "section": "Flow", "text": "1. Entry."])
         let sent = try XCTUnwrap(backend.writes.all.last { $0.0 == "set/description" }?.1)
@@ -140,6 +140,24 @@ final class MCPEndpointTests: XCTestCase {
         let wrong = try await call(10, "ghidra_code_mode", [
             "module": .string(module), "start": "0x10", "end": "0x20", "bits": 64])
         XCTAssertEqual(wrong["isError"], true)
+    }
+
+    /// A constant's name reaches the owner with the value that picks the
+    /// operand, or with the operand's index.
+    func testAnEquateCarriesItsValueOrOperand() async throws {
+        _ = try await call(11, "ghidra_equate", [
+            "module": .string(module), "address": "0x9DFE6F5", "name": "PCI_CONFIG_ADDRESS", "value": "0xCF8"])
+        var sent = try XCTUnwrap(backend.writes.all.last { $0.0 == "set/equate" }?.1)
+        var body = try JSONSerialization.jsonObject(with: sent) as? [String: Any]
+        XCTAssertEqual(body?["name"] as? String, "PCI_CONFIG_ADDRESS")
+        XCTAssertEqual(body?["value"] as? String, "0xCF8")
+
+        _ = try await call(12, "ghidra_equate", [
+            "module": .string(module), "address": "0x9DFE70E", "name": "POST_CODE_PORT", "operand": 0])
+        sent = try XCTUnwrap(backend.writes.all.last { $0.0 == "set/equate" }?.1)
+        body = try JSONSerialization.jsonObject(with: sent) as? [String: Any]
+        XCTAssertEqual(body?["operand"] as? Int, 0)
+        XCTAssertNil(body?["value"])
     }
 
     func testALegacyClientAndANotification() async throws {

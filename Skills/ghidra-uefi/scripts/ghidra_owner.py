@@ -485,6 +485,12 @@ def main(argv: list[str]) -> int:
     mode.add_argument("bits", type=int, choices=[16, 32])
     mode.add_argument("--reason")
     mode.add_argument("--by", choices=["agent", "person"], default="agent")
+    equate = sub.add_parser("equate", help="name a constant an instruction holds, e.g. an I/O port")
+    equate.add_argument("module")
+    equate.add_argument("address")
+    equate.add_argument("name", help="empty removes the name there")
+    equate.add_argument("--value", help="the constant, to pick the operand that holds it")
+    equate.add_argument("--operand", type=int, help="or the operand by its index")
     rel = sub.add_parser("release", help="publish and give the write lease back")
     rel.add_argument("module")
     rel.add_argument("--by", choices=["agent", "person"], default="agent")
@@ -569,6 +575,9 @@ def main(argv: list[str]) -> int:
                                  {"text": Path(args.text[1:]).read_text(encoding="utf-8")
                                   if args.text.startswith("@") else args.text,
                                   "section": args.section}),
+            "equate": lambda: ("/v1/set/equate",
+                               {"address": args.address, "name": args.name,
+                                "value": args.value, "operand": args.operand}),
             "code-mode": lambda: ("/v1/set/code-mode",
                                   {"start": args.start, "end": args.end, "bits": args.bits,
                                    "reason": args.reason, "by": args.by}),

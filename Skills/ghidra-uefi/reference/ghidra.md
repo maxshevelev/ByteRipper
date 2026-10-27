@@ -30,12 +30,27 @@ CAS, and its project lock keeps the owner off the project.
 | data, strings | `ghidra_data`, `ghidra_strings` |
 | rename a function, a parameter, a local | `ghidra_rename`, `ghidra_rename_variable` |
 | a function only a table's slot points at | `ghidra_function_create` |
+| a name for an I/O port, an MSR, a PCI config address | `ghidra_equate` |
 | 16-bit code in a 32-bit module (the reset vector) | `ghidra_code_mode` with `bits: 16` |
 | a linker's clone with arguments in other registers | `ghidra_signature` with `storage` / `return_storage` |
 | signature, comment, datum | `ghidra_signature`, `ghidra_comment`, `ghidra_set_data` |
 | read a type: program, shared archive, EDK2 | `ghidra_type_definition` |
 | define a type | `ghidra_type` |
 | make the review visible, end it | `ghidra_publish`, `ghidra_done` |
+
+### I/O ports and other constants
+
+x86 I/O ports are not memory, so a port has no label: `OUT DX,EAX` writes to
+whatever DX holds. A port gets its name as an equate on the operand that holds
+the number — `ghidra_equate` at the `MOV DX,0xCF8` with `value: "0xCF8"` — and
+the decompiler carries the name to the `out()` the register reaches:
+`out(PCI_CONFIG_ADDRESS, 0x8000A344)`. Name the PCI config address too
+(`LPC_IO_PORT_DECODE_ENABLE_CFG` for 0x8000A344), and MSR numbers
+(`MSR_IA32_APIC_BASE` for 0x1B). A port the code computes — `ADD DL,4` to reach
+0xCFC from 0xCF8, `INC DX` from CD6h to CD7h — is in no operand and cannot be
+named: say it in the end-of-line comment. Every port write gets one: which
+register, which bits, and the source of the names (a PPR, coreboot, EDK2), or
+that they are not known.
 
 ### 16-bit code in a 32-bit module
 
