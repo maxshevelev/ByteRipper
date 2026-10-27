@@ -98,6 +98,23 @@ final class GhidraHostOwnerTests: XCTestCase {
         XCTAssertEqual(again.manifest.reading?.rev, manifest.reading?.rev)
         XCTAssertEqual(store.verify(), [])
 
+        // The description alone makes the next revision, as an object of its own.
+        _ = try await host.write(module, "/v1/set/description", body: JSONSerialization.data(withJSONObject: [
+            "text": "# CpuPei\r\n\n## Purpose\n\nInitialises the CPU.  \n\n"]))
+        _ = try await host.write(module, "/v1/set/description", body: JSONSerialization.data(withJSONObject: [
+            "section": "Open questions", "text": "- Who reads 0x11004?"]))
+        let read = try JSONSerialization.jsonObject(with: await host.read(module, "/v1/description")) as! [String: Any]
+        XCTAssertEqual(read["sections"] as? [String], ["Purpose", "Open questions"])
+        let described = try await host.publish(module, by: "agent").manifest
+        XCTAssertEqual(described.reading?.rev, (manifest.reading?.rev ?? 0) + 1)
+        XCTAssertEqual(try store.moduleDescription(for: described),
+                       "# CpuPei\n\n## Purpose\n\nInitialises the CPU.\n\n## Open questions\n\n- Who reads 0x11004?\n")
+        XCTAssertEqual(try store.reviewHistory(module: module)?.revisions.last?.description,
+                       described.reading?.description)
+        let unchanged = try await host.publish(module, by: "agent").manifest
+        XCTAssertEqual(unchanged.reading?.rev, described.reading?.rev)
+        XCTAssertEqual(store.verify(), [])
+
         let stopped = await host.stop(module)
         XCTAssertTrue(stopped)
         let summaries = await host.summaries()

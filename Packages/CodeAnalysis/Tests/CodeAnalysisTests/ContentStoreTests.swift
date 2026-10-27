@@ -363,6 +363,60 @@ final class ContentStoreTests: XCTestCase {
         XCTAssertEqual(other.verify(), [])
     }
 
+    // MARK: - The module description
+
+    /// A revision with a description: the description is an object of its
+    /// own, recorded in the history, read back by the manifest, kept by gc,
+    /// carried by a bundle, and missing is a problem `verify` names.
+    func testTheDescriptionIsAnObjectTheReadingAndTheHistoryName() throws {
+        let document = try store.putObject(Data(#"{"rev":1}"#.utf8))
+        let description = try store.putObject(Data("# CpuPei\n\nInitialises the CPU.\n".utf8))
+        let reading = AnalysisReading(project: "p", rev: 1, review: document, description: description)
+        try store.recordRevision(module: module().sha256, reading: reading, by: "agent")
+        let manifest = try store.putAnalysis(module: module(), recipe: recipe(), artifact: artifact(),
+                                             reading: reading)
+        XCTAssertEqual(try store.moduleDescription(for: manifest), "# CpuPei\n\nInitialises the CPU.\n")
+        XCTAssertEqual(try store.reviewHistory(module: module().sha256)?.revisions.last?.description, description)
+        XCTAssertEqual(try store.collectGarbage(dryRun: false).objects, 0)
+        XCTAssertTrue(store.hasObject(description))
+
+        let url = directory.appendingPathComponent("described.zip")
+        try store.exportBundle([manifest.key!], to: url)
+        let other = try ContentStore(root: directory.appendingPathComponent("other", isDirectory: true))
+        XCTAssertEqual(try other.importBundle(from: url).imported.count, 1)
+        XCTAssertEqual(try other.object(description), Data("# CpuPei\n\nInitialises the CPU.\n".utf8))
+
+        try FileManager.default.removeItem(at: store.objectURL(description))
+        XCTAssertEqual(store.verify().count, 2, "the manifest and the history both name it")
+    }
+
+    /// Only the description changed: the same artifact takes the next
+    /// revision, and the history records it.
+    func testADescriptionAloneMakesTheNextRevision() throws {
+        let document = try store.putObject(Data(#"{"rev":1}"#.utf8))
+        let first = AnalysisReading(project: "p", rev: 1, review: document)
+        try store.recordRevision(module: module().sha256, reading: first)
+        try store.putAnalysis(module: module(), recipe: recipe(), artifact: artifact(), reading: first)
+        let description = try store.putObject(Data("# Module\n".utf8))
+        let second = AnalysisReading(project: "p", rev: 2, review: document, description: description)
+        try store.recordRevision(module: module().sha256, reading: second)
+        let manifest = try store.putAnalysis(module: module(), recipe: recipe(), artifact: artifact(),
+                                             reading: second)
+        XCTAssertEqual(manifest.reading, second)
+        XCTAssertEqual(try store.reviewHistory(module: module().sha256)?.revisions.map(\.rev), [1, 2])
+        var undescribed = manifest
+        undescribed.reading = first
+        XCTAssertNil(try store.moduleDescription(for: undescribed))
+    }
+
+    func testARevisionNeedsItsDescriptionFirst() throws {
+        let document = try store.putObject(Data(#"{"rev":1}"#.utf8))
+        let missing = SHA256Digest(data: Data("# not stored\n".utf8))
+        XCTAssertThrowsError(try store.recordRevision(
+            module: module().sha256,
+            reading: AnalysisReading(project: "p", rev: 1, review: document, description: missing)))
+    }
+
     func testOneBadEntryDoesNotStopTheRestOfABundle() throws {
         let first = try store.putAnalysis(module: module("a"), recipe: recipe(), artifact: artifact(functions: 1))
         let second = try store.putAnalysis(module: module("b"), recipe: recipe(), artifact: artifact(functions: 2))

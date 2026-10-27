@@ -46,14 +46,26 @@ final class Harvest {
     static final String BY = "ByteRipper.nameBy";
     static final String OPTIONS = "ByteRipper";
     static final String TYPES = "reviewTypes";
+    static final String DESCRIPTION = "description";
+    /** The longest description the owner keeps, in UTF-8 bytes. */
+    static final int DESCRIPTION_LIMIT = 256 * 1024;
 
     private Harvest() {}
 
-    /** The document as bytes, and whether it holds any decision at all. */
+    /**
+     * The document as bytes, whether it holds any decision at all, and the
+     * module's description as it stood at the same publish — an object of
+     * its own in the store, not a part of the document.
+     */
     static final class Document {
         final byte[] bytes;
         final boolean reviewed;
-        Document(byte[] bytes, boolean reviewed) { this.bytes = bytes; this.reviewed = reviewed; }
+        final byte[] description;
+        Document(byte[] bytes, boolean reviewed, byte[] description) {
+            this.bytes = bytes;
+            this.reviewed = reviewed;
+            this.description = description;
+        }
     }
 
     static final String BASELINE = "baseline";
@@ -74,7 +86,9 @@ final class Harvest {
         JsonArray comments = now.getAsJsonArray("comments");
         JsonObject data = now.getAsJsonObject("data");
         JsonArray types = now.getAsJsonArray("types");
-        boolean reviewed = functions.size() > 0 || comments.size() > 0 || data.size() > 0 || types.size() > 0;
+        String description = description(program);
+        boolean reviewed = functions.size() > 0 || comments.size() > 0 || data.size() > 0 || types.size() > 0
+            || description != null;
         JsonObject document = new JsonObject();
         document.add("comments", comments);
         document.add("data", data);
@@ -92,7 +106,84 @@ final class Harvest {
         document.addProperty("schema", 1);
         document.add("types", types);
         Gson gson = new GsonBuilder().disableHtmlEscaping().setPrettyPrinting().serializeNulls().create();
-        return new Document((gson.toJson(document) + "\n").getBytes(StandardCharsets.UTF_8), reviewed);
+        return new Document((gson.toJson(document) + "\n").getBytes(StandardCharsets.UTF_8), reviewed,
+                            description == null ? null : description.getBytes(StandardCharsets.UTF_8));
+    }
+
+    // MARK: - The module description
+
+    /** The module's description, Markdown; null while nobody wrote one. */
+    static String description(Program program) {
+        String text = program.getOptions(OPTIONS).getString(DESCRIPTION, null);
+        return text == null || text.isEmpty() ? null : text;
+    }
+
+    /** Sets the description; null or blank removes it. Inside a transaction. */
+    static void setDescription(Program program, String text) {
+        String normal = normalized(text);
+        Options options = program.getOptions(OPTIONS);
+        if (normal == null) options.removeOption(DESCRIPTION); else options.setString(DESCRIPTION, normal);
+    }
+
+    /**
+     * The same text every time it means the same: line ends as LF, no
+     * trailing blanks on a line, no blank lines at the ends, one LF last.
+     * Null for a text with nothing in it.
+     */
+    static String normalized(String text) {
+        if (text == null) return null;
+        String[] lines = text.replace("\r\n", "\n").replace('\r', '\n').split("\n", -1);
+        StringBuilder out = new StringBuilder();
+        for (String line : lines) out.append(line.replaceAll("[ \t]+$", "")).append('\n');
+        String trimmed = out.toString().replaceAll("^\n+", "").replaceAll("\n+$", "");
+        return trimmed.isEmpty() ? null : trimmed + "\n";
+    }
+
+    /** The `## ` headings of a description, in order: its sections. */
+    static java.util.List<String> sections(String text) {
+        java.util.List<String> found = new java.util.ArrayList<>();
+        if (text == null) return found;
+        boolean fenced = false;
+        for (String line : text.split("\n")) {
+            if (line.startsWith("```")) fenced = !fenced;
+            if (!fenced && line.startsWith("## ")) found.add(line.substring(3).trim());
+        }
+        return found;
+    }
+
+    /**
+     * `text` with the section headed `## heading` given `body`: the lines up
+     * to the next `#` or `##` heading are replaced, a missing section is added
+     * at the end, and an empty body removes the section with its heading.
+     * A heading inside a fenced block is not a heading.
+     */
+    static String replaceSection(String text, String heading, String body) {
+        String[] lines = (text == null ? "" : text).split("\n", -1);
+        int start = -1, end = lines.length;
+        boolean fenced = false;
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            if (line.startsWith("```")) fenced = !fenced;
+            if (fenced || line.startsWith("```")) continue;
+            boolean top = line.startsWith("# ") || line.startsWith("## ");
+            if (start < 0 && line.startsWith("## ") && line.substring(3).trim().equals(heading)) {
+                start = i;
+            } else if (start >= 0 && top) {
+                end = i;
+                break;
+            }
+        }
+        String content = normalized(body);
+        StringBuilder out = new StringBuilder();
+        if (start < 0) {
+            out.append(text == null ? "" : text.replaceAll("\n+$", ""));
+            if (content != null) out.append("\n\n## ").append(heading).append("\n\n").append(content);
+            return normalized(out.toString());
+        }
+        for (int i = 0; i < start; i++) out.append(lines[i]).append('\n');
+        if (content != null) out.append("## ").append(heading).append("\n\n").append(content).append('\n');
+        for (int i = end; i < lines.length; i++) out.append(lines[i]).append('\n');
+        return normalized(out.toString());
     }
 
     /**

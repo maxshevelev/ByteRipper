@@ -77,7 +77,12 @@ final class MCPEndpointTests: XCTestCase {
         XCTAssertEqual(status, 200)
         let names = listed?["result"]?["tools"]?.arrayValue?.compactMap { $0["name"]?.stringValue } ?? []
         XCTAssertTrue(names.contains("ghidra_rename_variable"), "\(names)")
-        XCTAssertEqual(names.count, 18)
+        XCTAssertEqual(names.count, 20)
+
+        _ = try await call(7, "ghidra_describe", ["module": .string(module), "section": "Flow", "text": "1. Entry."])
+        let sent = try XCTUnwrap(backend.writes.all.last { $0.0 == "set/description" }?.1)
+        let body = try JSONSerialization.jsonObject(with: sent) as? [String: String]
+        XCTAssertEqual(body, ["section": "Flow", "text": "1. Entry."])
 
         let read = try await call(2, "ghidra_functions", ["module": .string(module), "limit": 5])
         let text = read["content"]?.arrayValue?.first?["text"]?.stringValue ?? ""

@@ -28,9 +28,9 @@ public enum GhidraTools {
         types and comments a review writes are Ghidra's own and are kept in the module's project between \
         sessions. A module is named by the SHA-256 of its bytes (`module`). Start with `ghidra_modules` \
         or `ghidra_open`; read with `ghidra_functions`, `ghidra_function` (decompiled C, parameters and \
-        locals with their storage), `ghidra_disassembly`, `ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_type_definition`; \
-        write with `ghidra_rename`, `ghidra_function_create`, `ghidra_rename_variable`, `ghidra_signature`, `ghidra_type`, \
-        `ghidra_set_data`, `ghidra_comment`. `ghidra_publish` makes the review visible to the app — every \
+        locals with their storage), `ghidra_disassembly`, `ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_type_definition`, \
+        `ghidra_description`; write with `ghidra_rename`, `ghidra_function_create`, `ghidra_rename_variable`, `ghidra_signature`, \
+        `ghidra_type`, `ghidra_set_data`, `ghidra_comment`, `ghidra_describe`. `ghidra_publish` makes the review visible to the app — every \
         ByteRipper that reads this store — as a new revision; publish at coherent checkpoints, not after \
         every rename. `ghidra_done` publishes and ends the session.
 
@@ -53,6 +53,26 @@ public enum GhidraTools {
         cast or `local_` is the next round.
         6. Report defects found (an unbounded buffer, a wrong format) in a comment at their place and to \
         the person; never let them shape a name.
+        7. The module's description is a result of the review as much as the code: a Markdown document, \
+        kept with the project and published with it, that the app shows beside the code. Write its outline \
+        early with `ghidra_describe`, fill and correct one section at a time as the review learns, and \
+        leave it true to the code at every publish: the names in it are the names in the program. \
+        \(descriptionFormat)
+        """
+
+    /// The description's sections, in order, as the skill's
+    /// `reference/description.md` sets them; a model reads this.
+    static let descriptionFormat = """
+        Its sections, in this order, headed exactly so: `# <ModuleName>` and a one-paragraph summary; \
+        `## Identity` (file GUID, type, image, base, entry, where it was found, source package and how \
+        sure); `## Purpose`; `## Interfaces` (what it consumes and produces — PPIs, protocols, HOBs, \
+        variables, callbacks — a table: interface, GUID, kind, where); `## Flow` (numbered, from the \
+        entry point); `## Internal structure` (functions by role, globals, tables, the review's types); \
+        `## Hardware and data`; `## Errors and diagnostics` (status, POST and halt codes, messages, \
+        what the bench sees); `## Findings`; `## Open questions`; `## Review status`. A section with \
+        nothing to say yet is left out. Link a function as `[Name](0xADDRESS)`; the app follows it. \
+        Mark what is not proven (`probably`, `not confirmed`). Markdown: headings, paragraphs, `-` and \
+        `1.` lists, tables, fenced code, `code`, **bold**, *italic*, links.
         """
 
     // MARK: - The tools
@@ -177,6 +197,19 @@ public enum GhidraTools {
                   "The defined data — named globals, GUIDs, tables — with address, name and type. Paged."),
             paged("ghidra_strings", "strings", "List a module's strings",
                   "The strings Ghidra found, with address and value. Paged."),
+            AgentTool(
+                name: "ghidra_description",
+                title: "Read the module's description",
+                description: """
+                    The module's description as the project holds it now: `text` (Markdown, null while \
+                    there is none), its `sections` (the `## ` headings, in order) and its size in \
+                    `bytes`. Read it before `ghidra_describe` changes it.
+                    """,
+                inputSchema: AgentSchema.object(["module": moduleProperty], required: ["module"])
+            ) { call in
+                let module = try module(call.arguments)
+                return try await answer { try await backend.readCall(module, "description", query: [:]) }
+            },
             AgentTool(
                 name: "ghidra_type_definition",
                 title: "Read a type's definition",
@@ -305,6 +338,20 @@ public enum GhidraTools {
                    "type": AgentSchema.string("Its C type, e.g. \"EFI_GUID\" or \"UINT32[4]\".")],
                   required: ["address"]) { arguments in
                 try optional(arguments, ["address", "name", "type"])
+            },
+            write("ghidra_describe", "set/description", "Write the module's description",
+                  "Writes the module's description — Markdown, what the module is for, how it works and how "
+                  + "it is built — kept in the project and published with the review as an object of its "
+                  + "own, which the app shows beside the code. With `section`, `text` replaces the body of "
+                  + "that `## ` section only (added at the end if missing; empty `text` removes it); without "
+                  + "it, `text` is the whole description (empty clears it). Up to 256 KiB. "
+                  + descriptionFormat,
+                  ["text": AgentSchema.string("The Markdown: the whole description, or one section's body without its heading."),
+                   "section": AgentSchema.string("The `## ` heading whose body `text` replaces, e.g. \"Flow\".")],
+                  required: ["text"]) { arguments in
+                var body: [String: JSONValue] = ["text": .string(try arguments.string("text"))]
+                if let section = try arguments.optionalString("section") { body["section"] = .string(section) }
+                return body
             },
             write("ghidra_type", "type", "Define a type",
                   "Adds a structure, union, enum or typedef from C to the module, shared with modules opened "

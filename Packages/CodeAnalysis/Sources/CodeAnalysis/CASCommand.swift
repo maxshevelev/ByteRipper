@@ -163,7 +163,7 @@ public enum CASCommand {
                 try decode($0, "--source", keys: ["path", "document", "node"])
             } ?? SourceIdentity()
             let reading: AnalysisReading? = try parser.option("--reading").map {
-                try decode($0, "--reading", keys: ["project", "rev", "review"])
+                try decode($0, "--reading", keys: ["project", "rev", "review", "description"])
             }
             let replace = parser.flag("--replace")
             let discardReading = parser.flag("--discard-reading")
@@ -191,7 +191,7 @@ public enum CASCommand {
         case "record-revision":
             let module = try digestArgument(&parser)
             let reading: AnalysisReading = try decode(
-                parser.option("--reading"), "--reading", keys: ["project", "rev", "review"])
+                parser.option("--reading"), "--reading", keys: ["project", "rev", "review", "description"])
             let by = parser.option("--by")
             try parser.end()
             output.stdout = try encode(try store.recordRevision(module: module, reading: reading, by: by))

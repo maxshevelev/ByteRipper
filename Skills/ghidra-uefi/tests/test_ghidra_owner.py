@@ -36,11 +36,14 @@ class FakeOwner(BaseHTTPRequestHandler):
     attributes hold."""
     served = artifact(1)
     document = b'{"functions": {}}'
+    description = b""
     reviewed = False
 
     def do_GET(self):
         if self.path == "/v1/hello":
             self._answer(json.dumps({"protocol": 1}).encode())
+        elif self.path == "/v1/review/description":
+            self._answer(FakeOwner.description)
         else:
             self._answer(FakeOwner.document if self.path == "/v1/review" else None)
 
@@ -66,6 +69,7 @@ class OwnerClientTests(unittest.TestCase):
     def setUp(self):
         FakeOwner.reviewed = False
         FakeOwner.document = b'{"functions": {}}'
+        FakeOwner.description = b""
         self.directory = tempfile.TemporaryDirectory()
         root = Path(self.directory.name)
         self.store = cas.Store(root / "store")
@@ -137,6 +141,24 @@ class OwnerClientTests(unittest.TestCase):
         history = self.store.review_history(self.sha)
         self.assertEqual([r["rev"] for r in history["revisions"]], [1, 2])
         self.assertEqual(history["revisions"][1]["review"], third["reading"]["review"])
+        self.assertEqual(self.store.verify(), [])
+
+    def testTheDescriptionIsStoredAndNamedByTheReading(self):
+        FakeOwner.reviewed = True
+        FakeOwner.document = b'{"functions": {"0x0": {"name": "Init"}}}'
+        first = ghidra_owner.publish(self.project, self.store)
+        self.assertNotIn("description", first["reading"])
+        # The description alone: the next revision, with the same artifact.
+        FakeOwner.description = b"# Module\n\n## Purpose\n\nInit.\n"
+        second = ghidra_owner.publish(self.project, self.store)
+        self.assertEqual(second["reading"]["rev"], first["reading"]["rev"] + 1)
+        self.assertEqual(second["artifact"], first["artifact"])
+        self.assertEqual(self.store.get_object(second["reading"]["description"]), FakeOwner.description)
+        history = self.store.review_history(self.sha)
+        self.assertEqual(history["revisions"][-1]["description"], second["reading"]["description"])
+        self.assertEqual(self.project.state()["published"]["description"], second["reading"]["description"])
+        again = ghidra_owner.publish(self.project, self.store)
+        self.assertEqual(again["reading"]["rev"], second["reading"]["rev"])
         self.assertEqual(self.store.verify(), [])
 
     def testAnOwnerWhoseProcessIsGoneIsNotRunning(self):

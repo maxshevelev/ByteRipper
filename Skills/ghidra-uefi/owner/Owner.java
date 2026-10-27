@@ -250,6 +250,8 @@ public class Owner {
                 if (path.equals("/v1/data")) { json(exchange, 200, data(query, false)); return; }
                 if (path.equals("/v1/strings")) { json(exchange, 200, data(query, true)); return; }
                 if (path.equals("/v1/review")) { review(exchange); return; }
+                if (path.equals("/v1/review/description")) { publishedDescription(exchange); return; }
+                if (path.equals("/v1/description")) { json(exchange, 200, description()); return; }
                 if (path.equals("/v1/type")) { json(exchange, 200, readType(query)); return; }
             } else if (method.equals("DELETE") && path.equals("/v1/lease")) {
                 json(exchange, 200, release(exchange));
@@ -264,6 +266,7 @@ public class Owner {
                     case "/v1/set/signature" -> write(exchange, this::setSignature);
                     case "/v1/set/comment" -> write(exchange, this::setComment);
                     case "/v1/set/data" -> write(exchange, this::setData);
+                    case "/v1/set/description" -> write(exchange, this::setDescription);
                     case "/v1/type" -> write(exchange, this::addType);
                     case "/v1/save" -> write(exchange, body -> {
                         if (program.isChanged()) program.save("save", TaskMonitor.DUMMY);
@@ -546,6 +549,62 @@ public class Owner {
         exchange.getResponseHeaders().set("X-Owner-Reviewed", Boolean.toString(published.reviewed));
         exchange.sendResponseHeaders(200, published.bytes.length);
         try (OutputStream body = exchange.getResponseBody()) { body.write(published.bytes); }
+    }
+
+    /**
+     * The description as the last publish took it, as Markdown; 204 when it
+     * had none. The client stores it as an object of its own.
+     */
+    private void publishedDescription(HttpExchange exchange) throws Exception {
+        if (published == null) throw new Failure(409, "nothing was published by this owner yet");
+        if (published.description == null) {
+            exchange.sendResponseHeaders(204, -1);
+            exchange.close();
+            return;
+        }
+        exchange.getResponseHeaders().set("Content-Type", "text/markdown; charset=utf-8");
+        exchange.sendResponseHeaders(200, published.description.length);
+        try (OutputStream body = exchange.getResponseBody()) { body.write(published.description); }
+    }
+
+    /** The description as the program holds it now, with its sections. */
+    private JsonObject description() {
+        String text = Harvest.description(program);
+        JsonObject answer = identity();
+        if (text == null) {
+            answer.add("text", com.google.gson.JsonNull.INSTANCE);
+        } else {
+            answer.addProperty("text", text);
+        }
+        JsonArray sections = new JsonArray();
+        Harvest.sections(text).forEach(sections::add);
+        answer.add("sections", sections);
+        answer.addProperty("bytes", text == null ? 0 : text.getBytes(StandardCharsets.UTF_8).length);
+        return answer;
+    }
+
+    /**
+     * The module's description, whole or one `## ` section of it: `text` is
+     * the Markdown (empty clears it, or removes the section), `section` the
+     * heading whose body it replaces.
+     */
+    private JsonObject setDescription(JsonObject body) throws Exception {
+        if (!body.has("text") || body.get("text").isJsonNull()) throw new Failure(400, "text is required");
+        String text = body.get("text").getAsString();
+        String section = string(body, "section", null);
+        String next;
+        if (section == null || section.isEmpty()) {
+            next = Harvest.normalized(text);
+        } else {
+            String heading = section.startsWith("## ") ? section.substring(3).trim() : section.trim();
+            if (heading.isEmpty() || heading.contains("\n")) throw new Failure(400, "section is one heading's words");
+            next = Harvest.replaceSection(Harvest.description(program), heading, text);
+        }
+        if (next != null && next.getBytes(StandardCharsets.UTF_8).length > Harvest.DESCRIPTION_LIMIT) {
+            throw new Failure(413, "a description is at most " + Harvest.DESCRIPTION_LIMIT / 1024 + " KiB");
+        }
+        Harvest.setDescription(program, next);
+        return description();
     }
 
     // MARK: - The lease

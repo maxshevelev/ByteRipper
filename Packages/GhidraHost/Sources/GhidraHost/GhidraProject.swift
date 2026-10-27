@@ -36,6 +36,8 @@ public struct ProjectState: Codable, Equatable, Sendable {
         public var artifact: String
         public var recipe: String
         public var review: String?
+        /// The SHA-256 of the module description this publish stored.
+        public var description: String?
         public var rev: Int?
         public var at: String
     }

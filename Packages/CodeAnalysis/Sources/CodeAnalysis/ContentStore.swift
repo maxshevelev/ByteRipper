@@ -166,6 +166,16 @@ public struct ContentStore: Sendable {
         }
     }
 
+    /// The module description a manifest's reading names, as Markdown; nil
+    /// when the reading has none. Text that is not UTF-8 is an invalid object.
+    public func moduleDescription(for manifest: AnalysisManifest) throws -> String? {
+        guard let digest = manifest.reading?.description else { return nil }
+        guard let text = String(data: try object(digest), encoding: .utf8) else {
+            throw CodeAnalysisError.io("object \(digest.hex) is not UTF-8 text")
+        }
+        return text
+    }
+
     // MARK: - Analyses
 
     /// Store an artifact and the manifest that names it.
@@ -364,16 +374,19 @@ public struct ContentStore: Sendable {
         guard let review = reading.review else {
             throw CodeAnalysisError.analysisMismatch("a revision names its review document")
         }
-        guard hasObject(review) else { throw CodeAnalysisError.objectMissing(review.hex) }
+        for object in reading.objects where !hasObject(object) {
+            throw CodeAnalysisError.objectMissing(object.hex)
+        }
         let url = reviewHistoryURL(module)
         return try withLock {
             var history = try reviewHistory(module: module) ?? ReviewHistory(module: module)
             let revision = ReviewRevision(project: reading.project, rev: reading.rev, review: review,
-                                          recordedAt: Timestamps.now(), by: by)
+                                          description: reading.description, recordedAt: Timestamps.now(), by: by)
             if let at = history.revisions.firstIndex(where: {
                 $0.project == reading.project && $0.rev == reading.rev
             }) {
-                guard history.revisions[at].review != review else { return history }
+                guard history.revisions[at].review != review
+                        || history.revisions[at].description != reading.description else { return history }
                 history.revisions[at] = revision
             } else {
                 history.revisions.append(revision)
@@ -483,6 +496,9 @@ public struct ContentStore: Sendable {
             if let review = manifest.reading?.review, !hasObject(review) {
                 problems.append("\(key.description): review document \(review.hex) is missing")
             }
+            if let description = manifest.reading?.description, !hasObject(description) {
+                problems.append("\(key.description): module description \(description.hex) is missing")
+            }
         }
 
         // A history entry ahead of every manifest of its project is a publish
@@ -503,6 +519,10 @@ public struct ContentStore: Sendable {
                 if !hasObject(revision.review) {
                     problems.append("reviews/\(name): revision \(revision.rev) of \(revision.project): "
                                     + "review document \(revision.review.hex) is missing")
+                }
+                if let description = revision.description, !hasObject(description) {
+                    problems.append("reviews/\(name): revision \(revision.rev) of \(revision.project): "
+                                    + "module description \(description.hex) is missing")
                 }
                 latest[revision.project] = max(latest[revision.project] ?? 0, revision.rev)
             }
@@ -560,14 +580,14 @@ public struct ContentStore: Sendable {
             drop = []
         }
         // An object stays while a kept manifest names it: as its artifact, or
-        // as the review document of its reading. A reading kept aside is still
-        // a person's to choose, so its objects stay too.
+        // as the review document or the description of its reading. A reading
+        // kept aside is still a person's to choose, so its objects stay too.
         let named = keep + conflicts()
         // Every document a history names stays too: the history is the base
         // for a diff, and pruning it is what lets its documents go.
         let keepObjects = Set(named.map(\.artifact.sha256))
-            .union(named.compactMap(\.reading?.review))
-            .union(reviewHistories().flatMap { $0.revisions.map(\.review) })
+            .union(named.flatMap { $0.reading?.objects ?? [] })
+            .union(reviewHistories().flatMap { $0.revisions.flatMap(\.objects) })
         let orphanObjects = contents(of: objectsURL).filter {
             guard let digest = SHA256Digest(hex: $0.lastPathComponent) else { return true }
             return !keepObjects.contains(digest)
@@ -621,8 +641,8 @@ public struct ContentStore: Sendable {
             entries["objects/\(manifest.artifact.sha256.hex)"] =
                 try object(manifest.artifact.sha256)
             // The reading travels with its rendering.
-            if let review = manifest.reading?.review {
-                entries["objects/\(review.hex)"] = try object(review)
+            for named in manifest.reading?.objects ?? [] {
+                entries["objects/\(named.hex)"] = try object(named)
             }
         }
         try BundleArchive.write(entries: entries, to: url)
@@ -671,10 +691,10 @@ public struct ContentStore: Sendable {
             try putObject(artifact)
             // A bundle written before documents travelled has none; the
             // analysis still imports, and `verify` names the missing document.
-            if let review = manifest.reading?.review,
-               let document = entries["objects/\(review.hex)"],
-               SHA256Digest(data: document) == review {
-                try putObject(document)
+            for named in manifest.reading?.objects ?? [] {
+                if let document = entries["objects/\(named.hex)"], SHA256Digest(data: document) == named {
+                    try putObject(document)
+                }
             }
             let target = manifestURL(key)
             try withLock {

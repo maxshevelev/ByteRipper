@@ -136,14 +136,15 @@ public actor GhidraHost {
 
     // MARK: - Publish
 
-    /// The program's artifact and its review document, from the owner, into
-    /// the store — `ghidra_owner.publish`, step for step.
+    /// The program's artifact, its review document and the module's
+    /// description, from the owner, into the store — `ghidra_owner.publish`,
+    /// step for step.
     ///
     /// A program nobody has reviewed publishes the mechanical reading. A
     /// reviewed one publishes a revision of this project's reading — one more
-    /// than the last whenever the artifact or the document changed — naming
-    /// the document, which is stored first, then recorded in the module's
-    /// history with `by`. The recipe takes the exporter and the Ghidra from the
+    /// than the last whenever the artifact, the document or the description
+    /// changed — naming the document and the description, which are stored
+    /// first, then recorded in the module's history with `by`. The recipe takes the exporter and the Ghidra from the
     /// artifact, the types and passes from what made the project (§5.2).
     public func publish(_ module: SHA256Digest, by: String?) async throws -> Publication {
         let project = self.project(module)
@@ -151,6 +152,7 @@ public actor GhidraHost {
         var state = try project.state()
         let (raw, headers) = try await Self.call(record.port, "POST", "/v1/publish", timeout: 3600)
         let document = try await Self.call(record.port, "GET", "/v1/review").data
+        let description = try await Self.call(record.port, "GET", "/v1/review/description").data
         guard let artifact = try JSONSerialization.jsonObject(with: raw) as? [String: Any] else {
             throw GhidraHostError(.owner, "the owner's artifact is not a JSON object")
         }
@@ -159,12 +161,15 @@ public actor GhidraHost {
         let last = state.published
         var reading: AnalysisReading?
         var review: SHA256Digest?
+        var described: SHA256Digest?
         if reviewed {
             let stored = try await writer.writeObject(document)
             review = stored
+            if !description.isEmpty { described = try await writer.writeObject(description) }
             let changed = last?.artifact != SHA256Digest(data: raw).hex || last?.review != stored.hex
+                || last?.description != described?.hex
             let rev = max(1, (last?.rev ?? 0) + (changed ? 1 : 0))
-            let current = AnalysisReading(project: state.project, rev: rev, review: stored)
+            let current = AnalysisReading(project: state.project, rev: rev, review: stored, description: described)
             reading = current
             try await writer.writeRevision(module: module, reading: current, by: by)
         }
@@ -184,7 +189,7 @@ public actor GhidraHost {
         let manifest = try await writer.writeAnalysis(module: identity, recipe: recipe, artifact: raw,
                                                       source: source, reading: reading, replace: ours)
         state.published = .init(artifact: manifest.artifact.sha256.hex, recipe: recipe.id, review: review?.hex,
-                                rev: reading?.rev, at: Self.now())
+                                description: described?.hex, rev: reading?.rev, at: Self.now())
         state.reviewed = reviewed
         try project.write(state)
         return Publication(manifest: manifest, typeConflicts: conflicts)

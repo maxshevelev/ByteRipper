@@ -349,14 +349,15 @@ def release(project: Project, store: cas.Store, by: str | None = None) -> dict |
 # -- publish ------------------------------------------------------------------
 
 def publish(project: Project, store: cas.Store, by: str | None = None) -> dict:
-    """The program's artifact and its review document, from the owner, into
-    the store.
+    """The program's artifact, its review document and the module's
+    description, from the owner, into the store.
 
     A program nobody has reviewed publishes the mechanical reading: no
     `reading` in the manifest. A reviewed one publishes a revision of this
-    project's reading — one more than the last whenever the artifact or the
-    document changed — naming the document, which is stored first (§5.4's
-    order), then recorded in the module's history with `by`. The recipe takes the exporter and the Ghidra from the artifact,
+    project's reading — one more than the last whenever the artifact, the
+    document or the description changed — naming the document and the
+    description, which are stored first (§5.4's order), then recorded in the
+    module's history with `by`. The recipe takes the exporter and the Ghidra from the artifact,
     the types and passes from what made the project (§5.2).
     """
     record = project.owner()
@@ -367,6 +368,7 @@ def publish(project: Project, store: cas.Store, by: str | None = None) -> dict:
     with progress.Step(f"Publishing {state['module']['name']}"):
         raw = call(record["port"], "POST", "/v1/publish", timeout=3600, headers=headers)
         document = call(record["port"], "GET", "/v1/review")
+        description = call(record["port"], "GET", "/v1/review/description")
     artifact = json.loads(raw)
     reviewed = headers.get("x-owner-reviewed") == "true"
     conflicts = [name for name in headers.get("x-owner-type-conflicts", "").split(",") if name]
@@ -376,11 +378,16 @@ def publish(project: Project, store: cas.Store, by: str | None = None) -> dict:
     last = state.get("published") or {}
     reading = None
     review = None
+    described = None
     if reviewed:
         review = store.put_object(document)
-        changed = (last.get("artifact") != cas.sha256_bytes(raw) or last.get("review") != review)
+        described = store.put_object(description) if description else None
+        changed = (last.get("artifact") != cas.sha256_bytes(raw) or last.get("review") != review
+                   or last.get("description") != described)
         rev = max(1, (last.get("rev") or 0) + (1 if changed else 0))
         reading = {"project": state["project"], "rev": rev, "review": review}
+        if described:
+            reading["description"] = described
         store.record_revision(project.sha, reading, by=by)
     made = state["made_with"]
     recipe = code_artifact.recipe_for(artifact, made.get("types"), made.get("passes"))
@@ -398,7 +405,8 @@ def publish(project: Project, store: cas.Store, by: str | None = None) -> dict:
                                   source=state.get("source") or None, replace=ours,
                                   reading=reading)
     state["published"] = {"artifact": manifest["artifact"]["sha256"], "recipe": recipe["id"],
-                          "review": review, "rev": reading["rev"] if reading else None,
+                          "review": review, "description": described,
+                          "rev": reading["rev"] if reading else None,
                           "at": now()}
     state["reviewed"] = reviewed
     project.write_state(state)
@@ -466,6 +474,10 @@ def main(argv: list[str]) -> int:
     type_ = sub.add_parser("type", help="add a structure, union, enum or typedef from C")
     type_.add_argument("module")
     type_.add_argument("c", help="the C text, or @file to read it from a file")
+    describe = sub.add_parser("describe", help="write the module's description, whole or one section")
+    describe.add_argument("module")
+    describe.add_argument("text", help="the Markdown, or @file to read it from a file; empty clears")
+    describe.add_argument("--section", help="the `## ` heading whose body the text replaces")
     rel = sub.add_parser("release", help="publish and give the write lease back")
     rel.add_argument("module")
     rel.add_argument("--by", choices=["agent", "person"], default="agent")
@@ -546,6 +558,10 @@ def main(argv: list[str]) -> int:
                              {"address": args.address, "name": args.name, "type": args.type}),
             "type": lambda: ("/v1/type",
                              {"c": Path(args.c[1:]).read_text() if args.c.startswith("@") else args.c}),
+            "describe": lambda: ("/v1/set/description",
+                                 {"text": Path(args.text[1:]).read_text(encoding="utf-8")
+                                  if args.text.startswith("@") else args.text,
+                                  "section": args.section}),
         }
         if args.command in writes:
             path, body = writes[args.command]()

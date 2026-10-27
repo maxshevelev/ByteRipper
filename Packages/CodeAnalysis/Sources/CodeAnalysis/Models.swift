@@ -223,12 +223,20 @@ public struct AnalysisReading: Codable, Equatable, Sendable {
     public var rev: Int
     /// The review document harvested with this publish, when there is one.
     public var review: SHA256Digest?
+    /// The module's description — Markdown, what the module is for, how it
+    /// works and how it is built (`Skills/ghidra-uefi/reference/description.md`)
+    /// — as this publish left it; nil while nobody has written one.
+    public var description: SHA256Digest?
 
-    public init(project: String, rev: Int, review: SHA256Digest? = nil) {
+    public init(project: String, rev: Int, review: SHA256Digest? = nil, description: SHA256Digest? = nil) {
         self.project = project
         self.rev = rev
         self.review = review
+        self.description = description
     }
+
+    /// The objects this reading names besides the artifact.
+    public var objects: [SHA256Digest] { [review, description].compactMap { $0 } }
 }
 
 /// One revision of a reading as the history keeps it: the reading, and when
@@ -237,20 +245,26 @@ public struct ReviewRevision: Codable, Equatable, Sendable {
     public var project: String
     public var rev: Int
     public var review: SHA256Digest
+    /// The module's description at this revision, when it had one.
+    public var description: SHA256Digest?
     public var recordedAt: String
     public var by: String?
 
-    public init(project: String, rev: Int, review: SHA256Digest, recordedAt: String,
-                by: String? = nil) {
+    public init(project: String, rev: Int, review: SHA256Digest, description: SHA256Digest? = nil,
+                recordedAt: String, by: String? = nil) {
         self.project = project
         self.rev = rev
         self.review = review
+        self.description = description
         self.recordedAt = recordedAt
         self.by = by
     }
 
+    /// The objects this revision names: its review document and description.
+    public var objects: [SHA256Digest] { [review] + (description.map { [$0] } ?? []) }
+
     private enum CodingKeys: String, CodingKey {
-        case project, rev, review, by
+        case project, rev, review, description, by
         case recordedAt = "recorded_at"
     }
 }
