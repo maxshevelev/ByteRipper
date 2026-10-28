@@ -111,6 +111,10 @@ final class CodeTextView: NSTextView {
     /// The occurrences of the symbol the reader clicked, drawn behind the
     /// glyphs as Xcode does. A temporary attribute, like the underline.
     private var highlighted: [NSRange] = []
+    /// How far a highlight's box stands in from the top and the bottom of its
+    /// line: the lines are taller than the font's, and the box goes round
+    /// the glyphs, not the whole line.
+    var highlightInset: CGFloat = 0
 
     func highlight(_ ranges: [NSRange]) {
         guard let storage = textStorage else { return }
@@ -130,7 +134,7 @@ final class CodeTextView: NSTextView {
             layoutManager.enumerateEnclosingRects(forGlyphRange: glyphs,
                                                   withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0),
                                                   in: textContainer) { box, _ in
-                let shown = box.offsetBy(dx: origin.x, dy: origin.y).insetBy(dx: -2, dy: 0)
+                let shown = box.offsetBy(dx: origin.x, dy: origin.y).insetBy(dx: -2, dy: self.highlightInset)
                 guard shown.intersects(rect) else { return }
                 NSBezierPath(roundedRect: shown, xRadius: CodeColors.symbolHighlightRadius,
                              yRadius: CodeColors.symbolHighlightRadius).fill()

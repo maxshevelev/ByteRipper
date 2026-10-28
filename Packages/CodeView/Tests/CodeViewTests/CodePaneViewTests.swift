@@ -127,7 +127,7 @@ final class CodePaneViewTests: XCTestCase {
         let functions = try XCTUnwrap(tables.first { $0.tableColumns.first?.identifier.rawValue == "function" })
         for table in tables {
             XCTAssertEqual(table.rowHeight,
-                           table === functions ? CodePaneView.navigatorRowHeight : ToolPanelFont.rowHeight,
+                           table === functions ? CodePaneView.navigatorRowHeight : CodePaneView.codeLineHeight,
                            "a row is as tall as the new size needs")
         }
         let cell = try XCTUnwrap(functions.view(atColumn: 0, row: 0, makeIfNecessary: true) as? NSTableCellView)
@@ -179,8 +179,9 @@ final class CodePaneViewTests: XCTestCase {
         let rep = try XCTUnwrap(textView.bitmapImageRepForCachingDisplay(in: textView.bounds))
         textView.cacheDisplay(in: textView.bounds, to: rep)
         let scale = CGFloat(rep.pixelsWide) / textView.bounds.width
+        // The box goes round the glyphs, in from the top of the taller line.
         let corner = NSPoint(x: box.minX + textView.textContainerOrigin.x,
-                             y: box.minY + textView.textContainerOrigin.y + 1)
+                             y: box.minY + textView.textContainerOrigin.y + CodePaneView.codeLinePadding + 1)
         let pixel = try XCTUnwrap(rep.colorAt(x: Int(corner.x * scale), y: Int(corner.y * scale))?
             .usingColorSpace(.sRGB))
         XCTAssertEqual(Int((pixel.redComponent * 255).rounded()), 0xEE, "\(pixel)")
@@ -1402,6 +1403,115 @@ final class CodePaneViewTests: XCTestCase {
         view.goToOccurrence(forward: true)
         XCTAssertEqual(view.selectedInstruction?.address, CodeAddress(0x221), "the CALL")
         XCTAssertEqual(view.occurrenceCounterText, "1 of 1")
+    }
+
+    /// The C's lines are as far apart as the listing's rows, with the glyphs
+    /// in the middle of each line, and both are drawn in the monospaced family
+    /// Settings names for the dump.
+    func testTheCReadsAtTheListingsPitchInTheSettingsFont() throws {
+        let suite = "CodePaneViewTests.codeFont"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        let saved = ToolPanelFont.defaults
+        ToolPanelFont.defaults = defaults
+        defer {
+            ToolPanelFont.defaults = saved
+            defaults.removePersistentDomain(forName: suite)
+        }
+        defaults.set(13.0, forKey: ToolPanelFont.zoomSizeKey)
+        defaults.set("Menlo", forKey: ToolPanelFont.fontFamilyKey)
+
+        let view = CodePaneView(manifest: manifest(), artifact: try spannedArtifact(),
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 900, height: 500)
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 0, instruction: nil, showsC: true)
+        let textView = try XCTUnwrap(first(CodeTextView.self, in: view) { _ in true })
+        let layout = try XCTUnwrap(textView.layoutManager)
+        layout.ensureLayout(for: try XCTUnwrap(textView.textContainer))
+
+        XCTAssertEqual(CodePaneView.codeLineHeight, 21, "13 points: the font's line and a row's padding")
+        let line = layout.lineFragmentRect(forGlyphAt: 0, effectiveRange: nil)
+        XCTAssertEqual(line.height, CodePaneView.codeLineHeight, "a line of the C")
+        let listing = try XCTUnwrap(tables(in: view).first { $0.tableColumns.first?.identifier.rawValue == "instruction" })
+        XCTAssertEqual(listing.rowHeight, CodePaneView.codeLineHeight, "a row of the listing")
+        let glyphs = layout.boundingRect(forGlyphRange: NSRange(location: 0, length: 3), in: textView.textContainer!)
+        let font = try XCTUnwrap(textView.textStorage?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)
+        let ink = line.maxY - CodePaneView.codeLinePadding - layout.defaultLineHeight(for: font)
+        XCTAssertEqual(ink, line.minY + CodePaneView.codeLinePadding, accuracy: 1, "the font's line in the middle")
+        XCTAssertLessThanOrEqual(glyphs.height, line.height)
+
+        XCTAssertEqual(font.familyName, "Menlo")
+        defaults.set("", forKey: ToolPanelFont.fontFamilyKey)
+        NotificationCenter.default.post(name: ToolPanelFont.zoomDidChangeNotification, object: nil)
+        let system = try XCTUnwrap(textView.textStorage?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)
+        XCTAssertNotEqual(system.familyName, "Menlo", "back to the system monospaced font")
+    }
+
+    /// A zoom keeps the reader where they were: the line at the top of the C
+    /// and of the listing is at the top again, at the new size.
+    func testAZoomKeepsTheLineAtTheTop() throws {
+        let suite = "CodePaneViewTests.zoomPlace"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        let saved = ToolPanelFont.defaults
+        ToolPanelFont.defaults = defaults
+        defer {
+            ToolPanelFont.defaults = saved
+            defaults.removePersistentDomain(forName: suite)
+        }
+        defaults.set(13.0, forKey: ToolPanelFont.zoomSizeKey)
+        var c = "int Long(void)\n{\n"
+        var instructions: [[String: Any]] = []
+        for line in 0..<400 {
+            c += "  Step\(line)();\n"
+            instructions.append(["address": String(format: "0x%X", 0x220 + line), "bytes": "90",
+                                 "mnemonic": "NOP", "text": "NOP ; \(line)"])
+        }
+        c += "}\n"
+        let json: [String: Any] = [
+            "script_version": 4, "ghidra": "12.1.2", "program": ["image_base": "0x0"],
+            "functions": [["entry": "0x220", "name": "Long", "c": c, "instructions": instructions]]
+        ]
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        let view = CodePaneView(manifest: manifest(), artifact: artifact, moduleBytes: Data(count: 0x600), hexView: NSView())
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 0, instruction: nil, showsC: true)
+        let textView = try XCTUnwrap(first(CodeTextView.self, in: view) { _ in true })
+        let cScroll = try XCTUnwrap(textView.enclosingScrollView)
+        let text = textView.string as NSString
+        let target = text.range(of: "Step200()")
+        let layout = try XCTUnwrap(textView.layoutManager)
+        layout.ensureLayout(for: textView.textContainer!)
+        let lineRect = layout.lineFragmentRect(forGlyphAt: layout.glyphIndexForCharacter(at: target.location),
+                                               effectiveRange: nil)
+        cScroll.contentView.scroll(to: NSPoint(x: 0, y: lineRect.minY + textView.textContainerOrigin.y))
+        cScroll.reflectScrolledClipView(cScroll.contentView)
+        func lineAtTop() -> String {
+            let y = cScroll.contentView.bounds.minY - textView.textContainerOrigin.y + 1
+            let glyph = layout.glyphIndex(for: NSPoint(x: 0, y: y), in: textView.textContainer!)
+            return text.substring(with: text.lineRange(for: NSRange(location: layout.characterIndexForGlyph(at: glyph), length: 0)))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        XCTAssertEqual(lineAtTop(), "Step200();")
+
+        view.showDecompiledC(false)
+        let listing = try XCTUnwrap(tables(in: view).first { $0.tableColumns.first?.identifier.rawValue == "instruction" })
+        listing.scrollRowToVisible(399)
+        let listingScroll = try XCTUnwrap(listing.enclosingScrollView)
+        listingScroll.contentView.scroll(to: NSPoint(x: 0, y: listing.rect(ofRow: 300).minY))
+        listingScroll.reflectScrolledClipView(listingScroll.contentView)
+        view.showDecompiledC(true)
+
+        defaults.set(18.0, forKey: ToolPanelFont.zoomSizeKey)
+        NotificationCenter.default.post(name: ToolPanelFont.zoomDidChangeNotification, object: nil)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(lineAtTop(), "Step200();", "the C stays at the line it was at")
+        XCTAssertEqual(listing.row(at: NSPoint(x: 0, y: listingScroll.contentView.bounds.minY + 1)), 300,
+                       "and so does the listing")
     }
 
     /// A click on a name in a long function's C highlights at once: what

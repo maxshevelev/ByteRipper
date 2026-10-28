@@ -957,6 +957,58 @@ import ToolModuleKit
         }
     }
 
+    /// The row at the top of `table`'s view, and how far into it the view
+    /// starts, as a fraction of the row. Read off the clip view, which a
+    /// table hidden behind the C still has: its own visible rect is then
+    /// empty. A header over the rows insets the clip view by its height
+    /// (measured: the origin is at −28 with the first row whole).
+    private func topRow(of table: NSTableView) -> (row: Int, into: CGFloat)? {
+        guard let clip = table.enclosingScrollView?.contentView else { return nil }
+        let top = clip.bounds.minY + clip.contentInsets.top
+        let row = table.row(at: NSPoint(x: 0, y: max(0, top)))
+        guard row >= 0 else { return nil }
+        let rect = table.rect(ofRow: row)
+        return (row, rect.height > 0 ? max(0, top - rect.minY) / rect.height : 0)
+    }
+
+    private func scroll(_ table: NSTableView, toTop top: (row: Int, into: CGFloat)) {
+        guard let scrollView = table.enclosingScrollView, top.row < table.numberOfRows else { return }
+        let rect = table.rect(ofRow: top.row)
+        let clip = scrollView.contentView
+        let inset = clip.contentInsets.top
+        // From the origin that shows the first row whole to the one that shows
+        // the last row at the bottom.
+        let highest = -inset
+        let lowest = max(highest, table.frame.height - clip.bounds.height)
+        let y = min(max(highest, rect.minY + top.into * rect.height - inset), lowest)
+        clip.scroll(to: NSPoint(x: clip.bounds.minX, y: y))
+        scrollView.reflectScrolledClipView(clip)
+    }
+
+    /// The character at the top of the C's view, and how far into its line
+    /// the view starts, as a fraction of the line.
+    private func topOfC() -> (character: Int, into: CGFloat)? {
+        guard let layout = cTextView.layoutManager, let container = cTextView.textContainer,
+              let storage = cTextView.textStorage, storage.length > 0 else { return nil }
+        let origin = cTextView.textContainerOrigin
+        let top = cScroll.contentView.bounds.minY - origin.y
+        let glyph = layout.glyphIndex(for: NSPoint(x: 0, y: max(0, top)), in: container)
+        let line = layout.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+        return (layout.characterIndexForGlyph(at: glyph),
+                line.height > 0 ? (top - line.minY) / line.height : 0)
+    }
+
+    private func scrollC(toTop place: (character: Int, into: CGFloat)) {
+        guard let layout = cTextView.layoutManager, let container = cTextView.textContainer,
+              let storage = cTextView.textStorage, place.character < storage.length else { return }
+        layout.ensureLayout(for: container)
+        cTextView.sizeToFit()
+        let glyph = layout.glyphIndexForCharacter(at: place.character)
+        let line = layout.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+        scroll(cScroll, to: NSPoint(x: cScroll.contentView.bounds.minX,
+                                    y: cTextView.textContainerOrigin.y + line.minY + place.into * line.height))
+    }
+
     private func scroll(_ scrollView: NSScrollView, to origin: NSPoint) {
         guard let document = scrollView.documentView else { return }
         let visible = scrollView.contentView.bounds.size
@@ -1425,27 +1477,45 @@ import ToolModuleKit
         recipeLabel?.font = Self.recipeFont()
         staleLabel.font = ToolPanelFont.body()
         drawNavigationImages()
-        cTextView.font = Self.codeFont()
         layOutNavigatorColumns()
+        // What the reader was looking at stays where it was: the line at the
+        // top of each list and of the C is at the top again, at the new size.
         syncingSelection = true
         for table in [functionTable, table] {
             let selected = table.selectedRow
-            table.rowHeight = table === functionTable ? Self.navigatorRowHeight : ToolPanelFont.rowHeight
+            let top = topRow(of: table)
+            table.rowHeight = table === functionTable ? Self.navigatorRowHeight : Self.codeLineHeight
             table.reloadData()
             if selected >= 0, selected < table.numberOfRows {
                 table.selectRowIndexes(IndexSet(integer: selected), byExtendingSelection: false)
-                table.scrollRowToVisible(selected)
             }
+            if let top { scroll(table, toTop: top) }
         }
         syncingSelection = false
         drawnC = nil
-        if !cScroll.isHidden { updateC() }
+        updateC(keepingPlace: true)
         descriptionView.redraw()
     }
 
-    /// The listing's and the C's type: monospaced, at the zoom.
+    /// The listing's and the C's type: the monospaced family Settings names
+    /// for the dump, at the zoom.
     static func codeFont() -> NSFont {
-        .monospacedSystemFont(ofSize: ToolPanelFont.size, weight: .regular)
+        ToolPanelFont.monospaced(size: ToolPanelFont.size)
+    }
+
+    /// One line of the code — a row of the listing, a line of the C: the code
+    /// font's line and the padding a panel's row has. At 13 points that is 21;
+    /// the C's own line was 16, and read cramped beside the listing.
+    static var codeLineHeight: CGFloat {
+        let font = codeFont()
+        return (font.ascender - font.descender + font.leading).rounded(.up) + 5
+    }
+
+    /// How far the code font's own line sits in from the top and the bottom
+    /// of a line of the code: the C raises its glyphs by this to centre them,
+    /// and draws a highlight this far in, around the glyphs.
+    static var codeLinePadding: CGFloat {
+        (codeLineHeight - NSLayoutManager().defaultLineHeight(for: codeFont())) / 2
     }
 
     /// The navigator's lists read a step smaller than the code beside them:
@@ -1458,7 +1528,7 @@ import ToolModuleKit
     static func navigatorFont() -> NSFont { .systemFont(ofSize: navigatorSize) }
 
     static func navigatorCodeFont() -> NSFont {
-        .monospacedSystemFont(ofSize: navigatorSize, weight: .regular)
+        ToolPanelFont.monospaced(size: navigatorSize)
     }
 
     /// A navigator row's height: the line of its font and the padding
@@ -1656,7 +1726,7 @@ import ToolModuleKit
         table.headerView = nil
         table.style = .plain
         table.rowSizeStyle = .custom
-        table.rowHeight = ToolPanelFont.rowHeight
+        table.rowHeight = Self.codeLineHeight
         table.intercellSpacing = NSSize(width: 0, height: 0)
         table.backgroundColor = .clear
         table.usesAlternatingRowBackgroundColors = false
@@ -1741,8 +1811,10 @@ import ToolModuleKit
 
     /// The selected function's C. Set only when it is another text: a new
     /// instruction in the same function does not lay the text out again.
-    private func updateC() {
+    private func updateC(keepingPlace: Bool = false) {
         guard drawnC != state.function || cTextView.string.isEmpty else { return }
+        let place = keepingPlace ? topOfC() : nil
+        let selection = cTextView.selectedRange()
         drawnC = state.function
         let font = Self.codeFont()
         cLinks = []
@@ -1786,12 +1858,35 @@ import ToolModuleKit
                 .font: font, .foregroundColor: NSColor.secondaryLabelColor
             ])
         }
+        // The C's lines at the listing's pitch, each glyph centred in its line.
+        let spaced = NSMutableAttributedString(attributedString: text)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.minimumLineHeight = Self.codeLineHeight
+        paragraph.maximumLineHeight = Self.codeLineHeight
+        let whole = NSRange(location: 0, length: spaced.length)
+        spaced.addAttribute(.paragraphStyle, value: paragraph, range: whole)
+        spaced.addAttribute(.baselineOffset, value: Self.codeLinePadding, range: whole)
+        cTextView.highlightInset = Self.codeLinePadding
         cTextView.hover(at: nil)
-        cTextView.textStorage?.setAttributedString(text)
-        // Another function's C is read from its top; Back puts a place left
-        // further down back where it was.
-        cTextView.setSelectedRange(NSRange(location: 0, length: 0))
-        cTextView.scroll(.zero)
+        cTextView.textStorage?.setAttributedString(spaced)
+        // Laid out whole, and the view as tall as the text, before anything
+        // scrolls in it: the lines are taller than the font's, and a view
+        // sized from an estimate clamps a scroll short of where it was asked
+        // to go (measured: Back landed 156 points off its place).
+        if let layout = cTextView.layoutManager, let container = cTextView.textContainer {
+            layout.ensureLayout(for: container)
+            cTextView.sizeToFit()
+        }
+        if let place {
+            // The same text at another size: the reader stays where they were.
+            if NSMaxRange(selection) <= spaced.length { cTextView.setSelectedRange(selection) }
+            scrollC(toTop: place)
+        } else {
+            // Another function's C is read from its top; Back puts a place
+            // left further down back where it was.
+            cTextView.setSelectedRange(NSRange(location: 0, length: 0))
+            cTextView.scroll(.zero)
+        }
         shownCTokens = tokensShown
         shownCSymbols = nil
         cTextView.explainable = explainableInC()

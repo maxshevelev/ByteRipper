@@ -1,6 +1,7 @@
 import AppKit
 import AppPalette
 import CodeAnalysis
+import ToolModuleKit
 
 /// How a token kind is drawn: Xcode's own source editor theme — Default
 /// (Light) and Default (Dark), switching with the appearance — with keywords
@@ -61,7 +62,7 @@ enum CodeColors {
             .font: font, .foregroundColor: NSColor.labelColor
         ])
         let length = string.length
-        let bold = NSFont.monospacedSystemFont(ofSize: font.pointSize, weight: .bold)
+        let bold = ToolPanelFont.monospaced(size: font.pointSize, bold: true)
         for token in tokens where token.start + token.length <= length {
             let range = NSRange(location: token.start, length: token.length)
             string.addAttribute(.foregroundColor, value: color(for: token.kind), range: range)

@@ -11,7 +11,7 @@ import ToolModuleKit
 /// headers) re-lay out. The font is a family name, with an empty string as the
 /// sentinel for "the system monospaced font".
 enum AppearanceSettings {
-    static let fontFamilyKey = "HexFontFamily"
+    static let fontFamilyKey = ToolPanelFont.fontFamilyKey
     static let rowHeightScaleKey = "HexRowHeightScale"
     /// The size key, spelled in `ToolModuleKit` — the tool-module panels read
     /// the same setting and cannot see this file, so the two sides share one
@@ -109,28 +109,14 @@ enum AppearanceSettings {
     /// the dump and its mirrors ask for `font()` and follow the setting; the
     /// fixed-size call sites (form fields, the decoding preview) pass their own.
     static func font(size: CGFloat = fontSize) -> NSFont {
-        let family = fontFamily
-        guard !family.isEmpty else {
-            return .monospacedSystemFont(ofSize: size, weight: .regular)
-        }
-        if let resolved = NSFontManager.shared.font(withFamily: family, traits: [], weight: 5, size: size) {
-            return resolved
-        }
-        return .monospacedSystemFont(ofSize: size, weight: .regular)
+        ToolPanelFont.monospaced(size: size)
     }
 
     /// The bold member of the same family — used where emphasis must match the
     /// hex font exactly (the Search All results excerpts). A monospaced family
     /// shares one advance width across weights, so bolding never shifts bytes.
     static func boldFont(size: CGFloat = fontSize) -> NSFont {
-        let family = fontFamily
-        guard !family.isEmpty else {
-            return .monospacedSystemFont(ofSize: size, weight: .bold)
-        }
-        if let resolved = NSFontManager.shared.font(withFamily: family, traits: [.boldFontMask], weight: 9, size: size) {
-            return resolved
-        }
-        return .monospacedSystemFont(ofSize: size, weight: .bold)
+        ToolPanelFont.monospaced(size: size, bold: true)
     }
 
     /// Width of one monospaced glyph cell — the horizontal pitch shared by the

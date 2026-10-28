@@ -46,6 +46,25 @@ public enum ToolPanelFont {
         return min(max(CGFloat(stored), sizeRange.lowerBound), sizeRange.upperBound)
     }
 
+    /// The `UserDefaults` key of the monospaced font's family, which Settings
+    /// writes: empty, or none, for the system monospaced font. The dump and the
+    /// code read it alike.
+    public static let fontFamilyKey = "HexFontFamily"
+
+    /// The monospaced font at `size`: the family Settings names, in its
+    /// regular or bold member; the system monospaced font when none is named,
+    /// or the one named is not installed. What the dump's bytes and the code
+    /// panel's C and listing are drawn in.
+    public static func monospaced(size: CGFloat, bold: Bool = false) -> NSFont {
+        let family = defaults.string(forKey: fontFamilyKey) ?? ""
+        if !family.isEmpty,
+           let named = NSFontManager.shared.font(withFamily: family, traits: bold ? [.boldFontMask] : [],
+                                                 weight: bold ? 9 : 5, size: size) {
+            return named
+        }
+        return .monospacedSystemFont(ofSize: size, weight: bold ? .bold : .regular)
+    }
+
     /// A detail's heading — one point over the body, the step the panels
     /// already read at before either of them followed the zoom.
     public static var titleSize: CGFloat { size + 1 }
