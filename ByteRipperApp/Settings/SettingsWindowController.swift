@@ -69,7 +69,7 @@ final class AppearanceSettingsViewController: NSViewController {
         let codeSpacingLabel = NSTextField(labelWithString: L("Code Line Spacing:"))
         codeSpacingSlider.minValue = Double(AppearanceSettings.codeLineSpacingRange.lowerBound)
         codeSpacingSlider.maxValue = Double(AppearanceSettings.codeLineSpacingRange.upperBound)
-        codeSpacingSlider.numberOfTickMarks = 11
+        codeSpacingSlider.numberOfTickMarks = 13
         codeSpacingSlider.allowsTickMarkValuesOnly = true
         codeSpacingSlider.isContinuous = true
         codeSpacingSlider.target = self

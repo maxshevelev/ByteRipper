@@ -57,7 +57,7 @@ public enum ToolPanelFont {
     public static let codeLineSpacingKey = "CodeLineSpacing"
     /// The span the Settings slider offers: from tighter than the font's own
     /// line — more of a long function on screen — to well spaced.
-    public static let codeLineSpacingRange: ClosedRange<CGFloat> = 0.8...1.3
+    public static let codeLineSpacingRange: ClosedRange<CGFloat> = 0.9...1.5
     /// With nothing stored: 21 points of line for the 16 of a 13-point font.
     public static let defaultCodeLineSpacing: CGFloat = 1.3
 
