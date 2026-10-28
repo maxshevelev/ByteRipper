@@ -21,6 +21,11 @@ func wireCodeScreen(_ codePane: CodePaneView, to pane: PaneViewModel, owner: Mai
         owner.showNotesWindow(leaving: pane)
         NotesWindowController.instance.cards.select(id)
     }
+    // A step through a name's uses that came round says so as a search that
+    // wrapped does: the same plate, the same sign.
+    codePane.onWrapOccurrences = { [weak owner] forward in
+        owner?.showWrapNotice(direction: forward ? .forward : .backward)
+    }
     codePane.onSelectRange = { [weak pane] range in
         guard let pane else { return }
         pane.select(range: range)

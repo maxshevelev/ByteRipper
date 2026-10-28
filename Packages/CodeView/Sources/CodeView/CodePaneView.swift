@@ -71,6 +71,14 @@ import ToolModuleKit
     public private(set) var highlightedSymbol: CodeSymbol?
     /// The function a highlighted variable belongs to.
     private var highlightedIn: Int?
+    /// Which of the highlighted name's occurrences the reader is at, in the
+    /// side on screen — the one clicked, or the last one stepped to. Nil when
+    /// the reader has not been at one yet: a step then starts from the caret.
+    private var currentOccurrence: Int?
+    private let occurrenceLabel = NSTextField(labelWithString: "")
+    private let previousOccurrenceButton = NSButton()
+    private let nextOccurrenceButton = NSButton()
+    private var occurrenceBar: NSStackView?
     private var drawnC: Int?
     /// How far the function's own C starts into the text shown: the
     /// annotations' comments head it.
@@ -142,6 +150,10 @@ import ToolModuleKit
     /// Add Annotation… on a function or an instruction: the place, and the
     /// name the form suggests as the title. The app asks for the note.
     public var onAnnotate: ((CodeLocation, String) -> Void)?
+    /// A step through a name's occurrences went round from the last to the
+    /// first (true) or from the first to the last: the app shows the same
+    /// plate as a search that wrapped.
+    public var onWrapOccurrences: ((Bool) -> Void)?
     /// Open Annotation “title” on an annotated row: the annotation's id.
     public var onOpenNote: ((String) -> Void)?
     /// Another stored analysis of the same module was chosen. The app loads
@@ -1204,12 +1216,16 @@ import ToolModuleKit
         // then where the reader is; the ASM/C switch at the right.
         let titleSpacer = NSView()
         titleSpacer.setContentHuggingPriority(.init(1), for: .horizontal)
-        let titleRow = NSStackView(views: [backButton, forwardButton, titleBlock, titleSpacer, modeControl])
+        let occurrenceBar = makeOccurrenceBar()
+        self.occurrenceBar = occurrenceBar
+        let titleRow = NSStackView(views: [backButton, forwardButton, titleBlock, titleSpacer,
+                                           occurrenceBar, modeControl])
         titleRow.orientation = .horizontal
         titleRow.alignment = .centerY
         titleRow.spacing = 8
         titleRow.setCustomSpacing(6, after: backButton)
         titleRow.setCustomSpacing(12, after: forwardButton)
+        titleRow.setCustomSpacing(16, after: occurrenceBar)
         titleRow.setContentHuggingPriority(.required, for: .vertical)
         titleRow.setContentCompressionResistancePriority(.required, for: .vertical)
         titleRow.translatesAutoresizingMaskIntoConstraints = false
@@ -1714,6 +1730,8 @@ import ToolModuleKit
         cScroll.isHidden = !c
         descriptionView.isHidden = segment != Self.descriptionSegment
         if c { updateC() }
+        currentOccurrence = nil
+        drawOccurrenceBar()
     }
 
     private func notifyInstruction() {
@@ -1782,6 +1800,8 @@ import ToolModuleKit
         // `Status` is another variable.
         if case .variable = highlightedSymbol, highlightedIn != state.function { highlightedSymbol = nil }
         cTextView.highlight(highlightedRangesInC())
+        currentOccurrence = nil
+        drawOccurrenceBar()
     }
 
     // MARK: - Highlighting a symbol
@@ -1838,7 +1858,9 @@ import ToolModuleKit
         guard symbol != highlightedSymbol else { return }
         highlightedSymbol = symbol
         highlightedIn = state.function
+        currentOccurrence = nil
         cTextView.highlight(highlightedRangesInC())
+        drawOccurrenceBar()
         // Every row, not only the visible ones: the listing may be behind the
         // C, and a row with no view yet costs nothing to reload.
         guard table.numberOfRows > 0 else { return }
@@ -1846,6 +1868,155 @@ import ToolModuleKit
         table.reloadData(forRowIndexes: IndexSet(integersIn: 0..<table.numberOfRows),
                          columnIndexes: IndexSet(integer: 0))
         syncingSelection = false
+    }
+
+    // MARK: - Stepping through a name's occurrences
+
+    /// One place the highlighted name is at: a range of the C, or a row of
+    /// the listing and the range in it.
+    struct Occurrence: Equatable {
+        var row: Int?
+        var range: NSRange
+    }
+
+    /// The highlighted name's occurrences in the side on screen, in reading
+    /// order. None while the description shows: it is not code.
+    func occurrences() -> [Occurrence] {
+        guard highlightedSymbol != nil, !showsDescription else { return [] }
+        if showsDecompiledC { return highlightedRangesInC().map { Occurrence(row: nil, range: $0) } }
+        return listingOccurrences().map { Occurrence(row: $0.row, range: $0.range) }
+    }
+
+    /// The listing's rows that name the highlighted symbol, row by row. Read
+    /// when asked — a step or the counter — not while the rows are drawn.
+    private func listingOccurrences() -> [(row: Int, range: NSRange)] {
+        guard highlightedSymbol != nil else { return [] }
+        let lines = state.lines
+        var found: [(row: Int, range: NSRange)] = []
+        for row in 0..<lines.count {
+            let shown = model.listingRow(ofLine: lines[lines.startIndex + row].global)
+            for range in highlightedRanges(in: shown.tokens, of: shown.text) { found.append((row, range)) }
+        }
+        return found
+    }
+
+    /// Which occurrence the reader is at, counted from 0, and how many there
+    /// are — what the counter in the header says.
+    var occurrencePosition: (current: Int?, count: Int) {
+        (currentOccurrence, occurrences().count)
+    }
+
+    // help: panel.code.occurrences
+    /// Goes to the next (or the previous) occurrence of the highlighted name
+    /// in the C or the listing on screen: selects it, scrolls to it and
+    /// flashes it. From the last it goes round to the first, and the app
+    /// shows the plate a wrapped search shows. With none current yet, the
+    /// step starts from the caret in the C, or the selected row.
+    public func goToOccurrence(forward: Bool) {
+        let all = occurrences()
+        guard !all.isEmpty else { NSSound.beep(); return }
+        var target: Int
+        var wrapped = false
+        if let current = currentOccurrence, all.indices.contains(current) {
+            target = current + (forward ? 1 : -1)
+        } else if showsDecompiledC {
+            let caret = cTextView.selectedRange().location
+            target = forward ? (all.firstIndex { $0.range.location > caret } ?? all.count)
+                             : ((all.lastIndex { $0.range.location < caret }) ?? -1)
+        } else {
+            let selected = state.selectedRow ?? -1
+            target = forward ? (all.firstIndex { ($0.row ?? 0) > selected } ?? all.count)
+                             : ((all.lastIndex { ($0.row ?? 0) < selected }) ?? -1)
+        }
+        if target >= all.count { target = 0; wrapped = true }
+        if target < 0 { target = all.count - 1; wrapped = true }
+        currentOccurrence = target
+        show(all[target])
+        drawOccurrenceBar()
+        if wrapped, all.count > 1 { onWrapOccurrences?(forward) }
+    }
+
+    private func show(_ occurrence: Occurrence) {
+        if let row = occurrence.row {
+            let lines = state.lines
+            guard row < lines.count else { return }
+            select(line: lines[lines.startIndex + row].global)
+            notifyInstruction()
+            lastFlash = .row(row)
+            flashRow(row)
+        } else {
+            cTextView.setSelectedRange(occurrence.range)
+            cTextView.scrollRangeToVisible(occurrence.range)
+            lastFlash = .c(occurrence.range)
+            if cTextView.window != nil { cTextView.showFindIndicator(for: occurrence.range) }
+        }
+    }
+
+    /// Edit ▸ Find Next (⌘G) and Find Previous (⇧⌘G) in the code panel while
+    /// a name is highlighted: they step through its occurrences. With nothing
+    /// highlighted the pane does not answer them, and they go on to the
+    /// window's find in the dump.
+    @objc func findNextMatch() { goToOccurrence(forward: true) }
+    @objc func findPreviousMatch() { goToOccurrence(forward: false) }
+
+    override public func responds(to aSelector: Selector!) -> Bool {
+        if aSelector == #selector(findNextMatch) || aSelector == #selector(findPreviousMatch) {
+            return highlightedSymbol != nil && !showsDescription && super.responds(to: aSelector)
+        }
+        return super.responds(to: aSelector)
+    }
+
+    private func makeOccurrenceBar() -> NSStackView {
+        occurrenceLabel.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+        occurrenceLabel.textColor = .secondaryLabelColor
+        for (button, symbol, action) in [
+            (previousOccurrenceButton, "chevron.up", #selector(previousOccurrenceClicked)),
+            (nextOccurrenceButton, "chevron.down", #selector(nextOccurrenceClicked))
+        ] {
+            button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+            button.imagePosition = .imageOnly
+            button.isBordered = false
+            button.bezelStyle = .inline
+            button.target = self
+            button.action = action
+            button.setContentHuggingPriority(.required, for: .horizontal)
+        }
+        ControlHelp.describe(previousOccurrenceButton, name: L("Previous Use"),
+                             tooltip: L("Go to the previous use of the highlighted name (⇧⌘G)"))
+        ControlHelp.describe(nextOccurrenceButton, name: L("Next Use"),
+                             tooltip: L("Go to the next use of the highlighted name (⌘G)"))
+        let bar = NSStackView(views: [occurrenceLabel, previousOccurrenceButton, nextOccurrenceButton])
+        bar.orientation = .horizontal
+        bar.alignment = .centerY
+        bar.spacing = 2
+        bar.setCustomSpacing(6, after: occurrenceLabel)
+        bar.setContentHuggingPriority(.required, for: .horizontal)
+        bar.setContentCompressionResistancePriority(.required, for: .horizontal)
+        bar.isHidden = true
+        return bar
+    }
+
+    @objc private func previousOccurrenceClicked() { goToOccurrence(forward: false) }
+    @objc private func nextOccurrenceClicked() { goToOccurrence(forward: true) }
+
+    /// The counter beside the ASM/C switch: "3 of 12" and the two arrows,
+    /// while a name is highlighted in the side on screen; "12" until the
+    /// reader is at one of them.
+    private func drawOccurrenceBar() {
+        guard let occurrenceBar else { return }
+        let count = highlightedSymbol == nil || showsDescription ? 0 : occurrences().count
+        occurrenceBar.isHidden = count == 0
+        guard count > 0 else { return }
+        if let current = currentOccurrence, current < count {
+            occurrenceLabel.stringValue = String(format: L("%1$@ of %2$@"), "\(current + 1)", "\(count)")
+        } else {
+            occurrenceLabel.stringValue = "\(count)"
+        }
+    }
+
+    /// What the counter says, for tests; nil while it is hidden.
+    var occurrenceCounterText: String? {
+        occurrenceBar?.isHidden == false ? occurrenceLabel.stringValue : nil
     }
 
     /// Whether a click jumps to what it is on: ⌘-click, or a double click.
@@ -1882,6 +2053,10 @@ import ToolModuleKit
         }
         let clicked = token.flatMap { symbol(of: $0, in: cTextView.string) }
         highlight(clicked)
+        if let token, clicked != nil {
+            currentOccurrence = highlightedRangesInC().firstIndex { $0.location == token.start }
+            drawOccurrenceBar()
+        }
         if let clicked, case .variable = clicked, Self.isJump(event) {
             selectDefinition(of: clicked)
             return true
@@ -2060,6 +2235,10 @@ import ToolModuleKit
             return true
         }
         highlight(link.map(CodeSymbol.target))
+        if link != nil, let line, let row = state.lines.firstIndex(where: { $0.global == line }) {
+            currentOccurrence = listingOccurrences().firstIndex { $0.row == row - state.lines.startIndex }
+            drawOccurrenceBar()
+        }
         return false
     }
 

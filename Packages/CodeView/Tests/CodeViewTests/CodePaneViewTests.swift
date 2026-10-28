@@ -1349,6 +1349,61 @@ final class CodePaneViewTests: XCTestCase {
 
     /// A v4 artifact whose C says what each name is: a parameter, a local
     /// used five times, a global, a call.
+    /// With a name highlighted, ⌘G and ⇧⌘G — or the arrows beside the
+    /// counter — step through its uses in the C, going round at the ends;
+    /// the counter says which one the reader is at.
+    func testTheHighlightedNamesUsesAreSteppedThrough() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try spannedArtifact(),
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 900, height: 360)
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 0, instruction: nil, showsC: true)
+        var wraps: [Bool] = []
+        view.onWrapOccurrences = { wraps.append($0) }
+        let textView = try XCTUnwrap(first(CodeTextView.self, in: view) { _ in true })
+        let c = textView.string as NSString
+        XCTAssertNil(view.occurrenceCounterText, "nothing highlighted, no counter")
+        XCTAssertFalse(view.responds(to: #selector(CodePaneView.findNextMatch)),
+                       "⌘G goes on to the find in the dump")
+
+        let last = c.range(of: "Total", options: .backwards)
+        XCTAssertFalse(view.clickC(at: last.location, event: try click(count: 1)))
+        XCTAssertEqual(view.occurrenceCounterText, "5 of 5", "the use clicked is the current one")
+        XCTAssertTrue(view.responds(to: #selector(CodePaneView.findNextMatch)))
+
+        view.findNextMatch()
+        let first = c.range(of: "Total")
+        XCTAssertEqual(textView.selectedRange(), first, "from the last round to the first")
+        XCTAssertEqual(view.occurrenceCounterText, "1 of 5")
+        XCTAssertEqual(wraps, [true])
+        view.findNextMatch()
+        XCTAssertEqual(view.occurrenceCounterText, "2 of 5")
+        XCTAssertEqual(c.substring(with: textView.selectedRange()), "Total")
+        view.findPreviousMatch()
+        view.findPreviousMatch()
+        XCTAssertEqual(textView.selectedRange(), last)
+        XCTAssertEqual(wraps, [true, false])
+
+        view.highlight(nil)
+        XCTAssertNil(view.occurrenceCounterText)
+        XCTAssertFalse(view.responds(to: #selector(CodePaneView.findPreviousMatch)))
+    }
+
+    /// In the listing the steps go row by row: a call to a function is a use
+    /// of its name, and a step selects the instruction.
+    func testAStepInTheListingSelectsTheRow() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try spannedArtifact(),
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 900, height: 360)
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 0, instruction: 0, showsC: false)
+        view.highlight(.target(.function(1)))
+        XCTAssertEqual(view.occurrenceCounterText, "1")
+        view.goToOccurrence(forward: true)
+        XCTAssertEqual(view.selectedInstruction?.address, CodeAddress(0x221), "the CALL")
+        XCTAssertEqual(view.occurrenceCounterText, "1 of 1")
+    }
+
     /// A click on a name in a long function's C highlights at once: what
     /// each token names was once read by copying the whole text per token,
     /// 6.7 s for this function.

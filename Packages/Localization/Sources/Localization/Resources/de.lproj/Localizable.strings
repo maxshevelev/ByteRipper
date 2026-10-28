@@ -1717,6 +1717,10 @@
 "Status" = "Status";
 "Status codes" = "Statuscodes";
 "Strings" = "Zeichenketten";
+"Previous Use" = "Vorherige Stelle";
+"Next Use" = "Nächste Stelle";
+"Go to the previous use of the highlighted name (⇧⌘G)" = "Zur vorherigen Stelle des hervorgehobenen Namens (⇧⌘G)";
+"Go to the next use of the highlighted name (⌘G)" = "Zur nächsten Stelle des hervorgehobenen Namens (⌘G)";
 "Nothing matches the search." = "Die Suche hat nichts gefunden.";
 "No ReportStatusCode calls found. The analysis looks for them in 32-bit PEI modules, which call it through the PEI services table." = "Keine Aufrufe von ReportStatusCode gefunden. Die Analyse sucht sie nur in 32-Bit-PEI-Modulen: Dort wird ReportStatusCode über die Tabelle der PEI-Dienste aufgerufen.";
 "The analysis found none in this module." = "Die Analyse hat in diesem Modul keinen Eintrag gefunden.";

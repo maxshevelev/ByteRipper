@@ -1717,6 +1717,10 @@
 "Status" = "Статус";
 "Status codes" = "Коды состояния";
 "Strings" = "Строки";
+"Previous Use" = "Предыдущее место";
+"Next Use" = "Следующее место";
+"Go to the previous use of the highlighted name (⇧⌘G)" = "Перейти к предыдущему месту, где встречается подсвеченное имя (⇧⌘G)";
+"Go to the next use of the highlighted name (⌘G)" = "Перейти к следующему месту, где встречается подсвеченное имя (⌘G)";
 "Nothing matches the search." = "Поиск ничего не нашёл.";
 "No ReportStatusCode calls found. The analysis looks for them in 32-bit PEI modules, which call it through the PEI services table." = "Вызовы ReportStatusCode не найдены. Анализ ищет их только в 32-битных модулях PEI: там ReportStatusCode вызывается через таблицу сервисов PEI.";
 "The analysis found none in this module." = "Анализ не нашёл в этом модуле ни одной записи.";
