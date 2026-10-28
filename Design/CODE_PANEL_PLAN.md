@@ -332,9 +332,10 @@ fixture analysis, the bytes at the mapped file offset must equal the artifact's
 The header shows:
 
 - module name and kind (TE / PE32);
-- recipe and Ghidra version (`code-v2 · Ghidra 12.1.2`) on the line under the
-  module's name — where the module has more than one readable analysis, that
-  line is the dropdown that chooses among them;
+- a tray, then the recipe and Ghidra version (`code-v2 · Ghidra 12.1.2`) on
+  the line under the module's name — where the module has more than one
+  readable analysis, that line is the dropdown that chooses among the
+  analyses, listed newest first;
 - when it was analyzed;
 - the module's short SHA-256;
 - the manifest's source document and node, when known.

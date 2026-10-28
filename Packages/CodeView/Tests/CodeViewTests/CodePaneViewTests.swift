@@ -314,9 +314,18 @@ final class CodePaneViewTests: XCTestCase {
                                         "\(field.stringValue) is shown whole while there is room")
         }
         let nameRect = rects[2]
-        let versionsRect = view.convert(versions.bounds, from: versions)
+        // The versions line is anchored by its archive box, so the box — not
+        // the text after it — stands under the module's name.
+        let versionsLine = try XCTUnwrap(all(CodeVersionsLine.self, in: view).first)
+        let versionsRect = view.convert(versionsLine.bounds, from: versionsLine)
         XCTAssertGreaterThan(nameRect.minY, versionsRect.maxY - 1, "the versions are under the name")
-        XCTAssertEqual(nameRect.minX, versionsRect.minX, accuracy: 1)
+        // The text fields carry a bezel inset of their own; the line and the
+        // name are compared where the layout puts them.
+        let nameEdge = view.convert(name.alignmentRect(forFrame: name.bounds), from: name)
+        let versionsEdge = view.convert(versionsLine.alignmentRect(forFrame: versionsLine.bounds),
+                                        from: versionsLine)
+        XCTAssertEqual(nameEdge.minX, versionsEdge.minX, accuracy: 1,
+                       "the line's icon stands under the module's name")
         for rect in rects[3...5] {
             XCTAssertEqual(rect.midY, nameRect.midY, accuracy: 1.5, "one line with the module's name")
         }
@@ -354,10 +363,12 @@ final class CodePaneViewTests: XCTestCase {
         let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
                                 moduleBytes: moduleBytes, hexView: NSView(),
                                 recipes: [manifest(), second])
-        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        // A window wide enough for the header's two rows: in a narrow one the
+        // line gives way, truncated, as the plain line did.
+        view.frame = NSRect(x: 0, y: 0, width: 1200, height: 400)
         view.layoutSubtreeIfNeeded()
 
-        let analysis = try XCTUnwrap(first(NSPopUpButton.self, in: view) {
+        let analysis = try XCTUnwrap(all(CodeVersionsLine.self, in: view).first {
             $0.accessibilityLabel() == "Analysis"
         })
         let fold = try XCTUnwrap(first(NSButton.self, in: view) {
@@ -378,10 +389,10 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertLessThan(foldRect.maxY, analysisRect.minY,
                           "the dump bar is below the menu, with only its fold button")
 
-        XCTAssertEqual(analysis.itemTitles, ["code-v2 · Ghidra 12.1.2", "code-v3 · Ghidra 12.2"],
-                       "each analysis is named as the versions line names it")
-        XCTAssertEqual(analysis.selectedItem?.title, "code-v2 · Ghidra 12.1.2",
-                       "the menu opens on the analysis shown")
+        XCTAssertEqual(analysis.title, "code-v2 · Ghidra 12.1.2",
+                       "the line reads as the plain versions line does")
+        XCTAssertGreaterThan(analysis.frame.width, 100,
+                             "the line keeps its text beside the chevron")
     }
 
     func testTheFunctionsHeadingSitsAtTheLeftOfItsList() throws {
@@ -2199,6 +2210,44 @@ final class CodePaneViewTests: XCTestCase {
         let words = popover.wordsText() ?? ""
         XCTAssertTrue(words.contains("p-code operation"))
         XCTAssertTrue(words.contains("nothing is returned"), "the load form is explained too: \(words)")
+    }
+
+    /// The menu lists every analysis newest first — the order the agent's
+    /// `code_modules` gives them. The one shown keeps its place, so a line
+    /// where it is not on top says a newer analysis exists.
+    func testTheMenuListsEveryAnalysisNewestFirst() throws {
+        var older = manifest()
+        older.recipe = AnalysisRecipe(id: "code-v0-ghidra-12.0", exporter: 0,
+                                      ghidra: "12.0", script: "ExportCode.java")
+        older.analyzedAt = "2026-10-01T00:00:00+00:00"
+        var newer = manifest()
+        newer.recipe = AnalysisRecipe(id: "code-v3-ghidra-12.2", exporter: 3,
+                                      ghidra: "12.2", script: "ExportCode.java")
+        newer.analyzedAt = "2026-10-20T00:00:00+00:00"
+        var newest = manifest()
+        newest.recipe = AnalysisRecipe(id: "code-v4-ghidra-12.3", exporter: 4,
+                                       ghidra: "12.3", script: "ExportCode.java")
+        newest.analyzedAt = "2026-10-27T00:00:00+00:00"
+        // The analysis shown is of 2026-10-25 — newer than one of the others,
+        // older than another, and it is not moved to the top.
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: moduleBytes, hexView: NSView(),
+                                recipes: [older, newer, newest])
+        XCTAssertEqual(view.offeredRecipes.map(\.recipe.id),
+                       ["code-v4-ghidra-12.3", "code-v2-ghidra-12.1.2",
+                        "code-v3-ghidra-12.2", "code-v0-ghidra-12.0"])
+    }
+
+    /// The line wears its ground while the menu is up and under the pointer,
+    /// and takes it off when the menu closes without a choice.
+    func testTheGroundGoesWhenTheMenuCloses() {
+        let line = CodeVersionsLine(frame: NSRect(x: 0, y: 0, width: 120, height: 14))
+        line.onOpen = {}
+        XCTAssertFalse(line.showsGround, "no ground at rest")
+        line.menuOpened()
+        XCTAssertTrue(line.showsGround, "the line stays marked while its menu is up")
+        line.menuClosed()
+        XCTAssertFalse(line.showsGround, "a menu dismissed untouched leaves no ground")
     }
 
     /// An enum member is marked on the line that names it — and a member

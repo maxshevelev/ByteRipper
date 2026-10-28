@@ -99,7 +99,7 @@ import ToolModuleKit
     private var pendingDescriptionScroll: NSPoint?
     /// The link in the description the reader just followed.
     private var leavingDescriptionMark: NSRange?
-    private let recipePopUp = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let recipeLine = CodeVersionsLine(frame: .zero)
     /// Turns while the app reads another analysis the reader chose.
     private let recipeSpinner = NSProgressIndicator()
     private let codeContent = NSView()
@@ -129,12 +129,12 @@ import ToolModuleKit
     private static let dumpBarHeight: CGFloat = 24
     private let staleLabel = NSTextField(labelWithString: "")
     /// The header's first line — the module, its revision, the function —
-    /// and the recipe under it: kept to follow the zoom.
+    /// kept to follow the zoom. The versions line under it follows with
+    /// `recipeLine`.
     private var nameLabel: NSTextField?
     private var revisionLabel: NSTextField?
     private var pathMark: NSTextField?
     private let functionLabel = CodeTitleField(labelWithString: "")
-    private var recipeLabel: NSTextField?
     private var zoomObserver: NSObjectProtocol?
     /// Set while the view moves a table's selection itself, so the table's
     /// delegate does not take the move for a click.
@@ -175,11 +175,17 @@ import ToolModuleKit
         self.artifact = model.artifact
         self.state = CodeReaderState(model: model)
         self.moduleHexView = hexView
-        var allRecipes = [manifest]
-        for recipe in recipes where !allRecipes.contains(where: { $0.recipe.id == recipe.recipe.id }) {
-            allRecipes.append(recipe)
-        }
-        self.recipes = allRecipes
+        // Every analysis newest first, as the agent lists them — the recipe
+        // id breaking a tie. The one shown keeps its place: a line where it
+        // is not on top says at once that a newer analysis exists.
+        var seen: Set<String> = []
+        self.recipes = ([manifest] + recipes)
+            .filter { seen.insert($0.recipe.id).inserted }
+            .sorted {
+                $0.analyzedAt == $1.analyzedAt
+                    ? $0.recipe.id < $1.recipe.id
+                    : $0.analyzedAt > $1.analyzedAt
+            }
         // ASM and C are names of formats, not words to translate.
         modeControl = NSSegmentedControl(
             labels: ["ASM", "C", L("Description")], trackingMode: .selectOne,
@@ -327,7 +333,7 @@ import ToolModuleKit
         // A large module's artifact takes a moment to read: the dropdown
         // waits, with a spinner beside it, until the app replaces this pane
         // with the chosen analysis — or calls `recipeLoadFailed`.
-        recipePopUp.isEnabled = false
+        recipeLine.isEnabled = false
         recipeSpinner.isHidden = false
         recipeSpinner.startAnimation(nil)
         onChooseRecipe?(recipes[index])
@@ -341,8 +347,7 @@ import ToolModuleKit
     public func recipeLoadFailed() {
         recipeSpinner.stopAnimation(nil)
         recipeSpinner.isHidden = true
-        recipePopUp.isEnabled = true
-        selectCurrentRecipe()
+        recipeLine.isEnabled = true
     }
 
     /// Switches the navigator: Functions, Strings, POST writes, Status codes.
@@ -1234,8 +1239,6 @@ import ToolModuleKit
         functionLabel.maximumNumberOfLines = 1
         functionLabel.translatesAutoresizingMaskIntoConstraints = false
         functionLabel.onMenu = { [weak self] in self?.functionMenu(for: self?.state.function) }
-        let recipeLabel = label(recipeSummary(), font: Self.recipeFont(), color: .secondaryLabelColor)
-        recipeLabel.lineBreakMode = .byTruncatingMiddle
         // The names are what one searches for elsewhere — in the tree, in a
         // report — so they can be selected and copied.
         nameLabel.isSelectable = true
@@ -1244,7 +1247,6 @@ import ToolModuleKit
         // the row has room for it; below required, so it is cut when there is
         // none: the versions first, then the function's name — down to a few
         // letters, enough to tell it — and the module's last.
-        recipeLabel.setContentCompressionResistancePriority(.init(498), for: .horizontal)
         functionLabel.setContentCompressionResistancePriority(.init(499), for: .horizontal)
         nameLabel.setContentCompressionResistancePriority(.init(500), for: .horizontal)
         let functionMinimum = functionLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 80)
@@ -1260,7 +1262,6 @@ import ToolModuleKit
         self.nameLabel = nameLabel
         self.revisionLabel = revisionLabel
         self.pathMark = pathMark
-        self.recipeLabel = recipeLabel
         let pathLine = NSStackView(views: [nameLabel, revisionLabel, pathMark, functionLabel])
         pathLine.orientation = .horizontal
         pathLine.alignment = .firstBaseline
@@ -1270,7 +1271,7 @@ import ToolModuleKit
         // recipe and the Ghidra version. Where the store holds more than one
         // analysis of the module, the line is the menu that chooses among
         // them, each named the same way.
-        let versionsLine: NSView = recipes.count > 1 ? recipeMenu() : recipeLabel
+        let versionsLine: NSView = recipes.count > 1 ? recipeMenu() : recipeVersions()
         let titleBlock = NSStackView(views: [pathLine, versionsLine])
         titleBlock.orientation = .vertical
         titleBlock.alignment = .leading
@@ -1481,8 +1482,9 @@ import ToolModuleKit
         navigatorLabel.font = ToolPanelFont.title()
         emptyListLabel.font = Self.navigatorFont()
         for field in [nameLabel, revisionLabel, pathMark, functionLabel] { field?.font = ToolPanelFont.title() }
-        recipeLabel?.font = Self.recipeFont()
-        recipePopUp.font = Self.recipeFont()
+        drawRecipeIcon()
+        drawRecipeChevron()
+        drawRecipeTitle()
         staleLabel.font = ToolPanelFont.body()
         drawNavigationImages()
         layOutNavigatorColumns()
@@ -1781,24 +1783,23 @@ import ToolModuleKit
     }
 
     /// The versions line as a menu: the analysis shown, named as the plain
-    /// line names it, and the others the store holds, each the same way. The
-    /// spinner turns beside it while the app reads the chosen one.
+    /// line names it, and a small chevron that says the line opens — a jump
+    /// bar's. The button has no bezel of its own, so the line reads as the
+    /// plain one does until the pointer is over it, and then it takes the
+    /// rounded ground an inline button shows. The spinner turns beside it
+    /// while the app reads the chosen analysis.
     private func recipeMenu() -> NSView {
-        recipePopUp.controlSize = .small
-        recipePopUp.font = Self.recipeFont()
-        recipePopUp.removeAllItems()
-        for recipe in recipes {
-            recipePopUp.addItem(withTitle: Self.recipeSummary(of: recipe))
-        }
-        recipePopUp.target = self
-        recipePopUp.action = #selector(recipeChanged)
-        recipePopUp.translatesAutoresizingMaskIntoConstraints = false
-        recipePopUp.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        drawRecipeIcon()
+        drawRecipeTitle()
+        drawRecipeChevron()
+        recipeLine.translatesAutoresizingMaskIntoConstraints = false
+        // Above the stacks' own hugging as the plain line was, so the text is
+        // shown whole while the row has room and gives way, truncated, first.
+        recipeLine.setContentCompressionResistancePriority(.init(498), for: .horizontal)
+        recipeLine.onOpen = { [weak self] in self?.recipeMenuClicked() }
         // help: panel.code.analysis
-        ControlHelp.describe(recipePopUp, name: L("Analysis"),
+        ControlHelp.describe(recipeLine, name: L("Analysis"),
                              tooltip: L("Choose the stored analysis shown here"))
-        // By position, not by title: two recipes may read alike.
-        selectCurrentRecipe()
 
         recipeSpinner.style = .spinning
         recipeSpinner.controlSize = .small
@@ -1806,18 +1807,46 @@ import ToolModuleKit
         recipeSpinner.isHidden = true
         recipeSpinner.translatesAutoresizingMaskIntoConstraints = false
 
-        let line = NSStackView(views: [recipePopUp, recipeSpinner])
+        let line = NSStackView(views: [recipeLine, recipeSpinner])
         line.orientation = .horizontal
         line.alignment = .centerY
         line.spacing = 6
         return line
     }
 
-    /// The menu's selection back on the analysis shown — the one it opens
-    /// with, and the one it returns to when another could not be read.
-    private func selectCurrentRecipe() {
-        guard let index = recipes.firstIndex(where: { $0.recipe.id == manifest.recipe.id }) else { return }
-        recipePopUp.selectItem(at: index)
+    /// The line with one analysis: the icon and the summary, no menu.
+    private func recipeVersions() -> NSView {
+        drawRecipeIcon()
+        drawRecipeTitle()
+        recipeLine.translatesAutoresizingMaskIntoConstraints = false
+        // Above the stacks' own hugging as the plain line was, so the text is
+        // shown whole while the row has room and gives way, truncated, first.
+        recipeLine.setContentCompressionResistancePriority(.init(498), for: .horizontal)
+        return recipeLine
+    }
+
+    /// The tray before the versions: what the line is about, and the edge the
+    /// line is read from.
+    private func drawRecipeIcon() {
+        let size = max(Self.recipeFont().pointSize, 9)
+        recipeLine.setIcon(NSImage(systemSymbolName: "tray", accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: size, weight: .regular)))
+    }
+
+    /// The line's text: the analysis and the Ghidra version in the quiet grey
+    /// of the versions line, whatever the pointer is doing.
+    private func drawRecipeTitle() {
+        recipeLine.title = Self.recipeSummary(of: manifest)
+        recipeLine.setFont(Self.recipeFont())
+    }
+
+    /// The small up-and-down chevron the line wears when it opens a menu, as
+    /// a jump bar's does: the system's own symbol, sized with the line.
+    private func drawRecipeChevron() {
+        let size = max(Self.recipeFont().pointSize - 1, 8)
+        recipeLine.setChevron(NSImage(systemSymbolName: "chevron.up.chevron.down",
+                                      accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: size, weight: .regular)))
     }
 
     private func label(_ text: String, font: NSFont,
@@ -1838,8 +1867,26 @@ import ToolModuleKit
         applyMode()
     }
 
-    @objc private func recipeChanged() {
-        chooseRecipe(at: recipePopUp.indexOfSelectedItem)
+    /// The line opens the analyses the store holds, the one shown ticked. A
+    /// menu pops below it, as a control's menu does.
+    @objc private func recipeMenuClicked() {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        for (index, recipe) in recipes.enumerated() {
+            let item = NSMenuItem(title: Self.recipeSummary(of: recipe),
+                                  action: #selector(recipeChosen(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = index
+            item.state = recipe.recipe.id == manifest.recipe.id ? .on : .off
+            menu.addItem(item)
+        }
+        recipeLine.menuOpened()
+        defer { recipeLine.menuClosed() }
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: 0), in: recipeLine)
+    }
+
+    @objc private func recipeChosen(_ item: NSMenuItem) {
+        chooseRecipe(at: item.tag)
     }
 
     // help: panel.code.description
