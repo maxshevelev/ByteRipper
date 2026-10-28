@@ -5,7 +5,8 @@ import Localization
 import ToolModuleKit
 
 /// The Appearance section of the Settings window's View tab (§3.2): the
-/// monospaced font (family and size), the row-height factor, and the app
+/// monospaced font (family and size), the dump's row-height factor, the code's
+/// line spacing, and the app
 /// theme. Every change
 /// persists immediately through `AppearanceSettings.set` / `AppTheme.set` and
 /// re-lays out every open hex view (or re-themes the app), so the effect is
@@ -16,6 +17,8 @@ final class AppearanceSettingsViewController: NSViewController {
     private let fontSizeValueLabel = NSTextField(labelWithString: "")
     private let scaleSlider = NSSlider()
     private let scaleValueLabel = NSTextField(labelWithString: "")
+    private let codeSpacingSlider = NSSlider()
+    private let codeSpacingValueLabel = NSTextField(labelWithString: "")
     private let themePopup = NSPopUpButton()
 
     // help: settings.appearance
@@ -46,7 +49,7 @@ final class AppearanceSettingsViewController: NSViewController {
         fontRow.addArrangedSubview(fontSizeValueLabel)
 
         // Row-height row: a slider snapping to 0.05 steps + the current value.
-        let scaleLabel = NSTextField(labelWithString: L("Row Height:"))
+        let scaleLabel = NSTextField(labelWithString: L("Dump Row Height:"))
         scaleSlider.minValue = Double(AppearanceSettings.rowHeightScaleRange.lowerBound)
         scaleSlider.maxValue = Double(AppearanceSettings.rowHeightScaleRange.upperBound)
         scaleSlider.numberOfTickMarks = 8
@@ -61,6 +64,23 @@ final class AppearanceSettingsViewController: NSViewController {
         scaleRow.addArrangedSubview(scaleSlider)
         scaleRow.addArrangedSubview(scaleValueLabel)
 
+        // The code's line spacing: the C's and the listing's, apart from the
+        // dump's rows — the dump packs rows, the code is read. 0.05 steps.
+        let codeSpacingLabel = NSTextField(labelWithString: L("Code Line Spacing:"))
+        codeSpacingSlider.minValue = Double(AppearanceSettings.codeLineSpacingRange.lowerBound)
+        codeSpacingSlider.maxValue = Double(AppearanceSettings.codeLineSpacingRange.upperBound)
+        codeSpacingSlider.numberOfTickMarks = 13
+        codeSpacingSlider.allowsTickMarkValuesOnly = true
+        codeSpacingSlider.isContinuous = true
+        codeSpacingSlider.target = self
+        codeSpacingSlider.action = #selector(codeSpacingChanged(_:))
+        codeSpacingSlider.widthAnchor.constraint(equalToConstant: 180).isActive = true
+        let codeSpacingRow = NSStackView()
+        codeSpacingRow.orientation = .horizontal
+        codeSpacingRow.spacing = 8
+        codeSpacingRow.addArrangedSubview(codeSpacingSlider)
+        codeSpacingRow.addArrangedSubview(codeSpacingValueLabel)
+
         // Theme row: follow the system, or force light / dark.
         let themeLabel = NSTextField(labelWithString: L("Theme:"))
         themePopup.target = self
@@ -70,6 +90,7 @@ final class AppearanceSettingsViewController: NSViewController {
         let grid = NSGridView(views: [
             [fontLabel, fontRow],
             [scaleLabel, scaleRow],
+            [codeSpacingLabel, codeSpacingRow],
             [themeLabel, themePopup],
         ])
         grid.rowSpacing = 12
@@ -78,7 +99,7 @@ final class AppearanceSettingsViewController: NSViewController {
         grid.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         let caption = NSTextField(wrappingLabelWithString:
-            L("The hex dump's font and row pitch. A smaller Row Height packs more rows onto the screen. Theme applies to the whole app."))
+            L("The font and its size are the dump's and the code panel's. A smaller Dump Row Height packs more rows of the dump onto the screen; Code Line Spacing sets how far apart the lines of the C and the ASM listing are. Theme applies to the whole app."))
         caption.font = .systemFont(ofSize: 11)
         caption.textColor = .secondaryLabelColor
         caption.maximumNumberOfLines = 3
@@ -159,6 +180,8 @@ final class AppearanceSettingsViewController: NSViewController {
 
         scaleSlider.doubleValue = Double(AppearanceSettings.rowHeightScale)
         scaleValueLabel.stringValue = Self.formatScale(AppearanceSettings.rowHeightScale)
+        codeSpacingSlider.doubleValue = Double(AppearanceSettings.codeLineSpacing)
+        codeSpacingValueLabel.stringValue = Self.formatSpacing(AppearanceSettings.codeLineSpacing)
 
         themePopup.removeAllItems()
         for theme in AppTheme.allCases {
@@ -190,6 +213,14 @@ final class AppearanceSettingsViewController: NSViewController {
         AppearanceSettings.set(fontFamily: AppearanceSettings.fontFamily, rowHeightScale: scale)
     }
 
+    @objc private func codeSpacingChanged(_ sender: NSSlider) {
+        let snapped = (sender.doubleValue / 0.05).rounded() * 0.05
+        let spacing = min(AppearanceSettings.codeLineSpacingRange.upperBound,
+                          max(AppearanceSettings.codeLineSpacingRange.lowerBound, snapped))
+        codeSpacingValueLabel.stringValue = Self.formatSpacing(spacing)
+        AppearanceSettings.set(codeLineSpacing: spacing)
+    }
+
     @objc private func themeChanged(_ sender: NSPopUpButton) {
         let theme = AppTheme.allCases[sender.indexOfSelectedItem]
         AppTheme.set(theme)
@@ -197,6 +228,14 @@ final class AppearanceSettingsViewController: NSViewController {
 
     private static func formatScale(_ scale: CGFloat) -> String {
         String(format: "%.2g×", scale)
+    }
+
+    /// "1.3×", "1.25×": two decimals where the step needs them, one where not.
+    private static func formatSpacing(_ spacing: CGFloat) -> String {
+        var text = String(format: "%.2f", spacing)
+        while text.hasSuffix("0") { text.removeLast() }
+        if text.hasSuffix(".") { text += "0" }
+        return text + "×"
     }
 
     private static func formatFontSize(_ size: CGFloat) -> String {

@@ -765,7 +765,6 @@
 "Revision" = "Revision";
 "Row #%1$@ already holds a microcode for CPUID %2$@ on the same platforms" = "Zeile #%1$@ enthält bereits einen Microcode für CPUID %2$@ auf denselben Plattformen";
 "Row #%1$@ already holds a microcode for CPUID %2$@ on the same platforms. To update it, replace that row. Nothing was changed." = "Zeile #%1$@ enthält bereits einen Microcode für CPUID %2$@ auf denselben Plattformen. Um ihn zu aktualisieren, ersetzen Sie den Microcode in dieser Zeile. Es wurde nichts geändert.";
-"Row Height:" = "Zeilenhöhe:";
 "Same as the Mac (%1$@)" = "Wie der Mac (%1$@)";
 "Save" = "Sichern";
 "Save %1$@ segments?" = "%1$@ Segmente sichern?";
@@ -892,7 +891,6 @@
 "The header is not an entry." = "Der Kopf ist kein Eintrag.";
 "The header says the table has no entries" = "Der Kopf sagt, die Tabelle habe keine Einträge";
 "The help changes language now. The menus and windows change when ByteRipper starts again." = "Die Hilfe wechselt sofort die Sprache. Menüs und Fenster wechseln, wenn ByteRipper neu startet.";
-"The hex dump's font and row pitch. A smaller Row Height packs more rows onto the screen. Theme applies to the whole app." = "Schrift und Zeilenabstand des Hex-Dumps. Eine kleinere Zeilenhöhe bringt mehr Zeilen auf den Bildschirm. Das Erscheinungsbild gilt für die ganze App.";
 "The image is too small to hold a FIT pointer" = "Das Image ist zu klein für einen FIT-Zeiger";
 "The length changed" = "Die Länge hat sich geändert";
 "The line below says what went wrong." = "Die Zeile darunter sagt, was schiefging.";
@@ -1717,6 +1715,9 @@
 "Status" = "Status";
 "Status codes" = "Statuscodes";
 "Strings" = "Zeichenketten";
+"Dump Row Height:" = "Zeilenhöhe des Dumps:";
+"Code Line Spacing:" = "Zeilenabstand des Codes:";
+"The font and its size are the dump's and the code panel's. A smaller Dump Row Height packs more rows of the dump onto the screen; Code Line Spacing sets how far apart the lines of the C and the ASM listing are. Theme applies to the whole app." = "Schrift und Schriftgröße gelten für den Dump und den Code-Bereich. Eine kleinere Zeilenhöhe des Dumps bringt mehr Zeilen des Dumps auf den Bildschirm; der Zeilenabstand des Codes bestimmt, wie weit die Zeilen des C und des ASM-Listings auseinanderliegen. Das Erscheinungsbild gilt für die ganze App.";
 "Previous Use" = "Vorherige Stelle";
 "Next Use" = "Nächste Stelle";
 "Go to the previous use of the highlighted name (⇧⌘G)" = "Zur vorherigen Stelle des hervorgehobenen Namens (⇧⌘G)";

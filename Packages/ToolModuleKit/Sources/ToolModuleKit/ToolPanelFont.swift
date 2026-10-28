@@ -51,6 +51,23 @@ public enum ToolPanelFont {
     /// code read it alike.
     public static let fontFamilyKey = "HexFontFamily"
 
+    /// The `UserDefaults` key of the code's line spacing, which Settings
+    /// writes: a line of the C and a row of the listing are the code font's
+    /// own line times this.
+    public static let codeLineSpacingKey = "CodeLineSpacing"
+    /// The span the Settings slider offers: from the font's own line, set
+    /// solid, to well spaced.
+    public static let codeLineSpacingRange: ClosedRange<CGFloat> = 1.0...1.6
+    /// With nothing stored: 21 points of line for the 16 of a 13-point font.
+    public static let defaultCodeLineSpacing: CGFloat = 1.3
+
+    /// The code's line spacing, as Settings has it.
+    public static var codeLineSpacing: CGFloat {
+        let stored = defaults.double(forKey: codeLineSpacingKey)
+        guard stored > 0 else { return defaultCodeLineSpacing }
+        return min(max(CGFloat(stored), codeLineSpacingRange.lowerBound), codeLineSpacingRange.upperBound)
+    }
+
     /// The monospaced font at `size`: the family Settings names, in its
     /// regular or bold member; the system monospaced font when none is named,
     /// or the one named is not installed. What the dump's bytes and the code

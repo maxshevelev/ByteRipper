@@ -1430,7 +1430,9 @@ final class CodePaneViewTests: XCTestCase {
         let layout = try XCTUnwrap(textView.layoutManager)
         layout.ensureLayout(for: try XCTUnwrap(textView.textContainer))
 
-        XCTAssertEqual(CodePaneView.codeLineHeight, 21, "13 points: the font's line and a row's padding")
+        let menlo = try XCTUnwrap(NSFont(name: "Menlo-Regular", size: 13))
+        XCTAssertEqual(CodePaneView.codeLineHeight, (layout.defaultLineHeight(for: menlo) * 1.3).rounded(),
+                       "the font's own line times the default spacing")
         let line = layout.lineFragmentRect(forGlyphAt: 0, effectiveRange: nil)
         XCTAssertEqual(line.height, CodePaneView.codeLineHeight, "a line of the C")
         let listing = try XCTUnwrap(tables(in: view).first { $0.tableColumns.first?.identifier.rawValue == "instruction" })
@@ -1442,6 +1444,17 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertLessThanOrEqual(glyphs.height, line.height)
 
         XCTAssertEqual(font.familyName, "Menlo")
+
+        // Settings ▸ Code Line Spacing: 1.0 sets the lines solid, at the
+        // font's own line, in the C and the listing alike.
+        defaults.set(1.0, forKey: ToolPanelFont.codeLineSpacingKey)
+        NotificationCenter.default.post(name: ToolPanelFont.zoomDidChangeNotification, object: nil)
+        let solid = layout.defaultLineHeight(for: font)
+        XCTAssertEqual(CodePaneView.codeLineHeight, solid)
+        XCTAssertEqual(listing.rowHeight, solid)
+        layout.ensureLayout(for: textView.textContainer!)
+        XCTAssertEqual(layout.lineFragmentRect(forGlyphAt: 0, effectiveRange: nil).height, solid)
+        defaults.removeObject(forKey: ToolPanelFont.codeLineSpacingKey)
         defaults.set("", forKey: ToolPanelFont.fontFamilyKey)
         NotificationCenter.default.post(name: ToolPanelFont.zoomDidChangeNotification, object: nil)
         let system = try XCTUnwrap(textView.textStorage?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)

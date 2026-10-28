@@ -765,7 +765,6 @@
 "Revision" = "Ревизия";
 "Row #%1$@ already holds a microcode for CPUID %2$@ on the same platforms" = "Строка #%1$@ уже содержит микрокод для CPUID %2$@ на тех же платформах";
 "Row #%1$@ already holds a microcode for CPUID %2$@ on the same platforms. To update it, replace that row. Nothing was changed." = "Строка #%1$@ уже содержит микрокод для CPUID %2$@ на тех же платформах. Чтобы обновить его, замените микрокод в этой строке. Ничего не изменено.";
-"Row Height:" = "Высота строки:";
 "Same as the Mac (%1$@)" = "Как на Mac (%1$@)";
 "Save" = "Сохранить";
 "Save %1$@ segments?" = "Сохранить сегментов: %1$@?";
@@ -892,7 +891,6 @@
 "The header is not an entry." = "Заголовок не является записью.";
 "The header says the table has no entries" = "Заголовок сообщает, что в таблице нет записей";
 "The help changes language now. The menus and windows change when ByteRipper starts again." = "Справка меняет язык сразу. Меню и окна — после перезапуска ByteRipper.";
-"The hex dump's font and row pitch. A smaller Row Height packs more rows onto the screen. Theme applies to the whole app." = "Шрифт и шаг строк hex-дампа. Меньшая высота строки умещает на экран больше строк. Тема действует на всю программу.";
 "The image is too small to hold a FIT pointer" = "Образ слишком мал, чтобы содержать указатель FIT";
 "The length changed" = "Длина изменилась";
 "The line below says what went wrong." = "Строка ниже говорит, что пошло не так.";
@@ -1717,6 +1715,9 @@
 "Status" = "Статус";
 "Status codes" = "Коды состояния";
 "Strings" = "Строки";
+"Dump Row Height:" = "Высота строки дампа:";
+"Code Line Spacing:" = "Интервал строк кода:";
+"The font and its size are the dump's and the code panel's. A smaller Dump Row Height packs more rows of the dump onto the screen; Code Line Spacing sets how far apart the lines of the C and the ASM listing are. Theme applies to the whole app." = "Шрифт и его размер общие для дампа и панели кода. Чем меньше высота строки дампа, тем больше строк дампа помещается на экране; интервал строк кода задаёт расстояние между строками C и листинга ASM. Оформление действует на всё приложение.";
 "Previous Use" = "Предыдущее место";
 "Next Use" = "Следующее место";
 "Go to the previous use of the highlighted name (⇧⌘G)" = "Перейти к предыдущему месту, где встречается подсвеченное имя (⇧⌘G)";

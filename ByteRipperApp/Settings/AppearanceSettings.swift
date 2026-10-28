@@ -71,6 +71,18 @@ enum AppearanceSettings {
         NotificationCenter.default.post(name: didChangeNotification, object: nil)
     }
 
+    /// The code panel's line spacing — the C's and the listing's — kept apart
+    /// from the dump's row height: the dump packs rows, the code is read.
+    static var codeLineSpacing: CGFloat { ToolPanelFont.codeLineSpacing }
+    static let codeLineSpacingRange = ToolPanelFont.codeLineSpacingRange
+
+    /// Stores the code's line spacing and tells the code panels, which re-lay
+    /// their lines out on the same notification as a zoom.
+    static func set(codeLineSpacing: CGFloat) {
+        AppDefaults.store.set(codeLineSpacing, forKey: ToolPanelFont.codeLineSpacingKey)
+        NotificationCenter.default.post(name: didChangeNotification, object: nil)
+    }
+
     /// Moves the hex font size by `step` points, clamped to `fontSizeRange` —
     /// Zoom In and Zoom Out (§3.2). Everything else about the appearance is
     /// left as it stands.
@@ -100,6 +112,7 @@ enum AppearanceSettings {
         AppDefaults.store.removeObject(forKey: fontFamilyKey)
         AppDefaults.store.removeObject(forKey: rowHeightScaleKey)
         AppDefaults.store.removeObject(forKey: fontSizeKey)
+        AppDefaults.store.removeObject(forKey: ToolPanelFont.codeLineSpacingKey)
         NotificationCenter.default.post(name: didChangeNotification, object: nil)
     }
 

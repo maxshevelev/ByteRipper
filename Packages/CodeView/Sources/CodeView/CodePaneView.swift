@@ -1504,11 +1504,12 @@ import ToolModuleKit
     }
 
     /// One line of the code — a row of the listing, a line of the C: the code
-    /// font's line and the padding a panel's row has. At 13 points that is 21;
-    /// the C's own line was 16, and read cramped beside the listing.
+    /// font's own line times the spacing Settings has for the code. At 13
+    /// points and the default 1.3 that is 21; the font's line alone is 16,
+    /// and read cramped beside the listing.
     static var codeLineHeight: CGFloat {
-        let font = codeFont()
-        return (font.ascender - font.descender + font.leading).rounded(.up) + 5
+        let line = NSLayoutManager().defaultLineHeight(for: codeFont())
+        return max(line, (line * ToolPanelFont.codeLineSpacing).rounded())
     }
 
     /// How far the code font's own line sits in from the top and the bottom
