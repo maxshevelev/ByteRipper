@@ -1313,7 +1313,7 @@ import ToolModuleKit
         titleSpacer.setContentHuggingPriority(.init(1), for: .horizontal)
         let occurrenceBar = makeOccurrenceBar()
         self.occurrenceBar = occurrenceBar
-        let codeHelpButton = HelpButton.standard(for: .topic(.toolUEFI))
+        let codeHelpButton = HelpButton.standard(for: .topic(.codePanel))
         codeHelpButton.setContentHuggingPriority(.required, for: .horizontal)
         codeHelpButton.setContentCompressionResistancePriority(.required, for: .horizontal)
         let titleRow = NSStackView(views: [backButton, forwardButton, titleBlock, titleSpacer,

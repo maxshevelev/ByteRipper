@@ -2222,7 +2222,7 @@ final class CodePaneViewTests: XCTestCase {
         view.frame = NSRect(x: 0, y: 0, width: 1200, height: 400)
         view.layoutSubtreeIfNeeded()
         let help = try XCTUnwrap(all(HelpButton.self, in: view).first)
-        XCTAssertEqual(help.opens, .topic(.toolUEFI))
+        XCTAssertEqual(help.opens, .topic(.codePanel))
         let mode = try XCTUnwrap(all(NSSegmentedControl.self, in: view)
             .first { $0.segmentCount == 3 })
         let helpRect = view.convert(help.bounds, from: help)

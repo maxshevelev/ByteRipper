@@ -53,6 +53,7 @@ public enum HelpContents {
         ("firmware", [
             .toolsOverview,
             .toolUEFI,
+            .codePanel,
             .peiDXE,
             .toolME,
             .toolFIT,
