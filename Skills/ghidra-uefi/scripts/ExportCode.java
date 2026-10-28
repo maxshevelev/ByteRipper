@@ -85,7 +85,7 @@ public class ExportCode extends GhidraScript {
         Listing listing = currentProgram.getListing();
         StringBuilder json = new StringBuilder(1 << 22);
         json.append("{\n");
-        json.append("  \"script_version\": 5,\n");
+        json.append("  \"script_version\": 6,\n");
         json.append("  \"ghidra\": ").append(quote(Application.getApplicationVersion())).append(",\n");
         json.append("  \"program\": {\n");
         json.append("    \"name\": ").append(quote(currentProgram.getName())).append(",\n");
@@ -418,8 +418,16 @@ public class ExportCode extends GhidraScript {
                     case ClangToken.PARAMETER_COLOR: kind = "parameter"; break;
                     case ClangToken.VARIABLE_COLOR: kind = "local"; break;
                     case ClangToken.FUNCTION_COLOR:
-                        kind = "function";
-                        target = calledEntry(token);
+                        // A call the processor model makes into a named p-code
+                        // operation — x86's SIDT, SGDT — has no function behind
+                        // it: it is one instruction of the image, and the span
+                        // says so rather than pointing at nothing.
+                        if (callOp != null && callOp.getOpcode() == PcodeOp.CALLOTHER) {
+                            kind = "pcode";
+                        } else {
+                            kind = "function";
+                            target = calledEntry(token);
+                        }
                         break;
                     case ClangToken.GLOBAL_COLOR:
                         kind = "global";

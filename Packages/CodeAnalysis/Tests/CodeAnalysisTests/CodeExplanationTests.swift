@@ -139,4 +139,29 @@ final class CodeExplanationTests: XCTestCase {
         XCTAssertEqual(artifact.equates, [])
         XCTAssertEqual(artifact.types, [])
     }
+    /// A call the processor model makes into one of its own named operations —
+    /// x86's SIDT — is explained as that instruction: no function stands behind
+    /// the name, and the span carries no target, so there is nowhere to go.
+    func testAPCodeOperationIsExplainedAsAnInstruction() throws {
+        let c = "void PeiDispatcher(void)\n{\n  InterruptDescriptorTableRegister(&Idtr);\n}\n"
+        let at = (c as NSString).range(of: "InterruptDescriptorTableRegister").location
+        let json: [String: Any] = [
+            "script_version": 6, "program": ["image_base": "0x0"],
+            "functions": [[
+                "entry": "0x100", "name": "PeiDispatcher", "c": c,
+                "c_spans": [[at, 32, "pcode"]],
+                "instructions": [["address": "0x100", "bytes": "0F 01 08",
+                                  "mnemonic": "SIDT", "text": "SIDT dword ptr [EAX]"]]
+            ]]
+        ]
+        let artifact = try JSONDecoder().decode(CodeArtifact.self,
+                                                from: JSONSerialization.data(withJSONObject: json))
+        let model = CodeModel(artifact: artifact, layout: nil)
+        let token = try XCTUnwrap(model.cTokens(ofFunction: 0).first)
+        XCTAssertEqual(token.kind, .pcode)
+        XCTAssertNil(token.link, "a p-code operation has nowhere to go")
+        let explained = try XCTUnwrap(model.explanation(ofC: token, inFunction: 0))
+        XCTAssertEqual(explained.subject, .pcodeOperation("InterruptDescriptorTableRegister"))
+        XCTAssertNil(explained.text, "the words are the panel's, not the artifact's")
+    }
 }

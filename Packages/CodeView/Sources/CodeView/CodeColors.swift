@@ -15,7 +15,7 @@ enum CodeColors {
         switch kind {
         case .keyword, .mnemonic: keyword
         case .type: type
-        case .function: function
+        case .function, .pcode: function
         case .global, .label: global
         case .constant: number
         case .string: string

@@ -17,6 +17,11 @@ public struct CodeExplanation: Equatable, Sendable {
         case unreachable(blocks: Int)
         /// A named global: its address.
         case global(CodeAddress)
+        /// A call the processor model makes into one of its own named
+        /// operations, such as x86's `InterruptDescriptorTableRegister` for
+        /// SIDT. There is no function behind the name and nothing to open; the
+        /// operation's name is what the C writes.
+        case pcodeOperation(String)
     }
 
     /// An instruction that holds the constant, or a removed block's first.
@@ -96,6 +101,8 @@ extension CodeModel {
             return equate.map(explanation(of:))
         case .type:
             return typeExplanation(named: text)
+        case .pcode:
+            return pcodeExplanation(name: text)
         case .global:
             // By the address it links to; one with no bytes in the module
             // links nowhere and is found by its name.
@@ -216,6 +223,14 @@ extension CodeModel {
         guard let type = typeDefinition(named: name) else { return nil }
         return CodeExplanation(subject: .type(type.name), name: type.name, enumName: nil,
                                kind: type.kind, size: type.size, declaration: nil, text: type.description.flatMap(Self.nonEmpty), c: type.c, uses: [])
+    }
+
+    /// A call the decompiler wrote for a p-code operation of the processor
+    /// model — SIDT as `InterruptDescriptorTableRegister()` on x86. The words
+    /// are the panel's: the model knows only the operation's name.
+    private func pcodeExplanation(name: String) -> CodeExplanation {
+        CodeExplanation(subject: .pcodeOperation(name), name: name, enumName: nil, kind: nil,
+                        size: 0, declaration: nil, text: nil, c: nil, uses: [])
     }
 
     private func fieldExplanation(_ field: CodeArtifact.CField, name: String) -> CodeExplanation? {

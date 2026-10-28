@@ -1780,3 +1780,9 @@
 "Ghidra's decompiler found that, with the values it knows, no path runs these blocks, and left them out of the C. Their instructions are still in the listing. A block that depends on what the hardware answers, such as a check Ghidra's model cannot fail, may still run on the board." = "Декомпилятор Ghidra установил, что при известных ему значениях ни один путь не ведёт в эти блоки, и не включил их в C. Их инструкции по-прежнему есть в листинге. Блок, который зависит от ответа оборудования, например проверка, которая в модели Ghidra не может не пройти, на плате всё же может выполниться.";
 "%1$@ · %2$@ bytes" = "%1$@ · %2$@ байт";
 "at +0x%1$@ in %2$@" = "по смещению +0x%1$@ в %2$@";
+
+"p-code operation · one instruction, not a function" = "p-code-операция · одна инструкция, не функция";
+"Ghidra's processor model names this instruction as a p-code operation. It is not a function in the image: the name stands for one instruction, and there is nothing to open." = "Модель процессора в Ghidra называет эту инструкцию p-code-операцией. Это не функция в образе: имя обозначает одну инструкцию, и открывать здесь нечего.";
+"SIDT stores the interrupt descriptor table register in the buffer it is given." = "SIDT сохраняет регистр таблицы дескрипторов прерываний в переданный буфер.";
+"SGDT stores the global descriptor table register in the buffer it is given." = "SGDT сохраняет регистр таблицы глобальных дескрипторов в переданный буфер.";
+"SLDT stores the local descriptor table register where it is pointed to." = "SLDT сохраняет регистр таблицы локальных дескрипторов по указанному адресу.";

@@ -155,18 +155,41 @@ import Localization
         return scroll
     }
 
-    /// The name as the code writes it; the removed blocks' line has a title.
+    /// The name as the code writes it; the removed blocks' line has a title,
+    /// and a p-code operation is titled with the instruction it stands for.
     func title() -> String {
         if case .unreachable = explanation.subject { return L("Unreachable blocks") }
+        if case .pcodeOperation(let operation) = explanation.subject {
+            return Self.pcodeInstructions[operation] ?? operation
+        }
         return explanation.name
     }
 
-    /// The review's words; for the removed blocks, what the decompiler did.
+    /// The review's words; for the removed blocks, what the decompiler did;
+    /// for a p-code operation, that it is an instruction and not a function.
     func wordsText() -> String? {
         if case .unreachable = explanation.subject {
             return L("Ghidra's decompiler found that, with the values it knows, no path runs these blocks, and left them out of the C. Their instructions are still in the listing. A block that depends on what the hardware answers, such as a check Ghidra's model cannot fail, may still run on the board.")
         }
+        if case .pcodeOperation(let operation) = explanation.subject {
+            let general = L("Ghidra's processor model names this instruction as a p-code operation. It is not a function in the image: the name stands for one instruction, and there is nothing to open.")
+            guard let words = Self.pcodeSentences[operation] else { return general }
+            return general + "\n\n" + words
+        }
         return explanation.text
+    }
+
+    /// The x86 operations Ghidra names as calls, with the instruction each
+    /// stands for. A name not here is shown as the model writes it.
+    static let pcodeInstructions = ["InterruptDescriptorTableRegister": "SIDT",
+                                    "GlobalDescriptorTableRegister": "SGDT",
+                                    "LocalDescriptorTableRegister": "SLDT"]
+
+    /// What each of those instructions does, in the words of the popover.
+    static var pcodeSentences: [String: String] {
+        ["InterruptDescriptorTableRegister": L("SIDT stores the interrupt descriptor table register in the buffer it is given."),
+         "GlobalDescriptorTableRegister": L("SGDT stores the global descriptor table register in the buffer it is given."),
+         "LocalDescriptorTableRegister": L("SLDT stores the local descriptor table register where it is pointed to.")]
     }
 
     /// The number and its enum; a type's kind and size; a field's
@@ -175,6 +198,8 @@ import Localization
         switch explanation.subject {
         case .unreachable(let blocks):
             return String(format: L("%1$@ blocks removed from the C"), "\(blocks)")
+        case .pcodeOperation:
+            return L("p-code operation · one instruction, not a function")
         case .global(let address):
             let place = String(format: L("%1$@ at address %2$@"), explanation.kind ?? L("Data"), model.displayAddress(address))
             guard let value = explanation.value else { return place }

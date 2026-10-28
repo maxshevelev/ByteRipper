@@ -42,7 +42,7 @@ import progress
 import te_to_pe
 import uefi_types
 
-SCRIPT_VERSION = 5
+SCRIPT_VERSION = 6
 
 
 def machine(blob: bytes) -> int | None:

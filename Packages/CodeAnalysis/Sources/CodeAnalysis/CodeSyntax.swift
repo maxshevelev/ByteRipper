@@ -7,6 +7,10 @@ public struct CodeToken: Equatable, Sendable {
     public enum Kind: String, Sendable {
         case keyword, comment, type, constant, string, parameter, local
         case function, global, label, mnemonic, address, bytes
+        /// A call the processor model makes into one of its own named
+        /// operations — x86's `InterruptDescriptorTableRegister` for SIDT. It
+        /// reads as a call and opens an explanation; there is nothing to go to.
+        case pcode
         /// An annotation's words beside the code: the agent's, the person's.
         case note, personNote
     }
@@ -83,6 +87,8 @@ extension CodeModel {
             case .function:
                 tokens.append(CodeToken(start: span.start, length: span.length, kind: .function,
                                         link: link ?? functionLink(named: utf16Slice(c, span.start, span.length))))
+            case .pcode:
+                tokens.append(CodeToken(start: span.start, length: span.length, kind: .pcode))
             case .global:
                 tokens.append(CodeToken(start: span.start, length: span.length, kind: .global, link: link))
             }

@@ -1957,7 +1957,7 @@ import ToolModuleKit
             // By name: a `goto` links to its label and the definition links
             // nowhere, and a click on either highlights both.
             return .named(.label, name())
-        case .function, .global:
+        case .function, .global, .pcode:
             if let link = token.link { return .target(link) }
             return .named(token.kind, name())
         case .parameter, .local:

@@ -70,7 +70,11 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
     /// `equates` — the names a review gave its constants, with the enum each
     /// is a member of and what it stands for — `types`, the C of the types
     /// the decompiled C names, and each function's `c_fields`.
-    public static let supportedScriptVersions: Set<Int> = [2, 3, 4, 5]
+    ///
+    /// 6 adds one span kind: a call the processor model makes into one of its
+    /// own named operations (x86's `InterruptDescriptorTableRegister` for
+    /// SIDT) is written as `pcode` instead of a function with no target.
+    public static let supportedScriptVersions: Set<Int> = [2, 3, 4, 5, 6]
 
     public let scriptVersion: Int
     public let ghidra: String
@@ -283,6 +287,9 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
     public struct CSpan: Decodable, Equatable, Sendable {
         public enum Kind: String, Sendable {
             case keyword, comment, type, constant, parameter, local, function, global
+            /// A call the processor model makes into a named operation of its
+            /// own — x86's SIDT — with no function behind the name.
+            case pcode
         }
 
         public let start: Int
