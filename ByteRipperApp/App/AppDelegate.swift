@@ -1,4 +1,5 @@
 import Cocoa
+import CodeView
 import HelpBook
 import HelpUI
 import Localization
@@ -88,6 +89,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // and so cannot know that a test run reads a suite of its own
         // (`AppDefaults`). Before anything draws, tell it.
         ToolPanelFont.defaults = AppDefaults.store
+        CodePaneView.defaults = AppDefaults.store
         // Every document's undo history keeps to the bounds the settings name,
         // read at each edit; the package cannot see the app's defaults.
         EditingSettings.applyUndoLimits()

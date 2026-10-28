@@ -1717,6 +1717,9 @@
 "Status" = "Status";
 "Status codes" = "Statuscodes";
 "Strings" = "Zeichenketten";
+"Nothing matches the search." = "Die Suche hat nichts gefunden.";
+"No ReportStatusCode calls found. The analysis looks for them in 32-bit PEI modules, which call it through the PEI services table." = "Keine Aufrufe von ReportStatusCode gefunden. Die Analyse sucht sie nur in 32-Bit-PEI-Modulen: Dort wird ReportStatusCode über die Tabelle der PEI-Dienste aufgerufen.";
+"The analysis found none in this module." = "Die Analyse hat in diesem Modul keinen Eintrag gefunden.";
 "Code" = "Code";
 "This panel reads the module's stored code analysis. Its bytes are a read-only snapshot." = "Diese Palette zeigt die gespeicherte Codeanalyse des Moduls. Ihre Bytes sind eine schreibgeschützte Momentaufnahme.";
 "Analysis" = "Analyse";

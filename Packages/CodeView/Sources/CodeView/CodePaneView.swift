@@ -41,6 +41,11 @@ import ToolModuleKit
     private let navigatorLabel = NSTextField(labelWithString: "")
     private let listControl: NSSegmentedControl
     private let searchField = NSSearchField()
+    /// The header over the POST and Strings columns: one view, put back
+    /// whenever a list with columns comes to the front.
+    private let navigatorHeader = CodeNavigatorHeader()
+    /// What an empty list says in place of its rows.
+    private let emptyListLabel = NSTextField(wrappingLabelWithString: "")
     private let backButton = NSButton()
     private let forwardButton = NSButton()
     /// The places the reader went to, oldest first, and which one is current:
@@ -95,6 +100,23 @@ import ToolModuleKit
     private let moduleHexView: NSView
     private var hexDumpVisible = true
     private static let hexDumpHeight: CGFloat = 220
+
+    /// Where the navigator's width is kept. The app points it at its own
+    /// store; a package cannot see that a test run reads a suite of its own.
+    public static var defaults: UserDefaults = .standard
+    static let navigatorWidthKey = "CodeNavigatorWidth"
+    /// Room for a POST row's code and function, and a string's address and
+    /// the start of its text, before the reader has chosen a width.
+    static let defaultNavigatorWidth: CGFloat = 340
+    private static let navigatorWidths: ClosedRange<CGFloat> = 180...900
+    private static let minimumCodeWidth: CGFloat = 320
+
+    /// The width a code pane's navigator opens with: the one last dragged to.
+    static var navigatorWidth: CGFloat {
+        let stored = CGFloat(defaults.double(forKey: navigatorWidthKey))
+        guard stored > 0 else { return defaultNavigatorWidth }
+        return min(max(stored, navigatorWidths.lowerBound), navigatorWidths.upperBound)
+    }
     private static let dumpBarHeight: CGFloat = 24
     private let staleLabel = NSTextField(labelWithString: "")
     /// The header's first line — the module, its revision, the function —
@@ -196,6 +218,8 @@ import ToolModuleKit
     var navigatorColumnTitles: [String] {
         functionTable.headerView == nil ? [] : functionTable.tableColumns.map(\.title)
     }
+    /// What an empty list says, for tests; nil while it has rows.
+    var emptyListText: String? { emptyListLabel.isHidden ? nil : emptyListLabel.stringValue }
     /// What a POST row's column shows, for tests.
     func postCell(_ row: Int, _ column: PostColumn) -> String {
         postCodeCell(artifact.postCodes[state.listedPostCodes[row]], column)
@@ -468,6 +492,7 @@ import ToolModuleKit
         navigatorLabel.stringValue = title(for: state.list)
         listControl.selectedSegment = state.list.rawValue
         layOutNavigatorColumns()
+        drawEmptyList()
         syncingSelection = true
         functionTable.reloadData()
         if state.list == .functions, let function = state.function,
@@ -503,6 +528,23 @@ import ToolModuleKit
         syncingSelection = false
         updateC()
         updateReferences()
+    }
+
+    // help: panel.code.lists
+    /// Says why a list has no rows: the search, or what the analysis looks
+    /// for. Status is the list that is most often empty — the analysis finds
+    /// `ReportStatusCode` calls only through the 32-bit PEI services table.
+    private func drawEmptyList() {
+        emptyListLabel.font = Self.navigatorFont()
+        emptyListLabel.isHidden = state.rowCount > 0
+        guard state.rowCount == 0 else { return }
+        if !state.searchText.isEmpty {
+            emptyListLabel.stringValue = L("Nothing matches the search.")
+        } else if state.list == .statusCodes {
+            emptyListLabel.stringValue = L("No ReportStatusCode calls found. The analysis looks for them in 32-bit PEI modules, which call it through the PEI services table.")
+        } else {
+            emptyListLabel.stringValue = L("The analysis found none in this module.")
+        }
     }
 
     private func title(for list: List) -> String {
@@ -1034,6 +1076,7 @@ import ToolModuleKit
         searchField.translatesAutoresizingMaskIntoConstraints = false
 
         configure(functionTable, identifier: "function")
+        functionTable.rowHeight = Self.navigatorRowHeight
         functionTable.menu = rowMenu()
         functionScroll.documentView = functionTable
         functionScroll.hasVerticalScroller = true
@@ -1046,7 +1089,16 @@ import ToolModuleKit
         functionPane.addSubview(listControl)
         functionPane.addSubview(searchField)
         functionPane.addSubview(functionScroll)
+        emptyListLabel.textColor = .secondaryLabelColor
+        emptyListLabel.alignment = .center
+        emptyListLabel.isSelectable = false
+        emptyListLabel.isHidden = true
+        emptyListLabel.translatesAutoresizingMaskIntoConstraints = false
+        functionPane.addSubview(emptyListLabel)
         NSLayoutConstraint.activate([
+            emptyListLabel.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 16),
+            emptyListLabel.leadingAnchor.constraint(equalTo: functionPane.leadingAnchor, constant: 16),
+            emptyListLabel.trailingAnchor.constraint(equalTo: functionPane.trailingAnchor, constant: -16),
             navigatorLabel.leadingAnchor.constraint(equalTo: functionPane.leadingAnchor, constant: 12),
             navigatorLabel.trailingAnchor.constraint(equalTo: functionPane.trailingAnchor, constant: -8),
             navigatorLabel.topAnchor.constraint(equalTo: functionPane.topAnchor, constant: 12),
@@ -1309,8 +1361,18 @@ import ToolModuleKit
         split.dividerThickness = 1
         split.addPane(functionPane)
         split.addPane(rightSplit)
-        split.setPaneLayout(.fixed(220), at: 0)
+        split.setPaneLayout(.fixed(Self.navigatorWidth), at: 0)
         split.setPaneLayout(.fill, at: 1)
+        // The width the reader drags the navigator to is the one every code
+        // pane opens with after it; the code keeps room beside it.
+        split.clampDividerPosition = { [weak split] _, position in
+            let room = (split?.bounds.width ?? 0) - Self.minimumCodeWidth
+            return min(max(position, Self.navigatorWidths.lowerBound),
+                       max(Self.navigatorWidths.lowerBound, min(room, Self.navigatorWidths.upperBound)))
+        }
+        split.onDividerMoved = { _, position in
+            Self.defaults.set(Double(position), forKey: Self.navigatorWidthKey)
+        }
         split.translatesAutoresizingMaskIntoConstraints = false
         addSubview(split)
         NSLayoutConstraint.activate([
@@ -1340,6 +1402,7 @@ import ToolModuleKit
     /// the selected row.
     private func zoomChanged() {
         navigatorLabel.font = ToolPanelFont.title()
+        emptyListLabel.font = Self.navigatorFont()
         for field in [nameLabel, revisionLabel, pathMark, functionLabel] { field?.font = ToolPanelFont.title() }
         recipeLabel?.font = Self.recipeFont()
         staleLabel.font = ToolPanelFont.body()
@@ -1349,7 +1412,7 @@ import ToolModuleKit
         syncingSelection = true
         for table in [functionTable, table] {
             let selected = table.selectedRow
-            table.rowHeight = ToolPanelFont.rowHeight
+            table.rowHeight = table === functionTable ? Self.navigatorRowHeight : ToolPanelFont.rowHeight
             table.reloadData()
             if selected >= 0, selected < table.numberOfRows {
                 table.selectRowIndexes(IndexSet(integer: selected), byExtendingSelection: false)
@@ -1365,6 +1428,26 @@ import ToolModuleKit
     /// The listing's and the C's type: monospaced, at the zoom.
     static func codeFont() -> NSFont {
         .monospacedSystemFont(ofSize: ToolPanelFont.size, weight: .regular)
+    }
+
+    /// The navigator's lists read a step smaller than the code beside them:
+    /// they are an index to the code, not the text being read. The step
+    /// follows the zoom.
+    static var navigatorSize: CGFloat {
+        max(ToolPanelFont.sizeRange.lowerBound, ToolPanelFont.size - 1.5)
+    }
+
+    static func navigatorFont() -> NSFont { .systemFont(ofSize: navigatorSize) }
+
+    static func navigatorCodeFont() -> NSFont {
+        .monospacedSystemFont(ofSize: navigatorSize, weight: .regular)
+    }
+
+    /// A navigator row's height: the line of its font and the padding
+    /// `ToolPanelFont.rowHeight` gives a panel's row.
+    static var navigatorRowHeight: CGFloat {
+        let font = navigatorFont()
+        return (font.ascender - font.descender + font.leading).rounded(.up) + 5
     }
 
     /// A layer's colour is a CGColor, fixed when it is made: it is resolved
@@ -1421,25 +1504,54 @@ import ToolModuleKit
         }
     }
 
-    /// The navigator is one column for every list but POST, which is a
-    /// table: aligned columns under headers, wider than the pane when it
-    /// must, scrolled sideways.
+    /// The strings list's columns: where the string is, and what it says.
+    enum StringColumn: String, CaseIterable {
+        case address = "string-address", text = "string-text"
+
+        var title: String {
+            switch self {
+            case .address: L("Location")
+            case .text: L("Text")
+            }
+        }
+    }
+
+    /// The columns of the list in front, by identifier and header; none for
+    /// a one-column list.
+    private var navigatorColumns: [(id: String, title: String)] {
+        switch state.list {
+        case .postCodes: PostColumn.allCases.map { ($0.rawValue, $0.title) }
+        case .strings: StringColumn.allCases.map { ($0.rawValue, $0.title) }
+        case .functions, .statusCodes: []
+        }
+    }
+
+    /// The navigator is one column for Functions and Status, and a table for
+    /// POST and Strings: aligned columns under headers. POST is wider than the
+    /// pane when it must and scrolls sideways; a string's text takes the
+    /// pane's remaining width and is cut there.
     private func layOutNavigatorColumns() {
-        let wantsColumns = state.list == .postCodes
-        let hasColumns = functionTable.tableColumns.count > 1
-        if wantsColumns != hasColumns {
+        let wanted = navigatorColumns
+        let wantsColumns = !wanted.isEmpty
+        let shown = functionTable.tableColumns.map(\.identifier.rawValue)
+        if shown != (wantsColumns ? wanted.map(\.id) : ["function"]) {
             for column in functionTable.tableColumns { functionTable.removeTableColumn(column) }
             if wantsColumns {
-                for kind in PostColumn.allCases {
-                    let column = NSTableColumn(identifier: .init(kind.rawValue))
-                    column.title = kind.title
+                for (id, title) in wanted {
+                    let column = NSTableColumn(identifier: .init(id))
+                    column.title = title
                     column.resizingMask = .userResizingMask
                     functionTable.addTableColumn(column)
                 }
-                functionTable.headerView = NSTableHeaderView()
+                // A string's text takes what the pane has left.
+                if state.list == .strings {
+                    functionTable.tableColumns.last?.resizingMask = [.userResizingMask, .autoresizingMask]
+                }
+                functionTable.headerView = navigatorHeader
+                functionTable.allowsColumnReordering = false
                 functionTable.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
                 functionTable.intercellSpacing = NSSize(width: 6, height: 0)
-                functionScroll.hasHorizontalScroller = true
+                functionScroll.hasHorizontalScroller = state.list == .postCodes
             } else {
                 let column = NSTableColumn(identifier: .init("function"))
                 column.resizingMask = .autoresizingMask
@@ -1451,19 +1563,39 @@ import ToolModuleKit
                 functionTable.sizeLastColumnToFit()
             }
         }
-        if wantsColumns {
+        (functionTable.headerView as? CodeNavigatorHeader)?.zoomChanged()
+        let headerFont = Self.navigatorFont()
+        // A column's width is its cell's; the gap between columns is extra.
+        let padding = 2 * CodeNavigatorHeader.cellTextInset + 4
+        func fit(_ id: String, _ widths: [CGFloat], title: String, limit: CGFloat = .greatestFiniteMagnitude) {
+            let header = (title as NSString).size(withAttributes: [.font: headerFont]).width
+            functionTable.tableColumn(withIdentifier: .init(id))?.width =
+                min(limit, ceil(max(header, widths.max() ?? 0)) + padding)
+        }
+        switch state.list {
+        case .postCodes:
             // Each column as wide as what it holds, so the codes line up and
             // nothing is cut; a long chain of routines is cut at a limit.
-            let limit = ToolPanelFont.size * 18
+            let limit = Self.navigatorSize * 18
             for kind in PostColumn.allCases {
-                var width = (kind.title as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)]).width
-                for index in state.listedPostCodes {
+                let widths = state.listedPostCodes.map { index -> CGFloat in
                     let entry = artifact.postCodes[index]
-                    let text = postCodeCell(entry, kind) as NSString
-                    width = max(width, text.size(withAttributes: [.font: postFont(entry, kind)]).width)
+                    return (postCodeCell(entry, kind) as NSString).size(withAttributes: [.font: postFont(entry, kind)]).width
                 }
-                functionTable.tableColumn(withIdentifier: .init(kind.rawValue))?.width = min(limit, ceil(width) + 10)
+                fit(kind.rawValue, widths, title: kind.title, limit: limit)
             }
+        case .strings:
+            // The addresses are in the code font, so the longest is the widest;
+            // the text takes the rest.
+            let longest = state.listedStrings.lazy
+                .map { self.model.displayAddress(self.artifact.strings[$0].address) }
+                .max { $0.count < $1.count } ?? ""
+            fit(StringColumn.address.rawValue,
+                [(longest as NSString).size(withAttributes: [.font: Self.navigatorCodeFont()]).width],
+                title: StringColumn.address.title)
+            functionTable.sizeLastColumnToFit()
+        case .functions, .statusCodes:
+            break
         }
     }
 
@@ -1471,8 +1603,8 @@ import ToolModuleKit
     /// line up digit under digit, "Value unknown" reads as a sentence.
     private func postFont(_ entry: CodeArtifact.PostCode, _ column: PostColumn) -> NSFont {
         switch column {
-        case .code where entry.value != nil, .address: Self.codeFont()
-        default: ToolPanelFont.body()
+        case .code where entry.value != nil, .address: Self.navigatorCodeFont()
+        default: Self.navigatorFont()
         }
     }
 
@@ -1946,9 +2078,21 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
                 cell.toolTip = postCodeDetail(entry)
                 return cell
             }
+            if state.list == .strings, let id = tableColumn?.identifier.rawValue,
+               let column = StringColumn(rawValue: id) {
+                let entry = artifact.strings[state.listedStrings[row]]
+                let cell = cell(in: tableView, identifier: .init("code-string"), monospaced: false)
+                let text = stringCell(entry, column)
+                cell.textField?.font = column == .address ? Self.navigatorCodeFont() : Self.navigatorFont()
+                cell.textField?.stringValue = text
+                cell.textField?.textColor = column == .address ? .secondaryLabelColor : .labelColor
+                // The whole string, which the column may have cut.
+                cell.toolTip = column == .text && !text.isEmpty ? text : nil
+                return cell
+            }
             let cell = cell(in: tableView, identifier: .init("code-navigator"), monospaced: false)
             // A cell from the queue was made at the size before a zoom.
-            cell.textField?.font = ToolPanelFont.body()
+            cell.textField?.font = Self.navigatorFont()
             cell.textField?.stringValue = navigatorText(at: row)
             // A name the module's own evidence gave reads as a name; Ghidra's
             // FUN_ placeholder reads quieter. The reason is one hover away.
@@ -1969,10 +2113,10 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
             if state.list == .functions, let notes = notesByFunction[state.listedFunctions[row]], !notes.isEmpty,
                let field = cell.textField {
                 let marked = NSMutableAttributedString(string: field.stringValue, attributes: [
-                    .foregroundColor: color, .font: field.font ?? ToolPanelFont.body()
+                    .foregroundColor: color, .font: field.font ?? Self.navigatorFont()
                 ])
                 marked.append(NSAttributedString(string: "  ◆", attributes: [
-                    .foregroundColor: CodeColors.color(for: notes[0].kind), .font: field.font ?? ToolPanelFont.body()
+                    .foregroundColor: CodeColors.color(for: notes[0].kind), .font: field.font ?? Self.navigatorFont()
                 ]))
                 field.attributedStringValue = marked
                 cell.toolTip = ([reason].compactMap { $0 } + notes.map(\.heading)).joined(separator: "\n")
@@ -2030,14 +2174,42 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
         case .strings:
             let entry = artifact.strings[state.listedStrings[row]]
             return entry.value.isEmpty
-                ? model.displayAddress(entry.address)
-                : "\(model.displayAddress(entry.address))  \(entry.value)"
+                ? stringCell(entry, .address)
+                : "\(stringCell(entry, .address))  \(stringCell(entry, .text))"
         case .postCodes:
             return postCodeText(artifact.postCodes[state.listedPostCodes[row]])
         case .statusCodes:
             let entry = artifact.statusCodeCalls[state.listedStatusCodes[row]]
             return "\(model.displayAddress(entry.address))  \(entry.text)"
         }
+    }
+
+    /// What a string's row says in one column. The text is one line: a line
+    /// break, a tab or another control character in it is written as C
+    /// writes it — the strings are mostly C's own format strings — so a row
+    /// never runs onto the next.
+    func stringCell(_ entry: CodeArtifact.StringEntry, _ column: StringColumn) -> String {
+        switch column {
+        case .address: return model.displayAddress(entry.address)
+        case .text: return Self.oneLine(entry.value)
+        }
+    }
+
+    static func oneLine(_ text: String) -> String {
+        var line = ""
+        for scalar in text.unicodeScalars {
+            switch scalar {
+            case "\n": line += "\\n"
+            case "\r": line += "\\r"
+            case "\t": line += "\\t"
+            case "\0"..<" ", "\u{7F}"..."\u{9F}":
+                line += String(format: "\\x%02X", scalar.value)
+            case "\u{2028}", "\u{2029}":
+                line += String(format: "\\u%04X", scalar.value)
+            default: line.unicodeScalars.append(scalar)
+            }
+        }
+        return line
     }
 
     // help: panel.code.post-codes
@@ -2086,7 +2258,7 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
         let cell = NSTableCellView()
         cell.identifier = identifier
         let field = NSTextField(labelWithString: "")
-        field.font = monospaced ? Self.codeFont() : ToolPanelFont.body()
+        field.font = monospaced ? Self.navigatorCodeFont() : Self.navigatorFont()
         field.lineBreakMode = .byTruncatingTail
         field.maximumNumberOfLines = 1
         field.translatesAutoresizingMaskIntoConstraints = false

@@ -69,6 +69,27 @@ final class ToolRowMarksTests: XCTestCase {
 
     // MARK: - The cell
 
+    /// A row's tooltip shows over the row and not over a panel lying on it:
+    /// AppKit would show it there too, so the row asks the hit test first.
+    func testARowCoveredByAPanelSaysNothing() throws {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 100),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        let content = NSView(frame: NSRect(x: 0, y: 0, width: 200, height: 100))
+        window.contentView = content
+        let cell = try XCTUnwrap(ToolPanelTable.makeCell(identifier: .init("name")) as? ToolPanelCellView)
+        cell.frame = NSRect(x: 0, y: 0, width: 200, height: 20)
+        content.addSubview(cell)
+        ToolPanelTable.dress(cell, with: ToolRowMarks(decompressedFrom: "Decompressed from LZMA at 0x60"))
+        let point = NSPoint(x: 150, y: 10)
+        XCTAssertEqual(cell.shownToolTip(at: point), "Decompressed from LZMA at 0x60")
+
+        let panel = NSView(frame: NSRect(x: 100, y: 0, width: 100, height: 100))
+        content.addSubview(panel)
+        XCTAssertEqual(cell.shownToolTip(at: point), "", "under the panel")
+        XCTAssertEqual(cell.shownToolTip(at: NSPoint(x: 50, y: 10)), "Decompressed from LZMA at 0x60",
+                       "beside it")
+    }
+
     func testACellWearsTheProblemAndTheBadges() throws {
         let cell = ToolPanelTable.makeCell(identifier: .init("name"), warning: true, badges: true)
         let marks = ToolRowMarks(

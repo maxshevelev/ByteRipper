@@ -100,7 +100,7 @@ import Localization
         marker: Bool = false,
         badges: Bool = false
     ) -> NSTableCellView {
-        let cell = NSTableCellView()
+        let cell = ToolPanelCellView()
         cell.identifier = identifier
         let field = NSTextField(labelWithString: "")
         field.font = ToolPanelFont.body()
@@ -284,7 +284,7 @@ import Localization
     }
 
     private static func makeBadge(tag: Int) -> NSImageView {
-        let badge = NSImageView()
+        let badge = ToolPanelIconView()
         badge.tag = tag
         badge.isHidden = true
         badge.imageScaling = .scaleProportionallyUpOrDown
@@ -307,7 +307,7 @@ import Localization
     /// microcode the catalogue has a newer revision for — has shapes of its
     /// own (`ToolRowMark`), none of them with an exclamation mark.
     private static func makeWarning() -> NSImageView {
-        let warning = NSImageView()
+        let warning = ToolPanelIconView()
         let symbol = NSImage(
             systemSymbolName: ToolRowMark.error.symbol ?? "",
             accessibilityDescription: L("Invalid")
@@ -375,7 +375,7 @@ import Localization
     /// The blank slot the marker is drawn into, hidden until a row earns it.
     /// Tagged so `setMarker` can find it on a cell come back out of the pool.
     private static func makeMarker() -> NSImageView {
-        let marker = NSImageView()
+        let marker = ToolPanelIconView()
         marker.tag = markerTag
         marker.isHidden = true
         marker.imageScaling = .scaleProportionallyUpOrDown

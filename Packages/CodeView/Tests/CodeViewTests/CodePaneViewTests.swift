@@ -124,12 +124,15 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(view.decompiledText, "return 0;")
         XCTAssertEqual(view.selectedFunction?.name, "entry", "the reader stays in the same function")
         XCTAssertGreaterThan(ToolPanelFont.rowHeight, smallRow)
-        for table in tables {
-            XCTAssertEqual(table.rowHeight, ToolPanelFont.rowHeight, "a row is as tall as the new size needs")
-        }
         let functions = try XCTUnwrap(tables.first { $0.tableColumns.first?.identifier.rawValue == "function" })
+        for table in tables {
+            XCTAssertEqual(table.rowHeight,
+                           table === functions ? CodePaneView.navigatorRowHeight : ToolPanelFont.rowHeight,
+                           "a row is as tall as the new size needs")
+        }
         let cell = try XCTUnwrap(functions.view(atColumn: 0, row: 0, makeIfNecessary: true) as? NSTableCellView)
-        XCTAssertEqual(cell.textField?.font?.pointSize, 18, "a function's name is drawn at the new size")
+        XCTAssertEqual(cell.textField?.font?.pointSize, 16.5,
+                       "a function's name is drawn at the new size, a step under the code's")
     }
 
     private func tables(in view: NSView) -> [NSTableView] {
@@ -267,7 +270,8 @@ final class CodePaneViewTests: XCTestCase {
         reviewed.reading = AnalysisReading(project: "p", rev: 14)
         let view = CodePaneView(manifest: reviewed, artifact: try artifact(),
                                 moduleBytes: moduleBytes, hexView: NSView())
-        view.frame = NSRect(x: 0, y: 0, width: 720, height: 360)
+        // The code side 500 points wide, beside the navigator.
+        view.frame = NSRect(x: 0, y: 0, width: 500 + CodePaneView.defaultNavigatorWidth, height: 360)
         view.layoutSubtreeIfNeeded()
 
         let mode = try XCTUnwrap(first(NSSegmentedControl.self, in: view) {
@@ -595,6 +599,103 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(view.postCell(2, .code), "Value unknown")
         view.selectList(.functions)
         XCTAssertEqual(view.navigatorColumnTitles, [], "the other lists stay one column")
+    }
+
+    /// Strings are a table like POST: the address and the text under
+    /// headers, each title where its column's text starts, and a string's
+    /// line breaks written as C writes them so a row never runs onto the next.
+    func testStringsAreATableOfOneLineRows() throws {
+        let json: [String: Any] = [
+            "script_version": 5, "ghidra": "12.1.2", "program": ["image_base": "0x0"],
+            "strings": [["address": "0x220", "type": "string", "value": "\n!!!! IA32 Exception\tType\r\n"]],
+            "functions": [["entry": "0x220", "name": "F", "instructions": [
+                ["address": "0x220", "bytes": "56", "mnemonic": "PUSH", "text": "PUSH ESI"]]]]
+        ]
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        let view = CodePaneView(manifest: manifest(), artifact: artifact, moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 800, height: 400)
+        view.selectList(.strings)
+        view.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(view.navigatorColumnTitles, ["Location", "Text"])
+        XCTAssertEqual(view.navigatorRowText(0), "0x68  \\n!!!! IA32 Exception\\tType\\r\\n")
+        XCTAssertEqual(CodePaneView.oneLine("a\u{1B}b\u{2028}"), "a\\x1Bb\\u2028")
+
+        let navigator = try XCTUnwrap(tables(in: view).first { $0.headerView is CodeNavigatorHeader })
+        let header = try XCTUnwrap(navigator.headerView as? CodeNavigatorHeader)
+        for column in 0..<navigator.numberOfColumns {
+            let cell = try XCTUnwrap(navigator.view(atColumn: column, row: 0, makeIfNecessary: true) as? NSTableCellView)
+            let field = try XCTUnwrap(cell.textField)
+            XCTAssertFalse(field.stringValue.contains("\n"), "one line")
+            cell.layoutSubtreeIfNeeded()
+            // A label's alignment rect starts at its first glyph; its frame
+            // is two points further out.
+            let textX = cell.convert(field.alignmentRect(forFrame: field.frame), to: navigator).minX
+            let titleX = header.headerRect(ofColumn: column).minX + CodeNavigatorHeader.titleInset(in: navigator)
+            XCTAssertEqual(titleX, textX, accuracy: 0.5, "the title of column \(column) over its text")
+        }
+        let text = try XCTUnwrap(navigator.tableColumn(withIdentifier: .init("string-text")))
+        XCTAssertEqual(navigator.rect(ofColumn: 1).maxX, navigator.bounds.maxX, accuracy: 1,
+                       "the text takes the pane's remaining width")
+        XCTAssertGreaterThan(text.width, 200)
+    }
+
+    /// An empty list says why; Status, empty for any module but a 32-bit
+    /// PEI one, says where the analysis looks.
+    func testAnEmptyListSaysWhy() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 480, height: 320)
+        view.selectList(.statusCodes)
+        XCTAssertNil(view.emptyListText, "the list has a row")
+        view.filter(by: "nothing like this")
+        XCTAssertEqual(view.emptyListText, "Nothing matches the search.")
+
+        let json: [String: Any] = [
+            "script_version": 5, "ghidra": "12.1.2", "program": ["image_base": "0x0"],
+            "functions": [["entry": "0x220", "name": "F", "instructions": [
+                ["address": "0x220", "bytes": "56", "mnemonic": "PUSH", "text": "PUSH ESI"]]]]
+        ]
+        let bare = CodePaneView(manifest: manifest(),
+                                artifact: try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json)),
+                                moduleBytes: teModule(), hexView: NSView())
+        bare.selectList(.statusCodes)
+        XCTAssertTrue(bare.emptyListText?.contains("32-bit PEI") ?? false)
+        bare.selectList(.strings)
+        XCTAssertEqual(bare.emptyListText, "The analysis found none in this module.")
+        bare.selectList(.functions)
+        XCTAssertNil(bare.emptyListText)
+    }
+
+    /// The navigator opens wide enough for a POST row, and at the width the
+    /// reader last dragged it to after that.
+    func testTheNavigatorKeepsTheWidthItWasDraggedTo() throws {
+        let suite = try XCTUnwrap(UserDefaults(suiteName: "CodePaneViewTests.navigatorWidth"))
+        suite.removePersistentDomain(forName: "CodePaneViewTests.navigatorWidth")
+        CodePaneView.defaults = suite
+        defer {
+            suite.removePersistentDomain(forName: "CodePaneViewTests.navigatorWidth")
+            CodePaneView.defaults = .standard
+        }
+        func navigatorWidth(_ view: CodePaneView) throws -> (split: ALSplitView, width: CGFloat) {
+            view.frame = NSRect(x: 0, y: 0, width: 1000, height: 400)
+            view.layoutSubtreeIfNeeded()
+            let split = try XCTUnwrap(all(ALSplitView.self, in: view).first { $0.isVertical })
+            return (split, split.panes[0].frame.width)
+        }
+        let first = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                 moduleBytes: teModule(), hexView: NSView())
+        let (split, width) = try navigatorWidth(first)
+        XCTAssertEqual(width, CodePaneView.defaultNavigatorWidth)
+
+        split.setDividerPosition(420)
+        XCTAssertEqual(suite.double(forKey: CodePaneView.navigatorWidthKey), 420)
+        let second = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                  moduleBytes: teModule(), hexView: NSView())
+        XCTAssertEqual(try navigatorWidth(second).width, 420, "the next pane opens at it")
+
+        split.setDividerPosition(990)
+        XCTAssertLessThanOrEqual(split.panes[0].frame.width, 1000 - 320, "the code keeps room")
     }
 
     /// Search narrows functions by their instructions as well as their names,

@@ -1717,6 +1717,9 @@
 "Status" = "Статус";
 "Status codes" = "Коды состояния";
 "Strings" = "Строки";
+"Nothing matches the search." = "Поиск ничего не нашёл.";
+"No ReportStatusCode calls found. The analysis looks for them in 32-bit PEI modules, which call it through the PEI services table." = "Вызовы ReportStatusCode не найдены. Анализ ищет их только в 32-битных модулях PEI: там ReportStatusCode вызывается через таблицу сервисов PEI.";
+"The analysis found none in this module." = "Анализ не нашёл в этом модуле ни одной записи.";
 "Code" = "Код";
 "This panel reads the module's stored code analysis. Its bytes are a read-only snapshot." = "Панель показывает сохранённый анализ кода модуля. Её байты — снимок только для чтения.";
 "Analysis" = "Анализ";
