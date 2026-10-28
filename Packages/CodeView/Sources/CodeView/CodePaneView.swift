@@ -1509,7 +1509,7 @@ import ToolModuleKit
     /// and read cramped beside the listing.
     static var codeLineHeight: CGFloat {
         let line = NSLayoutManager().defaultLineHeight(for: codeFont())
-        return max(line, (line * ToolPanelFont.codeLineSpacing).rounded())
+        return (line * ToolPanelFont.codeLineSpacing).rounded()
     }
 
     /// How far the code font's own line sits in from the top and the bottom
