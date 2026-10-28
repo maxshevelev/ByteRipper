@@ -552,6 +552,9 @@ import ToolModuleKit
     private func drawEmptyList() {
         emptyListLabel.font = Self.navigatorFont()
         emptyListLabel.isHidden = state.rowCount > 0
+        // An empty list shows no table: its column headers over nothing ran
+        // into the sentence that stands in for the rows.
+        functionScroll.isHidden = state.rowCount == 0
         guard state.rowCount == 0 else { return }
         if !state.searchText.isEmpty {
             emptyListLabel.stringValue = L("Nothing matches the search.")

@@ -664,8 +664,12 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertTrue(bare.emptyListText?.contains("32-bit PEI") ?? false)
         bare.selectList(.strings)
         XCTAssertEqual(bare.emptyListText, "The analysis found none in this module.")
+        let table = try XCTUnwrap(tables(in: bare).first { $0.headerView is CodeNavigatorHeader })
+        XCTAssertTrue(try XCTUnwrap(table.enclosingScrollView).isHidden,
+                      "no headers over an empty list: the sentence stands alone")
         bare.selectList(.functions)
         XCTAssertNil(bare.emptyListText)
+        XCTAssertFalse(try XCTUnwrap(table.enclosingScrollView).isHidden, "a list with rows shows them")
     }
 
     /// The navigator opens wide enough for a POST row, and at the width the
