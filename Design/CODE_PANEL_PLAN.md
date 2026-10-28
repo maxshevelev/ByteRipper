@@ -196,11 +196,12 @@ the code with the hex view under it on the right.
 
 ```
 ┌ Code — CpuPei · TE ──────────────────────────────── ASM │ C ─ ? ┐
-│ Functions      │ CpuPei (code-v2 · Ghidra 12.1.2)              │
-│ FUN_000004bf   │ 0x68  55 8B EC   PUSH EBP                     │
-│ FUN_000005e8   │ ...                                           │
-│ ...            ├───────────────────────────────────────────────┤
-│                │                       [code-v2 ▾]        [fold] │
+│ Functions      │ CpuPei  (r14) ▸ FUN_000004bf                  │
+│ FUN_000004bf   │ [code-v2 · Ghidra 12.1.2 ▾]                   │
+│ FUN_000005e8   │ 0x68  55 8B EC   PUSH EBP                     │
+│ ...            │ ...                                           │
+│                ├───────────────────────────────────────────────┤
+│                │                                        [fold] │
 ├────────────────┴───────────────────────────────────────────────┤
 │ 00000000  VZ 00 00 ...                                          │
 │ 00000010  00 00 00 ...                                          │
@@ -222,9 +223,10 @@ on the ordinary text background; the hex view is not the subject of the screen.
 `ASM` and `C` are the names of formats and are not translated.
 
 A thin bar — the **dump bar** — sits at the bottom of the code pane, between
-the code and the hex view. At its right are the analysis dropdown and
-`inset.filled.bottomthird.rectangle`; the `ASM`/`C` switch stays in the header's
-top-right corner, where it has room. While the bytes are showing the fold
+the code and the hex view. At its right is `inset.filled.bottomthird.rectangle`;
+the `ASM`/`C` switch stays in the header's top-right corner, where it has room,
+and the analysis dropdown sits on the line under the module's name, where the
+recipe and the Ghidra version are shown. While the bytes are showing the fold
 button is in its selected state, and a click folds the hex view to nothing and
 brings it back. The bar belongs to the code pane, so it stays visible when the
 dump is folded and cannot be dragged out of sight: the split's divider only
@@ -330,8 +332,9 @@ fixture analysis, the bytes at the mapped file offset must equal the artifact's
 The header shows:
 
 - module name and kind (TE / PE32);
-- recipe and Ghidra version (`code-v2-ghidra-12.1.2`); the dropdown for the
-  module's other readable analyses lives in the dump bar, not the header;
+- recipe and Ghidra version (`code-v2 · Ghidra 12.1.2`) on the line under the
+  module's name — where the module has more than one readable analysis, that
+  line is the dropdown that chooses among them;
 - when it was analyzed;
 - the module's short SHA-256;
 - the manifest's source document and node, when known.

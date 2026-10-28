@@ -102,7 +102,6 @@ import ToolModuleKit
     private let recipePopUp = NSPopUpButton(frame: .zero, pullsDown: false)
     /// Turns while the app reads another analysis the reader chose.
     private let recipeSpinner = NSProgressIndicator()
-    private var recipePopUpCollapsed: NSLayoutConstraint?
     private let codeContent = NSView()
     private let rightSplit = ALSplitView()
     private let hexDumpBar = CodeDumpBar()
@@ -343,7 +342,7 @@ import ToolModuleKit
         recipeSpinner.stopAnimation(nil)
         recipeSpinner.isHidden = true
         recipePopUp.isEnabled = true
-        recipePopUp.selectItem(withTitle: manifest.recipe.id)
+        selectCurrentRecipe()
     }
 
     /// Switches the navigator: Functions, Strings, POST writes, Status codes.
@@ -1267,7 +1266,12 @@ import ToolModuleKit
         pathLine.alignment = .firstBaseline
         pathLine.spacing = 6
         pathLine.setCustomSpacing(4, after: nameLabel)
-        let titleBlock = NSStackView(views: [pathLine, recipeLabel])
+        // The line under the names says what produced the analysis — the
+        // recipe and the Ghidra version. Where the store holds more than one
+        // analysis of the module, the line is the menu that chooses among
+        // them, each named the same way.
+        let versionsLine: NSView = recipes.count > 1 ? recipeMenu() : recipeLabel
+        let titleBlock = NSStackView(views: [pathLine, versionsLine])
         titleBlock.orientation = .vertical
         titleBlock.alignment = .leading
         titleBlock.spacing = 1
@@ -1317,26 +1321,6 @@ import ToolModuleKit
         titleRow.setContentHuggingPriority(.required, for: .vertical)
         titleRow.setContentCompressionResistancePriority(.required, for: .vertical)
         titleRow.translatesAutoresizingMaskIntoConstraints = false
-
-        // The analysis dropdown, in the dump bar's right side. It shows the
-        // recipe in front; the others are its menu.
-        recipePopUp.controlSize = .small
-        recipePopUp.font = .systemFont(ofSize: 11)
-        recipePopUp.removeAllItems()
-        for recipe in recipes {
-            recipePopUp.addItem(withTitle: recipe.recipe.id)
-        }
-        recipePopUp.selectItem(withTitle: manifest.recipe.id)
-        recipePopUp.target = self
-        recipePopUp.action = #selector(recipeChanged)
-        recipePopUp.translatesAutoresizingMaskIntoConstraints = false
-        recipePopUp.isHidden = recipes.count <= 1
-        let collapsed = recipePopUp.widthAnchor.constraint(equalToConstant: 0)
-        collapsed.isActive = recipes.count <= 1
-        recipePopUpCollapsed = collapsed
-        recipePopUp.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        ControlHelp.describe(recipePopUp, name: L("Analysis"),
-                             tooltip: L("Choose the stored analysis shown here"))
 
         staleLabel.font = ToolPanelFont.body()
         staleLabel.textColor = .systemOrange
@@ -1422,13 +1406,6 @@ import ToolModuleKit
         hexDumpButton.action = #selector(toggleHexDump)
         hexDumpButton.translatesAutoresizingMaskIntoConstraints = false
         hexDumpBar.addSubview(hexDumpButton)
-        hexDumpBar.addSubview(recipePopUp)
-        recipeSpinner.style = .spinning
-        recipeSpinner.controlSize = .small
-        recipeSpinner.isDisplayedWhenStopped = false
-        recipeSpinner.isHidden = true
-        recipeSpinner.translatesAutoresizingMaskIntoConstraints = false
-        hexDumpBar.addSubview(recipeSpinner)
         codeContent.addSubview(hexDumpBar)
         NSLayoutConstraint.activate([
             hexDumpBar.leadingAnchor.constraint(equalTo: codeContent.leadingAnchor),
@@ -1437,13 +1414,7 @@ import ToolModuleKit
             hexDumpBar.heightAnchor.constraint(equalToConstant: Self.dumpBarHeight),
             codeStack.bottomAnchor.constraint(equalTo: hexDumpBar.topAnchor, constant: -8),
             hexDumpButton.trailingAnchor.constraint(equalTo: hexDumpBar.trailingAnchor, constant: -8),
-            hexDumpButton.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor),
-            recipePopUp.trailingAnchor.constraint(equalTo: hexDumpButton.leadingAnchor, constant: -12),
-            recipePopUp.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor),
-            recipeSpinner.trailingAnchor.constraint(equalTo: recipePopUp.leadingAnchor, constant: -6),
-            recipeSpinner.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor),
-            recipePopUp.leadingAnchor.constraint(greaterThanOrEqualTo: hexDumpBar.leadingAnchor,
-                                                 constant: 8)
+            hexDumpButton.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor)
         ])
         updateHexDumpButton()
 
@@ -1511,6 +1482,7 @@ import ToolModuleKit
         emptyListLabel.font = Self.navigatorFont()
         for field in [nameLabel, revisionLabel, pathMark, functionLabel] { field?.font = ToolPanelFont.title() }
         recipeLabel?.font = Self.recipeFont()
+        recipePopUp.font = Self.recipeFont()
         staleLabel.font = ToolPanelFont.body()
         drawNavigationImages()
         layOutNavigatorColumns()
@@ -1796,7 +1768,9 @@ import ToolModuleKit
     /// The plugin that produced the analysis and the Ghidra it ran in, as the
     /// quiet parenthesis after the module's name. The recipe id carries both;
     /// the exporter and Ghidra fields are what it was built from.
-    private func recipeSummary() -> String {
+    private func recipeSummary() -> String { Self.recipeSummary(of: manifest) }
+
+    private static func recipeSummary(of manifest: AnalysisManifest) -> String {
         let plugin = manifest.recipe.id
             .components(separatedBy: "-ghidra-").first ?? manifest.recipe.id
         var parts = [plugin]
@@ -1804,6 +1778,46 @@ import ToolModuleKit
             parts.append("Ghidra \(ghidra)")
         }
         return parts.joined(separator: " · ")
+    }
+
+    /// The versions line as a menu: the analysis shown, named as the plain
+    /// line names it, and the others the store holds, each the same way. The
+    /// spinner turns beside it while the app reads the chosen one.
+    private func recipeMenu() -> NSView {
+        recipePopUp.controlSize = .small
+        recipePopUp.font = Self.recipeFont()
+        recipePopUp.removeAllItems()
+        for recipe in recipes {
+            recipePopUp.addItem(withTitle: Self.recipeSummary(of: recipe))
+        }
+        recipePopUp.target = self
+        recipePopUp.action = #selector(recipeChanged)
+        recipePopUp.translatesAutoresizingMaskIntoConstraints = false
+        recipePopUp.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        // help: panel.code.analysis
+        ControlHelp.describe(recipePopUp, name: L("Analysis"),
+                             tooltip: L("Choose the stored analysis shown here"))
+        // By position, not by title: two recipes may read alike.
+        selectCurrentRecipe()
+
+        recipeSpinner.style = .spinning
+        recipeSpinner.controlSize = .small
+        recipeSpinner.isDisplayedWhenStopped = false
+        recipeSpinner.isHidden = true
+        recipeSpinner.translatesAutoresizingMaskIntoConstraints = false
+
+        let line = NSStackView(views: [recipePopUp, recipeSpinner])
+        line.orientation = .horizontal
+        line.alignment = .centerY
+        line.spacing = 6
+        return line
+    }
+
+    /// The menu's selection back on the analysis shown — the one it opens
+    /// with, and the one it returns to when another could not be read.
+    private func selectCurrentRecipe() {
+        guard let index = recipes.firstIndex(where: { $0.recipe.id == manifest.recipe.id }) else { return }
+        recipePopUp.selectItem(at: index)
     }
 
     private func label(_ text: String, font: NSFont,

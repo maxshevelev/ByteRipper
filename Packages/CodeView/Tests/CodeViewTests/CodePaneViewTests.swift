@@ -344,9 +344,10 @@ final class CodePaneViewTests: XCTestCase {
     }
 
 
-    /// The dump bar is the screen's control strip: ASM/C on its left, the
-    /// analysis dropdown and the fold button on its right.
-    func testTheDumpBarCarriesTheControls() throws {
+    /// Where the store holds more than one analysis, the versions line under
+    /// the module's name is the menu that chooses among them: each named as
+    /// the line names the one shown. The dump bar keeps only the fold button.
+    func testTheVersionsLineIsTheAnalysisMenu() throws {
         var second = manifest()
         second.recipe = AnalysisRecipe(id: "code-v3-ghidra-12.2", exporter: 3,
                                        ghidra: "12.2", script: "ExportCode.java")
@@ -362,13 +363,25 @@ final class CodePaneViewTests: XCTestCase {
         let fold = try XCTUnwrap(first(NSButton.self, in: view) {
             $0.accessibilityLabel() == "Hide hex dump"
         })
+        let name = try XCTUnwrap(first(NSTextField.self, in: view) {
+            $0.stringValue == "CpuPei" && !$0.isHidden
+        })
         let analysisRect = view.convert(analysis.bounds, from: analysis)
+        let nameRect = view.convert(name.bounds, from: name)
         let foldRect = view.convert(fold.bounds, from: fold)
-        XCTAssertEqual(analysisRect.midY, foldRect.midY, accuracy: 1,
-                       "the controls share the bar")
-        XCTAssertLessThan(analysisRect.maxX, foldRect.minX, "the dropdown before the fold button")
-        XCTAssertGreaterThan(analysisRect.minX, view.bounds.midX,
-                             "the dropdown is on the right")
+        XCTAssertLessThan(analysisRect.midY, nameRect.midY, "the menu is under the name")
+        // The bezel's own alignment inset puts its frame a couple of points
+        // left of the label's, so the text inside lines up with the name.
+        XCTAssertEqual(analysisRect.minX, nameRect.minX, accuracy: 3, "left with the name")
+        XCTAssertGreaterThan(analysisRect.minY, view.bounds.midY,
+                             "in the header, not in the bar at the bottom")
+        XCTAssertLessThan(foldRect.maxY, analysisRect.minY,
+                          "the dump bar is below the menu, with only its fold button")
+
+        XCTAssertEqual(analysis.itemTitles, ["code-v2 · Ghidra 12.1.2", "code-v3 · Ghidra 12.2"],
+                       "each analysis is named as the versions line names it")
+        XCTAssertEqual(analysis.selectedItem?.title, "code-v2 · Ghidra 12.1.2",
+                       "the menu opens on the analysis shown")
     }
 
     func testTheFunctionsHeadingSitsAtTheLeftOfItsList() throws {
