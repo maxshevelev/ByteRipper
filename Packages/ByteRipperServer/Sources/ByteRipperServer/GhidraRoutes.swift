@@ -14,7 +14,7 @@ enum GhidraRoutes {
     static let reads: [String] = ["hello", "functions", "function/", "disassembly/", "xrefs", "data", "strings", "review", "type",
                                    "description"]
     /// The owner's write calls, each under the host's lease.
-    static let writes: Set<String> = ["rename/function", "create/function", "rename/variable", "set/signature", "set/comment",
+    static let writes: Set<String> = ["rename/function", "rename/label", "create/function", "rename/variable", "set/signature", "set/comment",
                                       "set/data", "set/description", "set/code-mode", "set/equate", "type", "save"]
 
     static func routes(host: GhidraHost, published: @escaping @Sendable () async -> Void) -> HTTPRouter {

@@ -29,6 +29,7 @@ CAS, and its project lock keeps the owner off the project.
 | who refers to an address | `ghidra_xrefs` |
 | data, strings | `ghidra_data`, `ghidra_strings` |
 | rename a function, a parameter, a local | `ghidra_rename`, `ghidra_rename_variable` |
+| name a branch label (`LAB_<address>` in the C) | `ghidra_label` — `ghidra_rename` would name the function around it |
 | a function only a table's slot points at | `ghidra_function_create` |
 | a name for an I/O port, an MSR, a PCI config address | `ghidra_equate` |
 | 16-bit code in a 32-bit module (the reset vector) | `ghidra_code_mode` with `bits: 16` |

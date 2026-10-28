@@ -447,6 +447,12 @@ def main(argv: list[str]) -> int:
     rename.add_argument("name")
     rename.add_argument("--reason")
     rename.add_argument("--by", choices=["agent", "person"], default="agent")
+    label = sub.add_parser("label", help="name a branch label, e.g. LAB_09a05373")
+    label.add_argument("module")
+    label.add_argument("address")
+    label.add_argument("name")
+    label.add_argument("--reason")
+    label.add_argument("--by", choices=["agent", "person"], default="agent")
     variable = sub.add_parser("rename-var", help="name a parameter or a local, perhaps type it")
     variable.add_argument("module")
     variable.add_argument("function")
@@ -565,6 +571,9 @@ def main(argv: list[str]) -> int:
             "rename": lambda: ("/v1/rename/function",
                                {"address": args.address, "name": args.name,
                                 "reason": args.reason, "by": args.by}),
+            "label": lambda: ("/v1/rename/label",
+                              {"address": args.address, "name": args.name,
+                               "reason": args.reason, "by": args.by}),
             "rename-var": lambda: ("/v1/rename/variable",
                                    {"function": args.function, "name": args.name,
                                     "storage": args.storage, "first_use": args.first_use,

@@ -279,6 +279,20 @@ public enum GhidraTools {
                 body["by"] = "agent"
                 return body
             },
+            write("ghidra_label", "rename/label", "Name a branch label",
+                  "Names the label at `address` — a jump target the C prints as `LAB_<address>`, which is a "
+                  + "step of the flow: an error exit, a loop's head, the place a structure starts being "
+                  + "read. `ghidra_rename` names functions only: given an address inside one it renames the "
+                  + "function, so a label needs this call. A function's entry, and an address no "
+                  + "instruction starts at, are refused.",
+                  ["address": AgentSchema.string("The label's address, e.g. \"0x9A05373\"."),
+                   "name": AgentSchema.string("The new name, e.g. \"ErrorHeaderDoesNotFit\"."),
+                   "reason": AgentSchema.string("Why this name, in a few words.")],
+                  required: ["address", "name"]) { arguments in
+                var body = try optional(arguments, ["address", "name", "reason"])
+                body["by"] = "agent"
+                return body
+            },
             write("ghidra_function_create", "create/function", "Make a function where Ghidra made none",
                   "Makes a function at `address`: code only a table points at — a slot of a services table, "
                   + "a member of a PPI or a protocol — which no call names, so Ghidra left it outside any "

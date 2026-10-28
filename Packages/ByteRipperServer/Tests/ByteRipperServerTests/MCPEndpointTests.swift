@@ -77,7 +77,8 @@ final class MCPEndpointTests: XCTestCase {
         XCTAssertEqual(status, 200)
         let names = listed?["result"]?["tools"]?.arrayValue?.compactMap { $0["name"]?.stringValue } ?? []
         XCTAssertTrue(names.contains("ghidra_rename_variable"), "\(names)")
-        XCTAssertEqual(names.count, 22)
+        XCTAssertTrue(names.contains("ghidra_label"), "\(names)")
+        XCTAssertEqual(names.count, 23)
 
         _ = try await call(7, "ghidra_describe", ["module": .string(module), "section": "Flow", "text": "1. Entry."])
         let sent = try XCTUnwrap(backend.writes.all.last { $0.0 == "set/description" }?.1)
@@ -87,6 +88,12 @@ final class MCPEndpointTests: XCTestCase {
         let read = try await call(2, "ghidra_functions", ["module": .string(module), "limit": 5])
         let text = read["content"]?.arrayValue?.first?["text"]?.stringValue ?? ""
         XCTAssertTrue(text.contains(#""call":"functions""#) && text.contains(#""limit":"5""#), text)
+
+        _ = try await call(9, "ghidra_label", ["module": .string(module), "address": "0x1A",
+                                               "name": "ErrorShortRead"])
+        let label = try XCTUnwrap(backend.writes.all.last { $0.0 == "rename/label" }?.1)
+        XCTAssertEqual(try JSONSerialization.jsonObject(with: label) as? [String: String],
+                       ["address": "0x1A", "name": "ErrorShortRead", "by": "agent"])
 
         let type = try await call(6, "ghidra_type_definition", ["module": .string(module), "name": "AMD_APOB_HEADER"])
         XCTAssertTrue(type["content"]?.arrayValue?.first?["text"]?.stringValue?.contains(#""call":"type""#) == true)

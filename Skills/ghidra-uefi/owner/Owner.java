@@ -261,6 +261,7 @@ public class Owner {
                 if (path.equals("/v1/lease")) { lease(exchange, body(exchange)); return; }
                 JsonObject write = switch (path) {
                     case "/v1/rename/function" -> write(exchange, this::renameFunction);
+                    case "/v1/rename/label" -> write(exchange, this::renameLabel);
                     case "/v1/create/function" -> write(exchange, this::createFunction);
                     case "/v1/rename/variable" -> write(exchange, this::renameVariable);
                     case "/v1/set/signature" -> write(exchange, this::setSignature);
@@ -876,6 +877,43 @@ public class Owner {
         JsonObject answer = identity();
         answer.addProperty("entry", hex(function.getEntryPoint()));
         answer.addProperty("name", function.getName());
+        return answer;
+    }
+
+    /**
+     * The label at `address` named: a jump target the decompiler prints as
+     * `LAB_<address>` is a step of the flow — an error exit, a loop's head,
+     * the place a structure starts being read — and its name belongs on the
+     * label, not on the function around it. A function's entry is refused
+     * (that is `renameFunction`'s call), and so is an address no instruction
+     * starts at: a label marks code.
+     */
+    private JsonObject renameLabel(JsonObject body) throws Exception {
+        Address at = address(required(body, "address"));
+        String name = required(body, "name");
+        if (!name.matches("[A-Za-z_][A-Za-z0-9_]*")) throw new Failure(400, name + " is not a C identifier");
+        if (program.getFunctionManager().getFunctionAt(at) != null) {
+            throw new Failure(409, hex(at) + " is a function's entry: rename the function with /v1/rename/function");
+        }
+        if (program.getListing().getInstructionAt(at) == null) {
+            throw new Failure(404, "no instruction starts at " + hex(at) + ": a label marks code");
+        }
+        for (Symbol other : program.getSymbolTable().getGlobalSymbols(name)) {
+            if (!other.getAddress().equals(at)) {
+                throw new Failure(409, name + " already names " + hex(other.getAddress()));
+            }
+        }
+        try {
+            Symbol primary = program.getSymbolTable().getPrimarySymbol(at);
+            if (primary != null && !primary.isDynamic()) primary.setName(name, SourceType.USER_DEFINED);
+            else program.getSymbolTable().createLabel(at, name, SourceType.USER_DEFINED);
+        } catch (Exception error) {
+            throw new Failure(400, error.getMessage());
+        }
+        why(at, body);
+        JsonObject answer = identity();
+        answer.addProperty("address", hex(at));
+        answer.addProperty("name", name);
         return answer;
     }
 

@@ -106,7 +106,9 @@ parameters and the locals with their storage), `ghidra_disassembly`,
 `ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_type_definition` (a
 type as the program, the shared review archive and EDK2 hold it — what a
 `type_conflicts` of a publish is read with); `ghidra_rename`,
-`ghidra_function_create` (a function where only a table points — a services
+`ghidra_label` (a branch label — `LAB_<address>` in the C — named; a function's
+entry is refused here, that is `ghidra_rename`'s), `ghidra_function_create` (a
+function where only a table points — a services
 table's or a PPI's slot), `ghidra_rename_variable`, `ghidra_signature`,
 `ghidra_type`, `ghidra_set_data`,
 `ghidra_comment`, `ghidra_code_mode` (a range read as 16-bit or 32-bit code — the
@@ -212,21 +214,49 @@ Names alone do not get there. Every review applies these rules:
    instructions prove (which offsets are read, at what width), not from a
    guess; a field nobody can name is `Unknown08`, never a plausible invention.
    Fix the signatures first — a typed parameter retypes every local that
-   follows from it, in this function and in its callers.
+   follows from it, in this function and in its callers. Local buffers are
+   typed the same way: a stack copy of a header that arrives as
+   `undefined1[184]` becomes the structure it is, so `local_10c._24_4_` reads
+   as `PeHeader.Pe32.OptionalHeader.Magic`. A union prints whichever member has
+   a field at that offset; where the members share offsets —
+   `EFI_IMAGE_OPTIONAL_HEADER_UNION`'s PE32, PE32+ and TE headers do — the
+   plate carries the offset table and names the places where the printed member
+   belongs to a sibling, rather than leaving the reader to trust a wrong name.
 3. **Names for everything that stays.** Functions, parameters and locals get
    names that say their role, in the module's own convention (EDK2:
    `CamelCase`, `Ptr` only where a pointer and its target both appear). A
    function is named for what it does for its caller, not for its first call.
    After a signature change, list the locals again before `rename-var`: Ghidra
    merges and retypes them, and the old storages no longer exist.
-4. **Comments that a source would have.** A plate comment on each function
-   that matters: what it does, why it exists in this module, what it expects
-   and what it returns or halts with. End-of-line comments where the code alone
-   cannot say it: the hardware or firmware meaning of a value, a convention
-   (the PEI Services pointer below the IDT), an error path that does not
-   return. Never paraphrase the line (`// add 1 to Index`). Say what is
-   uncertain (`probably`, `not confirmed`). Read the existing comment before
-   writing one: a `comment` replaces it.
+   Branch labels are names too. Ghidra prints an unnamed jump target as
+   `LAB_<address>`, and that label is a step of the flow — an error exit, a
+   loop's head, the place a structure starts being read — so it gets a name
+   that says which (`ErrorShortRead`, `NextSection`,
+   `CheckMachineAndSections`), never the address. A label is not a function and
+   has its own call: `ghidra_label` (`/v1/rename/label`), which names the
+   symbol at the address; `ghidra_rename` takes any address but names the
+   function around it, so a label given to it leaves the label as it was and
+   renames the function — read the answer's `entry` back.
+4. **Comments that a source would have — in the body, not only above it.**
+   All three are required, and a plate alone does not count:
+   - a plate comment on the function: what it does, why it exists in this
+     module, what it expects, what it returns or halts with, and the numbers a
+     caller acts on — status values, `ImageError` codes, `BootMode` values —
+     spelled out where the code carries them by number;
+   - a `pre` comment at the first instruction of every step of the flow: each
+     read, each structure the code walks, the loop, the branch that changes the
+     meaning of what follows, and every error exit. The C then reads as a
+     walkthrough: a person follows it top to bottom without going back to the
+     plate to learn what the next twenty lines are for;
+   - an `eol` comment where one line needs a remark: the hardware or firmware
+     meaning of a value, a convention (the PEI Services pointer below the IDT),
+     a field the decompiler could not name, an error path that does not return.
+   Never paraphrase the line (`// add 1 to Index`). Say what is uncertain
+   (`probably`, `not confirmed`). Read the existing comment before writing one:
+   a `comment` replaces it. A label Ghidra shows (`LAB_09a05373`) is an
+   instruction address, so branch targets already have somewhere to hang a step
+   comment; the rest need one `ghidra_disassembly` page to find where each step
+   begins.
 5. **Read it again.** After a publish, read the function and its callers once
    more: a name or a type that reads wrong in a caller is not done. What still
    reads as a constant, a cast or `local_` is the next round.
@@ -248,6 +278,62 @@ Names alone do not get there. Every review applies these rules:
    linked as `[Name](0xADDRESS)` or written as `` `Name` `` opens there.
    A review is not finished while its description says nothing of what the
    review found.
+
+### What a finished function looks like
+
+The bar is the same for every function of a reviewed module, whether or not it
+was the reason for the review. A function is done when all of this is true:
+
+- The signature reads in EDK2 terms, every parameter sits where the ABI really
+  puts it (`storage`/`return_storage` when no convention fits), and every
+  parameter is typed with the structure it receives — the archive's type when
+  EDK2 has one, a type this review defines when only the code shows the layout.
+- Local buffers are typed, not `undefined1[N]`: the DOS header, the section
+  header, the image context's stack copy and the debug entry read as fields.
+- No `param_`, `uVar`, `iVar`, `local_`, `undefined` or `FUN_` is left in the
+  function. A value whose role the code does not establish gets an honest name
+  (`HeaderField`, `TeOffset`, `HobOrStatus`) and the plate says what it stands
+  for — never a plausible invention.
+- The plate and the `pre`/`eol` comments of rule 4 are there, with the error
+  and status numbers spelled out.
+- Where the decompiler merged two meanings into one name, or printed a field
+  through the wrong member of a union, the plate says so in one line each and
+  names the places — a reader who meets `Count` holding a size will look.
+- The function is named for what it does for its caller, the functions it calls
+  are named too, and the module description's `Review status` lists it as read.
+- It is in a published revision.
+
+Reading one function of a reviewed module should look like this (`PeiCore`,
+`PeCoffLoaderGetPeHeader`):
+
+```c
+/* Reads and validates the DOS and PE headers of an image ... (plate: the steps,
+   the ImageError values, the offsets in the header buffer, what the union
+   prints through a sibling member) */
+
+EFI_STATUS PeCoffLoaderGetPeHeader (PE_COFF_LOADER_IMAGE_CONTEXT *ImageContext,
+                                    EFI_IMAGE_OPTIONAL_HEADER_UNION *PeHeader)
+{
+  EFI_IMAGE_DOS_HEADER DosHeader;
+  ...
+  /* Step 1: the DOS header. ReadSize is in/out — a shorter answer means the
+     file ends before the header does. */
+  Status = (*ImageContext->ImageRead) (ImageContext->Handle, 0, &ReadSize, &DosHeader);
+
+  /* MZ? then e_lfanew is where the PE or TE header begins; without MZ the same
+     read starts at offset 0. */
+  ...
+  /* TE (VZ): machine at +2, subsystem at +5, stripped size at +6. SizeOfHeaders
+     = BaseOfCode - StrippedSize + 0x28, because the stripped header sits at the
+     front of the loaded image. */
+  ...
+  /* Step 3: machine. Only i386, x86-64, EBC and ARM64 are accepted, and a
+     refusal here leaves ImageError untouched. Then every section header is
+     read ... */
+```
+
+A review that stops at names, or at a plate with an unmarked body, is an
+intermediate state and is reported as one.
 
 ### On an analysis server
 
