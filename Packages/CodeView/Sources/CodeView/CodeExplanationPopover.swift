@@ -166,13 +166,17 @@ import Localization
     }
 
     /// The review's words; for the removed blocks, what the decompiler did;
-    /// for a p-code operation, that it is an instruction and not a function.
+    /// for a p-code operation, what the instruction does and that it returns
+    /// nothing.
     func wordsText() -> String? {
         if case .unreachable = explanation.subject {
             return L("Ghidra's decompiler found that, with the values it knows, no path runs these blocks, and left them out of the C. Their instructions are still in the listing. A block that depends on what the hardware answers, such as a check Ghidra's model cannot fail, may still run on the board.")
         }
         if case .pcodeOperation(let operation) = explanation.subject {
-            let general = L("Ghidra's processor model names this instruction as a p-code operation. It is not a function in the image: the name stands for one instruction, and there is nothing to open.")
+            // The processor model's names and what an instruction does are
+            // technical, like a mnemonic: they stay in English and are not
+            // translated.
+            let general = String(format: "Ghidra models this instruction as a p-code operation of the processor named %1$@, and the decompiler writes it as a call. It is not a function in the image: there is nothing to open, and it returns nothing — what it does is write memory where its argument points.", operation)
             guard let words = Self.pcodeSentences[operation] else { return general }
             return general + "\n\n" + words
         }
@@ -186,10 +190,11 @@ import Localization
                                     "LocalDescriptorTableRegister": "SLDT"]
 
     /// What each of those instructions does, in the words of the popover.
+    /// English, not translated: the operation names are the model's.
     static var pcodeSentences: [String: String] {
-        ["InterruptDescriptorTableRegister": L("SIDT stores the interrupt descriptor table register in the buffer it is given."),
-         "GlobalDescriptorTableRegister": L("SGDT stores the global descriptor table register in the buffer it is given."),
-         "LocalDescriptorTableRegister": L("SLDT stores the local descriptor table register where it is pointed to.")]
+        ["InterruptDescriptorTableRegister": "SIDT — store interrupt descriptor table register — puts the IDTR into the buffer it is given: in 32-bit mode a 2-byte limit, then the 4-byte base of the interrupt descriptor table. The code after it reads that base, which is how a program finds the table without being handed it.",
+         "GlobalDescriptorTableRegister": "SGDT — store global descriptor table register — puts the GDTR into the buffer it is given: a 2-byte limit, then the 4-byte base of the global descriptor table.",
+         "LocalDescriptorTableRegister": "SLDT — store local descriptor table register — writes the selector of the current local descriptor table into the 16-bit location it is given."]
     }
 
     /// The number and its enum; a type's kind and size; a field's
@@ -198,8 +203,8 @@ import Localization
         switch explanation.subject {
         case .unreachable(let blocks):
             return String(format: L("%1$@ blocks removed from the C"), "\(blocks)")
-        case .pcodeOperation:
-            return L("p-code operation · one instruction, not a function")
+        case .pcodeOperation(let operation):
+            return String(format: "%1$@ · p-code operation · returns nothing", operation)
         case .global(let address):
             let place = String(format: L("%1$@ at address %2$@"), explanation.kind ?? L("Data"), model.displayAddress(address))
             guard let value = explanation.value else { return place }
