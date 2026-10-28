@@ -1885,7 +1885,7 @@ import ToolModuleKit
                 drawn[own] = CodeToken(start: token.start, length: token.length, kind: token.kind)
             }
             text = CodeColors.attributed(header + c, tokens: drawn, font: font,
-                                         links: &cLinks, asTextLinks: true)
+                                         links: &cLinks, asTextLinks: true, spacedCommas: true)
             tokensShown = tokens
         } else {
             let message = state.selectedFunction == nil

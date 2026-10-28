@@ -57,7 +57,8 @@ enum CodeColors {
     /// `linkKey` as its index in `links`, and — in a text view — as `.link`,
     /// which is what makes the text view report a click on it.
     static func attributed(_ text: String, tokens: [CodeToken], font: NSFont,
-                           links: inout [CodeLink], asTextLinks: Bool) -> NSAttributedString {
+                           links: inout [CodeLink], asTextLinks: Bool,
+                           spacedCommas: Bool = false) -> NSAttributedString {
         let string = NSMutableAttributedString(string: text, attributes: [
             .font: font, .foregroundColor: NSColor.labelColor
         ])
@@ -73,6 +74,20 @@ enum CodeColors {
                 string.addAttribute(.link, value: "code:\(links.count)", range: range)
             }
             links.append(link)
+        }
+        if spacedCommas {
+            // Ghidra's printer sets a comma hard against what follows it —
+            // `f(a,b)`. A kern widens the comma the way a space would, and
+            // the text keeps the offsets the artifact's spans are measured in.
+            let commas = string.string as NSString
+            var search = NSRange(location: 0, length: string.length)
+            while search.length > 0 {
+                let found = commas.range(of: ",", options: [], range: search)
+                guard found.location != NSNotFound else { break }
+                string.addAttribute(.kern, value: font.pointSize * 0.3, range: found)
+                let next = found.location + found.length
+                search = NSRange(location: next, length: string.length - next)
+            }
         }
         return string
     }

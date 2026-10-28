@@ -232,7 +232,7 @@ import Localization
         let font = CodePaneView.codeFont()
         var links: [CodeLink] = []
         let text = NSMutableAttributedString(attributedString: CodeColors.attributed(
-            c, tokens: model.lexC(c), font: font, links: &links, asTextLinks: false))
+            c, tokens: model.lexC(c), font: font, links: &links, asTextLinks: false, spacedCommas: true))
         if case .field(_, let offset) = explanation.subject,
            let line = Self.lineRange(in: c, offset: offset, name: String(explanation.name.split(separator: ".").last ?? "")) {
             text.addAttribute(.backgroundColor, value: CodeColors.symbolHighlight, range: line)
