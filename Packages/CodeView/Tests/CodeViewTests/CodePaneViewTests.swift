@@ -2182,7 +2182,9 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(explained.subject, .pcodeOperation("InterruptDescriptorTableRegister"))
         let popover = CodeExplanationPopover(explanation: explained,
                                              model: CodeModel(artifact: artifact, layout: nil))
-        XCTAssertEqual(popover.title(), "SIDT")
-        XCTAssertTrue((popover.wordsText() ?? "").contains("p-code operation"))
+        XCTAssertEqual(popover.title(), "SIDT / LIDT")
+        let words = popover.wordsText() ?? ""
+        XCTAssertTrue(words.contains("p-code operation"))
+        XCTAssertTrue(words.contains("nothing is returned"), "the load form is explained too: \(words)")
     }
 }

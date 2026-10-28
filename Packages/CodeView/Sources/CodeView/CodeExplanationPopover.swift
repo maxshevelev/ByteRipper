@@ -176,25 +176,26 @@ import Localization
             // The processor model's names and what an instruction does are
             // technical, like a mnemonic: they stay in English and are not
             // translated.
-            let general = String(format: "Ghidra models this instruction as a p-code operation of the processor named %1$@, and the decompiler writes it as a call. It is not a function in the image: there is nothing to open, and it returns nothing — what it does is write memory where its argument points.", operation)
+            let general = String(format: "Ghidra gives the store and the load of a descriptor-table register one p-code operation, and writes both instructions as a call to it. The form says which: `x = %1$@()` is the store — the operation returns the register's contents and the assignment puts them where the operand points; `%1$@(x)` is the load — the operand is the only argument and nothing is returned.", operation)
             guard let words = Self.pcodeSentences[operation] else { return general }
             return general + "\n\n" + words
         }
         return explanation.text
     }
 
-    /// The x86 operations Ghidra names as calls, with the instruction each
-    /// stands for. A name not here is shown as the model writes it.
-    static let pcodeInstructions = ["InterruptDescriptorTableRegister": "SIDT",
-                                    "GlobalDescriptorTableRegister": "SGDT",
-                                    "LocalDescriptorTableRegister": "SLDT"]
+    /// The x86 operations Ghidra names as calls, with the two instructions
+    /// each stands for: the store and the load of the same register. A name
+    /// not here is shown as the model writes it.
+    static let pcodeInstructions = ["InterruptDescriptorTableRegister": "SIDT / LIDT",
+                                    "GlobalDescriptorTableRegister": "SGDT / LGDT",
+                                    "LocalDescriptorTableRegister": "SLDT / LLDT"]
 
-    /// What each of those instructions does, in the words of the popover.
-    /// English, not translated: the operation names are the model's.
+    /// What the store form of each operation yields, in the words of the
+    /// popover. English, not translated: the operation names are the model's.
     static var pcodeSentences: [String: String] {
-        ["InterruptDescriptorTableRegister": "SIDT — store interrupt descriptor table register — puts the IDTR into the buffer it is given: in 32-bit mode a 2-byte limit, then the 4-byte base of the interrupt descriptor table. The code after it reads that base, which is how a program finds the table without being handed it.",
-         "GlobalDescriptorTableRegister": "SGDT — store global descriptor table register — puts the GDTR into the buffer it is given: a 2-byte limit, then the 4-byte base of the global descriptor table.",
-         "LocalDescriptorTableRegister": "SLDT — store local descriptor table register — writes the selector of the current local descriptor table into the 16-bit location it is given."]
+        ["InterruptDescriptorTableRegister": "SIDT, the store form, returns the IDTR: in 32-bit mode a 2-byte limit, then the 4-byte base of the interrupt descriptor table, so that whoever reads that memory afterwards finds the table without being handed it.",
+         "GlobalDescriptorTableRegister": "SGDT, the store form, returns the GDTR: a 2-byte limit, then the 4-byte base of the global descriptor table.",
+         "LocalDescriptorTableRegister": "SLDT, the store form, returns the selector of the current local descriptor table."]
     }
 
     /// The number and its enum; a type's kind and size; a field's
@@ -204,7 +205,7 @@ import Localization
         case .unreachable(let blocks):
             return String(format: L("%1$@ blocks removed from the C"), "\(blocks)")
         case .pcodeOperation(let operation):
-            return String(format: "%1$@ · p-code operation · returns nothing", operation)
+            return String(format: "%1$@ · p-code operation", operation)
         case .global(let address):
             let place = String(format: L("%1$@ at address %2$@"), explanation.kind ?? L("Data"), model.displayAddress(address))
             guard let value = explanation.value else { return place }
