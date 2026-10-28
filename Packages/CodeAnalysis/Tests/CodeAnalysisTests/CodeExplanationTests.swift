@@ -7,6 +7,11 @@ import XCTest
 final class CodeExplanationTests: XCTestCase {
     private let c = "void ResetEntry(SEC_SERIAL_DEVICE_INFO *Info)\n{\n  out(PCI_CONFIG_ADDRESS,Info->BaudRate);\n}\n"
 
+    /// The enum the constant belongs to, as the exporter writes it: a member
+    /// a line, its value after `=`, its comment after the comma.
+    private let enumC = "enum FCH_IO_PORT {\n    PCI_CONFIG_ADDRESS = 0xCF8, // PCI configuration address port\n"
+        + "    PCI_CONFIG_DATA = 0xCFC\n}"
+
     private func model() throws -> CodeModel {
         func at(_ word: String) -> Int { (c as NSString).range(of: word).location }
         let spans = """
@@ -37,7 +42,9 @@ final class CodeExplanationTests: XCTestCase {
             ],
             "types": [
                 ["name": "SEC_SERIAL_DEVICE_INFO", "path": "/ByteRipper/SEC_SERIAL_DEVICE_INFO",
-                 "kind": "struct", "size": 8, "description": "The UART SEC reports through.", "c": structC]
+                 "kind": "struct", "size": 8, "description": "The UART SEC reports through.", "c": structC],
+                ["name": "FCH_IO_PORT", "path": "/ByteRipper/FCH_IO_PORT",
+                 "kind": "enum", "size": 4, "c": enumC]
             ]
         ]
         let artifact = try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
@@ -58,7 +65,38 @@ final class CodeExplanationTests: XCTestCase {
         XCTAssertEqual(CodeModel.number(1), "0x1")
         XCTAssertEqual(explained.text, "PCI configuration address port. Source: PCI Local Bus Spec 3.0")
         XCTAssertEqual(explained.uses.map(\.address), [CodeAddress(0x100)])
-        XCTAssertNil(explained.c)
+        XCTAssertEqual(explained.c, enumC, "the member brings its enum, so the popover can mark its line")
+    }
+
+    /// The decompiler prints an enum member's name when the variable it is
+    /// compared with is that enum — no equate stands behind it. The member's
+    /// line in the enum's C is what explains it.
+    func testAnEnumMemberWithoutAnEquateIsExplainedByItsEnum() throws {
+        let c = "void Load(void)\n{\n  Status = EFI_LOAD_ERROR;\n}\n"
+        let at = (c as NSString).range(of: "EFI_LOAD_ERROR").location
+        let enumC = "enum EFI_STATUS {\n    EFI_SUCCESS = 0x0,\n"
+            + "    EFI_LOAD_ERROR = 0x80000001, // the image was not a valid one\n    EFI_LOAD_ERROR_2 = 0x2\n}"
+        let json: [String: Any] = [
+            "script_version": 5,
+            "functions": [[
+                "entry": "0x100", "name": "Load", "c": c,
+                "c_spans": [[at, "EFI_LOAD_ERROR".utf16.count, "constant"]],
+                "instructions": [["address": "0x100", "bytes": "90", "mnemonic": "NOP", "text": "NOP"]]
+            ]],
+            "equates": [],
+            "types": [["name": "EFI_STATUS", "path": "/PiDxeCis.h/EFI_STATUS",
+                       "kind": "enum", "size": 4, "c": enumC]]
+        ]
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        let model = CodeModel(artifact: artifact, layout: nil)
+        let token = try XCTUnwrap(model.cTokens(ofFunction: 0).first {
+            CodeModel.slice(c, $0.start, $0.length) == "EFI_LOAD_ERROR"
+        })
+        let explained = try XCTUnwrap(model.explanation(ofC: token, inFunction: 0))
+        XCTAssertEqual(explained.subject, .constant(name: "EFI_LOAD_ERROR", value: 0x80000001))
+        XCTAssertEqual(explained.enumName, "EFI_STATUS")
+        XCTAssertEqual(explained.text, "the image was not a valid one")
+        XCTAssertEqual(explained.c, enumC, "the enum comes along, so the popover can mark the member's line")
     }
 
     func testTheListingsNumberIsTheSameName() throws {

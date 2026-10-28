@@ -176,7 +176,7 @@ import Localization
             // The processor model's names and what an instruction does are
             // technical, like a mnemonic: they stay in English and are not
             // translated.
-            let general = String(format: "Ghidra gives the store and the load of a descriptor-table register one p-code operation, and writes both instructions as a call to it. The form says which: `x = %1$@()` is the store — the operation returns the register's contents and the assignment puts them where the operand points; `%1$@(x)` is the load — the operand is the only argument and nothing is returned.", operation)
+            let general = String(format: "Ghidra gives the store and the load of a descriptor-table register one p-code operation, and writes both instructions as a call to it. The form says which: `x = %1$@()` is the store — the operation returns the register's contents and the assignment puts them where the operand points; `%1$@(x)` is the load — the operand is the only argument and nothing is returned. A call with neither a result nor an argument is the store form too: the operand is an address the decompiler held in a register and did not name, so the write it makes does not appear in the C — the instruction itself is the record of it, `SIDT [reg]`.", operation)
             guard let words = Self.pcodeSentences[operation] else { return general }
             return general + "\n\n" + words
         }
@@ -233,9 +233,9 @@ import Localization
         var links: [CodeLink] = []
         let text = NSMutableAttributedString(attributedString: CodeColors.attributed(
             c, tokens: model.lexC(c), font: font, links: &links, asTextLinks: false, spacedCommas: true))
-        if case .field(_, let offset) = explanation.subject,
-           let line = Self.lineRange(in: c, offset: offset, name: String(explanation.name.split(separator: ".").last ?? "")) {
-            text.addAttribute(.backgroundColor, value: CodeColors.symbolHighlight, range: line)
+        let marked = highlightRange(in: c)
+        if let marked {
+            text.addAttribute(.backgroundColor, value: CodeColors.symbolHighlight, range: marked)
         }
         let scroll = NSTextView.scrollableTextView()
         scroll.hasHorizontalScroller = true
@@ -280,7 +280,41 @@ import Localization
             box.widthAnchor.constraint(equalToConstant: width),
             box.heightAnchor.constraint(equalToConstant: height)
         ])
+        // A long enum or structure opens at the member or field asked about,
+        // not at its first line.
+        if let marked {
+            box.layoutSubtreeIfNeeded()
+            textView.scrollRangeToVisible(marked)
+        }
         return box
+    }
+
+    /// The line to set apart in the declaration: the field's, or the enum
+    /// member's.
+    private func highlightRange(in c: String) -> NSRange? {
+        switch explanation.subject {
+        case .field(_, let offset):
+            return Self.lineRange(in: c, offset: offset, name: String(explanation.name.split(separator: ".").last ?? ""))
+        case .constant:
+            return Self.memberRange(in: c, name: explanation.name)
+        default:
+            return nil
+        }
+    }
+
+    /// The line an enum gives its member — `    EFI_LOAD_ERROR = 0x80000001,`
+    /// — as a range over the whole line, comment and all. The name has to be
+    /// the whole name, so `EFI_LOAD_ERROR` does not find `EFI_LOAD_ERROR_2`.
+    static func memberRange(in c: String, name: String) -> NSRange? {
+        let pattern = "^\\s*" + NSRegularExpression.escapedPattern(for: name) + "\\s*="
+        let text = c as NSString
+        var found: NSRange?
+        text.enumerateSubstrings(in: NSRange(location: 0, length: text.length), options: .byLines) { line, range, _, stop in
+            guard let line, line.range(of: pattern, options: .regularExpression) != nil else { return }
+            found = range
+            stop.pointee = true
+        }
+        return found
     }
 
     /// The characters of a field's line in the type's C, `/* 0x04 */ … Name;`.

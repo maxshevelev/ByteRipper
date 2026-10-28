@@ -46,7 +46,8 @@ public struct CodeExplanation: Equatable, Sendable {
     public let declaration: String?
     /// The review's words for it; nil when there are none.
     public let text: String?
-    /// The type's C, for a type or a field; nil for a constant.
+    /// The type's C: a type's own, a structure's for a field, an enum's for a
+    /// constant that is one of its members; nil when the artifact holds none.
     public let c: String?
     /// The instructions that hold the constant, in address order.
     public let uses: [Use]
@@ -98,7 +99,10 @@ extension CodeModel {
             let candidates = artifact.equates.filter { $0.name == text }
             // A name in two enums with two values: the one this function holds.
             let equate = candidates.first { $0.references.contains { held.contains($0.address) } } ?? candidates.first
-            return equate.map(explanation(of:))
+            if let equate { return explanation(of: equate) }
+            // No equate behind the name: the decompiler printed it because a
+            // variable is an enum, and the member's line is in that enum's C.
+            return memberExplanation(named: text)
         case .type:
             return typeExplanation(named: text)
         case .pcode:
@@ -205,9 +209,12 @@ extension CodeModel {
             guard let line = line(at: use.address) else { return nil }
             return CodeExplanation.Use(line: line, function: lines[line].function, address: use.address)
         }
+        // A member is read with its enum's declaration beside it, the way a
+        // field is read with its structure's.
+        let enumC = equate.enumName.flatMap { typeDefinition(named: $0)?.c }
         return CodeExplanation(subject: .constant(name: equate.name, value: equate.value),
                                name: equate.name, enumName: equate.enumName, kind: nil, size: 0,
-                               declaration: nil, text: equate.comment.flatMap(Self.nonEmpty), c: nil, uses: uses)
+                               declaration: nil, text: equate.comment.flatMap(Self.nonEmpty), c: enumC, uses: uses)
     }
 
     private func unreachableExplanation(_ removed: CodeArtifact.CUnreachable, text: String) -> CodeExplanation {
@@ -217,6 +224,43 @@ extension CodeModel {
         }
         return CodeExplanation(subject: .unreachable(blocks: removed.blocks.count), name: text, enumName: nil,
                                kind: nil, size: 0, declaration: nil, text: nil, c: nil, uses: uses)
+    }
+
+    /// A constant the decompiler printed as a name with no equate behind it —
+    /// an enum member, because the variable it is compared with is that enum.
+    /// The member's line in the enum's C carries its value, and its comment
+    /// when the review wrote one.
+    private func memberExplanation(named name: String) -> CodeExplanation? {
+        for type in artifact.types {
+            let c = type.c
+            guard let member = Self.enumMember(named: name, in: c) else { continue }
+            return CodeExplanation(subject: .constant(name: name, value: member.value),
+                                   name: name, enumName: type.name, kind: nil, size: 0,
+                                   declaration: nil, text: member.comment, c: c, uses: [])
+        }
+        return nil
+    }
+
+    /// The exporter's enum line — `    EFI_LOAD_ERROR = 0x80000001, // what it
+    /// means` — read for the member `name`: its value and its comment. The
+    /// name has to be the whole name, so `EFI_LOAD_ERROR` is not found on
+    /// `EFI_LOAD_ERROR_2`'s line.
+    static func enumMember(named name: String, in c: String) -> (value: UInt64, comment: String?)? {
+        for raw in c.split(separator: "\n") {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            guard let equals = line.firstIndex(of: "="),
+                  line[line.startIndex..<equals].trimmingCharacters(in: .whitespaces) == name else { continue }
+            var rest = line[line.index(after: equals)...].trimmingCharacters(in: .whitespaces)
+            var comment: String?
+            if let slashes = rest.range(of: "//") {
+                comment = String(rest[slashes.upperBound...]).trimmingCharacters(in: .whitespaces)
+                rest = rest[..<slashes.lowerBound].trimmingCharacters(in: .whitespaces)
+            }
+            rest = rest.trimmingCharacters(in: CharacterSet(charactersIn: " ,;"))
+            guard rest.hasPrefix("0x"), let value = UInt64(rest.dropFirst(2), radix: 16) else { continue }
+            return (value, comment.flatMap(nonEmpty))
+        }
+        return nil
     }
 
     private func typeExplanation(named name: String) -> CodeExplanation? {

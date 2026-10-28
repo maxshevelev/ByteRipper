@@ -2187,4 +2187,14 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertTrue(words.contains("p-code operation"))
         XCTAssertTrue(words.contains("nothing is returned"), "the load form is explained too: \(words)")
     }
+
+    /// An enum member is marked on the line that names it — and a member
+    /// whose name only starts the same way is not it.
+    func testAnEnumMemberIsMarkedOnItsOwnLine() throws {
+        let c = "enum EFI_STATUS {\n    EFI_SUCCESS = 0x0,\n    EFI_LOAD_ERROR = 0x80000001,\n"
+            + "    EFI_LOAD_ERROR_2 = 0x2\n}"
+        let range = try XCTUnwrap(CodeExplanationPopover.memberRange(in: c, name: "EFI_LOAD_ERROR"))
+        XCTAssertEqual((c as NSString).substring(with: range), "    EFI_LOAD_ERROR = 0x80000001,")
+        XCTAssertNil(CodeExplanationPopover.memberRange(in: c, name: "EFI_NOT_HERE"))
+    }
 }
