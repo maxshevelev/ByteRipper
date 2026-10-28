@@ -2162,7 +2162,7 @@ import ToolModuleKit
         if !Self.isJump(event), let token, case .function(let index)? = token.link,
            let own = signatureName(), own.function == index,
            own.range == NSRange(location: token.start, length: token.length), !callers(of: index).isEmpty {
-            RunLoop.main.perform(inModes: [.default]) { [weak self] in
+            afterClick(inC: true) { [weak self] in
                 self?.showCallers(of: index, at: own.range)
             }
             return false
@@ -2190,11 +2190,34 @@ import ToolModuleKit
             found = (explained, NSRange(location: field.start + cShift, length: field.length))
         }
         guard let (explained, range) = found, let rect = cRect(range) else { return }
-        RunLoop.main.perform(inModes: [.default]) { [weak self] in
+        afterClick(inC: true) { [weak self] in
             guard let self else { return }
             self.showExplanation(explained, relativeTo: rect, of: self.cTextView)
         }
     }
+
+    /// Runs `show` once the press ends — after the text view's or the table's
+    /// own tracking of it — and only if it was a click. A press that became a
+    /// drag to select text is not a question about the name it started on:
+    /// the popover then stays shut (it opened at the end of every selection
+    /// that started on an explained name). A drag is the pointer let go more
+    /// than a few points from where it went down, or, in the C, a selection.
+    private func afterClick(inC: Bool, _ show: @escaping () -> Void) {
+        let down = NSApp.currentEvent.flatMap { $0.type == .leftMouseDown ? $0.locationInWindow : nil }
+        RunLoop.main.perform(inModes: [.default]) { [weak self] in
+            guard let self else { return }
+            if inC, self.cTextView.selectedRange().length > 0 { return }
+            if let down, let up = NSApp.currentEvent, up.type == .leftMouseUp,
+               hypot(up.locationInWindow.x - down.x, up.locationInWindow.y - down.y) > Self.clickSlop {
+                return
+            }
+            show()
+        }
+    }
+
+    /// How far the pointer may move between press and release for the two to
+    /// still be a click.
+    static let clickSlop: CGFloat = 3
 
     /// A click on a number of the listing that the review named: the same
     /// explanation as the name in the C.
@@ -2202,7 +2225,7 @@ import ToolModuleKit
         guard token.kind == .constant, let value = Self.listingNumber(text),
               let explained = model.explanation(ofConstant: value, onLine: line) else { return }
         let inTable = table.convert(rect, from: view)
-        RunLoop.main.perform(inModes: [.default]) { [weak self] in
+        afterClick(inC: false) { [weak self] in
             guard let self else { return }
             self.showExplanation(explained, relativeTo: inTable, of: self.table)
         }

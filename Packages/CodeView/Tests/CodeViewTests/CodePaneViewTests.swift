@@ -1666,6 +1666,14 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(CodePaneView.listingNumber("0xcf8"), 0xCF8)
         XCTAssertEqual(CodePaneView.listingNumber("-0x1"), UInt64.max)
         XCTAssertNil(CodePaneView.listingNumber("DX"))
+
+        // A press on an explained name that becomes a drag selecting text
+        // opens nothing when it ends: it was a selection, not a question.
+        view.shownExplanationClose()
+        XCTAssertFalse(view.clickC(at: at("PCI_CONFIG_ADDRESS") + 1, event: try click(count: 1)))
+        textView.setSelectedRange(NSRange(location: at("PCI_CONFIG_ADDRESS"), length: 30))
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        XCTAssertNil(view.shownExplanation, "a selection, not a click")
     }
 
     /// The one line for the blocks the decompiler removed explains itself:
