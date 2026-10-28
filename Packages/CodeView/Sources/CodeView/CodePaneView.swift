@@ -1,6 +1,7 @@
 import ALSplitView
 import AppKit
 import CodeAnalysis
+import HelpBook
 import HelpUI
 import Localization
 import ToolModuleKit
@@ -1306,19 +1307,25 @@ import ToolModuleKit
                              tooltip: L("Go forward again (⌘])"))
 
         // One line, every control centred on it: the way back and forward,
-        // then where the reader is; the ASM/C switch at the right.
+        // then where the reader is; the platform's round help button and the
+        // ASM/C switch at the right — the panel's way to its page in the book.
         let titleSpacer = NSView()
         titleSpacer.setContentHuggingPriority(.init(1), for: .horizontal)
         let occurrenceBar = makeOccurrenceBar()
         self.occurrenceBar = occurrenceBar
+        let codeHelpButton = HelpButton.standard(for: .topic(.toolUEFI))
+        codeHelpButton.setContentHuggingPriority(.required, for: .horizontal)
+        codeHelpButton.setContentCompressionResistancePriority(.required, for: .horizontal)
         let titleRow = NSStackView(views: [backButton, forwardButton, titleBlock, titleSpacer,
-                                           occurrenceBar, modeControl])
+                                           occurrenceBar, codeHelpButton, modeControl])
         titleRow.orientation = .horizontal
         titleRow.alignment = .centerY
         titleRow.spacing = 8
         titleRow.setCustomSpacing(6, after: backButton)
         titleRow.setCustomSpacing(12, after: forwardButton)
         titleRow.setCustomSpacing(16, after: occurrenceBar)
+        // A little air between the round `?` and the switch it stands beside.
+        titleRow.setCustomSpacing(12, after: codeHelpButton)
         titleRow.setContentHuggingPriority(.required, for: .vertical)
         titleRow.setContentCompressionResistancePriority(.required, for: .vertical)
         titleRow.translatesAutoresizingMaskIntoConstraints = false

@@ -2,6 +2,8 @@ import ALSplitView
 import AppKit
 import XCTest
 import CodeAnalysis
+import HelpBook
+import HelpUI
 import ToolModuleKit
 @testable import CodeView
 
@@ -2210,6 +2212,23 @@ final class CodePaneViewTests: XCTestCase {
         let words = popover.wordsText() ?? ""
         XCTAssertTrue(words.contains("p-code operation"))
         XCTAssertTrue(words.contains("nothing is returned"), "the load form is explained too: \(words)")
+    }
+
+    /// The round help button after the ASM/C switch opens the page about the
+    /// code panel.
+    func testTheHeaderOpensTheHelpForTheCodePanel() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 1200, height: 400)
+        view.layoutSubtreeIfNeeded()
+        let help = try XCTUnwrap(all(HelpButton.self, in: view).first)
+        XCTAssertEqual(help.opens, .topic(.toolUEFI))
+        let mode = try XCTUnwrap(all(NSSegmentedControl.self, in: view)
+            .first { $0.segmentCount == 3 })
+        let helpRect = view.convert(help.bounds, from: help)
+        let modeRect = view.convert(mode.bounds, from: mode)
+        XCTAssertLessThan(helpRect.maxX, modeRect.minX, "the help button stands before the switch")
+        XCTAssertEqual(helpRect.midY, modeRect.midY, accuracy: 1.5, "one line with it")
     }
 
     /// The menu lists every analysis newest first — the order the agent's
