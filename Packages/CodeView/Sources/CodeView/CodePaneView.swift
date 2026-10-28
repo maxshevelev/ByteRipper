@@ -64,6 +64,8 @@ import ToolModuleKit
     /// The tokens of the C on screen, in the text's own offsets — past the
     /// annotations heading it.
     private var shownCTokens: [CodeToken] = []
+    /// What each of `shownCTokens` names, once a highlight has asked.
+    private var shownCSymbols: [CodeSymbol?]?
     /// The symbol the reader clicked, every occurrence of which is drawn
     /// highlighted in the C and the listing.
     public private(set) var highlightedSymbol: CodeSymbol?
@@ -1773,12 +1775,13 @@ import ToolModuleKit
         cTextView.setSelectedRange(NSRange(location: 0, length: 0))
         cTextView.scroll(.zero)
         shownCTokens = tokensShown
+        shownCSymbols = nil
         cTextView.explainable = explainableInC()
         cTextView.callable = signatureName().flatMap { callers(of: $0.function).isEmpty ? nil : $0.range }
         // A parameter or a local is its function's alone: another function's
         // `Status` is another variable.
         if case .variable = highlightedSymbol, highlightedIn != state.function { highlightedSymbol = nil }
-        cTextView.highlight(highlightedRanges(in: shownCTokens, of: cTextView.string))
+        cTextView.highlight(highlightedRangesInC())
     }
 
     // MARK: - Highlighting a symbol
@@ -1786,27 +1789,47 @@ import ToolModuleKit
     /// The symbol a token is an occurrence of, or nil for one that is not a
     /// name: a keyword, a type, a constant, an address.
     func symbol(of token: CodeToken, in text: String) -> CodeSymbol? {
+        symbol(of: token, in: Array(text.utf16))
+    }
+
+    /// The same over the text's UTF-16 units, made once by a caller that
+    /// asks for many tokens: a copy of the whole text per token made a click
+    /// in a long function's C cost seconds.
+    private func symbol(of token: CodeToken, in units: [UTF16.CodeUnit]) -> CodeSymbol? {
+        func name() -> String {
+            guard token.start >= 0, token.start + token.length <= units.count else { return "" }
+            return String(decoding: units[token.start..<token.start + token.length], as: UTF16.self)
+        }
         switch token.kind {
         case .function, .global, .label:
             if let link = token.link { return .target(link) }
-            return .named(token.kind, utf16Slice(text, token))
+            return .named(token.kind, name())
         case .parameter, .local:
-            return .variable(utf16Slice(text, token))
+            return .variable(name())
         default:
             return nil
         }
     }
 
-    private func utf16Slice(_ text: String, _ token: CodeToken) -> String {
-        let units = Array(text.utf16)
-        guard token.start >= 0, token.start + token.length <= units.count else { return "" }
-        return String(decoding: units[token.start..<token.start + token.length], as: UTF16.self)
-    }
-
     private func highlightedRanges(in tokens: [CodeToken], of text: String) -> [NSRange] {
         guard let highlightedSymbol else { return [] }
-        return tokens.filter { symbol(of: $0, in: text) == highlightedSymbol }
+        let units = Array(text.utf16)
+        return tokens.filter { symbol(of: $0, in: units) == highlightedSymbol }
             .map { NSRange(location: $0.start, length: $0.length) }
+    }
+
+    /// The occurrences of the highlighted symbol in the C on screen. What
+    /// each token names is worked out once per text shown, so a click costs
+    /// a pass over the names, not a reading of the text.
+    private func highlightedRangesInC() -> [NSRange] {
+        guard let highlightedSymbol else { return [] }
+        if shownCSymbols == nil {
+            let units = Array(cTextView.string.utf16)
+            shownCSymbols = shownCTokens.map { symbol(of: $0, in: units) }
+        }
+        return zip(shownCTokens, shownCSymbols ?? []).compactMap { token, symbol in
+            symbol == highlightedSymbol ? NSRange(location: token.start, length: token.length) : nil
+        }
     }
 
     /// Highlights every occurrence of `symbol` — in the C on screen and in the
@@ -1815,7 +1838,7 @@ import ToolModuleKit
         guard symbol != highlightedSymbol else { return }
         highlightedSymbol = symbol
         highlightedIn = state.function
-        cTextView.highlight(highlightedRanges(in: shownCTokens, of: cTextView.string))
+        cTextView.highlight(highlightedRangesInC())
         // Every row, not only the visible ones: the listing may be behind the
         // C, and a row with no view yet costs nothing to reload.
         guard table.numberOfRows > 0 else { return }

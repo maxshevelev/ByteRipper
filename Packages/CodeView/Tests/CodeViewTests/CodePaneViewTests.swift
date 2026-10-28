@@ -1349,6 +1349,42 @@ final class CodePaneViewTests: XCTestCase {
 
     /// A v4 artifact whose C says what each name is: a parameter, a local
     /// used five times, a global, a call.
+    /// A click on a name in a long function's C highlights at once: what
+    /// each token names was once read by copying the whole text per token,
+    /// 6.7 s for this function.
+    func testAHighlightInALongFunctionIsQuick() throws {
+        var c = "int Big(int Count)\n{\n  int Total;\n"
+        var spans: [[Any]] = []
+        func add(_ text: String, _ kind: String? = nil) {
+            if let kind { spans.append([c.utf16.count, text.utf16.count, kind]) }
+            c += text
+        }
+        for line in 0..<1500 {
+            add("  "); add("Total", "local"); add(" = "); add("Total", "local"); add(" + ")
+            add("Count", "parameter"); add(" + "); add("local_\(line % 40)", "local"); add(";\n")
+        }
+        c += "  return Total;\n}\n"
+        let json: [String: Any] = [
+            "script_version": 4, "ghidra": "12.1.2", "program": ["image_base": "0x0"],
+            "functions": [["entry": "0x220", "name": "Big", "c": c, "c_spans": spans,
+                           "instructions": [["address": "0x220", "bytes": "56", "mnemonic": "PUSH", "text": "PUSH ESI"]]]]
+        ]
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        let view = CodePaneView(manifest: manifest(), artifact: artifact, moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 900, height: 600)
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 0, instruction: nil, showsC: true)
+        let textView = try XCTUnwrap(first(CodeTextView.self, in: view) { _ in true })
+
+        let start = Date()
+        XCTAssertFalse(view.clickC(at: try XCTUnwrap(spans[2][0] as? Int), event: try click(count: 1)))
+        XCTAssertEqual(view.highlightedSymbol, .variable("Count"))
+        XCTAssertEqual(textView.highlightedRanges.count, 1500)
+        XCTAssertFalse(view.clickC(at: try XCTUnwrap(spans[0][0] as? Int), event: try click(count: 1)))
+        XCTAssertEqual(textView.highlightedRanges.count, 3000)
+        XCTAssertLessThan(Date().timeIntervalSince(start), 1, "two clicks, 6000 names")
+    }
+
     private func spannedArtifact() throws -> CodeArtifact {
         let c = "int FUN_00000220(int Count)\n{\n  int Total;\n  Total = Count;\n"
             + "  Total = Total + gValue;\n  entry();\n  return Total;\n}\n"
