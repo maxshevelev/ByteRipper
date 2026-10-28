@@ -2221,7 +2221,7 @@ import ToolModuleKit
         guard let index = state.function else { return }
         let local = character - cShift
         var found: (CodeExplanation, NSRange)?
-        if let token, [.constant, .type, .comment, .global].contains(token.kind),
+        if let token, Self.explainedInC.contains(token.kind),
            let explained = model.explanation(ofC: CodeToken(start: token.start - cShift, length: token.length,
                                                             kind: token.kind, link: token.link), inFunction: index) {
             found = (explained, NSRange(location: token.start, length: token.length))
@@ -2272,12 +2272,19 @@ import ToolModuleKit
         }
     }
 
+    /// The kinds of C token a click explains: the names the artifact holds
+    /// something about — a constant's name, a type, the removed blocks' line,
+    /// a named global, and a p-code operation the processor model named for an
+    /// instruction (SIDT written as `InterruptDescriptorTableRegister`).
+    /// A field of a structure is found by its place in the C, not by its kind.
+    static let explainedInC: Set<CodeToken.Kind> = [.constant, .type, .comment, .global, .pcode]
+
     /// The names in the C on screen that a click explains: the named
     /// constants and the types the artifact holds, and the fields of those.
     private func explainableInC() -> [NSRange] {
         guard let index = state.function else { return [] }
         var ranges = shownCTokens.compactMap { token -> NSRange? in
-            guard [.constant, .type, .comment, .global].contains(token.kind),
+            guard Self.explainedInC.contains(token.kind),
                   model.explanation(ofC: CodeToken(start: token.start - cShift, length: token.length,
                                                    kind: token.kind, link: token.link), inFunction: index) != nil
             else { return nil }

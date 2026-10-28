@@ -2144,4 +2144,45 @@ final class CodePaneViewTests: XCTestCase {
             data[offset + index] = UInt8((value >> (8 * UInt64(index))) & 0xFF)
         }
     }
+
+    /// A p-code operation's name — SIDT, which Ghidra writes as
+    /// InterruptDescriptorTableRegister() — is marked and explained like any
+    /// other name: it is an instruction, and the popover says so and titles it
+    /// with the mnemonic.
+    func testAPCodeOperationOpensItsInstruction() throws {
+        let c = "void PeiDispatcher(void)\n{\n  InterruptDescriptorTableRegister(&Idtr);\n}\n"
+        let at = (c as NSString).range(of: "InterruptDescriptorTableRegister").location
+        let json: [String: Any] = [
+            "script_version": 6, "program": ["image_base": "0x0"],
+            "functions": [[
+                "entry": "0x100", "name": "PeiDispatcher", "c": c,
+                "c_spans": [[at, 32, "pcode"]],
+                "instructions": [["address": "0x100", "bytes": "0F 01 08", "mnemonic": "SIDT",
+                                  "text": "SIDT dword ptr [EAX]"]]
+            ]]
+        ]
+        let artifact = try JSONDecoder().decode(CodeArtifact.self,
+                                                from: JSONSerialization.data(withJSONObject: json))
+        let view = CodePaneView(manifest: manifest(), artifact: artifact, moduleBytes: teModule(), hexView: NSView())
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 480),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 0, instruction: nil, showsC: true)
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil) }
+
+        let textView = try XCTUnwrap(first(CodeTextView.self, in: view) { _ in true })
+        let shown = textView.string as NSString
+        XCTAssertEqual(textView.explainable.map { shown.substring(with: $0) },
+                       ["InterruptDescriptorTableRegister"], "the name is clickable")
+        XCTAssertFalse(view.clickC(at: at + 1, event: try click(count: 1)))
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        let explained = try XCTUnwrap(view.shownExplanation)
+        XCTAssertEqual(explained.subject, .pcodeOperation("InterruptDescriptorTableRegister"))
+        let popover = CodeExplanationPopover(explanation: explained,
+                                             model: CodeModel(artifact: artifact, layout: nil))
+        XCTAssertEqual(popover.title(), "SIDT")
+        XCTAssertTrue((popover.wordsText() ?? "").contains("p-code operation"))
+    }
 }
