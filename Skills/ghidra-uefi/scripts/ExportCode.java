@@ -373,10 +373,12 @@ public class ExportCode extends GhidraScript {
         }
         boolean fold = unreachable.size() > 1;
         String folded = null;
-        for (ClangLine line : lines) {
+        List<String> indents = commentIndents(lines);
+        for (int at = 0; at < lines.size(); at++) {
+            ClangLine line = lines.get(at);
             if (fold && unreachableBlock(line) != null) {
                 if (folded == null) {
-                    text.append(line.getIndentString());
+                    text.append(indents.get(at));
                     String summary = "/* WARNING: Removing " + unreachable.size() + " unreachable blocks */";
                     int start = text.length();
                     text.append(summary).append('\n');
@@ -385,7 +387,7 @@ public class ExportCode extends GhidraScript {
                 }
                 continue;
             }
-            text.append(line.getIndentString());
+            text.append(indents.get(at));
             for (ClangToken token : line.getAllTokens()) {
                 String piece = token.getText();
                 int start = text.length();
@@ -447,6 +449,48 @@ public class ExportCode extends GhidraScript {
             if (text != null && !text.isBlank()) return text.strip();
         }
         return null;
+    }
+
+    // Each line's indent. The decompiler sets a comment at a fixed column
+    // ("Comment line indent level", 20) whatever the nesting, so a comment
+    // over a statement four levels in stood left of it and one at the top
+    // level far right of it. A comment takes the indent of the code line it
+    // stands over — the next line that is not a comment — as a comment in
+    // written C does, and its later lines keep their step in from its first
+    // (they line up under the text after the opening `/* `). One with no code
+    // after it keeps its own. Written here, with the text, every offset still
+    // counts the text as it is written.
+    private static List<String> commentIndents(List<ClangLine> lines) {
+        List<String> indents = new ArrayList<>();
+        for (ClangLine line : lines) indents.add(line.getIndentString());
+        int at = 0;
+        while (at < lines.size()) {
+            if (!isCommentLine(lines.get(at))) {
+                at++;
+                continue;
+            }
+            int first = at;
+            while (at < lines.size() && isCommentLine(lines.get(at))) at++;
+            if (at == lines.size()) break;
+            int target = indents.get(at).length();
+            int base = indents.get(first).length();
+            for (int line = first; line < at; line++) {
+                int step = Math.max(0, indents.get(line).length() - base);
+                indents.set(line, " ".repeat(target + step));
+            }
+        }
+        return indents;
+    }
+
+    // Whether every token on the line that is not blank is a comment's.
+    private static boolean isCommentLine(ClangLine line) {
+        boolean any = false;
+        for (ClangToken token : line.getAllTokens()) {
+            if (token.getText().isBlank()) continue;
+            if (token.getSyntaxType() != ClangToken.COMMENT_COLOR) return false;
+            any = true;
+        }
+        return any;
     }
 
     private static final Pattern UNREACHABLE =
