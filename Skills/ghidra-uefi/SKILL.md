@@ -222,6 +222,26 @@ Names alone do not get there. Every review applies these rules:
    `EFI_IMAGE_OPTIONAL_HEADER_UNION`'s PE32, PE32+ and TE headers do — the
    plate carries the offset table and names the places where the printed member
    belongs to a sibling, rather than leaving the reader to trust a wrong name.
+
+   **A structure the archive already holds is that structure.** Before
+   defining one, look it up: `ghidra_type_definition` answers what the
+   program, the shared review archive and EDK2 hold — `EFI_PEI_SERVICES`,
+   `EFI_HOB_HANDOFF_INFO_TABLE`, `EFI_PEI_FIRMWARE_VOLUME_PPI`,
+   `IA32_DESCRIPTOR`, the PE and TE headers — with every field's offset, and
+   says whether the three agree. Type the variables with it, the decompiler's
+   synthetic pieces included: the 6-byte IDTR a `SIDT` writes comes out as a
+   2-byte local and a 4-byte one, and giving the 2-byte one `IA32_DESCRIPTOR`
+   resizes its storage to six bytes and turns `IdtrBase` into `Idtr.Base`;
+   a record that arrives as `void *` from a lookup becomes its structure, and
+   `*(int *)(FvRecord + 4)` becomes `FvRecord->VolumePpi`. A field that is a
+   function pointer pays twice: the call reads `VolumePpi->FindSectionByType2`,
+   and a wrong offset would print a wrong field name — which is the check.
+   A record no one publishes (`PEI_CORE_FV_RECORD`, the core's 0x20-byte
+   volume entry) is defined from the instructions with `Unknown<offset>` where
+   the code never reads, and a description saying what is known and what is
+   not. Where the module keeps the table itself — `EFI_PEI_SERVICES` at
+   0x9A06410 in PeiCore, `PEI_SERV` then the pointers — an offset is confirmed
+   against the bytes there, not only against the archive.
 3. **Names for everything that stays.** Functions, parameters and locals get
    names that say their role, in the module's own convention (EDK2:
    `CamelCase`, `Ptr` only where a pointer and its target both appear). A
