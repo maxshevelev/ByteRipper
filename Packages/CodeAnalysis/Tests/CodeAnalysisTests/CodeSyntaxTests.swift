@@ -93,4 +93,29 @@ final class CodeSyntaxTests: XCTestCase {
         XCTAssertEqual(model.link(to: CodeAddress(0x230)), .function(1))
         XCTAssertNil(model.link(to: CodeAddress(0x9000)), "outside the module")
     }
+
+    /// A `goto` leads to its label, whatever the label is called: Ghidra's
+    /// `LAB_` spelling or a name the review gave it. The decompiler marks no
+    /// label, so they are read off the text; one in a comment is not one,
+    /// and `default:` is a keyword.
+    func testAGotoLeadsToItsLabelByName() throws {
+        let c = "void F(int x)\n{\n  /* goto Skip; */\n  if (x) goto LAB_00000225;\n  goto Done;\n"
+            + "  switch (x) {\n  default:\n    break;\n  }\nLAB_00000225:\n  x = 1;\nDone:\n  return;\n}\n"
+        let text = c as NSString
+        let comment = text.range(of: "/* goto Skip; */")
+        let json: [String: Any] = [
+            "script_version": 5, "program": ["image_base": "0x0"],
+            "functions": [["entry": "0x220", "name": "F", "c": c,
+                           "c_spans": [[comment.location, comment.length, "comment"]],
+                           "instructions": [["address": "0x220", "bytes": "90", "mnemonic": "NOP", "text": "NOP"]]]]
+        ]
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        let model = CodeModel(artifact: artifact, moduleBytes: nil)
+        let labels = model.cTokens(ofFunction: 0).filter { $0.kind == .label }
+        let shown = labels.map { (text.substring(with: NSRange(location: $0.start, length: $0.length)), $0.link) }
+        XCTAssertEqual(shown.map(\.0), ["LAB_00000225", "Done", "LAB_00000225", "Done"],
+                       "two gotos and two definitions, in reading order")
+        XCTAssertEqual(shown.map(\.1), [.label("LAB_00000225"), .label("Done"), nil, nil],
+                       "a goto links to its label; the definition links nowhere")
+    }
 }

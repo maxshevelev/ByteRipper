@@ -30,6 +30,10 @@ public enum CodeLink: Equatable, Hashable, Sendable {
     case function(Int)
     case line(Int)
     case bytes(CodeAddress)
+    /// A `goto`'s label: the place in the same function's C where the label
+    /// is defined, `NAME:` on a line of its own. By name, since a label the
+    /// review renamed no longer spells its address.
+    case label(String)
 }
 
 extension CodeModel {
@@ -53,6 +57,10 @@ extension CodeModel {
     /// address, so a call is a link either way.
     public func cTokens(ofFunction index: Int) -> [CodeToken] {
         guard functions.indices.contains(index), let c = functions[index].c else { return [] }
+        return withLabels(spannedTokens(ofFunction: index, c: c), in: c)
+    }
+
+    private func spannedTokens(ofFunction index: Int, c: String) -> [CodeToken] {
         let spans = functions[index].cSpans
         guard !spans.isEmpty else { return lexC(c) }
         let length = c.utf16.count
@@ -81,6 +89,53 @@ extension CodeModel {
         }
         return tokens
     }
+
+    // MARK: - Labels
+
+    /// `tokens` with the C's labels in them: each `goto NAME;` a link to where
+    /// `NAME:` stands, and that definition a label too, so a click on either
+    /// highlights both. The decompiler marks no label in its spans, and the
+    /// lexer knew only Ghidra's `LAB_` spelling, so they are read off the
+    /// text here — read, never rewritten. A `goto` or a colon inside a comment
+    /// or a string is not one.
+    func withLabels(_ tokens: [CodeToken], in c: String) -> [CodeToken] {
+        let text = c as NSString
+        let whole = NSRange(location: 0, length: text.length)
+        let quoted = tokens.filter { $0.kind == .comment || $0.kind == .string }
+        func isQuoted(_ range: NSRange) -> Bool {
+            quoted.contains { NSIntersectionRange(NSRange(location: $0.start, length: $0.length), range).length > 0 }
+        }
+        var labels: [CodeToken] = []
+        var defined: Set<String> = []
+        for match in Self.labelDefinition.matches(in: c, range: whole) {
+            let range = match.range(at: 1)
+            let name = text.substring(with: range)
+            guard !Self.cKeywords.contains(name), !isQuoted(range) else { continue }
+            defined.insert(name)
+            labels.append(CodeToken(start: range.location, length: range.length, kind: .label))
+        }
+        for match in Self.gotoStatement.matches(in: c, range: whole) {
+            let range = match.range(at: 1)
+            guard !isQuoted(range) else { continue }
+            let name = text.substring(with: range)
+            labels.append(CodeToken(start: range.location, length: range.length, kind: .label,
+                                    link: defined.contains(name) ? .label(name) : nil))
+        }
+        guard !labels.isEmpty || tokens.contains(where: { $0.kind == .label }) else { return tokens }
+        let taken = labels.map { NSRange(location: $0.start, length: $0.length) }
+        let kept = tokens.filter { token in
+            token.kind != .label
+                && !taken.contains { NSIntersectionRange($0, NSRange(location: token.start, length: token.length)).length > 0 }
+        }
+        return (kept + labels).sorted { $0.start < $1.start }
+    }
+
+    /// `NAME:` alone on its line, as the decompiler writes a label.
+    private static let labelDefinition = try! NSRegularExpression(
+        pattern: "^[ \\t]*([A-Za-z_][A-Za-z0-9_]*):[ \\t]*$", options: [.anchorsMatchLines])
+    /// `goto NAME;`.
+    private static let gotoStatement = try! NSRegularExpression(
+        pattern: "\\bgoto[ \\t]+([A-Za-z_][A-Za-z0-9_]*)[ \\t]*;")
 
     private func functionLink(named name: String) -> CodeLink? {
         functionsByName[name].map(CodeLink.function)
@@ -215,7 +270,7 @@ extension CodeModel {
             let kind: CodeToken.Kind
             switch target.link {
             case .function: kind = .function
-            case .line: kind = .label
+            case .line, .label: kind = .label
             case .bytes, .none: kind = .global
             }
             tokens.append(CodeToken(start: base + target.start, length: target.length,

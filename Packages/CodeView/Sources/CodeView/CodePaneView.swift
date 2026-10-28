@@ -692,7 +692,9 @@ import ToolModuleKit
     /// range as the dump's main zone, an instruction is selected with its
     /// bytes, data selects its bytes in the hex view. The first two are
     /// places Back returns from.
-    func follow(_ link: CodeLink) {
+    /// `even`: a move Back returns from even when the function and the
+    /// instruction stay what they were.
+    func follow(_ link: CodeLink, even: Bool = false) {
         // The code the reader just moved in has the keyboard: ⌘[ goes back
         // here, and the arrows move in the listing.
         takeKeyboard()
@@ -701,14 +703,41 @@ import ToolModuleKit
             jump { selectFunction(at: index) }
             flashArrival()
         case .line(let line):
-            jump {
+            jump(even: even) {
                 select(line: line)
                 notifyInstruction()
             }
             flashArrival()
         case .bytes(let address):
             if let range = dataRange(at: address) { onSelectRange?(range) }
+        case .label(let name):
+            // In the same function's C: to the line that defines the label,
+            // and to its instruction when the name still spells its address.
+            guard let range = labelDefinition(named: name) else { NSSound.beep(); return }
+            jump(even: true) {
+                if let address = Self.labelAddress(name), let line = model.line(at: address) {
+                    select(line: line)
+                    notifyInstruction()
+                }
+                cTextView.setSelectedRange(range)
+            }
+            flashArrival(cMark: range)
         }
+    }
+
+    /// Where `NAME:` stands in the C on screen.
+    private func labelDefinition(named name: String) -> NSRange? {
+        let text = cTextView.string as NSString
+        return shownCTokens.first { token in
+            token.kind == .label && token.link == nil && token.start + token.length <= text.length
+                && text.substring(with: NSRange(location: token.start, length: token.length)) == name
+        }.map { NSRange(location: $0.start, length: $0.length) }
+    }
+
+    /// The address a label of Ghidra's own spelling names, `LAB_09dff047`.
+    static func labelAddress(_ name: String) -> CodeAddress? {
+        guard name.hasPrefix("LAB_") else { return nil }
+        return CodeAddress(hex: String(name.dropFirst(4).prefix { $0.isHexDigit }))
     }
 
     /// The bytes a click on a global selects: a GUID's 16, an integer's or a
@@ -751,7 +780,10 @@ import ToolModuleKit
 
     /// Moves somewhere new: the place left is kept, what was ahead of it is
     /// dropped, and the new place becomes the current one.
-    private func jump(_ move: () -> Void) {
+    /// `even`: a new place even when the function and the instruction stay —
+    /// a jump to a label in the same function, whose instruction may be
+    /// unknown, is still a move Back returns from.
+    private func jump(even: Bool = false, _ move: () -> Void) {
         recordCurrentPlace()
         leavingCMark = nil
         leavingDescriptionMark = nil
@@ -759,7 +791,7 @@ import ToolModuleKit
         guard let place = currentPlace else { return }
         // Leaving the description for the function on screen is still a
         // move: Back returns to the description.
-        if historyIndex >= 0, history[historyIndex].function == place.function,
+        if !even, historyIndex >= 0, history[historyIndex].function == place.function,
            history[historyIndex].line == place.line, history[historyIndex].view.description == nil { return }
         history = Array(history.prefix(historyIndex + 1)) + [place]
         historyIndex = history.count - 1
@@ -1917,7 +1949,11 @@ import ToolModuleKit
             return String(decoding: units[token.start..<token.start + token.length], as: UTF16.self)
         }
         switch token.kind {
-        case .function, .global, .label:
+        case .label:
+            // By name: a `goto` links to its label and the definition links
+            // nowhere, and a click on either highlights both.
+            return .named(.label, name())
+        case .function, .global:
             if let link = token.link { return .target(link) }
             return .named(token.kind, name())
         case .parameter, .local:
@@ -2280,9 +2316,16 @@ import ToolModuleKit
         guard view.window != nil else { return }
         explanationPopover?.close()
         let popover = CodeExplanationPopover(explanation: explained, model: model)
-        popover.onUse = { [weak self] line in self?.follow(.line(line)) }
+        popover.onUse = { [weak self] line in self?.goToUse(line) }
         popover.show(relativeTo: rect, of: view)
         explanationPopover = popover
+    }
+
+    /// A place under the popover's "Used at": a move Back returns from, even
+    /// to the instruction already selected — a click in the C selects the
+    /// instruction under it, and the use is often that one.
+    func goToUse(_ line: Int) {
+        follow(.line(line), even: true)
     }
 
     /// What the popover open over the code explains, if one is open.

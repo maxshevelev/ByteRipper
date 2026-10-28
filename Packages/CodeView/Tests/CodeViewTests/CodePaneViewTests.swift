@@ -1527,6 +1527,49 @@ final class CodePaneViewTests: XCTestCase {
                        "and so does the listing")
     }
 
+    /// A `goto`'s label is a link, as a call is: underlined under the
+    /// pointer, ⌘-click goes to where the label is defined — and to its
+    /// instruction when the name spells its address — and Back returns. A
+    /// plain click highlights the goto and the definition alike.
+    func testAGotoGoesToItsLabel() throws {
+        let c = "void F(int x)\n{\n  if (x) goto LAB_00000222;\n  goto Done;\n  x = 2;\n"
+            + "LAB_00000222:\n  x = 1;\nDone:\n  return;\n}\n"
+        let json: [String: Any] = [
+            "script_version": 5, "program": ["image_base": "0x0"],
+            "functions": [["entry": "0x220", "name": "F", "c": c, "instructions": [
+                ["address": "0x220", "bytes": "90", "mnemonic": "NOP", "text": "NOP"],
+                ["address": "0x221", "bytes": "90", "mnemonic": "NOP", "text": "NOP"],
+                ["address": "0x222", "bytes": "C3", "mnemonic": "RET", "text": "RET"]]]]
+        ]
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        let view = CodePaneView(manifest: manifest(), artifact: artifact, moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 900, height: 400)
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 0, instruction: nil, showsC: true)
+        let textView = try XCTUnwrap(first(CodeTextView.self, in: view) { _ in true })
+        let text = textView.string as NSString
+        let gotoLab = text.range(of: "LAB_00000222")
+        let definition = text.range(of: "LAB_00000222:")
+        XCTAssertNotNil(textView.textStorage?.attribute(.link, at: gotoLab.location, effectiveRange: nil),
+                        "a link, underlined under the pointer")
+
+        XCTAssertFalse(view.clickC(at: gotoLab.location, event: try click(count: 1)))
+        XCTAssertEqual(textView.highlightedRanges.map { text.substring(with: $0) }, ["LAB_00000222", "LAB_00000222"])
+
+        XCTAssertTrue(view.clickC(at: gotoLab.location, event: try click(count: 1, flags: .command)))
+        XCTAssertEqual(textView.selectedRange(), NSRange(location: definition.location, length: 12), "the definition")
+        XCTAssertEqual(view.selectedInstruction?.address, CodeAddress(0x222), "and its instruction")
+        XCTAssertEqual(view.lastFlash, .c(NSRange(location: definition.location, length: 12)))
+        view.goBack()
+        XCTAssertEqual(textView.selectedRange(), gotoLab, "Back returns to the goto, as to a call")
+
+        let done = text.range(of: "Done;")
+        XCTAssertTrue(view.clickC(at: done.location, event: try click(count: 2)))
+        XCTAssertEqual(textView.selectedRange(), NSRange(location: text.range(of: "Done:").location, length: 4),
+                       "a label the review named, without an address, by name")
+        XCTAssertTrue(view.canGoBack)
+    }
+
     /// A click on a name in a long function's C highlights at once: what
     /// each token names was once read by copying the whole text per token,
     /// 6.7 s for this function.
@@ -1669,6 +1712,18 @@ final class CodePaneViewTests: XCTestCase {
 
         // A press on an explained name that becomes a drag selecting text
         // opens nothing when it ends: it was a selection, not a question.
+        // A place under "Used at" is a move: Back returns to the C the
+        // popover was opened over, even when the use is in the same function
+        // and on the instruction already selected.
+        XCTAssertNotNil(try clickOn("PCI_CONFIG_ADDRESS"))
+        let before = textView.selectedRange()
+        let back = view.canGoBack
+        view.goToUse(0)
+        XCTAssertTrue(view.canGoBack, "the use is a place Back returns from")
+        view.goBack()
+        XCTAssertEqual(view.canGoBack, back)
+        XCTAssertEqual(textView.selectedRange(), before, "back where the popover was opened")
+
         view.shownExplanationClose()
         XCTAssertFalse(view.clickC(at: at("PCI_CONFIG_ADDRESS") + 1, event: try click(count: 1)))
         textView.setSelectedRange(NSRange(location: at("PCI_CONFIG_ADDRESS"), length: 30))
