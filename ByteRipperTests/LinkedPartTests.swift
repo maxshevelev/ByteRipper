@@ -203,6 +203,56 @@ final class LinkedPartTests: XCTestCase {
 
     /// A module with two stored analyses: the header offers the other one, and
     /// choosing it redraws the same panel with that artifact.
+    /// Back from a place opened under a popover's "Used at" in another
+    /// function returns to where the popover was opened — through the
+    /// window's View ▸ Back, with the panel's dump answering every selection.
+    func testBackFromAUseInAnotherFunctionReturns() throws {
+        let controller = try makeController(opening: [UInt8](repeating: 0xAA, count: 0x400))
+        let parent = controller.windowModel.pane1
+        let bytes = teModule()
+        let manifest = AnalysisManifest(
+            module: ModuleIdentity(
+                sha256: SHA256Digest(data: Data(bytes)), size: bytes.count, name: "CpuPei",
+                kind: "TE", language: "x86:LE:32:default", imageBase: "0x0"),
+            recipe: AnalysisRecipe(id: "code-v5-ghidra-12.1.2", exporter: 5,
+                                   ghidra: "12.1.2", script: "ExportCode.java"),
+            artifact: AnalysisArtifact(
+                sha256: SHA256Digest(data: Data("artifact".utf8)), size: 8,
+                mediaType: "application/json"),
+            analyzedAt: "2026-10-25T15:00:00+00:00",
+            stats: AnalysisStats())
+        let a = "void A(void)\n{\n  out(PCI_CONFIG_ADDRESS,1);\n}\n"
+        let b = "void B(void)\n{\n  x = 1;\n  out(PCI_CONFIG_ADDRESS,2);\n}\n"
+        let inA = (a as NSString).range(of: "PCI_CONFIG_ADDRESS")
+        let inB = (b as NSString).range(of: "PCI_CONFIG_ADDRESS")
+        let json: [String: Any] = [
+            "script_version": 5, "ghidra": "12.1.2", "program": ["image_base": "0x0"],
+            "functions": [
+                ["entry": "0x0", "name": "A", "c": a, "c_spans": [[inA.location, inA.length, "constant"]],
+                 "instructions": [["address": "0x0", "bytes": "66 BA F8 0C", "mnemonic": "MOV", "text": "MOV DX,0xcf8"]]],
+                ["entry": "0x10", "name": "B", "c": b, "c_spans": [[inB.location, inB.length, "constant"]],
+                 "instructions": [["address": "0x10", "bytes": "90", "mnemonic": "NOP", "text": "NOP"],
+                                  ["address": "0x11", "bytes": "66 BA F8 0C", "mnemonic": "MOV", "text": "MOV DX,0xcf8"]]]],
+            "equates": [["name": "PCI_CONFIG_ADDRESS", "value": "0xCF8", "references": [["0x0", 1], ["0x11", 1]]]]
+        ]
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        controller.openCode(named: "CpuPei body", from: parent, source: 0x100..<0x160,
+                            manifest: manifest, artifact: artifact,
+                            codec: ReadOnlyPartCodec(bytes, title: L("This cannot be put back"), reason: L("A code analysis is a snapshot; edit the dump and analyze the module again.")))
+        let id = try XCTUnwrap(controller.fragments.expanded)
+        controller.view.window?.layoutIfNeeded()
+        let code = try XCTUnwrap(controller.fragments.codePane(id))
+        code.restore(function: 0, instruction: nil, showsC: true)
+        controller.view.window?.makeFirstResponder(code)
+
+        code.goToUse(2)
+        XCTAssertEqual(code.selectedFunction?.name, "B")
+        XCTAssertTrue(code.canGoBack)
+        controller.navigateBack()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        XCTAssertEqual(code.selectedFunction?.name, "A", "back where the popover was opened")
+    }
+
     func testAnotherRecipeRedrawsTheSamePanel() async throws {
         let bytes = [UInt8](repeating: 0x90, count: 0x100)
         let one = Data("""

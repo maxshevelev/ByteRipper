@@ -1570,6 +1570,53 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertTrue(view.canGoBack)
     }
 
+    /// Back from a place opened under a popover's "Used at" — here in another
+    /// function — returns to the name the popover was opened on: selected and
+    /// flashed, as the call a jump was made from is. It flashed the function's
+    /// name in its signature and scrolled up to it.
+    func testBackFromAUseReturnsToTheNameThePopoverWasOpenedOn() throws {
+        let a = "void A(void)\n{\n" + String(repeating: "  x = 0;\n", count: 40)
+            + "  out(PCI_CONFIG_ADDRESS,1);\n}\n"
+        let b = "void B(void)\n{\n  x = 1;\n  out(PCI_CONFIG_ADDRESS,2);\n}\n"
+        let inA = (a as NSString).range(of: "PCI_CONFIG_ADDRESS")
+        let inB = (b as NSString).range(of: "PCI_CONFIG_ADDRESS")
+        let json: [String: Any] = [
+            "script_version": 5, "program": ["image_base": "0x0"],
+            "functions": [
+                ["entry": "0x220", "name": "A", "c": a, "c_spans": [[inA.location, inA.length, "constant"]],
+                 "instructions": [["address": "0x220", "bytes": "66 BA F8 0C", "mnemonic": "MOV", "text": "MOV DX,0xcf8"]]],
+                ["entry": "0x230", "name": "B", "c": b, "c_spans": [[inB.location, inB.length, "constant"]],
+                 "instructions": [["address": "0x230", "bytes": "90", "mnemonic": "NOP", "text": "NOP"],
+                                  ["address": "0x231", "bytes": "66 BA F8 0C", "mnemonic": "MOV", "text": "MOV DX,0xcf8"]]]],
+            "equates": [["name": "PCI_CONFIG_ADDRESS", "value": "0xCF8", "references": [["0x220", 1], ["0x231", 1]]]]
+        ]
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        let view = CodePaneView(manifest: manifest(), artifact: artifact, moduleBytes: teModule(), hexView: NSView())
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 500),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 0, instruction: nil, showsC: true)
+        // A popover shows only off a window on screen.
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil) }
+        let textView = try XCTUnwrap(first(CodeTextView.self, in: view) { _ in true })
+        textView.scrollRangeToVisible(inA)
+        let scrolled = try scrollOrigin(of: textView)
+        XCTAssertGreaterThan(scrolled, 0, "the name is down the function")
+        XCTAssertFalse(view.clickC(at: inA.location + 1, event: try click(count: 1)))
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        XCTAssertNotNil(view.shownExplanation)
+
+        view.goToUse(2)
+        XCTAssertEqual(view.selectedFunction?.name, "B")
+        view.goBack()
+        XCTAssertEqual(view.selectedFunction?.name, "A")
+        XCTAssertEqual(textView.selectedRange(), inA, "the name the popover was opened on")
+        XCTAssertEqual(view.lastFlash, .c(inA), "flashed, not the function's name")
+        XCTAssertEqual(try scrollOrigin(of: textView), scrolled, accuracy: 0.5, "where it was scrolled")
+    }
+
     /// A click on a name in a long function's C highlights at once: what
     /// each token names was once read by copying the whole text per token,
     /// 6.7 s for this function.
@@ -1716,13 +1763,13 @@ final class CodePaneViewTests: XCTestCase {
         // popover was opened over, even when the use is in the same function
         // and on the instruction already selected.
         XCTAssertNotNil(try clickOn("PCI_CONFIG_ADDRESS"))
-        let before = textView.selectedRange()
         let back = view.canGoBack
         view.goToUse(0)
         XCTAssertTrue(view.canGoBack, "the use is a place Back returns from")
         view.goBack()
         XCTAssertEqual(view.canGoBack, back)
-        XCTAssertEqual(textView.selectedRange(), before, "back where the popover was opened")
+        XCTAssertEqual(textView.selectedRange(), NSRange(location: at("PCI_CONFIG_ADDRESS"), length: 18),
+                       "back at the name the popover was opened on")
 
         view.shownExplanationClose()
         XCTAssertFalse(view.clickC(at: at("PCI_CONFIG_ADDRESS") + 1, event: try click(count: 1)))

@@ -448,6 +448,7 @@ import ToolModuleKit
         select(line: line)
     }
 
+
     /// The whole stored range of a function, for the hex view and for tests.
     public func moduleRange(forFunction index: Int) -> Range<UInt64>? {
         model.moduleRange(ofFunction: index)
@@ -2229,6 +2230,7 @@ import ToolModuleKit
         afterClick(inC: true) { [weak self] in
             guard let self else { return }
             self.showExplanation(explained, relativeTo: rect, of: self.cTextView)
+            self.explainedInC = range
         }
     }
 
@@ -2315,6 +2317,7 @@ import ToolModuleKit
     private func showExplanation(_ explained: CodeExplanation, relativeTo rect: NSRect, of view: NSView) {
         guard view.window != nil else { return }
         explanationPopover?.close()
+        explainedInC = nil
         let popover = CodeExplanationPopover(explanation: explained, model: model)
         popover.onUse = { [weak self] line in self?.goToUse(line) }
         popover.show(relativeTo: rect, of: view)
@@ -2324,9 +2327,17 @@ import ToolModuleKit
     /// A place under the popover's "Used at": a move Back returns from, even
     /// to the instruction already selected — a click in the C selects the
     /// instruction under it, and the use is often that one.
-    func goToUse(_ line: Int) {
+    public func goToUse(_ line: Int) {
+        // The name the popover was opened on is the place left: Back selects
+        // and flashes it, as it does the call a jump was made from — without
+        // it, Back flashed the function's name and scrolled up to it.
+        leavingCMark = explainedInC
         follow(.line(line), even: true)
     }
+
+    /// The name in the C the open popover explains; nil for one opened on
+    /// the listing.
+    private var explainedInC: NSRange?
 
     /// What the popover open over the code explains, if one is open.
     var shownExplanation: CodeExplanation? {
