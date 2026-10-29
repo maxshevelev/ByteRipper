@@ -66,11 +66,18 @@
    replaces snapshot and tree, keeps the id, bumps `version`.
 10. Document ids **survive a restart**: `documents.json` stores, per document,
     the id it was given, its path, the hash it was opened with and its
-    `version`; new ones take `max+1`; there is no renumbering, because an agent
-    holds ids across a restart. A restored file whose hash differs is opened
-    with `version` set to the stored one plus one and marked "changed on disk",
-    so an agent's node ids from before are not silently read against other
-    bytes.
+    `version`; there is no renumbering, because an agent holds ids across a
+    restart. A restored file whose hash differs is opened with `version` set to
+    the stored one plus one and marked "changed on disk", so an agent's node
+    ids from before are not silently read against other bytes.
+    **An id is never given to another file.** `documents.json` keeps `next_id`,
+    and a new document takes it and advances it — not `max+1` over the rows
+    present, which would hand a closed or forgotten document's id to the next
+    upload, and an agent still holding it would read another file under it. A
+    "missing" row (decision 18) keeps its id, held but not served; when its
+    file comes back, or the roots widen again, it reopens under that id, with
+    `version` by the rule above. The console's **Forget** removes a missing row
+    for good; its id is retired with it, not freed.
 11. Simple limits: document count and the total size of open files.
     Decompressed buffers are measured, not capped.
 12. An upload opens the document immediately. It has a limit of its own,
@@ -97,7 +104,8 @@
     (`realpath`, symlinks followed) inside a `--dump-roots` directory or inside
     `<Server>/Uploads/`. Anything else is refused. A restored row that no
     longer passes — the roots narrowed between runs — is kept as a "missing"
-    row with no id, not dropped, so the operator sees what left the set.
+    row, its id held (decision 10), not dropped, so the operator sees what left
+    the set.
 19. The console checks `Host` and `Origin` against the listen addresses plus
     the names given with `--server-name` (repeatable: a LAN name, a tailnet
     MagicDNS name). An unlisted name is refused — the guard against DNS
@@ -191,7 +199,8 @@ imports AppKit in several files: the server stays macOS-only in v1.
 ## 6. Documents
 
 - `DocumentRegistry` (`@MainActor`, an `AgentDocumentSet`): open by path or
-  upload, close, reopen, list, reorder; ids persisted; new ids `max+1`.
+  upload, close, reopen, forget a missing row, list, reorder; ids persisted;
+  new ids from `next_id`, never reused (decision 10).
 - `SnapshotReader: ToolContentReader` over the `Data` read at open — the
   snapshot of decision 9.
 - `DocumentHost: ToolReadHost, UEFITreeProviding`: `fileName`, `contentSize`,
@@ -199,12 +208,15 @@ imports AppKit in several files: the server stays macOS-only in v1.
   `LazyUEFITree(ToolContentByteSource(reader: snapshot))` (not
   `WindowedByteSource`, which is internal to `UEFIImage`); the tree lives with
   the document.
-- Reopen: reread, rehash, `tree = nil`, `version += 1`, same id.
-  `changedOnDisk` comes from mtime and size; the tree is not rebuilt under the
+- Reopen: reread, rehash, `tree = nil`, `version += 1`, same id; the new hash
+  and `version` are written to `documents.json` at once, so a restart after a
+  Reopen does not roll the version back. `changedOnDisk` comes from mtime and size; the tree is not rebuilt under the
   agent.
 - Restore: each row of `documents.json` is checked by decision 18, read, and
   its hash compared with the stored one (decision 10); a missing file, and a
-  row now outside the roots, stays as a "missing" row with no id.
+  row now outside the roots, stay as "missing" rows that hold their ids and
+  serve nothing — `documents` does not list them, and a call naming one is
+  told the file is missing, not that the id is unknown.
 - Limits: `--max-documents` (8), `--max-open-bytes` (512 MiB), counted over
   file sizes and checked before opening.
 - Upload: `POST /admin/documents?name=…` with a raw body (there is no multipart
@@ -255,7 +267,8 @@ imports AppKit in several files: the server stays macOS-only in v1.
 - `ServerConsole` serves `/admin` and the pages Documents, Activity, Tokens and
   Status; the HTML/CSS/JS are resources of the target (SPM resources).
 - JSON: `/admin/api/documents`, `/admin/api/activity`, `/admin/api/status`;
-  actions: open by path, upload, reopen, delete (uploads only), create/rotate/
+  actions: open by path, upload, reopen, delete (uploads only), forget a
+  missing row, create/rotate/
   revoke a token, sign in and out.
 - Polling every two seconds; no SSE or WebSocket, because `HTTPService` sends
   complete responses only.
@@ -333,7 +346,9 @@ Every phase ends with its packages' tests green and the server starting.
 - Console: sign-in, the secret shown once, rotate and revoke, open by path
   (and refused outside the roots) and upload, reopen, delete an upload, the
   set and the ids surviving a restart, a file changed while the server was
-  down coming back marked, the activity of the MCP and of the REST clients, an
+  down coming back marked, a Reopen's version surviving a restart, a missing
+  row keeping its id and getting it back when the file returns, no id reused
+  after close or Forget, the activity of the MCP and of the REST clients, an
   unlisted `Host` refused.
 - Measurements: RSS and start time of `relay`; RSS of the server with the 21 MB
   LVM volume open; the status page shows the memory.
