@@ -357,17 +357,33 @@ intermediate state and is reported as one.
 
 ### On an analysis server
 
-`byteripper-server` (`Design/SERVER_PLAN.md`) runs the same owners from Swift
-and serves them with the store, so one machine keeps every module's project
-and every Mac reads the result:
+`byteripper-server` (`Design/SERVER_PLAN.md`, `Design/SERVER_HEADLESS_PLAN.md`)
+runs the same owners from Swift and serves them with the store, so one machine
+keeps every module's project and every Mac reads the result:
 
 ```bash
 swift build -c release --package-path Packages/ByteRipperServer
-.build/release/byteripper-server token                       # once
-.build/release/byteripper-server --listen 127.0.0.1:8765 --listen 100.64.0.7:8765
+.build/release/byteripper-server token add --name admin --rights admin  # once: the console's
+.build/release/byteripper-server token add --name <mac> --preset app    # one per Mac, and per client
+.build/release/byteripper-server --dump-roots <dir> \
+    --listen 127.0.0.1:8765 --listen 100.64.0.7:8765
 # loopback for the app on the server itself (a Mac does not reach its own
-# tailnet address), the tailnet address for the other Macs
+# tailnet address), the tailnet address for the other Macs.
+# Every address needs a token now, loopback included: the secret goes into the
+# app's Settings ▸ Code Analysis, which writes the file the scripts read.
 ```
+
+The server keeps its own documents — the dumps under `--dump-roots` and what
+the console uploads — and serves them to an agent **on that machine** over a
+Unix socket; the agent's client reaches it through the relay:
+
+```bash
+build/release/byteripper-server relay      # MCP on stdin/stdout ↔ <Server>/mcp.sock
+```
+
+`/admin` on any listen address is the operator's console — documents,
+activity, tokens, status — behind an admin token. There is no `/mcp` over the
+network: an agent is on the machine, or it goes through the app.
 
 An agent reaches the review tools through ByteRipper's own MCP server when
 Settings ▸ Code Analysis names the server: `ghidra_open` with a node,

@@ -184,19 +184,30 @@ above hold unchanged.
 
 ```bash
 # on the server
-byteripper-server token                      # once: …/ByteRipper/Server/token, 0600
-byteripper-server --listen 100.64.0.7:8765   # a tailnet address; loopback by default
+byteripper-server token add --name admin --rights admin   # the console's, once
+byteripper-server token add --name <mac> --preset app     # one per Mac, and per client
+byteripper-server --listen 100.64.0.7:8765                # a tailnet address; loopback by default
+# each secret is shown once. Paste a Mac's into the app's Settings ▸ Code
+# Analysis there: the app writes …/ByteRipper/Server/token, the file its
+# scripts read.
 
-# on any machine that has the token in …/ByteRipper/Server/token
+# on any machine
 python3 Skills/ghidra-uefi/scripts/cas_cli.py --store http://100.64.0.7:8765 list
 python3 Skills/ghidra-uefi/scripts/code_artifact.py module.efi --store http://100.64.0.7:8765
 ```
 
 - `--store http://host:port` works for every script; `byteripper-cas` takes it
-  as `--server <url>`. The token is `--token-file`, or the file
+  as `--server <url>`. The client's token is `--token-file`, or the file
   `BYTERIPPER_SERVER_TOKEN_FILE` names, or `…/ByteRipper/Server/token`.
-- Off loopback the server refuses to start without a token file, and refuses
-  a token file group or others may read.
+- The server's own tokens live in `tokens.json` (0600, hashes only), and each
+  carries rights: `cas.read` on every one, `cas.write` for writing. The `app`
+  preset has both; a `reader` may read and nothing else. A 403 names the
+  right the token lacks.
+- Every address the server listens on requires a token, loopback included,
+  and without an admin token in `tokens.json` it refuses to start. There is
+  no token file on the server any more, and there is no `/mcp`: an agent on
+  the server connects to `<Server>/mcp.sock` through `byteripper-server relay`
+  (`Design/SERVER_HEADLESS_PLAN.md` §7).
 - `gc` is refused over the network: run it on the server, against its own
   directory. A write made there directly — `byteripper-cas`, `code_artifact.py`
   — is seen by the server's FSEvents stream and announced like any other.

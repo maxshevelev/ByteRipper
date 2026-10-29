@@ -510,10 +510,17 @@ Every phase ends with its packages' tests green and the server starting.
    and never listed, rotate refusing the old secret, the last admin token
    kept, a revocation ending its sessions; REST rows per token; the status;
    a failed sign-in slowed.
-8. **Documentation and measurements**: `SERVER_PLAN.md` and the skill; RSS and
-   start time of `relay`; RSS of the server with the 21 MB LVM volume open; a
-   relay executable of its own and a decompressed-buffer cap only if the
-   numbers demand them.
+8. **Documentation and measurements** — done: `SERVER_PLAN.md` brought back
+   in line (tokens with rights, the dumps, the local MCP, the console, the
+   flags) and the skill's server section rewritten (token commands, the
+   relay, no `/mcp`); the numbers of §11 taken. What they decide, and what
+   they do not: `relay` at 0.8 MiB and 0.02 s needs no executable of its own —
+   the binary it ships in already starts none of the roles, and the target
+   that carries it imports `AgentKit` alone. A cap on decompressed buffers is
+   not added: 28 MiB of them for a 16 MiB image stays far under
+   `--max-open-bytes`, which bounds the snapshots and so, indirectly, what is
+   decompressed from them. If a large image measures worse than 1.75× its
+   size, the cap returns to this list with that number.
 
 ## 11. Verification
 
@@ -543,8 +550,15 @@ Every phase ends with its packages' tests green and the server starting.
   `gone`, Reopen of a `gone` document leaving a missing row with its id, the
   activity of the MCP and of the REST clients, an
   unlisted `Host` refused.
-- Measurements: RSS and start time of `relay`; RSS of the server with the 21 MB
-  LVM volume open; the status page shows the memory.
+- Measurements, taken on 2026-10-29 on `admins-imac`, macOS 15, with the
+  server serving a 16 MiB SPI dump (`W25Q128FV.lenovo.la-c422p.orig.bin`):
+  `relay` — a whole process start, the connect and a `ping` answered in
+  0.02 s, 0.8 MiB resident while connected; the server — 59.5 MiB with two
+  16 MiB snapshots open, 60.2 MiB once `uefi_tree` read the top of one,
+  88.5 MiB after `uefi_find` opened every volume and decompressed every
+  section (507 PE32 images), so the decompressed buffers of that image cost
+  about 28 MiB, some 1.75× its own size. The console's Status page reads the
+  process's resident memory at each ask.
 
 ## 12. Risks and follow-ups
 

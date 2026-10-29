@@ -1,17 +1,24 @@
 # byteripper-server — one shared store and one Ghidra host for a personal network
 
-> Status: proposal, accepted in conversation on 2026-10-26; the phases below
-> are the order of work. macOS first; the other platforms are a TODO (§9).
+> Status: accepted in conversation on 2026-10-26; the phases below were the
+> order of work and are done. `Design/SERVER_HEADLESS_PLAN.md` extends this
+> one and supersedes its MCP parts: the server holds dumps, serves a local MCP
+> on a Unix socket, keeps `tokens.json` with rights, and has a web console.
+> Read the two together; where they differ, the headless plan wins. macOS
+> first; the other platforms are a TODO (§9).
 
 ## 1. Decision in one page
 
 1. **One process, two roles.** `byteripper-server` is a Swift executable whose
    roles are switched on separately: `--cas` serves a code-analysis store,
    `--ghidra` hosts the Ghidra owners of `Design/GHIDRA_SHARED_PLAN.md`. Both
-   are on by default. A machine without Ghidra runs `--cas` alone; a Ghidra
-   machine whose store lives elsewhere runs `--ghidra --cas-url …`.
-2. **One listener, one token.** The roles share one HTTP port and one bearer
-   token. The owners stay on loopback behind it and never see the network.
+   are on by default, and `--cas` alone turns Ghidra off. The store is
+   always the server's own (`Design/SERVER_HEADLESS_PLAN.md` decision 17):
+   there is no `--cas-url`, and no mirror of somebody else's store.
+2. **One listener, tokens with rights.** The roles share one HTTP port and
+   one `tokens.json`: a token carries `cas.read`, `cas.write`, `ghidra.use`
+   or `admin`, and every address needs one. The owners stay on loopback
+   behind it and never see the network.
 3. **The store's rules exist once.** The server runs `ContentStore`
    (`Packages/CodeAnalysis`) on its own directory and is the only writer of
    it. A client sends operations — put an object, put an analysis, record a
@@ -36,14 +43,20 @@
    in the server and, for the desktop, inside the app. Python stays for the
    skill's scripts and tests; a DMG user never needs it.
 7. **Agents get one set of tools from either place.** The tools are defined
-   once (`GhidraHost`, on `AgentKit`). The server serves them at `/mcp`; the app
-   serves the same tools on its own MCP server — in-process for a desktop host,
-   relayed to the server otherwise — beside the tree tools, so an agent goes
-   from a UEFI node to a rename in one connection.
-8. **Local by default, tailnet as the network.** The server binds loopback
-   unless told an address. A non-loopback bind refuses to start without a token
-   file. Encryption is the tailnet's (WireGuard); TLS is a proxy's job if ever
-   needed.
+   once (`GhidraHost`, on `AgentKit`), and what they need of a document —
+   the document rule, a module query, `code_query`/`code_modules`,
+   `ghidra_open` by a node — is `Packages/AgentDocuments`, which both hosts
+   link. The app serves the list on its own MCP server — in-process for a
+   desktop host, relayed to the server otherwise — beside the tree tools. The
+   server serves its own list to an agent on its own machine over
+   `<Server>/mcp.sock` (`byteripper-server relay` is the client's end); it has
+   no `/mcp`, and nothing of MCP reaches the network
+   (`Design/SERVER_HEADLESS_PLAN.md` §7, §9).
+8. **Local by default, tailnet as the network, a token on every address.**
+   The server binds loopback unless told an address, and every address it
+   listens on — loopback included — requires a token of its `tokens.json`,
+   which carries the token's rights. Encryption is the tailnet's (WireGuard);
+   TLS is a proxy's job if ever needed.
 9. **A personal installation.** One token, one person, few writers. Collisions
    are rare and handled by the rules the store already has; there is no user
    model, no per-project scoping. That is a deliberate limit (§8).
@@ -53,9 +66,9 @@
 | | store | Ghidra | agent connects to |
 |---|---|---|---|
 | desktop (DMG) | this Mac | the app starts owners (`GhidraHost` in-process) | the app's MCP |
-| server, app on the same Mac | server | server | the app's MCP (relayed) or `/mcp` |
-| server, app on a laptop | server, mirrored on the laptop | server | the laptop app's MCP (relayed) or the server's `/mcp` |
-| server, agent alone | server | server | `/mcp` |
+| server, app on the same Mac | server | server | the app's MCP |
+| server, app on a laptop | server, mirrored on the laptop | server | the laptop app's MCP |
+| server, agent alone | server | server | `byteripper-server relay` → the server's local MCP on `mcp.sock` |
 
 An agent on the server with no app running still reviews: a module it opens
 by SHA must already have a project or be sent its bytes (§6.3).
@@ -64,14 +77,16 @@ by SHA must already have a project or be sent its bytes (§6.3).
 
 | package | targets | what it is |
 |---|---|---|
-| `Packages/HTTPService` | `HTTPService` | a small HTTP/1.1 server: listener, request parsing, routes, bearer token, long poll. macOS: Network.framework |
+| `Packages/HTTPService` | `HTTPService` | a small HTTP/1.1 server: listener, request parsing, routes with access and body limits, the authorizer seam, long poll. macOS: Network.framework |
+| `Packages/AgentDocuments` | `AgentDocuments` | the tools both hosts serve over their own documents: the document rule, a tool-module's query, `code_query`/`code_modules`, `ghidra_open` by a node |
 | `Packages/CodeAnalysis` | + `RemoteStore`, `StoreMirror` | the client of a served store and the mirror the app reads; the store itself as today |
-| `Packages/CASService` | `CASService` | the store's routes over `ContentStore` and its change feed |
+| `Packages/CASService` | `CASService` | the store's routes over `ContentStore` and its change feed, each naming its right |
 | `Packages/GhidraHost` | `GhidraHost` | Ghidra install, `Owner.jar`, projects, owner pool, lease, publish, the MCP tools |
-| `Packages/ByteRipperServer` | `ByteRipperServer` + executable `byteripper-server` | roles, configuration, token, the `/mcp` endpoint; the executable only calls it |
+| `Packages/ByteRipperServer` | `ServerAuth`, `DumpHost`, `ServerMCP`, `ServerRelay`, `ServerConsole`, `ByteRipperServer` + executable `byteripper-server` | tokens with rights and the console's door; the documents a snapshot is read from; the local MCP and its socket; the stdio↔socket relay; `/admin`; the roles on one listener |
 
-The app links `CodeAnalysis` (mirror) and `GhidraHost` (desktop host and the
-tools); it never links `HTTPService`.
+The app links `CodeAnalysis` (mirror), `GhidraHost` (desktop host and the
+tools) and `AgentDocuments` (the tools over its panes); it never links
+`HTTPService` or anything of `Packages/ByteRipperServer`.
 
 ## 4. The store over HTTP
 
@@ -104,9 +119,10 @@ carries `Authorization: Bearer <token>`.
   different store id or a sequence lower than its own syncs everything.
 - **Refs are per installation of the app**: `refs/<mac name>/…`, so `gc` on the
   server knows what every Mac's projects use.
-- **Who claimed a reading** (§13 of the Ghidra plan): with one token every
-  writer is the person; the history's `by` records `agent` or `person` and the
-  server adds the client's name. A user model is out of scope (§8).
+- **Who claimed a reading** (§13 of the Ghidra plan): every writer is a token
+  of the person's, so a token names the client and its rights, not a person;
+  the history's `by` records `agent` or `person` and the server adds the
+  client's name. A user model is out of scope (§8).
 
 ## 5. The mirror
 
@@ -143,7 +159,7 @@ carries `Authorization: Bearer <token>`.
 | `te_to_pe.py` | a TE→PE rewrite in Swift, checked byte for byte against the script |
 | `ghidra_owner.open` (step 1) | `analyzeHeadless` with `ApplyUefi.java` into the kept project; `state.json` |
 | `ghidra_owner` start, stop, `get`, writes | the owner pool: start on demand, loopback port, idle exit, `/v1` proxy |
-| `ghidra_owner.publish` / `release` | publish: the owner's artifact and document into the store in the §5.4 order (`ContentStore` direct, or `RemoteStore` with `--cas-url`) |
+| `ghidra_owner.publish` / `release` | publish: the owner's artifact and document into the store in the §5.4 order (`ContentStore` direct — the server's Ghidra role always publishes into its own store) |
 
 The Java sources ship with the app (`Contents/Resources/GhidraOwner/`) and
 with the server; they are compiled against whatever Ghidra is installed,
@@ -175,23 +191,36 @@ own lease stays the guard against a second host.
 MCP instructions carry the review rules of the skill (`SKILL.md`, "What a
 review makes of the code"), so an agent without the skill gets them too.
 
-`/mcp` is kept but not advertised (2026-10-27): an agent with no app beside it
-has no tree — no module map, no nodes — so it can open only modules that
-already have a project, or bytes it found on its own. The skill sends agents
-through ByteRipper's MCP; `/mcp` stays for a test or a later headless use.
+The server serves this list, with the server's own documents, over a Unix
+socket — `<Server>/mcp.sock`, reached from a client by `byteripper-server
+relay` — and not at `/mcp`: an agent on the server keeps its own dumps, the
+tree is read from them, and nothing of MCP reaches the network
+(`Design/SERVER_HEADLESS_PLAN.md` §7, §9). The 2026-10-27 note that kept a
+`/mcp` endpoint is withdrawn.
 
 ## 7. Configuration
 
 ```
-byteripper-server [--cas] [--ghidra] [--listen 127.0.0.1:8765]
-                  [--store <dir>] [--cas-url <url>] [--token-file <file>]
-                  [--ghidra-home <dir>] [--projects <dir>] [--pool 2]
+byteripper-server [serve] [--cas] [--ghidra] [--listen <host>:<port>]
+                  [--store <dir>] [--tokens <file>]
+                  [--dump-roots <dir>] [--max-documents <n>]
+                  [--max-open-bytes <n>] [--max-upload-bytes <n>] [--mcp-socket <path>]
+                  [--server-name <name>] [--ghidra-home <dir>] [--projects <dir>] [--idle <s>]
+byteripper-server token add --name <name> [--rights <r,…> | --preset <reader|app|admin>]
+byteripper-server token list | rotate <id|name> | revoke <id|name>
+byteripper-server relay [--mcp-socket <path>]
 ```
 
-- Defaults: both roles, loopback, the app's own directories under
-  `~/Library/Application Support/ByteRipper/`.
-- `--listen` on anything but loopback without `--token-file` is refused. The
-  token file must be 0600; `byteripper-server token` makes one.
+- Defaults: the store and Ghidra, loopback, the app's own directories under
+  `~/Library/Application Support/ByteRipper/`, the dumps in `<Server>/Uploads`
+  only, `mcp.sock` beside `tokens.json`.
+- Every address needs a token, loopback included: `tokens.json` (0600, hashes
+  only, one set of rights each), and the server refuses to start without an
+  admin token. `byteripper-server token add` prints a secret once.
+- `--dump-roots` names the folders the console may open dumps from; a path
+  outside them and the server's `Uploads` is refused. `--server-name` adds a
+  name the console answers to (`Design/SERVER_HEADLESS_PLAN.md` decisions 12,
+  18, 19).
 - A LaunchAgent plist in the docs runs it at login.
 
 ## 8. Not in scope
@@ -249,10 +278,12 @@ them).
    Not done: `ghidra_owner.py` still runs its own owners; making it a client
    of the host is left until the scripts need the server.
 4. **The tools — done.** `GhidraTools` over a `GhidraBackend` (the host, or
-   a server's `/ghidra/v1`): `/mcp` on the server (Streamable HTTP, one
-   AgentKit connection per request, the review rules as instructions), and
-   the same list on the app's MCP server, with `ghidra_open` taking a node
-   of an open dump.
+   a server's `/ghidra/v1`), and `AgentDocuments` for what they need of a
+   document: the app serves the list on its own MCP server, with
+   `ghidra_open` taking a node of an open dump, and the server serves its own
+   list with the dumps it holds over `<Server>/mcp.sock`
+   (`Design/SERVER_HEADLESS_PLAN.md` §7). The `/mcp` endpoint this phase
+   first built is gone (§9 of that plan).
 5. **Desktop — the host is done.** With the analyses on this Mac, the app
    answers the `ghidra_` tools from a `GhidraHost` in its own process
    (`LocalGhidraHost`): the same `GhidraProjects` folder a server on this Mac
@@ -261,6 +292,11 @@ them).
    resources, and the Settings pane saying which Ghidra and JDK it uses.
 
 These replace phase 2c and phase 3 of `Design/GHIDRA_SHARED_PLAN.md`.
+
+`Design/SERVER_HEADLESS_PLAN.md` is the second half of the work, in phases of
+its own: tokens and rights, the app's side of them, `AgentDocuments`, the
+documents a snapshot is read from, the local MCP and its relay, the rights on
+the roles, `/admin`, and this documentation with its measurements.
 
 ## 11. Testing
 
