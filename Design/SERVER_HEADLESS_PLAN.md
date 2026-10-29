@@ -398,7 +398,9 @@ imports AppKit in several files: the server stays macOS-only in v1.
   addresses and names for a wildcard one, and `--server-name` — screens every
   `/admin` request on its headers through `HTTPServer.Configuration.screen`,
   before the route and the authorizer; `Sec-Fetch-Site: cross-site` is
-  refused too.
+  refused too. The set is fixed when the server starts: an address a wildcard
+  listener gains later — a new lease, a tunnel — is refused until the server
+  restarts or the name is given with `--server-name`.
 - Polling every two seconds; no SSE or WebSocket, because `HTTPService` sends
   complete responses only.
 - Activity: REST rows per token from `onRequest` (name, last seen, requests,

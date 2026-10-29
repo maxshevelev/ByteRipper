@@ -319,6 +319,25 @@ final class ServerConsoleTests: XCTestCase {
         XCTAssertNotNil(status.body?["memory"])
     }
 
+    /// A burst of failed attempts is spaced by the pause, not let through
+    /// together after one: each waiter looks at the gate again when it wakes,
+    /// in the turn that runs its attempt.
+    func testABurstOfFailedSignInsIsSpaced() async throws {
+        let gate = SignInGate(pause: 0.15)
+        let started = Date()
+        await withTaskGroup(of: Void.self) { group in
+            for _ in 0..<3 {
+                group.addTask {
+                    do {
+                        _ = try await gate.attempt { () throws -> Int in throw HTTPError(.unauthorized, "no") }
+                    } catch {}
+                }
+            }
+        }
+        XCTAssertGreaterThanOrEqual(Date().timeIntervalSince(started), 0.42,
+                                    "three attempts, each a pause behind the one before")
+    }
+
     /// A failed sign-in is answered after the pause, and the next attempt
     /// waits it out.
     func testFailedSignInsAreSlowed() async throws {

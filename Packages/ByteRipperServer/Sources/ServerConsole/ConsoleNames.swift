@@ -10,6 +10,11 @@ import ServerAuth
 /// origin as `Origin`. A name that is not listed is a page that reached this
 /// server under a name it does not own — DNS rebinding — and is refused before
 /// any route runs, the open sign-in included.
+///
+/// The set is built once, at start: a wildcard listener's addresses and this
+/// Mac's name are read then. An address gained later — a new lease, a tunnel
+/// brought up — is refused until the server restarts or the name is given
+/// with `--server-name`, which is the way in the refusal says.
 public struct ConsoleNames: Sendable, Equatable {
     public let names: Set<String>
 
