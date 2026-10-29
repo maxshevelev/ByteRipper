@@ -378,9 +378,9 @@ imports AppKit in several files: the server stays macOS-only in v1.
 - A call's line keeps its arguments as compact JSON, cut at 2048 characters,
   the tool's error in its own words, and the answer's size. A connection is
   "at work" while a call runs and for two seconds after one ends — the app's
-  `AgentService.activityHold` — and the console shows that as a red lamp
-  blinking where Live stands, at the app's toolbar dot's rate (steady under
-  Reduce Motion).
+  `AgentService.activityHold` — and the console shows that where Live
+  stands, in Live's own pill: red, saying Active, its dot blinking at the
+  app's toolbar dot's rate (steady under Reduce Motion).
 - The Activity card shows the last three calls and opens the connection's
   log in a panel from the right: the calls newest first with time, tool, the
   arguments that say what it was about, duration as a bar and a number, the

@@ -920,13 +920,13 @@
       request.running ? workingPill("running") : statusPill(request.status || 0));
   }
 
-  // The lamp of a connection at work: red, blinking at the rate of the app's
-  // toolbar dot (`AgentActivityBadge`), in the corner where Live stands when
-  // the agent is idle. Its phase follows the clock, so a card drawn anew
-  // every second does not restart the blink.
+  // A connection at work: Live's pill in red, saying Active, its dot blinking
+  // at the rate of the app's toolbar dot (`AgentActivityBadge`). The blink's
+  // phase follows the clock, so a card drawn anew every second does not
+  // restart it.
   function lamp() {
-    const el = h("span", { class: "lamp", role: "img", title: "The agent is at work", "aria-label": "The agent is at work" });
-    el.style.animationDelay = `-${Date.now() % 1000}ms`;
+    const el = h("span", { class: "pill danger blinking", title: "The agent is at work", text: "Active" });
+    el.style.setProperty("--phase", `-${Date.now() % 1000}ms`);
     return el;
   }
 

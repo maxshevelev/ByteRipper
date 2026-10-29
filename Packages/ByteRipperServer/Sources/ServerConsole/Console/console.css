@@ -674,7 +674,7 @@ button.chip:hover { border-color: var(--accent); color: var(--text); }
 /* The lamp of a session that is working right now — the app's toolbar badge
    (`AgentActivityBadge`) blinks at this same rate. */
 @keyframes blink { from { opacity: 1; } to { opacity: 0.15; } }
-.pill.blinking::before { animation: blink 0.5s ease-in-out infinite alternate; }
+.pill.blinking::before { animation: blink 0.5s ease-in-out infinite alternate; animation-delay: var(--phase, 0ms); }
 
 .agent-log {
   display: flex;
@@ -710,21 +710,8 @@ button.chip:hover { border-color: var(--accent); color: var(--text); }
 .log-empty { color: var(--muted); font-size: 12.5px; padding: 2px 6px; }
 .log-row td { padding: 0 20px 10px; }
 
-/* ---------- The lamp ---------- */
+/* ---------- At work ---------- */
 
-/* A connection at work: a red lamp where Live stands, blinking at the app's
-   toolbar dot's rate; steady under Reduce Motion, as the dot is. */
-.lamp {
-  margin-left: auto;
-  margin-right: 8px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  flex: none;
-  background: var(--danger);
-  box-shadow: 0 0 0 4px var(--danger-soft), 0 0 12px 1px var(--danger);
-  animation: blink 0.5s ease-in-out infinite alternate;
-}
 .agent.active { border-color: var(--danger-soft); }
 .agent-open { align-self: flex-start; }
 .count-badge {
@@ -767,7 +754,7 @@ button.chip:hover { border-color: var(--accent); color: var(--text); }
 }
 .drawer.open { transform: none; }
 .drawer-head { display: flex; align-items: center; gap: 12px; padding: 18px 20px 10px; }
-.drawer-head .lamp, .drawer-head .pill { margin-left: auto; }
+.drawer-head .pill { margin-left: auto; }
 .drawer-stats { display: flex; flex-wrap: wrap; gap: 6px 18px; padding: 0 20px 14px; font-size: 13px; color: var(--text-2); border-bottom: 1px solid var(--border); }
 .drawer-stats b { font-variant-numeric: tabular-nums; color: var(--text); }
 .drawer-stats .muted { margin-left: auto; font-size: 12px; }
