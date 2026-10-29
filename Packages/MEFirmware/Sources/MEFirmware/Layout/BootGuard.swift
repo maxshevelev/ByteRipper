@@ -99,8 +99,10 @@ enum BootGuardReader {
     /// nearest profile: four settings are one profile or they are a layout this
     /// does not read.
     static func profile(inUEPArea uep: Data) -> BootGuardProfile? {
-        guard let signature = uep.range(of: Data("$UEP".utf8))?.lowerBound,
-              let flagsAt = uep.index(signature, offsetBy: flagsOffset,
+        // The same container `UEPReader` reads the settings beside it from.
+        guard let container = containerOffset(in: uep) else { return nil }
+        let signature = uep.startIndex + container
+        guard let flagsAt = uep.index(signature, offsetBy: flagsOffset,
                                       limitedBy: uep.endIndex),
               flagsAt < uep.endIndex else { return nil }
         // An area never written is not a profile: as bits, all zeros answer
@@ -326,19 +328,21 @@ enum BootGuardReader {
         return first
     }
 
-    /// The ASCII container that opens the UEP area: `$UEPC`, or the `$UEP`
-    /// inside one of those (`$UEPC` is `$UEP` plus its revision letter). Nil
-    /// when the image has no such area in the bytes it handed over.
-    /// Where the `$UEP` container opens the area — `$UEPC` preferred, and the
-    /// `$UEP` spelling the older dumps use. Shared with `UEPReader`, which
-    /// reads the arrays past the same signature.
+    /// Where the ASCII container that opens the UEP area begins, counted from
+    /// the area's first byte — not a `Data` index, so a slice reads the same as
+    /// a copy. `$UEPC` preferred (it is `$UEP` plus its revision letter), and
+    /// the bare `$UEP` the older dumps use. Nil when the image has no such area
+    /// in the bytes it handed over. Shared with `UEPReader` and the profile and
+    /// key readers here, so all of them read past the same signature.
     static func containerOffset(in uep: Data) -> Int? {
-        if let at = uep.range(of: Data("$UEPC".utf8))?.lowerBound { return at }
+        if let at = uep.range(of: Data("$UEPC".utf8))?.lowerBound {
+            return uep.distance(from: uep.startIndex, to: at)
+        }
         var from = uep.startIndex
         while let at = uep.range(of: Data("$UEP".utf8), options: [], in: from..<uep.endIndex) {
             let after = at.upperBound
             if after >= uep.endIndex || uep[after] != UInt8(ascii: "C") {
-                return at.lowerBound
+                return uep.distance(from: uep.startIndex, to: at.lowerBound)
             }
             from = after
         }

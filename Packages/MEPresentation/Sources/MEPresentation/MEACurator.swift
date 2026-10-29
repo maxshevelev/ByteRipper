@@ -615,7 +615,8 @@ public enum MEACurator {
         }
         return MEANode(
             path: [], title: L("CPU straps", in: language),
-            fields: [MEAField("Message length", "\(straps.messageLengthWords) words"),
+            fields: [MEAField(L("Message length", in: language),
+                              L("%1$@ words", in: language, "\(straps.messageLengthWords)")),
                      MEAField("CRC-16", String(format: "0x%04X", straps.crcStored)),
                      MEAField("CRC Valid", MEAText.yesNo(straps.crcValid))],
             children: rows)
@@ -652,8 +653,9 @@ public enum MEACurator {
             }
             return MEANode(
                 path: [], title: title,
-                fields: [MEAField("Block type", "\(container.blockType)"),
-                         MEAField("Length", "\(container.length) bytes")],
+                fields: [MEAField(L("Block type", in: language), "\(container.blockType)"),
+                         MEAField(L("Length", in: language),
+                                  L("%1$@ bytes", in: language, "\(container.length)"))],
                 children: rows)
         }
     }
@@ -669,7 +671,7 @@ public enum MEACurator {
         }
         return MEANode(
             path: [], title: L("SPHY OEM configuration", in: language),
-            fields: [MEAField("Fields", "\(readings.count)")], children: rows)
+            fields: [MEAField(L("Fields", in: language), "\(readings.count)")], children: rows)
     }
 
     /// The feature pins the image configures (ours): `/home/gpio/csme_pins`,

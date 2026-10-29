@@ -82,7 +82,7 @@ enum ManufacturingDecoder {
         var imageEOMConfig: Int? = nil
         /// The live `/home/mca/eom_config` record of the MFS volume.
         var liveEOMConfig: Int? = nil
-        /// Whether the descriptor's BIOS master is open (`0xFFFF` in both
+        /// Whether the descriptor's BIOS master is open (`0xFFF` in both
         /// masks). nil when no descriptor was handed to the analyzer.
         var descriptorOpen: Bool? = nil
         /// Whether this generation decides End of Manufacturing at all: CSME

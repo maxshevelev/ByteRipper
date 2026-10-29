@@ -214,6 +214,12 @@ public extension DescriptorStrapMap {
     /// as length: 16, 18 and 21 words belong to those boards' sections, and a
     /// section of one of those lengths is only read when the generation is
     /// certain.
+    ///
+    /// An uncertain generation reads no SPT table, and a shared one only where
+    /// the SPT set has no section of that length: a 90-word section of a board
+    /// that may be Sunrise Point is not the shared 90-word layout, and reading
+    /// it as that would name a protected range and an eSPI clock out of
+    /// another chipset's words.
     static func forSection(words: Int,
                            generation: DescriptorGeneration,
                            generationIsCertain: Bool = true) -> DescriptorStrapMap? {
@@ -223,6 +229,9 @@ public extension DescriptorStrapMap {
         if generationIsCertain, let table = legacyTable(for: generation),
            table.words == words {
             return table
+        }
+        if !generationIsCertain, sptTables.contains(where: { $0.words == words }) {
+            return nil
         }
         return forSection(words: words)
     }
@@ -246,11 +255,12 @@ public extension DescriptorStrapMap {
         }
     }
 
-    /// The layout of a strap section of `words` words, or nil where no tool at
-    /// hand carries one: the words then stand as numbers, as they did before,
-    /// and nothing about them is claimed.
+    /// The shared layout of a strap section of `words` words, or nil where no
+    /// tool at hand carries one: the words then stand as numbers, as they did
+    /// before, and nothing about them is claimed. Never an SPT table — those
+    /// are Sunrise Point's own, and only its generation reads them.
     static func forSection(words: Int) -> DescriptorStrapMap? {
-        all.first { $0.words == words }
+        StrapMapData.pchMaps.first { $0.words == words }
     }
 
     /// The processor strap section's tables, one per length the tools state.

@@ -523,6 +523,11 @@ final class DescriptorInfoTests: XCTestCase {
                        DescriptorStrapMap.pch90.name)
         XCTAssertNil(DescriptorStrapMap.forSection(words: 69, generation: .sunrisePoint),
                      "the shared 69-word table is not Sunrise Point's")
+        XCTAssertNil(DescriptorStrapMap.forSection(words: 90, generation: .cannonPoint,
+                                                   generationIsCertain: false),
+                     "a length both sets have is nobody's on an uncertain generation")
+        XCTAssertNil(DescriptorStrapMap.forSection(words: 66, generation: .cannonPoint),
+                     "an SPT table is read on Sunrise Point alone")
 
         let sptCPU = try XCTUnwrap(DescriptorStrapMap.forProcessorSection(
             words: 3, generation: .sunrisePoint))

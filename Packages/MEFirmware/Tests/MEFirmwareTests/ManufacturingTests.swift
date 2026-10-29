@@ -203,6 +203,15 @@ final class BootGuardReaderTests: XCTestCase {
         XCTAssertEqual(BootGuardReader.profile(inUEPArea: uepArea(flags: 0x7B)), .fvme)
     }
 
+    /// A slice of a larger buffer reads the same as a copy: the container is
+    /// found as an offset into the area, not as an index into the buffer.
+    func testASliceReadsTheSameAsACopy() {
+        let buffer = Data(repeating: 0xA5, count: 0x300) + uepArea(flags: 0x7A)
+        let slice = buffer[0x300...]
+        XCTAssertNotEqual(slice.startIndex, 0)
+        XCTAssertEqual(BootGuardReader.profile(inUEPArea: slice), .vm)
+    }
+
     /// An area never written — a cleanME image, a CSME 12 image whose UEP
     /// partition is blank — is not profile 0 or 5: as bits, all zeros answer
     /// No_FVME and all ones answer FVME, and nothing was chosen there. What

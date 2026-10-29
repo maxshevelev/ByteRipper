@@ -50,7 +50,18 @@ final class AgentRelayInstallTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: installed), try Data(contentsOf: helper))
 
         let left = try FileManager.default.contentsOfDirectory(atPath: installed.deletingLastPathComponent().path)
-        XCTAssertEqual(left, [AgentEndpoint.relayName], "the staged copy is gone")
+        XCTAssertEqual(left.sorted(), [AgentEndpoint.relayName, AgentEndpoint.appRecordName].sorted(),
+                       "the staged copy is gone")
+    }
+
+    /// The installed copy sits in no bundle, so the install records which app
+    /// it came from: that is the app it starts when a client connects first.
+    func testTheInstallRecordsTheAppItCameFrom() throws {
+        let helper = try helper("#!/bin/sh\necho first\n")
+        let app = folder.appendingPathComponent("ByteRipper.app")
+        XCTAssertTrue(AgentRelayInstall.install(helper: helper, at: installed, app: app))
+        let record = installed.deletingLastPathComponent().appendingPathComponent(AgentEndpoint.appRecordName)
+        XCTAssertEqual(String(decoding: try Data(contentsOf: record), as: UTF8.self), app.path)
     }
 
     /// Nothing to install is not an install: the settings then hand out the

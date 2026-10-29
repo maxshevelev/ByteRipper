@@ -2,8 +2,9 @@
 //
 //  The client speaks MCP over this process's stdin and stdout. The app speaks
 //  it on a Unix socket in the user's Library (`AgentEndpoint`). This copies
-//  bytes between the two and does nothing else: it parses no message except
-//  when there is no app to pass it to, and then only to say so
+//  bytes between the two and does nothing else. It reads a message only for
+//  its `id`: to answer for the app when there is no app to pass it to, and to
+//  know which requests the app had not answered yet when it went
 //  (`Design/AGENT_PLAN.md`, "The relay").
 //
 //  **It outlives the app.** A client starts this process once and keeps it for
@@ -30,11 +31,29 @@ let lookEvery: TimeInterval = 0.25
 
 /// The app bundle this relay was shipped in: `ByteRipper.app` when run from
 /// `ByteRipper.app/Contents/Helpers/byteripper-mcp`, nil when run from anywhere
-/// else — a build folder, a test.
+/// else — a build folder, a test, the installed copy.
 func enclosingApp() -> URL? {
     guard let executable = Bundle.main.executableURL?.resolvingSymlinksInPath() else { return nil }
     let app = executable.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     return app.pathExtension == "app" ? app : nil
+}
+
+/// The app that installed this copy, as it recorded itself beside it
+/// (`AgentEndpoint.appRecordName`) — the installed copy, which every client's
+/// configuration names, sits in no bundle. Nil when there is no record, or the
+/// bundle it names is gone.
+func recordedApp() -> URL? {
+    guard let data = FileManager.default.contents(atPath: AgentEndpoint.appRecordPath()) else { return nil }
+    let path = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+    let app = URL(fileURLWithPath: path)
+    guard app.pathExtension == "app", FileManager.default.fileExists(atPath: app.path) else { return nil }
+    return app
+}
+
+/// The app to start: the bundle this relay is in, or else the one that
+/// installed it.
+func appToStart() -> URL? {
+    enclosingApp() ?? recordedApp()
 }
 
 /// Starts the app in the background, so a client launched before the app
@@ -87,7 +106,7 @@ var hasLaunched = false
 /// waits for it to come up.
 func attach() -> Int32? {
     if let socket = try? UnixSocket.connect(to: path) { return socket }
-    guard launches, !hasLaunched, let app = enclosingApp() else { return nil }
+    guard launches, !hasLaunched, let app = appToStart() else { return nil }
     hasLaunched = true
     launch(app)
     let deadline = Date().addingTimeInterval(launchWait)
@@ -98,12 +117,69 @@ func attach() -> Int32? {
     return nil
 }
 
+/// The requests passed to the app and not answered yet, by their encoded
+/// `id`. When the app goes, each is answered with the reason: the app will
+/// never answer it, and a client would otherwise wait out its own timeout.
+/// Under `stateLock`, like `upstream`.
+var pending: [Data: JSONValue] = [:]
+
+/// The `id` of a request — a message with a method and an id — or nil for a
+/// notification, an answer, or a line that is not JSON.
+func requestID(_ line: Data) -> JSONValue? {
+    guard let message = try? JSONValue.parse(line),
+          message["method"] != nil, let id = message["id"], !id.isNull else { return nil }
+    return id
+}
+
+/// The `id` an answer from the app carries: a message with an id and no
+/// method.
+func answeredID(_ line: Data) -> JSONValue? {
+    guard let message = try? JSONValue.parse(line),
+          message["method"] == nil, let id = message["id"], !id.isNull else { return nil }
+    return id
+}
+
+func addPending(_ id: JSONValue) {
+    stateLock.lock()
+    pending[id.encoded()] = id
+    stateLock.unlock()
+}
+
+/// Takes `id` off the list; false when it was not on it — the other thread
+/// answered it already.
+func takePending(_ id: JSONValue) -> Bool {
+    stateLock.lock()
+    defer { stateLock.unlock() }
+    return pending.removeValue(forKey: id.encoded()) != nil
+}
+
+func takeAllPending() -> [JSONValue] {
+    stateLock.lock()
+    defer { stateLock.unlock() }
+    let all = Array(pending.values)
+    pending.removeAll()
+    return all
+}
+
+/// One thread writes to the client at a time, so an answer the relay makes
+/// never lands inside one the app is writing.
+let outputLock = NSLock()
+
+func writeToClient(_ data: Data) -> Bool {
+    outputLock.lock()
+    defer { outputLock.unlock() }
+    return UnixSocket.writeAll(STDOUT_FILENO, data)
+}
+
 /// The answer to one request when there is no app to pass it to: the reason,
 /// so the client shows the person something they can act on instead of a
 /// timeout.
 func answerUnavailable(_ line: Data) {
-    guard let message = try? JSONValue.parse(line),
-          message["method"] != nil, let id = message["id"], !id.isNull else { return }
+    guard let id = requestID(line) else { return }
+    answerUnavailable(id: id)
+}
+
+func answerUnavailable(id: JSONValue) {
     let answer: JSONValue = [
         "jsonrpc": "2.0", "id": id,
         "error": ["code": .int(MCPProtocol.ErrorCode.internalError),
@@ -111,7 +187,7 @@ func answerUnavailable(_ line: Data) {
     ]
     var data = answer.encoded()
     data.append(0x0A)
-    UnixSocket.writeAll(STDOUT_FILENO, data)
+    _ = writeToClient(data)
 }
 
 /// The app's side: read its answers while it is there, and when it goes, wait
@@ -123,12 +199,21 @@ func follow() -> Never {
             if currentUpstream() == nil { Thread.sleep(forTimeInterval: lookEvery) }
             continue
         }
+        // The answers go on as the bytes they came in; the framer only reads
+        // their ids, to strike them off `pending`. Its bound is generous: an
+        // answer too long for it is still passed on whole.
+        var answers = LineFramer(maxLineBytes: 64 << 20)
         while let chunk = UnixSocket.readSome(socket) {
-            guard UnixSocket.writeAll(STDOUT_FILENO, chunk) else { exit(0) }
+            for case .message(let line) in answers.append(chunk) {
+                if let id = answeredID(line) { _ = takePending(id) }
+            }
+            guard writeToClient(chunk) else { exit(0) }
         }
-        // The app quit, or was switched off. The client is still there.
+        // The app quit, or was switched off. The client is still there, and so
+        // are the requests the app took and will now never answer.
         setUpstream(nil)
         close(socket)
+        for id in takeAllPending() { answerUnavailable(id: id) }
     }
 }
 
@@ -150,12 +235,15 @@ while let chunk = UnixSocket.readSome(STDIN_FILENO) {
             answerUnavailable(line)
             continue
         }
+        let id = requestID(line)
+        if let id { addPending(id) }
         var request = line
         request.append(0x0A)
         if !UnixSocket.writeAll(socket, request) {
             // It went between the look and the write. The thread above finds
-            // the same broken socket and clears it.
-            answerUnavailable(line)
+            // the same broken socket and clears it — and may have answered
+            // this request already, as one the app had not answered.
+            if let id, takePending(id) { answerUnavailable(id: id) }
         }
     }
 }

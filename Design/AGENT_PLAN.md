@@ -124,6 +124,9 @@ once and keeps it for the whole conversation, and an app may be quit and opened
 again in the middle of one — running it from Xcode does exactly that. So when
 the socket goes the relay answers every request with an error that says what to
 open and where the switch is, waits, and attaches again when the app comes back.
+A request the app had taken and not answered when it went is answered the same
+way: the app will never answer it, and the client would otherwise wait out its
+own timeout.
 A client that does not restart a server which exited inside a session — Claude
 Code does not — then never loses it, and the person never registers the server a
 second time. Its exit is the client's: when stdin closes, the conversation is
@@ -136,8 +139,12 @@ Settings ▸ Agent (off by default). Once only, because the promise the switch
 makes is "open ByteRipper when an agent connects": a person who quits ByteRipper
 does not want the server that is still running to open it again a moment later.
 The relay reads none of the app's settings, so the choice travels in the
-environment the client gives it. It knows nothing about MCP beyond reading a
-request's `id` for that answer.
+environment the client gives it. It knows nothing about MCP beyond reading the
+`id` of a request, and of the app's answer to it, for those answers.
+
+The app it starts is the bundle it sits in — or, for the installed copy below,
+which sits in none, the app that installed it: each install records the
+bundle's path beside the relay (`AgentEndpoint.appRecordName`).
 
 The path a client is configured with is the **installed copy of the relay**,
 beside the socket, not the helper inside the app bundle
@@ -152,8 +159,8 @@ Settings ▸ Agent has a button that copies the configuration for Claude Code
 (`claude mcp add --scope user byteripper -- <path>`, with
 `--env BYTERIPPER_LAUNCH=1` after the name when the app is to be started) and
 one for Claude Desktop (the JSON block, with `"env"` then), with that installed
-path in it — the bundled helper answering only while the installed copy is not
-there.
+path in it — the bundled helper answering whenever this launch did not install
+it: a copy an earlier build left there is not this app's relay.
 
 ### `AgentService`
 

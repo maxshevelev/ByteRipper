@@ -161,7 +161,7 @@ public enum UEPReader {
             // The bytes the field's last bit touches, no more: an offset near
             // the area's end still reads where the field fits.
             let touched = (place.bit + place.count + 7) / 8
-            guard at >= 0, touched <= 8, at + touched <= area.endIndex else { continue }
+            guard at >= 0, touched <= 8, at + touched <= area.count else { continue }
             let start = area.startIndex + at
             var word: UInt64 = 0
             for index in 0..<touched {

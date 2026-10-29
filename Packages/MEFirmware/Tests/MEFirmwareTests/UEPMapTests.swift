@@ -113,6 +113,11 @@ final class UEPMapTests: XCTestCase {
         XCTAssertEqual(readings.first { $0.name == "fw_type" }?.value, 3)
         XCTAssertEqual(readings.first { $0.name == "fw_type_v" }?.value, 1)
         XCTAssertEqual(readings.first { $0.name == "OemVendorId" }?.value, 0)
+
+        // And the same area as a slice of a larger buffer reads the same.
+        let buffer = Data(repeating: 0xA5, count: 0x100) + area
+        let fromSlice = try XCTUnwrap(UEPReader.readings(in: buffer[0x100...], map: map))
+        XCTAssertEqual(fromSlice, readings)
     }
 
     /// CSME 13 and 14's maps are their FIT builds' Ice Lake and Comet Lake

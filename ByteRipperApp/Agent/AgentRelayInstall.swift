@@ -27,8 +27,20 @@ enum AgentRelayInstall {
         URL(fileURLWithPath: AgentEndpoint.relayPath())
     }
 
+    /// Whether this launch's install succeeded. Settings ▸ Agent hands out the
+    /// installed copy only then: a copy left there by an earlier build is not
+    /// this app's relay, and an install that failed says nothing about it.
+    private(set) static var installedAtLaunch = false
+
+    /// The install the app runs once as it starts, remembered for the settings.
+    static func installAtLaunch() {
+        installedAtLaunch = install()
+    }
+
     /// Copies the bundled helper over the installed one and makes it
-    /// executable. Answers whether the installed copy is the app's own — false
+    /// executable, and records `app` beside it (`AgentEndpoint.appRecordName`):
+    /// the installed copy is not inside a bundle, and this is how it knows which
+    /// app to start. Answers whether the installed copy is the app's own — false
     /// when there was nothing to copy, or the copy failed, and the settings then
     /// hand out the bundled path, which is what they did before this existed.
     ///
@@ -37,7 +49,8 @@ enum AgentRelayInstall {
     /// started from, and the next client to start one gets this app's version.
     @discardableResult
     static func install(helper: URL = AgentRelayInstall.bundledHelper,
-                        at destination: URL = AgentRelayInstall.installed) -> Bool {
+                        at destination: URL = AgentRelayInstall.installed,
+                        app: URL = Bundle.main.bundleURL) -> Bool {
         let manager = FileManager.default
         guard manager.isReadableFile(atPath: helper.path) else { return false }
         let folder = destination.deletingLastPathComponent()
@@ -52,6 +65,8 @@ enum AgentRelayInstall {
             } else {
                 try manager.moveItem(at: staged, to: destination)
             }
+            try Data(app.path.utf8).write(to: folder.appendingPathComponent(AgentEndpoint.appRecordName),
+                                          options: .atomic)
             return true
         } catch {
             try? manager.removeItem(at: staged)

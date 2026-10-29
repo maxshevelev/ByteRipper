@@ -14,7 +14,7 @@ public enum MEASummaryValue: Sendable, Equatable {
     /// A verdict with the evidence it was read from: the panel draws the
     /// verdict in the row's tone and the evidence in brackets in the ordinary
     /// font and colour, so the answer and what stands behind it cannot be
-    /// mistaken for one another. `text(in:)` is what a copy of the row shows —
+    /// mistaken for one another. `text` is what a copy of the row shows —
     /// one line, brackets and all.
     case verdict(String, evidence: String)
     /// The engine has nothing for this row yet.

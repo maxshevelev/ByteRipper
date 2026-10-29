@@ -24,4 +24,16 @@ final class AgentEndpointTests: XCTestCase {
         XCTAssertEqual(AgentEndpoint.relayPath(environment: environment),
                        "/tmp/bytest/\(AgentEndpoint.relayName)")
     }
+
+    /// The variable names the socket itself, not only its folder: a socket
+    /// called something other than `agent.sock` is the one both ends use, and
+    /// the one a script reading the same variable connects to.
+    func testTheVariableNamesTheSocketFileItself() {
+        let environment = [AgentEndpoint.environmentKey: "/tmp/bytest/test.sock"]
+        XCTAssertEqual(AgentEndpoint.socketPath(environment: environment), "/tmp/bytest/test.sock")
+        XCTAssertEqual(AgentEndpoint.relayPath(environment: environment),
+                       "/tmp/bytest/\(AgentEndpoint.relayName)")
+        XCTAssertEqual(AgentEndpoint.appRecordPath(environment: environment),
+                       "/tmp/bytest/\(AgentEndpoint.appRecordName)")
+    }
 }

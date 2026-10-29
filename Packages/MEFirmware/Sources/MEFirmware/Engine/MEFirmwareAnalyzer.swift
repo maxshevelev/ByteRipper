@@ -1178,9 +1178,13 @@ public actor MEFirmwareAnalyzer {
             // has one, and otherwise the volume's own home directory. A CSME 12
             // volume keeps its names there and carries no `FileTable.dat`, so
             // without this the configuration would read nothing on that
-            // generation however good its map is.
+            // generation however good its map is. Only an FTBL volume's files
+            // are named through the table, as for the EOM files above: a table
+            // can be loaded for a volume whose files are not FTBL's — an
+            // ID-keyed Intel Configuration asks for one — and its low-level
+            // indices are no FTBL file's.
             var pathByIndex: [Int: String] = [:]
-            if let table = fileTable {
+            if info.usesFTBL, let table = fileTable {
                 let resolution = table.resolve(platform: info.ftblPlatform,
                                                dictionary: info.ftblDictionary)
                 let naming = table.records(namingFileIndices: Set(info.files.map(\.index)),
@@ -2303,7 +2307,9 @@ public actor MEFirmwareAnalyzer {
     /// the file table cannot name it.
     private static func fileBytes(path: String, volume: MFSVolumeInfo?,
                                   table: FileTable?) -> Data? {
-        guard let volume, let table, !volume.files.isEmpty else { return nil }
+        // Only an FTBL volume's file indices are FTBL's (the configuration
+        // read above says why).
+        guard let volume, let table, volume.usesFTBL, !volume.files.isEmpty else { return nil }
         let resolution = table.resolve(platform: volume.ftblPlatform,
                                        dictionary: volume.ftblDictionary)
         let naming = table.records(namingFileIndices: Set(volume.files.map(\.index)),

@@ -183,4 +183,18 @@ final class AgentRelayTests: XCTestCase {
         send(4)
         waitUntil("and the request reaches it") { again.received.contains(#""id":4"#) }
     }
+
+    /// A request the app took and never answered — it quit first — is answered
+    /// with the reason, not left for the client to wait out its timeout.
+    func testARequestInFlightWhenTheAppQuitsIsAnswered() throws {
+        let app = try FakeApp(path: socketPath)
+        waitUntil("the relay attaches to the app") { app.isConnected }
+        send(7)
+        waitUntil("the request reached the app") { app.received.contains(#""id":7"#) }
+
+        app.quit()
+        let answer = answerFromRelay()
+        XCTAssertEqual(answer?["id"], .int(7), "the request the app took is the one answered")
+        XCTAssertEqual(reason(answer), AgentEndpoint.notStartedMessage)
+    }
 }

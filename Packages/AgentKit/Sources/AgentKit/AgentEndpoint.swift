@@ -8,9 +8,11 @@ public enum AgentEndpoint {
     public static let environmentKey = "BYTERIPPER_AGENT_SOCKET"
 
     /// `~/Library/Application Support/ByteRipper/agent.sock`, unless the
-    /// environment names another path.
+    /// environment names another path — and then that path as it is, file name
+    /// and all: a script that reads the same variable connects to exactly it.
     public static func socketPath(environment: [String: String] = ProcessInfo.processInfo.environment) -> String {
-        folder(environment: environment).appendingPathComponent("agent.sock").path
+        if let path = environment[environmentKey], !path.isEmpty { return path }
+        return folder(environment: environment).appendingPathComponent("agent.sock").path
     }
 
     /// The name the relay is installed under, beside the socket.
@@ -31,6 +33,17 @@ public enum AgentEndpoint {
     /// whatever the app was launched from.
     public static func relayPath(environment: [String: String] = ProcessInfo.processInfo.environment) -> String {
         folder(environment: environment).appendingPathComponent(relayName).path
+    }
+
+    /// The name of the file beside the installed relay that holds the path of
+    /// the app bundle that installed it. The installed copy is not inside a
+    /// bundle, so this is how it knows which app to start
+    /// (`AgentEndpoint.launchKey`): the one launched last.
+    public static let appRecordName = "byteripper-mcp.app-path"
+
+    /// Where that record is: beside the relay.
+    public static func appRecordPath(environment: [String: String] = ProcessInfo.processInfo.environment) -> String {
+        folder(environment: environment).appendingPathComponent(appRecordName).path
     }
 
     /// The folder the two live in — taken from the socket's own path, so a

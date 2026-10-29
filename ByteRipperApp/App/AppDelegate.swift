@@ -103,7 +103,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // in this bundle: a path inside a bundle changes with the folder the app
         // was built in, and a configuration is meant to be made once
         // (`AgentRelayInstall`). Before anything can hand one out.
-        AgentRelayInstall.install()
+        AgentRelayInstall.installAtLaunch()
         // Tabs are windows. Turning this on is what gives the app the system's
         // tab bar, ⌘T through `newWindowForTab(_:)`, ⌃Tab and ⌘1…⌘9, dragging a
         // tab out into its own window and dragging one back in, and the Window
