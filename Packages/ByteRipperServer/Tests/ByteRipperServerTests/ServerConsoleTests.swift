@@ -260,6 +260,70 @@ final class ServerConsoleTests: XCTestCase {
         XCTAssertEqual(list.body?["documents"]?.arrayValue?.count, 0)
     }
 
+    /// The file browser lists the roots, then the folders and files under
+    /// one — folders first, hidden ones not at all — and never a folder
+    /// outside them: not by `..`, not through a link. A link out is listed,
+    /// marked, and refused. A file the registry holds carries its id.
+    func testTheBrowserStaysInsideTheRoots() async throws {
+        let signed = try await signIn()
+        let real = { (url: URL) -> String in
+            guard let pointer = realpath(url.path, nil) else { return url.path }
+            defer { free(pointer) }
+            return String(cString: pointer)
+        }
+        let elsewhere = directory.appendingPathComponent("elsewhere", isDirectory: true)
+        try FileManager.default.createDirectory(at: elsewhere, withIntermediateDirectories: true)
+        try SyntheticDump.image(marker: 5).write(to: elsewhere.appendingPathComponent("secret.bin"))
+        let sub = dumps.appendingPathComponent("Lenovo", isDirectory: true)
+        try FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
+        try SyntheticDump.image(marker: 1).write(to: sub.appendingPathComponent("t480.bin"))
+        try SyntheticDump.image(marker: 2).write(to: dumps.appendingPathComponent("b.bin"))
+        try Data("x".utf8).write(to: dumps.appendingPathComponent(".DS_Store"))
+        try FileManager.default.createSymbolicLink(at: dumps.appendingPathComponent("away"), withDestinationURL: elsewhere)
+        try FileManager.default.createSymbolicLink(at: dumps.appendingPathComponent("away.bin"),
+                                                   withDestinationURL: elsewhere.appendingPathComponent("secret.bin"))
+
+        let top = try await call("GET", "/admin/api/browse", signed: signed)
+        XCTAssertEqual(top.body?["entries"]?.arrayValue?.map { $0["kind"]?.stringValue }, ["root"])
+        XCTAssertNil(top.body?["path"])
+
+        let rootPath = real(dumps)
+        func list(_ path: String) async throws -> (status: Int, body: JSONValue?) {
+            let query = path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!
+            let answer = try await call("GET", "/admin/api/browse?path=\(query)", signed: signed)
+            return (answer.status, answer.body)
+        }
+        var folder = try await list(dumps.path)
+        XCTAssertEqual(folder.body?["path"]?.stringValue, rootPath)
+        XCTAssertEqual(folder.body?["root"]?.stringValue, rootPath)
+        XCTAssertNil(folder.body?["parent"], "a root's way up is the top")
+        let entries = folder.body?["entries"]?.arrayValue ?? []
+        XCTAssertEqual(entries.map { $0["name"]?.stringValue }, ["away", "Lenovo", "away.bin", "b.bin"],
+                       "folders first, by name; no hidden file")
+        XCTAssertNotNil(entries[0]["unavailable"], "a link out of the roots is marked")
+        XCTAssertNil(entries[1]["unavailable"])
+        XCTAssertNotNil(entries[2]["unavailable"])
+        XCTAssertEqual(entries[3]["size"], .count(0x1000))
+
+        let opened = try await call("POST", "/admin/api/documents", signed: signed,
+                                    json: ["path": entries[3]["path"]?.stringValue ?? ""])
+        XCTAssertEqual(opened.status, 200)
+        folder = try await list(dumps.path)
+        let held = folder.body?["entries"]?.arrayValue?.first { $0["name"]?.stringValue == "b.bin" }
+        XCTAssertEqual(held?["document"]?.stringValue, "d1")
+        XCTAssertEqual(held?["state"]?.stringValue, "open")
+
+        let inner = try await list(sub.path)
+        XCTAssertEqual(inner.body?["parent"]?.stringValue, rootPath)
+        XCTAssertEqual(inner.body?["entries"]?.arrayValue?.map { $0["name"]?.stringValue }, ["t480.bin"])
+
+        for outside in [dumps.path + "/..", "/etc", dumps.appendingPathComponent("away").path,
+                        dumps.appendingPathComponent("nothing").path] {
+            let refused = try await list(outside)
+            XCTAssertEqual(refused.status, 422, outside)
+        }
+    }
+
     /// A secret is answered once, at making or rotating, never listed; the
     /// last admin token cannot be revoked, and a revocation ends its sessions.
     func testTokensThroughTheConsole() async throws {

@@ -384,7 +384,14 @@ imports AppKit in several files: the server stays macOS-only in v1.
   page, drawn by its script: the shell answers each page's path, and the
   script shows the one in the address.
 - JSON: `GET /admin/api/session`, `/admin/api/documents`,
-  `/admin/api/activity`, `/admin/api/tokens`, `/admin/api/status`. Actions:
+  `/admin/api/activity`, `/admin/api/tokens`, `/admin/api/status`, and
+  `/admin/api/browse?path=…` — the file browser a dump is picked in
+  (`DumpBrowser`): the roots at the top, then a folder's folders and files,
+  folders first and hidden ones left out, each file the registry holds named
+  by its id. Only a folder that resolves inside a root is listed, by the
+  same `realpath` rule as opening (decision 18), so neither `..` nor a link
+  walks out; a link out of the roots is listed and marked, and refused if
+  followed. A folder lists 2000 entries at most, off the main actor. Actions:
   `POST /admin/api/documents` (open by path, `~` expanded), `POST
   /admin/api/uploads?name=…`, `POST /admin/api/documents/:id/reopen`
   (an open document or a missing row), `…/close`, `…/forget` (a missing row),

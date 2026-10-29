@@ -535,6 +535,69 @@ button.chip:hover { border-color: var(--accent); color: var(--text); }
   font-size: 13px;
 }
 
+/* ---------- File browser ---------- */
+
+.browser { display: flex; flex-direction: column; gap: 12px; }
+.browser-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.crumbs { display: flex; align-items: center; gap: 2px; flex: 1; min-width: 0; flex-wrap: wrap; }
+.crumb {
+  border: 0;
+  background: transparent;
+  padding: 5px 8px;
+  border-radius: 7px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-2);
+  cursor: pointer;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.crumb:hover { background: var(--panel-3); color: var(--text); }
+.crumb:last-child { color: var(--text); }
+.crumb-sep { color: var(--muted); }
+.field.filter { width: 220px; height: 34px; }
+
+.browser-list {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-2);
+  max-height: 420px;
+  overflow: auto;
+}
+.entry {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 90px 110px 150px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  padding: 6px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+}
+.entry:last-child { border-bottom: 0; }
+.entry.folder { cursor: pointer; }
+.entry:hover { background: var(--panel-3); }
+.entry.off { opacity: 0.5; cursor: default; }
+.entry.off:hover { background: transparent; }
+.entry-icon { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--panel-3); color: var(--muted); }
+.entry.folder .entry-icon { background: var(--accent-soft); color: var(--accent); }
+.entry.up .entry-icon { background: var(--panel-3); color: var(--muted); }
+.entry-name { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.entry-why { display: block; font-family: var(--sans); font-weight: 400; font-size: 12px; color: var(--danger); }
+.entry-meta { color: var(--muted); font-size: 12.5px; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.entry-go { justify-self: end; color: var(--muted); transform: rotate(-90deg); display: grid; }
+.entry-action { justify-self: end; }
+.browser-empty { padding: 22px; text-align: center; color: var(--muted); }
+.browser-foot { font-size: 12.5px; color: var(--muted); }
+.small { font-size: 12px; }
+
 /* ---------- Drop zone ---------- */
 
 .drop {
@@ -869,6 +932,9 @@ details.revoked[open] summary::before { content: "▾ "; }
 }
 
 @media (max-width: 560px) {
+  .entry { grid-template-columns: 28px minmax(0, 1fr) auto; }
+  .entry > .entry-meta { display: none; }
+  .field.filter { width: 100%; }
   .nav-label { display: none; }
   .nav a { padding: 9px; }
   .row.wrap > .name-field { flex: 1 1 auto; }

@@ -518,23 +518,9 @@
     const missingTile = tile("alert", "Missing");
     const rootsTile = tile("folder", "Dump roots");
 
-    // Adding: from a path or by upload.
-    const path = h("input", { class: "field mono", placeholder: "/Volumes/Dumps/board.bin", spellcheck: "false" });
-    const displayName = h("input", { class: "field", placeholder: "Name (optional)" });
-    const roots = h("div", { class: "chips" });
-    const openButton = h("button", { class: "btn primary", type: "submit" }, icon("folder", 16), "Open");
-    const byPath = h("form", { class: "form", onsubmit: async (event) => {
-      event.preventDefault();
-      if (!path.value.trim()) { path.focus(); return; }
-      openButton.disabled = true;
-      const result = await act(() => call("POST", "/admin/api/documents", { path: path.value, name: displayName.value || undefined }),
-        (made) => `Opened as ${made.id}`);
-      openButton.disabled = false;
-      if (result) { path.value = ""; displayName.value = ""; }
-    } },
-      h("div", {}, h("label", { class: "label", text: "Path on the server" }),
-        h("div", { class: "row wrap" }, h("div", { class: "grow" }, path), h("div", { class: "name-field" }, displayName), openButton)),
-      h("div", {}, h("div", { class: "label", text: "Dump roots — a path must lie under one" }), roots));
+    // Adding: picked in the dump roots, or uploaded.
+    const browser = fileBrowser();
+    const byPath = browser.root;
 
     const fileInput = h("input", { type: "file", hidden: true });
     const limitText = h("span", {});
@@ -586,7 +572,7 @@
       [...tabs.children].forEach((button) => button.classList.toggle("on", button.dataset.tab === which));
     };
     append(tabs, [
-      h("button", { type: "button", "data-tab": "path", class: "on", onclick: () => showTab("path") }, "From a path"),
+      h("button", { type: "button", "data-tab": "path", class: "on", onclick: () => showTab("path") }, "Dump roots"),
       h("button", { type: "button", "data-tab": "upload", onclick: () => showTab("upload") }, "Upload"),
     ]);
     const adding = h("section", { class: "card" },
@@ -612,12 +598,9 @@
       rootsTile.set(String(present), `/ ${data.roots.length}`, data.roots.length ? "present now" : "none: uploads only");
       limitText.textContent = `at most ${bytes(data.limits.upload_bytes)}`;
 
-      fill(roots, data.roots.length
-        ? data.roots.map((r) => h("button", { type: "button", class: `chip ${r.present ? "" : "absent"}`,
-          title: r.present ? "Put this root in the path" : "This root is not there — not mounted, or mistyped",
-          onclick: () => { path.value = r.path.replace(/\/?$/, "/"); path.focus(); } },
-          icon(r.present ? "folder" : "alert", 13), h("span", { class: "clip", text: r.path })))
-        : h("span", { class: "muted", text: "No --dump-roots: only uploads can be opened." }));
+      // The browser marks the files already held: read again when the set
+      // changes, not at every poll.
+      browser.documentsChanged(docs.map((doc) => `${doc.id}:${doc.state}`).join(","));
 
       list.head.querySelector(".sub").textContent = docs.length
         ? `${docs.length - missing} served${missing ? ` · ${missing} missing` : ""} · ids last across restarts`
@@ -635,6 +618,139 @@
         h("tbody", {}, rows))));
     }
     return { root, update };
+  }
+
+  // The folders under --dump-roots: the roots at the top, a folder's folders
+  // and files below, a file opened with a click. Nothing outside the roots
+  // is listed; the server checks every step again.
+  function fileBrowser() {
+    const STORE = "byteripper.console.folder";
+    let listing = null;
+    let current = null;
+    let documents = null;
+    let query = "";
+    const crumbs = h("nav", { class: "crumbs", "aria-label": "Folder" });
+    const filter = h("input", { class: "field filter", type: "search", placeholder: "Filter this folder", spellcheck: "false",
+      oninput: () => { query = filter.value.trim().toLowerCase(); draw(); } });
+    const list = h("div", { class: "browser-list" });
+    const foot = h("div", { class: "browser-foot" });
+    const root = h("div", { class: "browser" },
+      h("div", { class: "browser-bar" }, crumbs,
+        iconButton("refresh", "Read the folder again", () => load(current, true)), filter),
+      list, foot);
+
+    function remember(path) {
+      try { if (path) localStorage.setItem(STORE, path); else localStorage.removeItem(STORE); } catch { /* no storage */ }
+    }
+
+    async function load(path, keepFilter = false) {
+      try {
+        listing = await call("GET", `/admin/api/browse${path ? `?path=${encodeURIComponent(path)}` : ""}`);
+      } catch (error) {
+        if (error.status === 401) return;
+        // A folder that went, or a root narrowed since: back to the top.
+        if (path) { remember(null); return load(null); }
+        fill(list, empty("alert", "The roots cannot be read", error.message));
+        return;
+      }
+      current = listing.path || null;
+      remember(current);
+      if (!keepFilter) { filter.value = ""; query = ""; }
+      draw();
+    }
+
+    function crumb(label, path, title) {
+      return h("button", { class: "crumb", type: "button", title: title || label, onclick: () => load(path) }, label);
+    }
+
+    function draw() {
+      const parts = [crumb("Dump roots", null)];
+      if (listing.root) {
+        const rootName = listing.root.split("/").filter(Boolean).pop() || "/";
+        parts.push(h("span", { class: "crumb-sep", text: "›" }), crumb(rootName, listing.root, listing.root));
+        const rest = listing.path.slice(listing.root.length).split("/").filter(Boolean);
+        rest.forEach((segment, index) => {
+          const path = `${listing.root}/${rest.slice(0, index + 1).join("/")}`;
+          parts.push(h("span", { class: "crumb-sep", text: "›" }), crumb(segment, path, path));
+        });
+      }
+      fill(crumbs, parts);
+      filter.hidden = !listing.path;
+
+      const entries = listing.entries.filter((e) => !query || e.name.toLowerCase().includes(query));
+      const rows = [];
+      if (listing.path) {
+        rows.push(h("button", { class: "entry folder up", type: "button", onclick: () => load(listing.parent || null) },
+          h("span", { class: "entry-icon" }, icon("up", 16)),
+          h("span", { class: "entry-name", text: listing.parent ? "Up" : "Dump roots" }),
+          h("span", {}), h("span", {}), h("span", {})));
+      }
+      for (const entry of entries) rows.push(entryRow(entry));
+      if (!listing.entries.length) {
+        fill(list, ...rows, listing.path
+          ? h("div", { class: "browser-empty", text: "Nothing to open here: no folders and no files." })
+          : empty("folder", "No dump roots", "Start the server with --dump-roots <folder> to browse it here. Uploads work without one."));
+      } else if (!entries.length) {
+        fill(list, ...rows, h("div", { class: "browser-empty", text: `Nothing here matches “${filter.value}”.` }));
+      } else {
+        fill(list, rows);
+      }
+      const folders = listing.entries.filter((e) => e.kind === "folder").length;
+      const files = listing.entries.filter((e) => e.kind === "file").length;
+      fill(foot, listing.path
+        ? `${plural(folders, "folder", "folders")} · ${plural(files, "file", "files")}${listing.truncated ? " · the first 2000 only" : ""}`
+        : "A file opens under its own name; its id lasts across restarts.");
+    }
+
+    function entryRow(entry) {
+      const off = Boolean(entry.unavailable);
+      const meta = (text) => h("span", { class: "entry-meta", text });
+      if (entry.kind !== "file") {
+        return h("button", { class: `entry folder ${off ? "off" : ""}`, type: "button", disabled: off,
+          title: off ? entry.unavailable : entry.path, onclick: () => load(entry.path) },
+          h("span", { class: "entry-icon" }, icon(entry.kind === "root" ? (off ? "alert" : "database") : "folder", 16)),
+          h("span", { class: `entry-name ${entry.kind === "root" ? "mono" : ""}` }, entry.name,
+            off ? h("small", { class: "entry-why", text: entry.unavailable }) : null),
+          meta(""),
+          meta(entry.modified ? ago(entry.modified) : ""),
+          h("span", { class: "entry-go" }, off ? null : icon("down", 14)));
+      }
+      let action;
+      if (off) {
+        action = null;
+      } else if (entry.document && entry.state === "open") {
+        action = h("span", { class: "pill accent", title: "Already served under this id", text: `${entry.document} · open` });
+      } else {
+        action = h("button", { class: "btn primary small", type: "button", onclick: () => open(entry) },
+          entry.document ? `Reopen ${entry.document}` : "Open");
+      }
+      return h("div", { class: `entry file ${off ? "off" : ""}`, title: entry.path,
+        ondblclick: () => { if (!off && !(entry.document && entry.state === "open")) open(entry); } },
+        h("span", { class: "entry-icon" }, icon("chip", 16)),
+        h("span", { class: "entry-name" }, entry.name,
+          off ? h("small", { class: "entry-why", text: entry.unavailable }) : null),
+        meta(bytes(entry.size)),
+        meta(entry.modified ? ago(entry.modified) : ""),
+        h("span", { class: "entry-action" }, action));
+    }
+
+    async function open(entry) {
+      const made = await act(() => call("POST", "/admin/api/documents", { path: entry.path }),
+        (result) => `${entry.name} is ${result.id}`);
+      if (made) load(current, true);
+    }
+
+    let saved = null;
+    try { saved = localStorage.getItem(STORE); } catch { /* no storage */ }
+    load(saved);
+
+    return {
+      root,
+      documentsChanged(fingerprint) {
+        if (documents !== null && documents !== fingerprint && listing) load(current, true);
+        documents = fingerprint;
+      },
+    };
   }
 
   function documentRow(doc, index, docs) {

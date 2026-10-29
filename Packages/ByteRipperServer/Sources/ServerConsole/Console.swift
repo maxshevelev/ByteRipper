@@ -79,6 +79,9 @@ public struct Console: Sendable {
         // Documents.
         let registry = self.registry
         add("GET", "/admin/api/documents") { _ in Self.json(await Self.documents(registry)) }
+        add("GET", "/admin/api/browse") { request in
+            try await Self.browse(request.query["path"], registry)
+        }
         add("POST", "/admin/api/documents") { request in
             struct Opening: Decodable {
                 let path: String
@@ -281,6 +284,47 @@ public struct Console: Sendable {
         try Self.refusing { try tokens.revoke(id) }
         authorizer.sessions.end(principal: id)
         return Self.json(["id": .string(id), "signed_out": .bool(request.principal?.id == id)])
+    }
+
+    // MARK: - Browsing
+
+    /// A folder under the dump roots, or the roots themselves, listed off the
+    /// main actor — a folder may be large, and that actor runs the tools —
+    /// with each file the registry already holds named by its id.
+    static func browse(_ path: String?, _ registry: DocumentRegistry) async throws -> HTTPResponse {
+        let (roots, held) = await MainActor.run { () -> ([URL], [String: (id: String, open: Bool)]) in
+            var held: [String: (id: String, open: Bool)] = [:]
+            for row in registry.rows { held[row.path.path] = (row.id, row.host != nil) }
+            return (registry.dumpRoots, held)
+        }
+        let listing: DumpBrowser.Listing
+        do {
+            listing = try await Task.detached(priority: .userInitiated) { try DumpBrowser(roots: roots).list(path) }.value
+        } catch let refusal as DumpBrowser.Refusal {
+            throw HTTPError(.unprocessable, refusal.description)
+        }
+        var members: [String: JSONValue] = [
+            "entries": .array(listing.entries.map { entry in
+                var item: [String: JSONValue] = [
+                    "name": .string(entry.name),
+                    "path": .string(entry.path),
+                    "kind": .string(entry.kind.rawValue)
+                ]
+                if let size = entry.size { item["size"] = .uint(size) }
+                if let modified = entry.modified { item["modified"] = .string(date(modified)) }
+                if let unavailable = entry.unavailable { item["unavailable"] = .string(unavailable) }
+                if let document = held[entry.path] {
+                    item["document"] = .string(document.id)
+                    item["state"] = .string(document.open ? "open" : "missing")
+                }
+                return .object(item)
+            }),
+            "truncated": .bool(listing.truncated)
+        ]
+        if let folder = listing.path { members["path"] = .string(folder) }
+        if let root = listing.root { members["root"] = .string(root) }
+        if let parent = listing.parent { members["parent"] = .string(parent) }
+        return json(.object(members))
     }
 
     // MARK: - Shapes
