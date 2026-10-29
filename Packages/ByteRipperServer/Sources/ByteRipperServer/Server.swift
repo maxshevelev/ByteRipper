@@ -30,12 +30,16 @@ public final class Server: @unchecked Sendable {
     public func start() async throws -> UInt16 {
         let tokens = try TokenStore.open(at: configuration.tokensFile)
         tokens.onProblem = log
-        // An earlier build's single token: nothing reads it any more, and a
-        // secret that looks live should not be left lying about.
+        // This file is still the app's and the scripts' token on this Mac
+        // (`Design/SERVER_HEADLESS_PLAN.md` decision 2) — an earlier build
+        // read it as the server's one token as well. It is not to be deleted:
+        // what the programs sending its contents need is a token of its own.
         if FileManager.default.fileExists(atPath: ServerPaths.legacyTokenFile.path) {
-            log("\(ServerPaths.legacyTokenFile.path) is an earlier build's token and is not read any more: "
-                + "delete it, and give each app a token of its own with "
-                + "`byteripper-server token add --name <mac> --preset app`")
+            log("\(ServerPaths.legacyTokenFile.path) stays the token the app and the scripts use on "
+                + "this Mac; the server no longer reads it, so a program still sending that secret is "
+                + "refused: give each one a token of its own with "
+                + "`byteripper-server token add --name <mac> --preset app`, pasted into "
+                + "Settings ▸ Code Analysis")
         }
         // Without an admin token the console cannot be opened and the file
         // cannot be corrected through it, so there is nothing to start

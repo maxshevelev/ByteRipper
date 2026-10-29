@@ -160,7 +160,10 @@ public enum ServerPaths {
         support.appendingPathComponent("tokens.json", isDirectory: false)
     }
 
-    /// Where an earlier build kept its one token (`--token-file`'s default).
+    /// The app's and the scripts' client token on this Mac, written from
+    /// Settings ▸ Code Analysis (`Design/SERVER_HEADLESS_PLAN.md` decision 2);
+    /// an earlier build also read it as the server's one token, and no longer
+    /// does.
     public static var legacyTokenFile: URL {
         support.appendingPathComponent("token", isDirectory: false)
     }

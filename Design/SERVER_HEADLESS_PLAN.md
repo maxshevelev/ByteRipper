@@ -228,6 +228,12 @@ imports AppKit in several files: the server stays macOS-only in v1.
   a `br_csrf` cookie plus `X-CSRF-Token`; `Host`/`Origin` checked against
   decision 19's names; failed sign-ins delayed and throttled. `Secure` waits
   for TLS.
+- A console route is refused by the authorizer, before the router runs, so no
+  page can answer a missing session with a redirect to the form. The shell —
+  the pages' HTML, CSS and script, which hold no data — is therefore `.open`
+  as well, and everything it shows comes from `/admin/api/*`, which needs the
+  session; a page opened by hand without one is answered 401, naming
+  `GET /admin/login`.
 - `tokens.json`: `{version, tokens: [{id, name, hash, rights, created,
   last_used, revoked}]}`; SHA-256 (the secret is 32 random bytes, so a slow
   hash buys nothing), constant-time compare, a file lock waited for two
@@ -384,7 +390,8 @@ Every phase ends with its packages' tests green and the server starting.
 6. **Rights on the roles** — done in phase 1: each route names its access,
    and the rights matrix is tested end to end over a running server.
 7. **The console**: pages, sign-in and CSRF, decision 19, documents and upload,
-   activity, tokens, status; loopback tests.
+   activity, tokens, status; its shell `.open` and its data behind the session
+   (§5); loopback tests.
 8. **Documentation and measurements**: `SERVER_PLAN.md` and the skill; RSS and
    start time of `relay`; RSS of the server with the 21 MB LVM volume open; a
    relay executable of its own and a decompressed-buffer cap only if the
