@@ -64,14 +64,27 @@
    kilobytes to tens of megabytes and the open set is capped, so the copy is
    affordable. A change on disk marks the document "changed on disk"; Reopen
    replaces snapshot and tree, keeps the id, bumps `version`. There is no disk
-   watcher: the mark is a `stat` (mtime and size) at each listing — the
-   console's poll and the `documents` tool — and nothing is rebuilt.
+   watcher: the mark is a `stat` compared with the one taken at open, and
+   nothing is rebuilt. The comparison is over inode, ctime, mtime and size —
+   not mtime and size alone: a dump of the same chip has the same size, and
+   `cp -p`, `rsync -a` or an unpacked archive keep the mtime of another file,
+   while ctime cannot be set and changes on every write, and the inode changes
+   when the file is replaced atomically. The `stat` is taken at each listing —
+   the console's poll and the `documents` tool — **and on every tool call that
+   names a document**, whose answer then carries `disk` (below): an agent
+   calls `documents` once and works in `uefi_tree`, `read` and `ghidra_open`
+   after, so that is where it must see the mark. A `stat` costs microseconds.
+   The mark has two values: `changed` (the file is there but is not the one
+   read) and `gone` (the `stat` fails — deleted or renamed). Either way the
+   document goes on serving its snapshot.
 10. Document ids **survive a restart**: `documents.json` stores, per document,
-    the id it was given, its path, the hash it was opened with and its
-    `version`; there is no renumbering, because an agent holds ids across a
-    restart. A restored file whose hash differs is opened with `version` set to
-    the stored one plus one and marked "changed on disk", so an agent's node
-    ids from before are not silently read against other bytes.
+    the id it was given, its path, the hash it was opened with, the `stat`
+    fields of decision 9 and its `version`; there is no renumbering, because
+    an agent holds ids across a restart. A restored file whose hash differs is
+    opened with `version` set to the stored one plus one, so an agent's node
+    ids from before are not silently read against other bytes. It carries no
+    `disk` mark: its snapshot is the file on disk now, and the bumped `version`
+    is what tells the agent.
     **An id is never given to another file.** `documents.json` keeps `next_id`,
     and a new document takes it and advances it — not `max+1` over the rows
     present, which would hand a closed or forgotten document's id to the next
@@ -137,7 +150,7 @@ server both link:
 | what | from | shape in the package |
 |---|---|---|
 | the document rule | `AgentDesk.place(named:)` | `AgentDocumentSet` (`@MainActor` protocol): the list of documents (id, name, size, version), and `resolve(_ document: String?) throws -> AgentDocument` with the one rule — one open: implied; several: required, the error lists ids and names; none: the host's own message |
-| the query adapter | `AgentModuleTools.query`/`runQuery` (`ByteRipperApp/Agent/AgentModuleTools.swift:48-105`) | `ToolQueryTools.tool(for: ToolAgentQuery, documents:)`: adds `document`, resolves it, runs the query on the document's `ToolReadHost`, puts `document` into the answer. The app wraps it with its own node links (`AgentNodeLinks`), which belong to parts and stay in the app |
+| the query adapter | `AgentModuleTools.query`/`runQuery` (`ByteRipperApp/Agent/AgentModuleTools.swift:48-105`) | `ToolQueryTools.tool(for: ToolAgentQuery, documents:)`: adds `document`, resolves it, runs the query on the document's `ToolReadHost`, puts `document` into the answer, and `disk` beside it when the resolved `AgentDocument` reports one (the server's does; the app's reports none). The app wraps it with its own node links (`AgentNodeLinks`), which belong to parts and stay in the app |
 | the code readings | `AgentCodeTools` query and modules tools | `CodeReadings`: `code_query` and `code_modules` over a `ToolReadHost & UEFITreeProviding` and a `ContentStore`, with the GUID catalogue passed in as a closure (as `UEFIAgentQueries.all(catalogue:)` takes it). `open_code` stays in the app — it opens a panel |
 | `ghidra_open` by a node | `AgentGhidraTools.openTool` | `GhidraNodeOpen`: reads the node's body through `UEFIAgentNodeData.bytes` and opens it on a `GhidraBackend`; by `module` for a project already made. Both hosts use `GhidraTools.tools(backend:includeOpenByImage: false)` and **replace** its `ghidra_open` with this one — two tools of one name in one list is a defect |
 
@@ -151,7 +164,8 @@ it must not break is the other direction — no tool-module depends on
 `documents`, `read` and `find_bytes` are **not** moved: in the app they speak
 of panes, parts, comparisons and unsaved edits, and the server's versions are
 a few dozen lines over a snapshot. The server writes its own, with the same
-answer keys (`id`, `name`, `size`, `version`, `link`), and a test in
+answer keys (`id`, `name`, `size`, `version`, `link`; the server adds
+`disk`), and a test in
 `ByteRipperServerTests` pins those keys.
 
 ### 4.2 Targets in `Packages/ByteRipperServer`
@@ -217,9 +231,17 @@ imports AppKit in several files: the server stays macOS-only in v1.
   the document.
 - Reopen: reread, rehash, `tree = nil`, `version += 1`, same id; the new hash
   and `version` are written to `documents.json` at once, so a restart after a
-  Reopen does not roll the version back. `changedOnDisk` comes from the
-  `stat` at each listing (decision 9); the tree is not rebuilt under the
+  Reopen does not roll the version back. The tree is not rebuilt under the
   agent.
+- The disk mark (decision 9): `DocumentHost.diskState()` takes the `stat` and
+  answers `nil`, `.changed` or `.gone`. `documents` lists it as `disk`, and
+  every tool that resolves a document — through `ToolQueryTools`,
+  `CodeReadings`, `GhidraNodeOpen` or the server's own `read` and
+  `find_bytes` — adds `"disk": "changed"` or `"disk": "gone"` to its answer
+  when it is set, and nothing when it is not.
+- Reopen of a `gone` document does not fail: the document becomes a missing
+  row (decision 18's reason "the file is gone") that keeps its id, and comes
+  back under it as any missing row does.
 - Restore: each row of `documents.json` is checked by decision 18, read, and
   its hash compared with the stored one (decision 10). Rows are restored in
   their stored order — the order the console's reorder sets — and each is
@@ -366,7 +388,11 @@ Every phase ends with its packages' tests green and the server starting.
   row over a limit staying missing with that limit named (to the console and
   to the agent), restore in the stored order when the saved set no longer
   fits, missing rows not counted in the limits, no id reused
-  after close or Forget, the activity of the MCP and of the REST clients, an
+  after close or Forget, a file replaced with `cp -p` (same size and mtime)
+  marked `changed`, the mark in the answer of `uefi_tree` and not only in
+  `documents`, a deleted file still answering from its snapshot and marked
+  `gone`, Reopen of a `gone` document leaving a missing row with its id, the
+  activity of the MCP and of the REST clients, an
   unlisted `Host` refused.
 - Measurements: RSS and start time of `relay`; RSS of the server with the 21 MB
   LVM volume open; the status page shows the memory.
