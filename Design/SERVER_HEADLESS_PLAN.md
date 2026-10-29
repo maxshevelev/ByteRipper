@@ -56,26 +56,31 @@
     an agent holds ids across a restart.
 11. Simple limits: document count and the total size of open files.
     Decompressed buffers are measured, not capped.
-12. An upload opens the document immediately; the upload limit is
-    `--max-open-bytes`.
+12. An upload opens the document immediately. It has a limit of its own,
+    `--max-upload-bytes` (256 MiB by default), because the request body is
+    buffered: the peak memory is about twice the file.
 13. The local MCP is a Unix socket at `<Server>/mcp.sock` (directory 0700,
     socket 0600) over the existing `UnixSocketListener`/`UnixSocketConnection`
     in `AgentKit`; the binary gains a `relay` subcommand (stdio↔socket) in a
     target of its own, which cannot reach HTTP, the store or Ghidra.
-14. The local MCP is always on and always has the dumps; `--cas` and `--ghidra`
-    are roles, and a disabled role's tools are absent from its list.
+14. The local MCP is always on and always has the dumps and the store;
+    `--ghidra` is the only optional role, and without it its tools are absent
+    from the list.
 15. v1 tools: bytes + UEFI + CAS read + Ghidra. ME, FIT, `microcode_catalogue`,
     `survey` and `region_scan` follow.
 16. The client keeps its secret in a 0600 file named in Settings; the scripts
     read the same file.
 17. Without `tokens.json`, or without an admin token in it, the server refuses
     to start and names `byteripper-server token add --name admin --rights admin`.
+18. The store is always this server's own and local: `--cas-url` and
+    `RemoteStore` are not used by the server, and the CAS role is always on.
+    Only Ghidra is optional.
 
 ## 3. Topology
 
 | who | what |
 |---|---|
-| the server | dumps + local MCP + console always; `--cas` (CAS REST) and `--ghidra` (Ghidra REST and owners) as roles; no network MCP |
+| the server | dumps + local MCP + console + this machine's store over CAS REST, always; `--ghidra` (Ghidra REST and owners) optional; no network MCP |
 | the client app | its own MCP socket and its own open files, as today; CAS and Ghidra over REST with its token; its agent sees only its own files |
 | the console | `/admin` on every listen address, signed in with the admin token |
 
@@ -142,8 +147,9 @@ imports AppKit in several files: the server stays macOS-only in v1.
 - Limits: `--max-documents` (8), `--max-open-bytes` (512 MiB), counted over
   file sizes and checked before opening.
 - Upload: `POST /admin/documents?name=…` with a raw body (there is no multipart
-  parser), written atomically to `Uploads/` mode 0600, checked against the
-  limit, hashed; an open hash discards the copy and answers the existing id.
+  parser), written atomically to `Uploads/` mode 0600, checked against
+  `--max-upload-bytes`, hashed; an open hash discards the copy and answers the
+  existing id.
   `DELETE` only for uploaded documents.
 
 ## 7. The local MCP and the relay
@@ -157,10 +163,10 @@ imports AppKit in several files: the server stays macOS-only in v1.
   `UEFIAgentQueries.all(catalogue: .empty)`, `UEFIAgentChecksums`,
   `UEFIAgentRegions`, `UEFIAgentDMI`, `UEFIAgentVariables.queries`,
   `UEFIAgentNodeData`; `code_modules`/`code_query` over the local
-  `ContentStore` with `--cas`, or `RemoteStore` with `--cas-url`;
-  `GhidraTools.tools(backend:includeOpenByImage:)` with `--ghidra`, plus a
-  server `ghidra_open(document, node)` that reads a node's bytes through
-  `UEFIAgentNodeData`.
+  `ContentStore`; `GhidraTools.tools(backend:includeOpenByImage:)` with
+  `--ghidra`, plus a server `ghidra_open(document, node)` — and `module` for a
+  project already made — that reads a node's bytes through
+  `UEFIAgentNodeData`. The server has no base64 form.
 - Not included: `UEFIAgentVariables.comparisons`, `UEFIAgentEdits`, and the
   excluded screen and edit names of decision 7. A test lists the forbidden
   names, asserts none is present, and asserts `uefi_tree`, `read` and
@@ -230,7 +236,7 @@ updated with the change.
 - Package tests, not a full sweep: `HTTPService`, `ByteRipperServer` (all new
   targets), `CASService`; the app's agent tests do not change.
 - A manual end-to-end run on a real Lenovo dump:
-  `byteripper-server --dump-roots … --cas --ghidra`; an agent through
+  `byteripper-server --dump-roots … --ghidra`; an agent through
   `byteripper-server relay`: `documents` → `uefi_tree` → `uefi_node_data` →
   `ghidra_open(document, node)` → edit → `ghidra_publish` → `code_query`.
 - Rights: a token without `cas.write` gets 403 on publish; without
@@ -242,16 +248,14 @@ updated with the change.
 - Measurements: RSS and start time of `relay`; RSS of the server with the 21 MB
   LVM volume open; the status page shows the memory.
 
-## 12. Risks and decisions still to confirm
+## 12. Risks and follow-ups
 
-- **`--cas-url`**: the server is a client of another store, and the old single
-  token is gone; it needs `--cas-token-file <0600>` (or an environment
-  variable) for publishing and reading a remote store.
-- **`ghidra_open` on the server** needs the `(document, node)` form beside the
-  base64 one, or a local agent cannot open a module from a dump.
-- **Upload memory**: `HTTPParser` buffers the whole body; at a 512 MiB limit the
-  peak is about twice that. v1 accepts it with a documented limit; streaming is
-  later.
+- **The store is local only** (decided): a deployment with Ghidra here and the
+  store on another machine is no longer served by the server; the app keeps
+  its mirror for its own side.
+- **Upload memory**: `HTTPParser` buffers the whole body, so a 256 MiB
+  `--max-upload-bytes` means a peak of about 512 MiB. Documented in v1;
+  streaming the body to disk is the follow-up.
 - **`find_bytes`** searches the stored bytes only; a search inside decompressed
   content arrives with `region_scan`.
 - **AppKit**: `ToolModuleKit` brings AppKit; the server is macOS-only and must
