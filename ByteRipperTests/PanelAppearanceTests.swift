@@ -105,6 +105,15 @@ final class PanelAppearanceTests: XCTestCase {
             XCTAssertNil(zone.layer?.backgroundColor)
             XCTAssertLessThan(backgroundComponent(zone.layer?.borderColor), 0.5,
                               "the idle edge returns to dark in light mode")
+
+            // The hover is a calm fill over the glass, as the plate had before
+            // it: a tint of the glass itself comes out far brighter.
+            XCTAssertNil(zone.hoverFillForTesting, "an idle zone has no fill")
+            zone.setHighlighted(true)
+            XCTAssertNil(zone.glassTintForTesting, "the glass is never tinted")
+            XCTAssertEqual(zone.hoverFillForTesting?.alpha ?? 0, DropTargetView.hoverFillAlpha, accuracy: 0.01)
+            zone.setHighlighted(false)
+            XCTAssertNil(zone.hoverFillForTesting)
             return
         }
 

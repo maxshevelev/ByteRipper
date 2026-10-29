@@ -1,15 +1,20 @@
 import Cocoa
 import Localization
 
-/// One targeted drop zone's visual: a pane of clear glass at idle (macOS 26 on;
-/// a quiet translucent plate before it), tinted accent-blue on hover, and a caption on its own frosted-glass
-/// plate so the label stays readable wherever the fill and the file content
-/// behind it are busy (§4.3). Purely visual — the drop handling lives in the
+/// One targeted drop zone's visual: a pane of clear glass at idle (macOS 26
+/// on; a quiet translucent plate before it), a calm accent-blue fill on hover,
+/// and a caption on its own frosted-glass plate so the label stays readable
+/// wherever the fill and the file content behind it are busy (§4.3). Purely visual — the drop handling lives in the
 /// owning region view.
 final class DropTargetView: NSView {
     private let plate = NSVisualEffectView()
-    /// The clear glass the zone is made of, from macOS 26.
+    /// The glass the zone is made of, from macOS 26.
     private var glass: NSView?
+    /// The hover fill, laid over the glass as its content. A tint of the glass
+    /// itself comes out far brighter than the same colour as a fill — the
+    /// glass saturates it — so the hover is the fill the plate had before
+    /// there was glass.
+    private var hoverFill: NSView?
     private let label = NSTextField(labelWithString: "")
 
     /// How much of the dump an idle zone lets through. Every zone a file can go
@@ -27,6 +32,10 @@ final class DropTargetView: NSView {
     /// The plate's corners.
     static let cornerRadius: CGFloat = 14
 
+    /// How strong the hovered zone's accent fill is — on the glass and on the
+    /// plate before it alike.
+    static let hoverFillAlpha: CGFloat = 0.25
+
     /// Whether the zone is showing its hover fill. Held so a theme switch can
     /// repaint the plate without forgetting whether it was lit (§3.1).
     private var highlighted = false
@@ -40,14 +49,22 @@ final class DropTargetView: NSView {
         layer?.cornerRadius = Self.cornerRadius
         layer?.cornerCurve = .continuous
         // From macOS 26 the plate is the system's clear glass: what lies
-        // under it shows through, lightly frosted, and the hover tints the
-        // glass rather than painting over it. Before 26 there is no glass with
-        // a blur that light — the materials blur the dump out of reading — so
-        // the plate is a translucent fill.
+        // under it shows through, lightly frosted. Its blur is the system's
+        // and follows the app's activity — heavier while ByteRipper is not the
+        // active app, as during a drag from Finder — with no setting to hold
+        // it, and a blur of our own is not worth what it would take. Before 26
+        // there is no glass — the visual-effect materials blur the dump out of
+        // reading — so the plate is a translucent fill.
         if #available(macOS 26.0, *) {
             let glass = NSGlassEffectView()
             glass.style = .clear
             glass.cornerRadius = Self.cornerRadius
+            let fill = NSView()
+            fill.wantsLayer = true
+            fill.layer?.cornerRadius = Self.cornerRadius
+            fill.layer?.cornerCurve = .continuous
+            glass.contentView = fill
+            hoverFill = fill
             glass.translatesAutoresizingMaskIntoConstraints = false
             addSubview(glass)
             NSLayoutConstraint.activate([
@@ -153,6 +170,12 @@ final class DropTargetView: NSView {
 
     /// Whether the zone is lit as the one under the pointer (for tests).
     var isHighlightedForTesting: Bool { highlighted }
+    /// The glass's own tint and the hover fill laid over it, from macOS 26.
+    var glassTintForTesting: NSColor? {
+        guard #available(macOS 26.0, *) else { return nil }
+        return (glass as? NSGlassEffectView)?.tintColor
+    }
+    var hoverFillForTesting: CGColor? { hoverFill?.layer?.backgroundColor }
 
     /// The caption the zone is showing (for tests).
     var titleForTesting: String { label.stringValue }
@@ -187,7 +210,10 @@ final class DropTargetView: NSView {
         layer?.borderWidth = highlighted ? 2 : 1.5
         effectiveAppearance.performAsCurrentDrawingAppearance {
             if #available(macOS 26.0, *), let glass = glass as? NSGlassEffectView {
-                glass.tintColor = highlighted ? NSColor.controlAccentColor.withAlphaComponent(0.3) : nil
+                glass.tintColor = nil
+                hoverFill?.layer?.backgroundColor = highlighted
+                    ? NSColor.controlAccentColor.withAlphaComponent(Self.hoverFillAlpha).cgColor
+                    : nil
                 layer?.backgroundColor = nil
                 layer?.borderColor = (highlighted
                     ? NSColor.controlAccentColor
@@ -195,7 +221,7 @@ final class DropTargetView: NSView {
                 return
             }
             layer?.backgroundColor = (highlighted
-                ? NSColor.controlAccentColor.withAlphaComponent(0.25)
+                ? NSColor.controlAccentColor.withAlphaComponent(Self.hoverFillAlpha)
                 : NSColor.windowBackgroundColor.withAlphaComponent(Self.idleFillAlpha)).cgColor
             layer?.borderColor = (highlighted
                 ? NSColor.controlAccentColor
