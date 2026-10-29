@@ -47,7 +47,16 @@ public struct Console: Sendable {
         func add(_ method: String, _ path: String, access: HTTPAccess = .rights([.admin]), maxBodyBytes: Int? = nil,
                  _ handler: @escaping HTTPRouter.Handler) {
             router.add(method, path, maxBodyBytes: maxBodyBytes, access: access) { request in
-                Self.secured(try await handler(request))
+                do {
+                    return Self.secured(try await handler(request))
+                } catch {
+                    // What the console refuses carries its headers too. A
+                    // request no session admits never gets here: the
+                    // authorizer answers it before any route, in the
+                    // server's own shape.
+                    return Self.secured(.error(error as? HTTPError
+                        ?? HTTPError(.internalError, "\(error)")))
+                }
             }
         }
         let assets = self.assets

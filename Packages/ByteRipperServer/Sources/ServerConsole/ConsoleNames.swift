@@ -56,7 +56,10 @@ public struct ConsoleNames: Sendable, Equatable {
     }
 
     /// The host of a `Host` header or of an origin's authority, without its
-    /// port: `127.0.0.1:8765` → `127.0.0.1`, `[::1]:8765` → `::1`.
+    /// port: `127.0.0.1:8765` → `127.0.0.1`, `[::1]:8765` → `::1`. The port is
+    /// dropped on purpose — it is not what the guard is about: the name is the
+    /// thing DNS rebinding takes over, and a name on another port is a server
+    /// somebody already reaches by name.
     static func host(ofAuthority authority: String) -> String {
         let authority = authority.trimmingCharacters(in: .whitespaces)
         if authority.hasPrefix("["), let close = authority.firstIndex(of: "]") {

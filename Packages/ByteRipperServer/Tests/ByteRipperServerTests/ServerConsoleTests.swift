@@ -218,6 +218,9 @@ final class ServerConsoleTests: XCTestCase {
         let outside = try await call("POST", "/admin/api/documents", signed: signed, json: ["path": "/etc/hosts"])
         XCTAssertEqual(outside.status, 422)
         XCTAssertTrue(outside.body?["error"]?.stringValue?.contains("outside the dump roots") == true)
+        // What the console itself refuses carries the console's headers too.
+        XCTAssertEqual(outside.response.value(forHTTPHeaderField: "Cache-Control"), "no-store")
+        XCTAssertNotNil(outside.response.value(forHTTPHeaderField: "Content-Security-Policy"))
 
         let uploaded = try await call("POST", "/admin/api/uploads?name=board%20one.bin", signed: signed,
                                       body: SyntheticDump.image(marker: 2))
