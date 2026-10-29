@@ -63,7 +63,9 @@
    agent, and one that truncates it ends the process with `SIGBUS`. Dumps are
    kilobytes to tens of megabytes and the open set is capped, so the copy is
    affordable. A change on disk marks the document "changed on disk"; Reopen
-   replaces snapshot and tree, keeps the id, bumps `version`.
+   replaces snapshot and tree, keeps the id, bumps `version`. There is no disk
+   watcher: the mark is a `stat` (mtime and size) at each listing — the
+   console's poll and the `documents` tool — and nothing is rebuilt.
 10. Document ids **survive a restart**: `documents.json` stores, per document,
     the id it was given, its path, the hash it was opened with and its
     `version`; there is no renumbering, because an agent holds ids across a
@@ -215,7 +217,8 @@ imports AppKit in several files: the server stays macOS-only in v1.
   the document.
 - Reopen: reread, rehash, `tree = nil`, `version += 1`, same id; the new hash
   and `version` are written to `documents.json` at once, so a restart after a
-  Reopen does not roll the version back. `changedOnDisk` comes from mtime and size; the tree is not rebuilt under the
+  Reopen does not roll the version back. `changedOnDisk` comes from the
+  `stat` at each listing (decision 9); the tree is not rebuilt under the
   agent.
 - Restore: each row of `documents.json` is checked by decision 18, read, and
   its hash compared with the stored one (decision 10). Rows are restored in
