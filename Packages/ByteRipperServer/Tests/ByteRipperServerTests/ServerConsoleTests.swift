@@ -382,11 +382,20 @@ final class ServerConsoleTests: XCTestCase {
         XCTAssertEqual(log.first?["status"], .count(200))
         XCTAssertEqual(log.first?["running"], .bool(false))
         XCTAssertEqual(activity.body?["mcp"], .array([]))
-        // The page tells an operator how to connect an agent, connected or not.
-        let agent = activity.body?["agent"]
+        XCTAssertNil(activity.body?["agent"], "how to connect is the Configuration page's")
+
+        // The Configuration page: each client of the app's Settings, in its form.
+        let configuration = try await call("GET", "/admin/api/configuration", signed: signed)
+        let agent = configuration.body?["agent"]
         XCTAssertTrue(agent?["socket"]?.stringValue?.hasSuffix(".sock") == true)
-        XCTAssertTrue(agent?["claude"]?.stringValue?.contains("claude mcp add byteripper --") == true)
-        XCTAssertTrue(agent?["config"]?.stringValue?.contains("\"mcpServers\"") == true)
+        XCTAssertEqual(agent?["server_name"]?.stringValue, "byteripper-server")
+        let clients = agent?["clients"]?.arrayValue ?? []
+        XCTAssertEqual(clients.compactMap { $0["id"]?.stringValue }, ["claude-code", "claude-desktop", "cursor", "other"])
+        XCTAssertEqual(clients.compactMap { $0["form"]?.stringValue }, ["shell", "json", "json", "fields"])
+        XCTAssertTrue(clients[0]["text"]?.stringValue?.hasPrefix("claude mcp add --scope user byteripper-server -- ") == true)
+        XCTAssertTrue(clients[1]["text"]?.stringValue?.contains("\"mcpServers\"") == true)
+        XCTAssertEqual(clients[3]["fields"]?.arrayValue?.compactMap { $0["name"]?.stringValue },
+                       ["Name", "Transport", "Command", "Arguments", "Environment"])
 
         let status = try await call("GET", "/admin/api/status", signed: signed)
         XCTAssertEqual(status.body?["version"]?.stringValue, Server.version)
@@ -397,9 +406,6 @@ final class ServerConsoleTests: XCTestCase {
         XCTAssertNotNil(status.body?["memory"])
     }
 
-    /// A burst of failed attempts is spaced by the pause, not let through
-    /// together after one: each waiter looks at the gate again when it wakes,
-    /// in the turn that runs its attempt.
     /// The shell words the console prints survive a path with a space — the
     /// server's own folder has one on every Mac.
     func testTheAgentConfigurationQuotesItsPaths() {
@@ -409,8 +415,10 @@ final class ServerConsoleTests: XCTestCase {
         XCTAssertEqual(agent.command,
                        "'/Users/a b/Tools/byteripper-server' relay --mcp-socket "
                        + "'/Users/a b/Library/Application Support/ByteRipper/Server/mcp.sock'")
-        XCTAssertTrue(agent.claudeCommand.hasPrefix("claude mcp add byteripper -- '"))
-        XCTAssertTrue(agent.config.contains("\"command\": \"/Users/a b/Tools/byteripper-server\""))
+        XCTAssertTrue(agent.text(for: .claudeCode).hasPrefix("claude mcp add --scope user byteripper-server -- '"))
+        XCTAssertTrue(agent.text(for: .claudeDesktop).contains("\"command\": \"/Users/a b/Tools/byteripper-server\""))
+        XCTAssertEqual(agent.text(for: .cursor), agent.text(for: .claudeDesktop), "the two read the same block")
+        XCTAssertTrue(agent.text(for: .other).contains("Transport    stdio"), agent.text(for: .other))
         XCTAssertEqual(ConsoleAgent.quoted("/opt/homebrew/bin/byteripper-server"),
                        "/opt/homebrew/bin/byteripper-server", "a plain path is left alone")
     }
@@ -469,6 +477,9 @@ final class ServerConsoleTests: XCTestCase {
         XCTAssertEqual(row.log[0].duration, 0.12, accuracy: 0.001)
     }
 
+    /// A burst of failed attempts is spaced by the pause, not let through
+    /// together after one: each waiter looks at the gate again when it wakes,
+    /// in the turn that runs its attempt.
     func testABurstOfFailedSignInsIsSpaced() async throws {
         let gate = SignInGate(pause: 0.15)
         let started = Date()

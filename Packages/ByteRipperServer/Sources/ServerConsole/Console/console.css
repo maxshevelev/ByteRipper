@@ -711,26 +711,83 @@ button.chip:hover { border-color: var(--accent); color: var(--text); }
 .log-row td { padding: 0 20px 10px; }
 .hidden { display: none; }
 
-/* ---------- Connect an agent ---------- */
+/* ---------- Configuration ---------- */
 
-.connect { display: flex; flex-direction: column; gap: 14px; }
-.json {
-  position: relative;
-  padding: 12px 46px 12px 14px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
+.config { display: flex; flex-direction: column; gap: 16px; }
+.clients { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.client {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border-strong);
   background: var(--panel-2);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
 }
-.json pre {
+.client:hover { border-color: var(--accent-ring); }
+.client.on { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 3px var(--accent-soft); }
+.client:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--accent-ring); }
+.client-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--panel-3); color: var(--muted); flex: none; }
+.client.on .client-icon { background: var(--gradient); color: var(--on-accent); }
+.client-text { display: flex; flex-direction: column; min-width: 0; }
+.client-text b { font-weight: 650; }
+.client-text small { color: var(--muted); font-size: 12px; }
+
+.destination { margin: 0; color: var(--text-2); line-height: 1.6; }
+code.path { padding: 1px 6px; border-radius: 6px; background: var(--panel-3); color: var(--text); font-size: 12.5px; overflow-wrap: anywhere; }
+
+.codeblock { border: 1px solid var(--border-strong); border-radius: 12px; overflow: hidden; background: var(--panel-2); }
+.codebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 8px 8px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-3);
+}
+.codebar-title { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+pre.code {
   margin: 0;
+  padding: 16px 18px;
   font-family: var(--mono);
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
   white-space: pre;
   overflow-x: auto;
 }
-.json .icon-btn { position: absolute; top: 8px; right: 8px; }
+pre.code.code-shell { white-space: pre-wrap; word-break: break-all; }
+pre.code .prompt { color: var(--accent); user-select: none; }
+
+.fields { display: flex; flex-direction: column; }
+.field-row { display: grid; grid-template-columns: 120px minmax(0, 1fr) 32px; align-items: center; gap: 12px; padding: 9px 10px 9px 18px; border-bottom: 1px solid var(--border); }
+.field-row:last-child { border-bottom: 0; }
+.field-name { color: var(--muted); font-size: 13px; }
+.field-value { font-family: var(--mono); font-size: 12.5px; overflow-wrap: anywhere; }
+
+.flow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.flow-node {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 170px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  min-width: 0;
+}
+.flow-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; background: var(--accent-soft); color: var(--accent); flex: none; }
+.flow-text { display: flex; flex-direction: column; min-width: 0; }
+.flow-text b { font-weight: 650; font-size: 13px; }
+.flow-text small { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.flow-arrow { color: var(--muted); display: grid; flex: none; }
+.empty-action { margin-top: 16px; }
 
 /* ---------- Key–value lists ---------- */
 
@@ -957,6 +1014,9 @@ details.revoked[open] summary::before { content: "▾ "; }
 }
 
 @media (max-width: 560px) {
+  .flow-arrow { transform: rotate(90deg); width: 100%; place-items: center; }
+  .field-row { grid-template-columns: 1fr 32px; }
+  .field-row .field-name { grid-column: 1 / -1; }
   .entry { grid-template-columns: 28px minmax(0, 1fr) auto; }
   .entry > .entry-meta { display: none; }
   .field.filter { width: 100%; }

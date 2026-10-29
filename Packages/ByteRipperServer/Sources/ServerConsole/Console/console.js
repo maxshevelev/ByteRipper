@@ -66,6 +66,11 @@
     plug: "M9 2v6 M15 2v6 M6 8h12v4a6 6 0 0 1-12 0z M12 18v4",
     layers: "M12 2 2 7l10 5 10-5z M2 17l10 5 10-5 M2 12l10 5 10-5",
     database: "M12 8c5 0 9-1.3 9-3s-4-3-9-3-9 1.3-9 3 4 3 9 3z M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5 M3 12c0 1.7 4 3 9 3s9-1.3 9-3",
+    terminal: "M4 17l6-6-6-6 M12 19h8",
+    braces: "M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5a2 2 0 0 0 2 2h1 M16 3h1a2 2 0 0 1 2 2v5a2 2 0 0 0 2 2 2 2 0 0 0-2 2v5a2 2 0 0 1-2 2h-1",
+    list: "M8 6h13 M8 12h13 M8 18h13 M3 6h.01 M3 12h.01 M3 18h.01",
+    arrowRight: "M5 12h14 M13 5l7 7-7 7",
+    sliders: "M4 21v-7 M4 10V3 M12 21v-9 M12 8V3 M20 21v-5 M20 12V3 M1 14h6 M9 8h6 M17 16h6",
     link: "M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7 M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7",
   };
 
@@ -330,6 +335,7 @@
     "/admin/documents": { title: "Documents", subtitle: "The firmware images the local MCP serves.", icon: "chip", endpoint: "/admin/api/documents", mount: mountDocuments },
     "/admin/activity": { title: "Activity", subtitle: "Who is connected now, and what each connection is doing.", icon: "activity", endpoint: "/admin/api/activity", interval: 1000, mount: mountActivity },
     "/admin/tokens": { title: "Tokens", subtitle: "Who may reach this server, and with which rights.", icon: "key", endpoint: "/admin/api/tokens", mount: mountTokens },
+    "/admin/configuration": { title: "Configuration", subtitle: "How an agent on this machine connects to the server.", icon: "sliders", endpoint: "/admin/api/configuration", interval: 15000, mount: mountConfiguration },
     "/admin/status": { title: "Status", subtitle: "The server, its roles, its limits.", icon: "gauge", endpoint: "/admin/api/status", mount: mountStatus },
   };
 
@@ -843,29 +849,17 @@
 
   function mountActivity() {
     const agents = card("Agents", "connections to the local MCP socket, and the calls each is making");
-    const connect = card("Connect an agent", "the socket this server serves, and the client configuration for it");
     const clients = card("REST clients", "requests per token since the server started; the console's own are not counted");
-    const root = h("div", { class: "stack" }, agents.root, connect.root, clients.root);
+    const root = h("div", { class: "stack" }, agents.root, clients.root);
 
     function update(data) {
       if (!data.mcp.length) {
         fill(agents.body, empty("bot", "No agent is connected",
-          "An agent on this machine reaches the server through the relay below; a call appears here as soon as its client connects."));
+          "An agent on this machine reaches the server through the relay; its calls appear here as soon as its client connects.",
+          h("div", { class: "empty-action" }, h("button", { class: "btn small", type: "button", onclick: () => go("/admin/configuration") },
+            icon("sliders", 15), "Agent configuration"))));
       } else {
         fill(agents.body, h("div", { class: "agents" }, data.mcp.map(agentCard)));
-      }
-      if (data.agent) {
-        fill(connect.body, h("div", { class: "connect" },
-          h("div", {}, h("div", { class: "label", text: "Socket" }),
-            copyLine(data.agent.socket, "the socket's path")),
-          h("div", {}, h("div", { class: "label", text: "Add to Claude Code" }),
-            copyLine(data.agent.claude, "the command")),
-          h("div", {}, h("div", { class: "label", text: "Or in .mcp.json, or Claude Desktop's own file" }),
-            h("div", { class: "json" },
-              h("pre", { text: data.agent.config }),
-              iconButton("copy", "Copy the configuration", () => copy(data.agent.config, "the configuration"))))));
-      } else {
-        fill(connect.body, empty("plug", "No local MCP socket", "This server answers without one."));
       }
       if (!data.rest.length) {
         fill(clients.body, empty("globe", "No REST requests yet", "The app and the scripts show up here, one row per token, when they reach the store or Ghidra."));
@@ -1110,6 +1104,108 @@
     setTimeout(() => name.focus(), 30);
   }
 
+  // ---------- Configuration ----------
+
+  // The client the agent runs in, then where the text goes and the text: the
+  // app's Settings ▸ Agents, for this server's relay.
+  function mountConfiguration() {
+    const STORE = "byteripper.console.client";
+    const FORM = {
+      shell: { icon: "terminal", kind: "Terminal command", file: "Terminal" },
+      json: { icon: "braces", kind: "Configuration file", file: "JSON" },
+      fields: { icon: "list", kind: "Parameters", file: "Parameters" },
+    };
+    let chosen = null;
+    try { chosen = localStorage.getItem(STORE); } catch { /* no storage */ }
+    let data = null;
+    let shown = "";
+
+    const picker = h("div", { class: "clients", role: "radiogroup", "aria-label": "Client" });
+    const destination = h("p", { class: "destination" });
+    const block = h("div", {});
+    const connect = h("section", { class: "card" },
+      h("div", { class: "card-head" }, h("h2", {}, "Connect an agent",
+        h("span", { class: "sub", text: "pick the program the agent runs in" }))),
+      h("div", { class: "card-body config" }, picker, destination, block,
+        h("p", { class: "hint", text: "" })));
+    const note = connect.querySelector(".hint");
+
+    const flow = h("div", { class: "flow" });
+    const facts = h("dl", { class: "kv" });
+    const how = h("section", { class: "card" },
+      h("div", { class: "card-head" }, h("h2", {}, "How it connects",
+        h("span", { class: "sub", text: "local only: nothing of MCP reaches the network" }))),
+      h("div", { class: "card-body config" }, flow, facts,
+        h("p", { class: "hint", text: "The socket's file permissions are its only guard: any process of this user can connect to it, and through it publish to the store and drive Ghidra." })));
+
+    const root = h("div", { class: "stack" }, connect, how);
+
+    // A destination's paths set in code: the sentence names the file.
+    function sentence(text) {
+      const parts = text.split(/((?:~\/|\.)[^,]*?\.json)/);
+      return parts.map((part, index) => (index % 2 ? h("code", { class: "path", text: part }) : part));
+    }
+
+    function draw() {
+      const clients = data.agent.clients;
+      const client = clients.find((c) => c.id === chosen) || clients[0];
+      chosen = client.id;
+      fill(picker, clients.map((c) => h("button", {
+        class: `client ${c.id === client.id ? "on" : ""}`, type: "button", role: "radio",
+        "aria-checked": c.id === client.id ? "true" : "false",
+        onclick: () => { chosen = c.id; try { localStorage.setItem(STORE, c.id); } catch { /* no storage */ } draw(); },
+      },
+        h("span", { class: "client-icon" }, icon(FORM[c.form].icon, 18)),
+        h("span", { class: "client-text" }, h("b", { text: c.title }), h("small", { text: FORM[c.form].kind })))));
+      fill(destination, sentence(client.destination));
+
+      const copyAll = h("button", { class: "btn primary small", type: "button", onclick: () => copy(client.text, client.form === "shell" ? "the command" : "the configuration") },
+        icon("copy", 15), client.form === "shell" ? "Copy command" : "Copy");
+      let body;
+      if (client.form === "fields") {
+        body = h("div", { class: "fields" }, client.fields.map((field) =>
+          h("div", { class: "field-row" },
+            h("span", { class: "field-name", text: field.name }),
+            h("code", { class: "field-value", text: field.value }),
+            iconButton("copy", `Copy ${field.name.toLowerCase()}`, () => copy(field.value, field.name.toLowerCase())))));
+      } else {
+        body = h("pre", { class: `code code-${client.form}` }, client.form === "shell" ? h("span", { class: "prompt", text: "$ " }) : null, client.text);
+      }
+      fill(block, h("div", { class: "codeblock" },
+        h("div", { class: "codebar" }, h("span", { class: "codebar-title" }, icon(FORM[client.form].icon, 14), FORM[client.form].file), copyAll),
+        body));
+      note.textContent = `Registered as ${data.agent.server_name}, so it sits beside the ByteRipper app's own byteripper in the same client.`;
+    }
+
+    function node(iconName, title, sub) {
+      return h("div", { class: "flow-node" }, h("span", { class: "flow-icon" }, icon(iconName, 18)),
+        h("span", { class: "flow-text" }, h("b", { text: title }), h("small", { text: sub })));
+    }
+
+    function update(next) {
+      const text = JSON.stringify(next);
+      if (text === shown) return;
+      shown = text;
+      data = next;
+      if (!data.agent) {
+        fill(root, empty("plug", "No local MCP socket", "This server answers without one, so there is nothing for an agent to connect to."));
+        return;
+      }
+      draw();
+      const arrow = () => h("span", { class: "flow-arrow" }, icon("arrowRight", 16));
+      fill(flow,
+        node("bot", "The agent's client", "Claude Code, Claude Desktop, Cursor…"), arrow(),
+        node("terminal", "relay", "started by the client, stdio"), arrow(),
+        node("plug", "mcp.sock", "0600, in the server's folder"), arrow(),
+        node("server", "This server", "the documents and the tools"));
+      fill(facts,
+        h("dt", { text: "Relay binary" }), h("dd", {}, copyLine(data.agent.binary, "the binary's path")),
+        h("dt", { text: "Socket" }), h("dd", {}, copyLine(data.agent.socket, "the socket's path")),
+        h("dt", { text: "Command" }), h("dd", {}, copyLine(data.agent.command, "the command")));
+    }
+    return { root, update };
+  }
+
   // ---------- Status ----------
 
   function mountStatus() {
@@ -1165,8 +1261,8 @@
       ]);
       fill(mcp,
         h("div", {}, h("div", { class: "label", text: "Socket" }), copyLine(data.socket, "the socket's path")),
-        h("div", {}, h("div", { class: "label", text: "An agent's MCP command" }),
-          copyLine(data.agent ? data.agent.command : `byteripper-server relay --mcp-socket ${data.socket}`, "the command")),
+        h("div", {}, h("button", { class: "btn small", type: "button", onclick: () => go("/admin/configuration") },
+          icon("sliders", 15), "Agent configuration", icon("arrowRight", 14))),
         h("p", { class: "hint", text: "The socket's file permissions are its only guard: any process of this user can connect." }));
       kv(limits, [
         ["Documents", `${data.limits.documents} open at once`],
