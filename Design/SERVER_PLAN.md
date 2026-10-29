@@ -251,12 +251,14 @@ them).
 4. **The tools — done.** `GhidraTools` over a `GhidraBackend` (the host, or
    a server's `/ghidra/v1`): `/mcp` on the server (Streamable HTTP, one
    AgentKit connection per request, the review rules as instructions), and
-   the same list on the app's MCP server, relayed to the server Settings
-   name, with `ghidra_open` taking a node of an open dump.
-5. **Desktop — next.** The app hosts owners itself when the store is on this
-   Mac and a Ghidra install is found (`CurrentGhidraBackend` returns the
-   in-process host); the owner's Java ships in the app's resources; the
-   Settings pane says which Ghidra and JDK it uses.
+   the same list on the app's MCP server, with `ghidra_open` taking a node
+   of an open dump.
+5. **Desktop — the host is done.** With the analyses on this Mac, the app
+   answers the `ghidra_` tools from a `GhidraHost` in its own process
+   (`LocalGhidraHost`): the same `GhidraProjects` folder a server on this Mac
+   uses, the same Ghidra found by `GhidraInstall.find`, and publications
+   written into the local store. Still open: the owner's Java in the app's
+   resources, and the Settings pane saying which Ghidra and JDK it uses.
 
 These replace phase 2c and phase 3 of `Design/GHIDRA_SHARED_PLAN.md`.
 

@@ -96,14 +96,14 @@ final class CodeAgentTests: XCTestCase {
     // MARK: - Ghidra on the analysis server
 
     /// `ghidra_open` sends a node's image to the server Settings name; with
-    /// the analyses on this Mac, a Ghidra tool says where to set a server.
+    /// the analyses on this Mac the tools are answered by the host inside the
+    /// app, not refused.
     func testGhidraOpenSendsTheNodesImageToTheAnalysisServer() async throws {
         try open()
         let node = try await moduleNode()
         for key in ["CodeAnalysisLocation", "CodeAnalysisServer"] { AppDefaults.store.removeObject(forKey: key) }
-        let refused = try await client.call("ghidra_modules")
-        XCTAssertTrue(refused.isError)
-        XCTAssertTrue(refused.answer.stringValue?.contains("Settings ▸ Code Analysis") == true, "\(refused.answer)")
+        let local = try await client.call("ghidra_modules")
+        XCTAssertFalse(local.isError, "the host in the app answers: \(local.answer)")
 
         final class Received: @unchecked Sendable { var body = Data(); var query: [String: String] = [:] }
         let received = Received()
