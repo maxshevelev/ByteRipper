@@ -57,7 +57,7 @@
    listens on — loopback included — requires a token of its `tokens.json`,
    which carries the token's rights. Encryption is the tailnet's (WireGuard);
    TLS is a proxy's job if ever needed.
-9. **A personal installation.** One token, one person, few writers. Collisions
+9. **A personal installation.** One person, a few tokens, few writers. Collisions
    are rare and handled by the rules the store already has; there is no user
    model, no per-project scoping. That is a deliberate limit (§8).
 

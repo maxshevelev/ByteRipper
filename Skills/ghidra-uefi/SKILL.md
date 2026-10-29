@@ -378,7 +378,7 @@ the console uploads — and serves them to an agent **on that machine** over a
 Unix socket; the agent's client reaches it through the relay:
 
 ```bash
-build/release/byteripper-server relay      # MCP on stdin/stdout ↔ <Server>/mcp.sock
+.build/release/byteripper-server relay      # MCP on stdin/stdout ↔ <Server>/mcp.sock
 ```
 
 `/admin` on any listen address is the operator's console — documents,

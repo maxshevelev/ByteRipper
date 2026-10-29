@@ -382,7 +382,7 @@
         h("p", { class: "lead", text: "Sign in to the console with an admin token." }),
         form,
         h("div", { class: "login-foot" }, "No admin token yet? Make one on the server:",
-          h("code", { text: "byteripper-server token add --name admin --preset admin" })))));
+          h("code", { text: "byteripper-server token add --name admin --rights admin" })))));
     input.focus();
   }
 
