@@ -378,12 +378,12 @@ Every phase ends with its packages' tests green and the server starting.
    per request. The rights on the roles (first planned as phase 6) landed
    here too: tokens with presets were being issued, and without them a
    `reader` token could publish through `/mcp`.
-2. **The app side of tokens**: the app sends its token on loopback, names a
-   missing right on 403, and its Settings caption names `token add` — through
-   `L()` in English, Russian and German; `help_coverage.py` and
-   `help_names.py` run, and the help page on the Code Analysis settings
-   updated if it quotes the command. App suite: the Code Analysis settings and
-   the store client.
+2. **The app side of tokens** — done: the app sends its token on loopback
+   (a test now holds the server to it), a 403 carries the missing right as a
+   field and the app names it, a refused token is its own state instead of an
+   unreachable server, and the Settings caption and the page on the Code
+   Analysis settings name `token add` in English, Russian and German;
+   `help_coverage.py` and `help_names.py` are clean.
 3. **`AgentDocuments`**: the package, `AgentDocumentSet`, `ToolQueryTools`,
    `CodeReadings`, `GhidraNodeOpen`; the app moved onto them with no change
    in what its agent sees. Package tests for the document rule and the

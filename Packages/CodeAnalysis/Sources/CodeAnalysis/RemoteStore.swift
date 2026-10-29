@@ -15,8 +15,9 @@ public struct RemoteStore: Sendable {
         /// The server could not be reached, or did not answer in time: its
         /// address and the system's words for why.
         case unreachable(String)
-        /// The server answered with a refusal.
-        case refused(status: Int, message: String)
+        /// The server answered with a refusal. `right` is the right a 403
+        /// names, when it names one.
+        case refused(status: Int, message: String, right: String?)
         /// The answer is not what this protocol version expects.
         case unexpected(String)
 
@@ -24,7 +25,7 @@ public struct RemoteStore: Sendable {
             switch self {
             case .unreachable(let reason):
                 return "no byteripper-server answers at \(reason) — is it running, and listening on that address?"
-            case .refused(_, let message): return message
+            case .refused(_, let message, _): return message
             case .unexpected(let reason): return "the analysis server answered unexpectedly: \(reason)"
             }
         }
@@ -79,7 +80,7 @@ public struct RemoteStore: Sendable {
         do {
             _ = try await call("HEAD", "objects/\(digest.hex)")
             return true
-        } catch Failure.refused(status: 404, _) {
+        } catch Failure.refused(status: 404, _, _) {
             return false
         }
     }
@@ -126,7 +127,7 @@ public struct RemoteStore: Sendable {
         do {
             let history: ReviewHistory = try await json("GET", "reviews/\(module.hex)")
             return history
-        } catch Failure.refused(status: 404, _) {
+        } catch Failure.refused(status: 404, _, _) {
             return nil
         }
     }
@@ -212,9 +213,10 @@ public struct RemoteStore: Sendable {
             throw Failure.unexpected("not an HTTP answer")
         }
         guard (200..<300).contains(http.statusCode) else {
-            let message = (try? JSONDecoder().decode(ServedStoreProtocol.Failure.self, from: data))?.error
+            let failure = try? JSONDecoder().decode(ServedStoreProtocol.Failure.self, from: data)
+            let message = failure?.error
                 ?? HTTPURLResponse.localizedString(forStatusCode: http.statusCode)
-            throw Failure.refused(status: http.statusCode, message: message)
+            throw Failure.refused(status: http.statusCode, message: message, right: failure?.right)
         }
         return data
     }

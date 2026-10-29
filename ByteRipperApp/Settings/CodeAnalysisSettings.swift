@@ -44,7 +44,7 @@ final class CodeAnalysisSettingsViewController: NSViewController {
         addressField.placeholderString = "http://100.64.0.7:8765"
         ControlHelp.describe(addressField, L("The analysis server's address, as http://host:port"))
         let tokenLabel = NSTextField(labelWithString: L("Token:"))
-        ControlHelp.describe(tokenField, L("The token byteripper-server token printed on the server"))
+        ControlHelp.describe(tokenField, L("The token made on the server by byteripper-server token add"))
         connectButton.title = L("Connect")
         connectButton.bezelStyle = .rounded
         connectButton.target = self
@@ -157,9 +157,10 @@ final class CodeAnalysisSettingsViewController: NSViewController {
         tokenField.placeholderString = (try? location.readToken()) != nil
             ? L("Kept on this Mac") : L("None")
         statusLabel.stringValue = Self.statusText(of: location.state)
-        if case .unreachable = location.state {
+        switch location.state {
+        case .unreachable, .refused:
             statusLabel.textColor = SemanticColors.bad
-        } else {
+        default:
             statusLabel.textColor = .secondaryLabelColor
         }
         let connected: Bool
@@ -181,6 +182,8 @@ final class CodeAnalysisSettingsViewController: NSViewController {
             return L("Connecting to the analysis server…")
         case .connected:
             return L("Connected. Analyses are read from the server and follow it.")
+        case .refused(let reason):
+            return L("The server refuses this Mac's token; what this Mac has read is shown. %1$@", reason)
         case .unreachable(let reason):
             return L("The server cannot be reached; what this Mac has read is shown. %1$@", reason)
         }
@@ -241,7 +244,7 @@ final class CodeAnalysisSettingsViewController: NSViewController {
                                                 String(report.imported.count), String(report.unchanged.count),
                                                 String(report.skipped.count), String(report.conflicts.count))
             case .failure(let error):
-                self.sendStatus.stringValue = "\(error)"
+                self.sendStatus.stringValue = CodeAnalysisLocation.describe(error)
             }
             self.refresh()
         }

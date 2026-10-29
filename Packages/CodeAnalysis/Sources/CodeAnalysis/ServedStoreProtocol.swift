@@ -122,5 +122,8 @@ public enum ServedStoreProtocol {
 
     public struct Failure: Codable, Equatable, Sendable {
         public var error: String
+        /// The right a 403 is about, by its name — `cas.write` — when the
+        /// refusal names one (`Design/SERVER_HEADLESS_PLAN.md` decision 4).
+        public var right: String?
     }
 }

@@ -94,9 +94,10 @@ final class CodeArtifactTests: XCTestCase {
     // MARK: - Refusals
 
     func testAnUnknownScriptVersionIsRefused() {
-        let json = #"{"script_version": 6, "ghidra": "12.1.2", "functions": []}"#
+        // One past what the exporter writes: 6 is a version this app reads.
+        let json = #"{"script_version": 7, "ghidra": "12.1.2", "functions": []}"#
         XCTAssertThrowsError(try decoded(json)) { error in
-            XCTAssertEqual(error as? CodeArtifactError, .unsupportedVersion(6))
+            XCTAssertEqual(error as? CodeArtifactError, .unsupportedVersion(7))
         }
     }
 

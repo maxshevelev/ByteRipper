@@ -45,6 +45,10 @@ final class CodeAnalysisLocation {
         case connecting
         /// The mirror follows the server.
         case connected(store: String)
+        /// The server answered and will not serve this Mac's token: it does
+        /// not know it, or the token lacks a right. The reason names which
+        /// (`Design/SERVER_HEADLESS_PLAN.md` decision 4).
+        case refused(reason: String)
         /// The server is out of reach; the mirror is read as it is.
         case unreachable(reason: String)
     }
@@ -140,7 +144,7 @@ final class CodeAnalysisLocation {
                 }
             } catch {
                 guard !Task.isCancelled else { return }
-                state = .unreachable(reason: Self.describe(error))
+                state = Self.state(for: error)
                 try? await Task.sleep(nanoseconds: pause * 1_000_000_000)
                 pause = min(pause * 2, 60)
             }
@@ -173,12 +177,24 @@ final class CodeAnalysisLocation {
         return report
     }
 
-    /// Why the server is out of reach, in the words of the tab.
+    /// What the tab says about a failed connection: a token the server
+    /// refuses is not a server out of reach, and a 403 names the right the
+    /// token lacks (`Design/SERVER_HEADLESS_PLAN.md` decision 4).
+    nonisolated static func state(for error: Error) -> State {
+        if case .refused(let status, _, _)? = error as? RemoteStore.Failure, status == 401 || status == 403 {
+            return .refused(reason: describe(error))
+        }
+        return .unreachable(reason: describe(error))
+    }
+
+    /// Why the server did not serve this Mac, in the words of the tab.
     nonisolated static func describe(_ error: Error) -> String {
         switch error as? RemoteStore.Failure {
-        case .refused(status: 401, _):
+        case .refused(status: 401, _, _):
             return L("The server does not accept the token.")
-        case .refused(_, let message):
+        case .refused(status: 403, _, let right?):
+            return L("The token lacks the %1$@ right.", right)
+        case .refused(_, let message, _):
             return message
         case .unreachable(let reason):
             // The system's own words say which: the name did not resolve,

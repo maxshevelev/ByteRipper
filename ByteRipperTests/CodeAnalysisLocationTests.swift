@@ -119,11 +119,43 @@ final class CodeAnalysisLocationTests: XCTestCase {
         XCTAssertNotNil(try mirror.analysis(module: module("carried").sha256))
     }
 
+    /// A token the server refuses is not a server out of reach: the line says
+    /// the token is refused, and the analyses already read stay readable
+    /// (`Design/SERVER_HEADLESS_PLAN.md` decision 4).
     func testAWrongTokenSaysSoAndKeepsTryingWithoutTheLocalStore() async throws {
         try location.choose(.server, server: address, token: "wrong")
-        await wait("the refusal") { if case .unreachable = location.state { return true } else { return false } }
-        XCTAssertEqual(location.state, .unreachable(reason: L("The server does not accept the token.")))
+        await wait("the refusal") { if case .refused = location.state { return true } else { return false } }
+        XCTAssertEqual(location.state, .refused(reason: L("The server does not accept the token.")))
         XCTAssertNotEqual(UEFIToolModule.codeAnalysisRoot, directory.appendingPathComponent("local"))
         XCTAssertThrowsError(try location.choose(.server, server: "not an address", token: nil))
+    }
+
+    /// No anonymous mode, loopback included (decision 3): the app sends its
+    /// token to the server on this Mac as well, and without it there is no
+    /// answer.
+    func testOnLoopbackTheTokenIsSentToo() async throws {
+        let base = URL(string: address)!
+        _ = try await RemoteStore(base: base, token: "secret").hello()
+        do {
+            _ = try await RemoteStore(base: base, token: nil).hello()
+            XCTFail("the server served a request without a token")
+        } catch RemoteStore.Failure.refused(let status, _, _) {
+            XCTAssertEqual(status, 401)
+        }
+    }
+
+    /// A 403 names the right the token lacks, in the tab's words and in the
+    /// send button's line.
+    func testAMissingRightIsNamed() {
+        let refusal = RemoteStore.Failure.refused(status: 403, message: "this token has no cas.write right",
+                                                  right: "cas.write")
+        XCTAssertEqual(CodeAnalysisLocation.describe(refusal), L("The token lacks the %1$@ right.", "cas.write"))
+        XCTAssertEqual(CodeAnalysisLocation.state(for: refusal),
+                       .refused(reason: L("The token lacks the %1$@ right.", "cas.write")))
+        XCTAssertEqual(CodeAnalysisLocation.describe(RemoteStore.Failure.refused(
+            status: 401, message: "a bearer token is required", right: nil)),
+            L("The server does not accept the token."))
+        XCTAssertEqual(CodeAnalysisLocation.state(for: RemoteStore.Failure.unreachable("nothing listens")),
+                       .unreachable(reason: CodeAnalysisLocation.describe(RemoteStore.Failure.unreachable("nothing listens"))))
     }
 }

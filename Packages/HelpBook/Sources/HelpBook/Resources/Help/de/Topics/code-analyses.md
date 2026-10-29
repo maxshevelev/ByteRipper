@@ -1,4 +1,4 @@
-@source-sha 557f81f7f44aee55a820aec737edec2e0cf7562c9260210fc3956f5f92a03e23
+@source-sha 1a86e4211ed3c3869dfcbec166f807a9acbb5131ce6af9bb6ae4f207dddb1059
 # Codeanalysen und der Analyseserver
 
 > Eine Codeanalyse ist das, was Ghidra in einem PEI- oder DXE-Modul gefunden hat: seine Funktionen, Befehle und den dekompilierten C-Code sowie die Namen, die eine Durchsicht ihnen gegeben hat. ByteRipper liest Analysen aus einem Speicher — einem Ordner auf diesem Mac oder einem Analyseserver, den alle Macs eines Netzwerks gemeinsam nutzen.
@@ -18,18 +18,19 @@ Die Einstellung legt nur fest, woher die Analysen gelesen werden. Beim Umstellen
 
 Der Server wird einmal eingerichtet, im Terminal des Rechners, auf dem er läuft:
 
-1. `byteripper-server token` erzeugt das Token und gibt es aus.
-2. `byteripper-server --listen 127.0.0.1:8765 --listen 100.64.0.7:8765` startet den Server unter den angegebenen Adressen: der Loopback-Adresse für ByteRipper auf dem Server selbst — ein Mac erreicht seine eigene Adresse in einem privaten Netzwerk wie Tailscale nicht — und der Adresse im privaten Netzwerk für die anderen Macs.
+1. `byteripper-server token add --name admin --rights admin` erzeugt das Admin-Token des Servers und gibt es einmal aus. Der Server speichert nur dessen Hash und startet ohne ein solches Token nicht.
+2. `byteripper-server token add --name <mac> --preset app` erzeugt das Token eines Mac: Jeder Mac und jedes Skript, das den Server liest, hat ein eigenes Token. Das Geheimnis wird einmal ausgegeben und nirgends aufbewahrt.
+3. `byteripper-server --listen 127.0.0.1:8765 --listen 100.64.0.7:8765` startet den Server unter den angegebenen Adressen: der Loopback-Adresse für ByteRipper auf dem Server selbst — ein Mac erreicht seine eigene Adresse in einem privaten Netzwerk wie Tailscale nicht — und der Adresse im privaten Netzwerk für die anderen Macs.
 
-Auf jeder Adresse außer der Loopback-Adresse des Rechners selbst startet der Server nur mit einem Token. Üblich ist die Adresse des Servers in einem privaten Netzwerk wie Tailscale, das die Verbindung zudem verschlüsselt.
+Jede Adresse, auf der der Server lauscht, verlangt ein Token, die Loopback-Adresse eingeschlossen. Üblich ist die Adresse des Servers in einem privaten Netzwerk wie Tailscale, das die Verbindung zudem verschlüsselt.
 
 Auf jedem Mac unter **Einstellungen ▸ Codeanalyse**:
 
 1. **Auf einem Analyseserver** wählen.
-2. Die Adresse in der Form `http://host:port` — auf dem Server selbst `http://localhost:8765` — und das vom Server ausgegebene Token eingeben.
+2. Die Adresse in der Form `http://host:port` — auf dem Server selbst `http://localhost:8765` — und das Token eingeben, das der Server für diesen Mac ausgegeben hat.
 3. Auf **Verbinden** klicken.
 
-Die Zeile unter den Feldern zeigt, ob der Server erreichbar ist. Das Token liegt in einer Datei, die nur der angemeldete Benutzer lesen kann, `~/Library/Application Support/ByteRipper/Server/token`; dieselbe Datei lesen die Skripte des Ghidra-Skills auf diesem Mac. Bleibt das Tokenfeld leer, wird das bereits gespeicherte Token verwendet.
+Die Zeile unter den Feldern zeigt, ob der Server erreichbar ist. Weist der Server das Token zurück, sagt die Zeile das und nicht, der Server sei nicht erreichbar, und nennt das fehlende Recht. Das Token liegt in einer Datei, die nur der angemeldete Benutzer lesen kann, `~/Library/Application Support/ByteRipper/Server/token`; dieselbe Datei lesen die Skripte des Ghidra-Skills auf diesem Mac. Bleibt das Tokenfeld leer, wird das bereits gespeicherte Token verwendet.
 
 ## Arbeiten mit einem Server
 
@@ -47,6 +48,6 @@ Betreibt der Analyseserver auch Ghidra, kann ein mit ByteRipper verbundener Agen
 
 ## Was der Server nicht tut
 
-- Er ist für das Netzwerk einer einzelnen Person gedacht: Es gibt ein Token, und wer es besitzt, kann jede Analyse lesen und schreiben.
+- Er ist für das Netzwerk einer einzelnen Person gedacht: Jeder Client hat ein eigenes Token, und dessen Rechte bestimmen, was der Client darf — ein `reader`-Token liest, ein `app`-Token schreibt und veröffentlicht zusätzlich. Ein eigenes Benutzermodell hat er nicht.
 - Er löscht nichts über das Netzwerk. Nicht mehr benötigte Analysen werden auf dem Server selbst mit `byteripper-cas gc` entfernt.
 - Er speichert keine Dumps. Eine Analyse vermerkt, welches Modul sie beschreibt, nie die Firmware, aus der es stammt.

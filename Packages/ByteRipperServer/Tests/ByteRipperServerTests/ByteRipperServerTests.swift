@@ -95,7 +95,7 @@ final class ServerTests: XCTestCase {
         do {
             _ = try await RemoteStore(base: remote.base, token: "wrong").hello()
             XCTFail("answered a wrong token")
-        } catch RemoteStore.Failure.refused(let status, _) {
+        } catch RemoteStore.Failure.refused(let status, _, _) {
             XCTAssertEqual(status, 401)
         }
     }

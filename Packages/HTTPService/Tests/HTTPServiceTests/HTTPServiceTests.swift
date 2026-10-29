@@ -224,6 +224,10 @@ final class HTTPServerTests: XCTestCase {
         let (refused, body) = try await call(base.appendingPathComponent("store"), method: "PUT")
         XCTAssertEqual(refused, 403)
         XCTAssertTrue(String(data: body, encoding: .utf8)!.contains("cas.write"))
+        // The right is an answer field, not only a word of the sentence: a
+        // client says which right to add without reading English.
+        let named = try XCTUnwrap(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual(named["right"] as? String, "cas.write")
     }
 
     /// Every answer, a refusal included, is one activity value — the seam the

@@ -71,7 +71,7 @@ final class CASServiceTests: XCTestCase {
         do {
             try await remote.putAnalysis(module: module(), recipe: recipe, artifact: artifact(3), reading: first)
             XCTFail("an older revision replaced a newer one")
-        } catch RemoteStore.Failure.refused(let status, let message) {
+        } catch RemoteStore.Failure.refused(let status, let message, _) {
             XCTAssertEqual(status, 409)
             XCTAssertTrue(message.contains("revision 2"), message)
         }
@@ -278,7 +278,7 @@ final class CASServiceTests: XCTestCase {
         do {
             _ = try await anonymous.hello()
             XCTFail("answered without a token")
-        } catch RemoteStore.Failure.refused(let status, _) {
+        } catch RemoteStore.Failure.refused(let status, _, _) {
             XCTAssertEqual(status, 401)
         }
     }

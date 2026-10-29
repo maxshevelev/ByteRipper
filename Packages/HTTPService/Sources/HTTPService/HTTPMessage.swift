@@ -90,9 +90,16 @@ public struct HTTPResponse: Sendable {
         HTTPResponse(.ok, headers: ["content-type": type], body: data)
     }
 
-    /// `{"error": "…"}`, the shape `byteripper-cas` refuses with.
+    /// `{"error": "…"}`, the shape `byteripper-cas` refuses with — and
+    /// `"right"` beside it when the refusal names the right a token lacks, so
+    /// a client says which one instead of reading the sentence
+    /// (`Design/SERVER_HEADLESS_PLAN.md` decision 4).
     public static func error(_ error: HTTPError) -> HTTPResponse {
-        json(["error": error.message], status: error.status)
+        struct Failure: Encodable {
+            let error: String
+            let right: String?
+        }
+        return json(Failure(error: error.message, right: error.right?.rawValue), status: error.status)
     }
 
     /// The bytes on the wire, with `Content-Length` and the connection's fate.
@@ -115,10 +122,15 @@ public struct HTTPResponse: Sendable {
 public struct HTTPError: Error, Equatable, Sendable, CustomStringConvertible {
     public let status: HTTPStatus
     public let message: String
+    /// The right a 403 is about, when a route's access named it: the answer
+    /// carries it as a value, so a client names the right to add rather than
+    /// reading it out of a sentence.
+    public let right: HTTPRight?
 
-    public init(_ status: HTTPStatus, _ message: String) {
+    public init(_ status: HTTPStatus, _ message: String, right: HTTPRight? = nil) {
         self.status = status
         self.message = message
+        self.right = right
     }
 
     public var description: String { "\(status.code) \(message)" }

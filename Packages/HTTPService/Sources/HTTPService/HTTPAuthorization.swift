@@ -34,7 +34,7 @@ public struct HTTPPrincipal: Equatable, Hashable, Sendable {
     /// is missing instead of reporting a network failure (decision 4).
     public func require(_ right: HTTPRight) throws {
         guard allows(right) else {
-            throw HTTPError(.forbidden, "this token has no \(right.rawValue) right")
+            throw HTTPError(.forbidden, "this token has no \(right.rawValue) right", right: right)
         }
     }
 

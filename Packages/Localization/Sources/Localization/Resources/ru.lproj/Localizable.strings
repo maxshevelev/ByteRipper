@@ -1746,7 +1746,7 @@
 "Server:" = "Сервер:";
 "The analysis server's address, as http://host:port" = "Адрес сервера разборов в виде http://host:port";
 "Token:" = "Токен:";
-"The token byteripper-server token printed on the server" = "Токен, который на сервере вывела команда byteripper-server token";
+"The token made on the server by byteripper-server token add" = "Токен, который на сервере создала команда byteripper-server token add";
 "Connect" = "Подключить";
 "Keep the analyses on this server and read them from it" = "Хранить разборы на этом сервере и читать их с него";
 "The token is kept in a file only you may read, the same file the Ghidra skill's scripts read on this Mac. Leave the field empty to keep the token already there." = "Токен хранится в файле, который можете читать только вы; этот же файл читают скрипты скилла Ghidra на этом Mac. Чтобы оставить уже сохранённый токен, не заполняйте поле.";
@@ -1758,6 +1758,8 @@
 "Connecting to the analysis server…" = "Подключение к серверу разборов…";
 "Connected. Analyses are read from the server and follow it." = "Подключено. Разборы читаются с сервера и обновляются вместе с ним.";
 "The server cannot be reached; what this Mac has read is shown. %1$@" = "Сервер недоступен; показано то, что этот Mac уже прочитал. %1$@";
+"The server refuses this Mac's token; what this Mac has read is shown. %1$@" = "Сервер не принимает токен этого Mac; показано то, что этот Mac уже прочитал. %1$@";
+"The token lacks the %1$@ right." = "В токене нет права %1$@.";
 "Sending…" = "Отправка…";
 "This Mac keeps no analyses to send." = "На этом Mac нет разборов для отправки.";
 "Sent: %1$@ new, %2$@ already there, %3$@ not taken, %4$@ kept aside." = "Отправлено: новых — %1$@, уже было — %2$@, не принято — %3$@, отложено — %4$@.";

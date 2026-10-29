@@ -150,7 +150,7 @@ struct RemoteOperations: StoreOperations {
         do {
             try wait { try await remote.removeRef(name) }
             return true
-        } catch RemoteStore.Failure.refused(status: 404, _) {
+        } catch RemoteStore.Failure.refused(status: 404, _, _) {
             return false
         }
     }
