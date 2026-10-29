@@ -338,6 +338,31 @@ final class HTTPServerTests: XCTestCase {
         XCTAssertEqual(granted.status, .ok)
     }
 
+    /// The screen is asked before the route and the authorizer, an open
+    /// route included: what the console's `Host` check stands on.
+    func testTheScreenRefusesBeforeAnyRoute() {
+        var router = HTTPRouter()
+        router.add("GET", "/admin/login", access: .open) { _ in .json(["ok": true]) }
+        let screen: @Sendable (HTTPRequest) -> HTTPError? = { head in
+            head.headers["host"] == "evil.example" ? HTTPError(.forbidden, "not this name") : nil
+        }
+        let refused = HTTPServer.admit(HTTPRequest(method: "GET", path: "/admin/login", headers: ["host": "evil.example"]),
+                                       router: router, authorizer: StaticAuthorizer(token: "t"), screen: screen)
+        XCTAssertEqual(refused, .refuse(HTTPError(.forbidden, "not this name")))
+        let admitted = HTTPServer.admit(HTTPRequest(method: "GET", path: "/admin/login", headers: ["host": "127.0.0.1"]),
+                                        router: router, authorizer: StaticAuthorizer(token: "t"), screen: screen)
+        XCTAssertEqual(admitted, .admit(maxBodyBytes: nil, principal: nil))
+    }
+
+    /// Two cookies are two `Set-Cookie` lines, never one joined header.
+    func testEachCookieIsALineOfItsOwn() {
+        var response = HTTPResponse.json(["ok": true])
+        response.cookies = ["a=1; Path=/admin", "b=2; Path=/admin"]
+        let head = String(decoding: response.serialized(keepAlive: false), as: UTF8.self)
+        XCTAssertTrue(head.contains("set-cookie: a=1; Path=/admin\r\n"), head)
+        XCTAssertTrue(head.contains("set-cookie: b=2; Path=/admin\r\n"), head)
+    }
+
     func testTheTokenComparisonNeedsEveryByte() {
         XCTAssertTrue(HTTPBearer.matches("Bearer abc", token: "abc"))
         XCTAssertFalse(HTTPBearer.matches("Bearer abcd", token: "abc"))

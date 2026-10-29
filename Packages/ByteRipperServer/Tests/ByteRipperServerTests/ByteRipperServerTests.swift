@@ -29,6 +29,10 @@ final class ServerCommandTests: XCTestCase {
         guard case .serve(let both) = try ServerCommand.parse(["--listen", "127.0.0.1:8765",
                                                                "--listen", "admins-imac:8765"]) else { return XCTFail() }
         XCTAssertEqual(both.listens, [.init(host: "127.0.0.1", port: 8765), .init(host: "admins-imac", port: 8765)])
+
+        guard case .serve(let named) = try ServerCommand.parse(["--server-name", "studio.local",
+                                                                "--server-name", "studio.tail.ts.net"]) else { return XCTFail() }
+        XCTAssertEqual(named.serverNames, ["studio.local", "studio.tail.ts.net"], "the console's names, repeatable")
     }
 
     /// The store is always served (`Design/SERVER_HEADLESS_PLAN.md` decision

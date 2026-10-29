@@ -187,7 +187,7 @@ them (the package is already listed). Its `dependencies:` gain
 | `ServerAuth` | `HTTPPrincipal`, `HTTPAuthorizer`, `TokenStore`, hashes, presets, one-time secrets, console cookie and CSRF | `HTTPService`, CryptoKit, Foundation |
 | `DumpHost` | `DocumentRegistry` (an `AgentDocumentSet`), `DocumentHost`, `SnapshotReader`, `documents.json`, uploads, limits | `AgentDocuments`, `AgentKit`, `UEFIImage`, `UEFIContentSource`, `ToolModuleKit` |
 | `ServerMCP` | the `AgentServer`, `documents`/`read`/`find_bytes`, the tool assembly, headless descriptions, the activity registry | `AgentKit`, `AgentDocuments`, `DumpHost`, `UEFITool`, `ToolModuleKit`, `BytePattern`, `GhidraHost`, `CodeAnalysis` |
-| `ServerConsole` | `/admin`: pages, JSON, sign-in, tokens, activity, status | `HTTPService`, `ServerAuth`, `DumpHost`, `AgentKit` |
+| `ServerConsole` | `/admin`: pages, JSON, sign-in, tokens, activity, status | `HTTPService`, `ServerAuth`, `DumpHost`, `ServerMCP` (the socket's activity rows), `AgentKit` |
 | `ServerRelay` | the stdio↔socket bridge; `AgentKit` only, which is what keeps the roles out of it | `AgentKit` |
 | `ByteRipperServer` | role composition, CLI, the removal of `MCPEndpoint` | all of the above + `CASService`, `GhidraHost`, `HTTPService` |
 
@@ -319,7 +319,7 @@ imports AppKit in several files: the server stays macOS-only in v1.
   refused, never written over another. A restore empties the rows before it
   fills them, so the server finishes it before it opens the socket or the
   console.
-- Upload: `POST /admin/documents?name=…` with a raw body (there is no multipart
+- Upload: `POST /admin/api/uploads?name=…` with a raw body (there is no multipart
   parser), checked against `--max-upload-bytes`, hashed, and written
   atomically to `Uploads/<sha256>` mode 0600 — the file is named by its hash,
   and `name` is kept only as the document's display name, so nothing a client
@@ -370,17 +370,44 @@ imports AppKit in several files: the server stays macOS-only in v1.
 ## 8. The console
 
 - `ServerConsole` serves `/admin` and the pages Documents, Activity, Tokens and
-  Status; the HTML/CSS/JS are resources of the target (SPM resources).
-- JSON: `/admin/api/documents`, `/admin/api/activity`, `/admin/api/status`;
-  actions: open by path, upload, reopen (an open document or a missing row),
-  delete (uploads only), forget a missing row, create/rotate/
-  revoke a token, sign in and out.
+  Status; the HTML/CSS/JS are resources of the target (SPM resources), read
+  once at start, with the app's own icon (`icon.png`, the 256 px AppIcon). One
+  page, drawn by its script: the shell answers each page's path, and the
+  script shows the one in the address.
+- JSON: `GET /admin/api/session`, `/admin/api/documents`,
+  `/admin/api/activity`, `/admin/api/tokens`, `/admin/api/status`. Actions:
+  `POST /admin/api/documents` (open by path, `~` expanded), `POST
+  /admin/api/uploads?name=…`, `POST /admin/api/documents/:id/reopen`
+  (an open document or a missing row), `…/close`, `…/forget` (a missing row),
+  `DELETE /admin/api/documents/:id` (uploads only), `PUT
+  /admin/api/documents/order`, `POST /admin/api/tokens` (a preset or rights),
+  `POST /admin/api/tokens/:id/rotate`, `…/revoke` — the last live admin token
+  is not revoked, the console and the next start need one — and `POST
+  /admin/login` / `/admin/logout`. A refusal of the registry or the token
+  store is a 422 with its sentence, a name already taken a 409.
+- Every console answer carries `Content-Security-Policy` (`'self'` only, no
+  inline script or style), `X-Frame-Options: DENY`, `nosniff`,
+  `no-referrer` and `no-store`. The page writes every value with
+  `textContent`: a document's name comes from an upload.
+- Sign-in: a failed attempt is answered after a second, and every attempt
+  that arrives meanwhile waits it out (`SignInGate`). The cookies are
+  `br_admin` (HttpOnly) and `br_csrf` (read by the page, sent back as
+  `X-CSRF-Token`), both `SameSite=Strict; Path=/admin`.
+- `Host`/`Origin` (decision 19): `ConsoleNames` — the listen hosts, their
+  addresses, every loopback name for a loopback listener, this Mac's
+  addresses and names for a wildcard one, and `--server-name` — screens every
+  `/admin` request on its headers through `HTTPServer.Configuration.screen`,
+  before the route and the authorizer; `Sec-Fetch-Site: cross-site` is
+  refused too.
 - Polling every two seconds; no SSE or WebSocket, because `HTTPService` sends
   complete responses only.
 - Activity: REST rows per token from `onRequest` (name, last seen, requests,
-  last method/path/status); MCP rows from the socket.
+  refused, last method/path/status), the console's own requests not counted
+  and requests without an accepted token on a row of their own; MCP rows from
+  the socket. The log leaves out the console's answered reads, which come
+  every two seconds.
 - Status: version, addresses, server names, roles, store, Ghidra, documents and
-  bytes, limits, socket path, uptime.
+  bytes, limits, socket path, uptime, sessions, and the resident memory.
 - Tokens: presets `reader` (`cas.read`), `app` (`cas.read` + `cas.write` +
   `ghidra.use`), `admin` (all); the secret is shown once.
 
@@ -466,11 +493,21 @@ Every phase ends with its packages' tests green and the server starting.
    stay out.
 6. **Rights on the roles** — done in phase 1: each route names its access,
    and the rights matrix is tested end to end over a running server.
-7. **The console**: pages, sign-in and CSRF, decision 19, documents and upload,
-   activity, tokens, status; its shell `.open` with its pages named one by
-   one, its data behind the session, `Host`/`Origin` checked on admission for
-   every `/admin` path, open ones included (§5); loopback tests, among them
-   the API refused without a session.
+7. **The console** — done: `ServerConsole` (§8) with the pages, sign-in and
+   CSRF, decision 19 through `ConsoleNames` and `HTTPServer`'s screen,
+   documents and upload, activity, tokens, status; `--server-name`;
+   `HTTPResponse.cookies` for the two `Set-Cookie` lines. Its shell `.open`
+   with its pages named one by one, its data behind the session. Loopback
+   tests: the API refused without a session and no page answering an
+   unlisted name; sign-in by JSON and by form, a non-admin token refused, a
+   change without its CSRF token refused, the cookie refused outside
+   `/admin`, sign-out ending the session; an unlisted `Host` refused over the
+   wire and `Origin`, `null` and `cross-site` refused; open by path (and
+   refused outside the roots), upload, the disk mark, Reopen raising the
+   version, the order, Delete for uploads only, Close; a secret answered once
+   and never listed, rotate refusing the old secret, the last admin token
+   kept, a revocation ending its sessions; REST rows per token; the status;
+   a failed sign-in slowed.
 8. **Documentation and measurements**: `SERVER_PLAN.md` and the skill; RSS and
    start time of `relay`; RSS of the server with the 21 MB LVM volume open; a
    relay executable of its own and a decompressed-buffer cap only if the

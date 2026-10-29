@@ -59,6 +59,17 @@ let package = Package(
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
             .product(name: "UEFITool", package: "UEFITool")
         ]),
+        // The web console at /admin: its pages, sign-in and the JSON behind
+        // them (`Design/SERVER_HEADLESS_PLAN.md` §8). The page, its style and
+        // its script are resources, read once at start; `icon.png` is the
+        // app's own icon (AppIcon, 256 px), so the console looks like it.
+        .target(name: "ServerConsole", dependencies: [
+            "ServerAuth",
+            "DumpHost",
+            "ServerMCP",
+            .product(name: "HTTPService", package: "HTTPService"),
+            .product(name: "AgentKit", package: "AgentKit")
+        ], resources: [.copy("Console")]),
         // The stdio↔socket bridge, and nothing else: a target whose only
         // import is AgentKit cannot start a role.
         .target(name: "ServerRelay", dependencies: [
@@ -67,6 +78,7 @@ let package = Package(
         .target(name: "ByteRipperServer", dependencies: [
             "ServerAuth",
             "ServerMCP",
+            "ServerConsole",
             "ServerRelay",
             "DumpHost",
             .product(name: "AgentDocuments", package: "AgentDocuments"),
@@ -85,6 +97,7 @@ let package = Package(
             "ByteRipperServer",
             "DumpHost",
             "ServerMCP",
+            "ServerConsole",
             "ServerRelay",
             .product(name: "AgentDocuments", package: "AgentDocuments"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),

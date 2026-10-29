@@ -16,7 +16,7 @@ public enum ServerCommand: Equatable {
 
     public static let usage = """
         usage: byteripper-server [serve] [--cas] [--ghidra] [--listen <host>:<port>]
-                                 [--store <dir>] [--tokens <file>]
+                                 [--server-name <name>] [--store <dir>] [--tokens <file>]
                                  [--dump-roots <dir>] [--max-documents <n>]
                                  [--max-open-bytes <n>] [--max-upload-bytes <n>] [--mcp-socket <path>]
                                  [--ghidra-home <dir>] [--projects <dir>] [--idle <s>]
@@ -39,6 +39,10 @@ public enum ServerCommand: Equatable {
           --projects      the modules' kept projects, the app's folder by default
           --idle          seconds an owner waits for a call before it saves and
                           exits, 1800 by default
+          --server-name   a name the console answers under besides the listen
+                          addresses — a LAN or tailnet name; repeat it for
+                          several. A browser that reached the server under any
+                          other name is refused
           --dump-roots    a folder the console may open dumps from; repeat it
                           for several. A path outside every root and the
                           server's Uploads is refused
@@ -137,6 +141,8 @@ public enum ServerCommand: Equatable {
                     configuration.store = URL(fileURLWithPath: try value(flag))
                 case "--tokens":
                     configuration.tokensFile = URL(fileURLWithPath: try value(flag))
+                case "--server-name":
+                    configuration.serverNames.append(try value(flag))
                 case "--dump-roots":
                     configuration.dumpRoots.append(URL(fileURLWithPath: try value(flag)))
                 case "--max-documents":
@@ -209,6 +215,9 @@ public struct ServerConfiguration: Equatable, Sendable {
     /// The `--dump-roots` a document's path must resolve inside. A root that
     /// is not there is kept and reported (`DocumentRegistry.absentRoots`).
     public var dumpRoots: [URL] = []
+    /// `--server-name`: the names the console answers under besides the
+    /// listen addresses (decision 19).
+    public var serverNames: [String] = []
     /// The local MCP's socket, `mcp.sock` in the server's folder.
     public var mcpSocket = ServerPaths.defaultSocket
     /// `Uploads` beside the tokens, and the documents' file — the server's

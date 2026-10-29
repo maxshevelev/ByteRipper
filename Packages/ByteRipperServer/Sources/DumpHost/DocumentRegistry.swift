@@ -75,6 +75,10 @@ public final class DocumentRegistry: AgentDocumentSet {
         self.limits = limits
     }
 
+    /// The `--dump-roots` as given, absent ones included: what the console
+    /// lists beside the documents.
+    public var dumpRoots: [URL] { givenRoots }
+
     /// The `--dump-roots` named that do not resolve now: the server says so
     /// at start, and the documents under them are missing for that reason.
     public var absentRoots: [URL] {

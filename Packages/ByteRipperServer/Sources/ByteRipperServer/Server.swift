@@ -6,6 +6,7 @@ import Foundation
 import GhidraHost
 import HTTPService
 import ServerAuth
+import ServerConsole
 import ServerMCP
 
 /// The running server: its roles' routes on one listener, behind the tokens
@@ -24,6 +25,11 @@ public final class Server {
     /// The dumps the local MCP answers over (`Design/SERVER_HEADLESS_PLAN.md` §6).
     public private(set) var documents: DocumentRegistry?
     public private(set) var mcp: MCPSocket?
+    /// The REST clients the console's Activity lists, per token.
+    public let rest = RESTActivity()
+    /// When `start` began, and the addresses it bound: the console's Status.
+    private var started = Date()
+    private var bound: [String] = []
 
     public init(configuration: ServerConfiguration,
                 log: @escaping @Sendable (String) -> Void = { FileHandle.standardError.write(Data(($0 + "\n").utf8)) }) {
@@ -34,6 +40,7 @@ public final class Server {
     /// Opens the roles and listens on every address; returns the first one's port.
     @discardableResult
     public func start() async throws -> UInt16 {
+        started = Date()
         let tokens = try TokenStore.open(at: configuration.tokensFile)
         tokens.onProblem = log
         if let warning = Self.clientTokenWarning(configuration.clientTokenFile, tokens: tokens) {
@@ -102,7 +109,7 @@ public final class Server {
         let backend = ghidra.map { $0 as any GhidraBackend }
         let tools = ServerTools.all(documents: registry, store: configuration.store, ghidra: backend)
         let agentServer = AgentServer(
-            info: AgentServerInfo(name: "byteripper-server", version: "1", title: "ByteRipper analysis server"),
+            info: AgentServerInfo(name: "byteripper-server", version: Self.version, title: "ByteRipper analysis server"),
             instructions: ServerTools.instructions(ghidra: backend != nil),
             tools: tools,
             limits: .init(maxLineBytes: 16 << 20, maxAnswerBytes: 96 << 10))
@@ -116,11 +123,34 @@ public final class Server {
         mcp = socket
         log("local MCP on \(configuration.mcpSocket.path), \(tools.count) tools")
 
+        // The console, on every address behind the admin token, and only
+        // under this server's own names (decision 19).
+        let console: Console
+        do {
+            console = try Console(registry: registry, tokens: tokens, authorizer: authorizer, rest: rest,
+                                  mcp: socket.activity, status: { [weak self] in await self?.status() ?? Self.noStatus })
+        } catch {
+            stop()
+            throw error
+        }
+        router.merge(console.routes(uploadLimit: configuration.limits.uploadBytes))
+        let names = ConsoleNames(listens: configuration.listens.map(\.host), serverNames: configuration.serverNames)
+        let rest = self.rest
+        // The console asks every two seconds: its answered reads would bury
+        // every other line of the log.
+        let log = self.log
+        let requestLog: @Sendable (String) -> Void = { line in
+            if line.hasPrefix("GET /admin"), line.contains(" 200 ") || line.contains(" 304 ") { return }
+            log(line)
+        }
+
         var first: UInt16 = 0
+        bound = []
         for listen in configuration.listens {
             let http = HTTPServer(
                 configuration: .init(host: listen.host, port: listen.port,
-                                     authorizer: authorizer, log: log),
+                                     authorizer: authorizer, log: requestLog,
+                                     onRequest: { rest.record($0) }, screen: { names.screen($0) }),
                 router: router)
             let port: UInt16
             do {
@@ -131,10 +161,38 @@ public final class Server {
             }
             if servers.isEmpty { first = port }
             servers.append(http)
+            bound.append("\(listen.host):\(port)")
             let address = http.boundAddress.map { $0 == listen.host ? "" : " (\($0))" } ?? ""
             log("listening on \(listen.host)\(address):\(port), token required")
         }
+        log("console at http://\(Self.hostForURL(configuration.listens[0].host)):\(first)/admin")
         return first
+    }
+
+    /// What the console's Status shows, read at each ask.
+    func status() async -> ConsoleStatus {
+        var ghidraNote: String?
+        if let ghidra {
+            ghidraNote = (try? await ghidra.ghidra()).map { "Ghidra \($0.version) at \($0.home.path)" }
+                ?? "no Ghidra found: give --ghidra-home"
+        }
+        return ConsoleStatus(version: Self.version, started: started, addresses: bound,
+                             serverNames: configuration.serverNames,
+                             roles: configuration.roles.map(\.rawValue).sorted(),
+                             store: configuration.store.path, storeID: cas?.feed.storeID, ghidra: ghidraNote,
+                             socket: configuration.mcpSocket.path, tokensFile: configuration.tokensFile.path)
+    }
+
+    /// What the server calls itself to an agent and on the console.
+    public nonisolated static let version = "1"
+
+    nonisolated static let noStatus = ConsoleStatus(
+        version: version, started: Date(), addresses: [], serverNames: [], roles: [], store: "", storeID: nil,
+        ghidra: nil, socket: "", tokensFile: "")
+
+    static func hostForURL(_ host: String) -> String {
+        if ConsoleNames.isWildcard(host) { return "127.0.0.1" }
+        return host.contains(":") ? "[\(host)]" : host
     }
 
     /// What to say about this Mac's client token: nothing when it is one of

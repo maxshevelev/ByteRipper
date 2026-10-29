@@ -54,11 +54,13 @@ public struct HTTPStatus: Equatable, Sendable {
     public static let forbidden = HTTPStatus(403, "Forbidden")
     public static let notFound = HTTPStatus(404, "Not Found")
     public static let methodNotAllowed = HTTPStatus(405, "Method Not Allowed")
+    public static let seeOther = HTTPStatus(303, "See Other")
     public static let conflict = HTTPStatus(409, "Conflict")
     public static let lengthRequired = HTTPStatus(411, "Length Required")
     public static let payloadTooLarge = HTTPStatus(413, "Payload Too Large")
     public static let headersTooLarge = HTTPStatus(431, "Request Header Fields Too Large")
     public static let unprocessable = HTTPStatus(422, "Unprocessable Content")
+    public static let tooManyRequests = HTTPStatus(429, "Too Many Requests")
     public static let internalError = HTTPStatus(500, "Internal Server Error")
     public static let unavailable = HTTPStatus(503, "Service Unavailable")
 }
@@ -67,6 +69,9 @@ public struct HTTPResponse: Sendable {
     public var status: HTTPStatus
     public var headers: [String: String]
     public var body: Data
+    /// Each a `Set-Cookie` line of its own: a header the protocol repeats
+    /// rather than joins, which `headers` cannot hold twice.
+    public var cookies: [String] = []
 
     public init(_ status: HTTPStatus = .ok, headers: [String: String] = [:], body: Data = Data()) {
         self.status = status
@@ -111,6 +116,9 @@ public struct HTTPResponse: Sendable {
         fields["connection"] = keepAlive ? "keep-alive" : "close"
         for name in fields.keys.sorted() {
             head += "\(name): \(fields[name]!)\r\n"
+        }
+        for cookie in cookies {
+            head += "set-cookie: \(cookie)\r\n"
         }
         head += "\r\n"
         var data = Data(head.utf8)

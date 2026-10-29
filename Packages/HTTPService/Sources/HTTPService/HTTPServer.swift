@@ -20,18 +20,25 @@ public final class HTTPServer: @unchecked Sendable {
         /// Every answered request as a value, refusals included: where the
         /// console's REST activity rows come from.
         public var onRequest: (@Sendable (HTTPActivity) -> Void)?
+        /// Asked about every request on its headers, before the route and the
+        /// authorizer — an open route included: a refusal here is the answer.
+        /// Where a check that no route may skip lives, such as the console's
+        /// `Host` and `Origin` (`Design/SERVER_HEADLESS_PLAN.md` decision 19).
+        public var screen: (@Sendable (HTTPRequest) -> HTTPError?)?
 
         public init(host: String = "127.0.0.1", port: UInt16 = 8765,
                     authorizer: any HTTPAuthorizer,
                     maxBodyBytes: Int = 512 * 1024 * 1024,
                     log: (@Sendable (String) -> Void)? = nil,
-                    onRequest: (@Sendable (HTTPActivity) -> Void)? = nil) {
+                    onRequest: (@Sendable (HTTPActivity) -> Void)? = nil,
+                    screen: (@Sendable (HTTPRequest) -> HTTPError?)? = nil) {
             self.host = host
             self.port = port
             self.authorizer = authorizer
             self.maxBodyBytes = maxBodyBytes
             self.log = log
             self.onRequest = onRequest
+            self.screen = screen
         }
 
         /// One bearer token that opens every route: the package's own tests and
@@ -183,17 +190,19 @@ public final class HTTPServer: @unchecked Sendable {
         connection.start(queue: queue)
         let router = self.router
         let authorizer = configuration.authorizer
+        let screen = configuration.screen
         receive(on: connection, parser: HTTPParser(
             maxBodyBytes: configuration.maxBodyBytes,
-            admit: { Self.admit($0, router: router, authorizer: authorizer) }))
+            admit: { Self.admit($0, router: router, authorizer: authorizer, screen: screen) }))
     }
 
     /// Who a request is, decided from its headers before its body is read: an
     /// open route asks for nobody, every other path — a route or not, so a
     /// stranger learns nothing of what is served — for a token the authorizer
     /// accepts (`Design/SERVER_HEADLESS_PLAN.md` §5).
-    static func admit(_ head: HTTPRequest, router: HTTPRouter,
-                      authorizer: any HTTPAuthorizer) -> HTTPParser.Admission {
+    static func admit(_ head: HTTPRequest, router: HTTPRouter, authorizer: any HTTPAuthorizer,
+                      screen: (@Sendable (HTTPRequest) -> HTTPError?)? = nil) -> HTTPParser.Admission {
+        if let refusal = screen?(head) { return .refuse(refusal) }
         let route = router.route(method: head.method, path: head.path)
         if route?.access == .open {
             return .admit(maxBodyBytes: route?.maxBodyBytes, principal: nil)
