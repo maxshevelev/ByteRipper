@@ -1,6 +1,8 @@
 import Cocoa
+import AgentDocuments
 import AgentKit
 import ByteRipperCore
+import ToolModuleKit
 
 /// The open documents as the agent service sees them: which there are, what
 /// each is called to an agent, and which one the reader is in
@@ -13,7 +15,7 @@ import ByteRipperCore
 /// against the document, so it goes when the document does, and a file opened
 /// into the same pane later is a new document with a new id.
 @MainActor
-final class AgentDesk {
+final class AgentDesk: AgentDocumentSet {
     /// Every tab's controller, frontmost first.
     private let controllers: () -> [MainViewController]
     /// The tab the reader is in.
@@ -45,7 +47,7 @@ final class AgentDesk {
 
     /// One open document: the pane it is in and the tab that holds the pane —
     /// none for a background document.
-    struct Place {
+    struct Place: AgentDocument {
         let id: String
         let pane: PaneViewModel
         let controller: MainViewController?
@@ -58,9 +60,12 @@ final class AgentDesk {
 
         var isOnScreen: Bool { controller != nil }
 
-        /// The label with the id, for a sentence the agent reads: it names
-        /// the document to the person by the first and to a tool by the second.
-        var named: String { label.isEmpty || label == id ? id : "\(label) (\(id))" }
+        /// A host that reads and nothing else: no session is behind it, and
+        /// a query must not draw zones or put up sheets on a panel that is
+        /// not there.
+        @MainActor func readHost() -> any ToolReadHost {
+            PaneToolHost(pane: pane, owner: controller, tools: nil)
+        }
 
         /// The tab, for a tool that shows something; a background document
         /// is refused with the way to put it on screen.
@@ -212,6 +217,22 @@ final class AgentDesk {
         if entry.id == nil { entry.id = id }
         if entry.id == id { released[id] = nil }
         return places().first { $0.pane === entry.pane }
+    }
+
+    // MARK: - The agent's document rule
+
+    /// The panes, as the tools `AgentDocuments` serves see them.
+    func documents() -> [any AgentDocument] { places() }
+
+    /// The document an agent named, or the focused one when it named none —
+    /// the app's rule, since the person is looking at one
+    /// (`Design/SERVER_HEADLESS_PLAN.md` §4.1).
+    func resolve(_ document: String?) throws -> any AgentDocument {
+        do {
+            return try place(named: document)
+        } catch let error as AgentDeskError {
+            throw AgentToolError(error.description)
+        }
     }
 
     // MARK: - Moving the view

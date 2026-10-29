@@ -1,11 +1,7 @@
 import CodeAnalysis
 import Foundation
 import Localization
-import PartCodec
-import ToolModuleKit
-import UEFIContentSource
 import UEFIImage
-import UEFITool
 
 /// Everything a Code panel is opened with, read and checked: the module's
 /// bytes, the analysis that matches them, its artifact, and where the part
@@ -15,6 +11,11 @@ import UEFITool
 /// `open_code`, a double-click on an annotation on code. None of them needs
 /// the UEFI panel to have scanned the tree first — the node's bytes are
 /// hashed here, and the store says which analysis they have.
+///
+/// In the pure target, because an agent's `code_query` by a node reads the
+/// same thing with no panel at all — in the app and in `byteripper-server`
+/// (`Packages/AgentDocuments`). The codec a panel is opened with is the UI
+/// target's (`UEFICodeOpening+Codec.swift`).
 public struct UEFICodeOpening: Sendable {
     public let partName: String
     public let source: Range<UInt64>
@@ -24,12 +25,6 @@ public struct UEFICodeOpening: Sendable {
     /// Every readable analysis of the module, for the panel's dropdown.
     public let recipes: [AnalysisManifest]
 
-    /// The read-only codec the part is opened with.
-    public var codec: ReadOnlyPartCodec {
-        ReadOnlyPartCodec(bytes, title: L("This cannot be put back"),
-                          reason: L("A code analysis is a snapshot; edit the dump and analyze the module again."))
-    }
-
     /// What stopped an opening, in the words the panel shows.
     public enum Failure: Error, Equatable, Sendable {
         case noAnalysis
@@ -37,7 +32,9 @@ public struct UEFICodeOpening: Sendable {
         case changed
         case unreadableAnalysis
 
-        public var message: String {
+        /// Put into words by whoever shows it: the panel in the app's
+        /// language (`message`, the UI target's).
+        public var text: LocalizedText {
             switch self {
             case .noAnalysis: L("There is no code analysis to open here.")
             case .unreadableBytes: L("Those bytes could not be read.")

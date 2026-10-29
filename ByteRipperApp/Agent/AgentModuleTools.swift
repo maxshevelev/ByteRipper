@@ -1,4 +1,5 @@
 import Cocoa
+import AgentDocuments
 import AgentKit
 import Localization
 import ToolModuleKit
@@ -45,16 +46,24 @@ final class AgentModuleTools {
 
     // MARK: - Queries
 
+    /// The query as `AgentDocuments` serves it, with the UEFI Structure's
+    /// node ids named in a part and its parent too (`AgentNodeLinks`), which
+    /// belong to parts and stay in the app.
     private nonisolated func query(_ module: any ToolModule.Type, _ query: ToolAgentQuery) -> AgentTool {
-        var properties = query.properties
-        properties["document"] = AgentSchema.string("The document's id from `documents`. Default: the focused one.")
-        let links = Self.linksNodes(module)
-        return AgentTool(
-            name: query.name, title: query.title, description: query.description,
-            inputSchema: AgentSchema.object(properties, required: query.required)
-        ) { call in
-            try await self.runQuery(query, links: links, call.arguments)
+        var around: ToolQueryTools.Around?
+        if Self.linksNodes(module) {
+            around = { document, body in try await self.linking(document, body) }
         }
+        return ToolQueryTools.tool(for: query, documents: desk,
+                                   document: "The document's id from `documents`. Default: the focused one.",
+                                   around: around)
+    }
+
+    private func linking(_ document: any AgentDocument,
+                         _ body: () async throws -> AgentAnswer) async throws -> AgentAnswer {
+        let place = document as! AgentDesk.Place
+        let answer = try await explainingNodes(place: place, links: true, body)
+        return await linked(answer, place: place)
     }
 
     /// The module whose answers name nodes of a firmware tree, which a part
@@ -85,21 +94,6 @@ final class AgentModuleTools {
             let said = holders.map { "\(id) is a node of \($0.document) (\($0.name)); call it with `document` \"\($0.document)\"." }
             throw AgentToolError(error.message + " " + said.joined(separator: " "))
         }
-    }
-
-    private func runQuery(_ query: ToolAgentQuery, links: Bool, _ arguments: AgentArguments) async throws -> AgentAnswer {
-        let place = try resolve(arguments)
-        // A host that reads and nothing else: no session is behind it, and a
-        // query must not draw zones or put up sheets on a panel that is not
-        // there.
-        let host = PaneToolHost(pane: place.pane, owner: place.controller, tools: nil)
-        var answer = try await explainingNodes(place: place, links: links) { try await query.run(host, arguments) }
-        if links { answer = await linked(answer, place: place) }
-        if case .json(let value) = answer, case .object(var members) = value {
-            members["document"] = .string(place.id)
-            answer = .json(.object(members))
-        }
-        return answer
     }
 
     // MARK: - Comparisons
