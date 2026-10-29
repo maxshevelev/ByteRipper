@@ -405,12 +405,17 @@ Every phase ends with its packages' tests green and the server starting.
    staying in the UI one. Package tests for the document rule, the adapter
    and the replaced `ghidra_open`; the app's agent tests run unchanged and
    pass.
-4. **`DumpHost`**: registry, `SnapshotReader`, `DocumentHost`, persistence with
-   the saved ids and hashes, decision 18, limits; a synthetic image in the
-   server tests (a ~50-line builder in
-   `ByteRipperServerTests/SyntheticDump.swift`; a shared
-   `UEFIImageTestSupport` only if a third package needs it); a test that a
-   file rewritten in place after open does not change what `read` answers.
+4. **`DumpHost`** — done: `DocumentRegistry`, `SnapshotReader`,
+   `DocumentHost`, `FileStamp` and the disk mark, `documents.json` with the
+   saved ids, hashes, stamps, versions and `next_id`, decision 18, the
+   limits, and uploads kept as `Uploads/<sha256>`; a synthetic image in the
+   server tests (`ByteRipperServerTests/SyntheticDump.swift`); a test that a
+   file rewritten in place after open does not change what the snapshot
+   answers. A Reopen of an open document that would pass a limit is refused
+   and leaves it open. The registry is not yet started by the server: the
+   flags (`--dump-roots`, `--max-documents`, `--max-open-bytes`,
+   `--max-upload-bytes`) and the restore at start come with phase 5, which
+   is the first to serve the documents.
 5. **`ServerMCP` and `ServerRelay`**: tool assembly, descriptions, the socket,
    the relay, `MCPEndpoint` removed; tests for the forbidden tools, unique
    names, the answer keys of `documents`, `uefi_tree`/`read` on the synthetic

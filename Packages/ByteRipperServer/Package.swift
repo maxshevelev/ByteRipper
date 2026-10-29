@@ -21,7 +21,11 @@ let package = Package(
         .package(path: "../HTTPService"),
         .package(path: "../CASService"),
         .package(path: "../GhidraHost"),
-        .package(path: "../AgentKit")
+        .package(path: "../AgentKit"),
+        .package(path: "../AgentDocuments"),
+        .package(path: "../ToolModuleKit"),
+        .package(path: "../UEFIImage"),
+        .package(path: "../UEFIContentSource")
     ],
     targets: [
         // Tokens: the file, the authorizer the listener runs on, and the
@@ -29,6 +33,16 @@ let package = Package(
         // is can be tested without a listener or a store.
         .target(name: "ServerAuth", dependencies: [
             .product(name: "HTTPService", package: "HTTPService")
+        ]),
+        // The documents the server holds: snapshots read whole at open, the
+        // tree read from each, the ids that survive a restart, the roots and
+        // the limits (`Design/SERVER_HEADLESS_PLAN.md` §6).
+        .target(name: "DumpHost", dependencies: [
+            .product(name: "AgentDocuments", package: "AgentDocuments"),
+            .product(name: "AgentKit", package: "AgentKit"),
+            .product(name: "ToolModuleKit", package: "ToolModuleKit"),
+            .product(name: "UEFIImage", package: "UEFIImage"),
+            .product(name: "UEFIContentSource", package: "UEFIContentSource")
         ]),
         .target(name: "ByteRipperServer", dependencies: [
             "ServerAuth",
@@ -45,6 +59,10 @@ let package = Package(
         ]),
         .testTarget(name: "ByteRipperServerTests", dependencies: [
             "ByteRipperServer",
+            "DumpHost",
+            .product(name: "AgentDocuments", package: "AgentDocuments"),
+            .product(name: "ToolModuleKit", package: "ToolModuleKit"),
+            .product(name: "UEFIImage", package: "UEFIImage"),
             "ServerAuth",
             .product(name: "CodeAnalysis", package: "CodeAnalysis"),
             .product(name: "GhidraHost", package: "GhidraHost"),
