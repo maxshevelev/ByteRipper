@@ -61,7 +61,10 @@ final class AgentModuleTools {
 
     private func linking(_ document: any AgentDocument,
                          _ body: () async throws -> AgentAnswer) async throws -> AgentAnswer {
-        let place = document as! AgentDesk.Place
+        guard let place = document as? AgentDesk.Place else {
+            throw AgentToolError("That document cannot answer this: only a document open in this app can. "
+                + "Call `documents` for the ones that are open.")
+        }
         let answer = try await explainingNodes(place: place, links: true, body)
         return await linked(answer, place: place)
     }

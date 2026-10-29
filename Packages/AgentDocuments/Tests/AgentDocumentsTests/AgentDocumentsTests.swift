@@ -84,6 +84,95 @@ final class AgentDocumentsTests: XCTestCase {
     }
 }
 
+/// `CodeReadings` on its own: a module's analysis read from the store with no
+/// dump and no panel, and the refusals a host's words make
+/// (`Design/SERVER_HEADLESS_PLAN.md` §4.1) — the same code `byteripper-server`
+/// serves, so it is tested where both can run it.
+@MainActor
+final class CodeReadingsTests: XCTestCase {
+    private var directory: URL!
+
+    override func setUpWithError() throws {
+        directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CodeReadingsTests-\(UUID().uuidString)", isDirectory: true)
+    }
+
+    override func tearDownWithError() throws {
+        try? FileManager.default.removeItem(at: directory)
+    }
+
+    private let recipe = AnalysisRecipe(id: "code-v4-ghidra-12.1.2", exporter: 4, ghidra: "12.1.2",
+                                        script: "ExportCode.java")
+
+    private var module: ModuleIdentity {
+        let bytes = Data("module".utf8)
+        return ModuleIdentity(sha256: SHA256Digest(data: bytes), size: bytes.count, name: "CpuPei", kind: "TE",
+                              language: "x86:LE:32:default", imageBase: "0x0")
+    }
+
+    private static let artifact = """
+        {"script_version": 4, "ghidra": "12.1.2", "functions": [
+          {"entry": "0x1000", "name": "entry", "size": 1, "signature": "void entry(void)",
+           "instructions": [{"address": "0x1000", "text": "RET"}]}
+        ], "strings": [], "post_codes": [], "status_code_calls": []}
+        """
+
+    private func readings(_ documents: [Document] = []) -> CodeReadings {
+        CodeReadings(
+            documents: Documents(documents),
+            wording: .init(query: "q", modules: "m",
+                           queryDocument: "The dump.", modulesDocument: "The dump.",
+                           missingNode: { "\($0) is not a Code panel." }),
+            store: { self.directory },
+            catalogue: { .empty })
+    }
+
+    private func query(_ readings: CodeReadings) throws -> AgentTool {
+        try XCTUnwrap(readings.tools().first { $0.name == "code_query" })
+    }
+
+    func testAQueryByModuleReadsTheStoreWithNoDump() async throws {
+        try ContentStore(root: directory).putAnalysis(module: module, recipe: recipe,
+                                                      artifact: Data(Self.artifact.utf8))
+        let tool = try query(readings())
+        let answer = try await tool.run(AgentCall(tool: "code_query", arguments: AgentArguments([
+            "module": .string(module.sha256.hex), "what": .string("functions")])))
+        guard case .json(.object(let members)) = answer else { return XCTFail("not an object: \(answer)") }
+        XCTAssertEqual(members["module"]?.stringValue, "CpuPei")
+        XCTAssertEqual(members["sha256"]?.stringValue, module.sha256.hex)
+        XCTAssertEqual(members["recipe"]?.stringValue, recipe.id)
+        XCTAssertEqual(members["functions"]?.arrayValue?.first?["name"]?.stringValue, "entry")
+        XCTAssertNil(members["document"], "no document was named")
+        XCTAssertNil(members["disk"])
+    }
+
+    func testAModuleTheStoreHasNothingForIsRefusedByName() async throws {
+        _ = try ContentStore(root: directory)
+        let other = SHA256Digest(data: Data("other".utf8)).hex
+        do {
+            _ = try await query(readings()).run(AgentCall(tool: "code_query", arguments: AgentArguments([
+                "module": .string(other)])))
+            XCTFail("read an analysis the store has not got")
+        } catch let error as AgentToolError {
+            XCTAssertEqual(error.message, "The store has no readable analysis of module \(other).")
+        }
+    }
+
+    /// A document that is not a module's code and has no `node` given is
+    /// refused in the host's words — the app's name its Code panel, the
+    /// server's name nothing.
+    func testADocumentWithoutANodeIsRefusedInTheHostsWords() async throws {
+        let tool = try query(readings([Document("d1", "a.bin")]))
+        do {
+            _ = try await tool.run(AgentCall(tool: "code_query",
+                                             arguments: AgentArguments(["document": "d1"])))
+            XCTFail("answered about a document with no node")
+        } catch let error as AgentToolError {
+            XCTAssertEqual(error.message, "a.bin (d1) is not a Code panel.")
+        }
+    }
+}
+
 private struct Document: AgentDocument {
     let id: String
     let label: String
