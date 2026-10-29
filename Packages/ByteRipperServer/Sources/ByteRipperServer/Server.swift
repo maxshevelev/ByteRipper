@@ -1,14 +1,17 @@
 import AgentKit
 import CASService
 import CodeAnalysis
+import DumpHost
 import Foundation
 import GhidraHost
 import HTTPService
 import ServerAuth
+import ServerMCP
 
 /// The running server: its roles' routes on one listener, behind the tokens
-/// of `tokens.json`.
-public final class Server: @unchecked Sendable {
+/// of `tokens.json`, and the documents its local MCP serves on a socket.
+@MainActor
+public final class Server {
     public let configuration: ServerConfiguration
     private let log: @Sendable (String) -> Void
     private var servers: [HTTPServer] = []
@@ -18,6 +21,9 @@ public final class Server: @unchecked Sendable {
     public let sessions = AdminSessions()
     public private(set) var cas: CASService?
     public private(set) var ghidra: GhidraHost?
+    /// The dumps the local MCP answers over (`Design/SERVER_HEADLESS_PLAN.md` §6).
+    public private(set) var documents: DocumentRegistry?
+    public private(set) var mcp: MCPSocket?
 
     public init(configuration: ServerConfiguration,
                 log: @escaping @Sendable (String) -> Void = { FileHandle.standardError.write(Data(($0 + "\n").utf8)) }) {
@@ -69,17 +75,42 @@ public final class Server: @unchecked Sendable {
             GhidraRoutes.projectsRoot = configuration.projects
             router.merge(GhidraRoutes.routes(host: host, published: { await feed.rescan() }))
             ghidra = host
-            // The agent's tools over this host, at `/mcp`, behind the same token.
-            let agentServer = AgentServer(
-                info: AgentServerInfo(name: "byteripper-server", version: "1", title: "ByteRipper analysis server"),
-                instructions: GhidraTools.instructions,
-                tools: GhidraTools.tools(backend: host),
-                limits: .init(maxLineBytes: 16 << 20, maxAnswerBytes: 96 << 10))
-            router.merge(MCPEndpoint.routes(server: agentServer, log: log))
             let ghidraNote = (try? await host.ghidra()).map { "Ghidra \($0.version) at \($0.home.path)" }
                 ?? "no Ghidra found yet"
             log("projects \(configuration.projects.path); \(ghidraNote)")
         }
+        // The documents and the local MCP: always on (decision 14), and it has
+        // the dumps and the store whether or not Ghidra is a role. The socket
+        // is served last, once the rows are restored: a client that connects
+        // finds the set the file had, not a half-filled one.
+        let registry = DocumentRegistry(roots: configuration.dumpRoots,
+                                        uploads: configuration.uploads,
+                                        file: configuration.documentsFile,
+                                        limits: configuration.limits)
+        try await registry.restore()
+        for root in registry.absentRoots {
+            log("dump root \(root.path) is not there; its documents stay missing until it is")
+        }
+        documents = registry
+        log("documents: \(registry.rows.filter { $0.host != nil }.count) open of \(registry.rows.count)")
+
+        let backend = ghidra.map { $0 as any GhidraBackend }
+        let tools = ServerTools.all(documents: registry, store: configuration.store, ghidra: backend)
+        let agentServer = AgentServer(
+            info: AgentServerInfo(name: "byteripper-server", version: "1", title: "ByteRipper analysis server"),
+            instructions: ServerTools.instructions(ghidra: backend != nil),
+            tools: tools,
+            limits: .init(maxLineBytes: 16 << 20, maxAnswerBytes: 96 << 10))
+        let socket = MCPSocket(path: configuration.mcpSocket.path, server: agentServer)
+        do {
+            try socket.start()
+        } catch {
+            stop()
+            throw error
+        }
+        mcp = socket
+        log("local MCP on \(configuration.mcpSocket.path), \(tools.count) tools")
+
         var first: UInt16 = 0
         for listen in configuration.listens {
             let http = HTTPServer(
@@ -117,6 +148,9 @@ public final class Server: @unchecked Sendable {
     }
 
     public func stop() {
+        mcp?.stop()
+        mcp = nil
+        documents = nil
         for server in servers { server.stop() }
         servers = []
         watcher = nil

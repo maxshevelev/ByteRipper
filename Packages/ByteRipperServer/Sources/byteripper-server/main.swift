@@ -1,5 +1,6 @@
 import ByteRipperServer
 import Foundation
+import ServerRelay
 
 // `byteripper-server`: the arguments to a command, and the server run until a
 // signal stops it. Everything else is in the ByteRipperServer library.
@@ -25,6 +26,10 @@ case .token(let command):
     } catch {
         fail("\(error)")
     }
+case .relay(let path):
+    // Before any `Server` exists: this mode copies bytes between stdin and
+    // the local MCP's socket and starts no role at all.
+    exit(ServerRelay.run(path: path))
 case .serve(let configuration):
     let server = Server(configuration: configuration)
     do {

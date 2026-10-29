@@ -61,6 +61,7 @@ final class ServerCommandTests: XCTestCase {
     }
 }
 
+@MainActor
 final class ServerTests: XCTestCase {
     private var directory: URL!
 
@@ -83,6 +84,10 @@ final class ServerTests: XCTestCase {
         configuration.port = 0
         configuration.store = directory.appendingPathComponent("store")
         configuration.tokensFile = directory.appendingPathComponent("tokens.json")
+        configuration.uploads = directory.appendingPathComponent("Uploads")
+        configuration.documentsFile = directory.appendingPathComponent("documents.json")
+        // `sun_path` holds 104 bytes: a socket in /tmp, not under the test folder.
+        configuration.mcpSocket = URL(fileURLWithPath: "/tmp/br-\(UUID().uuidString.prefix(8)).sock")
         configuration.clientTokenFile = directory.appendingPathComponent("token")
         let lines = Lines()
         let server = Server(configuration: configuration, log: { lines.add($0) })
@@ -115,6 +120,10 @@ final class ServerTests: XCTestCase {
         configuration.store = directory.appendingPathComponent("store")
         configuration.projects = directory.appendingPathComponent("projects")
         configuration.tokensFile = directory.appendingPathComponent("tokens.json")
+        configuration.uploads = directory.appendingPathComponent("Uploads")
+        configuration.documentsFile = directory.appendingPathComponent("documents.json")
+        // `sun_path` holds 104 bytes: a socket in /tmp, not under the test folder.
+        configuration.mcpSocket = URL(fileURLWithPath: "/tmp/br-\(UUID().uuidString.prefix(8)).sock")
         configuration.clientTokenFile = directory.appendingPathComponent("token")
         let server = Server(configuration: configuration, log: { _ in })
         let port = try await server.start()
@@ -140,8 +149,10 @@ final class ServerTests: XCTestCase {
         let (ghidra, why) = try await call("GET", "ghidra/v1/modules", reader)
         XCTAssertEqual(ghidra, 403)
         XCTAssertTrue(why.contains("ghidra.use"), why)
+        // The network MCP is gone (`Design/SERVER_HEADLESS_PLAN.md` §9): an
+        // agent on the server uses the socket, not a route.
         let status2 = try await call("POST", "mcp", reader, body: Data("{}".utf8)).0
-        XCTAssertEqual(status2, 403)
+        XCTAssertEqual(status2, 404)
         // A publish lacks two rights, and one refusal names both — through
         // the client the app relays Ghidra calls with, as values.
         do {
@@ -189,6 +200,10 @@ final class ServerTests: XCTestCase {
         configuration.port = 0
         configuration.store = directory.appendingPathComponent("store")
         configuration.tokensFile = directory.appendingPathComponent("tokens.json")
+        configuration.uploads = directory.appendingPathComponent("Uploads")
+        configuration.documentsFile = directory.appendingPathComponent("documents.json")
+        // `sun_path` holds 104 bytes: a socket in /tmp, not under the test folder.
+        configuration.mcpSocket = URL(fileURLWithPath: "/tmp/br-\(UUID().uuidString.prefix(8)).sock")
         configuration.clientTokenFile = directory.appendingPathComponent("token")
         do {
             try await Server(configuration: configuration, log: { _ in }).start()

@@ -441,10 +441,20 @@ Every phase ends with its packages' tests green and the server starting.
    the server: the flags (`--dump-roots`, `--max-documents`,
    `--max-open-bytes`, `--max-upload-bytes`) and the restore at start come
    with phase 5, which is the first to serve the documents.
-5. **`ServerMCP` and `ServerRelay`**: tool assembly, descriptions, the socket,
-   the relay, `MCPEndpoint` removed; tests for the forbidden tools, unique
-   names, the answer keys of `documents`, `uefi_tree`/`read` on the synthetic
-   image, the relay's isolation and a call through the socket.
+5. **`ServerMCP` and `ServerRelay`** — done: `ServerTools` assembles the list
+   (the server's `documents`/`read`/`find_bytes`, the UEFI Structure's
+   queries through `ToolQueryTools` with the four panel-bound texts reworded
+   in `ServerToolText`, `CodeReadings`, and Ghidra's with `ghidra_open` by a
+   node under `--ghidra`), `MCPSocket` serves it on `<Server>/mcp.sock` with
+   a row per connection in `ServerActivity`, and `ServerRelay` is the
+   stdio↔socket bridge behind `byteripper-server relay`. `MCPEndpoint` and
+   its tests are gone; `/mcp` answers 404. The server now takes
+   `--dump-roots`, `--max-documents`, `--max-open-bytes`,
+   `--max-upload-bytes` and `--mcp-socket`, restores `documents.json` at
+   start and reports the roots that are not there. Tests: the forbidden names
+   absent and the served ones present once, `documents`' keys, the tree and
+   the bytes of the synthetic image, the disk mark in an answer, a search,
+   a call through the socket, and the relay with and without a server.
 6. **Rights on the roles** — done in phase 1: each route names its access,
    and the rights matrix is tested end to end over a running server.
 7. **The console**: pages, sign-in and CSRF, decision 19, documents and upload,

@@ -25,7 +25,8 @@ let package = Package(
         .package(path: "../AgentDocuments"),
         .package(path: "../ToolModuleKit"),
         .package(path: "../UEFIImage"),
-        .package(path: "../UEFIContentSource")
+        .package(path: "../UEFIContentSource"),
+        .package(path: "../../Modules/UEFITool")
     ],
     targets: [
         // Tokens: the file, the authorizer the listener runs on, and the
@@ -44,15 +45,35 @@ let package = Package(
             .product(name: "UEFIImage", package: "UEFIImage"),
             .product(name: "UEFIContentSource", package: "UEFIContentSource")
         ]),
+        // The local MCP: the tools over the documents, the socket they are
+        // served on, and the activity the console shows
+        // (`Design/SERVER_HEADLESS_PLAN.md` §7).
+        .target(name: "ServerMCP", dependencies: [
+            "DumpHost",
+            .product(name: "AgentDocuments", package: "AgentDocuments"),
+            .product(name: "AgentKit", package: "AgentKit"),
+            .product(name: "CodeAnalysis", package: "CodeAnalysis"),
+            .product(name: "GhidraHost", package: "GhidraHost"),
+            .product(name: "UEFITool", package: "UEFITool")
+        ]),
+        // The stdio↔socket bridge, and nothing else: a target whose only
+        // import is AgentKit cannot start a role.
+        .target(name: "ServerRelay", dependencies: [
+            .product(name: "AgentKit", package: "AgentKit")
+        ]),
         .target(name: "ByteRipperServer", dependencies: [
             "ServerAuth",
+            "ServerMCP",
+            "ServerRelay",
+            "DumpHost",
+            .product(name: "AgentDocuments", package: "AgentDocuments"),
             .product(name: "CodeAnalysis", package: "CodeAnalysis"),
             .product(name: "HTTPService", package: "HTTPService"),
             .product(name: "CASService", package: "CASService"),
             .product(name: "GhidraHost", package: "GhidraHost"),
             .product(name: "AgentKit", package: "AgentKit")
         ]),
-        .executableTarget(name: "byteripper-server", dependencies: ["ByteRipperServer"]),
+        .executableTarget(name: "byteripper-server", dependencies: ["ByteRipperServer", "ServerRelay"]),
         .testTarget(name: "ServerAuthTests", dependencies: [
             "ServerAuth",
             .product(name: "HTTPService", package: "HTTPService")
@@ -60,6 +81,8 @@ let package = Package(
         .testTarget(name: "ByteRipperServerTests", dependencies: [
             "ByteRipperServer",
             "DumpHost",
+            "ServerMCP",
+            "ServerRelay",
             .product(name: "AgentDocuments", package: "AgentDocuments"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
             .product(name: "UEFIImage", package: "UEFIImage"),
