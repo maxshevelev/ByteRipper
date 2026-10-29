@@ -213,6 +213,10 @@ imports AppKit in several files: the server stays macOS-only in v1.
   `access` — `.token` (any accepted token; the default), `.rights([…])`
   (checked by the router before the handler; a request with no principal is
   refused), or `.open` (no token: the console's sign-in alone).
+- A refused right is answered 403 with the rights the token lacks as a list
+  in the answer — `{"error": "…", "rights": ["cas.write", "ghidra.use"]}` —
+  every one of them in the single answer, not one per attempt, so the app
+  and the Ghidra client name them without reading the sentence (decision 4).
 - CAS: `cas.read` for the GETs (hello, objects, analyses, reviews, conflicts,
   refs, verify, changes) and for `POST export`, which only reads; `cas.write`
   for `PUT objects`, `POST analyses`/`reviews`/`import`, `PUT`/`DELETE refs`.

@@ -1,4 +1,4 @@
-@source-sha 5b34d09e5f6f4de035f7c8c8f593c1f2f6b4c71d38f55f2612fe663ac59b1950
+@source-sha 80e54b92d193d7de84fc201b4b3e328f89fef91adafc15a20d14e8dbf40f4bab
 # Codeanalysen und der Analyseserver
 
 > Eine Codeanalyse ist das, was Ghidra in einem PEI- oder DXE-Modul gefunden hat: seine Funktionen, Befehle und den dekompilierten C-Code sowie die Namen, die eine Durchsicht ihnen gegeben hat. ByteRipper liest Analysen aus einem Speicher — einem Ordner auf diesem Mac oder einem Analyseserver, den alle Macs eines Netzwerks gemeinsam nutzen.
@@ -30,7 +30,7 @@ Auf jedem Mac unter **Einstellungen ▸ Codeanalyse**:
 2. Die Adresse in der Form `http://host:port` — auf dem Server selbst `http://localhost:8765` — und das Token eingeben, das der Server für diesen Mac ausgegeben hat.
 3. Auf **Verbinden** klicken.
 
-Die Zeile unter den Feldern zeigt, ob der Server erreichbar ist. Weist der Server das Token zurück oder ist auf diesem Mac kein Token gespeichert, meldet die Zeile genau das und nicht, der Server sei nicht erreichbar. Das Token liegt in einer Datei, die nur der angemeldete Benutzer lesen kann, `~/Library/Application Support/ByteRipper/Server/token`; dieselbe Datei lesen die Skripte des Ghidra-Skills auf diesem Mac. Bleibt das Tokenfeld leer, wird das bereits gespeicherte Token verwendet.
+Die Zeile unter den Feldern zeigt, ob der Server erreichbar ist. Weist der Server das Token zurück oder ist auf diesem Mac kein Token gespeichert, meldet die Zeile genau das und nicht, der Server sei nicht erreichbar; bei einer Zurückweisung nennt sie die Rechte, die dem Token fehlen. Das Token liegt in einer Datei, die nur der angemeldete Benutzer lesen kann, `~/Library/Application Support/ByteRipper/Server/token`; dieselbe Datei lesen die Skripte des Ghidra-Skills auf diesem Mac. Bleibt das Tokenfeld leer, wird das bereits gespeicherte Token verwendet.
 
 ## Arbeiten mit einem Server
 
