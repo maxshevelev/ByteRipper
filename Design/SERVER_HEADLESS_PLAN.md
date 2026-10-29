@@ -80,11 +80,13 @@
 10. Document ids **survive a restart**: `documents.json` stores, per document,
     the id it was given, its path, the hash it was opened with, the `stat`
     fields of decision 9 and its `version`; there is no renumbering, because
-    an agent holds ids across a restart. A restored file whose hash differs is
-    opened with `version` set to the stored one plus one, so an agent's node
-    ids from before are not silently read against other bytes. It carries no
-    `disk` mark: its snapshot is the file on disk now, and the bumped `version`
-    is what tells the agent.
+    an agent holds ids across a restart. The stored `stat` is what lets a
+    restore skip the work: when it matches the file now, the stored hash is
+    reused; when it does not, the file is read and hashed again. A restored
+    file whose hash differs is opened with `version` set to the stored one
+    plus one, so an agent's node ids from before are not silently read against
+    other bytes. It carries no `disk` mark: its snapshot is the file on disk
+    now, and the bumped `version` is what tells the agent.
     **An id is never given to another file.** `documents.json` keeps `next_id`,
     and a new document takes it and advances it — not `max+1` over the rows
     present, which would hand a closed or forgotten document's id to the next
@@ -383,7 +385,8 @@ Every phase ends with its packages' tests green and the server starting.
 - Console: sign-in, the secret shown once, rotate and revoke, open by path
   (and refused outside the roots) and upload, reopen, delete an upload, the
   set and the ids surviving a restart, a file changed while the server was
-  down coming back marked, a Reopen's version surviving a restart, a missing
+  down coming back with `version` bumped, a Reopen's version surviving a
+  restart, a missing
   row keeping its id and getting it back when the file returns, a returning
   row over a limit staying missing with that limit named (to the console and
   to the agent), restore in the stored order when the saved set no longer
