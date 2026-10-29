@@ -82,6 +82,7 @@ final class ServerTests: XCTestCase {
         configuration.port = 0
         configuration.store = directory.appendingPathComponent("store")
         configuration.tokensFile = directory.appendingPathComponent("tokens.json")
+        configuration.clientTokenFile = directory.appendingPathComponent("token")
         let lines = Lines()
         let server = Server(configuration: configuration, log: { lines.add($0) })
         let port = try await server.start()
@@ -113,6 +114,7 @@ final class ServerTests: XCTestCase {
         configuration.store = directory.appendingPathComponent("store")
         configuration.projects = directory.appendingPathComponent("projects")
         configuration.tokensFile = directory.appendingPathComponent("tokens.json")
+        configuration.clientTokenFile = directory.appendingPathComponent("token")
         let server = Server(configuration: configuration, log: { _ in })
         let port = try await server.start()
         defer { server.stop() }
@@ -146,6 +148,28 @@ final class ServerTests: XCTestCase {
         XCTAssertEqual(status4, 200)
     }
 
+    /// This Mac's client token is said nothing about when it is one of the
+    /// server's, and named — never as a file to delete — when it is not.
+    func testTheClientTokenIsCheckedNotDeleted() throws {
+        let tokens = try TokenStore.open(at: directory.appendingPathComponent("tokens.json"))
+        let (_, app) = try tokens.add(name: "app", rights: TokenPreset.app.rights)
+        let client = directory.appendingPathComponent("token")
+        XCTAssertNil(Server.clientTokenWarning(client, tokens: tokens), "no file, nothing to say")
+
+        try Data((app + "\n").utf8).write(to: client)
+        XCTAssertNil(Server.clientTokenWarning(client, tokens: tokens))
+        XCTAssertNil(try TokenStore.open(at: directory.appendingPathComponent("tokens.json")).all()
+            .first?.lastUsed, "the check is not a use")
+
+        try Data("an-earlier-builds-token\n".utf8).write(to: client)
+        let warning = try XCTUnwrap(Server.clientTokenWarning(client, tokens: tokens))
+        XCTAssertTrue(warning.contains("token add"), warning)
+        XCTAssertTrue(warning.contains("do not delete it"), warning)
+        try tokens.revoke("app")
+        try Data((app + "\n").utf8).write(to: client)
+        XCTAssertNotNil(Server.clientTokenWarning(client, tokens: tokens), "a revoked token is not one of the server's")
+    }
+
     /// Without an admin token the console cannot be opened and the file cannot
     /// be corrected through it, so the server names the command instead of
     /// starting (`Design/SERVER_HEADLESS_PLAN.md` decision 16).
@@ -155,6 +179,7 @@ final class ServerTests: XCTestCase {
         configuration.port = 0
         configuration.store = directory.appendingPathComponent("store")
         configuration.tokensFile = directory.appendingPathComponent("tokens.json")
+        configuration.clientTokenFile = directory.appendingPathComponent("token")
         do {
             try await Server(configuration: configuration, log: { _ in }).start()
             XCTFail("started without an admin token")

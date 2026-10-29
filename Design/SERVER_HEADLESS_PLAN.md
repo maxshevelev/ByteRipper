@@ -234,6 +234,17 @@ imports AppKit in several files: the server stays macOS-only in v1.
   as well, and everything it shows comes from `/admin/api/*`, which needs the
   session; a page opened by hand without one is answered 401, naming
   `GET /admin/login`.
+- Two things follow from an `.open` shell. The `Host`/`Origin` check of
+  decision 19 cannot live in the authorizer, which an open route never
+  reaches — and `POST /admin/login` needs it most: without it a page on a
+  rebound name could try tokens through the form, or sign a browser in to an
+  attacker's session. It runs where the server admits a request, on its
+  headers, for every path under `/admin`, open or not; the delay and the
+  throttle of failed sign-ins stay in the sign-in route. And the router
+  takes the first route that matches, so the shell names its pages one by
+  one rather than as `/admin/*page`, which, added before `/admin/api/*`,
+  would answer the API's GETs without a session. A test asserts
+  `GET /admin/api/status` without a session is a 401.
 - `tokens.json`: `{version, tokens: [{id, name, hash, rights, created,
   last_used, revoked}]}`; SHA-256 (the secret is 32 random bytes, so a slow
   hash buys nothing), constant-time compare, a file lock waited for two
@@ -390,8 +401,10 @@ Every phase ends with its packages' tests green and the server starting.
 6. **Rights on the roles** — done in phase 1: each route names its access,
    and the rights matrix is tested end to end over a running server.
 7. **The console**: pages, sign-in and CSRF, decision 19, documents and upload,
-   activity, tokens, status; its shell `.open` and its data behind the session
-   (§5); loopback tests.
+   activity, tokens, status; its shell `.open` with its pages named one by
+   one, its data behind the session, `Host`/`Origin` checked on admission for
+   every `/admin` path, open ones included (§5); loopback tests, among them
+   the API refused without a session.
 8. **Documentation and measurements**: `SERVER_PLAN.md` and the skill; RSS and
    start time of `relay`; RSS of the server with the 21 MB LVM volume open; a
    relay executable of its own and a decompressed-buffer cap only if the

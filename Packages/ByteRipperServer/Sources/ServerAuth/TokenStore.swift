@@ -159,6 +159,17 @@ public final class TokenStore: @unchecked Sendable {
         try flushLocked()
     }
 
+    /// Whether a live token has this secret — a check, not a use: nothing is
+    /// marked in `last_used`.
+    public func holds(secret: String) -> Bool {
+        guard !secret.isEmpty else { return false }
+        lock.lock()
+        defer { lock.unlock() }
+        reloadIfChangedLocked()
+        let digest = Self.hash(secret)
+        return contents.tokens.contains { !$0.revoked && Self.equal($0.hash, digest) }
+    }
+
     /// Whether a token is live and still has the secret whose hash is `hash`:
     /// what a console session signed in with must still be, so a rotation
     /// ends it as a revocation does.

@@ -146,6 +146,9 @@ public struct ServerConfiguration: Equatable, Sendable {
     /// The file of tokens, by hash and right: the only credential the server
     /// has (`Design/SERVER_HEADLESS_PLAN.md` §5).
     public var tokensFile = ServerPaths.defaultTokensFile
+    /// This Mac's client token, which the server checks at start against
+    /// `tokensFile` and never serves on (decision 2).
+    public var clientTokenFile = ServerPaths.clientTokenFile
 
     public init() {}
 }
@@ -164,7 +167,7 @@ public enum ServerPaths {
     /// Settings ▸ Code Analysis (`Design/SERVER_HEADLESS_PLAN.md` decision 2);
     /// an earlier build also read it as the server's one token, and no longer
     /// does.
-    public static var legacyTokenFile: URL {
+    public static var clientTokenFile: URL {
         support.appendingPathComponent("token", isDirectory: false)
     }
 }

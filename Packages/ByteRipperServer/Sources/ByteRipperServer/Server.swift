@@ -30,16 +30,8 @@ public final class Server: @unchecked Sendable {
     public func start() async throws -> UInt16 {
         let tokens = try TokenStore.open(at: configuration.tokensFile)
         tokens.onProblem = log
-        // This file is still the app's and the scripts' token on this Mac
-        // (`Design/SERVER_HEADLESS_PLAN.md` decision 2) — an earlier build
-        // read it as the server's one token as well. It is not to be deleted:
-        // what the programs sending its contents need is a token of its own.
-        if FileManager.default.fileExists(atPath: ServerPaths.legacyTokenFile.path) {
-            log("\(ServerPaths.legacyTokenFile.path) stays the token the app and the scripts use on "
-                + "this Mac; the server no longer reads it, so a program still sending that secret is "
-                + "refused: give each one a token of its own with "
-                + "`byteripper-server token add --name <mac> --preset app`, pasted into "
-                + "Settings ▸ Code Analysis")
+        if let warning = Self.clientTokenWarning(configuration.clientTokenFile, tokens: tokens) {
+            log(warning)
         }
         // Without an admin token the console cannot be opened and the file
         // cannot be corrected through it, so there is nothing to start
@@ -107,6 +99,21 @@ public final class Server: @unchecked Sendable {
             log("listening on \(listen.host)\(address):\(port), token required")
         }
         return first
+    }
+
+    /// What to say about this Mac's client token: nothing when it is one of
+    /// this server's live tokens — the usual Mac where the app and the server
+    /// sit together — and how to mend it when it is not, which is what an
+    /// earlier build's single token is after an upgrade. The file is the
+    /// app's and the scripts' (decision 2): it is never to be deleted.
+    static func clientTokenWarning(_ file: URL, tokens: TokenStore) -> String? {
+        guard let text = try? String(contentsOf: file, encoding: .utf8) else { return nil }
+        let secret = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !secret.isEmpty, !tokens.holds(secret: secret) else { return nil }
+        return "\(file.path), the token the app and the scripts send from this Mac, is not one of "
+            + "this server's: they will be refused. Make one with "
+            + "`byteripper-server token add --name <mac> --preset app` and paste it into "
+            + "Settings ▸ Code Analysis — the app rewrites the file; do not delete it"
     }
 
     public func stop() {
