@@ -52,7 +52,9 @@ final class ServerMCPTests: XCTestCase {
                           "write", "update_in_parent", "open_panel", "open_code", "open_part",
                           "uefi_select", "uefi_selection", "compare", "reveal_diff", "uefi_fix_checksum",
                           "fit_fix_checksum", "fit_add_microcode", "microcode_catalogue", "survey",
-                          "open_dump", "close_dump", "copy_to_other_pane"] {
+                          "open_dump", "close_dump", "copy_to_other_pane",
+                          // The next stage, with ME and FIT (decision 15).
+                          "region_scan", "survey", "microcode_catalogue"] {
             XCTAssertFalse(names.contains(forbidden), "\(forbidden) is in the server's list")
         }
         for required in ["documents", "read", "find_bytes", "uefi_tree", "uefi_node", "uefi_find",

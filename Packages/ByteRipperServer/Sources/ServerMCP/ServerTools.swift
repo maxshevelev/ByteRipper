@@ -34,10 +34,11 @@ public enum ServerTools {
     }
 
     /// The UEFI Structure's queries the server serves, in the module's words
-    /// (`ServerToolText` rewords some).
+    /// (`ServerToolText` rewords some). `region_scan` is not among them: it is
+    /// the next stage (`Design/SERVER_HEADLESS_PLAN.md` decision 15).
     static var queries: [ToolAgentQuery] {
         UEFIAgentQueries.all(catalogue: { .empty })
-            + UEFIAgentChecksums.all + UEFIAgentRegions.all + UEFIAgentDMI.all
+            + UEFIAgentChecksums.all + UEFIAgentDMI.all
             + UEFIAgentVariables.queries + UEFIAgentNodeData.all
     }
 

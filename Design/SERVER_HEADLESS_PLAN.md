@@ -338,8 +338,9 @@ imports AppKit in several files: the server stays macOS-only in v1.
   is bound to its log and activity view.
 - Tools: `documents`, `read`, `find_bytes` (stored bytes only in v1) — the
   server's own (§4.1); through `ToolQueryTools`:
-  `UEFIAgentQueries.all(catalogue:)`, `UEFIAgentChecksums`, `UEFIAgentRegions`,
-  `UEFIAgentDMI`, `UEFIAgentVariables.queries`, `UEFIAgentNodeData`;
+  `UEFIAgentQueries.all(catalogue:)`, `UEFIAgentChecksums`, `UEFIAgentDMI`,
+  `UEFIAgentVariables.queries`, `UEFIAgentNodeData` — `UEFIAgentRegions` is
+  not served: `region_scan` follows with ME and FIT (decision 15);
   `code_modules`/`code_query` from `CodeReadings` over the local
   `ContentStore`; with `--ghidra`, `GhidraTools.tools(backend:
   includeOpenByImage: false)` with `ghidra_open` replaced by `GhidraNodeOpen`.
@@ -443,13 +444,13 @@ Every phase ends with its packages' tests green and the server starting.
    with phase 5, which is the first to serve the documents.
 5. **`ServerMCP` and `ServerRelay`** — done: `ServerTools` assembles the list
    (the server's `documents`/`read`/`find_bytes`, the UEFI Structure's
-   queries through `ToolQueryTools` with the four panel-bound texts reworded
-   in `ServerToolText`, `CodeReadings`, and Ghidra's with `ghidra_open` by a
-   node under `--ghidra`), `MCPSocket` serves it on `<Server>/mcp.sock` with
-   a row per connection in `ServerActivity`, and `ServerRelay` is the
-   stdio↔socket bridge behind `byteripper-server relay`. `MCPEndpoint` and
-   its tests are gone; `/mcp` answers 404. The server now takes
-   `--dump-roots`, `--max-documents`, `--max-open-bytes`,
+   queries through `ToolQueryTools` with the texts that name the app's screen
+   reworded in `ServerToolText`, `CodeReadings`, and Ghidra's with
+   `ghidra_open` by a node under `--ghidra`), `MCPSocket` serves it on
+   `<Server>/mcp.sock` with a row per connection in `ServerActivity`, and
+   `ServerRelay` is the stdio↔socket bridge behind `byteripper-server relay`.
+   `MCPEndpoint` and its tests are gone; `/mcp` answers 404. The server now
+   takes `--dump-roots`, `--max-documents`, `--max-open-bytes`,
    `--max-upload-bytes` and `--mcp-socket`, restores `documents.json` at
    start and reports the roots that are not there. Tests: the forbidden names
    absent and the served ones present once, `documents`' keys, the tree and
@@ -457,10 +458,12 @@ Every phase ends with its packages' tests green and the server starting.
    a call through the socket, and the relay with and without a server.
    `find_bytes` runs `BytePattern`'s scan off the main actor and pages with
    `AgentPage`, as the app's does; a test pages through every match, the
-   ASCII and UTF-16LE ones at one address both. `uefi_at`, `region_scan` and
+   ASCII and UTF-16LE ones at one address both. `uefi_at` and
    `uefi_node_data` are reworded too, and two tests keep the rewordings
    honest: every one is of a served query, and no served description names
-   a panel, a part, the focus, `survey`, `reveal` or `write`.
+   a panel, a part, the focus, `survey`, `reveal` or `write`. `region_scan`
+   is not served (decision 15), and a test names it among those that must
+   stay out.
 6. **Rights on the roles** — done in phase 1: each route names its access,
    and the rights matrix is tested end to end over a running server.
 7. **The console**: pages, sign-in and CSRF, decision 19, documents and upload,

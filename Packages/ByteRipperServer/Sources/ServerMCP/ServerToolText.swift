@@ -62,22 +62,6 @@ public enum ServerToolText {
             `uefi_tree` gives it, with `encoded` ("XOR 77") for a LENV block or entry stored encoded and \
             `compressed` / `compressed_in` for one inside a compressed section.
             """,
-        "region_scan": """
-            Judges by their bytes the nodes the parser cannot name — Padding (the flash map's Unused, \
-            Unknown and named areas among them) and Raw files and sections — under `node` (default: the \
-            BIOS region), in address order. A node its children divide is replaced by them; one whose only \
-            child covers it whole stays, naming the child as `inner`. Each: `node`, `name`, `type`, \
-            `subtype`, `guid`, `start`, `end`, `size`; `fill` (the share of 0xFF and 0x00 bytes), \
-            `first_nonfill` and `last_nonfill` (the first and the last other byte); `class` — `empty` (at \
-            least 99% fill), `text` (most of the other bytes are ASCII or UTF-16LE strings of 4 characters \
-            or more), `code` (x86-64 instructions, by a heuristic: frequent REX.W moves, calls and \
-            returns, or a PE image), else `data`; and up to five `strings` with their addresses. The \
-            bytes themselves are never answered: `read` or `uefi_node_data` read them. An area whose name \
-            in the flash map says MSDM, Password or Key gives its class and sizes, no strings, and \
-            `redacted: true`. `kinds` picks the node types (`type` or `subtype` as `uefi_tree` gives \
-            them), default Padding and Raw; `min_size` leaves out smaller nodes. Pages: `limit`, `after` \
-            as in `uefi_find`.
-            """,
         "uefi_node_data": """
             Reads a node's bytes as `read` reads a document's — rows of 16 with their address, text, or \
             integers — at addresses inside the node's `part` (`body` by default, `header`, or `all`), \
@@ -116,8 +100,7 @@ public enum ServerToolText {
             the board's serial read from the names of its calibration variables. An area that is not found \
             is not therefore absent from the dump: it may be in a layout the parser does not know, or a \
             known one that is damaged, wiped or moved so its checks fail. So an empty `areas` means only \
-            that the parser recognised none — say so to the person, never that the dump has no DMI; \
-            `region_scan` judges the nameless areas by their bytes, which is where to look next.
+            that the parser recognised none — say so to the person, never that the dump has no DMI.
             """
     ]
 }
