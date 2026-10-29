@@ -45,7 +45,8 @@ final class MCPEndpointTests: XCTestCase {
         let agent = AgentServer(info: AgentServerInfo(name: "test", version: "1"),
                                 instructions: GhidraTools.instructions,
                                 tools: GhidraTools.tools(backend: backend))
-        server = HTTPServer(configuration: .init(port: 0), router: MCPEndpoint.routes(server: agent, log: { _ in }))
+        server = HTTPServer(configuration: .init(port: 0, token: "test"),
+                            router: MCPEndpoint.routes(server: agent, log: { _ in }))
         base = URL(string: "http://127.0.0.1:\(try await server.start())/mcp")!
     }
 
@@ -55,6 +56,7 @@ final class MCPEndpointTests: XCTestCase {
         var request = URLRequest(url: base)
         request.httpMethod = "POST"
         request.httpBody = message.encoded()
+        request.setValue("Bearer test", forHTTPHeaderField: "Authorization")
         let (data, response) = try await URLSession.shared.data(for: request)
         return ((response as! HTTPURLResponse).statusCode, try? JSONValue.parse(data))
     }

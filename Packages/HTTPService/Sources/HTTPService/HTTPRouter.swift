@@ -13,6 +13,8 @@ public struct HTTPRouter: Sendable {
     struct Route: Sendable {
         let method: String
         let pattern: [String]
+        /// The body this route alone accepts; nil is the server's default.
+        let maxBodyBytes: Int?
         let handler: Handler
     }
 
@@ -20,10 +22,29 @@ public struct HTTPRouter: Sendable {
 
     public init() {}
 
-    public mutating func add(_ method: String, _ pattern: String, _ handler: @escaping Handler) {
+    /// `maxBodyBytes` gives this route a body limit of its own, in place of the
+    /// server's rather than in addition to it — an upload route exists to take
+    /// more than every other route does (`Design/SERVER_HEADLESS_PLAN.md`
+    /// decision 12).
+    public mutating func add(_ method: String, _ pattern: String, maxBodyBytes: Int? = nil,
+                             _ handler: @escaping Handler) {
         routes.append(Route(method: method.uppercased(),
                             pattern: pattern.split(separator: "/").map(String.init),
+                            maxBodyBytes: maxBodyBytes,
                             handler: handler))
+    }
+
+    /// The body limit of the route that will answer `method` and `path`, or nil
+    /// for the server's default. The parser asks this once the headers are in,
+    /// before it waits for the body (`Design/SERVER_HEADLESS_PLAN.md` §5).
+    public func bodyLimit(method: String, path: String) -> Int? {
+        let segments = path.split(separator: "/").map(String.init)
+        for route in routes {
+            guard Self.match(route.pattern, segments) != nil else { continue }
+            guard route.method == method || (method == "HEAD" && route.method == "GET") else { continue }
+            return route.maxBodyBytes
+        }
+        return nil
     }
 
     /// Every route of `other`, under its own patterns.

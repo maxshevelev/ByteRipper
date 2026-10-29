@@ -15,11 +15,17 @@ public struct HTTPParser: Sendable {
 
     public var maxHeaderBytes = 64 * 1024
     public var maxBodyBytes: Int
+    /// The limit a route names for its own body, asked once the request line
+    /// and headers are in — the upload route takes more than the rest
+    /// (`Design/SERVER_HEADLESS_PLAN.md` §5, decision 12). nil keeps
+    /// `maxBodyBytes`.
+    public var bodyLimit: (@Sendable (String, String) -> Int?)?
 
     private var buffer = Data()
 
-    public init(maxBodyBytes: Int) {
+    public init(maxBodyBytes: Int, bodyLimit: (@Sendable (String, String) -> Int?)? = nil) {
         self.maxBodyBytes = maxBodyBytes
+        self.bodyLimit = bodyLimit
     }
 
     public mutating func feed(_ data: Data) {
@@ -63,18 +69,20 @@ public struct HTTPParser: Sendable {
             }
             length = value
         }
-        guard length <= maxBodyBytes else {
-            return .refused(.payloadTooLarge, "the body is longer than \(maxBodyBytes) bytes")
+        let target = String(requestLine[1])
+        let (path, query) = Self.split(target)
+        guard let path else { return .refused(.badRequest, "the path is not percent-encoded UTF-8") }
+        let method = String(requestLine[0])
+        let limit = bodyLimit?(method, path) ?? maxBodyBytes
+        guard length <= limit else {
+            return .refused(.payloadTooLarge, "the body is longer than \(limit) bytes")
         }
         let bodyStart = end.upperBound
         guard buffer.endIndex - bodyStart >= length else { return .needMore }
         let body = Data(buffer[bodyStart..<(bodyStart + length)])
         buffer = Data(buffer[(bodyStart + length)...])
 
-        let target = String(requestLine[1])
-        let (path, query) = Self.split(target)
-        guard let path else { return .refused(.badRequest, "the path is not percent-encoded UTF-8") }
-        return .request(HTTPRequest(method: String(requestLine[0]), path: path, query: query,
+        return .request(HTTPRequest(method: method, path: path, query: query,
                                     headers: headers, body: body))
     }
 
@@ -104,5 +112,6 @@ extension HTTPRequest: Equatable {
     public static func == (a: HTTPRequest, b: HTTPRequest) -> Bool {
         a.method == b.method && a.path == b.path && a.query == b.query
             && a.headers == b.headers && a.body == b.body && a.parameters == b.parameters
+            && a.principal == b.principal
     }
 }

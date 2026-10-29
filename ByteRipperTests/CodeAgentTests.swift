@@ -113,7 +113,9 @@ final class CodeAgentTests: XCTestCase {
             received.query = request.query
             return .json(["module": SHA256Digest(data: request.body).hex, "functions": "2"])
         }
-        let server = HTTPServer(configuration: .init(port: 0), router: router)
+        // What the app sends is this test's subject, not the token: the door
+        // is open, and every request is served as the same principal.
+        let server = HTTPServer(configuration: .init(port: 0, authorizer: OpenDoor()), router: router)
         let port = try await server.start()
         defer { server.stop() }
         AppDefaults.store.set("server", forKey: "CodeAnalysisLocation")
@@ -402,4 +404,10 @@ final class CodeAgentTests: XCTestCase {
     private static func put(_ data: inout Data, _ offset: Int, _ value: UInt64, _ count: Int) {
         for index in 0..<count { data[offset + index] = UInt8((value >> (8 * UInt64(index))) & 0xFF) }
     }
+}
+
+/// A listener that asks nothing of a request: what a test whose subject is not
+/// the token runs on.
+struct OpenDoor: HTTPAuthorizer {
+    func principal(for request: HTTPRequest) async throws -> HTTPPrincipal { .all() }
 }

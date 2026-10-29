@@ -4,13 +4,18 @@ import CodeAnalysis
 import Foundation
 import GhidraHost
 import HTTPService
+import ServerAuth
 
-/// The running server: its roles' routes on one listener, behind one token.
+/// The running server: its roles' routes on one listener, behind the tokens
+/// of `tokens.json`.
 public final class Server: @unchecked Sendable {
     public let configuration: ServerConfiguration
     private let log: @Sendable (String) -> Void
     private var servers: [HTTPServer] = []
     private var watcher: CodeStoreWatcher?
+    private var tokens: TokenStore?
+    /// Who is signed in to the console, for the server's life.
+    public let sessions = AdminSessions()
     public private(set) var cas: CASService?
     public private(set) var ghidra: GhidraHost?
 
@@ -23,11 +28,15 @@ public final class Server: @unchecked Sendable {
     /// Opens the roles and listens on every address; returns the first one's port.
     @discardableResult
     public func start() async throws -> UInt16 {
-        let token = try TokenFile.read(at: configuration.tokenFile)
-        if token == nil, configuration.tokenRequired {
-            throw ServerCommand.Failure(description: "\(configuration.tokenFile.path) does not exist; "
-                                        + "make it with byteripper-server token")
+        let tokens = try TokenStore.open(at: configuration.tokensFile)
+        // Without an admin token the console cannot be opened and the file
+        // cannot be corrected through it, so there is nothing to start
+        // (`Design/SERVER_HEADLESS_PLAN.md` decision 16).
+        guard tokens.hasAdmin else {
+            throw ServerCommand.Failure(description: "\(TokenStore.Failure.noAdmin(configuration.tokensFile.path))")
         }
+        self.tokens = tokens
+        let authorizer = ServerAuthorizer(tokens: tokens, sessions: sessions)
         var router = HTTPRouter()
         if configuration.roles.contains(.cas) {
             let store = try ContentStore(root: configuration.store)
@@ -43,21 +52,18 @@ public final class Server: @unchecked Sendable {
             log("store \(store.root.path) (\(cas.feed.storeID))")
         }
         if configuration.roles.contains(.ghidra) {
-            let writer: AnalysisWriter
-            if let url = configuration.casURL {
-                writer = RemoteStore(base: url, token: token)
-            } else if let cas {
-                writer = cas.store
-            } else {
-                throw ServerCommand.Failure(description: "the Ghidra role publishes into a store: add --cas, or name --cas-url")
+            // The store is always this server's own (decision 17).
+            guard let cas else {
+                throw ServerCommand.Failure(description: "the Ghidra role publishes into this server's store, which did not open")
             }
+            let writer: AnalysisWriter = cas.store
             let host = GhidraHost(configuration: .init(projectsRoot: configuration.projects,
                                                        ghidraHome: configuration.ghidraHome,
                                                        idle: configuration.idle),
                                   writer: writer)
-            let feed = cas?.feed
+            let feed = cas.feed
             GhidraRoutes.projectsRoot = configuration.projects
-            router.merge(GhidraRoutes.routes(host: host, published: { await feed?.rescan() }))
+            router.merge(GhidraRoutes.routes(host: host, published: { await feed.rescan() }))
             ghidra = host
             // The agent's tools over this host, at `/mcp`, behind the same token.
             let agentServer = AgentServer(
@@ -73,7 +79,8 @@ public final class Server: @unchecked Sendable {
         var first: UInt16 = 0
         for listen in configuration.listens {
             let http = HTTPServer(
-                configuration: .init(host: listen.host, port: listen.port, token: token, log: log),
+                configuration: .init(host: listen.host, port: listen.port,
+                                     authorizer: authorizer, log: log),
                 router: router)
             let port: UInt16
             do {
@@ -85,8 +92,7 @@ public final class Server: @unchecked Sendable {
             if servers.isEmpty { first = port }
             servers.append(http)
             let address = http.boundAddress.map { $0 == listen.host ? "" : " (\($0))" } ?? ""
-            log("listening on \(listen.host)\(address):\(port)"
-                + (token == nil ? ", no token (loopback only)" : ", token required"))
+            log("listening on \(listen.host)\(address):\(port), token required")
         }
         return first
     }
@@ -95,5 +101,7 @@ public final class Server: @unchecked Sendable {
         for server in servers { server.stop() }
         servers = []
         watcher = nil
+        // What `last_used` collected: one write at stop, none per request.
+        try? tokens?.flush()
     }
 }

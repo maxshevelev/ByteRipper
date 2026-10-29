@@ -19,10 +19,9 @@ do {
 switch command {
 case .help:
     print(ServerCommand.usage)
-case .token(let file, let replace):
+case .token(let command):
     do {
-        print(try TokenFile.make(at: file, replace: replace))
-        FileHandle.standardError.write(Data("written to \(file.path)\n".utf8))
+        print(try command.run())
     } catch {
         fail("\(error)")
     }

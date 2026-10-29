@@ -11,14 +11,19 @@ public struct HTTPRequest: Sendable {
     public var body: Data
     /// What the route matched for each `:name` in its pattern.
     public var parameters: [String: String] = [:]
+    /// Whose token the request is served on, set by the server once its
+    /// authorizer has answered; nil inside a test that calls a route directly.
+    public var principal: HTTPPrincipal?
 
     public init(method: String, path: String, query: [String: String] = [:],
-                headers: [String: String] = [:], body: Data = Data()) {
+                headers: [String: String] = [:], body: Data = Data(),
+                principal: HTTPPrincipal? = nil) {
         self.method = method
         self.path = path
         self.query = query
         self.headers = headers
         self.body = body
+        self.principal = principal
     }
 
     public var segments: [String] { path.split(separator: "/").map(String.init) }
@@ -46,6 +51,7 @@ public struct HTTPStatus: Equatable, Sendable {
     public static let noContent = HTTPStatus(204, "No Content")
     public static let badRequest = HTTPStatus(400, "Bad Request")
     public static let unauthorized = HTTPStatus(401, "Unauthorized")
+    public static let forbidden = HTTPStatus(403, "Forbidden")
     public static let notFound = HTTPStatus(404, "Not Found")
     public static let methodNotAllowed = HTTPStatus(405, "Method Not Allowed")
     public static let conflict = HTTPStatus(409, "Conflict")

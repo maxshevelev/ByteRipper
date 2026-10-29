@@ -1,34 +1,50 @@
 import Foundation
 import Network
 
-/// The listener: one address, one optional bearer token, one router.
+/// The listener: one address, one authorizer, one router.
 ///
 /// Requests on a connection are answered in order, one at a time; a slow
-/// handler — a long poll — holds its own connection and nothing else. A
-/// non-loopback address without a token is refused at `start`, because the
-/// server's only guard on a network is the token (`Design/SERVER_PLAN.md` §1).
+/// handler — a long poll — holds its own connection and nothing else. There is
+/// no anonymous mode: every request is served as the principal its authorizer
+/// names, on loopback as much as anywhere else
+/// (`Design/SERVER_HEADLESS_PLAN.md` §2, decision 3).
 public final class HTTPServer: @unchecked Sendable {
     public struct Configuration: Sendable {
         public var host: String
         /// 0 lets the system choose; `start` returns the port it chose.
         public var port: UInt16
-        public var token: String?
+        public var authorizer: any HTTPAuthorizer
         public var maxBodyBytes: Int
         /// One line per answered request: method, path, status, time.
         public var log: (@Sendable (String) -> Void)?
+        /// Every answered request as a value, refusals included: where the
+        /// console's REST activity rows come from.
+        public var onRequest: (@Sendable (HTTPActivity) -> Void)?
 
-        public init(host: String = "127.0.0.1", port: UInt16 = 8765, token: String? = nil,
-                    maxBodyBytes: Int = 512 * 1024 * 1024, log: (@Sendable (String) -> Void)? = nil) {
+        public init(host: String = "127.0.0.1", port: UInt16 = 8765,
+                    authorizer: any HTTPAuthorizer,
+                    maxBodyBytes: Int = 512 * 1024 * 1024,
+                    log: (@Sendable (String) -> Void)? = nil,
+                    onRequest: (@Sendable (HTTPActivity) -> Void)? = nil) {
             self.host = host
             self.port = port
-            self.token = token
+            self.authorizer = authorizer
             self.maxBodyBytes = maxBodyBytes
             self.log = log
+            self.onRequest = onRequest
         }
 
-        public var isLoopback: Bool {
-            host == "127.0.0.1" || host == "::1" || host == "localhost"
+        /// One bearer token that opens every route: the package's own tests and
+        /// a server of one person. A deployment with `tokens.json` uses
+        /// `authorizer:` instead.
+        public init(host: String = "127.0.0.1", port: UInt16 = 8765, token: String,
+                    maxBodyBytes: Int = 512 * 1024 * 1024,
+                    log: (@Sendable (String) -> Void)? = nil,
+                    onRequest: (@Sendable (HTTPActivity) -> Void)? = nil) {
+            self.init(host: host, port: port, authorizer: StaticAuthorizer(token: token),
+                      maxBodyBytes: maxBodyBytes, log: log, onRequest: onRequest)
         }
+
     }
 
     /// The address a host name stands for, as a literal the listener can bind
@@ -65,13 +81,10 @@ public final class HTTPServer: @unchecked Sendable {
     }
 
     public enum StartError: Error, Equatable, CustomStringConvertible {
-        case tokenRequired(String)
         case cannotListen(String)
 
         public var description: String {
             switch self {
-            case .tokenRequired(let host):
-                return "listening on \(host) needs a token: only loopback may go without one"
             case .cannotListen(let reason):
                 return "cannot listen: \(reason)"
             }
@@ -94,18 +107,12 @@ public final class HTTPServer: @unchecked Sendable {
     /// Listens, and returns the port it listens on.
     @discardableResult
     public func start() async throws -> UInt16 {
-        if !configuration.isLoopback, (configuration.token ?? "").isEmpty {
-            throw StartError.tokenRequired(configuration.host)
-        }
         let parameters = NWParameters.tcp
         parameters.allowLocalEndpointReuse = true
         guard let port = NWEndpoint.Port(rawValue: configuration.port) else {
             throw StartError.cannotListen("port \(configuration.port)")
         }
         let address = try Self.resolve(configuration.host)
-        if !Self.isLoopbackAddress(address), (configuration.token ?? "").isEmpty {
-            throw StartError.tokenRequired(configuration.host)
-        }
         boundAddress = address
         parameters.requiredLocalEndpoint = .hostPort(host: NWEndpoint.Host(address), port: port)
         let listener: NWListener
@@ -174,7 +181,10 @@ public final class HTTPServer: @unchecked Sendable {
             }
         }
         connection.start(queue: queue)
-        receive(on: connection, parser: HTTPParser(maxBodyBytes: configuration.maxBodyBytes))
+        let router = self.router
+        receive(on: connection, parser: HTTPParser(
+            maxBodyBytes: configuration.maxBodyBytes,
+            bodyLimit: { method, path in router.bodyLimit(method: method, path: path) }))
     }
 
     private func receive(on connection: NWConnection, parser: HTTPParser) {
@@ -203,21 +213,27 @@ public final class HTTPServer: @unchecked Sendable {
 
     private func answer(_ request: HTTPRequest, on connection: NWConnection, parser: HTTPParser) {
         let keepAlive = request.headers["connection"]?.lowercased() != "close"
-        if let token = configuration.token, !token.isEmpty,
-           !Self.authorized(request.headers["authorization"], token: token) {
-            configuration.log?("\(request.method) \(request.path) 401")
-            send(.error(HTTPError(.unauthorized, "a bearer token is required")),
-                 on: connection, keepAlive: keepAlive)
-            if keepAlive { receive(on: connection, parser: parser) }
-            return
-        }
+        let authorizer = configuration.authorizer
         let router = self.router
         let log = configuration.log
+        let onRequest = configuration.onRequest
         Task {
             let started = Date()
-            let response = await router.handle(request)
-            let milliseconds = Int((Date().timeIntervalSince(started) * 1000).rounded())
+            var request = request
+            let response: HTTPResponse
+            do {
+                request.principal = try await authorizer.principal(for: request)
+                response = await router.handle(request)
+            } catch let error as HTTPError {
+                response = .error(error)
+            } catch {
+                response = .error(HTTPError(.internalError, "\(error)"))
+            }
+            let duration = Date().timeIntervalSince(started)
+            let milliseconds = Int((duration * 1000).rounded())
             log?("\(request.method) \(request.path) \(response.status.code) \(milliseconds) ms")
+            onRequest?(HTTPActivity(method: request.method, path: request.path, status: response.status,
+                                    duration: duration, principal: request.principal))
             self.queue.async {
                 self.send(response, on: connection, keepAlive: keepAlive)
                 if keepAlive { self.receive(on: connection, parser: parser) }
@@ -232,22 +248,4 @@ public final class HTTPServer: @unchecked Sendable {
         })
     }
 
-    static func isLoopbackAddress(_ address: String) -> Bool {
-        address == "::1" || address.hasPrefix("127.")
-    }
-
-    /// Compares every byte whatever the first difference, so the time an
-    /// answer takes says nothing about how much of a guess was right.
-    static func authorized(_ header: String?, token: String) -> Bool {
-        guard let header, header.hasPrefix("Bearer ") else { return false }
-        let given = Array(header.dropFirst("Bearer ".count).utf8)
-        let expected = Array(token.utf8)
-        var difference = UInt8(given.count == expected.count ? 0 : 1)
-        for index in 0..<max(given.count, expected.count) {
-            let a = index < given.count ? given[index] : 0
-            let b = index < expected.count ? expected[index] : 0
-            difference |= a ^ b
-        }
-        return difference == 0
-    }
 }

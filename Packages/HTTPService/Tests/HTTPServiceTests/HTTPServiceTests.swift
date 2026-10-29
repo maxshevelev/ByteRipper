@@ -46,6 +46,29 @@ final class HTTPParserTests: XCTestCase {
         guard case .refused(let status, _) = parser.next() else { return XCTFail("not refused") }
         XCTAssertEqual(status.code, 431)
     }
+
+    /// A route may take more than the parser's default, and only it
+    /// (`Design/SERVER_HEADLESS_PLAN.md` §5, decision 12).
+    func testARouteNamesItsOwnBodyLimit() {
+        var parser = HTTPParser(maxBodyBytes: 10, bodyLimit: { method, path in
+            method == "POST" && path == "/upload" ? 4096 : nil
+        })
+        parser.feed(Data("POST /upload HTTP/1.1\r\nContent-Length: 3000\r\n\r\n".utf8))
+        XCTAssertEqual(parser.next(), .needMore)
+        parser.feed(Data(count: 3000))
+        guard case .request(let upload) = parser.next() else { return XCTFail("the upload was not read") }
+        XCTAssertEqual(upload.body.count, 3000)
+
+        for text in ["POST /upload HTTP/1.1\r\nContent-Length: 4097\r\n\r\n",
+                     "POST /other HTTP/1.1\r\nContent-Length: 11\r\n\r\n"] {
+            var refusing = HTTPParser(maxBodyBytes: 10, bodyLimit: { method, path in
+                method == "POST" && path == "/upload" ? 4096 : nil
+            })
+            refusing.feed(Data(text.utf8))
+            guard case .refused(let status, _) = refusing.next() else { return XCTFail("not refused: \(text)") }
+            XCTAssertEqual(status.code, 413)
+        }
+    }
 }
 
 final class HTTPRouterTests: XCTestCase {
@@ -74,10 +97,12 @@ final class HTTPRouterTests: XCTestCase {
 }
 
 final class HTTPServerTests: XCTestCase {
-    private func serve(token: String? = nil, _ add: (inout HTTPRouter) -> Void) async throws -> (HTTPServer, URL) {
+    private func serve(token: String = "s3cret", onRequest: (@Sendable (HTTPActivity) -> Void)? = nil,
+                       _ add: (inout HTTPRouter) -> Void) async throws -> (HTTPServer, URL) {
         var router = HTTPRouter()
         add(&router)
-        let server = HTTPServer(configuration: .init(port: 0, token: token, maxBodyBytes: 1024),
+        let server = HTTPServer(configuration: .init(port: 0, token: token, maxBodyBytes: 1024,
+                                                     onRequest: onRequest),
                                 router: router)
         let port = try await server.start()
         return (server, URL(string: "http://127.0.0.1:\(port)")!)
@@ -100,17 +125,20 @@ final class HTTPServerTests: XCTestCase {
         defer { server.stop() }
         for text in ["one", "two", "three"] {
             let (status, data) = try await call(base.appendingPathComponent("echo"), method: "POST",
-                                                body: Data(text.utf8))
+                                                body: Data(text.utf8), token: "s3cret")
             XCTAssertEqual(status, 200)
             XCTAssertEqual(String(data: data, encoding: .utf8), text)
         }
         let (status, _) = try await call(base.appendingPathComponent("echo"), method: "POST",
-                                         body: Data(count: 2048))
+                                         body: Data(count: 2048), token: "s3cret")
         XCTAssertEqual(status, 413)
     }
 
-    func testATokenIsRequiredWhenSet() async throws {
-        let (server, base) = try await serve(token: "s3cret") { router in
+    /// No anonymous mode, on loopback too (`Design/SERVER_HEADLESS_PLAN.md`
+    /// decision 3): a request without the bearer is refused before any route
+    /// sees it.
+    func testATokenIsRequiredOnEveryAddress() async throws {
+        let (server, base) = try await serve { router in
             router.add("GET", "/hello") { _ in .json(["ok": true]) }
         }
         defer { server.stop() }
@@ -123,16 +151,52 @@ final class HTTPServerTests: XCTestCase {
         XCTAssertEqual(right.0, 200)
     }
 
-    func testANetworkAddressWithoutATokenIsRefused() async {
-        let server = HTTPServer(configuration: .init(host: "0.0.0.0", port: 0), router: HTTPRouter())
-        do {
-            try await server.start()
-            XCTFail("started without a token")
-        } catch let error as HTTPServer.StartError {
-            XCTAssertEqual(error, .tokenRequired("0.0.0.0"))
-        } catch {
-            XCTFail("\(error)")
+    /// The principal the authorizer names reaches the route, and the rights
+    /// it does not give are named in the refusal.
+    func testTheRouteSeesThePrincipalAndItsRefusalNamesTheRight() async throws {
+        struct Reader: HTTPAuthorizer {
+            func principal(for request: HTTPRequest) async throws -> HTTPPrincipal {
+                HTTPPrincipal(id: "t1", name: "laptop", rights: [.casRead])
+            }
         }
+        var router = HTTPRouter()
+        router.add("GET", "/who") { request in
+            .bytes(Data((request.principal?.name ?? "nobody").utf8))
+        }
+        router.add("PUT", "/store") { request in
+            try request.principal?.require(.casWrite)
+            return .json(["stored": true])
+        }
+        let server = HTTPServer(configuration: .init(port: 0, authorizer: Reader()), router: router)
+        let base = URL(string: "http://127.0.0.1:\(try await server.start())")!
+        defer { server.stop() }
+
+        let (who, name) = try await call(base.appendingPathComponent("who"))
+        XCTAssertEqual(who, 200)
+        XCTAssertEqual(String(data: name, encoding: .utf8), "laptop")
+        let (refused, body) = try await call(base.appendingPathComponent("store"), method: "PUT")
+        XCTAssertEqual(refused, 403)
+        XCTAssertTrue(String(data: body, encoding: .utf8)!.contains("cas.write"))
+    }
+
+    /// Every answer, a refusal included, is one activity value — the seam the
+    /// console's REST rows are built on (`Design/SERVER_HEADLESS_PLAN.md` §5).
+    func testEveryAnswerIsAnActivityValue() async throws {
+        let seen = Activities()
+        let (server, base) = try await serve(onRequest: { seen.add($0) }) { router in
+            router.add("GET", "/hello") { _ in .json(["ok": true]) }
+        }
+        defer { server.stop() }
+        _ = try await call(base.appendingPathComponent("hello"), token: "s3cret")
+        _ = try await call(base.appendingPathComponent("hello"))
+        let all = seen.all
+        XCTAssertEqual(all.count, 2)
+        XCTAssertEqual(all[0].method, "GET")
+        XCTAssertEqual(all[0].path, "/hello")
+        XCTAssertEqual(all[0].status, .ok)
+        XCTAssertEqual(all[0].principal?.name, "test")
+        XCTAssertEqual(all[1].status, .unauthorized)
+        XCTAssertNil(all[1].principal)
     }
 
     func testASlowHandlerHoldsOnlyItsOwnConnection() async throws {
@@ -144,9 +208,9 @@ final class HTTPServerTests: XCTestCase {
             router.add("GET", "/fast") { _ in .json(["fast": true]) }
         }
         defer { server.stop() }
-        let slow = Task { try await self.call(base.appendingPathComponent("slow")) }
+        let slow = Task { try await self.call(base.appendingPathComponent("slow"), token: "s3cret") }
         let started = Date()
-        let fast = try await call(base.appendingPathComponent("fast"))
+        let fast = try await call(base.appendingPathComponent("fast"), token: "s3cret")
         XCTAssertEqual(fast.0, 200)
         XCTAssertLessThan(Date().timeIntervalSince(started), 0.8)
         let slowAnswer = try await slow.value
@@ -175,11 +239,38 @@ final class HTTPServerTests: XCTestCase {
         XCTAssertEqual(status, 200)
     }
 
-    func testTheTokenComparisonNeedsEveryByte() {
-        XCTAssertTrue(HTTPServer.authorized("Bearer abc", token: "abc"))
-        XCTAssertFalse(HTTPServer.authorized("Bearer abcd", token: "abc"))
-        XCTAssertFalse(HTTPServer.authorized("Bearer ab", token: "abc"))
-        XCTAssertFalse(HTTPServer.authorized("Basic abc", token: "abc"))
-        XCTAssertFalse(HTTPServer.authorized(nil, token: "abc"))
+    /// A route takes more than the parser's default, over the wire, and the
+    /// other routes keep the default (`Design/SERVER_HEADLESS_PLAN.md`
+    /// decision 12).
+    func testAnUploadRouteTakesMoreThanTheOthers() async throws {
+        let (server, base) = try await serve { router in
+            router.add("POST", "/upload", maxBodyBytes: 4096) { .json(["bytes": $0.body.count]) }
+            router.add("POST", "/echo") { .json(["bytes": $0.body.count]) }
+        }
+        defer { server.stop() }
+        let upload = try await call(base.appendingPathComponent("upload"), method: "POST",
+                                    body: Data(count: 3000), token: "s3cret")
+        XCTAssertEqual(upload.0, 200)
+        let echo = try await call(base.appendingPathComponent("echo"), method: "POST",
+                                  body: Data(count: 3000), token: "s3cret")
+        XCTAssertEqual(echo.0, 413)
     }
+
+    func testTheTokenComparisonNeedsEveryByte() {
+        XCTAssertTrue(HTTPBearer.matches("Bearer abc", token: "abc"))
+        XCTAssertFalse(HTTPBearer.matches("Bearer abcd", token: "abc"))
+        XCTAssertFalse(HTTPBearer.matches("Bearer ab", token: "abc"))
+        XCTAssertFalse(HTTPBearer.matches("Basic abc", token: "abc"))
+        XCTAssertFalse(HTTPBearer.matches(nil, token: "abc"))
+        XCTAssertEqual(HTTPBearer.token("Bearer abc"), "abc")
+        XCTAssertNil(HTTPBearer.token("Basic abc"))
+    }
+}
+
+/// What the server reported, in order, from any thread.
+final class Activities: @unchecked Sendable {
+    private let lock = NSLock()
+    private var items: [HTTPActivity] = []
+    func add(_ activity: HTTPActivity) { lock.lock(); items.append(activity); lock.unlock() }
+    var all: [HTTPActivity] { lock.lock(); defer { lock.unlock() }; return items }
 }

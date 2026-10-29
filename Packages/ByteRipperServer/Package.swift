@@ -24,7 +24,14 @@ let package = Package(
         .package(path: "../AgentKit")
     ],
     targets: [
+        // Tokens: the file, the authorizer the listener runs on, and the
+        // console's cookies. A target of its own so what decides who a request
+        // is can be tested without a listener or a store.
+        .target(name: "ServerAuth", dependencies: [
+            .product(name: "HTTPService", package: "HTTPService")
+        ]),
         .target(name: "ByteRipperServer", dependencies: [
+            "ServerAuth",
             .product(name: "CodeAnalysis", package: "CodeAnalysis"),
             .product(name: "HTTPService", package: "HTTPService"),
             .product(name: "CASService", package: "CASService"),
@@ -32,8 +39,13 @@ let package = Package(
             .product(name: "AgentKit", package: "AgentKit")
         ]),
         .executableTarget(name: "byteripper-server", dependencies: ["ByteRipperServer"]),
+        .testTarget(name: "ServerAuthTests", dependencies: [
+            "ServerAuth",
+            .product(name: "HTTPService", package: "HTTPService")
+        ]),
         .testTarget(name: "ByteRipperServerTests", dependencies: [
             "ByteRipperServer",
+            "ServerAuth",
             .product(name: "CodeAnalysis", package: "CodeAnalysis"),
             .product(name: "GhidraHost", package: "GhidraHost"),
             .product(name: "HTTPService", package: "HTTPService"),

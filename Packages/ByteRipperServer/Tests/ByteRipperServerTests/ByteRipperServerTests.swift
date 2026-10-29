@@ -1,5 +1,7 @@
 import CodeAnalysis
 import Foundation
+import HTTPService
+import ServerAuth
 import XCTest
 @testable import ByteRipperServer
 
@@ -10,89 +12,82 @@ final class ServerCommandTests: XCTestCase {
         XCTAssertEqual(configuration.host, "127.0.0.1")
         XCTAssertEqual(configuration.port, 8765)
         XCTAssertEqual(configuration.store, CodeAnalysisPaths.defaultRoot)
-        XCTAssertFalse(configuration.tokenRequired)
+        XCTAssertEqual(configuration.tokensFile, ServerPaths.defaultTokensFile)
     }
 
-    func testAnAddressAStoreAndATokenFile() throws {
+    func testAnAddressAStoreAndATokensFile() throws {
         let parsed = try ServerCommand.parse(["serve", "--cas", "--listen", "100.64.1.2:9000",
-                                              "--store", "/tmp/s", "--token-file", "/tmp/t"])
+                                              "--store", "/tmp/s", "--tokens", "/tmp/t.json"])
         guard case .serve(let configuration) = parsed else { return XCTFail() }
         XCTAssertEqual(configuration.host, "100.64.1.2")
         XCTAssertEqual(configuration.port, 9000)
         XCTAssertEqual(configuration.store.path, "/tmp/s")
-        XCTAssertEqual(configuration.tokenFile.path, "/tmp/t")
-        XCTAssertTrue(configuration.tokenRequired)
+        XCTAssertEqual(configuration.tokensFile.path, "/tmp/t.json")
         guard case .serve(let ipv6) = try ServerCommand.parse(["--listen", "[::1]:8765"]) else { return XCTFail() }
         XCTAssertEqual(ipv6.host, "::1")
-        guard case .serve(let both) = try ServerCommand.parse(["--listen", "127.0.0.1:8765", "--listen", "admins-imac:8765",
-                                                               "--token-file", "/tmp/t"]) else { return XCTFail() }
+        guard case .serve(let both) = try ServerCommand.parse(["--listen", "127.0.0.1:8765",
+                                                               "--listen", "admins-imac:8765"]) else { return XCTFail() }
         XCTAssertEqual(both.listens, [.init(host: "127.0.0.1", port: 8765), .init(host: "admins-imac", port: 8765)])
     }
 
+    /// The store is always served (`Design/SERVER_HEADLESS_PLAN.md` decision
+    /// 17): `--ghidra` alone is every role, and `--cas` alone turns Ghidra off.
+    func testTheStoreIsServedWhateverTheRolesNamed() throws {
+        guard case .serve(let ghidra) = try ServerCommand.parse(["--ghidra"]) else { return XCTFail() }
+        XCTAssertEqual(ghidra.roles, [.cas, .ghidra])
+        guard case .serve(let cas) = try ServerCommand.parse(["--cas"]) else { return XCTFail() }
+        XCTAssertEqual(cas.roles, [.cas])
+    }
+
     func testWhatIsRefused() {
-        XCTAssertThrowsError(try ServerCommand.parse(["--ghidra"]), "the Ghidra role alone has no store")
-        XCTAssertNoThrow(try ServerCommand.parse(["--ghidra", "--cas-url", "http://100.64.0.7:8765"]))
         XCTAssertThrowsError(try ServerCommand.parse(["--idle", "-1"]))
         XCTAssertThrowsError(try ServerCommand.parse(["--listen", "nowhere"]))
         XCTAssertThrowsError(try ServerCommand.parse(["--store"]))
         XCTAssertThrowsError(try ServerCommand.parse(["--bogus"]))
+        XCTAssertThrowsError(try ServerCommand.parse(["--cas-url", "http://100.64.0.7:8765"]),
+                             "--cas-url is gone: the store is this server's own")
         XCTAssertThrowsError(try ServerCommand.parse(["frobnicate"]))
-        XCTAssertEqual(try ServerCommand.parse(["token", "--replace"]),
-                       .token(file: ServerPaths.defaultTokenFile, replace: true))
+    }
+
+    func testTheTokenCommands() throws {
+        XCTAssertEqual(try ServerCommand.parse(["token", "add", "--name", "admin", "--rights", "admin"]),
+                       .token(.add(name: "admin", rights: [.admin], file: ServerPaths.defaultTokensFile)))
+        XCTAssertEqual(try ServerCommand.parse(["token", "list", "--tokens", "/tmp/t.json"]),
+                       .token(.list(file: URL(fileURLWithPath: "/tmp/t.json"))))
+        XCTAssertEqual(try ServerCommand.parse(["token", "revoke", "laptop"]),
+                       .token(.revoke(id: "laptop", file: ServerPaths.defaultTokensFile)))
+        XCTAssertThrowsError(try ServerCommand.parse(["token", "add"]))
     }
 }
 
-final class TokenFileTests: XCTestCase {
+final class ServerTests: XCTestCase {
     private var directory: URL!
 
     override func setUpWithError() throws {
         directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("TokenFileTests-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("ServerTests-\(UUID().uuidString)", isDirectory: true)
     }
 
     override func tearDownWithError() throws {
         try? FileManager.default.removeItem(at: directory)
     }
 
-    func testATokenIsMadeOnlyItsOwnerMayReadAndReadBack() throws {
-        let url = directory.appendingPathComponent("token")
-        let token = try TokenFile.make(at: url)
-        XCTAssertEqual(token.count, 43)
-        let mode = try FileManager.default.attributesOfItem(atPath: url.path)[.posixPermissions] as! NSNumber
-        XCTAssertEqual(mode.intValue & 0o777, 0o600)
-        XCTAssertEqual(try TokenFile.read(at: url), token)
-        XCTAssertThrowsError(try TokenFile.make(at: url))
-        XCTAssertNotEqual(try TokenFile.make(at: url, replace: true), token)
-    }
-
-    func testAFileOthersMayReadIsRefusedAndNoFileIsNoToken() throws {
-        let url = directory.appendingPathComponent("token")
-        XCTAssertNil(try TokenFile.read(at: url))
-        try TokenFile.make(at: url)
-        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path)
-        XCTAssertThrowsError(try TokenFile.read(at: url)) { error in
-            XCTAssertEqual(error as? TokenFile.Failure, .readableByOthers(url.path))
-        }
-    }
-}
-
-final class ServerTests: XCTestCase {
     func testTheServerServesItsStoreBehindItsToken() async throws {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ServerTests-\(UUID().uuidString)", isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
+        let tokens = try TokenStore.open(at: directory.appendingPathComponent("tokens.json"))
+        // The console's admin token is what lets the server start at all.
+        try tokens.add(name: "admin", rights: TokenPreset.admin.rights)
+        let (_, secret) = try tokens.add(name: "app", rights: TokenPreset.app.rights)
         var configuration = ServerConfiguration()
         configuration.roles = [.cas]
         configuration.port = 0
         configuration.store = directory.appendingPathComponent("store")
-        configuration.tokenFile = directory.appendingPathComponent("token")
-        let token = try TokenFile.make(at: configuration.tokenFile)
+        configuration.tokensFile = directory.appendingPathComponent("tokens.json")
         let lines = Lines()
         let server = Server(configuration: configuration, log: { lines.add($0) })
         let port = try await server.start()
         defer { server.stop() }
 
-        let remote = RemoteStore(base: URL(string: "http://127.0.0.1:\(port)")!, token: token)
+        let remote = RemoteStore(base: URL(string: "http://127.0.0.1:\(port)")!, token: secret)
         let hello = try await remote.hello()
         XCTAssertEqual(hello.store, try ContentStore(root: configuration.store).identity())
         XCTAssertTrue(lines.all.contains { $0.contains("GET /cas/v1/hello 200") }, "\(lines.all)")
@@ -104,19 +99,21 @@ final class ServerTests: XCTestCase {
         }
     }
 
-    func testANamedTokenFileMustExist() async throws {
+    /// Without an admin token the console cannot be opened and the file cannot
+    /// be corrected through it, so the server names the command instead of
+    /// starting (`Design/SERVER_HEADLESS_PLAN.md` decision 16).
+    func testAServerWithoutAnAdminTokenRefusesToStart() async throws {
         var configuration = ServerConfiguration()
         configuration.roles = [.cas]
         configuration.port = 0
-        configuration.store = FileManager.default.temporaryDirectory.appendingPathComponent("s-\(UUID())")
-        configuration.tokenFile = URL(fileURLWithPath: "/nonexistent/token")
-        configuration.tokenRequired = true
-        defer { try? FileManager.default.removeItem(at: configuration.store) }
+        configuration.store = directory.appendingPathComponent("store")
+        configuration.tokensFile = directory.appendingPathComponent("tokens.json")
         do {
             try await Server(configuration: configuration, log: { _ in }).start()
-            XCTFail("started without its token file")
+            XCTFail("started without an admin token")
         } catch {
-            XCTAssertTrue("\(error)".contains("does not exist"))
+            XCTAssertTrue("\(error)".contains("no admin token"), "\(error)")
+            XCTAssertTrue("\(error)".contains("token add --name admin --rights admin"), "\(error)")
         }
     }
 }

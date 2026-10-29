@@ -1,40 +1,37 @@
 import CodeAnalysis
 import Foundation
 import GhidraHost
+import ServerAuth
 
 /// What `byteripper-server` was asked to do, read from its arguments.
 public enum ServerCommand: Equatable {
     case serve(ServerConfiguration)
-    /// Write a new token file and print the token.
-    case token(file: URL, replace: Bool)
+    /// Make, list, rotate or revoke a token of `tokens.json`.
+    case token(TokenCommand)
     case help
 
     public static let usage = """
         usage: byteripper-server [serve] [--cas] [--ghidra] [--listen <host>:<port>]
-                                 [--store <dir>] [--token-file <file>]
-                                 [--cas-url <url>] [--ghidra-home <dir>] [--projects <dir>] [--idle <s>]
-               byteripper-server token [--token-file <file>] [--replace]
+                                 [--store <dir>] [--tokens <file>]
+                                 [--ghidra-home <dir>] [--projects <dir>] [--idle <s>]
+               byteripper-server token add --name <name> [--rights <right,…> | --preset <reader|app|admin>]
+               byteripper-server token list | rotate <id|name> | revoke <id|name>
 
-          --cas           serve the code-analysis store
-          --ghidra        host the Ghidra owners; publishes into this server's
-                          store, or into --cas-url's
-                          (with neither named, both roles are on)
+        \(TokenCommand.usage)
+
+          --cas           serve the store alone; the store is served either way,
+                          and with neither --cas nor --ghidra both roles are on
+          --ghidra        host the Ghidra owners
           --listen        an address to listen on, 127.0.0.1:8765 by default;
                           repeat it for several (loopback for this Mac's own
-                          app, the tailnet address for the others); anything
-                          but loopback needs a token file
+                          app, the tailnet address for the others)
           --store         the store's directory, the app's own by default
-          --token-file    the bearer token, a file only its owner may read;
-                          used when present, required off loopback
-          --cas-url       the served store the Ghidra role publishes into,
-                          when this server does not serve one; same token
+          --tokens        the tokens' file, tokens.json in the server's folder
+                          by default; every address needs a token
           --ghidra-home   the Ghidra install; GHIDRA_HOME or the newest found
           --projects      the modules' kept projects, the app's folder by default
           --idle          seconds an owner waits for a call before it saves and
                           exits, 1800 by default
-
-          token           make a token file (0600) and print the token for the
-                          app's Settings ▸ Code analysis
         """
 
     public struct Failure: Error, Equatable, CustomStringConvertible {
@@ -59,21 +56,14 @@ public enum ServerCommand: Equatable {
         case "help":
             return .help
         case "token":
-            var file = ServerPaths.defaultTokenFile
-            var replace = false
-            while let flag = rest.popFirst() {
-                switch flag {
-                case "--token-file": file = URL(fileURLWithPath: try value(flag))
-                case "--replace": replace = true
-                case "--help", "-h": return .help
-                default: throw Failure(description: "token does not take \(flag)")
-                }
+            do {
+                return .token(try TokenCommand.parse(Array(rest), defaultFile: ServerPaths.defaultTokensFile))
+            } catch let failure as TokenCommand.Failure {
+                throw Failure(description: failure.description)
             }
-            return .token(file: file, replace: replace)
         case "serve":
             var configuration = ServerConfiguration()
             var roles: Set<ServerConfiguration.Role> = []
-            var tokenFileGiven = false
             var listens: [ServerConfiguration.Listen] = []
             while let flag = rest.popFirst() {
                 switch flag {
@@ -81,12 +71,6 @@ public enum ServerCommand: Equatable {
                     roles.insert(.cas)
                 case "--ghidra":
                     roles.insert(.ghidra)
-                case "--cas-url":
-                    let text = try value(flag)
-                    guard let url = URL(string: text), url.scheme == "http" || url.scheme == "https" else {
-                        throw Failure(description: "--cas-url takes http://<host>:<port>, not \(text)")
-                    }
-                    configuration.casURL = url
                 case "--ghidra-home":
                     configuration.ghidraHome = URL(fileURLWithPath: try value(flag))
                 case "--projects":
@@ -105,9 +89,8 @@ public enum ServerCommand: Equatable {
                         .trimmingCharacters(in: CharacterSet(charactersIn: "[]")), port: port))
                 case "--store":
                     configuration.store = URL(fileURLWithPath: try value(flag))
-                case "--token-file":
-                    configuration.tokenFile = URL(fileURLWithPath: try value(flag))
-                    tokenFileGiven = true
+                case "--tokens":
+                    configuration.tokensFile = URL(fileURLWithPath: try value(flag))
                 case "--help", "-h":
                     return .help
                 default:
@@ -115,11 +98,10 @@ public enum ServerCommand: Equatable {
                 }
             }
             if !listens.isEmpty { configuration.listens = listens }
-            configuration.roles = roles.isEmpty ? [.cas, .ghidra] : roles
-            if configuration.roles.contains(.ghidra), !configuration.roles.contains(.cas), configuration.casURL == nil {
-                throw Failure(description: "the Ghidra role publishes into a store: add --cas, or name --cas-url")
-            }
-            configuration.tokenRequired = tokenFileGiven
+            // The store is this server's own and always served
+            // (`Design/SERVER_HEADLESS_PLAN.md` decision 17); Ghidra alone is
+            // optional.
+            configuration.roles = roles.isEmpty ? [.cas, .ghidra] : roles.union([.cas])
             return .serve(configuration)
         default:
             throw Failure(description: "\(verb) is not a command of byteripper-server")
@@ -157,15 +139,13 @@ public struct ServerConfiguration: Equatable, Sendable {
         get { listens[0].port }
         set { listens[0].port = newValue }
     }
-    public var casURL: URL?
     public var ghidraHome: URL?
     public var projects = GhidraHost.defaultProjectsRoot
     public var idle = 1800
     public var store = CodeAnalysisPaths.defaultRoot
-    public var tokenFile = ServerPaths.defaultTokenFile
-    /// A token file named on the command line must be there; the default one
-    /// is used when it is.
-    public var tokenRequired = false
+    /// The file of tokens, by hash and right: the only credential the server
+    /// has (`Design/SERVER_HEADLESS_PLAN.md` §5).
+    public var tokensFile = ServerPaths.defaultTokensFile
 
     public init() {}
 }
@@ -176,7 +156,7 @@ public enum ServerPaths {
             .appendingPathComponent("Server", isDirectory: true)
     }
 
-    public static var defaultTokenFile: URL {
-        support.appendingPathComponent("token", isDirectory: false)
+    public static var defaultTokensFile: URL {
+        support.appendingPathComponent("tokens.json", isDirectory: false)
     }
 }
