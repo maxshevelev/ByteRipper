@@ -76,8 +76,10 @@
     upload, and an agent still holding it would read another file under it. A
     "missing" row (decision 18) keeps its id, held but not served; when its
     file comes back, or the roots widen again, it reopens under that id, with
-    `version` by the rule above. The console's **Forget** removes a missing row
-    for good; its id is retired with it, not freed.
+    `version` by the rule above — but only if the limits of decision 11 allow;
+    otherwise it stays missing with the limit named as the reason, its id held.
+    The console's **Forget** removes a missing row for good; its id is retired
+    with it, not freed.
 11. Simple limits: document count and the total size of open files.
     Decompressed buffers are measured, not capped.
 12. An upload opens the document immediately. It has a limit of its own,
@@ -216,7 +218,8 @@ imports AppKit in several files: the server stays macOS-only in v1.
   its hash compared with the stored one (decision 10); a missing file, and a
   row now outside the roots, stay as "missing" rows that hold their ids and
   serve nothing — `documents` does not list them, and a call naming one is
-  told the file is missing, not that the id is unknown.
+  told the file is missing, not that the id is unknown. A row that returns is
+  admitted only within the limits (decision 11).
 - Limits: `--max-documents` (8), `--max-open-bytes` (512 MiB), counted over
   file sizes and checked before opening.
 - Upload: `POST /admin/documents?name=…` with a raw body (there is no multipart
