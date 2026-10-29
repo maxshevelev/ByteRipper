@@ -3,7 +3,7 @@ import DumpHost
 import Foundation
 import HTTPService
 import ServerAuth
-import ServerConsole
+@testable import ServerConsole
 import ServerMCP
 import XCTest
 @testable import ByteRipperServer
@@ -382,6 +382,11 @@ final class ServerConsoleTests: XCTestCase {
         XCTAssertEqual(log.first?["status"], .count(200))
         XCTAssertEqual(log.first?["running"], .bool(false))
         XCTAssertEqual(activity.body?["mcp"], .array([]))
+        // The page tells an operator how to connect an agent, connected or not.
+        let agent = activity.body?["agent"]
+        XCTAssertTrue(agent?["socket"]?.stringValue?.hasSuffix(".sock") == true)
+        XCTAssertTrue(agent?["claude"]?.stringValue?.contains("claude mcp add byteripper --") == true)
+        XCTAssertTrue(agent?["config"]?.stringValue?.contains("\"mcpServers\"") == true)
 
         let status = try await call("GET", "/admin/api/status", signed: signed)
         XCTAssertEqual(status.body?["version"]?.stringValue, Server.version)
@@ -395,6 +400,21 @@ final class ServerConsoleTests: XCTestCase {
     /// A burst of failed attempts is spaced by the pause, not let through
     /// together after one: each waiter looks at the gate again when it wakes,
     /// in the turn that runs its attempt.
+    /// The shell words the console prints survive a path with a space — the
+    /// server's own folder has one on every Mac.
+    func testTheAgentConfigurationQuotesItsPaths() {
+        let agent = ConsoleAgent(
+            socket: "/Users/a b/Library/Application Support/ByteRipper/Server/mcp.sock",
+            binary: "/Users/a b/Tools/byteripper-server")
+        XCTAssertEqual(agent.command,
+                       "'/Users/a b/Tools/byteripper-server' relay --mcp-socket "
+                       + "'/Users/a b/Library/Application Support/ByteRipper/Server/mcp.sock'")
+        XCTAssertTrue(agent.claudeCommand.hasPrefix("claude mcp add byteripper -- '"))
+        XCTAssertTrue(agent.config.contains("\"command\": \"/Users/a b/Tools/byteripper-server\""))
+        XCTAssertEqual(ConsoleAgent.quoted("/opt/homebrew/bin/byteripper-server"),
+                       "/opt/homebrew/bin/byteripper-server", "a plain path is left alone")
+    }
+
     /// The activity rows carry the request itself, not only a count: a call is
     /// listed while it runs, and the answer takes the running line's place.
     func testActivityKeepsTheRequestsOfACall() throws {

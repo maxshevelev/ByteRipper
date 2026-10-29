@@ -135,7 +135,10 @@ public final class Server {
         let console: Console
         do {
             console = try Console(registry: registry, tokens: tokens, authorizer: authorizer, rest: rest,
-                                  mcp: socket.activity, status: { [weak self] in await self?.status() ?? Self.noStatus })
+                                  mcp: socket.activity,
+                                  agent: ConsoleAgent(socket: configuration.mcpSocket.path,
+                                                      binary: Self.executablePath()),
+                                  status: { [weak self] in await self?.status() ?? Self.noStatus })
         } catch {
             stop()
             throw error
@@ -192,6 +195,22 @@ public final class Server {
 
     /// What the server calls itself to an agent and on the console.
     public nonisolated static let version = "1"
+
+    /// This server's own binary, absolute — the thing an MCP client's relay
+    /// starts. `CommandLine.arguments` holds what the operator typed, which is
+    /// often a path relative to the folder it was typed in; a bare name is
+    /// looked up in `PATH` and left as it is when it is not found there.
+    nonisolated static func executablePath() -> String {
+        let argument = CommandLine.arguments.first ?? "byteripper-server"
+        if argument.contains("/") {
+            return URL(fileURLWithPath: argument).standardized.path
+        }
+        for directory in (ProcessInfo.processInfo.environment["PATH"] ?? "").split(separator: ":") {
+            let candidate = URL(fileURLWithPath: String(directory)).appendingPathComponent(argument)
+            if FileManager.default.isExecutableFile(atPath: candidate.path) { return candidate.path }
+        }
+        return argument
+    }
 
     nonisolated static let noStatus = ConsoleStatus(
         version: version, started: Date(), addresses: [], serverNames: [], roles: [], store: "", storeID: nil,

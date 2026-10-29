@@ -21,11 +21,15 @@ public struct Console: Sendable {
     public let gate: SignInGate
     public let rest: RESTActivity
     public let mcp: ServerActivity?
+    /// How an agent's client reaches this server, for the Activity page to
+    /// show: nil where there is no socket to reach (a test's console).
+    public let agent: ConsoleAgent?
     public let status: @Sendable () async -> ConsoleStatus
     let assets: ConsoleAssets
 
     public init(registry: DocumentRegistry, tokens: TokenStore, authorizer: ServerAuthorizer,
                 gate: SignInGate = SignInGate(), rest: RESTActivity, mcp: ServerActivity?,
+                agent: ConsoleAgent? = nil,
                 status: @escaping @Sendable () async -> ConsoleStatus) throws {
         self.registry = registry
         self.tokens = tokens
@@ -33,6 +37,7 @@ public struct Console: Sendable {
         self.gate = gate
         self.rest = rest
         self.mcp = mcp
+        self.agent = agent
         self.status = status
         assets = try ConsoleAssets.load()
     }
@@ -134,10 +139,14 @@ public struct Console: Sendable {
         let mcp = self.mcp
         add("GET", "/admin/api/activity") { _ in
             let agents = await MainActor.run { mcp?.listed ?? [] }
-            return Self.json([
+            var members: [String: JSONValue] = [
                 "mcp": .array(agents.map(Self.agent)),
                 "rest": .array(rest.listed.map(Self.client))
-            ])
+            ]
+            // How to connect one, whether or not one is connected: the page
+            // is where an operator comes to ask that.
+            if let agent = self.agent { members["agent"] = agent.json() }
+            return Self.json(.object(members))
         }
 
         // Tokens.
@@ -156,8 +165,13 @@ public struct Console: Sendable {
                 return (registry.limits, open.count, registry.rows.count - open.count,
                         open.reduce(0) { $0 + $1.contentSize })
             }
-            return Self.json(now.json(limits: held.0, sessions: sessions.count,
-                                      documents: (held.1, held.2, held.3)))
+            var value = now.json(limits: held.0, sessions: sessions.count,
+                                 documents: (held.1, held.2, held.3))
+            if let agent = self.agent, case .object(var members) = value {
+                members["agent"] = agent.json()
+                value = .object(members)
+            }
+            return Self.json(value)
         }
         return router
     }

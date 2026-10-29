@@ -711,6 +711,27 @@ button.chip:hover { border-color: var(--accent); color: var(--text); }
 .log-row td { padding: 0 20px 10px; }
 .hidden { display: none; }
 
+/* ---------- Connect an agent ---------- */
+
+.connect { display: flex; flex-direction: column; gap: 14px; }
+.json {
+  position: relative;
+  padding: 12px 46px 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+}
+.json pre {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-2);
+  white-space: pre;
+  overflow-x: auto;
+}
+.json .icon-btn { position: absolute; top: 8px; right: 8px; }
+
 /* ---------- Key–value lists ---------- */
 
 .kv { display: grid; grid-template-columns: minmax(120px, max-content) 1fr; gap: 12px 20px; align-items: baseline; }

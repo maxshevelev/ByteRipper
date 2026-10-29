@@ -198,13 +198,43 @@
     });
   }
 
+  // The clipboard API lives only in a secure context — https, or a loopback
+  // address. The console is opened on a LAN or tailnet name over plain HTTP,
+  // which is not one; there the old gesture — a selection and execCommand —
+  // is the only clipboard the page has.
   async function copy(text, what) {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast(`Copied ${what}`, "ok");
-    } catch {
-      toast("The browser did not allow copying; select the text instead.", "error");
+    let copied = false;
+    if (window.isSecureContext && navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(text);
+        copied = true;
+      } catch { /* the selection below may still work */ }
     }
+    if (!copied) copied = copyBySelection(text);
+    if (copied) toast(`Copied ${what}`, "ok");
+    else toast("The browser did not allow copying; select the text instead.", "error");
+  }
+
+  function copyBySelection(text) {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.top = "-1000px";
+    area.style.opacity = "0";
+    document.body.append(area);
+    const selection = document.getSelection();
+    const previous = selection && selection.rangeCount ? selection.getRangeAt(0) : null;
+    area.select();
+    area.setSelectionRange(0, text.length);
+    let copied = false;
+    try { copied = document.execCommand("copy"); } catch { copied = false; }
+    area.remove();
+    if (previous && selection) {
+      selection.removeAllRanges();
+      selection.addRange(previous);
+    }
+    return copied;
   }
 
   // ---------- Toasts and dialogs ----------
@@ -813,16 +843,29 @@
 
   function mountActivity() {
     const agents = card("Agents", "connections to the local MCP socket, and the calls each is making");
+    const connect = card("Connect an agent", "the socket this server serves, and the client configuration for it");
     const clients = card("REST clients", "requests per token since the server started; the console's own are not counted");
-    const root = h("div", { class: "stack" }, agents.root, clients.root);
+    const root = h("div", { class: "stack" }, agents.root, connect.root, clients.root);
 
     function update(data) {
       if (!data.mcp.length) {
         fill(agents.body, empty("bot", "No agent is connected",
-          "An agent on this machine reaches the server through the relay; give its MCP client this command:",
-          h("div", { class: "row" }, h("div", { class: "grow" }, copyLine("byteripper-server relay", "the command")))));
+          "An agent on this machine reaches the server through the relay below; a call appears here as soon as its client connects."));
       } else {
         fill(agents.body, h("div", { class: "agents" }, data.mcp.map(agentCard)));
+      }
+      if (data.agent) {
+        fill(connect.body, h("div", { class: "connect" },
+          h("div", {}, h("div", { class: "label", text: "Socket" }),
+            copyLine(data.agent.socket, "the socket's path")),
+          h("div", {}, h("div", { class: "label", text: "Add to Claude Code" }),
+            copyLine(data.agent.claude, "the command")),
+          h("div", {}, h("div", { class: "label", text: "Or in .mcp.json, or Claude Desktop's own file" }),
+            h("div", { class: "json" },
+              h("pre", { text: data.agent.config }),
+              iconButton("copy", "Copy the configuration", () => copy(data.agent.config, "the configuration"))))));
+      } else {
+        fill(connect.body, empty("plug", "No local MCP socket", "This server answers without one."));
       }
       if (!data.rest.length) {
         fill(clients.body, empty("globe", "No REST requests yet", "The app and the scripts show up here, one row per token, when they reach the store or Ghidra."));
@@ -1122,7 +1165,8 @@
       ]);
       fill(mcp,
         h("div", {}, h("div", { class: "label", text: "Socket" }), copyLine(data.socket, "the socket's path")),
-        h("div", {}, h("div", { class: "label", text: "An agent's MCP command" }), copyLine(`byteripper-server relay --mcp-socket ${data.socket}`, "the command")),
+        h("div", {}, h("div", { class: "label", text: "An agent's MCP command" }),
+          copyLine(data.agent ? data.agent.command : `byteripper-server relay --mcp-socket ${data.socket}`, "the command")),
         h("p", { class: "hint", text: "The socket's file permissions are its only guard: any process of this user can connect." }));
       kv(limits, [
         ["Documents", `${data.limits.documents} open at once`],

@@ -375,6 +375,11 @@ imports AppKit in several files: the server stays macOS-only in v1.
   outcome) — in memory, one row per connection. A call is logged when it
   starts and replaced by its finished record under the same id, so a tool
   still working shows as a running line.
+- The Activity page carries the connection itself, connected or not: the
+  socket's path, the `claude mcp add` line that adds this server to a client,
+  and the `mcpServers` entry for `.mcp.json` or Claude Desktop's file — the
+  binary's absolute path is the server's own (`CommandLine.arguments`), which
+  a client on this Mac has no other way to guess.
 
 ## 8. The console
 
