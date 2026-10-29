@@ -210,7 +210,9 @@ typedef struct {
     UINT32                    : 6;
     UINT32 PchStrapsBase      : 8;
     UINT32 NumberOfPchStraps  : 8;   // one-based, in UINT32s
-    // FLMAP2
+    // FLMAP2 — up to Cannon Point. From Tiger Point on the same word is
+    // bits 0–1 reserved, 2–11 the strap message's offset in the PMC's space,
+    // 16–23 its length (§2.5, §2.7).
     UINT32 ProcStrapsBase     : 8;
     UINT32 NumberOfProcStraps : 8;
     UINT32                    : 16;
@@ -322,7 +324,13 @@ EC=0x20`.
   The base is again bits `[11:4]`; the size is in `UINT32`s.
 - The VSCC table: an array of `{UINT8 VendorId; UINT8 DeviceId0;
   UINT8 DeviceId1; UINT8 ReservedZero; UINT32 VsccRegisterValue;}`.
-- The OEM section: fixed at `0x0F00`, size `0x100`.
+- The OEM section: fixed at `0x0F00`, size `0x100`. Intel lays nothing out in
+  it; the board's maker fills it with what it likes, and the dumps at hand use
+  it for a serial and a BIOS version (`CSME 11.bin`: `N1CRM37W`, `11.0.16.1000`,
+  `16MB`, a signature) or leave it erased. Flash Image Tool names it in
+  `DescConfFields.xml` as the OEM binary it merges there. The panel shows the
+  section as sixteen-byte rows, with the address that outlines each, only when
+  something other than `0xFF` is written; an erased one is not shown.
 - The component section, at `ComponentBase << 4`:
   `{UINT32 FLCOMP; UINT32 FLILL; UINT32 FLPB;}`. `FLCOMP` holds each chip's
   density — three bits a chip up to Cougar Point, four from Lynx Point on;
@@ -366,14 +374,76 @@ regions with flashrom's `ich_descriptors_tool` and coreboot's `ifdtool -d`,
 and the chip densities with the dump's length — `SPI_ALL_192Mbit` is
 8 MB + 16 MB.
 
+**MFIT's own register names.** MFIT 18 lays the registers out field by field —
+FLMAP0/1/2, FLCOMP, FLIL, FLMSTR (six master words), FLDRPLCY and FLUMAP1 —
+and `Packages/UEFIImage/MapSources/register/csme18.json` carries them
+(emitted by `descriptor18_map.py`, compiled into `RegisterMaps.bin`); the
+UEFI Structure panel shows
+them as a "Descriptor registers" table, one section per register. A register's
+place is absolute or stated by the map words themselves (`FCBA << 4`,
+`FMBA << 4`). The map applies from Meteor Lake on: FLCOMP's density and clock
+bits are that generation's. On the CSME 18 dump the table reads FLMAP0
+`00040003` (FCBA 0x30, FRBA 0x40), FLMAP1 `82100208` (FMBA 0x80, two masters,
+the strap section at 0x100 with 130 words), FLCOMP `0930F0F6`, FLDRPLCY
+`20000000` and FLUMAP1 `C0FF00FF` (VSCC table base 0xFF, MIP descriptor table
+base 0xC0 → 0xC00). MFIT calls FLMAP0 bits 24–26 reserved where the classic
+descriptor counts regions; the panel's own "Regions" row keeps the classic
+reading.
+
+The older builds state the same registers in their platform class documents —
+one set per platform, selected by the strap include it names
+(`descriptor_fit_map.py --platform`) — and what those documents agree on is a
+map: Sunrise Point (FIT 11: FLMAP1/2), Cannon Point (four registers spread
+over FIT 12–15's CNP documents — the CNP build states FLMAP1 and FLCOMP, FIT
+13's CNP documents FLMAP0, FIT 14's FLMAP2), Elkhart Lake and Jasper Lake
+(FIT 13), and Tiger Point (FIT 15: FLMAP0/1/2, FLCOMP and masters 3 and 5).
+**The maps are partial where the build's own documents are**: the masters 1,
+2 and 4, and the region registers, live in a common document the builds name
+but do not embed, so a register no map holds stays unnamed rather than taking
+another generation's bits. Verified against `ifdtool`: CSME 11's FLMAP1
+`42100208` reads PSL `0x42` (66 words), FPSBA 0x100, two masters and FMBA
+0x80; CSME 12's FLMAP0 `00040003` states FCBA 0x30 and FRBA 0x40, and its
+FLMAP2 `00340330` the 3-word processor section at 0x30; CSME 15's
+`46100208` reads PSL 70, and its FLMAP0 states FCBA 0x30, FRBA 0x40 — the
+values ifdtool prints.
+
 ### 2.6. The PCH straps
 
 At `PchStrapsBase << 4`, `NumberOfPchStraps` `UINT32`s (`PCHSTRP0`,
 `PCHSTRP1`, …): settings the chipset reads for itself at power-on, before any
-firmware runs. Their layout is the chipset's and is not published past the
-oldest generations. It is not even one layout per generation: the mobile and
-desktop parts of one generation make the section different lengths, and put
-the same field in different words —
+firmware runs.
+
+**The layout is inside Flash Image Tool.** Every FIT executable carries the
+chipset's own layout of this section as documents of entries
+
+```xml
+<LayoutEntry name="PCH_Strap_SPI_ec_max_freq" type="bitfield32" value="0x4"
+             offset="0x50" bitfield_high="5" bitfield_low="3" />
+```
+
+— the tool's identifier for the field, the byte offset of the word it sits in,
+the bits it takes, and the value the tool writes into it when the configuration
+does not override it (`value` is the field's own value, not the word's), which
+is what the panel calls Flash Image Tool's default. The 70-word section has 759
+such fields, the 101-word one 901; no two fields of a table claim the same bits
+except where the tool documents both a whole address field and the fields
+inside it (`CSME_SMT1_AUDIDB118` over the bits under it), and every word of a
+section is named by at least one field.
+
+Which platform a document belongs to is not written into it — the build has no
+Qt resource tree, and only some documents say `File Name: cnp_h_rvp.xml` in
+their XML comment — so **a table is keyed by the length of the section it
+describes**, which is what an image states about itself and what the panel can
+ask by. The key holds: the 69-word and the 74-word sections are the same field
+for field in every tool that carries them (FIT 13.0, 14.0, 15.0), and FIT 15's
+three 70-word tables differ only in 50 fields' default values and in two
+spellings. Where one length has several documents, the one that names itself
+wins: FIT 15 carries the 90-word section as `cnp_h_rvp.xml` (755 fields) *and*
+as a nameless document whose 417 fields sit at other offsets entirely.
+
+It is not even one layout per generation: the mobile and desktop parts of one
+generation make the section different lengths, and put the same field in
+different words —
 
 | generation | mobile (LP/P) | desktop (H/S) |
 |---|---|---|
@@ -381,11 +451,37 @@ the same field in different words —
 | Tiger Point | 70 | 101 |
 | Alder Point | 70 | 115 |
 
-— so a layout would have to be keyed by generation *and* length.
+— which is why no rule can name a strap field from the descriptor's generation
+alone.
 
-ByteRipper reads the words as numbers, and as what they mean only where the
-meaning is checked: the bit that soft-disables the ME, where ifdtool and
-me_cleaner agree on it, and on one layout the eSPI clock and GPR0 (below).
+**From Meteor Lake the section is the SoC soft-strap block.** `FLMAP1` still
+places and counts it — 130 words at 0x100 on the CSME 18 dump at hand — but
+the fields are MFIT 18's `SoC` harness block (`PlatformSoftStraps name="SoC"`),
+and the document is **byte-addressed**: a `serialized_item`'s `offset` is a
+byte and its bits count from that byte's least significant bit, so a field's
+place is the bit range `offset*8 + bit_low … offset*8 + bit_high`. The three
+platform documents place 1184 fields alike and add one or two of their own;
+values are per reference platform, so no default is emitted. The table is
+`StrapMap+PCH18.swift`, emitted by `pch18_map.py`. Placement is checked: all
+250 fields whose document states a constant value read exactly that value in
+the dump's section, and the eSPI clock and GPRD fields are where the panel's
+rows look for them. The 13 fields the document lays across a 32-bit word
+boundary — the three 32-bit CSME SMT IDs, three 16-bit MPPHY pipe configs and
+four reserved spans — are one word's field in the model only if they are cut,
+so they are left out; the three words the SMT IDs partly cover (41, 46, 51)
+therefore hold no field of their own.
+
+ByteRipper carries the layouts of the lengths its dumps showed and checked —
+69, 70, 74, 90, 101, 114, 115 and 130 words — emitted into
+`Packages/UEFIImage/Sources/UEFIImage/StrapMap+PCH.swift` and
+`StrapMap+PCH18.swift` by `Skills/me-eom-structures/scripts/strap_map.py` and
+`pch18_map.py` (the tool's names, offsets, bits and defaults copied, nothing
+added). The panel gives every field a row of
+its own — its name, the word it sits in, its bits, the value the image holds
+and the value the tool builds — so a row whose two values differ is a field the
+board's own build set; the bit that soft-disables the ME is a row there too,
+being no field of the layout. A section of a length that is not among them is
+listed as numbers, and nothing about its bits is claimed.
 
 | generations | name | word | bit |
 |---|---|---|---|
@@ -397,18 +493,25 @@ Bay Trail (TXE) and Emmitsburg have none: neither tool names one. On ICH8 –
 ICH10 ifdtool also sets two bits in the processor straps; the PCH one is the
 one shown.
 
-Two more fields are read on the one layout ifdtool's offsets were checked
-against — Tiger and Alder Point mobile, 70 words:
+Two further fields are read wherever the layout names them, found in the table
+by the tool's own name rather than by an offset kept by hand:
 
-- **The eSPI clock**, bits 3–5 of `PCHSTRP22`: the clock of the eSPI bus to the
-  EC. ifdtool's 500-series table: 0 = 20, 1 = 24, 2 = 25, 3 = 48, 4 = 60 MHz;
-  any other code is shown as unknown.
-- **GPR0**, the whole of `PCHSTRP21`: the GPRD value the SPI controller loads
-  its global protected range from — `start : 15, read enable : 1, end : 15,
-  write enable : 1`, start and end in 4 KiB units of the flash's linear
-  addresses, the end inclusive. With neither enable bit the range is off. A
-  range refuses the host whatever the masters' masks allow; coreboot sets it
-  over the ME region up to the end of its FITC (`ifdtool --gpr0-enable`).
+- **The eSPI clock**, bits 3–5 of `PCH_Strap_SPI_ec_max_freq`: the clock of the
+  eSPI bus to the EC — word 22 of the 70-word section and word 20 of the
+  101-word one, which is the word ifdtool's offsets had it at. The 69-, 74- and
+  90-word sections (Cannon Point) have no such field at all, and none is read
+  there. ifdtool's 500-series table: 0 = 20, 1 = 24, 2 = 25, 3 = 48, 4 = 60
+  MHz; any other code is shown as unknown.
+- **GPR0**, the whole of `PCH_Strap_SPI_GLOBAL_PROTECTED_RNG_DEF`: the GPRD
+  value the SPI controller loads its global protected range from —
+  `start : 15, read enable : 1, end : 15, write enable : 1`, start and end in
+  4 KiB units of the flash's linear addresses, the end inclusive. With neither
+  enable bit the range is off. A range refuses the host whatever the masters'
+  masks allow; coreboot sets it over the ME region up to the end of its FITC
+  (`ifdtool --gpr0-enable`). The field is word 21 on 70 words and 19 on 101 —
+  both checked against the dumps and against ifdtool — and 16 on 69, 18 on 74
+  and 16 on 90, where only the tool's own table says so. On all of the dumps at
+  hand the range is off whatever word is read.
 
 ifdtool also places GPR0 in word `0x12` on Jasper Lake, `0x40` on Meteor Lake,
 `0x76` on Panther Lake and `0x3C` on Nova Lake, with the eSPI clock in words 65
@@ -416,10 +519,26 @@ and 119 on Meteor and Panther Lake. No dump at hand checks any of them, so
 none is read. On Cannon Point GPR0 is not in the descriptor at all but in the
 ME region's FITC.
 
-On the desktop layouts the same words are other fields. On a Tiger Point H dump
-(`1.bin`, length 101) word 22 gives an eSPI clock code nobody defines, and on an
-Alder Point S one (`SPI_EF4019`, length 115) word 21 gives a "GPR0" of
-`0x22222222`. Neither field is shown there until the desktop layouts are known.
+Before the tables were at hand the desktop layouts were read with the mobile
+one's offsets, which is why a Tiger Point H dump (`1.bin`, 101 words) used to
+give an eSPI clock code nobody defines from word 22 and an Alder Point S one
+(`SPI_EF4019`, 115 words) a "GPR0" of `0x22222222` from word 21. The 101-word
+section now has a table of its own: the clock is word 20 there — code 2 on
+`1.bin`, 25 MHz — and GPR0 word 19, off. Alder Point S's desktop sections,
+114 and 115 words, have tables of their own too: the clock is word 26 and 29
+and GPR0 word 25 and 28. On the 115-word dump at hand (`LENV_CSME 16.bin`,
+Consumer H) 1084 of the table's 1201 fields read the tool's default, which is
+what says the document is that section's, and its clock code is 4 — 60 MHz.
+**Sunrise Point's sections are FIT 11's SPT documents**: 66, 88, 90 and 139
+words, with the older build's `PchStrap…` spelling and whole-word `dword`
+entries for the CPM soft straps and the protected range. A length both sets
+carry — 90 words — is chosen by the generation: Sunrise Point and Lewisburg
+read the SPT table, every other generation the shared one; an uncertain
+generation reads the shared one, as every generation did before. The CSME 11
+dump at hand (Corporate LP) states 66 words; its PCHSTRP0 `0x00100000` reads
+Deep Sx support set and every other bit clear, as ifdtool prints. A section of
+any length not in the tables is words and nothing more; a word a table names
+no field of is shown as its raw value rather than dropped.
 
 On the seven mobile dumps the clock and GPR0 (off on all of them) agree with
 ifdtool, and so do the two copies `ifdtool --gpr0-enable` was run on
@@ -427,6 +546,127 @@ ifdtool, and so do the two copies `ifdtool --gpr0-enable` was run on
 writes refused). ifdtool also needs `-p` to read any descriptor
 from Sunrise Point on as one: without it, it takes the layout for version 1
 and reports `AltMeDisable` from the wrong word.
+
+**The generations before FIT's layout documents read Intel's own guides.**
+Ibex Peak, Cougar Point/Panther Point and Lynx Point have no strap XML inside
+their FIT Classic builds, but flashrom's `ich_descriptors.h` carries the
+`ibex` and `cougar` unions written from Intel's SPI Programming Guides, and
+`intel_strap_map.py` emits them into `legacy-ibx.json` / `legacy-cpt.json` /
+`legacy-lpt.json`. The
+sections are **16 words on Ibex Peak, 18 on Cougar Point and 21 on Lynx
+Point**, and each table is read only on the generation that states its length.
+Intel's 7 Series/C216 SPI Programming Guide (document 475653, Appendix A)
+states the same fields and bits for the `cougar` union. The tables themselves
+are JSON sources compiled into `StrapMaps.bin` (`Design/MAP_DATA.md`), not
+Swift literals.
+
+The XML is not in the executable, but the tool package ships the project
+template it reads — `newfiletmpl.xml`. Per `PchStrapN` it states each field's
+**default value**, the words of every option and the tool's own label, and it
+is where the Cougar Point and Lynx Point tables get those three things
+(`intel_strap_map.py --template`, from ME System Tools v8 r3 and v10.0 r8).
+**Lynx Point's own guide (487990) is not public**: its table carries the
+Cougar Point fields over the first 18 of the 21 words — the dumps corroborate
+the shared bits (`SMB_EN`, `SML1_EN`, `Deep_SX_EN`, `ICC_PRO_SEL` read where
+the 7-series layout puts them). The template also lays out the two words the
+guide does not: **word 14**, Lynx Point's PCIe/SATA lane modes, whose fields
+pack most significant first from bit 15 down — eight dumps read the low 16
+bits back as exactly those modes — and **word 19**, Wildcat Point's SATA/USB3
+MPHY power controls in the low bits, both clear on every dump. Words 18 and 20
+are in neither source and stay raw. Measured on the dumps at hand: `MacBook
+Pro 15 2010` 16 words, `ME 7` and `MacBook Pro 15 2011` 18, `MacBook Air 13`
+21. The words the guides call reserved are not named, and the panel shows them
+as their raw values.
+
+### 2.7. The processor straps
+
+**Up to Cannon Point**: at `ProcStrapsBase << 4`, `NumberOfProcStraps`
+`UINT32`s (`PROCSTRP0`, `PROCSTRP1`, …) — the processor's own straps, read
+before it lets the chipset go. Its layout is Flash Image Tool's
+`<LayoutEntry name="CPU_Strap_…">` entries, emitted per section length into
+`cpu.json` by `strap_map.py --kind cpu` (that source was bootstrapped from
+the generated tables and is edited as JSON until the generator is
+reconciled — `Skills/me-eom-structures/SKILL.md`). **The length is a weak key
+here**: documents of one length can lay a field out differently —
+`Num_Active_Cores` is three bits in `cnp_lp_rvp.xml` and four in a nameless
+newer document of the same three words — so a table keeps only the fields
+every document of that length states alike. On the dumps at hand the section
+is 1 word on 23 of them, 3 on 10 and 11 on one — `CSME 13.BIN` (ICP LP),
+whose words at 0x300 decode through FIT 12–15's `cnp_lp_rvp.xml` table:
+Fast wakeup and PEG_DEF set, SMT enabled, all cores active, the rest at the
+tool's defaults. `CSME 12.BIN`'s three words read
+`0x00001000 0x00108002 0x08000210`.
+
+**The 3-word section has two layouts.** FIT 11's SPT documents name it
+`CpuStrapHtDisable`, `CpuStrapNumActiveCores`, `CpuStrapFlexRatio` and so on
+and give SMT three bits where the newer `CPU_Strap_…` table gives one, so the
+generation chooses: Sunrise Point and Lewisburg read SPT's, every other
+generation the shared one, and an uncertain generation the shared one.
+`CSME 11.BIN`'s three words at 0x300 state `CpuStrapCpuMaxFreqBoot` 1 (boot at
+P1) with the rest at the defaults — the fields the newer table had read as
+another layout's.
+
+**From Tiger Point on** the same map word means something else — `FLMAP2`
+bits 2–11 are an offset and bits 16–23 a length, which is how §2.5 tells those
+generations apart — and what they locate is the CPU strap **message** in the
+descriptor's MIP area: `MIP + offset`, where the MIP area opens at `0xC00`
+(the IFWI layout puts `MipDesc` there, after the FDV manifest at `0x800` and
+before the VSCC table at `0xDF0`), with `length` words. Verified on three
+dumps — `CSME 15.bin` (0x68, 17 words), `CSME 16.1.bin` (0x6C, 20) and
+`LENV_CSME 16` (0x5C, 20): each message opens with `0x00001000`, which is the
+layout's word 0 for an all-default build (Flex Ratio 0, boot at P1), and the
+rest decodes to the values MFIT's CPU Straps page shows — Hyperthreading No,
+all cores active, SVID addresses and VR types, the Type-C straps on the mobile
+part.
+
+The message's layout is MFIT's `CpuStrapsLayout` class, whose `<UI>` elements
+are the panel's own words ("Disable Hyperthreading", "All Cores Active") and
+whose entries carry no default — the values are stated per reference platform.
+`Skills/me-eom-structures/scripts/mip_strap_map.py` emits it into
+`mip.json`, keyed by message length and keeping the fields every
+document of that length agrees on; 17 and 20 words are the lengths the
+documents and the dumps at hand state. The table shows the tool's labels and
+option words, and no field is emphasised because there is no default to differ
+from.
+
+**Up to Alder Point and the embedded lines.** That is where the descriptor
+holds the message. **From Meteor Lake on it does not**: MFIT 18's layout puts
+the `MipDesc` nvar inside the **FITC partition**, and the CSME 18 dump's MIP
+area at `0xC00` is erased. `FLMAP2`'s bits 2–11 and 16–23 still tell the
+generation apart (§2.5), but they no longer name a CPU message — MFIT 18 reads
+the same word as the SoC soft straps (`Flmap2StructureV2`). Reading them as a
+message gives three erased words, which is why `hasMIPProcessorStraps` stops at
+Alder Point: the panel shows no CPU strap table for a descriptor that holds
+none. The CSME 18 straps are read on the ME side instead
+(`Design/ME_STRUCTURES.md`, "The CPU strap message").
+
+Which reading applies is `DescriptorGeneration.hasProcessorStrapSection`
+(classic) or `hasMIPProcessorStraps` (the message — read only where the
+generation is certain, since an assumed one may be a classic layout); the
+reading is `DescriptorInfo.processorStraps`.
+
+**The MIP area also carries a block table**, which Cannon Point introduced
+(`MipDescNvar`) and Meteor Lake erases: at `UpperMap[31:24] << 4` — `0xC00` on
+every dump at hand — a `u16` count and a `u16` area size, then one eight-byte
+entry per block, `{type, offset, length, reserved}`, whose payload follows the
+table. Every dump from Cannon Point to Alder Point states two blocks: type 1,
+the PMC and CPU soft straps (40 bytes on the CSME 12 and 14 dumps, 124 on 13,
+152 on 15, 168 on 16), and type 0, the CSE DbC configuration (8 bytes). It is
+`DescriptorInfo.mip`, and the panel lists the blocks and reads the DbC one
+through the three masks every FIT document states alike in the block's second
+word — bits 23:16 the ME boot stall, 15:8 the USB3 port enable, 7:0 the USB2
+one. On `CSME 12.BIN` the block's words are `0x00000000 0x0000FFFF`: every
+port enabled, no stall. The PMC and CPU block's **leading words are the PMC
+soft straps**: the block's length less the CPU strap message `FLMAP2` states
+(the processor section's words up to Cannon Point, which is the message's
+length in the block too, and the message's length from Tiger Point on). They
+are read through the FIT builds' PMC tables, keyed by what remains — 7 words
+on the CSME 12 and 14 dumps, 20 on 13, 21 on 15 and 22 on 16 — and on every
+dump at hand most fields read the tool's default (128/135, 174/194, 125/135,
+212/230, 179/232), which is what says the split and the table are the
+section's. The CPU message that ends the block is the same one
+`processorStraps` reads through `FLMAP2` from Tiger Point on; on the classic
+generations the block's copy is not named separately.
 
 ---
 

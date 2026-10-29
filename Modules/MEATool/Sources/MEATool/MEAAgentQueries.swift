@@ -33,14 +33,28 @@ public enum MEAAgentQueries {
             The File System State row carries `basis`: what each of the three steps that decide it found \
             (the reserved MFS files, whether the EFS volume holds files, the configuration partitions), \
             which step decided it, `complete: false` when a step that could have raised the state could \
-            not be taken — an EFS partition that could not be read — and an `explanation`. Say the basis \
+            not be taken — an EFS partition that could not be read — and an `explanation`, which is the \
+            row's own line: the state and, in brackets, the evidence it was read from. Say the evidence \
             when you report the state: Configured with an unreadable EFS is not the same fact as \
-            Configured with an empty one. The first call on a dump analyses its ME region, which takes a \
+            Configured with an empty one. Three rows of our own answer what a bench asks of a dump it \
+            is about to flash: "Manufacturing" (whether the platform closes End of Manufacturing on \
+            the first boot of this image — "Will close on the EOM flag" or "Will close on the \
+            descriptor's rights" (the two mechanisms: the flag only MFIT sets, and the access rights \
+            a serial image relies on), "Will not close", "Will close on the EOM flag, with the \
+            descriptor open", "Not readable from this image" or "No such switch in this firmware"), \
+            which carries a `basis` of its own (the flag and which page it was read from, what End of \
+            Manufacturing commits, and the descriptor's state — the last of those is `flexible`, \
+            MFIT's `FlexibleEomSettings` in its four values, which the Configuration tab shows on \
+            `/home/mca/eom_config`); \
+            "Boot Guard", the profile the image is built for (0 - No_FVME, 3 - VM, 4 - FVE, 5 - FVME, \
+            with `profile` and `profile_index` beside it, or "No profile record in this image"); and \
+            "OEM Public Key Hash", the 48-byte SHA-384 the ME region carries, all zeros meaning OEM \
+            signing is disabled. The first call on a dump analyses its ME region, which takes a \
             second or two.
             """
     ) { host, _ in
         let analysis = try await analysis(host)
-        let blocks = MEASummary.build(analysis, in: .english)
+        let blocks = MEASummary.build(analysis)
         return .json(["blocks": .array(blocks.map { block in
             var members: [String: JSONValue] = ["rows": .array(block.rows.map { summaryRow in
                 var entry = row(summaryRow)
@@ -50,6 +64,25 @@ public enum MEAAgentQueries {
                    let state = analysis.mfsState, let basis = analysis.mfsStateBasis,
                    case .object(var fields) = entry {
                     fields["basis"] = basisJSON(state: state, basis: basis)
+                    entry = .object(fields)
+                }
+                // The Manufacturing verdict's evidence likewise: the two pages
+                // of the setting, and the descriptor's state — which a reader
+                // (or an agent) must see before acting on "already closed".
+                if summaryRow.label == "Manufacturing",
+                   summaryRow.value.isValue,
+                   let basis = analysis.manufacturingBasis,
+                   let state = analysis.manufacturingState,
+                   case .object(var fields) = entry {
+                    fields["basis"] = manufacturingBasisJSON(state, basis)
+                    entry = .object(fields)
+                }
+                if summaryRow.label == "Boot Guard",
+                   summaryRow.value.isValue,
+                   let profile = analysis.bootGuardProfile,
+                   case .object(var fields) = entry {
+                    fields["profile"] = .string(profile.rawValue)
+                    fields["profile_index"] = .count(profile.index)
                     entry = .object(fields)
                 }
                 return entry
@@ -100,7 +133,7 @@ public enum MEAAgentQueries {
             var detail = summaryOf(node)
             if case .object(var members) = detail {
                 members["fields"] = .array(node.fields.map { field in
-                    var entry: [String: JSONValue] = ["label": .string(field.label), "value": .string(field.value)]
+                    var entry: [String: JSONValue] = ["label": .string(field.label), "value": .string(field.text)]
                     if field.tone.isStatus { entry["tone"] = .string(toneName(field.tone)) }
                     return .object(entry)
                 })
@@ -176,6 +209,29 @@ public enum MEAAgentQueries {
                                   configPaths: names?.config ?? .none, in: .english)
     }
 
+    // MARK: - The Manufacturing verdict's basis
+
+    /// The End of Manufacturing verdict's evidence, for the same reason the
+    /// File System State carries its own: the row says "Already closed", and an
+    /// agent that acts on it needs to see that it was the live `/home/mca/eom`
+    /// record that said so and not a reading of the image's setting.
+    static func manufacturingBasisJSON(_ state: ManufacturingState,
+                                       _ basis: ManufacturingBasis) -> JSONValue {
+        var members: [String: JSONValue] = [
+            "flag": basis.flag.map { .bool($0) } ?? .null,
+            "flexible_eom_settings": basis.flexible.map { .count($0) } ?? .null,
+            "flag_page": .string(basis.page?.rawValue ?? "none"),
+            "descriptor": .string(basis.descriptorOpen.map { $0 ? "open" : "locked" } ?? "not read"),
+            "live_files": .string(basis.liveFilesResolved ? "read" : "not read")
+        ]
+        // What the row itself reads, brackets and all.
+        let verdict = MEAText.manufacturingState(state, basis: basis)
+        let evidence = MEAText.manufacturingEvidence(state, basis: basis)
+        members["explanation"] = .string(
+            evidence.isEmpty ? verdict : "\(verdict) (\(evidence))")
+        return .object(members)
+    }
+
     // MARK: - The File System State's basis
 
     static func basisJSON(state: MFSState, basis: MFSStateBasis) -> JSONValue {
@@ -226,12 +282,10 @@ public enum MEAAgentQueries {
         }
     }
 
-    /// One paragraph: the state, the step that set it, and — when a step
-    /// that could have raised it was not taken — what is not known. The
-    /// panel's own words (`MEAText.fileSystemStateBasis`), in the English
-    /// every agent call is answered in.
+    /// What the row itself reads: the state, then its evidence in brackets —
+    /// the panel's own words in the English every agent call is answered in.
     static func explanation(state: MFSState, basis: MFSStateBasis) -> String {
-        MEAText.fileSystemStateBasis(state, basis, in: .english)
+        MEAText.fileSystemState(state, basis: basis)
     }
 
     private nonisolated static func list(_ indices: [Int]) -> String {
@@ -241,7 +295,7 @@ public enum MEAAgentQueries {
     // MARK: - Shapes
 
     private static func row(_ row: MEASummaryRow) -> JSONValue {
-        var members: [String: JSONValue] = ["label": .string(row.label), "value": .string(row.value.text(in: .english))]
+        var members: [String: JSONValue] = ["label": .string(row.label), "value": .string(row.value.text)]
         if row.value.isValue, row.tone.isStatus { members["tone"] = .string(toneName(row.tone)) }
         return .object(members)
     }

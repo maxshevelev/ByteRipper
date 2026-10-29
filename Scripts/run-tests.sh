@@ -51,6 +51,100 @@ done
 derived="${BYTERIPPER_DD:-${DUMPCOMPARE_DD:-$PWD/.build/xcode}}"
 failed=0
 
+# The binary maps, their JSON manifests and the code's version marks must
+# agree (`Design/MAP_DATA.md`). `--check` reads and rebuilds in memory; it
+# never writes. A stale pair fails the run before a test starts, because every
+# descriptor and configuration test would otherwise be testing the wrong
+# tables.
+if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
+    --out Packages/UEFIImage/Sources/UEFIImage/Resources/StrapMaps/StrapMaps.bin \
+    --manifest Packages/UEFIImage/MapSources/manifest.json \
+    --swift-version-file Packages/UEFIImage/Sources/UEFIImage/StrapMapDataVersion.swift \
+    Packages/UEFIImage/MapSources/strap/pch.json \
+    Packages/UEFIImage/MapSources/strap/pch18.json \
+    Packages/UEFIImage/MapSources/strap/spt.json \
+    Packages/UEFIImage/MapSources/strap/cpu.json \
+    Packages/UEFIImage/MapSources/strap/sptcpu.json \
+    Packages/UEFIImage/MapSources/strap/pmc.json \
+    Packages/UEFIImage/MapSources/strap/mip.json \
+    Packages/UEFIImage/MapSources/strap/legacy-ibx.json \
+    Packages/UEFIImage/MapSources/strap/legacy-cpt.json \
+    Packages/UEFIImage/MapSources/strap/legacy-lpt.json; then
+    echo "the strap map binary is stale: rebuild it (Skills/me-eom-structures/SKILL.md)" >&2
+    exit 1
+fi
+if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
+    --out Packages/UEFIImage/Sources/UEFIImage/Resources/RegisterMaps/RegisterMaps.bin \
+    --manifest Packages/UEFIImage/MapSources/register/manifest.json \
+    --swift-version-file Packages/UEFIImage/Sources/UEFIImage/DescriptorRegisterMapDataVersion.swift \
+    --swift-enum-name DescriptorRegisterMapDataVersion \
+    Packages/UEFIImage/MapSources/register/sunrisePoint.json \
+    Packages/UEFIImage/MapSources/register/cannonPoint.json \
+    Packages/UEFIImage/MapSources/register/tigerPoint.json \
+    Packages/UEFIImage/MapSources/register/elkhartLake.json \
+    Packages/UEFIImage/MapSources/register/jasperLake.json \
+    Packages/UEFIImage/MapSources/register/csme18.json; then
+    echo "the register map binary is stale: rebuild it (Skills/me-eom-structures/SKILL.md)" >&2
+    exit 1
+fi
+if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
+    --out Packages/MEFirmware/Sources/MEFirmware/Resources/LayoutMaps/LayoutMaps.bin \
+    --manifest Packages/MEFirmware/MapSources/layout/manifest.json \
+    --swift-version-file Packages/MEFirmware/Sources/MEFirmware/Configuration/LayoutMapDataVersion.swift \
+    --swift-enum-name LayoutMapDataVersion \
+    Packages/MEFirmware/MapSources/layout/mip.json \
+    Packages/MEFirmware/MapSources/layout/cpu.json \
+    Packages/MEFirmware/MapSources/layout/sphy.json; then
+    echo "the CSME 18 layout binary is stale: rebuild it (Skills/me-eom-structures/SKILL.md)" >&2
+    exit 1
+fi
+if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
+    --out Packages/MEFirmware/Sources/MEFirmware/Resources/ConfigMaps/ConfigMaps.bin \
+    --manifest Packages/MEFirmware/MapSources/manifest.json \
+    --swift-version-file Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationDataVersion.swift \
+    --swift-enum-name MEConfigurationDataVersion \
+    Packages/MEFirmware/MapSources/configuration/csme11.json \
+    Packages/MEFirmware/MapSources/configuration/csme12.json \
+    Packages/MEFirmware/MapSources/configuration/csme12Desktop.json \
+    Packages/MEFirmware/MapSources/configuration/csme13.json \
+    Packages/MEFirmware/MapSources/configuration/csme13Desktop.json \
+    Packages/MEFirmware/MapSources/configuration/csme14.json \
+    Packages/MEFirmware/MapSources/configuration/csme14Desktop.json \
+    Packages/MEFirmware/MapSources/configuration/csme15.json \
+    Packages/MEFirmware/MapSources/configuration/csme15Desktop.json \
+    Packages/MEFirmware/MapSources/configuration/csme16.json \
+    Packages/MEFirmware/MapSources/configuration/csme18.json; then
+    echo "the configuration map binary is stale: rebuild it (Skills/me-eom-structures/SKILL.md)" >&2
+    exit 1
+fi
+if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
+    --out Packages/MEFirmware/Sources/MEFirmware/Resources/UEPMaps/UEPMaps.bin \
+    --manifest Packages/MEFirmware/MapSources/uep/manifest.json \
+    --swift-version-file Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMapDataVersion.swift \
+    --swift-enum-name UEPMapDataVersion \
+    Packages/MEFirmware/MapSources/uep/csme12.json \
+    Packages/MEFirmware/MapSources/uep/csme13.json \
+    Packages/MEFirmware/MapSources/uep/csme14.json \
+    Packages/MEFirmware/MapSources/uep/csme15.json \
+    Packages/MEFirmware/MapSources/uep/csme16.json \
+    Packages/MEFirmware/MapSources/uep/csme18.json; then
+    echo "the UEP map binary is stale: rebuild it (Skills/me-eom-structures/SKILL.md)" >&2
+    exit 1
+fi
+if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
+    --out Packages/MEFirmware/Sources/MEFirmware/Resources/GPIOMaps/GPIOMaps.bin \
+    --manifest Packages/MEFirmware/MapSources/gpio/manifest.json \
+    --swift-version-file Packages/MEFirmware/Sources/MEFirmware/Configuration/GPIOPinMapDataVersion.swift \
+    --swift-enum-name GPIOPinMapDataVersion \
+    Packages/MEFirmware/MapSources/gpio/csme11.json \
+    Packages/MEFirmware/MapSources/gpio/csme12.json \
+    Packages/MEFirmware/MapSources/gpio/csme13.json \
+    Packages/MEFirmware/MapSources/gpio/csme14.json \
+    Packages/MEFirmware/MapSources/gpio/csme15.json; then
+    echo "the GPIO map binary is stale: rebuild it (Skills/me-eom-structures/SKILL.md)" >&2
+    exit 1
+fi
+
 report() {   # keeps the counts, the failures, and any death of the test host
     # A test host that dies mid-run is not a line in this output: XCTest prints
     # "Restarting after unexpected exit", launches a second host, and reports

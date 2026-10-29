@@ -46,6 +46,8 @@ import ToolModuleKit
     /// The summary as it was last built — kept so a re-show with the same
     /// analysis neither rebuilds the rows nor loses the user's scroll.
     private var summaryBlocks: [MEASummaryBlock] = []
+    /// The configuration as it was last built, the same way.
+    private var configurationBlocks: [MEAConfigurationBlock] = []
     /// The tab on screen.
     private var tabIndex = 0
     /// True while state is being shown — a selection the code made is not news,
@@ -53,7 +55,7 @@ import ToolModuleKit
     /// again until the stack ran out.
     private var isShowingState = false
 
-    private let tabs = NSSegmentedControl(labels: [L("Summary"), L("Full Info")],
+    private let tabs = NSSegmentedControl(labels: [L("Summary"), L("Configuration"), L("Full Info")],
                                           trackingMode: .selectOne,
                                           target: nil, action: nil)
     /// Taking the summary somewhere else: as text to paste into a note or a
@@ -85,6 +87,8 @@ import ToolModuleKit
     let detailPane = ToolDetailPane()
     private var detail: ToolDetailScroll { detailPane.detail }
     private let summaryScroll = ToolDetailScroll()
+    /// The Configuration tab: the same rows, one block per configuration file.
+    private let configurationScroll = ToolDetailScroll()
     private let splitter = ALSplitView()
     private let noticeLabel = NSTextField(labelWithString: "")
     private let retryButton = NSButton(title: L("Try Again"), target: nil, action: nil)
@@ -109,6 +113,17 @@ import ToolModuleKit
         case waiting
         case empty
         case failed
+        /// The Configuration tab of an image that *was* read: the firmware is
+        /// there, and the other two tabs show it, but no configuration file was
+        /// read from it — a generation with no map, or one whose files are not
+        /// in the image. "No ME firmware" there contradicted the tab beside it.
+        case noConfiguration
+        /// The Configuration tab while the reading is still on: the settings
+        /// come with the analysis, and on CSME 15 and 16 only with the file
+        /// table it fetches after the first reading. Until the reading is over,
+        /// an empty tab is a tab still being filled, not one that came back
+        /// empty.
+        case readingConfiguration
 
         /// The system symbol the state wears. A running analysis is the engine
         /// the panel is about; nothing found is a question; a failure is the
@@ -118,6 +133,7 @@ import ToolModuleKit
             case .waiting: return "cpu"
             case .empty: return "questionmark.circle"
             case .failed: return "exclamationmark.octagon.fill"
+            case .noConfiguration, .readingConfiguration: return "list.bullet.rectangle"
             }
         }
 
@@ -126,6 +142,8 @@ import ToolModuleKit
             case .waiting: return L("Analyzing the ME firmware…")
             case .empty: return L("No ME firmware")
             case .failed: return L("The analysis did not finish")
+            case .noConfiguration: return L("No configuration read")
+            case .readingConfiguration: return L("Reading the configuration…")
             }
         }
 
@@ -137,6 +155,10 @@ import ToolModuleKit
             case .waiting: return L("Reading the region and its partitions.")
             case .empty: return L("Nothing in this file reads as Intel ME firmware.")
             case .failed: return L("The line below says what went wrong.")
+            case .noConfiguration:
+                return L("The settings are read on CSME 13 to 16, from the configuration files the image carries.")
+            case .readingConfiguration:
+                return L("The settings appear when the analysis finishes.")
             }
         }
     }
@@ -190,6 +212,7 @@ import ToolModuleKit
         contentBox.translatesAutoresizingMaskIntoConstraints = false
         contentBox.addSubview(placeholder)
         contentBox.addSubview(summaryScroll)
+        contentBox.addSubview(configurationScroll)
         contentBox.addSubview(splitter)
         // The empty tab's own margins are breakable: a collapsed panel is not
         // 32 points wide, and a required pair there is one AppKit strikes out
@@ -205,13 +228,18 @@ import ToolModuleKit
         NSLayoutConstraint.activate(placeholderInsets + [
             placeholder.centerXAnchor.constraint(equalTo: contentBox.centerXAnchor),
             placeholder.centerYAnchor.constraint(equalTo: contentBox.centerYAnchor),
-            // The summary and the tree both fill the box to its edges; only one
-            // is visible at a time, so overlapping edge-pinned siblings are
-            // fine — visibility is the switch, not geometry.
+            // The summary, the configuration rows and the tree all fill the box
+            // to its edges; only one is visible at a time, so overlapping
+            // edge-pinned siblings are fine — visibility is the switch, not
+            // geometry.
             summaryScroll.topAnchor.constraint(equalTo: contentBox.topAnchor),
             summaryScroll.leadingAnchor.constraint(equalTo: contentBox.leadingAnchor),
             summaryScroll.trailingAnchor.constraint(equalTo: contentBox.trailingAnchor),
             summaryScroll.bottomAnchor.constraint(equalTo: contentBox.bottomAnchor),
+            configurationScroll.topAnchor.constraint(equalTo: contentBox.topAnchor),
+            configurationScroll.leadingAnchor.constraint(equalTo: contentBox.leadingAnchor),
+            configurationScroll.trailingAnchor.constraint(equalTo: contentBox.trailingAnchor),
+            configurationScroll.bottomAnchor.constraint(equalTo: contentBox.bottomAnchor),
             splitter.topAnchor.constraint(equalTo: contentBox.topAnchor),
             splitter.leadingAnchor.constraint(equalTo: contentBox.leadingAnchor),
             splitter.trailingAnchor.constraint(equalTo: contentBox.trailingAnchor),
@@ -336,10 +364,29 @@ import ToolModuleKit
         selectTab(tabIndex)
     }
 
+    /// What the placeholder says on the tab that is open. The module's state
+    /// is about the analysis; on the Configuration tab an analysis that found
+    /// firmware but no configuration is a different answer from one that
+    /// found no firmware at all — and while the reading is still on, neither
+    /// is an answer yet: the tab says it is being read.
+    private var shownPlaceholder: Placeholder {
+        guard tabIndex == 1 else { return placeholderState }
+        let analysed = !summaryBlocks.isEmpty || !roots.isEmpty
+        switch placeholderState {
+        case .waiting:
+            return .readingConfiguration
+        case .empty where analysed:
+            return isBusy ? .readingConfiguration : .noConfiguration
+        default:
+            return placeholderState
+        }
+    }
+
     /// The placeholder as the state and the current zoom make it. The icon is
     /// sized off the panel's type rather than fixed, so it stays the same
     /// weight beside the words at every zoom.
     private func applyPlaceholder() {
+        let placeholderState = shownPlaceholder
         let side = (ToolPanelFont.size * 3).rounded()
         let icon = NSImage(systemSymbolName: placeholderState.symbol,
                            accessibilityDescription: placeholderState.title)?
@@ -418,6 +465,10 @@ import ToolModuleKit
         applyColumnWidths()
         outline.reloadData()
         renderSummary()
+        // The configuration tab's rows are built per field too, so they are
+        // rebuilt at the new size the same way — and not at all where there are
+        // none, which would take the empty tab's own words away.
+        if !configurationBlocks.isEmpty { renderConfiguration() }
         renderDetail(focusPath.flatMap { MEATree.node(at: $0, in: roots) })
     }
 
@@ -457,22 +508,28 @@ import ToolModuleKit
         applyColumnWidths()
     }
 
-    /// Which content the selected tab shows: the summary for Summary, the tree
-    /// (with its detail below) for Full Info — and, for either of them with
-    /// nothing in it yet, the placeholder saying why. A tab is empty for the
-    /// same three reasons on both sides, and while the ME region is being read
-    /// an empty tree is a wait, not an answer; an empty outline with a spinner
-    /// under it said nothing about which.
+    /// Which content the selected tab shows: the summary for Summary, the
+    /// configuration rows for Configuration, the tree (with its detail below)
+    /// for Full Info — and, for any of them with nothing in it yet, the
+    /// placeholder saying why. A tab is empty for the same reasons on every
+    /// side, and while the ME region is being read an empty tree is a wait, not
+    /// an answer; an empty outline with a spinner under it said nothing about
+    /// which.
     private func selectTab(_ index: Int) {
         tabIndex = index
-        let showTree = index == 1 && !roots.isEmpty
+        let showTree = index == 2 && !roots.isEmpty
         let showSummary = index == 0 && !summaryBlocks.isEmpty
+        let showConfiguration = index == 1 && !configurationBlocks.isEmpty
         splitter.isHidden = !showTree
         summaryScroll.isHidden = !showSummary
-        placeholder.isHidden = showSummary || showTree
+        configurationScroll.isHidden = !showConfiguration
+        if !showConfiguration { closeSettingHelp() }
+        placeholder.isHidden = showSummary || showTree || showConfiguration
         // Nothing to copy and nothing to picture until the summary is up.
         summaryActions.isHidden = !showSummary
         tabs.selectedSegment = index
+        // The words depend on the tab as well as on the state.
+        if !placeholder.isHidden { applyPlaceholder() }
     }
 
     @objc private func tabChanged(_ sender: NSSegmentedControl) {
@@ -580,7 +637,7 @@ import ToolModuleKit
                     .paragraphStyle: rowStyle,
                 ]))
                 // The words and the weight the panel gives the row.
-                let value = row.value.text(in: Localization.appLanguage)
+                let value = row.value.text
                 let emphasized = row.isEmphasized
                 text.append(NSAttributedString(string: value + "\n", attributes: [
                     .font: value.hasPrefix("0x")
@@ -597,17 +654,23 @@ import ToolModuleKit
     // MARK: - A parse's progress
 
     func showBusy() {
-        guard progressBar.superview == nil else { return }
+        guard !isBusy else { return }
         progressBar.startAnimation(nil)
         bottomRow.addArrangedSubview(progressBar)
+        if !placeholder.isHidden { applyPlaceholder() }
     }
 
     func endBusy() {
-        guard progressBar.superview != nil else { return }
+        guard isBusy else { return }
         progressBar.stopAnimation(nil)
         bottomRow.removeArrangedSubview(progressBar)
         progressBar.removeFromSuperview()
+        // An empty Configuration tab was "being read"; it is now an answer.
+        if !placeholder.isHidden { applyPlaceholder() }
     }
+
+    /// A reading is on: the bar under the panel is up.
+    private var isBusy: Bool { progressBar.superview != nil }
 
     /// A line under the content — what happened, or what to do next.
     func say(_ text: String, asProblem: Bool = false) {
@@ -678,6 +741,17 @@ import ToolModuleKit
         }
     }
 
+    /// The Configuration tab's blocks, fed and kept the way the summary's are.
+    func showConfiguration(_ blocks: [MEAConfigurationBlock]) {
+        guard blocks != configurationBlocks else { return }
+        configurationBlocks = blocks
+        renderConfiguration()
+        selectTab(tabIndex)
+        if !blocks.isEmpty {
+            configurationScroll.documentView?.scroll(.zero)
+        }
+    }
+
     /// Rebuilds the summary's rows — the blocks `showSummary` last accepted,
     /// at the current zoom. Only label and value texts: the values come
     /// pre-formatted from `MEASummary`, so nothing is decided here.
@@ -715,22 +789,245 @@ import ToolModuleKit
         }
     }
 
+    /// Rebuilds the Configuration tab's rows: one block per configuration
+    /// file, each setting with the two copies of the file it lives in side by
+    /// side.
+    ///
+    /// The rows are the shared detail list's (`ToolFieldList`), as the Summary
+    /// tab's are — a row that draws its own texts, selected the way a text
+    /// view's is, copied with a tab between the setting and each of its two
+    /// copies — with a row's *second value* being the column the detail list
+    /// does not otherwise carry. So the tab reads as a table and behaves as a
+    /// list: the two columns line up down the page, and a drag across the rows
+    /// takes a band of them.
+    ///
+    /// The name column is one width for every list in the tab, and so are the
+    /// two value columns — which is what makes the columns of one file line up
+    /// with the columns of the next, and with the heading row above them.
+    ///
+    /// Where the two copies of a setting disagree, **the file system's value**
+    /// is drawn bold — the one emphasis the tab uses, and no colour: it is the
+    /// state in force, the build's copy beside it is what the row was meant to
+    /// be, and a setting the platform rewrote is not a fault, so the palette's
+    /// greens and browns stay out of it. A value one copy does not carry is not
+    /// a disagreement — an image nobody has booted has one column and no
+    /// argument — and is drawn as the quiet dash it is.
+    private func renderConfiguration() {
+        // The rows are about to go, and with them the button a setting's
+        // popover hangs off: one left open would point at nothing.
+        closeSettingHelp()
+        let stack = configurationScroll.content
+        stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        configurationScroll.placeholder.isHidden = true
+
+        let columns = configurationColumns
+        let nameWidth = ToolFieldList.nameWidth(
+            for: configurationBlocks.flatMap { $0.rows.map(\.name) },
+            // Every name has to fit beside the `?` on the rows that carry one,
+            // which is what keeps the column of buttons straight down the tab.
+            reservingHelp: configurationBlocks.contains { block in
+                block.rows.contains { $0.help != nil }
+            })
+        place(Self.configurationHeadingRow(columns, nameWidth: nameWidth), in: stack)
+        for (index, block) in configurationBlocks.enumerated() {
+            // The first block sits right under the column names, which is a
+            // nearer relation than the next block is to the one before it.
+            if let last = stack.arrangedSubviews.last {
+                stack.setCustomSpacing(index == 0 ? 12 : 14, after: last)
+            }
+            stack.addArrangedSubview(Self.configurationFileHeading(block))
+            let rows = ToolFieldList(
+                fields: block.rows.map { row in
+                    .init(label: row.name,
+                          // Where the copies disagree, only the file system's
+                          // value is drawn bold: it is the state in force, and
+                          // the build's copy is what the row was meant to be.
+                          value: Self.configurationCell(columns.first(row),
+                                                        differs: false,
+                                                        quiet: row.disabled),
+                          second: columns.compares
+                              ? Self.configurationCell(row.mfs, differs: row.differs,
+                                                       quiet: row.disabled)
+                              : nil,
+                          // The tool's own words about the setting, where it
+                          // has them: the `?` beside the name opens them, with
+                          // the identifier the row does not show at the top.
+                          // A row with a condition and no help has the
+                          // `?` too: the condition is the answer its name
+                          // has no room for.
+                          help: (row.help != nil || row.note != nil) ? FieldHelp(
+                              identifier: row.identifier,
+                              text: row.help ?? "",
+                              note: row.note,
+                              buttonName: L("Setting help"),
+                              buttonTooltip: L("Show what Flash Image Tool says about this setting")) : nil)
+                },
+                nameWidth: nameWidth)
+            rows.onHelp = { [weak self] help, anchor in
+                self?.settingHelpPopover?.close()
+                self?.settingHelpPopover = MEASettingHelpPopover.show(help, from: anchor)
+            }
+            place(rows, in: stack)
+        }
+    }
+
+    /// The popover a setting's `?` opened, kept so the next one can close it —
+    /// a transient popover closes itself on a click elsewhere, and one left
+    /// open behind the next is two popovers over one tab. Weak: a closed
+    /// popover lets go of itself (`HelpPopoverController`), and this must not
+    /// be what keeps it.
+    private weak var settingHelpPopover: MEASettingHelpPopover?
+
+    /// Closes a setting's popover, where one is open — when its rows are
+    /// rebuilt, and when the tab it belongs to goes off screen.
+    private func closeSettingHelp() {
+        settingHelpPopover?.close()
+        settingHelpPopover = nil
+    }
+
+    /// Which of the tab's two value columns carry anything at all in this
+    /// render. A copy the image does not carry in *any* file — no OEM
+    /// Configuration partition at all, or a file system nobody could read — is
+    /// not a column of dashes: the tab then names the one copy it has, in the
+    /// one value column the rows have.
+    private var configurationColumns: ConfigurationColumns {
+        ConfigurationColumns(
+            fitc: configurationBlocks.contains { block in
+                block.rows.contains { $0.fitc != nil }
+            },
+            mfs: configurationBlocks.contains { block in
+                block.rows.contains { $0.mfs != nil }
+            })
+    }
+
+    /// Which of the two value columns carry values, and what the first of them
+    /// is.
+    private struct ConfigurationColumns {
+        let fitc: Bool
+        let mfs: Bool
+
+        /// Whether the tab shows the two copies side by side — both of them
+        /// present somewhere in this image.
+        var compares: Bool { fitc && mfs }
+
+        /// What the first value column shows: the build's copy where the image
+        /// carries one, the file system's where it is the only one there is.
+        func first(_ row: MEAConfigurationRow) -> String? { fitc ? row.fitc : row.mfs }
+
+        /// What the first value column is called.
+        var firstName: String { fitc ? MEAText.configurationFITC(in: Localization.appLanguage)
+                                     : MEAText.configurationMFS(in: Localization.appLanguage) }
+    }
+
+    /// A block of the tab — a file's heading or its rows — into the list, as
+    /// wide as the list itself, which is what gives the rows their width to
+    /// divide into columns.
+    private func place(_ row: NSView, in stack: NSStackView) {
+        stack.addArrangedSubview(row)
+        row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+    }
+
+    /// A file's heading: MFIT's own name for it in bold, and where it lives and
+    /// how long it is in the ordinary weight — one line, so the two read as one
+    /// heading rather than as a title with a subtitle under it.
+    private static func configurationFileHeading(_ block: MEAConfigurationBlock) -> NSTextField {
+        let heading = NSTextField(labelWithString: "")
+        let text = NSMutableAttributedString(
+            string: block.alias, attributes: [.font: ToolPanelFont.title()])
+        text.append(NSAttributedString(
+            string: " " + block.detail,
+            attributes: [.font: ToolPanelFont.body(), .foregroundColor: NSColor.secondaryLabelColor]))
+        heading.attributedStringValue = text
+        heading.lineBreakMode = .byTruncatingTail
+        heading.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        heading.translatesAutoresizingMaskIntoConstraints = false
+        return heading
+    }
+
+    /// The tab's column names, once at the top: the rows' own component with an
+    /// empty name, so the two names sit over the columns they name — the same
+    /// widths, by construction, and no second set of column arithmetic to keep
+    /// in step with the rows'.
+    private static func configurationHeadingRow(_ columns: ConfigurationColumns,
+                                                nameWidth: CGFloat) -> ToolFieldList {
+        return ToolFieldList(
+            fields: [.init(label: "",
+                           value: configurationHeading(columns.firstName),
+                           second: columns.compares
+                               ? configurationHeading(MEAText.configurationMFS(
+                                   in: Localization.appLanguage))
+                               : nil)],
+            nameWidth: nameWidth)
+    }
+
+    /// One column heading: the quiet weight a table's header carries, so it is
+    /// read as a name for the column rather than as a row of its own.
+    private static func configurationHeading(_ text: String) -> NSAttributedString {
+        NSAttributedString(string: text, attributes: [
+            .font: ToolPanelFont.body(weight: .semibold),
+            .foregroundColor: NSColor.secondaryLabelColor,
+        ])
+    }
+
+    /// One value cell of a row. Where the two copies of a file disagree, the
+    /// **file system's** value — the second column — is drawn bold, in the
+    /// ordinary colour: it is the state in force, the emphasis carries no
+    /// verdict, and the build's copy beside it stays plain so the eye lands on
+    /// what the board holds. A value one copy does not carry is the quiet
+    /// dash, in the colour of a thing that is not there. A setting the tool
+    /// switches off is quiet too, value and all: the value is in the file and
+    /// does nothing, and the row's name says what did it.
+    private static func configurationCell(_ text: String?, differs: Bool,
+                                          quiet: Bool = false) -> NSAttributedString {
+        guard let text else {
+            return NSAttributedString(
+                string: MEAText.configurationAbsent,
+                attributes: [.font: ToolPanelFont.body(),
+                             .foregroundColor: NSColor.tertiaryLabelColor])
+        }
+        return NSAttributedString(
+            string: text,
+            attributes: [.font: ToolPanelFont.body(weight: differs && !quiet ? .semibold : .regular),
+                         .foregroundColor: quiet ? NSColor.tertiaryLabelColor
+                                                 : NSColor.labelColor])
+    }
+
     /// One Summary row as a field of the shared detail list: the label, and the
-    /// value drawn as the row's tone asks. A status value is bold and coloured,
-    /// with the tick a passed check carries, all of it from the tone, which is
-    /// the same rendering the tree's detail and the UEFI Structure's use; a
+    /// value drawn as the row's tone asks. A verdict is the answer in the
+    /// row's tone and what it was read from in brackets in the ordinary font
+    /// and colour — the tone is the verdict's, and the evidence beside it must
+    /// not borrow it; a status value is bold and coloured, with the tick a
+    /// passed check carries, all of it from the tone, which is the same
+    /// rendering the tree's detail and the UEFI Structure's use; a
     /// `.comingSoon` value is drawn grey, the shape of a row the engine will
-    /// answer once the bridge reaches it, and so is a `.pending` one, which the
-    /// reading under way will answer.
+    /// answer once the bridge reaches it, and so is a `.pending` one, which
+    /// the reading under way will answer.
     private static func summaryField(_ row: MEASummaryRow) -> ToolFieldList.Field {
-        let text = row.value.text(in: Localization.appLanguage)
-        guard row.value.isValue else {
+        let text = row.value.text
+        switch row.value {
+        case .verdict(let verdict, let evidence):
+            return .init(label: row.label,
+                         value: toned(verdict, tone: row.tone, evidence: evidence))
+        case .value:
+            return .init(label: row.label, value: row.tone.attributedValue(text))
+        case .comingSoon, .pending:
             return .init(label: row.label, value: NSAttributedString(
                 string: text,
                 attributes: [.font: ToolPanelFont.body(),
                              .foregroundColor: NSColor.secondaryLabelColor]))
         }
-        return .init(label: row.label, value: row.tone.attributedValue(text))
+    }
+
+    /// A verdict in its tone, and what it was read from in brackets after it
+    /// in the ordinary font and colour — one drawing for the Summary's rows and
+    /// the tree's detail, so the two cannot come apart.
+    private static func toned(_ verdict: String, tone: ToolValueTone,
+                              evidence: String) -> NSAttributedString {
+        let drawn = NSMutableAttributedString(attributedString: tone.attributedValue(verdict))
+        if !evidence.isEmpty {
+            drawn.append(ToolValueTone.standard.attributedValue(" (\(evidence))"))
+        }
+        return drawn
     }
 
     /// Rebuilds the detail list from the focused row's own fields.
@@ -770,8 +1067,10 @@ import ToolModuleKit
                 // when the status is a passed check. This is the same call the
                 // UEFI Structure's detail makes for the same field, and the
                 // Summary's row asks the tone for the same string, so the
-                // three cannot come apart.
-                .init(label: $0.label, value: $0.tone.attributedValue($0.value))
+                // three cannot come apart. Evidence follows in brackets in the
+                // ordinary drawing, as the Summary's verdict rows carry theirs.
+                .init(label: $0.label,
+                      value: Self.toned($0.value, tone: $0.tone, evidence: $0.evidence))
             },
             nameWidth: ToolFieldList.nameWidth(for: focus.fields.map(\.label)))
         detail.content.addArrangedSubview(fields)

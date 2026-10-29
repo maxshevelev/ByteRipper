@@ -118,24 +118,49 @@ Nothing here knows about dumps.
 ### The relay
 
 A command-line target in `project.yml`, copied into `Contents/Helpers` by a
-copy-files phase. About a hundred lines: connect to the socket, copy stdin to
-it and it to stdout, exit when either side closes. If the socket is not there it
-answers every request with an error that says what to open and where the
-switch is. It launches the app with `open -g` and waits a few seconds for it
-only under `BYTERIPPER_LAUNCH=1`, which the client's configuration carries
-when **Start ByteRipper when an agent connects** is on in Settings ▸ Agent
-(off by default): a client restarts its server as soon as the app quits, and
-a relay that launched the app brought back the app the person had just
-quit. The relay reads none of the app's settings, so the choice travels in
-the environment the client gives it. It knows nothing about MCP beyond reading a request's
-`id` for that answer.
+copy-files phase. A couple of hundred lines: attach to the socket, copy stdin
+to it and it to stdout, and **outlive the app**: a client starts this process
+once and keeps it for the whole conversation, and an app may be quit and opened
+again in the middle of one — running it from Xcode does exactly that. So when
+the socket goes the relay answers every request with an error that says what to
+open and where the switch is, waits, and attaches again when the app comes back.
+A request the app had taken and not answered when it went is answered the same
+way: the app will never answer it, and the client would otherwise wait out its
+own timeout.
+A client that does not restart a server which exited inside a session — Claude
+Code does not — then never loses it, and the person never registers the server a
+second time. Its exit is the client's: when stdin closes, the conversation is
+over.
 
-The relay is what a client is configured with. Settings ▸ Agent has a button
-that copies the configuration for Claude Code
+It launches the app with `open -g` and waits a few seconds for it only on its
+**first** look, and only under `BYTERIPPER_LAUNCH=1`, which the client's
+configuration carries when **Start ByteRipper when an agent connects** is on in
+Settings ▸ Agent (off by default). Once only, because the promise the switch
+makes is "open ByteRipper when an agent connects": a person who quits ByteRipper
+does not want the server that is still running to open it again a moment later.
+The relay reads none of the app's settings, so the choice travels in the
+environment the client gives it. It knows nothing about MCP beyond reading the
+`id` of a request, and of the app's answer to it, for those answers.
+
+The app it starts is the bundle it sits in — or, for the installed copy below,
+which sits in none, the app that installed it: each install records the
+bundle's path beside the relay (`AgentEndpoint.appRecordName`).
+
+The path a client is configured with is the **installed copy of the relay**,
+beside the socket, not the helper inside the app bundle
+(`AgentEndpoint.relayPath()`, written at every launch by `AgentRelayInstall`).
+A bundle's path changes with the folder the app was built in — the app under
+Xcode lives in DerivedData, whose folder is named after the *project's* path —
+so a configuration naming it went stale as soon as the app was built from
+another copy of the repository. The installed copy is one path for every copy of
+the app on the account.
+
+Settings ▸ Agent has a button that copies the configuration for Claude Code
 (`claude mcp add --scope user byteripper -- <path>`, with
 `--env BYTERIPPER_LAUNCH=1` after the name when the app is to be started) and
-one for Claude Desktop (the JSON block, with `"env"` then), with the bundle's
-real path in it.
+one for Claude Desktop (the JSON block, with `"env"` then), with that installed
+path in it — the bundled helper answering whenever this launch did not install
+it: a copy an earlier build left there is not this app's relay.
 
 ### `AgentService`
 

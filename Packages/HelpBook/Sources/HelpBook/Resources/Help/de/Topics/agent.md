@@ -1,4 +1,4 @@
-@source-sha ce9f0cedb72fa8abc14d739c89508bc4e040797a940c00f9081785b58a653cfa
+@source-sha d7cd5ed4f23430f74b2ebbe6d169704de4ea9306d00591a6fe47209f90e97b48
 # Mit einem Agenten arbeiten
 
 > An ByteRipper lässt sich ein Agent anbinden: Claude Code, Claude Desktop oder ein anderes Programm, das das Protokoll MCP unterstützt. Der angebundene Agent hat Zugriff auf die in ByteRipper geöffneten Dateien, liest deren Inhalt und zeigt die betreffenden Stellen im Dump an. Die Unterhaltung mit dem Agenten selbst findet im Fenster seines eigenen Programms statt.
@@ -24,9 +24,9 @@ Unter **Einstellungen ▸ Agent** legt das Menü **Konfiguration für:** fest, i
 
 Enthält die Konfigurationsdatei bereits andere Server, wird der Eintrag `byteripper` neben ihnen in denselben Abschnitt `mcpServers` eingefügt.
 
-Jede Variante enthält den Pfad zum Hilfsprogramm innerhalb genau dieser Kopie von ByteRipper. Nach dem Verschieben von ByteRipper in einen anderen Ordner ist der Konfigurationstext daher neu zu kopieren.
+Jede Variante nennt ein und dasselbe Hilfsprogramm: die Kopie, die ByteRipper für sich in der Benutzerbibliothek hält, neben der Datei, über die die Verbindung läuft, und die es bei jedem Start auf den neuesten Stand bringt. ByteRipper in einen anderen Ordner zu verschieben oder neu zu bauen lässt die Konfiguration daher unberührt — sie wird einmal gemacht.
 
-Das Hilfsprogramm startet ByteRipper nicht von sich aus: Der Agent erreicht ByteRipper, solange es geöffnet und der Dienst eingeschaltet ist; andernfalls meldet das Agentenprogramm, dass ByteRipper oder sein Agentendienst nicht läuft. Sonst würde ein Programm, das seine Server neu startet, ByteRipper gleich nach dem Beenden wieder öffnen. Soll das Agentenprogramm ByteRipper bei Bedarf starten, wird unter **Einstellungen ▸ Agent** die Option **ByteRipper starten, wenn sich ein Agent verbindet** eingeschaltet: Der Konfigurationstext unter dem Menü enthält dann die Variable `BYTERIPPER_LAUNCH=1` und wird erneut in das Programm kopiert. Ausgeschaltet und erneut kopiert, startet er ByteRipper nicht mehr. Ist der Dienst ausgeschaltet, meldet das Agentenprogramm in jedem Fall, dass der Agentendienst von ByteRipper nicht läuft.
+Das Hilfsprogramm startet ByteRipper nicht von sich aus: Der Agent erreicht ByteRipper, solange es geöffnet und der Dienst eingeschaltet ist; andernfalls wird der Anfrage geantwortet, dass ByteRipper oder sein Agentendienst nicht läuft. Es überlebt ByteRipper: Das Programm mitten im Gespräch zu schließen und wieder zu öffnen trennt das Agentenprogramm nicht, und sobald ByteRipper offen ist, gehen die Anfragen wieder durch — nichts ist ein zweites Mal zu registrieren. Sonst würde ein Programm, das seine Server neu startet, ByteRipper gleich nach dem Beenden wieder öffnen. Soll das Agentenprogramm ByteRipper bei Bedarf starten, wird unter **Einstellungen ▸ Agent** die Option **ByteRipper starten, wenn sich ein Agent verbindet** eingeschaltet: Der Konfigurationstext unter dem Menü enthält dann die Variable `BYTERIPPER_LAUNCH=1` und wird erneut in das Programm kopiert. Ausgeschaltet und erneut kopiert, startet er ByteRipper nicht mehr. Ist der Dienst ausgeschaltet, meldet das Agentenprogramm in jedem Fall, dass der Agentendienst von ByteRipper nicht läuft.
 
 ## Warum nicht über HTTP
 

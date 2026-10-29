@@ -16,8 +16,17 @@ enum AgentClientConfiguration {
     /// The name the server is registered under in every client.
     static let serverName = "byteripper"
 
+    /// The relay a client's configuration names: the copy the app installs
+    /// beside the socket at every launch (`AgentRelayInstall`), not the helper
+    /// inside the bundle the app happens to be running from — a bundled path
+    /// changes with the folder the app was built in, which is what made a
+    /// configuration go stale after a build. Where this launch installed no
+    /// copy — the app has not finished launching, or could not write — the
+    /// bundled helper answers instead, as it always did: a copy an earlier build
+    /// left there is not this app's relay.
     static var relayPath: String {
-        Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/byteripper-mcp").path
+        AgentRelayInstall.installedAtLaunch
+            ? AgentEndpoint.relayPath() : AgentRelayInstall.bundledHelper.path
     }
 
     enum Client: CaseIterable {

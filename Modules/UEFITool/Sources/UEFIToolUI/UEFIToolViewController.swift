@@ -145,11 +145,14 @@ import UEFITool
     /// size without waiting for the next parse — a zoom is not a re-read.
     private var detailShown: UEFINodeDetail = .empty
     private var detailSubject = ""
-    /// The folding tables the reader has opened, by title — kept for the
-    /// panel's life, so a table opened on one node is open on the next and
-    /// stays open through a re-render, and folded again only at the next
-    /// launch.
+    /// The folding tables the reader has opened, by title — kept while the
+    /// panel shows one file, so a table opened on one node is open on the
+    /// next and stays open through a re-render; another file starts with
+    /// every table as its definition says.
     private var unfoldedTables: Set<String> = []
+    /// The sections open inside each table (a descriptor's strap words), by
+    /// the table's title: kept as the tables are, across nodes.
+    private var openTableSections: [String: Set<String>] = [:]
     /// The folding tables on screen, by title.
     private var tableFolds: [String: TableFold] = [:]
 
@@ -762,6 +765,11 @@ import UEFITool
             meOpening = nil
             supersededByStore.removeAll()
             listedChildren = nil
+            // A fold the last file's reader opened belongs to that file: every
+            // table of this one starts as its definition says — the strap
+            // tables, PCH and CPU alike, folded until asked for.
+            unfoldedTables.removeAll()
+            openTableSections.removeAll()
             // What the search opened was in the last file's tree.
             cancelSearch()
             searchOpenings.release()
@@ -858,6 +866,8 @@ import UEFITool
             )
         }
 
+        bindScrollRequest()
+
         // The ME focus is the sub-tree's half of the selection: it reveals its
         // own row, not a UEFI node. The two focuses are apart, so only one is
         // in play at a time.
@@ -870,11 +880,13 @@ import UEFITool
         // to select, and the title already stands for it in accent colour, so
         // there is nothing to do to the tree.
         if presented.title != nil, focus == presented.title?.id {
+            scrollRequest = nil
             outline.deselectAll(nil)
             return
         }
 
         guard let focus, let tree, tree.node(focus) != nil else {
+            scrollRequest = nil
             outline.deselectAll(nil)
             return
         }
@@ -886,6 +898,10 @@ import UEFITool
     /// the sub-tree — opened on the way the UEFI reveal opens its own — so the
     /// row exists by the time a selection is asked to land on it.
     private func revealME(_ path: [Int]) {
+        // Taken here rather than where the row is found: a reveal that ends
+        // early still answers the request, which must not wait for a later
+        // show to scroll for.
+        let scrollsAnyway = takeScrollRequest(for: .me(path))
         guard !path.isEmpty else {
             deselectForShow()
             return
@@ -907,8 +923,12 @@ import UEFITool
             return
         }
         // The same rule the UEFI half's `selectAndScroll` keeps: a show that
-        // finds the row where it already was does not move the table.
-        guard outline.selectedRow != row else { return }
+        // finds the row where it already was does not move the table — unless
+        // the reader asked to be shown it.
+        guard outline.selectedRow != row else {
+            if scrollsAnyway { outline.scrollRowToVisible(row) }
+            return
+        }
         outline.scrollRowToVisible(row)
         // The selection is the panel's own doing, not the reader's, so it must
         // not read back as a click — the same reason `reveal` sets this around
@@ -943,7 +963,12 @@ import UEFITool
             let settled = [preferred, self.meFocus].compactMap { $0 }
                 .first { self.meNode(of: self.meRow($0)) != nil }
                 ?? self.meRoots.first?.path
-            guard let settled else { return }
+            guard let settled else {
+                // Nowhere to land: a reveal that asked to be shown its row is
+                // over, and the next show is not it.
+                if self.scrollRequest == .next { self.scrollRequest = nil }
+                return
+            }
             self.revealME(settled)
             // The panel chose this row, so the session is told outright rather
             // than the outline being asked. A selection read back off the
@@ -1019,7 +1044,13 @@ import UEFITool
             // that selected the old one then took the selection back from the
             // new one — what the full show after every selection used to
             // paper over, by revealing the focus again.
-            guard let self, self.focus == nodeID, tree.node(nodeID) != nil else { return }
+            guard let self else { return }
+            guard self.focus == nodeID, tree.node(nodeID) != nil else {
+                // The row this reveal was asked to show is not the focus any
+                // more: the request for it goes with it.
+                if self.scrollRequest == .uefi(nodeID) { self.scrollRequest = nil }
+                return
+            }
             // The selection is the panel's own doing, not the reader's, so it
             // must not read back as a click — that would publish a zone and
             // scroll the dump away from the byte a reveal was asked about.
@@ -1027,6 +1058,47 @@ import UEFITool
             defer { self.isShowingState = false }
             self.selectAndScroll(to: nodeID)
         }
+    }
+
+    /// A row the reader asked to be shown (`scrollToFocusOnNextShow`): armed
+    /// until the show that follows says which row that is, then tied to it.
+    /// Tied, it is answered by the reveal that lands on that row, or dropped
+    /// when a show moves the focus elsewhere — never left over for a later
+    /// show that only redraws, which would move the table nobody asked to.
+    private enum ScrollRequest: Equatable {
+        case next
+        case uefi(NodeID)
+        case me([Int])
+    }
+
+    private var scrollRequest: ScrollRequest?
+
+    /// The reader asked to be shown a row — the reveal button, **Show in
+    /// Tree**, the DMI button — rather than the panel showing its focus again
+    /// after a change. The reveal that follows scrolls to the row even when it
+    /// finds it already selected, which a passive show must not do.
+    func scrollToFocusOnNextShow() {
+        scrollRequest = .next
+    }
+
+    /// The show's focus is known: an armed request is tied to it, and one tied
+    /// to a row the focus has left is dropped.
+    private func bindScrollRequest() {
+        guard let request = scrollRequest else { return }
+        let current = meFocus.map(ScrollRequest.me) ?? focus.map(ScrollRequest.uefi)
+        if request == .next {
+            scrollRequest = current
+        } else if request != current {
+            scrollRequest = nil
+        }
+    }
+
+    /// Whether the reveal landing on `target` is one the reader asked for —
+    /// answered once.
+    private func takeScrollRequest(for target: ScrollRequest) -> Bool {
+        guard let request = scrollRequest, request == .next || request == target else { return false }
+        scrollRequest = nil
+        return true
     }
 
     private func selectAndScroll(to nodeID: NodeID) {
@@ -1038,13 +1110,19 @@ import UEFITool
            let standing = supersededCopies(in: store)[nodeID] {
             row = outline.row(forItem: self.row(standing))
         }
+        let scrollsAnyway = takeScrollRequest(for: .uefi(nodeID))
         guard row >= 0 else { return }
         // A show that finds the focus where it already was — a branch opening,
         // the checksum pass that follows it, an edit — is not a reason to move
         // the table. The reader may have scrolled somewhere else to look at
         // something, and the row this would scroll to is already the selection,
-        // so there is nothing to move to and nothing to select.
-        guard outline.selectedRow != row else { return }
+        // so there is nothing to select. A reveal or the DMI button is the
+        // reader asking to see the row, though, and that one brings it back on
+        // screen even when it is the selection already.
+        guard outline.selectedRow != row else {
+            if scrollsAnyway { outline.scrollRowToVisible(row) }
+            return
+        }
         outline.scrollRowToVisible(row)
         outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
     }
@@ -1306,7 +1384,7 @@ import UEFITool
         detail.content.setCustomSpacing(8, after: heading)
 
         guard let disclosure else {
-            install(makeGrid(table), after: heading)
+            install(makeTableBody(table), after: heading)
             return
         }
         let fold = TableFold(button: disclosure, heading: heading, table: table)
@@ -1330,10 +1408,43 @@ import UEFITool
         grid.trailingAnchor.constraint(lessThanOrEqualTo: list.trailingAnchor).isActive = true
     }
 
+    /// The table and, where it has one, the line that sums it up under it —
+    /// one view, so a folding table shows and hides both together. The line
+    /// wraps inside the list and is not selectable: it is a reading of the
+    /// rows, not a value to copy. It is drawn in the ordinary colour
+    /// (`UEFIDetailTable.note`): it says what the rows show, and neither a
+    /// tone nor a quieter grey of its own.
+    private func makeTableBody(_ table: UEFIDetailTable) -> NSView {
+        let grid = makeGrid(table)
+        guard let note = table.note, !note.isEmpty else { return grid }
+        let label = ToolWrappingLabel(string: note)
+        label.font = ToolPanelFont.body()
+        label.textColor = .labelColor
+        let body = NSStackView(views: [grid, label])
+        body.orientation = .vertical
+        body.alignment = .leading
+        body.spacing = 4
+        body.translatesAutoresizingMaskIntoConstraints = false
+        // Against the body, not the list: the body is not in the list yet, and
+        // a constraint across two hierarchies throws. `install` keeps the
+        // body inside the list, and so the line with it.
+        label.widthAnchor.constraint(lessThanOrEqualTo: body.widthAnchor).isActive = true
+        return body
+    }
+
     /// The table's header line and rows, one view per row
     /// (`DetailTableView`); a row's link leads where its target says.
     private func makeGrid(_ table: UEFIDetailTable) -> NSView {
-        DetailTableView(table: table) { [weak self] target in self?.follow(target) }
+        DetailTableView(
+            table: table, openSections: openTableSections[table.title] ?? [],
+            onFollow: { [weak self] target in self?.follow(target) },
+            onToggleSection: { [weak self] section, open in
+                if open {
+                    self?.openTableSections[table.title, default: []].insert(section)
+                } else {
+                    self?.openTableSections[table.title]?.remove(section)
+                }
+            })
     }
 
     @objc private func tableFoldClicked(_ sender: NSButton) {
@@ -1353,7 +1464,7 @@ import UEFITool
         guard let fold = tableFolds[title] else { return }
         fold.button.state = unfolded ? .on : .off
         if unfolded, fold.grid == nil {
-            let grid = makeGrid(fold.table)
+            let grid = makeTableBody(fold.table)
             fold.grid = grid
             install(grid, after: fold.heading)
         }

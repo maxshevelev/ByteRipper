@@ -122,10 +122,12 @@ public struct DescriptorInfo: Equatable, Sendable {
     /// before any firmware runs. Nil when its base is not one or it is empty.
     public var straps: Straps?
 
-    /// The strap words as they stand. Their layout is the chipset's and
-    /// changes with every generation — and between the mobile and desktop
-    /// parts of one — and next to none of it is published, so a word is
-    /// kept as a number rather than read as fields nobody can justify.
+    /// The strap words as they stand, and where a table of the section's
+    /// length is at hand, the fields they are made of. The layout is the
+    /// chipset's and changes with every generation — and between the mobile
+    /// and desktop parts of one — and next to none of it is published, which
+    /// is what `DescriptorStrapMap` is: Intel's own layout, taken from the
+    /// Flash Image Tool that writes the section.
     public struct Straps: Equatable, Sendable {
         /// Where the first word lies, in the file's own offsets.
         public var base: UInt64
@@ -140,7 +142,121 @@ public struct DescriptorInfo: Equatable, Sendable {
         /// strap the SPI controller loads its GPR0 register from. Nil where
         /// the layout is not one whose word for it is known.
         public var gpr0: ProtectedRange?
+        /// The section read as the fields of its layout, each with what this
+        /// image holds there. Nil where no table of this length is at hand,
+        /// in which case the words above are all there is to say.
+        public var fields: [DescriptorStrapMap.Reading]?
     }
+
+    /// The processor strap section — the words the processor reads at
+    /// power-on, in the descriptor's third map word (`FLMAP2`). Nil from Tiger
+    /// Point on, where that word names the section's place in the PMC's space
+    /// instead and the section is no longer in the descriptor to read
+    /// (`DescriptorGeneration.hasProcessorStrapSection`).
+    public struct ProcessorStraps: Equatable, Sendable {
+        /// Where the first word lies, in the file's own offsets.
+        public var base: UInt64
+        public var words: [UInt32]
+        /// The section read as the fields of its layout, each with what this
+        /// image holds there. Nil where no table of this length is at hand.
+        public var fields: [DescriptorStrapMap.Reading]?
+    }
+
+    public var processorStraps: ProcessorStraps?
+
+    /// The MIP area's descriptor table, which Cannon Point introduced: a count
+    /// and the area's size, then one eight-byte entry per block — type, offset,
+    /// length, reserved — whose payload the entry's offset places after the
+    /// table. Block type 1 is the PMC and CPU soft straps, type 0 the CSE DbC
+    /// configuration. Nil before Cannon Point, and on Meteor Lake and later,
+    /// where the area is erased and the byte the table's place came from means
+    /// the SoC soft straps instead.
+    public struct MIPTable: Equatable, Sendable {
+        public struct Block: Equatable, Sendable {
+            /// The tool's block type: 0 is the CSE DbC configuration and 1 the
+            /// PMC and CPU soft straps.
+            public var type: Int
+            /// The block's first byte, in the file's own offsets.
+            public var base: UInt64
+            /// Its place, in bytes, from the table's first byte.
+            public var offset: Int
+            public var length: Int
+            public var words: [UInt32]
+        }
+
+        /// The table's first byte, in the file's own offsets.
+        public var base: UInt64
+        /// `NumberOfDescriptors`.
+        public var count: Int
+        /// `SizeOfMip`: the area's length in bytes.
+        public var size: Int
+        public var blocks: [Block]
+
+        /// The CSE DbC configuration, where the table carries one.
+        public var dbc: DBCStraps? {
+            guard let block = blocks.first(where: { $0.type == 0 }),
+                  block.words.count >= 2 else { return nil }
+            return DBCStraps(base: block.base, words: block.words)
+        }
+    }
+
+    /// The CSE DbC configuration — block type 0's two dwords. Every Flash
+    /// Image Tool document that states the block agrees on these three masks
+    /// in its second word; the variants add the eHAP and DAM bits or the USB2
+    /// AFE signal strengths above them, which the documents do not agree on
+    /// and which are therefore not claimed here.
+    public struct DBCStraps: Equatable, Sendable {
+        public var base: UInt64
+        public var words: [UInt32]
+        public var fields: [DescriptorStrapMap.Reading]
+
+        static let layout: [DescriptorStrapMap.Field] = [
+            .init(name: "DbC_Strap_CSME_Early_USB_DbC_ME_Boot_Stall_Enable",
+                  word: 1, bits: 16...23, label: "Early USB DbC ME boot stall"),
+            .init(name: "DbC_Strap_CSME_USB3_DbC_port_enable",
+                  word: 1, bits: 8...15, label: "USB3 DbC port enable"),
+            .init(name: "DbC_Strap_CSME_USB2_DbC_port_enable",
+                  word: 1, bits: 0...7, label: "USB2 DbC port enable"),
+        ]
+
+        init(base: UInt64, words: [UInt32]) {
+            self.base = base
+            self.words = words
+            self.fields = Self.layout.compactMap { field in
+                guard field.word < words.count else { return nil }
+                return DescriptorStrapMap.Reading(
+                    field: field, value: field.value(in: words[field.word]))
+            }
+        }
+    }
+
+    public var mip: MIPTable?
+
+    /// The PMC soft straps — the leading words of the MIP area's PMC and CPU
+    /// block, before the CPU strap message that ends it. The message's length
+    /// is what `FLMAP2` states (the processor section's words up to Cannon
+    /// Point, its message's from Tiger Point on), and the rest of the block is
+    /// the PMC section. Nil where the generation has no block, or no tool at
+    /// hand states a layout of the PMC words' length.
+    public struct PMCSection: Equatable, Sendable {
+        public var base: UInt64
+        public var words: [UInt32]
+        public var fields: [DescriptorStrapMap.Reading]
+    }
+
+    public var pmcStraps: PMCSection?
+
+    /// The descriptor's registers read through Flash Image Tool's own layouts
+    /// (`DescriptorRegisterMap`): FLMAP0/1/2, FLCOMP and FLIL at the component
+    /// base, the masters' FLMSTR registers, FLDRPLCY and FLUMAP1. Empty where
+    /// the generation has no map emitted, or a register's base is not readable.
+    public var registerReadings: [DescriptorRegisterReading]
+
+    /// The OEM section of §2.4: `0x100` bytes at `0xF00` in the descriptor,
+    /// where a board's maker keeps what it likes — a serial, a BIOS version, a
+    /// signature — and which is erased on many boards. Empty when the reader
+    /// does not reach it.
+    public var oemSection: [UInt8]
 
     /// The eSPI clock: bits 3–5 of its word.
     public struct ESPIClock: Equatable, Sendable {
@@ -198,6 +314,7 @@ public extension DescriptorInfo {
     static func read(at base: UInt64, in reader: ImageReader) -> DescriptorInfo? {
         guard let map = reader.uint32(at: base + Descriptor.mapOffset),
               let map1 = reader.uint32(at: base + Descriptor.map1Offset),
+              let map2 = reader.uint32(at: base + Descriptor.map2Offset),
               let (generation, isCertain) = DescriptorGeneration.read(at: base, in: reader),
               let vector = reader.bytes(at: base, count: 16)
         else { return nil }
@@ -213,6 +330,7 @@ public extension DescriptorInfo {
         let masterBase = (masterAt > 0 && masterAt <= Descriptor.maxBase)
             ? base + UInt64(masterAt) << 4
             : nil
+        let mip = mipTable(at: base, generation: generation, reader: reader)
 
         return DescriptorInfo(
             reservedVector: vector,
@@ -224,15 +342,201 @@ public extension DescriptorInfo {
             maskDigits: isVersion1 ? 2 : 3,
             biosAccess: biosAccess(at: masterBase, isVersion1: isVersion1, reader: reader),
             chips: chips(at: base, reader: reader),
-            straps: straps(at: base, map1: map1, generation: generation, reader: reader)
+            straps: straps(at: base, map1: map1, generation: generation,
+                           isGenerationCertain: isCertain, reader: reader),
+            processorStraps: processorStraps(at: base, generation: generation,
+                                             isGenerationCertain: isCertain,
+                                             reader: reader),
+            mip: mip,
+            pmcStraps: pmcStraps(at: base, map2: map2, generation: generation,
+                                 mip: mip),
+            registerReadings: registerReadings(at: base, map: map, map1: map1,
+                                               generation: generation, reader: reader),
+            oemSection: reader.bytes(at: base + Descriptor.oemSectionOffset,
+                                     count: Descriptor.oemSectionSize) ?? []
         )
+    }
+
+    /// The MIP area's block table: its place from the upper map's high byte,
+    /// its count and size, and each block's payload. A table whose entries do
+    /// not fit the area, or a payload past the reader's end, is no table —
+    /// the erased area of Meteor Lake reads `0xFFFF` throughout and answers
+    /// nil by the count check alone.
+    static func mipTable(at base: UInt64, generation: DescriptorGeneration,
+                         reader: ImageReader) -> MIPTable? {
+        guard generation.hasMIPDescriptorTable,
+              let upper = reader.uint32(at: base + UpperMap.offset)
+        else { return nil }
+        let area = Int(upper >> 24)
+        guard area > 0, area <= Int(Descriptor.maxBase) else { return nil }
+        let tableAt = base + UInt64(area) << 4
+        guard let count = reader.uint16(at: tableAt),
+              let size = reader.uint16(at: tableAt + 2),
+              count > 0, count <= 8
+        else { return nil }
+        var blocks: [MIPTable.Block] = []
+        for index in 0..<Int(count) {
+            let entry = tableAt + 4 + UInt64(index) * 8
+            guard let type = reader.uint16(at: entry),
+                  let offset = reader.uint16(at: entry + 2),
+                  let length = reader.uint16(at: entry + 4),
+                  let reserved = reader.uint16(at: entry + 6),
+                  reserved == 0, offset >= 4 + count * 8, length > 0,
+                  length % 4 == 0
+            else { return nil }
+            let payload = tableAt + UInt64(offset)
+            var words: [UInt32] = []
+            for word in 0..<(length / 4) {
+                guard let value = reader.uint32(at: payload + UInt64(word) * 4)
+                else { return nil }
+                words.append(value)
+            }
+            blocks.append(MIPTable.Block(type: Int(type), base: payload,
+                                         offset: Int(offset), length: Int(length),
+                                         words: words))
+        }
+        let end = blocks.map { $0.offset + $0.length }.max() ?? 0
+        guard Int(size) >= end else { return nil }
+        return MIPTable(base: tableAt, count: Int(count), size: Int(size),
+                        blocks: blocks)
+    }
+
+    /// The PMC soft straps: the MIP area's PMC and CPU block less the CPU
+    /// strap message that ends it. Up to Cannon Point `FLMAP2` states the
+    /// processor section's words, which is the message's length in the block
+    /// too; from Tiger Point on it states the message's length directly. A
+    /// block whose remainder matches no table at hand answers none.
+    static func pmcStraps(at base: UInt64, map2: UInt32,
+                          generation: DescriptorGeneration,
+                          mip: MIPTable?) -> PMCSection? {
+        guard let mip,
+              let block = mip.blocks.first(where: { $0.type == 1 })
+        else { return nil }
+        let cpuWords: Int
+        if generation.hasMIPProcessorStraps {
+            cpuWords = Int(map2 >> 16 & 0xFF)
+        } else if generation.hasProcessorStrapSection {
+            cpuWords = Int(map2 >> 8 & 0xFF)
+        } else {
+            return nil
+        }
+        let pmcWords = block.words.count - cpuWords
+        guard pmcWords > 0, let map = DescriptorStrapMap.forPMC(words: pmcWords)
+        else { return nil }
+        let words = Array(block.words.prefix(pmcWords))
+        return PMCSection(base: block.base, words: words,
+                          fields: map.readings(in: words))
+    }
+
+    /// The descriptor's registers through the tool's layout: each register's
+    /// place resolved (absolute, or the component/master base the map words
+    /// state) and its words read. A register whose base is out of range or
+    /// whose words do not fit is left out.
+    private static func registerReadings(
+        at base: UInt64, map: UInt32, map1: UInt32,
+        generation: DescriptorGeneration, reader: ImageReader
+    ) -> [DescriptorRegisterReading] {
+        guard let registerMap = DescriptorRegisterMap.forGeneration(generation) else { return [] }
+        let componentAt = map & 0xFF
+        let masterAt = map1 & 0xFF
+        func address(_ place: DescriptorRegisterMap.Place) -> UInt64? {
+            switch place {
+            case .absolute(let offset):
+                return base + UInt64(offset)
+            case .flashComponent(let offset):
+                guard componentAt > 0, componentAt <= Descriptor.maxBase else { return nil }
+                return base + (UInt64(componentAt) << 4) + UInt64(offset)
+            case .flashMaster(let offset):
+                guard masterAt > 0, masterAt <= Descriptor.maxBase else { return nil }
+                return base + (UInt64(masterAt) << 4) + UInt64(offset)
+            }
+        }
+        var readings: [DescriptorRegisterReading] = []
+        for register in registerMap.registers {
+            guard let start = address(register.place) else { continue }
+            var words: [UInt32] = []
+            for index in 0..<register.words {
+                guard let word = reader.uint32(at: start + UInt64(index) * 4) else { break }
+                words.append(word)
+            }
+            guard words.count == register.words else { continue }
+            readings.append(DescriptorRegisterReading(register: register,
+                                                      base: start, words: words))
+        }
+        return readings
+    }
+
+    /// The processor straps, where this generation's descriptor keeps them:
+    /// the section the classic third map word points at up to Cannon Point, or
+    /// — from Tiger Point to Alder Point and the embedded lines — the message
+    /// in the MIP area, at `0xC00` plus the offset the same word carries
+    /// (`FLMAP2[2:11]`), as many words as `FLMAP2[16:23]` says (§2.7). Nil
+    /// where neither applies, where the generation is only assumed (the MIP
+    /// reading needs the map word's Tiger Point meaning), or where a section
+    /// lies outside the descriptor. Meteor Lake and later are nil by
+    /// generation: their descriptor carries no CPU message (it is in the FITC
+    /// partition's MIP table), and the map-word bits there mean other straps.
+    private static func processorStraps(
+        at base: UInt64, generation: DescriptorGeneration,
+        isGenerationCertain: Bool, reader: ImageReader
+    ) -> ProcessorStraps? {
+        if generation.hasProcessorStrapSection {
+            return classicProcessorStraps(at: base, generation: generation,
+                                          isGenerationCertain: isGenerationCertain,
+                                          reader: reader)
+        }
+        guard generation.hasMIPProcessorStraps, isGenerationCertain,
+              let map2 = reader.uint32(at: base + Descriptor.map2Offset)
+        else { return nil }
+        let offset = UInt64((map2 >> 2) & 0x3FF)
+        let count = UInt64((map2 >> 16) & 0xFF)
+        guard count > 0, Descriptor.mipOffset + offset + count * 4 <= Descriptor.size
+        else { return nil }
+        let section = base + Descriptor.mipOffset + offset
+        var words: [UInt32] = []
+        for index in 0..<count {
+            guard let word = reader.uint32(at: section + index * 4) else { break }
+            words.append(word)
+        }
+        guard !words.isEmpty else { return nil }
+        let map = DescriptorStrapMap.forMIPProcessorSection(words: words.count)
+        return ProcessorStraps(base: section, words: words,
+                               fields: map?.readings(in: words))
+    }
+
+    /// The processor strap section of the classic map word, at its base and as
+    /// long as its count — the fields Tiger Point stopped writing. Cut at the
+    /// descriptor's end, as the PCH section is.
+    private static func classicProcessorStraps(
+        at base: UInt64, generation: DescriptorGeneration,
+        isGenerationCertain: Bool, reader: ImageReader
+    ) -> ProcessorStraps? {
+        guard let map2 = reader.uint32(at: base + Descriptor.map2Offset) else { return nil }
+        let strapAt = map2 & 0xFF
+        guard strapAt > 0, strapAt <= Descriptor.maxBase else { return nil }
+        let offset = UInt64(strapAt) << 4
+        let count = min(UInt64(map2 >> 8 & 0xFF), (Descriptor.size - offset) / 4)
+        guard count > 0 else { return nil }
+        let section = base + offset
+        var words: [UInt32] = []
+        for index in 0..<count {
+            guard let word = reader.uint32(at: section + index * 4) else { break }
+            words.append(word)
+        }
+        guard !words.isEmpty else { return nil }
+        let map = DescriptorStrapMap.forProcessorSection(
+            words: words.count, generation: generation,
+            generationIsCertain: isGenerationCertain)
+        return ProcessorStraps(base: section, words: words,
+                               fields: map?.readings(in: words))
     }
 
     /// The PCH strap section, at `PchStrapBase << 4`, as many words long as
     /// the map's strap length says — cut at the descriptor's end, past which
     /// nothing is a strap however long an erased length claims to be.
     private static func straps(
-        at base: UInt64, map1: UInt32, generation: DescriptorGeneration, reader: ImageReader
+        at base: UInt64, map1: UInt32, generation: DescriptorGeneration,
+        isGenerationCertain: Bool, reader: ImageReader
     ) -> Straps? {
         let strapAt = map1 >> 16 & 0xFF
         guard strapAt > 0, strapAt <= Descriptor.maxBase else { return nil }
@@ -250,17 +554,25 @@ public extension DescriptorInfo {
             return MEDisable(name: bit.name, word: bit.word, bit: bit.bit,
                              isSet: words[bit.word] >> bit.bit & 1 != 0)
         }
-        var straps = Straps(base: section, words: words, meDisable: meDisable)
-        if let fields = generation.strapFields(count: words.count) {
-            let code = UInt8(words[fields.espiClockWord] >> 3 & 0x7)
+        // The chipset's layout of this length, where one is at hand: what
+        // names the words and says which of them the two fields below are.
+        let map = DescriptorStrapMap.forSection(
+            words: words.count, generation: generation,
+            generationIsCertain: isGenerationCertain)
+        var straps = Straps(base: section, words: words, meDisable: meDisable,
+                            fields: map?.readings(in: words))
+        if let field = map?.espiClockField, field.word < words.count {
+            let code = UInt8(field.value(in: words[field.word]))
             straps.espiClock = ESPIClock(
-                word: fields.espiClockWord,
+                word: field.word,
                 clock: Clock(code: code, megahertz: generation.espiClock(code)))
-            // Fifteen bits of start, a read enable, fifteen of end, a write
-            // enable — ifdtool's `union gprd`.
-            let gprd = words[fields.gpr0Word]
+        }
+        // Fifteen bits of start, a read enable, fifteen of end, a write
+        // enable — ifdtool's `union gprd`, which is the whole of the field.
+        if let field = map?.protectedRangeField, field.word < words.count {
+            let gprd = field.value(in: words[field.word])
             straps.gpr0 = ProtectedRange(
-                word: fields.gpr0Word,
+                word: field.word,
                 start: base + UInt64(gprd & 0x7FFF) << 12,
                 end: base + (UInt64(gprd >> 16 & 0x7FFF) << 12 | 0xFFF),
                 readProtected: gprd >> 15 & 1 != 0,

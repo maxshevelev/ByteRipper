@@ -110,6 +110,89 @@ public struct FirmwareAnalysis: Codable, Sendable, Equatable, Identifiable {
     /// What `mfsState` was decided from (`MFSStateBasis`). Ours; nil where
     /// `mfsState` is.
     public var mfsStateBasis: MFSStateBasis? = nil
+    /// What the platform will do with End of Manufacturing (ours; MEAnalyzer
+    /// prints no such row). nil for a firmware whose generation has no such
+    /// switch at all — see `ManufacturingState.noSwitch`, which is that same
+    /// fact stated as a value where a row states one.
+    public var manufacturingState: ManufacturingState? = nil
+    /// What `manufacturingState` was decided from (`ManufacturingBasis`): the
+    /// two pages of the setting, and the descriptor's state. Ours; nil where
+    /// `manufacturingState` is.
+    public var manufacturingBasis: ManufacturingBasis? = nil
+    /// What the board whose dump this is has done with End of Manufacturing —
+    /// the live file system's `/home/mca/manuf_lock`, one byte no MFIT
+    /// settings database names and no build ever writes (`ManufacturingLock`).
+    /// Ours. nil where the volume carries no File IDs, the table that names
+    /// them was not read, or the image has never been through a first boot and
+    /// so has no live file at all.
+    public var manufacturingLock: ManufacturingLock? = nil
+    /// Which half of its chipset generation the board is (ours) — the mobile
+    /// parts or the desktop ones — told from the length of the descriptor's
+    /// PCH strap section, which is the one thing a dump states about it
+    /// (`MEConfigurationMap.MEPlatformFamily`). nil where no descriptor was
+    /// read with the region, or its section length is one neither half uses:
+    /// an extracted ME region carries no descriptor, and a section erased past
+    /// reading names no length.
+    public var platformFamily: MEConfigurationMap.MEPlatformFamily? = nil
+    /// The ME configuration, file by file (ours): what MFIT's own settings
+    /// database says lives in each MFS file of this image, read out of its
+    /// bytes — through the map of `platformFamily` where the dump says which
+    /// half it is, and the mobile map where it does not.
+    /// `ConfigurationFile` says which page each file's bytes came from.
+    /// nil where the analysis read no configuration at all — an image whose
+    /// files carry no File IDs and whose OEM Configuration holds no records.
+    public var configuration: [ConfigurationFile]? = nil
+    /// The feature pins the firmware drives (ours), out of
+    /// `/home/gpio/csme_pins` — the file Flash Image Tool writes from its
+    /// `MeFeaturePins` settings — read through the tool's own value classes
+    /// (`GPIOPinMap`). `GPIOPinReadings` says which copy of the file was read.
+    /// nil where the image carries none, the file is empty (no feature pins
+    /// configured), or the generation has no map.
+    public var gpioPins: GPIOPinReadings? = nil
+    /// The Boot Guard profile this image is built for (ours), out of the CDMD
+    /// configuration's JSON record where the image has one and the UEP area's
+    /// Boot Guard bits where it does not. `nil` when neither says a combination
+    /// of the four settings — an area never written, or a layout this does not
+    /// read.
+    public var bootGuardProfile: BootGuardProfile? = nil
+    /// The FPF/UEP settings the `$UEP` area's first bit array records, as the
+    /// tool of this generation lays them out (`UEPMap`) — the bits the platform
+    /// would burn at End of Manufacturing. Ours: MEAnalyzer reads none of them
+    /// but the Boot Guard profile, which `bootGuardProfile` carries. nil where
+    /// the image has no area, or the generation has no map.
+    public var uepSettings: [UEPReading]? = nil
+    /// The CPU straps the image's **MIP table** holds, as the tool of this
+    /// generation lays them out (`CPUStrapMap`) — the values the processor is
+    /// strapped with at reset. CSME 18 keeps them in the FITC partition's
+    /// `smip` file rather than the descriptor's MIP area, which is where the
+    /// older generations put them. Ours: no upstream reading exists. nil where
+    /// the image has no MIP table, or the generation has no map.
+    public var cpuStraps: CPUStrapReadings? = nil
+    /// The strap containers an image's **MIP table** keeps beside the CPU
+    /// message — CSME (DBC), PMC IOE and IOE — read through the tool's own
+    /// layouts (`MIPStrapMap`). Ours; no upstream reading exists. nil where
+    /// the image has no MIP table, or none of the map's blocks is in it.
+    public var mipStraps: [MIPStrapContainerReadings]? = nil
+    /// The SPHY OEM configuration the image's `phy_oem_cfg` nvar holds — the
+    /// PHY tuning block of the FITC partition, read through the tool's own
+    /// `SphyNvar` layout (`SphyNvarMap`). Ours. nil where the nvar is not
+    /// there, or its anchors are another SPHY variant's.
+    public var sphyNvar: [MIPStrapReading]? = nil
+    /// Whether the platform binds its SPI part to the chipset — Flash Image
+    /// Tool's "Hardware Binding Enabled", whose own help calls it the FPF
+    /// hardware and RPMC / RPMB binding. Ours: MEAnalyzer prints nothing of the
+    /// kind, and the setting is not in any of its files: the state is one byte
+    /// of `/home/bup/bup_sku/hw_binding` (the path FIT's alias table gives for
+    /// `HwBinding`), read out of the ME file system and, where the volume has
+    /// no such file, out of the OEM Configuration partition's record of it.
+    /// Its value class is `DisabledEnabledValues`: 0 Disabled, 1 Enabled.
+    public var hardwareBinding: HardwareBinding? = nil
+    /// The OEM public key hash the UEP area carries — 32 hex bytes on CSME 12
+    /// to 14, 48 on 15 and later — and why it is not a value where it is not one
+    /// (ours). `OEMKeyHash` says what each answer means;
+    /// `BootGuardReader.oemPublicKeyHash` reads it out of the image's record,
+    /// which record being the generation's own.
+    public var oemPublicKeyHash: OEMKeyHash? = nil
     /// Power Down Mitigation (row 12a, upstream `pdm_status`): whether a
     /// CSME 11 firmware carries the power-down mitigation, as its database row
     /// records it. nil for every other family and major — the row upstream
@@ -301,8 +384,9 @@ public enum MFSState: String, Codable, Sendable {
 public struct MFSStateBasis: Codable, Sendable, Equatable {
     /// Step 1: the reserved low-level files.
     public enum ReservedFiles: Codable, Sendable, Equatable {
-        /// The volume names its files through its tables (CSME 15/16), so
-        /// nothing is claimed from indices.
+        /// The volume's files start at offset 0 (CSME 15/16, CSME 13.30), so
+        /// there are no reserved files by index: upstream breaks its walk
+        /// before reading one and nothing is claimed from indices.
         case notRead
         /// None of the reserved indices is present.
         case none
@@ -352,6 +436,347 @@ public struct MFSStateBasis: Codable, Sendable, Equatable {
         switch efs {
         case .unreadable, .filesNotNamed: return decidedBy != .efs && decidedBy != .reservedFiles
         case .holdsFiles, .noFileContent, .noPartition: return false
+        }
+    }
+}
+
+/// What the platform will do with End of Manufacturing — the question a bench
+/// asks of a dump it is about to write to a board whose chipset is fresh: will
+/// the first boot of *this image* close Manufacturing? Ours: MEAnalyzer has no
+/// such row.
+///
+/// The switch is CSME 15/16's `CsePlugin:EomNvar:EOM#EomFirstBootEnabled`, which
+/// MFIT writes into the image's **OEM Configuration** partition as a record of
+/// the MFS file `/home/mca/eom_config`: bit 0 is the flag, bits 1–2 are
+/// `FlexibleEomSettings` (what EOM commits — `Lock Descriptor and OEM Configs`,
+/// `Lock OEM Configs Only`, `Lock Descriptor Only`, `Do not lock…`). The record
+/// is read from the image's own configuration first — that is the page the
+/// platform applies when it enters End of Manufacturing — and from the live
+/// file system only when the image carries none, which is what an extracted
+/// region without its OEM Configuration partition looks like. Deciding it is
+/// `ManufacturingDecoder` in `FileSystem/Manufacturing.swift`.
+///
+/// What the *board* has already done takes no part in this verdict — the live
+/// file system's `/home/mca/eom` duplicates the flag, and `/home/mca/manuf_lock`
+/// records that the machine went through End of Manufacturing, which is
+/// reported as its own fact (`ManufacturingLock`). What the *image* will do is
+/// what this says; what the board is, the row beside it says.
+///
+/// The engine never reads the PCH fuses themselves — those are burned into the
+/// chip, not into a dump, and no dump can say what they hold. What this says is
+/// what the *image* will make the platform do. The structures behind it, and
+/// what is still undetermined on older generations, are `Design/ME_STRUCTURES.md`.
+public enum ManufacturingState: String, Codable, Sendable, CaseIterable {
+    /// The first boot of this image closes Manufacturing — either because the
+    /// descriptor carries the factory rights that close it, or because the
+    /// flag orders it explicitly.
+    case willClose
+    /// Neither mechanism is at work: the flag is clear and the descriptor's
+    /// access rights are open, which is what an image a bench prepares for
+    /// itself looks like. The machine boots on and stays workable.
+    case willNotClose
+    /// The flag is set while the descriptor's BIOS master is open (its read and
+    /// write masks are all ones, the service-image state). MFIT refuses to
+    /// build such an image — `CsePlugin:EomNvar` answers *"When 'Host CPU /
+    /// BIOS' Read and Write Master Access are set to 0xFFFF, End of
+    /// manufacturing on first boot and locking descriptor is not allowed"* —
+    /// so the two together mean the image was edited outside MFIT, or predates
+    /// that rule.
+    case unexpectedCombination
+    /// The generation decides this, but its bytes do not: the flag is clear or
+    /// absent and no descriptor was read with the region, so what the access
+    /// rights would say is unknown.
+    case unknown
+    /// This firmware does not decide it at all: before CSME 11, whose
+    /// descriptors are the ones the rights are read from.
+    case noSwitch
+}
+
+/// What the board the dump came from has already done, out of the live file
+/// system's `/home/mca/manuf_lock` — one byte written by the platform, never by
+/// a build (every image's own OEM Configuration record of it reads 0, and no
+/// MFIT settings database names it).
+///
+/// What it means is evidence, not documentation. On every factory dump at hand
+/// it reads 1, and on a board that was flashed an image with End of
+/// Manufacturing **not** set to close on first boot it read 0 after that first
+/// boot, while the file system went from Configured to Initialized
+/// (`Skills/me-eom-structures/reference/structures.md`, the live experiment).
+/// So it tracks whether the machine has closed End of Manufacturing — and with
+/// it committed the FPFs, the RPMC / RPMB binding and the manufacturing-mode
+/// setting — which is the one thing about the board's own fuses a dump can
+/// say. It is *not* the image's flag: `manufacturingState` answers for the
+/// next first boot, this for the board it came from.
+public enum ManufacturingLock: Codable, Sendable, Equatable {
+    /// The byte reads 1: the machine has been through End of Manufacturing.
+    case locked
+    /// The byte reads 0: it has not — a board never booted with this image, or
+    /// an image whose first boot had nothing to close.
+    case open
+    /// Any other byte — a layout this reading does not know.
+    case other(UInt8)
+}
+
+/// What the Manufacturing row was decided from. Ours, not upstream's — the same
+/// idea as `MFSStateBasis`: a reader must be able to tell a verdict the image
+/// states from one that only a page that could not be read left standing.
+public struct ManufacturingBasis: Codable, Sendable, Equatable {
+    /// Which page the flag was read from.
+    public enum Page: String, Codable, Sendable {
+        /// The live MFS file `/home/mca/eom_config` — what the file system
+        /// holds now.
+        case liveMFS
+        /// The OEM Configuration partition's record for that file — what the
+        /// build wrote into the image, which the platform applies at EOM.
+        case imageConfiguration
+    }
+
+    /// The flag: **bit 0** of `/home/mca/eom_config`.
+    public var flag: Bool? = nil
+    /// **Bits 1–2** of the same record: `FlexibleEomSettings`.
+    public var flexible: Int? = nil
+    /// Which page `flag` and `flexible` came from.
+    public var page: Page? = nil
+    /// Whether the descriptor's BIOS master is open — its read *and* write
+    /// masks all ones, which is what the factory leaves and what MFIT's rule
+    /// above is about. nil when no descriptor was handed to the analyser
+    /// (`analyze(descriptorBytes:)`) or it does not read as one.
+    public var descriptorOpen: Bool? = nil
+    /// Whether the live file system could be looked in at all: false when the
+    /// image has an MFS volume but the File IDs of its files are unknown, which
+    /// is a missing database rather than a fact about the firmware.
+    public var liveFilesResolved: Bool = false
+
+    public init(flag: Bool? = nil, flexible: Int? = nil,
+                page: Page? = nil, descriptorOpen: Bool? = nil,
+                liveFilesResolved: Bool = false) {
+        self.flag = flag
+        self.flexible = flexible
+        self.page = page
+        self.descriptorOpen = descriptorOpen
+        self.liveFilesResolved = liveFilesResolved
+    }
+}
+
+/// The feature pins `/home/gpio/csme_pins` records (ours): the file Flash
+/// Image Tool writes from its `MeFeaturePins` settings, decoded through the
+/// tool's own value classes (`GPIOPinMap`, `GPIOPinReader`). `fromImage` says
+/// which copy the bytes came from — the OEM Configuration partition's record
+/// of the file (what the build wrote) or the live MFS (what the platform holds
+/// now).
+public struct GPIOPinReadings: Codable, Sendable, Equatable {
+    public var path: String
+    public var fromImage: Bool
+    public var pins: [GPIOPin]
+
+    public init(path: String, fromImage: Bool, pins: [GPIOPin]) {
+        self.path = path
+        self.fromImage = fromImage
+        self.pins = pins
+    }
+}
+
+/// One configuration file of an image (ours): a file the ME configuration keeps
+/// settings in, and the two copies of it a dump carries.
+///
+/// An image keeps each of these files twice, and the two copies are different
+/// things to know. The build wrote one into the **OEM Configuration** (FITC)
+/// partition — `fitc` — and the platform copies it into the ME file system on
+/// its first boot, which is where the engine reads it now — `mfs`. A setting
+/// the platform rewrote and a setting the build chose look the same in one
+/// column, so neither copy is dropped here: the panel shows them side by side
+/// and marks the pairs that disagree. An image that has never been through a
+/// first boot carries `fitc` alone; one whose MFS volume could not be read
+/// carries `mfs` alone.
+///
+/// `settings` carries numbers and hex, not words: what a number *means* — that
+/// `2` in `FlexibleEomSettings` is "Lock Descriptor Only" — is MFIT's own
+/// naming, which lives in the generation's `MEConfigurationMap` and is read by
+/// the panel.
+public struct ConfigurationFile: Codable, Sendable, Equatable, Identifiable {
+    /// One of the two copies: how many bytes of it there are, and the settings
+    /// they hold.
+    public struct Page: Codable, Sendable, Equatable {
+        /// How many bytes of it there are.
+        public var size: Int
+        public var settings: [ConfigurationSetting]
+
+        public init(size: Int, settings: [ConfigurationSetting]) {
+            self.size = size
+            self.settings = settings
+        }
+    }
+
+    public var id: String { path }
+    /// The MFS path, as the panel's tree prints it (`/home/mca/eom_config`).
+    public var path: String
+    /// MFIT's own name for the file, as its panel's file list shows it.
+    public var alias: String
+    /// The build's copy: the OEM Configuration partition's record for this
+    /// file. Nil where the image has no such partition, the partition no such
+    /// record, or the record is shorter than the map's first field.
+    public var fitc: Page?
+    /// The file system's copy: the state in force. Nil where the volume holds
+    /// no such file, or its File IDs could not be resolved.
+    public var mfs: Page?
+
+    public init(path: String, alias: String, fitc: Page? = nil, mfs: Page? = nil) {
+        self.path = path
+        self.alias = alias
+        self.fitc = fitc
+        self.mfs = mfs
+    }
+}
+
+/// One setting of one configuration file, as the bytes gave it: MFIT's name for
+/// the setting, and the value. A setting the file is too short to hold is left
+/// out rather than guessed at.
+public struct ConfigurationSetting: Codable, Sendable, Equatable, Identifiable {
+    public var id: String { name }
+    /// The setting's identifier, which is the same word in every language; what
+    /// a tool's panel shows for it, where that is not the identifier, is the
+    /// map's own `label` (`MEConfigurationMap.Setting.label`).
+    public var name: String
+    /// The value as a number: the bits of a bitfield where the catalogue gives
+    /// bits, the field's own value — little-endian, as every one of these files
+    /// is — otherwise, up to eight bytes.
+    public var number: Int?
+    /// The value as hex where the field is wider than eight bytes.
+    public var bytes: String?
+    /// Whether MFIT marks the setting `Auto`: the platform writes it, and a
+    /// build carries only a placeholder.
+    public var auto: Bool
+    /// The condition the tool placed the setting under, where it placed it
+    /// conditionally — and which branch this image holds (`MEConfigurationMap
+    /// .Setting.condition`). Nil for a place that always holds.
+    public var condition: ConfigurationCondition?
+    /// The condition the tool switches the setting off under, where the image
+    /// holds the value the condition names: the value is there and does not
+    /// apply. Nil where the tool says no such thing, or the condition's own
+    /// value is not in the image (nothing is claimed then).
+    public var disabled: ConfigurationCondition?
+
+    public init(name: String, number: Int?, bytes: String? = nil, auto: Bool = false,
+                condition: ConfigurationCondition? = nil,
+                disabled: ConfigurationCondition? = nil) {
+        self.name = name
+        self.number = number
+        self.bytes = bytes
+        self.auto = auto
+        self.condition = condition
+        self.disabled = disabled
+    }
+}
+
+/// A condition a configuration setting is placed — or switched off — by, as
+/// this image answers it: the other setting's identifier and the value it has.
+/// Ours: the tool's own conditional actions, read back from the dump.
+public struct ConfigurationCondition: Codable, Sendable, Equatable {
+    /// The identifier of the setting the condition is on (`eSpiEnabled`).
+    public var name: String
+    /// The number that setting has.
+    public var value: Int
+    /// The branch was chosen because the condition's own value was not in the
+    /// image — neither page carried the file it lives in — and the file that
+    /// carries the setting was. A branch this is true for is read, but the
+    /// reading rests on which files are there rather than on the condition.
+    public var assumed: Bool
+
+    public init(name: String, value: Int, assumed: Bool = false) {
+        self.name = name
+        self.value = value
+        self.assumed = assumed
+    }
+}
+
+/// Whether the platform binds its SPI part to the chipset — the fact
+/// `FirmwareAnalysis.hardwareBinding` carries and `Design/ME_STRUCTURES.md`
+/// describes. A byte rather than a yes/no, because the file can hold what the
+/// tool's class does not name, and saying "No" of it would be a guess.
+public enum HardwareBinding: Codable, Sendable, Equatable {
+    /// 0x00 — the platform may take a new SPI part.
+    case disabled
+    /// 0x01 — the part is bound; Flash Image Tool calls rebinding it a
+    /// manufacturing step.
+    case enabled
+    /// A byte the value class `DisabledEnabledValues` does not name.
+    case other(UInt8)
+    /// Neither page carries the file: nothing is claimed about the binding.
+    case notInImage
+}
+
+/// The OEM public key hash an image carries — the SHA-384 of the manufacturer's
+/// public key, which MFIT calls `OemPublicKeyHash` and the field tools print as
+/// "OEM Public Key Hash (SHA-384)". Ours: MEAnalyzer reads nothing of the kind.
+///
+/// The value lives in the UEP area's entry, at a fixed offset inside it, and
+/// that area is described nowhere — so the four answers below are four
+/// *findings*, not four ways of saying nothing. The distinction matters at a
+/// bench: an image whose key field reads zeros has signing switched off by the
+/// manufacturer's own setting, one whose field is erased was never configured
+/// there, and one whose field holds something else is an area this reader does
+/// not know how to walk — three different things to do about a boot chain, and
+/// the tools print them as one line each rather than as silence.
+public enum OEMKeyHash: Codable, Sendable, Equatable {
+    /// The bytes the entry's key field holds, as uppercase hex: **32** of them
+    /// on CSME 12 to 14, whose record is a SHA-256, and **48** on CSME 15 and
+    /// later, whose record is a SHA-384. The 16 bytes of assignment bits that
+    /// follow the shorter one are a field of their own and are not part of it.
+    case hash(String)
+    /// The field reads all zeros: MFIT's own "OEM signing is disabled when this
+    /// hash is set to all 0s".
+    case allZeros
+    /// The field reads all `0xFF`: the area was never written, so no key was
+    /// ever put there.
+    case erased
+    /// The field holds something that is not a key, or the area has no entry
+    /// where this one expects it: the image's layout is not one this reads, and
+    /// nothing is claimed about its key.
+    case unrecognized
+}
+
+/// The Boot Guard profile an image is built for. Ours: MEAnalyzer prints no such
+/// row, and ECFinder — the tool the field practice uses — answers only "Boot
+/// Guard enabled / disabled".
+///
+/// The four settings MFIT offers are a list, and a dump carries the profile in
+/// one of two keepings: MFIT writes the **index into that list** as a JSON
+/// record of the CDMD partition's configuration
+/// (`{"BtGuardProfileConfig": <index>}` under the partition's `FIT AS A FIDDLE`
+/// signature; index 0 → `0 - No_FVME`, 1 → `3 - VM`, 2 → `4 - FVE`, 3 →
+/// `5 - FVME`), while the older FIT — whose images have no such record — writes
+/// the four settings themselves as bits of the UEP area (see
+/// `BootGuardReader.profile(inUEPArea:)`). The raw values are what MFIT,
+/// ECFinder and MEInfo all print. The chain of names is MFIT's own: VM =
+/// verified and measured boot, FVE = firmware verified, FVME = both.
+///
+/// The profile is the one the platform burns into the PCH's fuses when
+/// Manufacturing closes, which is why it is worth reading *before* flashing a
+/// dump: the fuses cannot be taken back.
+public enum BootGuardProfile: String, Codable, Sendable, CaseIterable {
+    case noFVME = "0"
+    case vm = "3"
+    case fve = "4"
+    case fvme = "5"
+
+    /// The profile a CDMD JSON index names.
+    public init?(index: Int) {
+        switch index {
+        case 0: self = .noFVME
+        case 1: self = .vm
+        case 2: self = .fve
+        case 3: self = .fvme
+        default: return nil
+        }
+    }
+
+    /// The index this profile is written as.
+    public var index: Int {
+        switch self {
+        case .noFVME: return 0
+        case .vm: return 1
+        case .fve: return 2
+        case .fvme: return 3
         }
     }
 }
@@ -2282,5 +2707,134 @@ public enum EngineModelRevision {
     /// is stored, in its own order, and a digest of what it holds, so two
     /// dumps' files can be compared by content wherever the volume put them.
     /// None of them is upstream's; the sync comparison leaves them out.
-    public static let current = 40
+    ///
+    /// 42 adds `configuration`: the ME configuration file by file — MFIT's own
+    /// layout of the MFS files, with the values read out of the image's OEM
+    /// Configuration partition or its live file system. Ours; the catalogue it
+    /// is read through is `MEConfigurationCatalogue`.
+    ///
+    /// 43 changes `configuration`'s shape: `ConfigurationFile` carries **both**
+    /// copies of a file — `fitc` (the OEM Configuration partition's record,
+    /// what the build wrote) and `mfs` (the file system's, the state in force)
+    /// — where 42 kept one and let the live copy win. A setting the platform
+    /// rewrote and one the build chose are different answers to the same
+    /// question, and one column could not tell them apart.
+    ///
+    /// 41 adds the three facts a repair bench asks of a dump it is about to
+    /// write to a board, none of them upstream's: `manufacturingState` with
+    /// `manufacturingBasis` (whether the platform closes End of Manufacturing
+    /// on the image's first boot, from the `/home/mca/eom_config` record of
+    /// the image's own OEM Configuration — and of the live file system where
+    /// the image carries none — plus the descriptor that makes the
+    /// flag-with-an-open-descriptor combination its own verdict),
+    /// `bootGuardProfile` (the profile the image is built for, out of the CDMD
+    /// configuration's JSON) and `oemPublicKeyHash` (the `OEMKeyHash` the UEP
+    /// area's entry holds — a value, or the read that says why there is none). `analyze` gained the optional `descriptorBytes` they need for
+    /// the descriptor's BIOS master — an extracted ME region has no descriptor
+    /// of its own, and the basis says so.
+    ///
+    /// 44 does not grow the shape and changes one field's answer:
+    /// `bootGuardProfile` is now read from **two** keepings of the one fact —
+    /// the CDMD configuration's JSON where the image has it, and the UEP area's
+    /// Boot Guard bits where it does not. Every CSME 15 image, which carries no
+    /// CDMD record, now answers the profile instead of "no profile record in
+    /// this image"; an image that answers nothing still does.
+    ///
+    /// 50 adds `manufacturingLock`: whether the board the dump came from has
+    /// been through End of Manufacturing, from the live file system's
+    /// `/home/mca/manuf_lock` — a byte the platform writes and no build does.
+    /// Ours; the manufacturing row above answers for the image's next boot,
+    /// this one for the machine it was taken from.
+    ///
+    /// 49 adds `uepSettings`: the FPF/UEP settings the `$UEP` area's first bit
+    /// array records, read through the tool's own layout for the generation
+    /// (`UEPMap`, generated by `Skills/me-eom-structures/scripts/uep_map.py`).
+    /// Ours; only the profile among them was readable before, and it still is
+    /// (`bootGuardProfile`). The values are what the build wrote — most read
+    /// zero, and that is the state, not a gap.
+    ///
+    /// 48 adds `hardwareBinding`: whether the platform binds its SPI part to
+    /// the chipset, one byte of `/home/bup/bup_sku/hw_binding` — the setting
+    /// Flash Image Tool calls "Hardware Binding Enabled", whose own help names
+    /// it the FPF hardware and RPMC / RPMB binding. Ours, as the rest of these;
+    /// it is a byte rather than a yes/no because the file can hold a value the
+    /// tool's class does not name.
+    ///
+    /// 47 reads the tool's conditional places: `ConfigurationSetting.condition`
+    /// says which branch of a setting the tool places only under another
+    /// setting's value an image holds (the LP family's MCTP EC address is in
+    /// one of two files, by `eSpiEnabled`), with `assumed` where the branch had
+    /// to be told from the files present because the condition's own value was
+    /// not in the image, and `.disabled` where the tool switches a setting off
+    /// under such a condition and the image holds it.
+    ///
+    /// 46 adds `platformFamily`: the half of its chipset generation the board
+    /// is, told from the descriptor's PCH strap section length — and the
+    /// configuration is now read through the map of that half (CSME 13, 14 and
+    /// 15 have one for the mobile parts and one for the desktop ones, which
+    /// lay a few settings out differently). A dump without a descriptor keeps
+    /// the mobile map, which is what every map was before.
+    ///
+    /// 45 changes one field's answer the same way: `oemPublicKeyHash` is read
+    /// from the record the image's **generation** keeps — the 32-byte SHA-256 of
+    /// CSME 12 to 14, 0x90 bytes into the UEP container, and the 48-byte
+    /// SHA-384 of 15 and later at 0xA0. Images of the older generations, which
+    /// answered "layout not recognized" (they were being read as a newer one),
+    /// now answer their key.
+    /// 51 adds `cpuStraps`: the CPU strap message a CSME 18 image keeps in the
+    /// FITC partition's MIP table (`smip` nvar) — the three words and their
+    /// CRC-16, read through the tool's own `CPU_smip` layout
+    /// (`CPUStrapMap`, generated by `strap18_map.py`). Ours; the older
+    /// generations' message is in the descriptor's MIP area and is not a field
+    /// of this model. nil where the image has no MIP table.
+    /// 52 adds `mipStraps`: the MIP table's other strap containers — CSME
+    /// (DBC), PMC IOE and IOE — each read through the tool's own layout
+    /// (`MIPStrapMap`). Ours. A layout is chosen by the block's type and
+    /// length, because the IOE container's MTL-M and MTL-P documents place the
+    /// same names at different offsets.
+    /// 53 adds `sphyNvar`: the SPHY OEM configuration the FITC partition's
+    /// `phy_oem_cfg` nvar holds, read through the tool's `SphyNvar` layout
+    /// (`SphyNvarMap`). Ours. The reader verifies the layout's anchors, since
+    /// the package carries several SPHY variants with identical headers.
+    /// 54 does not grow the shape: a CSME 18 image's `uepSettings` now includes
+    /// the settings the tool places in the container's second array
+    /// (`PLAT_ID`, `DNX`, `RPMC_RB`, `ESE_ROM_SVN_EN`, the CSE FVC states and
+    /// the validity bits beside them) — seven more rows on such an image, where
+    /// revision 49 read the first array alone.
+    /// 55 does not grow the shape either: `uepSettings` is now filled on
+    /// CSME 12 too, from Flash Image Tool 12's CNP `Uep` document
+    /// (`UEPMap.csme12`, emitted by `uep_fit_map.py`). The container is the
+    /// tool's 8-byte header and four 0x80-byte arrays; the Boot Guard profile
+    /// proper is still the record this generation keeps, and the array's bits
+    /// are read alongside it. Ours; upstream reads none of the UEP bits.
+    /// 56 does not grow the shape: `configuration` is now filled on CSME 12
+    /// too — Flash Image Tool 12's CNP maps, `MEConfigurationMap.csme12` and
+    /// `.csme12Desktop` — and the engine resolves their paths from the MFS
+    /// home directory on images that carry no `FileTable.dat`, which is every
+    /// volume of that generation. Ours, as the rest of the field.
+    /// 57 does not grow the shape: `uepSettings` is now filled on CSME 13 and
+    /// 14 as well, from Flash Image Tool 13's Ice Lake and 14's Comet Lake
+    /// `Uep` documents (`UEPMap.csme13`, `.csme14`). The profile bits there
+    /// read what the four FIT builds of each generation set (0, 3, 4, 5) and
+    /// agree with the record `bootGuardProfile` reads. Ours, as the rest.
+    /// 58 does not grow the shape: `configuration` is now filled on CSME 11
+    /// too, through Flash Image Tool 11's SPT map (`MEConfigurationMap.csme11`),
+    /// which serves both platform halves. That generation's volumes carry no
+    /// `FileTable.dat` either, and the home directory resolves the paths.
+    /// 59 does not grow the shape either: the FIT maps now read the documents
+    /// their platform layout includes, so `configuration` carries the settings
+    /// the family binds in `*_common.xml` — Boot Guard's policy, key-manifest
+    /// id and OEM key hash files on CSME 11, the FPF hardware binding, the ICC
+    /// profile keys, the OEM certificates and the MCTP and BIST files on every
+    /// generation FIT 11-15 maps. A dump shows more rows; nothing in the model
+    /// moved.
+    /// 60 adds `gpioPins`: the feature pins `/home/gpio/csme_pins` records —
+    /// the file Flash Image Tool writes from its `MeFeaturePins` settings —
+    /// read through the tool's own value classes (`GPIOPinMap`, emitted by
+    /// `gpio_map.py`). CSME 11 writes 20-byte records of five dwords and
+    /// CSME 12+ 12-byte records of packed bytes; both shapes are settled
+    /// against FIT's own defaults and the field sets of its `GpioCsmeFeature`
+    /// class. Ours: no upstream reading exists, and the file is not in any
+    /// published specification.
+    public static let current = 60
 }

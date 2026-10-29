@@ -32,7 +32,7 @@ final class MEASummaryTests: XCTestCase {
 
     /// The primary table — always the first block, which carries no title.
     private func tableRows(_ a: FirmwareAnalysis) -> [MEASummaryRow] {
-        MEASummary.build(a, in: .english)[0].rows
+        MEASummary.build(a)[0].rows
     }
 
     private func value(_ label: String, in rows: [MEASummaryRow]) -> MEASummaryValue? {
@@ -149,9 +149,20 @@ final class MEASummaryTests: XCTestCase {
             "NVM Compatibility",
             "TCB Security Version Number", "ARB Security Version Number",
             "Version Control Number", "Production Ready", "OEM Configuration",
-            "FWUpdate Support", "Date", "File System State", "Size",
+            "FWUpdate Support", "Date", "File System State",
+            // Our three rows, between the file system state they are read
+            // beside and the size: a CSME 15 image with a manifest that
+            // carries none of the three facts answers each of them honestly —
+            // a promise for the Manufacturing row, and the two Boot Guard
+            // facts as "this image has none".
+            "EOM on First Boot", "Boot Guard", "OEM Public Key Hash", "Size",
             "Flash Image Tool", "Manifest Extension Utility",
         ])
+        XCTAssertEqual(value("EOM on First Boot", in: rows), .comingSoon)
+        XCTAssertEqual(value("Boot Guard", in: rows),
+                       .value("No profile record in this image"))
+        XCTAssertEqual(value("OEM Public Key Hash", in: rows),
+                       .value("No key material in this image"))
         XCTAssertEqual(value("NVM Compatibility", in: rows), .value("SPI"))
         XCTAssertEqual(value("Manifest Extension Utility", in: rows),
                        .value("1.4.0.0014"))
@@ -271,7 +282,7 @@ final class MEASummaryTests: XCTestCase {
     func testFileSystemStateOfAnEFSVolumeWaitsForTheFileTable() throws {
         let a = try analysis(["manifest": manifestJSON(), "mfsState": "configured",
                               "efsVolume": efsVolumeJSON])
-        let waiting = MEASummary.build(a, pending: MEAPending(fileTable: true), in: .english)[0].rows
+        let waiting = MEASummary.build(a, pending: MEAPending(fileTable: true))[0].rows
         XCTAssertEqual(value("File System State", in: waiting), .pending)
         XCTAssertEqual(tone("File System State", in: waiting), .standard)
         XCTAssertEqual(value("File System State", in: tableRows(a)), .value("Configured"))
@@ -281,7 +292,7 @@ final class MEASummaryTests: XCTestCase {
     /// wait for.
     func testFileSystemStateWithoutAnEFSVolumeDoesNotWait() throws {
         let a = try analysis(["manifest": manifestJSON(), "mfsState": "configured"])
-        let rows = MEASummary.build(a, pending: MEAPending(fileTable: true), in: .english)[0].rows
+        let rows = MEASummary.build(a, pending: MEAPending(fileTable: true))[0].rows
         XCTAssertEqual(value("File System State", in: rows), .value("Configured"))
     }
 
@@ -290,16 +301,16 @@ final class MEASummaryTests: XCTestCase {
     /// and without it there is no such row, nor a block for nothing.
     func testMessagesSayTheModuleChecksAreToCome() throws {
         let a = try analysis(["manifest": manifestJSON()])
-        let waiting = MEASummary.build(a, pending: MEAPending(huffman: true), in: .english)
+        let waiting = MEASummary.build(a, pending: MEAPending(huffman: true))
         let messages = try XCTUnwrap(waiting.last)
         XCTAssertEqual(messages.title, "Messages")
         XCTAssertEqual(messages.rows.last, MEASummaryRow("Module checks", .pending))
-        XCTAssertFalse(MEASummary.build(a, in: .english).contains { $0.title == "Messages" })
+        XCTAssertFalse(MEASummary.build(a).contains { $0.title == "Messages" })
 
         let raised = try analysis(["manifest": manifestJSON(), "issues": [
             ["id": 1, "severity": "warning", "message": "Something."],
         ]])
-        XCTAssertEqual(MEASummary.build(raised, pending: MEAPending(huffman: true), in: .english).last?.rows.map(\.value),
+        XCTAssertEqual(MEASummary.build(raised, pending: MEAPending(huffman: true)).last?.rows.map(\.value),
                        [.value("Something."), .pending])
     }
 
@@ -308,8 +319,8 @@ final class MEASummaryTests: XCTestCase {
     func testAPendingValueIsNotEmphasized() {
         XCTAssertFalse(MEASummaryRow("File System State", .pending, tone: .good).isEmphasized)
         XCTAssertTrue(MEASummaryRow("File System State", .value("Configured"), tone: .good).isEmphasized)
-        XCTAssertEqual(MEASummaryValue.pending.text(in: .english), "Loading…")
-        XCTAssertEqual(MEASummaryValue.comingSoon.text(in: .english), "Coming soon")
+        XCTAssertEqual(MEASummaryValue.pending.text, "Loading…")
+        XCTAssertEqual(MEASummaryValue.comingSoon.text, "Coming soon")
     }
 
     /// The File System State row's tone is its status: both settled states read
@@ -341,27 +352,27 @@ final class MEASummaryTests: XCTestCase {
         XCTAssertEqual(tone("Family", in: try state("configured")), .standard)
     }
 
-    /// The Summary says what the File System State rests on, directly under
-    /// it, in the same words as Full Info — and a state an unread EFS left
-    /// standing is neither green nor its basis plain. The case is a CSME 15
-    /// dump whose EFS system page was erased: Configured from the FITC alone.
-    func testTheStateBasisFollowsTheStateInTheSummary() throws {
+    /// The Summary states what the File System State rests on in brackets on
+    /// its own row — one line, in the same words as Full Info — and a state an
+    /// unread EFS left standing is not green. The case is a dump whose EFS
+    /// system page was erased: Configured from the FITC alone.
+    func testTheStateCarriesWhatItRestsOn() throws {
         var a = try analysis(["manifest": manifestJSON(), "mfsState": "configured"])
         a.mfsStateBasis = MFSStateBasis(reservedFiles: .notRead, efs: .unreadable(offset: 0x267000),
                                         configuration: ["FITC"], decidedBy: .configuration)
         let rows = tableRows(a)
-        let labels = rows.map(\.label)
-        let state = try XCTUnwrap(labels.firstIndex(of: "File System State"))
-        XCTAssertEqual(labels[state + 1], "State basis")
-        XCTAssertEqual(value("State basis", in: rows),
-                       .value(MEAText.fileSystemStateBasis(.configured, try XCTUnwrap(a.mfsStateBasis), in: .english)))
-        XCTAssertEqual(tone("State basis", in: rows), .caution)
+        XCTAssertEqual(value("File System State", in: rows),
+                       .verdict("Configured", evidence: "configuration: FITC; EFS: unreadable"))
+        XCTAssertEqual(value("File System State", in: rows)?.text,
+                       "Configured (configuration: FITC; EFS: unreadable)")
         XCTAssertEqual(tone("File System State", in: rows), .caution, "an incomplete state is not green")
+        XCTAssertNil(value("State basis", in: rows), "the basis is in the brackets now")
 
         a.mfsStateBasis = MFSStateBasis(reservedFiles: .notRead, efs: .noFileContent,
                                         configuration: ["FITC"], decidedBy: .configuration)
         let settled = tableRows(a)
-        XCTAssertEqual(tone("State basis", in: settled), .standard)
+        XCTAssertEqual(value("File System State", in: settled),
+                       .verdict("Configured", evidence: "configuration: FITC"))
         XCTAssertEqual(tone("File System State", in: settled), .good)
     }
 
@@ -734,7 +745,7 @@ final class MEASummaryTests: XCTestCase {
                               "version": ["major": 12, "minor": 0,
                                           "hotfix": 3, "build": 1091],
                               "independentFirmware": [pmc]])
-        let blocks = MEASummary.build(a, in: .english)
+        let blocks = MEASummary.build(a)
         XCTAssertEqual(blocks.count, 2, "the engine's table, then the PMC's")
         let block = blocks[1]
         XCTAssertEqual(block.title, "Power Management Controller")
@@ -782,7 +793,7 @@ final class MEASummaryTests: XCTestCase {
                 firmware("phy", "PHYNTGP", sku: "N", meu: false),
             ],
         ])
-        let blocks = MEASummary.build(a, in: .english)
+        let blocks = MEASummary.build(a)
         XCTAssertEqual(blocks.count, 3)
 
         XCTAssertEqual(blocks[1].title, "Platform Controller Hub Configuration")
@@ -823,7 +834,7 @@ final class MEASummaryTests: XCTestCase {
             "manifest": manifestJSON(),
             "version": ["major": 15, "minor": 0, "hotfix": 30, "build": 1659],
             "independentFirmware": [pmc(copies: ["Boot 2"])],
-        ]), in: .english)
+        ]))
         XCTAssertEqual(twice.count, 2)
         XCTAssertEqual(twice[1].rows.last?.label, "Redundant Copy")
         XCTAssertEqual(value("Redundant Copy", in: twice[1].rows), .value("Boot 2"))
@@ -832,7 +843,7 @@ final class MEASummaryTests: XCTestCase {
             "manifest": manifestJSON(),
             "version": ["major": 15, "minor": 0, "hotfix": 30, "build": 1659],
             "independentFirmware": [pmc(copies: nil)],
-        ]), in: .english)
+        ]))
         XCTAssertNil(value("Redundant Copy", in: once[1].rows))
     }
 
@@ -857,7 +868,7 @@ final class MEASummaryTests: XCTestCase {
                 "version": ["major": hostMajor, "minor": 0,
                             "hotfix": 3, "build": 1091],
                 "independentFirmware": [pmc],
-            ]), in: .english)[1].rows
+            ]))[1].rows
         }
 
         // A discrete-graphics PMC has no stepping row at all — but a CSME 12
@@ -878,6 +889,425 @@ final class MEASummaryTests: XCTestCase {
         XCTAssertEqual(value("Chipset SKU", in: unread), .value("H"))
     }
 
+    // MARK: - Our three rows (End of Manufacturing, Boot Guard, OEM key hash)
+
+    /// The RPMC row: whether the platform binds its SPI part to the chipset —
+    /// one byte the tool keeps in `bup_sku/hw_binding`, which its own help
+    /// names the FPF hardware and RPMC / RPMB binding. Read for the
+    /// generations whose tool has the setting, and saying so where the image
+    /// does not carry the file.
+    func testTheRPMCBindingIsARow() throws {
+        func rows(_ binding: HardwareBinding?, major: Int) throws -> [MEASummaryRow] {
+            var a = try analysis([
+                "family": "csme", "manifest": manifestJSON(),
+                "version": ["major": major, "minor": 0, "hotfix": 1, "build": 100],
+            ])
+            a.hardwareBinding = binding
+            return tableRows(a)
+        }
+        XCTAssertEqual(value("RPMC Hardware Binding", in: try rows(.enabled, major: 15)),
+                       .value("Enabled"))
+        XCTAssertEqual(value("RPMC Hardware Binding", in: try rows(.disabled, major: 15)),
+                       .value("Disabled"))
+        XCTAssertEqual(value("RPMC Hardware Binding", in: try rows(.other(0x02), major: 16)),
+                       .value("Unexpected value 0x02"))
+        XCTAssertEqual(value("RPMC Hardware Binding", in: try rows(.notInImage, major: 16)),
+                       .value("Not recorded in this image"))
+        // The two settled states read as a bench needs them: Disabled — the
+        // part is not bound — is green, and Enabled is the caution the File
+        // System State draws for Initialized. A byte the tool does not name
+        // and an absence are ordinary values.
+        XCTAssertEqual(tone("RPMC Hardware Binding", in: try rows(.disabled, major: 15)), .good)
+        XCTAssertEqual(tone("RPMC Hardware Binding", in: try rows(.enabled, major: 15)), .caution)
+        XCTAssertEqual(tone("RPMC Hardware Binding", in: try rows(.other(0x02), major: 16)), .standard)
+        XCTAssertEqual(tone("RPMC Hardware Binding", in: try rows(.notInImage, major: 16)), .standard)
+        // CSME 12 has no such setting: no row, rather than one that can only
+        // say the image does not carry it.
+        XCTAssertNil(value("RPMC Hardware Binding", in: try rows(.notInImage, major: 12)))
+        XCTAssertNil(value("RPMC Hardware Binding", in: try rows(nil, major: 15)))
+    }
+
+    /// The binding's file is found through `FileTable.dat`: until the reading
+    /// with it lands, "not recorded in this image" is an answer the reading has
+    /// not checked for, and the row says it is still loading. A binding the
+    /// image did show is a value already, and the absence is the answer once
+    /// the table is in.
+    func testTheRPMCBindingWaitsForTheFileTable() throws {
+        var a = try analysis([
+            "family": "csme", "manifest": manifestJSON(),
+            "version": ["major": 15, "minor": 0, "hotfix": 1, "build": 100],
+        ])
+        a.hardwareBinding = .notInImage
+        let waiting = MEASummary.build(a, pending: MEAPending(fileTable: true))[0].rows
+        XCTAssertEqual(value("RPMC Hardware Binding", in: waiting), .pending)
+        XCTAssertEqual(tone("RPMC Hardware Binding", in: waiting), .standard)
+        XCTAssertEqual(value("RPMC Hardware Binding", in: tableRows(a)), .value("Not recorded in this image"))
+
+        a.hardwareBinding = .enabled
+        let carried = MEASummary.build(a, pending: MEAPending(fileTable: true))[0].rows
+        XCTAssertEqual(value("RPMC Hardware Binding", in: carried), .value("Enabled"))
+    }
+
+
+    /// The four dumps whose answers are known, as the rows read them: the
+    /// factory dump that closed Manufacturing already, the same image built
+    /// with MFIT's flag set, the one built without it, and the pair of Boot
+    /// Guard facts under them.
+    func testTheBenchRowsReadTheFourKnownDumps() throws {
+        let protected = try analysis([
+            "family": "csme", "manifest": manifestJSON(),
+            "version": ["major": 16, "minor": 1, "hotfix": 25, "build": 1991],
+            "manufacturingState": "willClose",
+            "manufacturingBasis": ["flag": true, "flexible": 0,
+                                   "page": "imageConfiguration",
+                                   "descriptorOpen": false,
+                                   "liveFilesResolved": true],
+            "bootGuardProfile": "5",
+        ])
+        var protectedKey = protected
+        protectedKey.oemPublicKeyHash = .hash(String(repeating: "05", count: 48))
+        let rows = tableRows(protectedKey)
+        XCTAssertEqual(value("EOM on First Boot", in: rows),
+                       .verdict("Will close on the EOM flag",
+                                evidence: "EOM: on, descriptor: locked"))
+        // It will close: the tone the File System State draws for Initialized.
+        XCTAssertEqual(tone("EOM on First Boot", in: rows), .caution)
+        XCTAssertEqual(value("Boot Guard", in: rows), .value("5 - FVME"))
+        // A profile the boot chain is committed to: the caution the File
+        // System State draws for Initialized.
+        XCTAssertEqual(tone("Boot Guard", in: rows), .caution)
+        XCTAssertEqual(value("OEM Public Key Hash", in: rows),
+                       .value(Array(repeating: "05", count: 48).joined(separator: " ")))
+        // One line for a copy: the verdict, then what it was read from in
+        // brackets — and only the verdict is emphasised.
+        XCTAssertEqual(value("EOM on First Boot", in: rows)?.text,
+                       "Will close on the EOM flag (EOM: on, descriptor: locked)")
+        XCTAssertTrue(rows.first { $0.label == "EOM on First Boot" }?.isEmphasized == true)
+        XCTAssertNil(value("Flexible EOM Settings", in: rows))
+        XCTAssertEqual(protected.manufacturingBasis?.flexible, 0)
+        XCTAssertNil(value("Manufacturing basis", in: rows))
+
+        let willClose = try analysis([
+            "family": "csme", "manifest": manifestJSON(),
+            "version": ["major": 16, "minor": 1, "hotfix": 25, "build": 1991],
+            "manufacturingState": "willClose",
+            "manufacturingBasis": ["flag": true, "flexible": 0,
+                                   "page": "imageConfiguration",
+                                   "descriptorOpen": false,
+                                   "liveFilesResolved": false],
+            "bootGuardProfile": "0",
+        ])
+        XCTAssertEqual(value("EOM on First Boot", in: tableRows(willClose)),
+                       .verdict("Will close on the EOM flag",
+                                evidence: "EOM: on, descriptor: locked"))
+        XCTAssertEqual(tone("EOM on First Boot", in: tableRows(willClose)), .caution)
+        // Profile 0 verifies nothing: the one green profile.
+        XCTAssertEqual(tone("Boot Guard", in: tableRows(willClose)), .good)
+
+        let willNotClose = try analysis([
+            "family": "csme", "manifest": manifestJSON(),
+            "version": ["major": 16, "minor": 1, "hotfix": 25, "build": 1991],
+            "manufacturingState": "willNotClose",
+            "manufacturingBasis": ["flag": false, "flexible": 0,
+                                   "page": "imageConfiguration",
+                                   "descriptorOpen": true,
+                                   "liveFilesResolved": false],
+        ])
+        XCTAssertEqual(value("EOM on First Boot", in: tableRows(willNotClose)),
+                       .verdict("Will not close",
+                                evidence: "EOM: off, descriptor: open"))
+        XCTAssertEqual(value("EOM on First Boot", in: tableRows(willNotClose))?.text,
+                       "Will not close (EOM: off, descriptor: open)")
+        XCTAssertEqual(tone("EOM on First Boot", in: tableRows(willNotClose)), .good)
+    }
+
+    /// Manufacturing Lock: the board's own record (`manuf_lock`), beside the
+    /// image's verdict. Locked is the committed state — the caution the File
+    /// System State draws for Initialized — and Not locked the board that has
+    /// not been through End of Manufacturing. The record exists only on a
+    /// file system whose files carry File IDs; while the table that names them
+    /// is on the way, the row says it is loading.
+    func testTheManufacturingLockIsTheBoardsOwnRecord() throws {
+        func volume(ftbl: Bool) -> [String: Any] {
+            var v = mfsJSON(chipsets: nil)
+            v["usesFTBL"] = ftbl
+            return v
+        }
+        func rows(_ lock: ManufacturingLock?, ftbl: Bool = true) throws -> [MEASummaryRow] {
+            var a = try analysis(["manifest": manifestJSON(),
+                                  "mfsVolume": volume(ftbl: ftbl),
+                                  "manufacturingBasis": ["liveFilesResolved": true]])
+            a.manufacturingLock = lock
+            return tableRows(a)
+        }
+        XCTAssertEqual(value("Manufacturing Lock", in: try rows(.locked)), .value("Locked"))
+        XCTAssertEqual(tone("Manufacturing Lock", in: try rows(.locked)), .caution)
+        XCTAssertEqual(value("Manufacturing Lock", in: try rows(.open)), .value("Not locked"))
+        XCTAssertEqual(tone("Manufacturing Lock", in: try rows(.open)), .good)
+        XCTAssertEqual(value("Manufacturing Lock", in: try rows(.other(0x02))),
+                       .value("Unexpected value 0x02"))
+        XCTAssertEqual(value("Manufacturing Lock", in: try rows(nil)), .value("—"),
+                       "a board that has made no mark is a dash, not a sentence")
+        XCTAssertNil(value("Manufacturing Lock", in: try rows(.locked, ftbl: false)),
+                     "a legacy volume carries no such record")
+
+        var a = try analysis(["manifest": manifestJSON(), "mfsVolume": volume(ftbl: true)])
+        a.manufacturingLock = nil
+        let waiting = MEASummary.build(a, pending: MEAPending(fileTable: true))[0].rows
+        XCTAssertEqual(value("Manufacturing Lock", in: waiting), .pending)
+        XCTAssertEqual(value("Manufacturing Lock", in: tableRows(a)), .value("—"))
+    }
+
+    /// The Summary is English in every language — MEA's console table, which a
+    /// technician quotes and compares with a report — and its rows keep the
+    /// console's names: the Manufacturing row is "EOM on First Boot".
+    func testTheSummaryIsEnglishAndKeepsItsNames() throws {
+        let a = try analysis([
+            "family": "csme", "manifest": manifestJSON(),
+            "version": ["major": 16, "minor": 1, "hotfix": 25, "build": 1991],
+            "manufacturingState": "willNotClose",
+            "manufacturingBasis": ["flag": false, "flexible": 0,
+                                   "page": "imageConfiguration",
+                                   "descriptorOpen": true,
+                                   "liveFilesResolved": true],
+        ])
+        let rows = MEASummary.build(a)[0].rows
+        let row = try XCTUnwrap(rows.first { $0.label == "EOM on First Boot" })
+        XCTAssertEqual(row.value, .verdict("Will not close",
+                                           evidence: "EOM: off, descriptor: open"))
+        XCTAssertEqual(row.value.text, "Will not close (EOM: off, descriptor: open)")
+    }
+
+    /// The three rows belong to CSME 11 and later. Manufacturing is decided
+    /// there by the descriptor's access rights — which is how it was done
+    /// before MFIT grew the flag, and CSME 12 is such a generation: it reads a
+    /// verdict of its own, not `noSwitch`.
+    func testTheBenchRowsBelongToCSME11AndLater() throws {
+        var a = try analysis([
+            "family": "csme", "manifest": manifestJSON(),
+            "version": ["major": 12, "minor": 0, "hotfix": 3, "build": 1091],
+            "manufacturingState": "willClose",
+            "manufacturingBasis": ["descriptorOpen": false,
+                                   "liveFilesResolved": false],
+            "bootGuardProfile": "4",
+        ])
+        a.oemPublicKeyHash = .allZeros
+        let rows = tableRows(a)
+        XCTAssertEqual(value("EOM on First Boot", in: rows),
+                       .verdict("Will close on the descriptor's rights",
+                                evidence: "descriptor: locked"))
+        XCTAssertEqual(tone("EOM on First Boot", in: rows), .caution)
+        // No flag in this image, so the evidence names the descriptor alone.
+        XCTAssertEqual(value("EOM on First Boot", in: rows)?.text,
+                       "Will close on the descriptor's rights (descriptor: locked)")
+        XCTAssertNil(a.manufacturingBasis?.flexible)
+        XCTAssertEqual(value("Boot Guard", in: rows), .value("4 - FVE"))
+        // A profile the boot chain is committed to: the Initialized caution.
+        XCTAssertEqual(tone("Boot Guard", in: rows), .caution)
+        // CSME 12 with a zeroed key field: a finding of its own, not silence.
+        XCTAssertEqual(value("OEM Public Key Hash", in: rows), .value("Not set (all zeros)"))
+
+        // ME 7 has none of this machinery.
+        let me7 = try analysis([
+            "family": "me", "manifest": manifestJSON(),
+            "version": ["major": 7, "minor": 1, "hotfix": 70, "build": 2264],
+            "manufacturingState": "noSwitch",
+        ])
+        XCTAssertNil(value("EOM on First Boot", in: tableRows(me7)))
+    }
+
+    // MARK: - The Configuration tab
+
+    /// The tab's blocks: one per configuration file, MFIT's own words for the
+    /// file and for the values it enumerates, both copies of a file read side
+    /// by side, and no tab at all where the image's generation has no map — a
+    /// generation nobody has mapped reads nothing rather than another
+    /// generation's offsets.
+    func testTheConfigurationTabReadsBothCopiesOfAFileSettingBySetting() throws {
+        var a = try analysis([
+            "family": "csme", "manifest": manifestJSON(),
+            "version": ["major": 16, "minor": 1, "hotfix": 25, "build": 1991],
+        ])
+        a.configuration = [
+            ConfigurationFile(
+                path: "/home/mca/eom_config", alias: "EOM_Config",
+                fitc: .init(size: 2, settings: [
+                    ConfigurationSetting(name: "EomFirstBootEnabled", number: 0),
+                    ConfigurationSetting(name: "FlexibleEomSettings", number: 0),
+                ]),
+                mfs: .init(size: 2, settings: [
+                    ConfigurationSetting(name: "EomFirstBootEnabled", number: 0),
+                    ConfigurationSetting(name: "FlexibleEomSettings", number: 2),
+                ])),
+        ]
+        let blocks = MEAConfiguration.build(a, in: .english)
+        XCTAssertEqual(blocks.count, 1)
+        // The heading is two parts: Intel's own name for the file, which the
+        // tab draws bold, and the path without its `/home` with the length.
+        XCTAssertEqual(blocks[0].alias, "EOM_Config")
+        XCTAssertEqual(blocks[0].detail, "/mca/eom_config, 2 bytes")
+        // The row reads as the tool's panel does: its own name for the setting
+        // where it states one, the identifier where it shows that instead.
+        XCTAssertEqual(blocks[0].rows.map(\.name),
+                       ["EOM on First Boot Enabled", "Flexible EOM setting options"])
+        // Each row carries the build's value and the file system's, and the
+        // pair that disagrees is the one the view marks.
+        // MFIT's own words for the flag, which its database calls a Yes/No
+        // setting rather than a bit that reads 0 or 1.
+        XCTAssertEqual(blocks[0].rows.map(\.fitc), ["No", "Lock Descriptor and OEM Configs"])
+        XCTAssertEqual(blocks[0].rows.map(\.mfs), ["No", "Lock Descriptor Only"])
+        XCTAssertEqual(blocks[0].rows.map(\.differs), [false, true])
+
+        // A copy that is not there at all is an absent value, not a
+        // disagreement: an image nobody has booted has one column and no
+        // argument — and the tab still shows the setting.
+        var unbooted = a
+        unbooted.configuration = [
+            ConfigurationFile(path: "/home/mca/eom_config", alias: "EOM_Config",
+                              fitc: a.configuration?[0].fitc),
+        ]
+        let unbootedRows = MEAConfiguration.build(unbooted, in: .english)[0].rows
+        XCTAssertEqual(unbootedRows.map(\.mfs), [nil, nil])
+        XCTAssertEqual(unbootedRows.map(\.differs), [false, false])
+        XCTAssertEqual(unbootedRows.map(\.fitc), ["No", "Lock Descriptor and OEM Configs"])
+
+        // A generation whose map has not been emitted reads nothing rather
+        // than a guess, even with the same files in hand. (18 has a map —
+        // `MEConfigurationMap+CSME18`, emitted from MFIT 18.1 — 17 has none.)
+        var unmapped = try analysis([
+            "family": "csme", "manifest": manifestJSON(),
+            "version": ["major": 17, "minor": 0, "hotfix": 0, "build": 0],
+        ])
+        unmapped.configuration = a.configuration
+        XCTAssertTrue(MEAConfiguration.build(unmapped, in: .english).isEmpty)
+
+        // A setting the map does not list has only its identifier to show: the
+        // tool's own words for a setting are the map's, and where there is no
+        // map entry there is nothing to borrow them from. The map's own order
+        // holds, so the unknown one comes last and the setting the copy has not
+        // got is still a row — with an absent value rather than a zero.
+        var unknown = a
+        unknown.configuration = [
+            ConfigurationFile(path: "/home/mca/eom_config", alias: "EOM_Config",
+                              mfs: .init(size: 2, settings: [
+                                  ConfigurationSetting(name: "EomFirstBootEnabled", number: 1),
+                                  ConfigurationSetting(name: "NotInTheMap", number: 1),
+                              ])),
+        ]
+        let unknownRows = MEAConfiguration.build(unknown, in: .english)[0].rows
+        XCTAssertEqual(unknownRows.map(\.name),
+                       ["EOM on First Boot Enabled", "Flexible EOM setting options",
+                        "NotInTheMap"])
+        XCTAssertEqual(unknownRows.map(\.mfs), ["Yes", nil, "1"])
+    }
+
+    /// A setting the tool places conditionally carries what placed it, after
+    /// its name — and says so when the branch had to be told from the files the
+    /// image carries. A setting the tool switches off carries that too, and its
+    /// values are drawn quiet.
+    func testAConditionalSettingCarriesItsConditionInTheRow() throws {
+        var a = try analysis([
+            "family": "csme", "manifest": manifestJSON(),
+            "version": ["major": 15, "minor": 0, "hotfix": 1, "build": 100],
+        ])
+        a.configuration = [
+            ConfigurationFile(path: "/home/mctp/smt2_devices", alias: "Smt2Devices",
+                              mfs: .init(size: 6, settings: [
+                                  ConfigurationSetting(
+                                      name: "MctpEcAddress", number: 0,
+                                      condition: ConfigurationCondition(name: "eSpiEnabled",
+                                                                        value: 0, assumed: true)),
+                              ])),
+            ConfigurationFile(path: "/home/smbus/smlink_bus", alias: "SmlinkBus",
+                              mfs: .init(size: 1, settings: [
+                                  ConfigurationSetting(
+                                      name: "SmlinkBusSelection", number: 0,
+                                      disabled: ConfigurationCondition(name: "eSpiEnabled", value: 1)),
+                              ])),
+            ConfigurationFile(path: "/home/mca/eom_config", alias: "EOM_Config",
+                              mfs: .init(size: 2, settings: [
+                                  ConfigurationSetting(name: "EomFirstBootEnabled", number: 0),
+                              ])),
+        ]
+        let rows = MEAConfiguration.build(a, in: .english).flatMap(\.rows)
+
+        let address = try XCTUnwrap(rows.first { $0.identifier == "MctpEcAddress" })
+        XCTAssertEqual(address.name, "MCTP EC Address",
+                       "the row's name stays the tool's name for it")
+        XCTAssertEqual(address.note, "eSpiEnabled = No, assumed",
+                       "the condition is the `?`'s subtitle, in the tool's own words")
+        XCTAssertEqual(address.condition, ConfigurationCondition(name: "eSpiEnabled",
+                                                                 value: 0, assumed: true))
+        XCTAssertEqual(address.disabled, false)
+
+        let bus = try XCTUnwrap(rows.first { $0.identifier == "SmlinkBusSelection" })
+        XCTAssertEqual(bus.name, "Bus Selection")
+        XCTAssertEqual(bus.note, "disabled by eSpiEnabled = Yes")
+        XCTAssertEqual(bus.disabled, true, "which is what the panel draws quiet")
+        XCTAssertNil(bus.condition)
+
+        // A row with neither a condition nor a switch-off is not given a note,
+        // and one with no help at all still has none: no empty subtitle.
+        XCTAssertNil(try XCTUnwrap(rows.first { $0.identifier == "EomFirstBootEnabled" }).note)
+    }
+
+    /// The tab reads the board's own half of the generation's map: a file the
+    /// mobile map lays out and the desktop one does not is labelled from the
+    /// mobile map and reaches the desktop tab by its identifier alone — the
+    /// same map the engine read the values through.
+    func testTheConfigurationTabReadsTheBoardsOwnHalfOfTheMap() throws {
+        func rows(_ family: MEConfigurationMap.MEPlatformFamily?) throws -> [MEAConfigurationRow] {
+            var a = try analysis([
+                "family": "csme", "manifest": manifestJSON(),
+                "version": ["major": 15, "minor": 0, "hotfix": 1, "build": 100],
+            ])
+            a.platformFamily = family
+            a.configuration = [
+                ConfigurationFile(path: "/home/smbus/smlink_bus", alias: "SmlinkBus",
+                                  mfs: .init(size: 1, settings: [
+                                      ConfigurationSetting(name: "SmlinkBusSelection", number: 1),
+                                  ])),
+            ]
+            return MEAConfiguration.build(a, in: .english)[0].rows
+        }
+
+        XCTAssertEqual(try rows(.mobile).map(\.name), ["Bus Selection"])
+        XCTAssertEqual(try rows(.desktop).map(\.name), ["SmlinkBusSelection"],
+                       "the desktop map does not lay this file out: the identifier is all there is")
+        XCTAssertEqual(try rows(nil).map(\.name), ["Bus Selection"],
+                       "a dump that did not say which half reads as the mobile one")
+    }
+
+    /// A row carries what the tool says about its setting, under the
+    /// identifier the row itself does not show — the heading of the `?` beside
+    /// the name. A setting the map does not list, or one MFIT has nothing to
+    /// say about, has neither.
+    func testARowCarriesTheToolsHelpAndTheIdentifier() throws {
+        var a = try analysis([
+            "family": "csme", "manifest": manifestJSON(),
+            "version": ["major": 16, "minor": 1, "hotfix": 25, "build": 1991],
+        ])
+        a.configuration = [
+            ConfigurationFile(path: "/home/mca/eom_config", alias: "EOM_Config",
+                              mfs: .init(size: 2, settings: [
+                                  ConfigurationSetting(name: "EomFirstBootEnabled", number: 1),
+                                  ConfigurationSetting(name: "NotInTheMap", number: 1),
+                              ])),
+        ]
+
+        let rows = MEAConfiguration.build(a, in: .english)[0].rows
+        let flag = try XCTUnwrap(rows.first { $0.name == "EOM on First Boot Enabled" })
+
+        XCTAssertEqual(flag.identifier, "EomFirstBootEnabled",
+                       "the name a document or a report calls the setting by")
+        XCTAssertEqual(flag.help?.hasPrefix("This setting det"), true, flag.help ?? "—")
+        XCTAssertEqual(flag.help?.contains("\nNote:"), true,
+                       "the tool's paragraph break, as the line it is")
+        for row in rows where row.help != nil {
+            XCTAssertFalse(row.help?.contains("<br") ?? true, row.identifier)
+        }
+    }
+
     // MARK: - The messages block
 
     func testIssuesBecomeAMessagesBlockAfterTheTable() throws {
@@ -885,7 +1315,7 @@ final class MEASummaryTests: XCTestCase {
             "issues": [["id": 1, "severity": "error", "message": "checksum mismatch"],
                        ["id": 2, "severity": "note", "message": "odd padding"]],
         ])
-        let blocks = MEASummary.build(a, in: .english)
+        let blocks = MEASummary.build(a)
         XCTAssertEqual(blocks.count, 2)
         XCTAssertNil(blocks[0].title)
         XCTAssertEqual(blocks[1].title, "Messages")
@@ -896,6 +1326,6 @@ final class MEASummaryTests: XCTestCase {
 
     func testNoIssuesNoMessagesBlock() throws {
         let a = try analysis([:])
-        XCTAssertEqual(MEASummary.build(a, in: .english).count, 1)
+        XCTAssertEqual(MEASummary.build(a).count, 1)
     }
 }

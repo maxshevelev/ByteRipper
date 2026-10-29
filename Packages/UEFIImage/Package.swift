@@ -33,6 +33,9 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../FirmwareCompression"),
+        // The envelope of the compiled strap tables (`Design/MAP_DATA.md`),
+        // shared with the ME configuration maps so the two cannot drift.
+        .package(path: "../MapData"),
         // The parser names the gaps it finds — "Free space", "Padding" — and
         // those names are what the tree's Name column shows a reader.
         .package(path: "../Localization"),
@@ -43,8 +46,15 @@ let package = Package(
     targets: [
         .target(name: "UEFIImage", dependencies: [
             .product(name: "FirmwareCompression", package: "FirmwareCompression"),
+            .product(name: "MapData", package: "MapData"),
             .product(name: "Localization", package: "Localization"),
             .product(name: "LenovoDMI", package: "LenovoDMI")
+        ], resources: [
+            // The strap tables as one binary (`Design/MAP_DATA.md`):
+            // the JSON sources are the reviewable form, this is what loads.
+            .copy("Resources/StrapMaps"),
+            // The descriptor's register maps, likewise compiled from JSON.
+            .copy("Resources/RegisterMaps")
         ]),
         .testTarget(
             name: "UEFIImageTests",

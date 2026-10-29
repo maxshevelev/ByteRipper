@@ -1,6 +1,7 @@
 import XCTest
 import HelpBook
 import MEFirmware
+import ToolModuleKit
 @testable import MEPresentation
 
 /// `MEACurator` / `MEAZones` — the pure, hand-curated tree over the engine's
@@ -8,6 +9,166 @@ import MEFirmware
 /// need `MEFirmware`'s internal memberwise initializers nor any data source:
 /// a decoded `FirmwareAnalysis` is exactly what the engine hands the curator.
 final class MEACuratorTests: XCTestCase {
+    /// The FPF settings the area records are a group of the full tree, under
+    /// the tool's own sections: `RPMC Supported` sits in `RpmcConfiguration`
+    /// with the value the image holds, and the tool's identifiers stand in for
+    /// the bits it gives no label.
+    func testTheFPFSettingsAreAGroupOfTheirOwn() throws {
+        let a = try analysis([
+            "version": ["major": 16, "minor": 1, "hotfix": 25, "build": 1991],
+            "uepSettings": [
+                ["name": "RpmcSupported", "value": 0],
+                ["name": "RpmcRebindEn", "value": 1],
+                ["name": "comp_eom", "value": 1],
+            ],
+        ])
+        let roots = MEACurator.present(a, in: .english)
+        let group = try XCTUnwrap(find("FPF Settings", in: roots))
+        let sections = group.children.map(\.title)
+        XCTAssertEqual(sections, ["RpmcConfiguration", "Other"],
+                       "the tool's sections first, and the bits it does not file")
+        let rpMc = try XCTUnwrap(group.children[0].children.first)
+        XCTAssertEqual(rpMc.title, "RPMC Supported")
+        XCTAssertEqual(rpMc.subtitle, "0")
+        let rebind = try XCTUnwrap(group.children[0].children.last)
+        XCTAssertEqual(rebind.title, "RPMC Rebinding Enabled")
+        XCTAssertEqual(rebind.subtitle, "1")
+        XCTAssertEqual(group.children[1].children.first?.title, "comp_eom",
+                       "a bit the tool names by its identifier alone")
+    }
+
+    /// CSME 18's map carries the tool's words for an enumerated value: the
+    /// profile's 5 is what MFIT calls "Verified and Measured Boot", while a
+    /// number its documents do not enumerate stays the number.
+    func testAnEnumeratedFPFSettingShowsTheToolsWord() throws {
+        let a = try analysis([
+            "version": ["major": 18, "minor": 0, "hotfix": 10, "build": 2288],
+            "uepSettings": [
+                ["name": "BTG_PROFILE", "value": 5],
+                ["name": "OEM_ID", "value": 0x103C],
+            ],
+        ])
+        let group = try XCTUnwrap(find("FPF Settings", in: MEACurator.present(a, in: .english)))
+        XCTAssertEqual(group.children.map(\.title),
+                       ["BootGuardConfiguration", "IntelUniquePlatformIdConfiguration"])
+        let profile = try XCTUnwrap(group.children[0].children.first)
+        XCTAssertEqual(profile.title, "Boot Guard Profile")
+        XCTAssertEqual(profile.subtitle, "Verified and Measured Boot (5)")
+        XCTAssertEqual(group.children[1].children.first?.subtitle, "4156")
+    }
+
+    /// CSME 18's CPU straps are a group of their own, with the tool's words and
+    /// the message's length and CRC-16 beside them.
+    func testTheCPUStrapsAreAGroupWithTheToolsWords() throws {
+        let a = try analysis([
+            "version": ["major": 18, "minor": 0, "hotfix": 10, "build": 2288],
+            "cpuStraps": [
+                "messageLengthWords": 3,
+                "crcStored": 0xD6CE,
+                "crcValid": true,
+                "readings": [
+                    ["name": "CPU_smip_Strap_CPU_SMT_Disable", "value": 0],
+                    ["name": "CPU_smip_Strap_CPU_NUM_OF_SOC_ATOM_CORES", "value": 2],
+                ],
+            ],
+        ])
+        let group = try XCTUnwrap(find("CPU straps", in: MEACurator.present(a, in: .english)))
+        XCTAssertEqual(group.fields.map(\.value), ["3 words", "0xD6CE", "Yes"])
+        XCTAssertEqual(group.children.map(\.title),
+                       ["Disable Hyperthreading", "Number of Active Small Cores"])
+        XCTAssertEqual(group.children.map(\.subtitle), ["No (0)", "2 Cores Active (2)"])
+    }
+
+    /// The MIP table's other containers — CSME and IOE — are groups of their
+    /// own, with the tool's words for their values.
+    func testTheMIPStrapContainersAreGroupsOfTheirOwn() throws {
+        let a = try analysis([
+            "version": ["major": 18, "minor": 0, "hotfix": 10, "build": 2288],
+            "mipStraps": [
+                ["name": "CSME", "blockType": 0, "length": 8, "readings": [
+                    ["name": "CSME_smip_Strap_CSME_Early_USB_DbC_ME_Boot_Stall_Enable",
+                     "value": 1],
+                ]],
+                ["name": "IOE", "blockType": 4, "length": 208, "readings": [
+                    ["name": "IOE_smip_Strap_IOEP_PCIED_LNREV", "value": 1],
+                ]],
+                ["name": "PMC SoC", "blockType": 1, "length": 72, "readings": [
+                    ["name": "PMC_SoC_smip_Strap_T573_TIMING", "value": 3],
+                ]],
+                ["name": "CPU 2", "blockType": 3, "length": 24, "readings": [
+                    ["name": "CPU_2_smip_Strap_CPU2_SMT_Disable", "value": 1],
+                ]],
+                ["name": "PMC SOC 2", "blockType": 3, "length": 72, "readings": [
+                    ["name": "PMC_SOC_2_smip_Strap_pmc_soc_smip2_CPWRG_STCH_WTDIS",
+                     "value": 1],
+                ]],
+            ],
+        ])
+        let roots = MEACurator.present(a, in: .english)
+        let soc = try XCTUnwrap(find("PMC SoC straps", in: roots))
+        XCTAssertEqual(soc.children.map(\.title),
+                       ["PCH clock output stable to PROCPWRGD high (tPCH45)"])
+        XCTAssertEqual(soc.children.first?.subtitle, "1ms (3)")
+        let cpu2 = try XCTUnwrap(find("CPU 2 straps", in: roots))
+        XCTAssertEqual(cpu2.children.map(\.title), ["Disable Hyperthreading"])
+        XCTAssertEqual(cpu2.children.first?.subtitle, "Yes (1)")
+        XCTAssertNotNil(find("PMC SOC 2 straps", in: roots))
+        let csme = try XCTUnwrap(find("CSME straps", in: roots))
+        XCTAssertEqual(csme.fields.map(\.value), ["0", "8 bytes"])
+        XCTAssertEqual(csme.children.map(\.title), ["Enable early USB2 DbC connection"])
+        XCTAssertEqual(csme.children.first?.subtitle, "Yes (1)")
+        let ioe = try XCTUnwrap(find("IOE straps", in: roots))
+        XCTAssertEqual(ioe.children.map(\.title), ["PCIe Controller 4 (Port 13-16)"])
+        XCTAssertEqual(ioe.children.first?.subtitle, "1x4 Lane Reversed (1)")
+    }
+
+    /// The SPHY OEM configuration is a group of its own: the tool's field
+    /// names with the image's values, shown flat.
+    func testTheSphyNvarIsAGroup() throws {
+        let a = try analysis([
+            "version": ["major": 18, "minor": 0, "hotfix": 10, "build": 2288],
+            "sphyNvar": [
+                ["name": "SPHY_OEM_NVAR_Common_Header_1", "value": 3],
+                ["name": "Sub_Section_Entry0_Header_1", "value": 5],
+            ],
+        ])
+        let group = try XCTUnwrap(find("SPHY OEM configuration",
+                                       in: MEACurator.present(a, in: .english)))
+        XCTAssertEqual(group.fields.map(\.value), ["2"])
+        XCTAssertEqual(group.children.map(\.title),
+                       ["SPHY_OEM_NVAR_Common_Header_1", "Sub_Section_Entry0_Header_1"])
+        XCTAssertEqual(group.children.map(\.subtitle), ["3", "5"])
+    }
+
+    /// The feature pins the image configures are a group of their own: one row
+    /// per pin, named by what the pin is for (its usage) and located by group
+    /// and pad, with the file and the copy the bytes came from beside them.
+    func testTheGPIOPinsAreAGroup() throws {
+        let a = try analysis([
+            "version": ["major": 11, "minor": 8, "hotfix": 92, "build": 4222],
+            "gpioPins": [
+                "path": "/home/gpio/csme_pins",
+                "fromImage": false,
+                "pins": [
+                    ["usage": "NFC_RST", "usageID": 0,
+                     "group": "GPP_E", "groupID": 4, "pad": 4,
+                     "ownership": "HOST_MODE", "ownershipID": 0,
+                     "padMode": "DEFAULT_MODE", "padModeID": 4],
+                    ["usage": "FWUPDATE", "usageID": 8,
+                     "group": "GPP_B", "groupID": 1, "pad": 15,
+                     "ownership": "CSME_MODE", "ownershipID": 1,
+                     "padMode": "GPIO_MODE", "padModeID": 0],
+                ],
+            ],
+        ])
+        let group = try XCTUnwrap(find("GPIO Pins", in: MEACurator.present(a, in: .english)))
+        XCTAssertEqual(group.fields.map(\.value), ["/home/gpio/csme_pins", "ME file system"])
+        XCTAssertEqual(group.children.map(\.title), ["NFC_RST", "FWUPDATE"])
+        XCTAssertEqual(group.children.map(\.subtitle), ["GPP_E_4", "GPP_B_15"])
+        XCTAssertEqual(group.children[1].fields.map(\.value),
+                       ["GPP_B_15", "FWUPDATE", "CSME_MODE", "GPIO_MODE"])
+    }
+
     // MARK: - Fixtures
 
     /// Decode an analysis whose top-level fields are `overrides` merged over
@@ -65,29 +226,120 @@ final class MEACuratorTests: XCTestCase {
         XCTAssertEqual(field("File System State", in: kept), "Configured")
     }
 
+    /// RPMC's file is found through `FileTable.dat`, so a reading taken
+    /// without it says it is still loading rather than that the image does not
+    /// record one; a binding the image did show is a value already.
+    func testTheRPMCBindingWaitsForTheFileTable() throws {
+        var a = try analysis([:])
+        a.hardwareBinding = .notInImage
+        let waiting = try XCTUnwrap(MEACurator.present(
+            a, pending: MEAPending(fileTable: true), in: .english).first)
+        XCTAssertEqual(field("RPMC Hardware Binding", in: waiting), "Loading…")
+
+        let read = try XCTUnwrap(MEACurator.present(a, in: .english).first)
+        XCTAssertEqual(field("RPMC Hardware Binding", in: read), "Not recorded in this image")
+
+        a.hardwareBinding = .enabled
+        let carried = try XCTUnwrap(MEACurator.present(
+            a, pending: MEAPending(fileTable: true), in: .english).first)
+        XCTAssertEqual(field("RPMC Hardware Binding", in: carried), "Enabled")
+        // The two settled states read as a bench needs them, the same tone
+        // the Summary row carries: Disabled green, Enabled the Initialized
+        // caution. A byte the tool does not name and the absence stay ordinary.
+        XCTAssertEqual(carried.fields.first { $0.label == "RPMC Hardware Binding" }?.tone,
+                       ToolValueTone.caution)
+        a.hardwareBinding = .disabled
+        let unbound = try XCTUnwrap(MEACurator.present(a, in: .english).first)
+        XCTAssertEqual(unbound.fields.first { $0.label == "RPMC Hardware Binding" }?.tone,
+                       ToolValueTone.good)
+        a.hardwareBinding = .notInImage
+        XCTAssertEqual(read.fields.first { $0.label == "RPMC Hardware Binding" }?.tone,
+                       ToolValueTone.standard)
+    }
+
+    /// Manufacturing Lock: the board's own `manuf_lock`, beside the image's
+    /// verdict — Locked the committed state, Not locked the board that has not
+    /// been through End of Manufacturing; shown only on a file system whose
+    /// files carry File IDs, and loading while their table is on the way.
+    func testTheManufacturingLockIsTheBoardsOwnRecord() throws {
+        func volume(ftbl: Bool) -> [String: Any] {
+            var v = mfsJSON()
+            v["usesFTBL"] = ftbl
+            return v
+        }
+        var a = try analysis(["mfsVolume": volume(ftbl: true),
+                              "manifest": manifestJSON(),
+                              "manufacturingBasis": ["liveFilesResolved": true]])
+        a.manufacturingLock = .locked
+        let locked = try XCTUnwrap(MEACurator.present(a, in: .english).first)
+        XCTAssertEqual(field("Manufacturing Lock", in: locked), "Locked")
+        XCTAssertEqual(locked.fields.first { $0.label == "Manufacturing Lock" }?.tone,
+                       ToolValueTone.caution)
+
+        a.manufacturingLock = .open
+        let open = try XCTUnwrap(MEACurator.present(a, in: .english).first)
+        XCTAssertEqual(field("Manufacturing Lock", in: open), "Not locked")
+        XCTAssertEqual(open.fields.first { $0.label == "Manufacturing Lock" }?.tone,
+                       ToolValueTone.good)
+
+        a.manufacturingLock = nil
+        let waiting = try XCTUnwrap(MEACurator.present(
+            a, pending: MEAPending(fileTable: true), in: .english).first)
+        XCTAssertEqual(field("Manufacturing Lock", in: waiting), "Loading…")
+        let absent = try XCTUnwrap(MEACurator.present(a, in: .english).first)
+        XCTAssertEqual(field("Manufacturing Lock", in: absent), "—",
+                       "a board that has made no mark is a dash")
+
+        var legacy = try analysis(["mfsVolume": volume(ftbl: false),
+                                   "manifest": manifestJSON()])
+        legacy.manufacturingLock = .locked
+        let none = try XCTUnwrap(MEACurator.present(legacy, in: .english).first)
+        XCTAssertNil(field("Manufacturing Lock", in: none))
+    }
+
+    /// The Boot Guard profile is a number the image holds: profile 0 — nothing
+    /// verified or measured — is green, every other profile the caution the
+    /// File System State draws for Initialized.
+    func testTheBootGuardProfileToneFollowsTheProfile() throws {
+        let none = try analysis(["bootGuardProfile": "0"])
+        let noneNode = try XCTUnwrap(MEACurator.present(none, in: .english).first)
+        let noneField = try XCTUnwrap(noneNode.fields.first { $0.label == "Boot Guard" })
+        XCTAssertEqual(noneField.value, "0 - No_FVME")
+        XCTAssertEqual(noneField.tone, ToolValueTone.good)
+
+        let fvme = try analysis(["bootGuardProfile": "5"])
+        let fvmeNode = try XCTUnwrap(MEACurator.present(fvme, in: .english).first)
+        let field = try XCTUnwrap(fvmeNode.fields.first { $0.label == "Boot Guard" })
+        XCTAssertEqual(field.value, "5 - FVME")
+        XCTAssertEqual(field.tone, ToolValueTone.caution)
+    }
+
     /// While `Huffman.dat` is on the way, the Issues group ends with a row
     /// that says the module checks are still to come — a group of its own
     /// when nothing else was raised, and none at all once they are done.
-    /// The state's basis follows it on the Firmware row: drawn as a caution
-    /// when the EFS step could not be taken, plain when it could.
-    func testTheStateIsFollowedByWhatItRestsOn() throws {
+    /// The state's own field carries what it rests on in brackets, as the
+    /// Manufacturing row does: a caution when the EFS step could not be taken,
+    /// green and plainly worded when it could.
+    func testTheStateFieldCarriesWhatItRestsOn() throws {
         var a = try analysis(["mfsState": "configured"])
         a.mfsStateBasis = MFSStateBasis(reservedFiles: .notRead, efs: .unreadable(offset: 0x267000),
                                         configuration: ["FITC"], decidedBy: .configuration)
         let firmware = try XCTUnwrap(find("Firmware", in: MEACurator.present(a, in: .english)))
-        let basis = try XCTUnwrap(firmware.fields.first { $0.label == "State basis" })
-        XCTAssertEqual(basis.tone, .caution)
-        XCTAssertTrue(basis.value.contains("The EFS partition at 0x267000 could not be read"), basis.value)
-        let labels = firmware.fields.map(\.label)
-        XCTAssertEqual(labels.firstIndex(of: "State basis"), labels.firstIndex(of: "File System State").map { $0 + 1 })
+        let state = try XCTUnwrap(firmware.fields.first { $0.label == "File System State" })
         // A state the unread EFS left standing is not drawn as settled.
-        XCTAssertEqual(firmware.fields.first { $0.label == "File System State" }?.tone, .caution)
+        XCTAssertEqual(state.tone, .caution)
+        XCTAssertEqual(state.value, "Configured")
+        XCTAssertEqual(state.evidence, "configuration: FITC; EFS: unreadable",
+                       "the evidence is kept apart, so it is not drawn in the state's tone")
+        XCTAssertEqual(state.text, "Configured (configuration: FITC; EFS: unreadable)")
+        XCTAssertNil(firmware.fields.first { $0.label == "State basis" })
 
         a.mfsStateBasis = MFSStateBasis(reservedFiles: .notRead, efs: .noFileContent,
                                         configuration: ["FITC"], decidedBy: .configuration)
         let settled = try XCTUnwrap(find("Firmware", in: MEACurator.present(a, in: .english)))
-        XCTAssertEqual(settled.fields.first { $0.label == "State basis" }?.tone, .standard)
-        XCTAssertEqual(settled.fields.first { $0.label == "File System State" }?.tone, .good)
+        let settledState = try XCTUnwrap(settled.fields.first { $0.label == "File System State" })
+        XCTAssertEqual(settledState.tone, .good)
+        XCTAssertEqual(settledState.text, "Configured (configuration: FITC)")
     }
 
     func testIssuesSayTheModuleChecksAreToCome() throws {

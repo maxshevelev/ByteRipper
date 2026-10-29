@@ -395,6 +395,50 @@ enum FlashDescriptor {
         return (start, size)
     }
 
+    /// How long the descriptor says the PCH strap section is, in words — the
+    /// high byte of `FLMAP1`, the length the section is read with. Ours.
+    ///
+    /// It is the one thing a dump states about which half of its chipset
+    /// generation the board is: the mobile parts lay the section out over 69,
+    /// 70 or 74 words and the desktop ones over 90, 101 or 115
+    /// (`MEPlatformFamily`). Nil where no descriptor was handed in or it does
+    /// not read as one.
+    static func pchStrapWords(in data: Data) -> Int? {
+        guard data.count >= 0x1000, subrange(data, 0x10, 4) == signature else { return nil }
+        return Int(data[data.startIndex + 0x1B])
+    }
+
+    /// What the host CPU / BIOS may read and write in the flash, off the
+    /// descriptor's master section — the fact that says whether a locked
+    /// descriptor is locked *against the BIOS*, which is what End of
+    /// Manufacturing is about ("Host CPU / BIOS Read and Write Master Access"
+    /// in MFIT's own words). The factory leaves `0x00F` / `0x00A`; an image
+    /// whose masks are all ones leaves the host able to rewrite the whole
+    /// flash, which is how a service dump is handed out for repair.
+    ///
+    /// The section base is FLMAP1's low byte in 0x10 units (the same rule the
+    /// BIOS side's `DescriptorInfo` applies). Read in the **v2** word form —
+    /// twelve bits each, `read = word >> 8 & 0xFFF`, `write = word >> 20 &
+    /// 0xFFF` — which is the only form this is asked about: the row that needs
+    /// it is about CSME 15/16, and v1 masters ended with Lynx Point, so reading
+    /// one of those as v2 would invent an answer. An all-zero word is an erased
+    /// section, not a master, and is answered as no master at all.
+    ///
+    /// `data` is the whole-flash image (or at least its first descriptor
+    /// page); an extracted ME region has no descriptor and answers nil.
+    static func biosMaster(in data: Data) -> (read: UInt32, write: UInt32)? {
+        guard data.count >= 0x1000, subrange(data, 0x10, 4) == signature else { return nil }
+        let masterAt = Int(data[data.startIndex + 0x18])
+        guard masterAt > 0, masterAt <= 0xE0 else { return nil }
+        let base = masterAt << 4
+        guard base + 4 <= data.count else { return nil }
+        let word = UInt32(le16(data, base)) | (UInt32(le16(data, base + 2)) << 16)
+        let read = (word >> 8) & 0xFFF
+        let write = (word >> 20) & 0xFFF
+        guard read != 0 || write != 0 else { return nil }
+        return (read, write)
+    }
+
     private static func subrange(_ data: Data, _ off: Int, _ len: Int) -> Data? {
         guard off >= 0, off + len <= data.count else { return nil }
         let s = data.startIndex + off

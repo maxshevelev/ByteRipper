@@ -54,9 +54,51 @@ public enum MEAToolModule: ToolModule {
 /// they were looking at. The analysis is worth doing again — it is the module's
 /// whole job, and it is automatic — so only the two choices are kept
 /// (`ToolSession.parkedState`).
+///
+/// The tab is kept by its name, not its place in the switch: the workspace
+/// and a project outlive the app that wrote them, and a tab added between two
+/// others moves every number after it. A workspace from before the names
+/// numbered Summary 0 and Full Info 1, and is read that way.
 struct MEAParkedState: PersistableToolSessionState {
+    /// The tab's place in the switch, as the panel numbers it.
     var tabIndex: Int
     var focusPath: [Int]?
+
+    init(tabIndex: Int, focusPath: [Int]?) {
+        self.tabIndex = tabIndex
+        self.focusPath = focusPath
+    }
+
+    /// The switch's tabs, in order, by the names they are kept under.
+    static let tabNames = ["summary", "configuration", "fullInfo"]
+    /// What the numbers a workspace kept before the names stand for now.
+    private static let numberedTabs = [0, 2]
+
+    private enum CodingKeys: String, CodingKey {
+        case tab, focusPath
+        /// The number a workspace kept before the names.
+        case tabIndex
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        focusPath = try container.decodeIfPresent([Int].self, forKey: .focusPath)
+        if let name = try container.decodeIfPresent(String.self, forKey: .tab) {
+            tabIndex = Self.tabNames.firstIndex(of: name) ?? 0
+        } else if let number = try container.decodeIfPresent(Int.self, forKey: .tabIndex),
+                  Self.numberedTabs.indices.contains(number) {
+            tabIndex = Self.numberedTabs[number]
+        } else {
+            tabIndex = 0
+        }
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        let name = Self.tabNames.indices.contains(tabIndex) ? Self.tabNames[tabIndex] : Self.tabNames[0]
+        try container.encode(name, forKey: .tab)
+        try container.encodeIfPresent(focusPath, forKey: .focusPath)
+    }
 }
 
 /// The running instrument: read the file off the main actor, run the engine's
@@ -288,6 +330,7 @@ struct MEAParkedState: PersistableToolSessionState {
             roots = []
             focusPath = nil
             controller.showSummary([])
+            controller.showConfiguration([])
             controller.setPlaceholder(.failed)
             controller.say(L("Could not read the file: %1$@", error), asProblem: true)
             show()
@@ -313,6 +356,7 @@ struct MEAParkedState: PersistableToolSessionState {
             roots = []
             focusPath = nil
             controller.showSummary([])
+            controller.showConfiguration([])
             controller.showRetry(false)
         }
         // Named, not just "Reading…": three panels can be the one on screen and
@@ -360,6 +404,7 @@ struct MEAParkedState: PersistableToolSessionState {
                 self.roots = []
                 self.focusPath = nil
                 self.controller.showSummary([])
+                self.controller.showConfiguration([])
                 self.controller.setPlaceholder(.failed)
                 self.controller.say(
                     MEReads.describe(error), asProblem: true)
@@ -396,7 +441,8 @@ struct MEAParkedState: PersistableToolSessionState {
         // being waited for. If the summary is still empty it is because this
         // file has no ME firmware, which is what the empty tab now says.
         controller.setPlaceholder(.empty)
-        controller.showSummary(MEASummary.build(analysis, pending: pending, in: Localization.appLanguage))
+        controller.showSummary(MEASummary.build(analysis, pending: pending))
+        controller.showConfiguration(MEAConfiguration.build(analysis, in: Localization.appLanguage))
         show()
         loadFileNames()
     }

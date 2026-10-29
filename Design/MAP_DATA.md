@@ -1,0 +1,600 @@
+# The compiled map files
+
+Six kinds of description used to be emitted as Swift literals: the
+descriptor's strap layouts (`StrapMap+PCH.swift` alone was 6 407 lines and
+650 KB), the descriptor's register maps, the ME configuration maps, the
+FPF/UEP layouts, the GPIO pin dictionaries and CSME 18's MIP, CPU-message and
+SPHY layouts. All are descriptions, not logic, and change only when a tool
+version is added. They now live as JSON sources, which is what a review reads,
+and are compiled into binaries, which is what ships.
+
+The format is deliberately small and language-neutral: the web edition can
+read the same file with a reader of its own, and no Foundation type or Swift
+layout is involved.
+
+## Where things live
+
+| What | Where | Committed |
+| --- | --- | --- |
+| Strap JSON sources | `Packages/UEFIImage/MapSources/strap/*.json` | yes |
+| Strap version and source digest | `Packages/UEFIImage/MapSources/manifest.json` | yes |
+| Strap binary | `Packages/UEFIImage/Sources/UEFIImage/Resources/StrapMaps/StrapMaps.bin` | yes |
+| Strap code's version mark | `Packages/UEFIImage/Sources/UEFIImage/StrapMapDataVersion.swift` | yes, generated |
+| Strap reader | `Packages/UEFIImage/Sources/UEFIImage/StrapMapData.swift` | yes |
+| Register JSON sources | `Packages/UEFIImage/MapSources/register/*.json` | yes |
+| Register version and source digest | `Packages/UEFIImage/MapSources/register/manifest.json` | yes |
+| Register binary | `Packages/UEFIImage/Sources/UEFIImage/Resources/RegisterMaps/RegisterMaps.bin` | yes |
+| Register code's version mark | `Packages/UEFIImage/Sources/UEFIImage/DescriptorRegisterMapDataVersion.swift` | yes, generated |
+| Register reader | `Packages/UEFIImage/Sources/UEFIImage/DescriptorRegisterMapData.swift` | yes |
+| Configuration JSON sources | `Packages/MEFirmware/MapSources/configuration/*.json` | yes |
+| Configuration version and source digest | `Packages/MEFirmware/MapSources/manifest.json` | yes |
+| Configuration binary | `Packages/MEFirmware/Sources/MEFirmware/Resources/ConfigMaps/ConfigMaps.bin` | yes |
+| Configuration code's version mark | `Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationDataVersion.swift` | yes, generated |
+| Configuration reader | `Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationData.swift` | yes |
+| UEP JSON sources | `Packages/MEFirmware/MapSources/uep/*.json` | yes |
+| UEP version and source digest | `Packages/MEFirmware/MapSources/uep/manifest.json` | yes |
+| UEP binary | `Packages/MEFirmware/Sources/MEFirmware/Resources/UEPMaps/UEPMaps.bin` | yes |
+| UEP code's version mark | `Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMapDataVersion.swift` | yes, generated |
+| UEP reader | `Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMapData.swift` | yes |
+| GPIO JSON sources | `Packages/MEFirmware/MapSources/gpio/*.json` | yes |
+| GPIO version and source digest | `Packages/MEFirmware/MapSources/gpio/manifest.json` | yes |
+| GPIO binary | `Packages/MEFirmware/Sources/MEFirmware/Resources/GPIOMaps/GPIOMaps.bin` | yes |
+| GPIO code's version mark | `Packages/MEFirmware/Sources/MEFirmware/Configuration/GPIOPinMapDataVersion.swift` | yes, generated |
+| GPIO reader | `Packages/MEFirmware/Sources/MEFirmware/Configuration/GPIOPinMapData.swift` | yes |
+| Layout JSON sources | `Packages/MEFirmware/MapSources/layout/*.json` | yes |
+| Layout version and source digest | `Packages/MEFirmware/MapSources/layout/manifest.json` | yes |
+| Layout binary | `Packages/MEFirmware/Sources/MEFirmware/Resources/LayoutMaps/LayoutMaps.bin` | yes |
+| Layout code's version mark | `Packages/MEFirmware/Sources/MEFirmware/Configuration/LayoutMapDataVersion.swift` | yes, generated |
+| Layout reader | `Packages/MEFirmware/Sources/MEFirmware/Configuration/LayoutMapData.swift` | yes |
+| Envelope reader | `Packages/MapData/Sources/MapData/MapFile.swift` | yes |
+| Compiler and dumper | `Skills/me-eom-structures/scripts/map_bin.py` | yes |
+
+The JSON is the source of truth. Each family's manifest holds its version and
+a digest of its JSON files; the binary and the Swift constant are generated
+from it. `map_bin.py build --check` rebuilds them in memory and compares, so a
+stale pair is reported rather than shipped. The six families version
+independently: a strap change does not move the register map's version, nor
+either family move the configuration, UEP, GPIO or layout one.
+
+## JSON
+
+One file per group of maps, one record per line, so a diff reads a record at a
+time. Both kinds share the envelope:
+
+```json
+{
+ "kind": "strap",
+ "schema": "byteripper.map/1",
+ "tool": "Flash Image Tool 18.1",
+ "maps": [
+  {"id": "pch130", "name": "…", "set": "pch", "words": 130, "fields": [
+   {"bits": [0, 0], "default": 0, "name": "PCH_Strap_…", "word": 0}
+  ]}
+ ]
+}
+```
+
+- `set` groups a strap table for the reader: `pch`, `spt`, `cpu` or `other`.
+- `fields[].bits` is `[low, high]`, inclusive.
+- `default` is the number the tool builds the field with, or `null`.
+- `label` and `options` are optional; options are `[value, words]` pairs.
+- `source` is provenance for a reviewer; the compiler ignores it.
+
+A configuration file states files and settings instead:
+
+```json
+{
+ "kind": "configuration",
+ "schema": "byteripper.map/1",
+ "tool": "15.0",
+ "maps": [
+  {"id": "csme15", "name": "CSME 15 (…)", "files": [
+   {"path": "/home/mca/eom_config", "alias": "eom_config", "settings": [
+    {"name": "EomFirstBootEnabled", "offset": 0, "length": 2,
+     "bits": [0, 0], "options": [[0, "No"], [1, "Yes"]],
+     "label": "EOM on First Boot Enabled", "help": "…"}
+   ]}
+  ]}
+ ]
+}
+```
+
+- A setting's `length` is the field's width in bytes; `bits` is relative to
+  that field, and absent on a whole-field setting.
+- `auto`, `hex`, `text` are present only when true.
+- `condition` and `disabledBy` are `{name, value}` objects when present.
+
+A UEP file states settings and their places in the container's bit arrays:
+
+```json
+{
+ "kind": "uep",
+ "schema": "byteripper.map/1",
+ "tool": "Modular Flash Image Tool 18.0",
+ "maps": [
+  {"id": "csme18", "name": "CSME 18 (…)", "arrayStart": 8, "arraySize": 128,
+   "settings": [
+    {"name": "BTG_PROFILE", "array": 0, "offset": 72, "bit": 30, "count": 3,
+     "label": "Boot Guard Profile", "section": "BootGuardConfiguration",
+     "options": [[0, "Boot Guard Disabled"], [3, "Debug Profile"],
+                 [4, "Verified Boot"], [5, "Verified and Measured Boot"]]}
+   ]}
+ ]
+}
+```
+
+- `arrayStart` is how far past the container's signature the first array
+  begins; `arraySize` is the stride between arrays (0 where the map keeps to
+  the first and offsets are already places in it).
+- `array` is the array a setting sits in, `offset` a byte into it.
+- `label`, `section`, `help` and `options` are optional.
+
+A GPIO file states the five value dictionaries behind a feature pin:
+
+```json
+{
+ "kind": "gpio",
+ "schema": "byteripper.map/1",
+ "tool": "15.0",
+ "maps": [
+  {"id": "csme15", "name": "CSME 15 (Flash Image Tool 15.0)",
+   "features": [[1, "GPIO_TOUCH_FEATURE_ID"]],
+   "usages": [[0, "INTEGRATED_TOUCH_1"]],
+   "ownerships": [[1, "CSME_MODE"]],
+   "padModes": [[4, "DEFAULT_MODE"]],
+   "groups": [[4, "GPP_E"]]}
+ ]
+}
+```
+
+Every dictionary maps a number to the tool's name; an empty one may be
+omitted.
+
+A register map states the descriptor's registers and their fields:
+
+```json
+{
+ "kind": "register",
+ "schema": "byteripper.map/1",
+ "tool": "FIT 12-15",
+ "maps": [
+  {"id": "cannonPoint", "name": "cannonPoint", "registers": [
+   {"name": "FLMAP0", "place": {"kind": "absolute", "offset": 20}, "words": 1,
+    "fields": [
+     {"name": "Flmap0_Flash_Component_Base_Address", "bitOffset": 0, "count": 8},
+     {"name": "Flmap0_Number_Of_Components", "bitOffset": 8, "count": 2,
+      "label": "Number of Flash Components", "options": [[0, "1"], [1, "2"]]}
+    ]}
+  ]}
+ ]
+}
+```
+
+- `place.kind` is `absolute` (an offset in the descriptor), `flashComponent`
+  (offset from `FCBA << 4`) or `flashMaster` (offset from `FMBA << 4`).
+- A field is a bit range that stays inside one 32-bit word.
+- `label` and `options` are optional.
+
+A layout file states one of CSME 18's three shapes — `mip` containers, the
+`cpu` message or the `sphy` nvar:
+
+```json
+{
+ "kind": "layout",
+ "schema": "byteripper.map/1",
+ "tool": "Flash Image Tool 18.1",
+ "maps": [
+  {"id": "csme18-mip", "name": "CSME 18 (…)", "layout": "mip", "containers": [
+   {"name": "PMC SoC", "blockType": 1, "blockLength": 88, "offset": 0,
+    "length": 72, "fields": [
+     {"name": "PMC_SoC_smip_Strap_…", "bitOffset": 0, "count": 1,
+      "label": "…", "section": "…", "help": "…", "options": [[0, "No"], [1, "Yes"]]}
+    ]}
+  ]},
+  {"id": "csme18-cpu", "layout": "cpu", "fields": [
+   {"name": "CPU_smip_Strap_…", "offset": 0, "bit": 0, "count": 1}
+  ]},
+  {"id": "csme18-sphy", "layout": "sphy",
+   "anchors": [{"name": "…", "bitOffset": 0, "count": 16, "value": 3}],
+   "fields": [{"name": "…", "bitOffset": 0, "count": 8}]}
+ ]
+}
+```
+
+- `mip` fields are bit ranges of their container; `cpu` fields keep the
+  tool's byte `offset` and `bit` in the little-endian dword there; `sphy`
+  fields are bit ranges of the nvar.
+- An `sphy` map states the anchors its reader checks before it reads a byte.
+
+## Binary
+
+All numbers are little-endian and unaligned; every offset and length is checked
+before it is used.
+
+### Header, 32 bytes
+
+| Offset | Type | Meaning |
+| --- | --- | --- |
+| 0 | 4 bytes | `BRM1` |
+| 4 | u16 | format version (1) |
+| 6 | u16 | header size (32) |
+| 8 | u32 | version (the data contract) |
+| 12 | u16 | kind (1 = strap, 2 = configuration, 3 = UEP, 4 = GPIO, 5 = register, 6 = layout) |
+| 14 | u16 | flags |
+| 16 | u32 | section count |
+| 20 | u32 | checksum: FNV-1a over the whole file with this field zeroed |
+| 24 | u32 | reserved |
+| 28 | u32 | reserved |
+
+### Section table
+
+One 12-byte entry per section: `u16 kind`, `u16 flags`, `u32 offset`,
+`u32 length`. Section kinds: 1 strings, 2 maps, 3 fields, 4 options, 5 files,
+6 settings, 7 registers, 8 containers, 9 anchors, 10 layout fields. A reader
+skips a section kind it does not know by its length.
+
+### Strings (1) and options (4)
+
+Strings are NUL-terminated UTF-8, deduplicated. A string reference is a byte
+offset into this section; `0xFFFFFFFF` means "no string". Strings may not
+contain NUL.
+
+An option is 8 bytes: `u16 value`, `u16 reserved`, `u32 text reference`.
+Options shared by settings are stored once and referenced by offset.
+
+### Kind 1: strap
+
+Maps (2): `u32 count`, then 24 bytes per map:
+
+| Type | Field |
+| --- | --- |
+| u32 | id string reference |
+| u32 | name string reference |
+| u16 | section words |
+| u16 | set (0 pch, 1 spt, 2 cpu, 3 other, 4 pmc, 5 mip, 6 legacy, 7 sptcpu) |
+| u32 | field count |
+| u32 | field array offset, from the fields section start |
+| u32 | help reference (reserved; `0xFFFFFFFF`) |
+
+Fields (3): 28 bytes per field:
+
+| Type | Field |
+| --- | --- |
+| u32 | name reference |
+| u16 | word |
+| u8 | low bit |
+| u8 | high bit |
+| u16 | flags: 1 default present, 2 options present, 4 label present |
+| u32 | default |
+| u32 | label reference |
+| u32 | options offset, from the options section start |
+| u16 | options count |
+| u16 | reserved |
+
+### Kind 2: configuration
+
+Maps (2): `u32 count`, then 24 bytes per map:
+
+| Type | Field |
+| --- | --- |
+| u32 | id string reference |
+| u32 | name string reference |
+| u32 | file count |
+| u32 | file array offset, from the files section start |
+| u32 | reserved |
+| u32 | reserved |
+
+Files (5): 20 bytes per file:
+
+| Type | Field |
+| --- | --- |
+| u32 | path reference |
+| u32 | alias reference |
+| u32 | setting count |
+| u32 | setting array offset, from the settings section start |
+| u32 | reserved |
+
+Settings (6): 50 bytes per setting:
+
+| Type | Field |
+| --- | --- |
+| u32 | name reference |
+| u32 | offset into the file |
+| u16 | length in bytes |
+| u16 | flags: 1 bits, 2 options, 4 label, 8 help, 16 auto, 32 hex, 64 text, 128 condition, 256 disabled-by |
+| u8 | low bit |
+| u8 | high bit |
+| u32 | label reference |
+| u32 | help reference |
+| u32 | options offset, from the options section start |
+| u16 | options count |
+| u16 | reserved |
+| u32 | condition name reference |
+| i32 | condition value |
+| u32 | disabled-by name reference |
+| i32 | disabled-by value |
+| u32 | reserved |
+
+### Kind 3: UEP
+
+Maps (2): `u32 count`, then 24 bytes per map:
+
+| Type | Field |
+| --- | --- |
+| u32 | id string reference |
+| u32 | name string reference |
+| u16 | array start |
+| u16 | array size |
+| u32 | setting count |
+| u32 | setting array offset, from the settings section start |
+| u32 | reserved |
+
+Settings (6): 32 bytes per setting:
+
+| Type | Field |
+| --- | --- |
+| u32 | name reference |
+| u16 | flags: 1 label, 2 section, 4 help, 8 options |
+| u16 | array |
+| u16 | offset into the array |
+| u8 | bit |
+| u8 | bit count |
+| u32 | label reference |
+| u32 | section reference |
+| u32 | help reference |
+| u32 | options offset, from the options section start |
+| u16 | options count |
+| u16 | reserved |
+
+### Kind 4: GPIO
+
+Maps (2): `u32 count`, then 40 bytes per map:
+
+| Type | Field |
+| --- | --- |
+| u32 | id string reference |
+| u32 | name string reference |
+| u32 | features offset, from the options section start |
+| u32 | usages offset |
+| u32 | ownerships offset |
+| u32 | pad modes offset |
+| u32 | groups offset |
+| u16 | features count |
+| u16 | usages count |
+| u16 | ownerships count |
+| u16 | pad modes count |
+| u16 | groups count |
+| u16 | reserved |
+
+Each dictionary is an array of option records (8 bytes each, as above); an
+empty one has count 0 and `0xFFFFFFFF` as its offset.
+
+### Kind 5: register
+
+Maps (2): `u32 count`, then 20 bytes per map:
+
+| Type | Field |
+| --- | --- |
+| u32 | id string reference |
+| u32 | register count |
+| u32 | register array offset, from the registers section start |
+| u32 | reserved |
+| u32 | reserved |
+
+Registers (7): 24 bytes per register:
+
+| Type | Field |
+| --- | --- |
+| u32 | name reference |
+| u16 | place kind (0 absolute, 1 flash component, 2 flash master) |
+| u16 | reserved |
+| u32 | place offset |
+| u16 | words |
+| u16 | field count |
+| u32 | field array offset, from the fields section start |
+| u32 | reserved |
+
+Fields (3) are the strap field records: 28 bytes, with `word`, low and high
+bits, flags 2 (options) and 4 (label) — the default word is unused. A field's
+`bitOffset` is `word * 32 + low`.
+
+### Kind 6: layout
+
+Maps (2): `u32 count`, then 40 bytes per map:
+
+| Type | Field |
+| --- | --- |
+| u32 | id string reference |
+| u32 | name string reference |
+| u16 | layout (0 mip, 1 cpu, 2 sphy) |
+| u16 | reserved |
+| u32 | container count |
+| u32 | container array offset, from the containers section |
+| u32 | anchor count |
+| u32 | anchor array offset, from the anchors section |
+| u32 | field count |
+| u32 | field array offset, from the layout fields section |
+| u32 | reserved |
+
+Containers (8): 28 bytes per container:
+
+| Type | Field |
+| --- | --- |
+| u32 | name reference |
+| u16 | block type |
+| u16 | reserved |
+| u32 | block length |
+| u32 | container offset in the block |
+| u32 | container length |
+| u32 | field count |
+| u32 | field array offset, from the layout fields section |
+
+Anchors (9): 16 bytes per anchor: name reference, `u32` bit offset, `u16`
+count, `u16` reserved, `u32` value.
+
+Layout fields (10): 36 bytes per field:
+
+| Type | Field |
+| --- | --- |
+| u32 | name reference |
+| u32 | byte offset (MIP/SPHY: the bit offset) |
+| u16 | bit (cpu only; 0 otherwise) |
+| u16 | count |
+| u16 | flags: 1 label, 2 section, 4 help, 8 options |
+| u16 | reserved |
+| u32 | label reference |
+| u32 | section reference |
+| u32 | help reference |
+| u32 | options offset, from the options section |
+| u16 | options count |
+| u16 | reserved |
+
+## Versioning
+
+There are two numbers, for two different jobs:
+
+- **format version** changes when the layout above changes. The readers have
+  one they were written for and refuse any other; unknown sections are
+  skipped, so a newer file with an unchanged core still reads.
+- **version** is the data contract. It lives in the family's `manifest.json`
+  together with a digest of its source JSON, and changes **only when that
+  digest changes**. The compile step recomputes the digest: a changed source
+  increments the version once, an unchanged one leaves it. The same number is
+  written into the binary and into the family's Swift constant
+  (`StrapMapDataVersion`, `MEConfigurationDataVersion`, `UEPMapDataVersion`,
+  `GPIOPinMapDataVersion`, `DescriptorRegisterMapDataVersion`,
+  `LayoutMapDataVersion`), and the reader compares the file's version with
+  the code's **before reading a section**.
+
+When a reader's *expectations* change without a data change, the version is
+bumped by hand in the manifest; the build then requires the code mark to carry
+it too. The build also refuses when the source digest is unchanged but the
+Swift constant carries another number — the code would not be marked with the
+data it reads.
+
+The checksum catches an edited or truncated file independently of the version.
+
+## Rebuilding
+
+```bash
+# 1. Emit the JSON from the tools (see Skills/me-eom-structures/SKILL.md).
+python3 Skills/me-eom-structures/scripts/strap_map.py \
+    ~/Downloads/1/fit-15.0.exe ~/Downloads/1/fit-14.0.exe \
+    --words 69,70,74,90,101,114,115 --format json > \
+    Packages/UEFIImage/MapSources/strap/pch.json
+python3 Skills/me-eom-structures/scripts/fit_map.py ~/Downloads/1/fit-15.0.exe \
+    --straps tgp_lp --generation 15 --tool 15.0 --format json > \
+    Packages/MEFirmware/MapSources/configuration/csme15.json
+python3 Skills/me-eom-structures/scripts/uep_fit_map.py ~/Downloads/1/fit-15.0.exe \
+    --generation 15 --tool 15.0 --format json > \
+    Packages/MEFirmware/MapSources/uep/csme15.json
+python3 Skills/me-eom-structures/scripts/gpio_map.py ~/Downloads/1/fit-15.0.exe \
+    --generation 15 --tool 15.0 --format json > \
+    Packages/MEFirmware/MapSources/gpio/csme15.json
+python3 Skills/me-eom-structures/scripts/descriptor_fit_map.py ~/Downloads/1/fit-15.0.exe \
+    --platform tgp_lp --generation tigerPoint --tool 15.0 --format json > \
+    Packages/UEFIImage/MapSources/register/tigerPoint.json
+python3 Skills/me-eom-structures/scripts/descriptor18_map.py ~/Downloads/1/mfit-18.1.exe \
+    --format json > Packages/UEFIImage/MapSources/register/csme18.json
+python3 Skills/me-eom-structures/scripts/mip18_map.py ~/Downloads/1/mfit-18.1.exe \
+    --format json > Packages/MEFirmware/MapSources/layout/mip.json
+python3 Skills/me-eom-structures/scripts/strap18_map.py ~/Downloads/1/mfit-18.1.exe \
+    --format json > Packages/MEFirmware/MapSources/layout/cpu.json
+python3 Skills/me-eom-structures/scripts/sphy18_map.py ~/Downloads/1/mfit-18.1.exe \
+    --format json > Packages/MEFirmware/MapSources/layout/sphy.json
+
+# 2. Compile a family. The version comes from its manifest; if the JSON digest
+#    changed, it is incremented and written into the binary and Swift constant.
+python3 Skills/me-eom-structures/scripts/map_bin.py build \
+    --out Packages/UEFIImage/Sources/UEFIImage/Resources/StrapMaps/StrapMaps.bin \
+    --manifest Packages/UEFIImage/MapSources/manifest.json \
+    --swift-version-file Packages/UEFIImage/Sources/UEFIImage/StrapMapDataVersion.swift \
+    Packages/UEFIImage/MapSources/strap/pch.json \
+    Packages/UEFIImage/MapSources/strap/pch18.json \
+    Packages/UEFIImage/MapSources/strap/spt.json \
+    Packages/UEFIImage/MapSources/strap/cpu.json \
+    Packages/UEFIImage/MapSources/strap/sptcpu.json \
+    Packages/UEFIImage/MapSources/strap/pmc.json \
+    Packages/UEFIImage/MapSources/strap/mip.json \
+    Packages/UEFIImage/MapSources/strap/legacy-ibx.json \
+    Packages/UEFIImage/MapSources/strap/legacy-cpt.json \
+    Packages/UEFIImage/MapSources/strap/legacy-lpt.json
+python3 Skills/me-eom-structures/scripts/map_bin.py build \
+    --out Packages/UEFIImage/Sources/UEFIImage/Resources/RegisterMaps/RegisterMaps.bin \
+    --manifest Packages/UEFIImage/MapSources/register/manifest.json \
+    --swift-version-file Packages/UEFIImage/Sources/UEFIImage/DescriptorRegisterMapDataVersion.swift \
+    --swift-enum-name DescriptorRegisterMapDataVersion \
+    Packages/UEFIImage/MapSources/register/sunrisePoint.json \
+    Packages/UEFIImage/MapSources/register/cannonPoint.json \
+    Packages/UEFIImage/MapSources/register/tigerPoint.json \
+    Packages/UEFIImage/MapSources/register/elkhartLake.json \
+    Packages/UEFIImage/MapSources/register/jasperLake.json \
+    Packages/UEFIImage/MapSources/register/csme18.json
+python3 Skills/me-eom-structures/scripts/map_bin.py build \
+    --out Packages/MEFirmware/Sources/MEFirmware/Resources/LayoutMaps/LayoutMaps.bin \
+    --manifest Packages/MEFirmware/MapSources/layout/manifest.json \
+    --swift-version-file Packages/MEFirmware/Sources/MEFirmware/Configuration/LayoutMapDataVersion.swift \
+    --swift-enum-name LayoutMapDataVersion \
+    Packages/MEFirmware/MapSources/layout/mip.json \
+    Packages/MEFirmware/MapSources/layout/cpu.json \
+    Packages/MEFirmware/MapSources/layout/sphy.json
+python3 Skills/me-eom-structures/scripts/map_bin.py build \
+    --out Packages/MEFirmware/Sources/MEFirmware/Resources/ConfigMaps/ConfigMaps.bin \
+    --manifest Packages/MEFirmware/MapSources/manifest.json \
+    --swift-version-file Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationDataVersion.swift \
+    --swift-enum-name MEConfigurationDataVersion \
+    Packages/MEFirmware/MapSources/configuration/csme11.json … csme18.json
+python3 Skills/me-eom-structures/scripts/map_bin.py build \
+    --out Packages/MEFirmware/Sources/MEFirmware/Resources/UEPMaps/UEPMaps.bin \
+    --manifest Packages/MEFirmware/MapSources/uep/manifest.json \
+    --swift-version-file Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMapDataVersion.swift \
+    --swift-enum-name UEPMapDataVersion \
+    Packages/MEFirmware/MapSources/uep/csme12.json … csme18.json
+python3 Skills/me-eom-structures/scripts/map_bin.py build \
+    --out Packages/MEFirmware/Sources/MEFirmware/Resources/GPIOMaps/GPIOMaps.bin \
+    --manifest Packages/MEFirmware/MapSources/gpio/manifest.json \
+    --swift-version-file Packages/MEFirmware/Sources/MEFirmware/Configuration/GPIOPinMapDataVersion.swift \
+    --swift-enum-name GPIOPinMapDataVersion \
+    Packages/MEFirmware/MapSources/gpio/csme11.json … csme15.json
+
+# 3. Verify the committed pairs (no write, byte-for-byte).
+python3 Skills/me-eom-structures/scripts/map_bin.py build --check …same arguments…
+
+# 4. Read a binary back, for review or debugging.
+python3 Skills/me-eom-structures/scripts/map_bin.py dump <file.bin>
+```
+
+The map order in a command is the order the reader returns; keep the commands
+in `Skills/me-eom-structures/SKILL.md`, which lists every source file.
+
+## The web edition
+
+A reader needs: little-endian 16/32-bit reads, byte slices, UTF-8, and FNV-1a.
+It does not need a serializer, a Foundation type or a JSON parser. The `dump`
+mode is the reference rendering, and the same binary and the same tests'
+expected counts apply. Data files are copied as they are.
+
+## What is converted
+
+- **Strap:** every table — the PCH set (`pch69` … `pch115`, `pch130`), FIT
+  11's SPT set (`sptPch66` … `sptPch139`), the processor sections
+  (`cpu1` … `cpu25`, `sptCpu3`), the PMC soft straps (`pmc7` … `pmc22`), the
+  MIP CPU messages (`mipCpu17`, `mipCpu20`) and the legacy guides' PCH tables
+  (`pch16`, `pch18`, `pch21`). `cpu.json` was bootstrapped from the generated
+  processor tables of 2026-10-17: the FIT builds at hand state a different
+  field set for those lengths, so it is edited as JSON until that is
+  reconciled (`Skills/me-eom-structures/SKILL.md`).
+- **Register maps:** Sunrise Point, Cannon Point, Tiger Point, Elkhart Lake,
+  Jasper Lake and CSME 18 — the registers each build's documents state, with
+  the places the tool gives them.
+- **Configuration:** CSME 11–16 (mobile and desktop where the generation has
+  two halves) and CSME 18. CSME 16's map is merged from 16.1.42 and 16.0.15:
+  the newer build's database no longer lists `/home/mctp/smt3_devices`, and
+  the older one states it.
+- **CSME 18 layouts:** the MIP table's containers (`csme18-mip`), the CPU
+  strap message (`csme18-cpu`) and the SPHY OEM configuration nvar
+  (`csme18-sphy`), each from MFIT 18.1's own documents.
+- **UEP:** CSME 12–16 and 18, each from its own tool build. 17 has no map yet.
+- **GPIO:** CSME 11–15, the generations whose Flash Image Tool carries the
+  `GpioCsme*` value classes. CSME 16 and 18 use MFIT's database, which does
+  not, so they have no map.

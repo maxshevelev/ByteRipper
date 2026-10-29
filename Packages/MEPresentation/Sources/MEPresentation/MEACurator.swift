@@ -48,6 +48,11 @@ public enum MEACurator {
         add(codePartition(analysis, in: language))
         add(manifest(analysis, in: language))
         add(mfsVolume(analysis, mfsNames, configPaths, in: language))
+        add(uepGroup(analysis, in: language))
+        add(cpuStrapGroup(analysis, in: language))
+        mipStrapGroups(analysis, in: language).forEach(add)
+        add(sphyGroup(analysis, in: language))
+        add(gpioGroup(analysis, in: language))
 
         // Fact groups — everything else a dump carried, each only when present.
         add(chipsetInitGroup(analysis, in: language))
@@ -95,13 +100,66 @@ public enum MEACurator {
         if a.mfsState != nil, pending.fileTable, a.efsVolume != nil {
             fields.append(MEAField("File System State", pendingValue))
         } else if let state = a.mfsState {
+            // The state, and in brackets what it rests on — the evidence kept
+            // apart, so it is drawn in the ordinary font and colour beside the
+            // state's, the same way the Manufacturing row carries its own.
             fields.append(MEAField("File System State", MEAText.title(state.rawValue),
-                                   tone: MEATones.fileSystemState(state, basis: a.mfsStateBasis)))
-            // What the state rests on, and — a caution — when a step that
-            // could have raised it could not be taken.
-            if let basis = a.mfsStateBasis {
-                fields.append(MEAField(L("State basis", in: language), MEAText.fileSystemStateBasis(state, basis, in: language),
-                                       tone: MEATones.stateBasis(basis)))
+                                   tone: MEATones.fileSystemState(state, basis: a.mfsStateBasis),
+                                   evidence: a.mfsStateBasis.map {
+                                       MEAText.fileSystemStateEvidence(state, $0)
+                                   } ?? ""))
+        }
+        // The bench's own facts, under the same names the Summary tab gives
+        // them — the two panels are one reading of one dump, and a field that
+        // is in one and not the other sends the reader looking for a second
+        // dump. Shown on the same gates as the Summary rows.
+        if a.family == .csme, a.version.major >= 11, let state = a.manufacturingState {
+            let evidence = MEAText.manufacturingEvidence(state, basis: a.manufacturingBasis)
+            let verdict = MEAText.manufacturingState(state, basis: a.manufacturingBasis)
+            fields.append(MEAField("EOM on First Boot", verdict,
+                                   tone: MEATones.manufacturingState(state),
+                                   evidence: evidence))
+        }
+        // The board's own record, beside the image's verdict — the live
+        // `manuf_lock`, which no build writes: 1 where the machine has been
+        // through End of Manufacturing, 0 where its first boot had nothing to
+        // close. Only a file system whose files carry File IDs has the record,
+        // and a reading taken without the table says it is still loading.
+        if a.family == .csme, a.mfsVolume?.usesFTBL == true {
+            if let lock = a.manufacturingLock {
+                fields.append(MEAField(L("Manufacturing Lock", in: language),
+                                       MEAText.manufacturingLock(lock),
+                                       tone: MEATones.manufacturingLock(lock)))
+            } else {
+                // Not found is a dash: the row is the board's mark, and a
+                // board that has not made one simply has none.
+                fields.append(MEAField(L("Manufacturing Lock", in: language),
+                                       pending.fileTable ? L("Loading…", in: language) : "—"))
+            }
+        }
+        if let binding = a.hardwareBinding, a.version.major >= 13 {
+            // The file is found through `FileTable.dat`, so a reading taken
+            // without it cannot have established that the image does not
+            // record one — that row says it is still loading.
+            let waits = pending.fileTable && binding == .notInImage
+            fields.append(MEAField(
+                "RPMC Hardware Binding",
+                waits ? "Loading…"
+                      : MEAText.hardwareBinding(binding),
+                tone: waits ? .standard : MEATones.hardwareBinding(binding)))
+        }
+        if a.family == .csme, a.version.major >= 11 {
+            fields.append(MEAField(
+                L("Boot Guard", in: language),
+                a.bootGuardProfile.map(MEAText.bootGuardProfile)
+                    ?? L("No profile record in this image", in: language),
+                tone: a.bootGuardProfile.map(MEATones.bootGuardProfile) ?? .standard))
+            if let key = a.oemPublicKeyHash {
+                fields.append(MEAField(L("OEM Public Key Hash", in: language),
+                                       MEAText.oemPublicKeyHash(key)))
+            } else if a.manifest != nil {
+                fields.append(MEAField(L("OEM Public Key Hash", in: language),
+                                       L("No key material in this image", in: language)))
             }
         }
         // Row 19 for a non-IFWI image: the $FPT header's FIT (an IFWI image's
@@ -508,6 +566,148 @@ public enum MEACurator {
     /// there; a CSME 15/16 one has them from the FTPR `intl.cfg` and no volume
     /// node to put them under, and an image whose two copies disagree gets both
     /// rows, each where it came from.
+    /// The FPF/UEP settings the `$UEP` area's first bit array records, under the
+    /// tool's own sections — the bits the platform would burn at End of
+    /// Manufacturing. Shown for the generations the engine has a layout for
+    /// (`UEPMap.forME`) and where the image carries an area; the values are
+    /// what the build wrote, and most of them are zero.
+    private static func uepGroup(_ a: FirmwareAnalysis, in language: AppLanguage) -> MEANode? {
+        guard let readings = a.uepSettings,
+              let map = UEPMap.forME(major: a.version.major) else { return nil }
+        let byName = Dictionary(uniqueKeysWithValues: map.settings.map { ($0.name, $0) })
+        var order: [String] = []
+        var sections: [String: [MEANode]] = [:]
+        for reading in readings {
+            let setting = byName[reading.name]
+            let section = setting?.section ?? ""
+            if sections[section] == nil { order.append(section) }
+            // The tool's word for an enumerated value where its documents give
+            // one ("Verified and Measured Boot" for the profile's 5), the
+            // number otherwise.
+            let shown = setting?.options?[reading.value].map { "\($0) (\(reading.value))" }
+                ?? "\(reading.value)"
+            sections[section, default: []].append(MEANode(
+                path: [], title: setting?.label ?? reading.name,
+                subtitle: shown))
+        }
+        let groups = order.map { section in
+            MEANode(path: [],
+                    title: section.isEmpty ? L("Other", in: language) : section,
+                    children: sections[section] ?? [])
+        }
+        return MEANode(path: [], title: L("FPF Settings", in: language), children: groups)
+    }
+
+    /// The CPU strap message a CSME 18 image keeps in the FITC partition's MIP
+    /// table, under the tool's own words (`CPUStrapMap`) — with the message
+    /// length and its CRC-16, which say the reading is aligned. Shown for the
+    /// generations the engine has a map for and where the image carries a MIP
+    /// table.
+    private static func cpuStrapGroup(_ a: FirmwareAnalysis, in language: AppLanguage) -> MEANode? {
+        guard let straps = a.cpuStraps,
+              let map = CPUStrapMap.forME(major: a.version.major) else { return nil }
+        let byName = Dictionary(uniqueKeysWithValues: map.fields.map { ($0.name, $0) })
+        let rows = straps.readings.map { reading -> MEANode in
+            let field = byName[reading.name]
+            let shown = field?.options?[reading.value].map { "\($0) (\(reading.value))" }
+                ?? "\(reading.value)"
+            return MEANode(path: [], title: field?.label ?? reading.name, subtitle: shown)
+        }
+        return MEANode(
+            path: [], title: L("CPU straps", in: language),
+            fields: [MEAField(L("Message length", in: language),
+                              L("%1$@ words", in: language, "\(straps.messageLengthWords)")),
+                     MEAField("CRC-16", String(format: "0x%04X", straps.crcStored)),
+                     MEAField("CRC Valid", MEAText.yesNo(straps.crcValid))],
+            children: rows)
+    }
+
+    /// The MIP table's other strap containers — CSME, PMC IOE and IOE — each a
+    /// group of its own under the tool's words (`MIPStrapMap`). A layout is
+    /// picked by the block's type and length, as the reading was.
+    private static func mipStrapGroups(_ a: FirmwareAnalysis,
+                                       in language: AppLanguage) -> [MEANode] {
+        guard let containers = a.mipStraps,
+              let map = MIPStrapMap.forME(major: a.version.major) else { return [] }
+        return containers.compactMap { container -> MEANode? in
+            guard let layout = map.containers.first(where: {
+                $0.blockType == container.blockType && $0.length == container.length
+            }) else { return nil }
+            let byName = Dictionary(uniqueKeysWithValues: layout.fields.map { ($0.name, $0) })
+            let rows = container.readings.map { reading -> MEANode in
+                let field = byName[reading.name]
+                let shown = field?.options?[reading.value].map { "\($0) (\(reading.value))" }
+                    ?? "\(reading.value)"
+                return MEANode(path: [], title: field?.label ?? reading.name,
+                               subtitle: shown)
+            }
+            let title: String
+            switch container.name {
+            case "PMC SoC": title = L("PMC SoC straps", in: language)
+            case "PMC SOC 2": title = L("PMC SOC 2 straps", in: language)
+            case "CPU 2": title = L("CPU 2 straps", in: language)
+            case "CSME": title = L("CSME straps", in: language)
+            case "IOE": title = L("IOE straps", in: language)
+            case "PMC IOE": title = L("PMC IOE straps", in: language)
+            default: title = container.name
+            }
+            return MEANode(
+                path: [], title: title,
+                fields: [MEAField(L("Block type", in: language), "\(container.blockType)"),
+                         MEAField(L("Length", in: language),
+                                  L("%1$@ bytes", in: language, "\(container.length)"))],
+                children: rows)
+        }
+    }
+
+    /// The SPHY OEM configuration the image's `phy_oem_cfg` nvar holds — the
+    /// PHY tuning block, in the tool's own field names. Shown flat: the names
+    /// carry their section (`Common_Header`, `Sub_Section_Entry…`).
+    private static func sphyGroup(_ a: FirmwareAnalysis,
+                                  in language: AppLanguage) -> MEANode? {
+        guard let readings = a.sphyNvar, !readings.isEmpty else { return nil }
+        let rows = readings.map { reading in
+            MEANode(path: [], title: reading.name, subtitle: "\(reading.value)")
+        }
+        return MEANode(
+            path: [], title: L("SPHY OEM configuration", in: language),
+            fields: [MEAField(L("Fields", in: language), "\(readings.count)")], children: rows)
+    }
+
+    /// The feature pins the image configures (ours): `/home/gpio/csme_pins`,
+    /// the file Flash Image Tool writes from its `MeFeaturePins` settings,
+    /// read through the tool's own value classes (`GPIOPinMap`). One row per
+    /// pin, named by what the pin is for — the usage — and where it is on the
+    /// board.
+    private static func gpioGroup(_ a: FirmwareAnalysis,
+                                  in language: AppLanguage) -> MEANode? {
+        guard let readings = a.gpioPins, !readings.pins.isEmpty else { return nil }
+        let rows = readings.pins.map { pin -> MEANode in
+            var fields: [MEAField] = []
+            append(&fields, L("Pin", in: language), pin.pinName)
+            append(&fields, L("Usage", in: language),
+                   pin.usage ?? "\(pin.usageID)")
+            if let feature = pin.feature {
+                append(&fields, L("Feature", in: language), feature)
+            }
+            append(&fields, L("Ownership", in: language), pin.ownership)
+            append(&fields, L("Pad Mode", in: language), pin.padMode)
+            return MEANode(path: [],
+                           title: pin.usage ?? "\(pin.usageID)",
+                           subtitle: pin.pinName,
+                           fields: fields)
+        }
+        let source = readings.fromImage
+            ? L("OEM Configuration partition", in: language)
+            : L("ME file system", in: language)
+        return MEANode(
+            path: [], title: L("GPIO Pins", in: language),
+            subtitle: "\(readings.pins.count)",
+            fields: [MEAField(L("File", in: language), readings.path),
+                     MEAField(L("Read from", in: language), source)],
+            children: rows)
+    }
+
     private static func chipsetInitGroup(_ a: FirmwareAnalysis, in language: AppLanguage) -> MEANode? {
         guard let chipsetInit = a.chipsetInit,
               chipsetInit != a.mfsVolume?.pchInit else { return nil }

@@ -48,10 +48,14 @@ public struct UEFIDetailTable: Equatable, Sendable {
         public enum Tone: Equatable, Sendable { case plain, yes, no }
         public var text: String
         public var tone: Tone
+        /// Drawn in bold: a value that stands out from the ones around it —
+        /// a strap field this board's build set away from the tool's default.
+        public var isStrong: Bool
 
-        public init(_ text: String, tone: Tone = .plain) {
+        public init(_ text: String, tone: Tone = .plain, isStrong: Bool = false) {
             self.text = text
             self.tone = tone
+            self.isStrong = isStrong
         }
 
         /// A permission, as the word and the colour that go with it.
@@ -87,8 +91,47 @@ public struct UEFIDetailTable: Equatable, Sendable {
     /// sight, and read only now and then — a descriptor's strap words.
     public var startsFolded: Bool
 
+    /// A run of rows under a line of its own, folded until the reader opens
+    /// it: a descriptor's strap fields, under the word they are bits of.
+    public struct Section: Equatable, Sendable {
+        /// What the section is — `PCHSTRP1` — and what its rows have in
+        /// common, where they have anything (`GPCOM4_gpio_sstrap`).
+        public var title: String
+        public var subtitle: String?
+        /// The rows it holds, as indices into `rows`.
+        public var rows: Range<Int>
+        /// Where a click on the section's address goes, and the address as it
+        /// is shown. Nil for a section that stands for nothing in the dump.
+        public var target: Target?
+        public var address: String?
+        /// What the folded line says about the rows it hides, where something
+        /// in them stands out: how many strap fields the build set.
+        public var note: String?
+
+        public init(title: String, subtitle: String? = nil, rows: Range<Int>,
+                    target: Target? = nil, address: String? = nil, note: String? = nil) {
+            self.title = title
+            self.subtitle = subtitle
+            self.rows = rows
+            self.target = target
+            self.address = address
+            self.note = note
+        }
+    }
+
+    /// The sections the rows fall into, in order, covering every row. Empty
+    /// for a table of plain rows.
+    public var sections: [Section]
+
+    /// One line under the table, for what its rows add up to — the verdict the
+    /// BIOS master's access masks make. Nil for a table that is only a list of
+    /// facts, and drawn in the ordinary colour: it says what the rows show,
+    /// not a second answer in a tone of its own.
+    public var note: String?
+
     public init(title: String, symbol: String, columns: [String], rows: [[Cell]],
-                rowTargets: [Target?] = [], linkColumn: Int = 1, startsFolded: Bool = false) {
+                rowTargets: [Target?] = [], linkColumn: Int = 1, startsFolded: Bool = false,
+                sections: [Section] = [], note: String? = nil) {
         self.title = title
         self.symbol = symbol
         self.columns = columns
@@ -96,6 +139,8 @@ public struct UEFIDetailTable: Equatable, Sendable {
         self.rowTargets = rowTargets
         self.linkColumn = linkColumn
         self.startsFolded = startsFolded
+        self.sections = sections
+        self.note = note
     }
 }
 
@@ -972,7 +1017,14 @@ public enum UEFIDetail {
                 fields.append(.init("PCH straps", "\((map1 >> 24) & 0xFF)"))
             }
             if let map2 = reader.uint32(at: h + 0x1C) {
-                fields.append(.init("PROC straps", "\((map2 >> 8) & 0xFF)"))
+                // Up to Cannon Point the same bits are the processor strap
+                // section's word count in the flash; from Tiger Point on they
+                // are the length of the strap message in the PMC's space, two
+                // bytes further up, and there is no flash section to count.
+                let classic = DescriptorInfo.read(at: h, in: reader)?
+                    .generation.hasProcessorStrapSection ?? true
+                fields.append(.init("PROC straps",
+                                    "\(classic ? (map2 >> 8) & 0xFF : (map2 >> 16) & 0xFF)"))
             }
 
         case .flashDescriptor:
@@ -1421,6 +1473,31 @@ public enum UEFIDetail {
         return fields
     }
 
+    /// What one strap word is where the chipset's layout of the section is not
+    /// at hand — a length no tool at hand carries, or a section from before the
+    /// layout was written down. The bit that soft-disables the ME, and the two
+    /// fields the engine reads by word, are all there is to say.
+    private static func strapMeaning(
+        _ index: Int, of straps: DescriptorInfo.Straps, in language: AppLanguage
+    ) -> String {
+        if let bit = straps.meDisable, bit.word == index {
+            return L("%1$@ in bit %2$@; the other bits unknown", in: language, bit.name, bit.bit)
+        }
+        if straps.espiClock?.word == index {
+            return L("eSPI clock in bits 3–5; the other bits unknown", in: language)
+        }
+        if straps.gpr0?.word == index { return L("GPR0, the whole word", in: language) }
+        return L("Unknown", in: language)
+    }
+
+    /// The tool's identifier for a strap field without the namespace every one
+    /// of them opens with: the table the name is in already says which section
+    /// the fields belong to.
+    private static func strapFieldName(_ name: String) -> String {
+        guard let range = name.range(of: "_Strap_") else { return name }
+        return String(name[range.upperBound...])
+    }
+
     /// A protected range as where it runs and what it refuses.
     private static func gpr0Text(_ range: DescriptorInfo.ProtectedRange, in language: AppLanguage) -> String {
         let span = "\(hex(range.start)) – \(hex(range.end))"
@@ -1478,6 +1555,13 @@ public enum UEFIDetail {
             ))
         }
         if !descriptor.biosAccess.isEmpty {
+            // The masks are a grid of facts; what they add up to is the
+            // question a bench asks first — is this an image that lets the
+            // host rewrite the whole chip, or one that holds it in? It is a
+            // sign and not the End of Manufacturing setting: early Flash Image
+            // Tool versions did not touch the masks when that setting changed,
+            // so the line says "usually" and never that the two agree.
+            let open = descriptor.biosAccess.allSatisfy { $0.read && $0.write }
             tables.append(UEFIDetailTable(
                 title: L("BIOS access table", in: language),
                 symbol: "lock.shield",
@@ -1486,7 +1570,10 @@ public enum UEFIDetail {
                     [.init(access.region),
                      .permission(access.read, in: language),
                      .permission(access.write, in: language)]
-                }
+                },
+                note: open
+                    ? L("The host may read and write every region, as a service image is usually built.", in: language)
+                    : L("Access is narrowed: the host may not read and write every region, as a production image is usually built.", in: language)
             ))
         }
         if !descriptor.chips.isEmpty {
@@ -1523,26 +1610,165 @@ public enum UEFIDetail {
             ))
         }
         if let straps = descriptor.straps {
-            // Numbers, not fields: the layout is the chipset's and next to
-            // none of it is published (`UEFI_IMAGE_FORMAT.md` §2.6). Each row
-            // outlines its four bytes in the dump, which is where two boards'
-            // straps are compared.
+            tables.append(strapTable(straps, in: language))
+        }
+        if let straps = descriptor.processorStraps {
+            tables.append(processorStrapTable(straps, in: language))
+        }
+        if let pmc = descriptor.pmcStraps {
+            tables.append(pmcTable(pmc, in: language))
+        }
+        if let mip = descriptor.mip {
+            tables.append(mipTable(mip, in: language))
+            if let dbc = mip.dbc {
+                tables.append(dbcTable(dbc, in: language))
+            }
+        }
+        if !descriptor.registerReadings.isEmpty {
+            tables.append(descriptorRegisterTable(descriptor.registerReadings,
+                                                  in: language))
+        }
+        if descriptor.oemSection.contains(where: { $0 != 0xFF }) {
+            tables.append(oemSectionTable(descriptor, in: language))
+        }
+        return tables
+    }
+
+    /// The OEM section — `0x100` bytes at `0xF00` — in rows of sixteen, where
+    /// the board's maker keeps a serial, a version string or a signature. It
+    /// is the one part of the descriptor Intel lays nothing out in, and erased
+    /// on most boards; the table is shown only where something is written.
+    private static func oemSectionTable(
+        _ descriptor: DescriptorInfo, in language: AppLanguage
+    ) -> UEFIDetailTable {
+        let base = (descriptor.regions.first { $0.type == .descriptor }?.base ?? 0) + 0x0F00
+        var rows: [(cells: [UEFIDetailTable.Cell], target: UEFIDetailTable.Target)] = []
+        for start in stride(from: 0, to: descriptor.oemSection.count, by: 16) {
+            let end = min(start + 16, descriptor.oemSection.count)
+            let address = base + UInt64(start)
+            let bytes = Array(descriptor.oemSection[start..<end])
+            rows.append(([.init(hex(address)), .init(hexBytes(bytes))],
+                         .range(address..<address + UInt64(bytes.count),
+                                name: hex(address))))
+        }
+        return UEFIDetailTable(
+            title: L("OEM section", in: language),
+            symbol: "square.grid.4x3.fill",
+            columns: [L("Offset", in: language), L("Bytes", in: language)],
+            rows: rows.map(\.cells),
+            rowTargets: rows.map(\.target),
+            linkColumn: 0
+        )
+    }
+
+    /// The strap section, one row per field where the chipset's layout of the
+    /// section is at hand — the tool's name for the field, the bits it takes,
+    /// what this image holds there and what the tool builds it with — and one
+    /// row per word where it is not, the words then standing as the numbers
+    /// they are.
+    ///
+    /// The fields fall into a section per word, folded: seventy words of a
+    /// dozen fields each are a list nobody reads whole, and the word is what a
+    /// reader looks for. A section's line names the word, what its fields
+    /// have in common (`DescriptorStrapMap.group(of:)` — the tool names its
+    /// words by offset only), and the word's address, which outlines its four
+    /// bytes in the dump, where two boards' straps are compared. Inside it a
+    /// field keeps its whole name, the one the tool is searched by.
+    ///
+    /// A value the build set away from the tool's default is drawn in bold,
+    /// and a folded line says how many of its fields are so: those are the
+    /// fields that make this board's straps its own.
+    /// The PMC soft straps — the MIP area's PMC and CPU block before the CPU
+    /// message that ends it — under the tool's own names for the length the
+    /// block's remainder states.
+    private static func pmcTable(_ pmc: DescriptorInfo.PMCSection,
+                                 in language: AppLanguage) -> UEFIDetailTable {
+        let rows = pmc.fields.map { reading -> (cells: [UEFIDetailTable.Cell], target: UEFIDetailTable.Target) in
+            let range = reading.field.bits
+            let shown = reading.field.options?[Int(reading.value)] ?? hex(reading.value)
+            let address = pmc.base + UInt64(reading.field.word) * 4
+            return ([.init(reading.field.label ?? strapFieldName(reading.field.name)),
+                     .init(range.lowerBound == range.upperBound
+                           ? "\(range.lowerBound)"
+                           : "\(range.lowerBound)–\(range.upperBound)"),
+                     .init(shown, isStrong: reading.isSet),
+                     .init(reading.field.defaultValue.map(hex) ?? "")],
+                    .range(address..<address + 4, name: reading.field.name))
+        }
+        return UEFIDetailTable(
+            title: L("PMC straps", in: language),
+            symbol: "cpu",
+            columns: [L("Field", in: language), L("Bits", in: language),
+                      L("Value", in: language), L("Default", in: language)],
+            rows: rows.map(\.cells),
+            rowTargets: rows.map(\.target),
+            startsFolded: true
+        )
+    }
+
+    /// The MIP area's block table: what each block is and where the entry
+    /// places it. The payload's own fields are in the tables after it, under
+    /// the names the same tool gives them.
+    private static func mipTable(_ mip: DescriptorInfo.MIPTable,
+                                 in language: AppLanguage) -> UEFIDetailTable {
+        UEFIDetailTable(
+            title: L("MIP table", in: language),
+            symbol: "list.bullet.rectangle",
+            columns: [L("Block", in: language), L("Offset", in: language),
+                      L("Length", in: language)],
+            rows: mip.blocks.map { block in
+                [.init(mipBlockName(block.type, in: language)),
+                 .init(hex(UInt64(block.offset))),
+                 .init("\(block.length)")]
+            }
+        )
+    }
+
+    /// The tool's names for the two block types a MIP table carries on the
+    /// generations at hand; a type it has not named is shown as its number.
+    private static func mipBlockName(_ type: Int, in language: AppLanguage) -> String {
+        switch type {
+        case 0: return L("CSE DbC configuration", in: language)
+        case 1: return L("PMC and CPU soft straps", in: language)
+        default: return L("Block %1$d", in: language, type)
+        }
+    }
+
+    private static func dbcTable(_ dbc: DescriptorInfo.DBCStraps,
+                                 in language: AppLanguage) -> UEFIDetailTable {
+        let rows = dbc.fields.map { reading -> (cells: [UEFIDetailTable.Cell], target: UEFIDetailTable.Target) in
+            let range = reading.field.bits
+            let address = dbc.base + UInt64(reading.field.word) * 4
+            return ([.init(reading.field.label ?? strapFieldName(reading.field.name)),
+                     .init(range.lowerBound == range.upperBound
+                           ? "\(range.lowerBound)"
+                           : "\(range.lowerBound)–\(range.upperBound)"),
+                     .init(hex(reading.value)),
+                     .init(hex(address))],
+                    .range(address..<address + 4, name: reading.field.name))
+        }
+        return UEFIDetailTable(
+            title: L("DbC straps", in: language),
+            symbol: "cable.connector",
+            columns: [L("Field", in: language), L("Bits", in: language),
+                      L("Value", in: language), L("Offset", in: language)],
+            rows: rows.map(\.cells),
+            rowTargets: rows.map(\.target),
+            linkColumn: 3
+        )
+    }
+
+    private static func strapTable(_ straps: DescriptorInfo.Straps, in language: AppLanguage) -> UEFIDetailTable {
+        guard let readings = straps.fields else {
             let rows = straps.words.indices.map { index -> (cells: [UEFIDetailTable.Cell], target: UEFIDetailTable.Target) in
                 let name = "PCHSTRP\(index)"
                 let address = straps.base + UInt64(index) * 4
-                var meaning = L("Unknown", in: language)
-                if let bit = straps.meDisable, bit.word == index {
-                    meaning = L("%1$@ in bit %2$@; the other bits unknown", in: language, bit.name, bit.bit)
-                } else if straps.espiClock?.word == index {
-                    meaning = L("eSPI clock in bits 3–5; the other bits unknown", in: language)
-                } else if straps.gpr0?.word == index {
-                    meaning = L("GPR0, the whole word", in: language)
-                }
                 return ([.init(name), .init(hex(address)),
-                         .init(String(format: "0x%08X", straps.words[index])), .init(meaning)],
+                         .init(String(format: "0x%08X", straps.words[index])),
+                         .init(strapMeaning(index, of: straps, in: language))],
                         .range(address..<address + 4, name: name))
             }
-            tables.append(UEFIDetailTable(
+            return UEFIDetailTable(
                 title: L("PCH straps", in: language),
                 symbol: "slider.horizontal.3",
                 columns: [L("Strap", in: language), L("Offset", in: language), L("Value", in: language), L("Meaning", in: language)],
@@ -1553,9 +1779,200 @@ public enum UEFIDetail {
                 // already said what is known: folded, it leaves the rest of
                 // the detail in view.
                 startsFolded: true
-            ))
+            )
         }
-        return tables
+        // The bit that soft-disables the ME is not one of the layout's fields —
+        // the tool calls the bits around it spare or reserved — so its row is
+        // added here, under the name ifdtool and me_cleaner give it, and it has
+        // no default of the tool's to compare against.
+        struct Row { let word: Int; let bit: Int; let isSet: Bool; let cells: [UEFIDetailTable.Cell] }
+        var groups: [Int: String] = [:]
+        for word in Set(readings.map(\.field.word)) {
+            groups[word] = DescriptorStrapMap.group(of: readings.filter { $0.field.word == word }.map(\.field))
+        }
+        var rows: [Row] = readings.map { reading in
+            let range = reading.field.bits
+            return Row(word: reading.field.word, bit: range.lowerBound, isSet: reading.isSet,
+                       cells: [.init(strapFieldName(reading.field.name)),
+                               .init(range.lowerBound == range.upperBound
+                                     ? "\(range.lowerBound)"
+                                     : "\(range.lowerBound)–\(range.upperBound)"),
+                               .init(hex(reading.value), isStrong: reading.isSet),
+                               .init(reading.field.defaultValue.map(hex) ?? "")])
+        }
+        if let bit = straps.meDisable, bit.word < straps.words.count {
+            rows.append(Row(
+                word: bit.word, bit: bit.bit, isSet: false,
+                cells: [.init(bit.name), .init("\(bit.bit)"),
+                        .init(bit.isSet ? "0x1" : "0x0"), .init("")]))
+        }
+        // A word the table names no field of still has its value: the section
+        // belongs to the descriptor, not to the table, and a table that states
+        // only part of one must not hide the rest.
+        let covered = Set(rows.map(\.word))
+        for word in 0..<straps.words.count where !covered.contains(word) {
+            rows.append(Row(word: word, bit: -1, isSet: false,
+                            cells: [.init("PCHSTRP\(word)"), .init(""),
+                                    .init(hex(straps.words[word])), .init("")]))
+        }
+        rows.sort { ($0.word, $0.bit) < ($1.word, $1.bit) }
+
+        var sections: [UEFIDetailTable.Section] = []
+        var start = 0
+        while start < rows.count {
+            let word = rows[start].word
+            let end = rows[start...].firstIndex { $0.word != word } ?? rows.count
+            let name = "PCHSTRP\(word)"
+            let address = straps.base + UInt64(word) * 4
+            let set = rows[start..<end].filter(\.isSet).count
+            sections.append(.init(title: name, subtitle: groups[word],
+                                  rows: start..<end,
+                                  target: .range(address..<address + 4, name: name),
+                                  address: hex(address),
+                                  note: set == 0 ? nil
+                                      : L("Non-default: %1$@", in: language, String(set))))
+            start = end
+        }
+        return UEFIDetailTable(
+            title: L("PCH straps", in: language),
+            symbol: "slider.horizontal.3",
+            columns: [L("Field", in: language), L("Bits", in: language),
+                      L("Value", in: language), L("Default", in: language)],
+            rows: rows.map(\.cells),
+            startsFolded: true,
+            sections: sections
+        )
+    }
+
+    /// The CPU straps — the words the processor reads at power-on before it
+    /// lets the chipset go: the strap section the classic third map word
+    /// points at, or the message in the descriptor's MIP area from Tiger
+    /// Point on. The message's fields carry the tool's own names ("Disable
+    /// Hyperthreading") and option words, so its values read as its panel
+    /// shows them; the older sections carry only identifiers.
+    ///
+    /// The rows are the PCH table's: fields where the tools state their
+    /// layout, one row per word where they do not. A field the documents of
+    /// one length lay out differently is not in the table at all, so a section
+    /// can have fewer named fields than it has bits.
+    private static func processorStrapTable(
+        _ straps: DescriptorInfo.ProcessorStraps, in language: AppLanguage
+    ) -> UEFIDetailTable {
+        let title = L("CPU straps", in: language)
+        guard let readings = straps.fields else {
+            let rows = straps.words.indices.map { index -> (cells: [UEFIDetailTable.Cell], target: UEFIDetailTable.Target) in
+                let name = "CPUSTRP\(index)"
+                let address = straps.base + UInt64(index) * 4
+                return ([.init(name), .init(hex(address)),
+                         .init(String(format: "0x%08X", straps.words[index])),
+                         .init(L("Unknown", in: language))],
+                        .range(address..<address + 4, name: name))
+            }
+            return UEFIDetailTable(
+                title: title,
+                symbol: "cpu",
+                columns: [L("Strap", in: language), L("Offset", in: language),
+                          L("Value", in: language), L("Meaning", in: language)],
+                rows: rows.map(\.cells),
+                rowTargets: rows.map(\.target),
+                linkColumn: 1,
+                startsFolded: true
+            )
+        }
+        struct Row { let word: Int; let bit: Int; let isSet: Bool; let cells: [UEFIDetailTable.Cell] }
+        var groups: [Int: String] = [:]
+        for word in Set(readings.map(\.field.word)) {
+            groups[word] = DescriptorStrapMap.group(of: readings.filter { $0.field.word == word }.map(\.field))
+        }
+        let rows = readings.map { reading -> Row in
+            let range = reading.field.bits
+            // The tool's own word for the value where it states one — "Yes",
+            // "All Cores Active" — and the number otherwise.
+            let shown = reading.field.options?[Int(reading.value)] ?? hex(reading.value)
+            return Row(word: reading.field.word, bit: range.lowerBound, isSet: reading.isSet,
+                       cells: [.init(reading.field.label ?? strapFieldName(reading.field.name)),
+                               .init(range.lowerBound == range.upperBound
+                                     ? "\(range.lowerBound)"
+                                     : "\(range.lowerBound)–\(range.upperBound)"),
+                               .init(shown, isStrong: reading.isSet),
+                               // The message states no default: the dash
+                               // says the column has nothing to compare
+                               // against, rather than leaving it blank.
+                               .init(reading.field.defaultValue.map(hex) ?? "—")])
+        }.sorted { ($0.word, $0.bit) < ($1.word, $1.bit) }
+
+        var sections: [UEFIDetailTable.Section] = []
+        var start = 0
+        while start < rows.count {
+            let word = rows[start].word
+            let end = rows[start...].firstIndex { $0.word != word } ?? rows.count
+            let name = "CPUSTRP\(word)"
+            let address = straps.base + UInt64(word) * 4
+            let set = rows[start..<end].filter(\.isSet).count
+            sections.append(.init(title: name, subtitle: groups[word],
+                                  rows: start..<end,
+                                  target: .range(address..<address + 4, name: name),
+                                  address: hex(address),
+                                  note: set == 0 ? nil
+                                      : L("Non-default: %1$@", in: language, String(set))))
+            start = end
+        }
+        return UEFIDetailTable(
+            title: title,
+            symbol: "cpu",
+            columns: [L("Field", in: language), L("Bits", in: language),
+                      L("Value", in: language), L("Default", in: language)],
+            rows: rows.map(\.cells),
+            startsFolded: true,
+            sections: sections
+        )
+    }
+
+    /// The descriptor's own registers as Flash Image Tool names them — the map
+    /// words, the flash component's registers, the masters' access masks, the
+    /// recovery policy and the VSCC/MIP map. One section per register, its
+    /// address in the section's head; a field with a plain 32-bit value shows
+    /// as hex, and a setting the tool enumerates in its own words.
+    private static func descriptorRegisterTable(
+        _ readings: [DescriptorRegisterReading], in language: AppLanguage
+    ) -> UEFIDetailTable {
+        var rows: [[UEFIDetailTable.Cell]] = []
+        var sections: [UEFIDetailTable.Section] = []
+        for reading in readings {
+            let start = rows.count
+            for field in reading.register.fields {
+                let word = field.bitOffset / 32
+                let inWord = field.bitOffset % 32
+                guard word < reading.words.count, field.count > 0, field.count <= 32,
+                      inWord + field.count <= 32 else { continue }
+                let mask: UInt32 = field.count >= 32 ? .max : (1 << UInt32(field.count)) - 1
+                let value = reading.words[word] >> UInt32(inWord) & mask
+                let shown = field.options?[Int(value)] ?? hex(value)
+                let bits = field.count == 1
+                    ? "\(inWord)"
+                    : "\(inWord)–\(inWord + field.count - 1)"
+                rows.append([.init(field.label ?? strapFieldName(field.name)),
+                             .init(bits), .init(shown)])
+            }
+            let end = rows.count
+            guard end > start else { continue }
+            let length = UInt64(reading.register.words * 4)
+            let count = reading.register.words == 1
+                ? "1 word" : "\(reading.register.words) words"
+            sections.append(.init(title: reading.register.name, subtitle: count,
+                                  rows: start..<end,
+                                  target: .range(reading.base..<(reading.base + length),
+                                                 name: reading.register.name),
+                                  address: hex(reading.base)))
+        }
+        return UEFIDetailTable(
+            title: L("Descriptor registers", in: language),
+            symbol: "cpu",
+            columns: [L("Field", in: language), L("Bits", in: language),
+                      L("Value", in: language)],
+            rows: rows,
+            startsFolded: true,
+            sections: sections)
     }
 
     /// A mask as the descriptor writes it: a byte on an old one, twelve bits on

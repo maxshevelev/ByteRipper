@@ -1,0 +1,51 @@
+{
+ "kind": "register",
+ "schema": "byteripper.map/1",
+ "tool": "FIT 12-15",
+ "maps": [
+  {"id": "cannonPoint", "name": "cannonPoint", "source": {"generation": "cannonPoint", "platform": "cnp_lp_rvp,cnp_h_rvp", "tool": "FIT 12-15"}, "registers": [
+   {"name": "FLMAP0", "place": {"kind": "absolute", "offset": 20}, "words": 1, "fields": [
+    {"bitOffset": 0, "count": 8, "name": "Flmap0_Flash_Component_Base_Address"},
+    {"bitOffset": 8, "count": 2, "label": "Number of Flash Components", "name": "Flmap0_Number_Of_Components", "options": [[0, "1"], [1, "2"], [3, "0"]]},
+    {"bitOffset": 10, "count": 1, "name": "Flmap0_Touch_on_shared_flash"},
+    {"bitOffset": 11, "count": 1, "label": "Intel(R) Precise Touch and Stylus Enabled", "name": "Flmap0_Touch_on_dedicated_SPI_bus", "options": [[0, "No"], [1, "Yes"]]},
+    {"bitOffset": 12, "count": 1, "name": "Flmap0_Fingerprint_sensor_on_shared_flash"},
+    {"bitOffset": 13, "count": 3, "name": "Flmap0_RSVD_15_13"},
+    {"bitOffset": 16, "count": 8, "name": "Flmap0_Flash_Region_Base_Address"},
+    {"bitOffset": 24, "count": 3, "name": "Flmap0_RSVD_26_24"},
+    {"bitOffset": 27, "count": 5, "name": "Flmap0_RSVD_31_27"}
+   ]},
+   {"name": "FLMAP1", "place": {"kind": "absolute", "offset": 24}, "words": 1, "fields": [
+    {"bitOffset": 0, "count": 8, "name": "Flmap1_Flash_Master_Base_Address"},
+    {"bitOffset": 8, "count": 3, "name": "Flmap1_Number_Of_Masters"},
+    {"bitOffset": 11, "count": 5, "name": "Flmap1_RSVD_15_11"},
+    {"bitOffset": 16, "count": 8, "name": "Flmap1_Flash_PCH_Strap_Base_Address"},
+    {"bitOffset": 24, "count": 8, "name": "Flmap1_PCH_Strap_Length"}
+   ]},
+   {"name": "FLMAP2", "place": {"kind": "absolute", "offset": 28}, "words": 1, "fields": [
+    {"bitOffset": 0, "count": 8, "name": "Flmap2_Flash_CPU_Strap_Base_Address"},
+    {"bitOffset": 8, "count": 8, "name": "Flmap2_CPU_Strap_Length"},
+    {"bitOffset": 16, "count": 8, "name": "Flmap2_RSVD_23_16"},
+    {"bitOffset": 24, "count": 8, "name": "Flmap2_Reg_Init_length"}
+   ]},
+   {"name": "FLCOMP", "place": {"kind": "flashComponent", "offset": 0}, "words": 1, "fields": [
+    {"bitOffset": 0, "count": 4, "label": "Flash component 1 Size", "name": "Flcomp_Component_0_Density", "options": [[0, "512KB"], [1, "1MB"], [2, "2MB"], [3, "4MB"], [4, "8MB"], [5, "16MB"], [6, "32MB"], [7, "64MB"], [15, "8MB"]]},
+    {"bitOffset": 4, "count": 4, "label": "Flash component 2 Size", "name": "Flcomp_Component_1_Density", "options": [[0, "512KB"], [1, "1MB"], [2, "2MB"], [3, "4MB"], [4, "8MB"], [5, "16MB"], [6, "32MB"], [7, "64MB"], [15, "8MB"]]},
+    {"bitOffset": 8, "count": 1, "name": "Flcomp_RSVD_8"},
+    {"bitOffset": 9, "count": 1, "name": "Flcomp_SPI_Voltage_Select"},
+    {"bitOffset": 10, "count": 2, "label": "eSPI / EC Maximum I/O Mode", "name": "Flcomp_eSPI_EC_Maximum_IO_Mode", "options": [[0, "Single"], [1, "Single and Dual"], [2, "Single and Quad"], [3, "Single, Dual and Quad"]]},
+    {"bitOffset": 12, "count": 1, "label": "Dual Output Read Enable", "name": "Flcomp_Dual_Output_Read_Enable", "options": [[0, "No"], [1, "Yes"]]},
+    {"bitOffset": 13, "count": 1, "label": "Dual I/O Read Enable", "name": "Flcomp_Dual_IO_Read_Enable", "options": [[0, "No"], [1, "Yes"]]},
+    {"bitOffset": 14, "count": 1, "label": "Quad Output Read Enable", "name": "Flcomp_Quad_Output_Read_Enable", "options": [[0, "No"], [1, "Yes"]]},
+    {"bitOffset": 15, "count": 1, "label": "Quad I/O Read Enable", "name": "Flcomp_Quad_IO_Read_Enable", "options": [[0, "No"], [1, "Yes"]]},
+    {"bitOffset": 16, "count": 1, "name": "Flcomp_RSVD_16"},
+    {"bitOffset": 17, "count": 3, "label": "eSPI / EC Bus Frequency", "name": "Flcomp_eSPI_EC_Bus_Frequency", "options": [[0, "20MHz"], [1, "24MHz"], [2, "30MHz"], [3, "48MHz"], [4, "60MHz"]]},
+    {"bitOffset": 20, "count": 1, "label": "Fast Read Supported", "name": "Flcomp_Fast_Read_Support", "options": [[0, "No"], [1, "Yes"]]},
+    {"bitOffset": 21, "count": 3, "label": "Fast Read Clock Frequency", "name": "Flcomp_Fast_Read_Clock_Frequency", "options": [[0, "100MHz"], [1, "50MHz"], [2, "48MHz"], [3, "33MHz"], [4, "25MHz"], [5, "20MHz"], [6, "14MHZ"]]},
+    {"bitOffset": 24, "count": 3, "label": "Write and Erase Clock Frequency", "name": "Flcomp_Write_Erase_Clock_Frequency", "options": [[0, "100MHz"], [1, "50MHz"], [2, "48MHz"], [3, "33MHz"], [4, "25MHz"], [5, "20MHz"], [6, "14MHZ"]]},
+    {"bitOffset": 27, "count": 3, "label": "Read ID and Read Status Clock Frequency", "name": "Flcomp_Read_ID_Read_Status_Clock_Frequency", "options": [[0, "100MHz"], [1, "50MHz"], [2, "48MHz"], [3, "33MHz"], [4, "25MHz"], [5, "20MHz"], [6, "14MHZ"]]},
+    {"bitOffset": 30, "count": 2, "name": "Flcomp_RSVD_31_30"}
+   ]}
+  ]}
+ ]
+}

@@ -90,11 +90,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // Every document's undo history keeps to the bounds the settings name,
         // read at each edit; the package cannot see the app's defaults.
         EditingSettings.applyUndoLimits()
+        // A help popover is read beside a panel's rows and follows the same
+        // zoom; HelpUI sits under the panels' font and is told it here.
+        HelpPopoverLayout.textSize = { ToolPanelFont.size }
+        HelpPopoverLayout.textSizeDidChange = ToolPanelFont.zoomDidChangeNotification
         // Which language the app speaks, before anything says a word in it:
         // the menu bar below is built from translated strings, and so is every
         // window after it (`Design/LOCALIZATION.md`).
         AppDefaults.startLocalization()
         AppDefaults.isolateFindPasteboard()
+        // The relay a client's configuration names lives beside the socket, not
+        // in this bundle: a path inside a bundle changes with the folder the app
+        // was built in, and a configuration is meant to be made once
+        // (`AgentRelayInstall`). Before anything can hand one out.
+        AgentRelayInstall.installAtLaunch()
         // Tabs are windows. Turning this on is what gives the app the system's
         // tab bar, ⌘T through `newWindowForTab(_:)`, ⌃Tab and ⌘1…⌘9, dragging a
         // tab out into its own window and dragging one back in, and the Window
