@@ -305,13 +305,20 @@ imports AppKit in several files: the server stays macOS-only in v1.
   file sizes and checked before opening.
 - A `--dump-roots` that does not resolve is kept, not dropped: `absentRoots`
   names it, the server says so at start, and a document under it is missing
-  for that reason, never as "the file is gone". Mounting the volume and
-  restarting brings its ids back. A root that is there does not excuse a file
+  for that reason, never as "the file is gone". The roots are resolved at
+  each check, so mounting the volume and a Reopen — or a restart — brings
+  its ids back. A root that is there does not excuse a file
   that went: that stays "the file is gone".
 - Opening, reopening, a restore and an upload read and write in a detached
   task, off the main actor, which also runs the tools and the console; the
   `stat` is taken before the read (decision 10). `documents.json` itself is
-  written on the main actor — it is small.
+  written on the main actor — it is small. Those four run one at a time, so
+  one file opened twice at once is one id and two opens cannot both take
+  the last place under a limit; Close, Forget and Delete do not wait, and a
+  Reopen finds its row again by id after the read — one closed meanwhile is
+  refused, never written over another. A restore empties the rows before it
+  fills them, so the server finishes it before it opens the socket or the
+  console.
 - Upload: `POST /admin/documents?name=…` with a raw body (there is no multipart
   parser), checked against `--max-upload-bytes`, hashed, and written
   atomically to `Uploads/<sha256>` mode 0600 — the file is named by its hash,
@@ -428,7 +435,9 @@ Every phase ends with its packages' tests green and the server starting.
    and leaves it open; a `documents.json` that would reuse an id stops the
    start; a `--dump-roots` that is not there is named as such, and its
    documents are missing for that reason, not as deleted files. Reads and the
-   upload's write run off the main actor. The registry is not yet started by
+   upload's write run off the main actor, the changes that read one at a
+   time; tests hold a read to close a row under its Reopen and to open one
+   file twice at once. The registry is not yet started by
    the server: the flags (`--dump-roots`, `--max-documents`,
    `--max-open-bytes`, `--max-upload-bytes`) and the restore at start come
    with phase 5, which is the first to serve the documents.

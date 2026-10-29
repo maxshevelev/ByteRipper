@@ -44,14 +44,23 @@ public final class DocumentRegistry: AgentDocumentSet {
 
     public private(set) var rows: [Row] = []
     private var nextID = 1
-    private let roots: [URL]
     /// The roots as the command line gave them, absent ones included: a
     /// document under one is missing for that reason, not because its file
-    /// went (`absentRoots`, `MissingReason.rootMissing`).
+    /// went (`absentRoots`, `MissingReason.rootMissing`). Resolved at each
+    /// check, so a volume mounted after the start is a root again at the next
+    /// Reopen.
     private let givenRoots: [URL]
+    private var roots: [URL] { givenRoots.compactMap(Self.resolved) }
     public let uploads: URL
     private let file: URL
     public let limits: DumpLimits
+    /// How a file's bytes are read: off the main actor (`contents(of:)`).
+    /// A test holds a read here to act while a change awaits it.
+    var reader: @Sendable (URL) async -> Data? = { await DocumentRegistry.contents(of: $0) }
+    /// The open, upload, Reopen or restore under way. Each reads off the
+    /// main actor, so without this a second could start from rows the first
+    /// is about to change: one file under two ids, or a limit passed twice.
+    private var inFlight: Task<Void, Never>?
 
     /// - Parameters:
     ///   - roots: the `--dump-roots` directories a path must resolve inside.
@@ -61,7 +70,6 @@ public final class DocumentRegistry: AgentDocumentSet {
     ///   - file: `documents.json`.
     public init(roots: [URL], uploads: URL, file: URL, limits: DumpLimits = DumpLimits()) {
         self.givenRoots = roots
-        self.roots = roots.compactMap(Self.resolved)
         self.uploads = uploads
         self.file = file
         self.limits = limits
@@ -81,6 +89,10 @@ public final class DocumentRegistry: AgentDocumentSet {
     /// that cannot be read is refused rather than started from empty — that
     /// would hand its ids out again.
     public func restore() async throws {
+        try await oneAtATime { try await self.restoreNow() }
+    }
+
+    private func restoreNow() async throws {
         guard FileManager.default.fileExists(atPath: file.path) else { return }
         let saved: Saved
         do {
@@ -115,6 +127,10 @@ public final class DocumentRegistry: AgentDocumentSet {
     /// already has — open, or missing and now back.
     @discardableResult
     public func open(path: URL, name: String? = nil) async throws -> String {
+        try await oneAtATime { try await self.openNow(path: path, name: name) }
+    }
+
+    private func openNow(path: URL, name: String?) async throws -> String {
         guard let resolved = Self.resolved(path) else {
             if let root = absentRoot(containing: path) {
                 throw Failure(MissingReason.rootMissing(root.path).message)
@@ -125,9 +141,9 @@ public final class DocumentRegistry: AgentDocumentSet {
             throw Failure("\(resolved.path) is outside the dump roots; the server opens only files under "
                 + "--dump-roots and its uploads")
         }
-        if let index = rows.firstIndex(where: { $0.path == resolved }) {
-            if rows[index].host == nil { try await reopen(rows[index].id) }
-            return rows[index].id
+        if let row = rows.first(where: { $0.path == resolved }) {
+            if row.host == nil { try await reopenNow(row.id) }
+            return row.id
         }
         guard let stamp = FileStamp.of(resolved), Self.isRegularFile(resolved) else {
             throw Failure("\(resolved.path) is not a file")
@@ -135,7 +151,7 @@ public final class DocumentRegistry: AgentDocumentSet {
         if let limit = exceeded(adding: stamp.size, besides: nil) {
             throw Failure("opening \(resolved.lastPathComponent) would pass \(limit)")
         }
-        guard let data = await Self.contents(of: resolved) else {
+        guard let data = await reader(resolved) else {
             throw Failure("\(resolved.path) cannot be read")
         }
         let id = mint()
@@ -152,6 +168,10 @@ public final class DocumentRegistry: AgentDocumentSet {
     /// already open answer the id they have, and the copy is not kept.
     @discardableResult
     public func upload(_ data: Data, name: String) async throws -> String {
+        try await oneAtATime { try await self.uploadNow(data, name: name) }
+    }
+
+    private func uploadNow(_ data: Data, name: String) async throws -> String {
         guard UInt64(data.count) <= limits.uploadBytes else {
             throw Failure("an upload is limited to \(DumpLimits.words(limits.uploadBytes))")
         }
@@ -162,40 +182,70 @@ public final class DocumentRegistry: AgentDocumentSet {
         }
         let target = uploads.appendingPathComponent(sha256, isDirectory: false)
         try await Self.writeOffMain(data, to: target)
-        return try await open(path: target, name: name)
+        return try await openNow(path: target, name: name)
     }
 
     /// Reads the file again under the same id, one version on. A file that
     /// is gone makes the row a missing one, its id kept; a missing row is
     /// checked against the roots and the limits again, and opened if it passes.
     public func reopen(_ id: String) async throws {
-        guard let index = rows.firstIndex(where: { $0.id == id }) else { throw Failure("no document \(id)") }
-        if let host = rows[index].host {
+        try await oneAtATime { try await self.reopenNow(id) }
+    }
+
+    /// Close, Forget and Delete do not wait for a change under way: the row
+    /// is looked up again by its id after each read, never by where it was.
+    private func reopenNow(_ id: String) async throws {
+        guard let row = rows.first(where: { $0.id == id }) else { throw Failure("no document \(id)") }
+        if let host = row.host {
             guard let stamp = FileStamp.of(host.url) else {
-                rows[index].state = .missing(reason(for: host.url))
-                try save()
+                try settle(id) { $0.state = .missing(reason(for: host.url)) }
                 return
             }
-            guard let data = await Self.contents(of: host.url) else {
+            let data = await reader(host.url)
+            guard rows.contains(where: { $0.id == id }) else {
+                throw Failure("\(id) was closed while it was being read again")
+            }
+            guard let data else {
                 // There and not readable: no reason of the plan's fits better.
-                rows[index].state = .missing(.gone)
-                try save()
+                try settle(id) { $0.state = .missing(.gone) }
                 return
             }
             if let limit = exceeded(adding: stamp.size, besides: id) {
                 throw Failure("reopening \(id) would pass \(limit)")
             }
             host.replace(data: data, stamp: stamp)
-            rows[index].sha256 = host.sha256
-            rows[index].version = host.version
-            rows[index].stamp = stamp
+            try settle(id) { row in
+                row.sha256 = host.sha256
+                row.version = host.version
+                row.stamp = stamp
+            }
         } else {
             // A copy: admitting reads every row to count the limits.
-            var row = rows[index]
-            await admit(&row)
-            rows[index] = row
+            var admitted = row
+            await admit(&admitted)
+            guard rows.contains(where: { $0.id == id }) else {
+                throw Failure("\(id) was forgotten while it was being read again")
+            }
+            try settle(id) { $0 = admitted }
         }
+    }
+
+    /// Changes the row with `id`, found where it is now, and writes the file.
+    private func settle(_ id: String, _ change: (inout Row) -> Void) throws {
+        guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
+        change(&rows[index])
         try save()
+    }
+
+    /// `body` once every change before it has finished, failed or not.
+    private func oneAtATime<T: Sendable>(_ body: @escaping @MainActor () async throws -> T) async throws -> T {
+        let previous = inFlight
+        let task = Task { @MainActor in
+            await previous?.value
+            return try await body()
+        }
+        inFlight = Task { _ = try? await task.value }
+        return try await task.value
     }
 
     /// Closes an open document. Its id is retired with it, not freed.
@@ -270,7 +320,7 @@ public final class DocumentRegistry: AgentDocumentSet {
             row.state = .missing(.limit(limit))
             return
         }
-        guard let data = await Self.contents(of: resolved) else {
+        guard let data = await reader(resolved) else {
             // There and not readable: no reason of the plan's fits better.
             row.state = .missing(.gone)
             return

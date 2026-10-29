@@ -173,9 +173,13 @@ final class DumpHostTests: XCTestCase {
         XCTAssertEqual(state(registry, "d1"), MissingReason.rootMissing(volume.path).message)
         await assertThrows("opening under an absent root") { try await registry.open(path: url) }
 
-        // Mounted again with the same bytes: the id comes back under it.
+        // Mounted again with the same bytes: a Reopen brings the id back,
+        // no restart needed, and so does a restart.
         try FileManager.default.createDirectory(at: volume, withIntermediateDirectories: true)
         try SyntheticDump.image(marker: 1).write(to: url)
+        XCTAssertTrue(registry.absentRoots.isEmpty)
+        try await registry.reopen("d1")
+        XCTAssertEqual(state(registry, "d1"), "open")
         registry = try await self.registry(roots: [volume])
         XCTAssertEqual(state(registry, "d1"), "open")
     }
@@ -297,5 +301,103 @@ final class DumpHostTests: XCTestCase {
         let registry = try await self.registry()
         let next = try await registry.open(path: try dump("b.bin", marker: 2))
         XCTAssertEqual(next, "d2", "next_id below the rows is raised past them")
+    }
+
+    /// A row closed or forgotten while its Reopen reads is looked up again
+    /// by id afterwards: the Reopen is refused, and no other row is written
+    /// over with what it read.
+    func testARowClosedDuringItsReopenIsLeftAlone() async throws {
+        let registry = try await registry()
+        let held = HeldReads()
+        try await registry.open(path: try dump("a.bin", marker: 1))
+        try await registry.open(path: try dump("b.bin", marker: 2))
+        let other = registry.rows[1].sha256
+        registry.reader = { await held.read($0) }
+
+        let reopening = Task { try await registry.reopen("d1") }
+        await held.untilHeld()
+        try registry.close("d1")
+        held.release()
+        await assertThrows("a Reopen of a row closed meanwhile") { try await reopening.value }
+        XCTAssertEqual(registry.rows.map(\.id), ["d2"])
+        XCTAssertEqual(registry.rows[0].sha256, other)
+        XCTAssertEqual(registry.rows[0].version, 1)
+
+        // A missing row forgotten while it is admitted.
+        registry.reader = { await DocumentRegistry.contents(of: $0) }
+        let url = try dump("c.bin", marker: 3)
+        try await registry.open(path: url)
+        try FileManager.default.removeItem(at: url)
+        try await registry.reopen("d3")
+        try dump("c.bin", marker: 3)
+        let pending = HeldReads()
+        registry.reader = { await pending.read($0) }
+        let admitting = Task { try await registry.reopen("d3") }
+        await pending.untilHeld()
+        try registry.forget("d3")
+        pending.release()
+        await assertThrows("a Reopen of a row forgotten meanwhile") { try await admitting.value }
+        XCTAssertEqual(registry.rows.map(\.id), ["d2"])
+        XCTAssertEqual(state(registry, "d2"), "open")
+    }
+
+    /// Opens wait for each other: one file opened twice at once is one id,
+    /// and two files at once cannot both take the last place under a limit.
+    func testOpensAtOnceAreOneAtATime() async throws {
+        var limits = DumpLimits()
+        limits.documents = 2
+        let registry = try await registry(limits: limits)
+        let held = HeldReads()
+        registry.reader = { await held.read($0) }
+        let a = try dump("a.bin", marker: 1)
+        let b = try dump("b.bin", marker: 2)
+
+        let first = Task { try await registry.open(path: a) }
+        await held.untilHeld()
+        let second = Task { try await registry.open(path: a) }
+        let third = Task { try await registry.open(path: b) }
+        let fourth = Task { try await registry.open(path: try self.dump("c.bin", marker: 3)) }
+        for _ in 0..<10 { await Task.yield() }
+        held.release()
+
+        let id = try await first.value
+        let again = try await second.value
+        XCTAssertEqual(again, id, "one file is one id")
+        _ = try await third.value
+        await assertThrows("a third document past the limit of two") { _ = try await fourth.value }
+        XCTAssertEqual(registry.rows.count, 2)
+    }
+}
+
+/// A reader that holds each read until it is let go, so a test can act while
+/// a change waits between its `stat` and its bytes.
+@MainActor
+private final class HeldReads {
+    private var waiting: [CheckedContinuation<Void, Never>] = []
+    private var held: CheckedContinuation<Void, Never>?
+    private var released = false
+
+    func read(_ url: URL) async -> Data? {
+        if !released {
+            await withCheckedContinuation { continuation in
+                waiting.append(continuation)
+                held?.resume()
+                held = nil
+            }
+        }
+        return try? Data(contentsOf: url)
+    }
+
+    /// Returns once a read is being held.
+    func untilHeld() async {
+        guard waiting.isEmpty else { return }
+        await withCheckedContinuation { held = $0 }
+    }
+
+    /// Lets every held read go, and every later one through.
+    func release() {
+        released = true
+        waiting.forEach { $0.resume() }
+        waiting = []
     }
 }
