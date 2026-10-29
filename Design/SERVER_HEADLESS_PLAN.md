@@ -65,11 +65,12 @@
    affordable. A change on disk marks the document "changed on disk"; Reopen
    replaces snapshot and tree, keeps the id, bumps `version`.
 10. Document ids **survive a restart**: `documents.json` stores, per document,
-    the id it was given, its path and the hash it was opened with; new ones
-    take `max+1`; there is no renumbering, because an agent holds ids across a
-    restart. A restored file whose hash differs is opened with `version` bumped
-    and marked "changed on disk", so an agent's node ids from before are not
-    silently read against other bytes.
+    the id it was given, its path, the hash it was opened with and its
+    `version`; new ones take `max+1`; there is no renumbering, because an agent
+    holds ids across a restart. A restored file whose hash differs is opened
+    with `version` set to the stored one plus one and marked "changed on disk",
+    so an agent's node ids from before are not silently read against other
+    bytes.
 11. Simple limits: document count and the total size of open files.
     Decompressed buffers are measured, not capped.
 12. An upload opens the document immediately. It has a limit of its own,
@@ -94,7 +95,9 @@
     Only Ghidra is optional.
 18. Every path opened — from the console or restored at start — must resolve
     (`realpath`, symlinks followed) inside a `--dump-roots` directory or inside
-    `<Server>/Uploads/`. Anything else is refused.
+    `<Server>/Uploads/`. Anything else is refused. A restored row that no
+    longer passes — the roots narrowed between runs — is kept as a "missing"
+    row with no id, not dropped, so the operator sees what left the set.
 19. The console checks `Host` and `Origin` against the listen addresses plus
     the names given with `--server-name` (repeatable: a LAN name, a tailnet
     MagicDNS name). An unlisted name is refused — the guard against DNS
@@ -200,8 +203,8 @@ imports AppKit in several files: the server stays macOS-only in v1.
   `changedOnDisk` comes from mtime and size; the tree is not rebuilt under the
   agent.
 - Restore: each row of `documents.json` is checked by decision 18, read, and
-  its hash compared with the stored one (decision 10); a missing file stays as
-  a "missing" row with no id.
+  its hash compared with the stored one (decision 10); a missing file, and a
+  row now outside the roots, stays as a "missing" row with no id.
 - Limits: `--max-documents` (8), `--max-open-bytes` (512 MiB), counted over
   file sizes and checked before opening.
 - Upload: `POST /admin/documents?name=…` with a raw body (there is no multipart
