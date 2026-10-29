@@ -93,11 +93,22 @@ final class AgentRelayTests: XCTestCase {
         private let lock = NSLock()
         private var connection: UnixSocketConnection?
         private var data = Data()
+        /// Set by `quit()`: a connection the accepting thread still takes
+        /// after it is closed at once, as `AgentService.adopt` does once the
+        /// service is stopped.
+        private var hasQuit = false
 
         init(path: String) throws {
             listener = UnixSocketListener(path: path)
             try listener.start { [self] socket in
-                lock.lock(); connection = socket; lock.unlock()
+                lock.lock()
+                guard !hasQuit else {
+                    lock.unlock()
+                    socket.close()
+                    return
+                }
+                connection = socket
+                lock.unlock()
                 socket.startReading(onData: { [self] chunk in
                     lock.lock(); data.append(chunk); lock.unlock()
                 }, onClose: {})
@@ -121,10 +132,19 @@ final class AgentRelayTests: XCTestCase {
             socket?.write(Data(text.utf8))
         }
 
+        /// The listener goes first, as in `AgentService.stop()`. Closing the
+        /// connection first let the relay — which attaches again the moment
+        /// its socket closes — be accepted by the listener still running, and
+        /// it then sat on a connection nothing answered, and never came to the
+        /// app that came back.
         func quit() {
-            lock.lock(); let socket = connection; connection = nil; lock.unlock()
-            socket?.close()
+            lock.lock()
+            hasQuit = true
+            let socket = connection
+            connection = nil
+            lock.unlock()
             listener.stop()
+            socket?.close()
         }
     }
 
