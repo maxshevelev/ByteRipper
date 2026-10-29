@@ -78,10 +78,13 @@
     file comes back, or the roots widen again, it reopens under that id, with
     `version` by the rule above — but only if the limits of decision 11 allow;
     otherwise it stays missing with the limit named as the reason, its id held.
+    The server does not watch the disk: a row comes back only at start, when
+    the rows are restored, or when the operator reopens it from the console.
     The console's **Forget** removes a missing row for good; its id is retired
     with it, not freed.
-11. Simple limits: document count and the total size of open files.
-    Decompressed buffers are measured, not capped.
+11. Simple limits: document count and the total size of open files. Only
+    open documents count; a missing row holds no bytes and counts toward
+    neither. Decompressed buffers are measured, not capped.
 12. An upload opens the document immediately. It has a limit of its own,
     `--max-upload-bytes` (256 MiB by default), applied to that route alone —
     every other route keeps the parser's present body limit. The request body
@@ -215,11 +218,17 @@ imports AppKit in several files: the server stays macOS-only in v1.
   Reopen does not roll the version back. `changedOnDisk` comes from mtime and size; the tree is not rebuilt under the
   agent.
 - Restore: each row of `documents.json` is checked by decision 18, read, and
-  its hash compared with the stored one (decision 10); a missing file, and a
-  row now outside the roots, stay as "missing" rows that hold their ids and
-  serve nothing — `documents` does not list them, and a call naming one is
-  told the file is missing, not that the id is unknown. A row that returns is
-  admitted only within the limits (decision 11).
+  its hash compared with the stored one (decision 10). Rows are restored in
+  their stored order — the order the console's reorder sets — and each is
+  admitted if the limits (decision 11) still allow; each one that does not
+  fit stays missing, so which documents open does not depend on the order the
+  files happen to be read.
+- A missing row holds its id and serves nothing, and carries its reason: the
+  file is gone, the path is outside the roots, or a limit (named) refused it.
+  `documents` does not list it; a call naming its id is told that reason —
+  not that the id is unknown, and not "missing" when the file is there but
+  over a limit. The console shows the same reason, and offers Reopen (which
+  re-runs decision 18 and the limits) and Forget.
 - Limits: `--max-documents` (8), `--max-open-bytes` (512 MiB), counted over
   file sizes and checked before opening.
 - Upload: `POST /admin/documents?name=…` with a raw body (there is no multipart
@@ -270,8 +279,8 @@ imports AppKit in several files: the server stays macOS-only in v1.
 - `ServerConsole` serves `/admin` and the pages Documents, Activity, Tokens and
   Status; the HTML/CSS/JS are resources of the target (SPM resources).
 - JSON: `/admin/api/documents`, `/admin/api/activity`, `/admin/api/status`;
-  actions: open by path, upload, reopen, delete (uploads only), forget a
-  missing row, create/rotate/
+  actions: open by path, upload, reopen (an open document or a missing row),
+  delete (uploads only), forget a missing row, create/rotate/
   revoke a token, sign in and out.
 - Polling every two seconds; no SSE or WebSocket, because `HTTPService` sends
   complete responses only.
@@ -350,7 +359,10 @@ Every phase ends with its packages' tests green and the server starting.
   (and refused outside the roots) and upload, reopen, delete an upload, the
   set and the ids surviving a restart, a file changed while the server was
   down coming back marked, a Reopen's version surviving a restart, a missing
-  row keeping its id and getting it back when the file returns, no id reused
+  row keeping its id and getting it back when the file returns, a returning
+  row over a limit staying missing with that limit named (to the console and
+  to the agent), restore in the stored order when the saved set no longer
+  fits, missing rows not counted in the limits, no id reused
   after close or Forget, the activity of the MCP and of the REST clients, an
   unlisted `Host` refused.
 - Measurements: RSS and start time of `relay`; RSS of the server with the 21 MB
