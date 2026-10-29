@@ -238,6 +238,10 @@ public final class DocumentRegistry: AgentDocumentSet {
     }
 
     /// `body` once every change before it has finished, failed or not.
+    ///
+    /// `body` calls the private `…Now` forms of any change it needs — `open`
+    /// from `upload`, `reopen` from `open`. A public change would queue
+    /// behind this one and wait for itself.
     private func oneAtATime<T: Sendable>(_ body: @escaping @MainActor () async throws -> T) async throws -> T {
         let previous = inFlight
         let task = Task { @MainActor in
