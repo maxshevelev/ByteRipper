@@ -51,10 +51,10 @@ final class ServerMCPTests: XCTestCase {
         for forbidden in ["annotate", "annotations", "remove_annotations", "reveal", "focus", "show",
                           "write", "update_in_parent", "open_panel", "open_code", "open_part",
                           "uefi_select", "uefi_selection", "compare", "reveal_diff", "uefi_fix_checksum",
-                          "fit_fix_checksum", "fit_add_microcode", "microcode_catalogue", "survey",
+                          "fit_fix_checksum", "fit_add_microcode", "survey",
                           "open_dump", "close_dump", "copy_to_other_pane",
                           // The next stage, with ME and FIT (decision 15).
-                          "region_scan", "survey", "microcode_catalogue"] {
+                          "region_scan", "microcode_catalogue"] {
             XCTAssertFalse(names.contains(forbidden), "\(forbidden) is in the server's list")
         }
         for required in ["documents", "read", "find_bytes", "uefi_tree", "uefi_node", "uefi_find",
@@ -190,7 +190,9 @@ final class ServerMCPTests: XCTestCase {
     /// has: a panel, a part, the focus, a survey, an edit.
     func testNoDescriptionNamesWhatTheServerHasNot() {
         let forbidden = ["survey", "reveal", "open_part", "annotate", "open_panel", "_fix_checksum", "panel",
-                         "focus", "unsaved", "`write`", "open_code", "counterpart", "open_dump"]
+                         "focus", "unsaved", "`write`", "open_code", "counterpart", "open_dump",
+                         // Not served before the next stage (decision 15).
+                         "region_scan", "microcode_catalogue"]
         for tool in tools(ghidra: NoGhidra()) {
             for word in forbidden where tool.description.localizedCaseInsensitiveContains(word) {
                 XCTFail("\(tool.name) names \(word)")
