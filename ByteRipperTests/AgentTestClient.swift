@@ -41,6 +41,20 @@ final class AgentTestClient {
         return answer
     }
 
+    /// The list `tools/list` answers: what the agent plans against before it
+    /// calls anything.
+    func tools(file: StaticString = #filePath, line: UInt = #line) async throws -> JSONValue {
+        let id = nextID
+        nextID += 1
+        let request: JSONValue = ["jsonrpc": "2.0", "id": .count(id), "method": "tools/list",
+                                  "params": .object([:])]
+        await connection.receive(request.encoded() + Data("\n".utf8))
+        await connection.waitUntilIdle()
+        let response = try XCTUnwrap(wire.messages.first { $0["id"] == .count(id) }, file: file, line: line)
+        let result = try XCTUnwrap(response["result"], "\(response)", file: file, line: line)
+        return try XCTUnwrap(result["tools"], "\(result)", file: file, line: line)
+    }
+
     /// Everything the service wrote, parsed.
     var messages: [JSONValue] { wire.messages }
 

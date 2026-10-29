@@ -125,6 +125,7 @@ final class CodeAgentTests: XCTestCase {
         let opened = try await client.answer("ghidra_open", ["node": .string(node)])
         XCTAssertEqual(received.body, Self.teModule(), "the node's image is what went to the server")
         XCTAssertEqual(opened["module"]?.stringValue, SHA256Digest(data: Self.teModule()).hex)
+        XCTAssertEqual(opened["document"]?.stringValue, "d1", "the answer names the document it read")
         XCTAssertEqual(received.query["node"], node)
         XCTAssertFalse((received.query["name"] ?? "").isEmpty)
     }

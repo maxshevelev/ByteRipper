@@ -1,0 +1,2634 @@
+[
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "Lists every file open in ByteRipper: its id (pass it as `document` to the other tools — never show it to the person), `label` (what to call it to the person: the file's name, told apart from another of the same name), `link` for a file on disk (the label as a Markdown link that brings it forward in ByteRipper — write it where you name the file), name, path, size, whether it has unsaved edits, and where it is — pane A or B of a tab, or a part opened over its parent file (\"part\", with the parent's id, the bytes of the parent it came from, and `decoded` — what the part's bytes are to those: `LZMA`, `XOR 77`, `Read-only`…, absent for a plain copy — and `keeps_offsets`, whether byte n of the part is byte n of the source). A part is read, searched and analysed by every tool as a file of its own, from address 0, in its decoded form, and its tool panel is its own. The document the reader is in comes first and is marked `focused`. Ids last as long as the file stays open.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+
+      },
+      "type" : "object"
+    },
+    "name" : "documents",
+    "title" : "Open documents"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "What the person at ByteRipper is looking at and pointing to: the document they are in, the caret, the selection (null when there is only a caret), and the bytes on screen. Call it when they say \"this\", \"here\" or \"what I selected\". In a comparison of two files it also names the other one, which scrolls with this one.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+
+      },
+      "type" : "object"
+    },
+    "name" : "focus",
+    "title" : "Where the reader is"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "Reads bytes of an open document as it is now, unsaved edits included. `format`: \"hex\" (default) gives rows of 16 bytes with their address and text, as the dump shows them; \"ascii\" a string with \".\" for bytes that are not printable; \"utf16le\" the bytes decoded as UTF-16LE text; \"u8\", \"u16\", \"u32\", \"u64\" a list of unsigned integers in hex, little-endian unless `endian` is \"big\". At most 4096 bytes; a range running past the end of the file is cut there and says so.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "document" : {
+          "description" : "The document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "endian" : {
+          "description" : "For u16, u32 and u64. Default \"little\".",
+          "enum" : [
+            "little",
+            "big"
+          ],
+          "type" : "string"
+        },
+        "format" : {
+          "description" : "How to show them. Default \"hex\".",
+          "enum" : [
+            "hex",
+            "ascii",
+            "utf16le",
+            "u8",
+            "u16",
+            "u32",
+            "u64"
+          ],
+          "type" : "string"
+        },
+        "length" : {
+          "description" : "How many bytes. Default 256, at most 4096.",
+          "type" : [
+            "integer",
+            "string"
+          ]
+        },
+        "offset" : {
+          "description" : "Where to start, e.g. \"0x7F3000\".",
+          "type" : [
+            "integer",
+            "string"
+          ]
+        }
+      },
+      "required" : [
+        "offset"
+      ],
+      "type" : "object"
+    },
+    "name" : "read",
+    "title" : "Read bytes"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Shows a place in a document to the person: brings its tab forward, scrolls the dump to it and moves the caret there — selecting `length` bytes when `select` is true, which is the default when a length is given. It is a step of the navigation history, so the person's Back returns to where they were. Use it to point at what you are talking about.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "document" : {
+          "description" : "The document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "length" : {
+          "description" : "How many bytes the place is. Default 0: just the caret.",
+          "type" : [
+            "integer",
+            "string"
+          ]
+        },
+        "offset" : {
+          "description" : "The first byte to show.",
+          "type" : [
+            "integer",
+            "string"
+          ]
+        },
+        "select" : {
+          "description" : "Select the bytes. Default: true when `length` is given.",
+          "type" : "boolean"
+        }
+      },
+      "required" : [
+        "offset"
+      ],
+      "type" : "object"
+    },
+    "name" : "reveal",
+    "title" : "Show bytes to the reader"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Puts an annotation on a place in a file: a short `title` (what the bytes are), an optional `note` (why they matter, or what you found there), and the place — a `document` or a file `path`, with `offset` and `length`, or a UEFI `node` — whole, or with `offset` and `length` counted from the node's first byte: a `find_bytes` match with `node` is `node` and `node_offset`. It is listed in the Annotations window and drawn over the bytes — a dashed outline, the note when the person rests the pointer on them — whenever the file is on screen, now or after it is opened later; it is kept when the file closes. Use it both to show what bytes are while you explain them and to leave a result for the person to check — with `survey`, one on each file that matches. Whenever it is about bytes you have already annotated — a pointer and its target, a size and the stretch it names, a checksum and what it covers — annotate the other end first and pass its id in `related_to`: the person sees the relation and cannot otherwise. `reveal: true` also brings the place on screen, opening the file in a tab if it is not. In a part — a fragment panel — it goes to the file the part came out of, at the same bytes where the part keeps the file's addresses, otherwise at the bytes the part was decoded from; `from_part` says where it was in the part. A place in bytes that are not the file's own — what a compressed section decompresses to, a LENV block decoded, given as a node there or as a part of them — is kept there: the annotation answers `decoded` (the section or block, the range in its bytes, the `codecs`), the person's double-click opens those bytes in a fragment panel at the place, and the card shows the codecs as badges, so the title need not name them. A place in a module's code — a `function`, or an instruction `address`, in a Code panel given as `document` or in a module's image `node` of a dump with a stored analysis — is a code annotation: the person's double-click opens the module's Code panel at that function or instruction, the panel shows the note beside it, and the answer has `code`. Annotations go with `remove_annotations` or when the person clears them.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "address" : {
+          "description" : "Or an instruction's Ghidra address in that code — the place is the instruction.",
+          "type" : "string"
+        },
+        "document" : {
+          "description" : "The document it is in. Default: the focused one.",
+          "type" : "string"
+        },
+        "function" : {
+          "description" : "A function of a module's code, by name or Ghidra entry address: annotate it in the Code panel `document`, or in the module at image `node` of the dump `document`.",
+          "type" : "string"
+        },
+        "length" : {
+          "description" : "How many bytes. Default 1.",
+          "type" : [
+            "integer",
+            "string"
+          ]
+        },
+        "node" : {
+          "description" : "Or the UEFI node it is about, e.g. \"0.2.5\" — inside a compressed section too.",
+          "type" : "string"
+        },
+        "note" : {
+          "description" : "A sentence or two: why they matter, or what was found. At most 600 characters.",
+          "type" : "string"
+        },
+        "offset" : {
+          "description" : "The first byte: in the document, or with `node` from the node's first byte.",
+          "type" : [
+            "integer",
+            "string"
+          ]
+        },
+        "path" : {
+          "description" : "Or the file it is in, by path, open or not.",
+          "type" : "string"
+        },
+        "related_to" : {
+          "description" : "Ids of annotations this one is about, e.g. [\"a1\"] for the target of a pointer. Give it whenever there is such an annotation.",
+          "items" : {
+            "type" : "string"
+          },
+          "type" : "array"
+        },
+        "reveal" : {
+          "description" : "Also bring the place on screen. Default false.",
+          "type" : "boolean"
+        },
+        "title" : {
+          "description" : "A few words: what the bytes are. At most 80 characters.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "title"
+      ],
+      "type" : "object"
+    },
+    "name" : "annotate",
+    "title" : "Annotate a place"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The annotations made so far, oldest first — on every file, or on a `document` or a file `path`: id, the file's `path` (and its `document` id while it is open), `range` and/or `node`, `decoded` for a place in decompressed or decoded bytes, `title`, `note`, `related_to`, and `author: \"person\"` for one the person made by hand. Pages: `limit` is a ceiling — a page also stops before the answer passes the size bound and then says `truncated: \"size\"`; pass `next` back as `after` until it is null. A page asked for after the list changed is refused.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "after" : {
+          "description" : "The `next` of the page before, to go on from where it stopped.",
+          "type" : "string"
+        },
+        "document" : {
+          "description" : "Only the annotations on this document's file.",
+          "type" : "string"
+        },
+        "limit" : {
+          "description" : "The most items one page holds — a ceiling: a page stops sooner when the answer would pass the size bound, and says so with `truncated: \"size\"`. Default 50, at most 200.",
+          "maximum" : 200,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "path" : {
+          "description" : "Only the annotations on this file.",
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "annotations",
+    "title" : "List annotations"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Removes annotations: the ones named in `ids`, or every one on a `document` or a file `path`, or — with `all` — every one. Relations to a removed annotation go with it.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "all" : {
+          "description" : "Remove every annotation.",
+          "type" : "boolean"
+        },
+        "document" : {
+          "description" : "Remove every annotation on this document's file.",
+          "type" : "string"
+        },
+        "ids" : {
+          "description" : "The annotations to remove, e.g. [\"a2\", \"a3\"].",
+          "items" : {
+            "type" : "string"
+          },
+          "type" : "array"
+        },
+        "path" : {
+          "description" : "Remove every annotation on this file.",
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "remove_annotations",
+    "title" : "Remove annotations"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "Opens a file by path without putting it on screen, read-only, and returns its document id — for the tools that take `document` (`read`, `uefi_tree`, `uefi_find`…), but not for the ones that show things (`reveal`, `annotate`, panels); `show` puts it on screen. A file already open in a tab answers with that tab's id. The last eight are kept parsed; older ones are closed and opened again when asked for. A file changed on disk is read again and keeps its id.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "path" : {
+          "description" : "An absolute path, or one starting with ~/.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "path"
+      ],
+      "type" : "object"
+    },
+    "name" : "open_dump",
+    "title" : "Open a dump in the background"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Closes a document `open_dump` opened. Files open in a tab are the person's and are not closed.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "document" : {
+          "description" : "The background document's id.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "document"
+      ],
+      "type" : "object"
+    },
+    "name" : "close_dump",
+    "title" : "Close a background dump"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Opens a background document in a new tab — or brings forward the tab that already has the file — and shows `offset` there, selecting `length` bytes when given. Returns the on-screen document's id, which replaces the background one. Never opens into a pane that holds a file. A tab is a change of context: to look inside a node or a stretch of a dump that is already on screen, use `open_part`, which opens a panel in the same window instead.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "document" : {
+          "description" : "The document's id.",
+          "type" : "string"
+        },
+        "length" : {
+          "description" : "How many bytes to select. Default 0.",
+          "type" : [
+            "integer",
+            "string"
+          ]
+        },
+        "offset" : {
+          "description" : "Where to show. Default: the start.",
+          "type" : [
+            "integer",
+            "string"
+          ]
+        }
+      },
+      "required" : [
+        "document"
+      ],
+      "type" : "object"
+    },
+    "name" : "show",
+    "title" : "Put a dump on screen"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "Runs one tool that takes `document` (`uefi_find`, `uefi_node`, `uefi_at`, `read`…) on every file in `folder` (or in `paths`), opening each in the background, and returns the answers grouped by the value at `group_by` — a dotted path into the tool's answer, e.g. \"total\", \"matches.0.start\", \"values.0\", \"chain.-1.name\" (a negative index counts from the end). Each group: the value, how many files gave it, and up to ten of the files; the largest groups first. A file is named by its path from `root` — the `folder`, or the folder all the `paths` share — so files of one name in different subfolders are told apart, and `root` joined to the name is the path to open. Files a tool refused are listed under `failed`. Takes a while on many large images; reports progress. At most 200 files. Pages: `limit` is the most groups on one page, a ceiling — a page also stops before the answer passes the size bound and then says `truncated: \"size\"`; pass `next` back as `after`, with the same other arguments, until it is null. The next page is answered from the same run, not a new one. A group whose value is too large alone gives it as the start of its JSON text, marked `truncated: \"item\"`.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "after" : {
+          "description" : "The `next` of the page before, to go on from where it stopped.",
+          "type" : "string"
+        },
+        "arguments" : {
+          "description" : "The tool's arguments, without `document`.",
+          "type" : "object"
+        },
+        "folder" : {
+          "description" : "A folder of dumps: files ending in .bin, .rom, .fd, .cap, .dump, .img, .scap.",
+          "type" : "string"
+        },
+        "group_by" : {
+          "description" : "Where in the answer the value to group by is. Default: the whole answer.",
+          "type" : "string"
+        },
+        "limit" : {
+          "description" : "The most items one page holds — a ceiling: a page stops sooner when the answer would pass the size bound, and says so with `truncated: \"size\"`. Default 20, at most 100.",
+          "maximum" : 100,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "paths" : {
+          "description" : "Files to survey, instead of a folder.",
+          "items" : {
+            "type" : "string"
+          },
+          "type" : "array"
+        },
+        "recursive" : {
+          "description" : "Look in subfolders too. Default false.",
+          "type" : "boolean"
+        },
+        "tool" : {
+          "description" : "The tool to run on each file.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "tool"
+      ],
+      "type" : "object"
+    },
+    "name" : "survey",
+    "title" : "Ask one question of many dumps"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The runs of bytes where `document` and `against` differ, in address order — compared at the same absolute offsets, unsaved edits included, as the window's A/B comparison compares. Never aligned: data that moved shows as one long run, not as a move. Runs closer than `merge_gap` matching bytes are one run; each has `start`, `end` (half-open), `length` and `differing_bytes`, which is less than `length` where matching bytes were merged in. `totals` count the whole range, whatever the page. Only bytes both files hold are compared: when the sizes differ, `tail` says where the longer file's extra bytes are, and they are not counted. With `structure` \"auto\" each run says `where` it is in `document`: the top-level area (region, volume, ME partition) and the deepest node that covers the run whole — a run across a boundary is placed at the node holding both sides, never split. Ids are those `uefi_node` and `me_tree` take; `where` is empty when nothing covers it. `summary: true` answers the areas instead, those with no differences too. Pages: `limit` is a ceiling — a page also stops before the answer passes the size bound, and then says `truncated: \"size\"`; pass `next` back as `after` until it is null. A page asked for after either document changed is refused. Reads only; nothing on screen moves.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "after" : {
+          "description" : "The `next` of the page before, to go on from where it stopped.",
+          "type" : "string"
+        },
+        "against" : {
+          "description" : "The id of the document to compare it with, from `documents` or `open_dump`.",
+          "type" : "string"
+        },
+        "document" : {
+          "description" : "The first document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "end" : {
+          "description" : "The first byte after the range. Default: the end of the shorter file.",
+          "type" : [
+            "integer",
+            "string"
+          ]
+        },
+        "limit" : {
+          "description" : "The most items one page holds — a ceiling: a page stops sooner when the answer would pass the size bound, and says so with `truncated: \"size\"`. Default 100, at most 1000.",
+          "maximum" : 1000,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "merge_gap" : {
+          "description" : "At most this many matching bytes between two runs make them one. Default 16; 0 merges nothing.",
+          "type" : "integer"
+        },
+        "offset" : {
+          "description" : "Where the compared range starts, the same in both. Default 0x0.",
+          "type" : [
+            "integer",
+            "string"
+          ]
+        },
+        "structure" : {
+          "description" : "Place each run in the firmware's structure, or not. Default auto.",
+          "enum" : [
+            "auto",
+            "none"
+          ],
+          "type" : "string"
+        },
+        "summary" : {
+          "description" : "Answer the areas of the image with their differences instead of the runs. Default false.",
+          "type" : "boolean"
+        }
+      },
+      "required" : [
+        "against"
+      ],
+      "type" : "object"
+    },
+    "name" : "diff",
+    "title" : "Byte differences"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Shows `document` and `against` to the person as a pair — A and B side by side, their differences coloured — in the window's own comparison. A pair already on screen is brought forward; a document alone in its tab gets the other beside it; otherwise the two open in a new tab, leaving the person's tabs as they are. Answers the ids of A and B as they are on screen (a background document gets a new one). Then `reveal_diff` walks the differences. A part (`open_part`), or anything never saved, has no file to open beside another: the two open as copies of their bytes in a new tab, and the answer says `copies` — an edit there reaches neither the documents nor a parent.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "against" : {
+          "description" : "The document to show beside it, as B.",
+          "type" : "string"
+        },
+        "document" : {
+          "description" : "The document to show as A. Default: the focused one.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "against"
+      ],
+      "type" : "object"
+    },
+    "name" : "compare",
+    "title" : "Show two documents side by side"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Moves both panes of a pair `compare` showed to the next or previous difference — the step the window's own difference arrows take, with the person's grouping of nearby differences — from `from`, or from the caret. A step of the navigation history, so the person's Back returns. Answers the difference, or `found: false` at the end. `document` is either side of the pair.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "direction" : {
+          "description" : "Which way. Default next.",
+          "enum" : [
+            "next",
+            "previous"
+          ],
+          "type" : "string"
+        },
+        "document" : {
+          "description" : "A or B of the pair. Default: the focused one.",
+          "type" : "string"
+        },
+        "from" : {
+          "description" : "Where to look from. Default: the caret.",
+          "type" : [
+            "integer",
+            "string"
+          ]
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "reveal_diff",
+    "title" : "Show the next difference"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "Every place a text or a byte pattern occurs, in one of two scopes. Without `node`: the document's bytes as they are stored, with unsaved edits — the find bar's own search — in address order, `offset`/`end` limiting the range. With `node` (an id from `uefi_tree`, `uefi_find` or `uefi_at`, or \"root\" for the whole image): what the UEFI tree holds at and under that node — every container opened, every compressed section searched in what it decompresses to (nested ones too), a BIOS Guard update in its assembled region, a Lenovo LENV block stored XOR-encoded decoded — and only so: a compressed stream or an encoded block as stored is not searched, nor is an ME region. Opening everything takes a few seconds on a large image the first time; the same search of unchanged bytes again — a next page — is answered from the last one. A text the file holds only compressed is found this way and not the other. `text` is looked for as ASCII, as UTF-16LE, or both (`encoding`, default both), any case with `ignore_case`; `hex` is bytes, with `??` for a byte that may be anything (\"24 ?? 4D 49\"). Each match: the `encoding` that matched; without `node`, `start`, `end` (half-open file addresses) and `where` it is, as `diff` places a run; with `node`, in tree order, the `node` that holds it whole (as `uefi_tree` gives it) with `node_offset`, its `volume` and `volume_offset`, and `start`/`end` in the file — or, inside a compressed section, `in_compressed: true`, the `section` (open it with `open_part` part \"decompressed\") and `buffer_start`/`buffer_end` in what it decompresses to, which `uefi_node_data` reads — and `decoded` (\"XOR 77\") in a LENV block decoded. With `context`, a `preview` of the bytes around it — none, and `redacted: true`, in an area the flash map names MSDM, Password or Key. `total` counts every match; with `node`, `unread` lists the compressed sections that would not decompress. Matches do not overlap unless `overlapping`: \"AA\" in \"AAAA\" is two, or three with it. Pages: `limit` is a ceiling — a page also stops before the answer passes the size bound and says `truncated: \"size\"`; pass `next` back as `after` until it is null. With `survey`, which dumps of a folder hold a string.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "after" : {
+          "description" : "The `next` of the page before, to go on from where it stopped.",
+          "type" : "string"
+        },
+        "context" : {
+          "description" : "Bytes before and after each match to show in `preview`. Default 0, at most 64.",
+          "type" : "integer"
+        },
+        "document" : {
+          "description" : "The document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "encoding" : {
+          "description" : "How `text` is stored. Default \"both\".",
+          "enum" : [
+            "ascii",
+            "utf16le",
+            "both"
+          ],
+          "type" : "string"
+        },
+        "end" : {
+          "description" : "The first byte after the searched range. Default: the end. Not with `node`.",
+          "type" : [
+            "integer",
+            "string"
+          ]
+        },
+        "hex" : {
+          "description" : "Bytes to find, as hex pairs; `??` for any byte: \"24 ?? 4D 49\".",
+          "type" : "string"
+        },
+        "ignore_case" : {
+          "description" : "Letters in either case — ASCII letters of `text`. Default false.",
+          "type" : "boolean"
+        },
+        "limit" : {
+          "description" : "The most items one page holds — a ceiling: a page stops sooner when the answer would pass the size bound, and says so with `truncated: \"size\"`. Default 100, at most 1000.",
+          "maximum" : 1000,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "node" : {
+          "description" : "Search what the UEFI tree holds at and under this node, decompressed and decoded; \"root\" for the whole image.",
+          "type" : "string"
+        },
+        "offset" : {
+          "description" : "Where the search of the document starts. Default 0x0. Not with `node`.",
+          "type" : [
+            "integer",
+            "string"
+          ]
+        },
+        "overlapping" : {
+          "description" : "Count matches that overlap one another. Default false.",
+          "type" : "boolean"
+        },
+        "text" : {
+          "description" : "A text to find. Give `text` or `hex`.",
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "find_bytes",
+    "title" : "Find bytes or text"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Opens a stretch of a document as a part of its own, in a fragment panel over its parent's tab — as Open Zone and the UEFI Structure panel's Open do — and answers its new `document` id. This is the way to open a node, compressed or not, or any stretch you want to read or edit: it keeps the person in the window they are in, with the parent showing behind the panel. A new tab is for switching to another context or for comparing two parts; `compare` opens one. The part's addresses start at 0, so two blocks at different addresses of two dumps compare with `diff` and `compare`; every tool that takes `document` works on it. Give `offset` and `length`, or `node` (with `part`) for a UEFI node: \"all\" (the default) or \"body\" for its bytes — a node inside a compressed section opens as what it decompressed to — \"decompressed\" for what a compressed section decompresses to, \"decoded\" for a Lenovo LENV block (or one of its entries) decoded, its XOR encoding removed. The part stays linked: edits to it stay in it until the person puts them back with Update in Parent, which for a decompressed node compresses them again. The answer says which `part` opened, and a LENV block opened without \"decoded\" comes with a `hint`. Asking again for a part that is already open raises its panel and answers `reused: true` with its `document` — not a second copy. `tool_panel` names the tool panel the part shows, null when none: `open_panel` with the part's `document` opens one on it. From then on the UEFI tools name the same node in the parent and the part (`counterpart`, `decoded_in`), and a call that names the parent while the focus is on the part answers with a `focus_note`. The new part takes the focus, so a call that leaves out `document` now goes to the part, and a node id belongs to the document it was listed on, the parent: give `document` (the `parent` of the answer) when you go on with that node. A part has its own tree, with its own ids: the parent's 0.3.4.1.2.5 is 0.0.5 in the decoded block. The parent must be on screen (`show` puts a background dump there). Closes with `close_dump` or by the person.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "document" : {
+          "description" : "The parent's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "length" : {
+          "description" : "How many bytes the part is.",
+          "type" : [
+            "integer",
+            "string"
+          ]
+        },
+        "name" : {
+          "description" : "What the part is called. Default: the parent's name and what it is.",
+          "type" : "string"
+        },
+        "node" : {
+          "description" : "Instead of `offset` and `length`: a UEFI node's id.",
+          "type" : "string"
+        },
+        "offset" : {
+          "description" : "Where the part starts in the parent.",
+          "type" : [
+            "integer",
+            "string"
+          ]
+        },
+        "part" : {
+          "description" : "With `node`: the whole node, its body, what a compressed section decompresses to, or a LENV block decoded. Default \"all\".",
+          "enum" : [
+            "all",
+            "body",
+            "decompressed",
+            "decoded"
+          ],
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "open_part",
+    "title" : "Open a part"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "Every place in a firmware image that refers to an address or a GUID, in the file and inside its compressed sections, grouped by the FFS file each is in — so \"which modules use this region\" is one call. `guid` is written as usual and searched in its EFI byte order. `address` is a file address (or, with `relative_to` \"region\", an offset in the BIOS region) and is searched in the forms `forms` names: `bus` — where the BIOS region is mapped below 4 GiB, the region's end at 0x100000000, as 32 and 64 bits; `file` — the file address; `region` — the offset in the BIOS region; each little-endian, 32 bits. Address hits are chance as often as not in code: each says the `form` it matched, and none is hidden, but a shorter form is not listed apart where it only matched inside a longer one. `scope`: \"all\" (default), \"raw\" (the file as stored) or \"compressed\" (what the sections decompress to). Per file: `file` (its id), `name`, `guid`, `type`, `in_compressed`, and `hits` — `form`, `section` and `section_offset` in it, `file_start` where the hit has a file address. A hit in no FFS file is listed by the deepest `node` holding it. `total` counts the hits, `files` the groups. Pages: `limit` is a ceiling on files — a page also stops before the answer passes the size bound and says `truncated: \"size\"`; pass `next` back as `after`. With `survey`, which dumps of a folder refer to a GUID.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "address" : {
+          "description" : "An address, e.g. \"0x668000\". Give `guid` or `address`.",
+          "type" : [
+            "integer",
+            "string"
+          ]
+        },
+        "after" : {
+          "description" : "The `next` of the page before, to go on from where it stopped.",
+          "type" : "string"
+        },
+        "document" : {
+          "description" : "The document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "forms" : {
+          "description" : "Which forms of `address` to search: \"bus\", \"file\", \"region\". Default all three.",
+          "items" : {
+            "type" : "string"
+          },
+          "type" : "array"
+        },
+        "guid" : {
+          "description" : "A GUID, e.g. \"8C8CE578-8A3D-4F1C-9935-896185C32DD3\". Give `guid` or `address`.",
+          "type" : "string"
+        },
+        "limit" : {
+          "description" : "The most items one page holds — a ceiling: a page stops sooner when the answer would pass the size bound, and says so with `truncated: \"size\"`. Default 50, at most 200.",
+          "maximum" : 200,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "relative_to" : {
+          "description" : "What `address` counts from: the file (default) or the BIOS region.",
+          "enum" : [
+            "file",
+            "region"
+          ],
+          "type" : "string"
+        },
+        "scope" : {
+          "description" : "Where to search. Default \"all\".",
+          "enum" : [
+            "all",
+            "raw",
+            "compressed"
+          ],
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "refs",
+    "title" : "Find references to an address or a GUID"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "Read a module's stored code analysis. The module is the Code panel or tab given as `document`; or a PE32/TE image `node` of a dump (`code_modules` lists the ones with an analysis), its bytes hashed to find the analysis; or a `module` SHA-256, read from the store alone. No panel needs to be open. `what` picks the list (default \"functions\"): \"functions\"; one function's \"instructions\" or decompiled \"c\"; a function's callers and callees (\"references\"); the instructions that \"uses\" an address — who calls a function, jumps to a label, or reads a global or a string; \"strings\"; \"symbols\", the named data — GUIDs, service tables, interfaces; or \"post_codes\", the values written to port 0x80 (what a POST card shows), each at the call that supplies it, with the functions it passes through (`via`) — `search` narrows by value — and, last, the writes whose value or port the code does not say (`unresolved`). A function's `name_source` says where its name came from: DEFAULT is Ghidra's FUN_ placeholder, ANALYSIS a name the UEFI pass read from the module (`name_reason` says from what), IMPORTED the image's own. Addresses come twice: `entry`/`address` is Ghidra's virtual address, `offset` the same byte's offset in the module, the number the hex view shows (none when read by `module` alone). To show the person a function, `open_code`; to leave a note on it, `annotate` with `function`. These are stored observations, not a live disassembly; the C is Ghidra's reading of the instructions, not the source.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "address" : {
+          "description" : "A Ghidra address, for \"uses\".",
+          "type" : "string"
+        },
+        "document" : {
+          "description" : "A Code panel or tab, or the dump the module is in. Default: the focused one.",
+          "type" : "string"
+        },
+        "function" : {
+          "description" : "A function name or Ghidra entry address, for \"instructions\", \"c\" and \"references\".",
+          "type" : "string"
+        },
+        "limit" : {
+          "description" : "The most items one page holds — a ceiling: a page stops sooner when the answer would pass the size bound, and says so with `truncated: \"size\"`. Default 200, at most 500.",
+          "maximum" : 500,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "module" : {
+          "description" : "Or the module by its bytes' SHA-256, read from the store without a dump.",
+          "type" : "string"
+        },
+        "node" : {
+          "description" : "The module's PE32/TE image node in the dump, e.g. \"0.6.4.0.0.205.2\" — from `code_modules`.",
+          "type" : "string"
+        },
+        "recipe" : {
+          "description" : "With `module`: which analysis, when there are several. Default: the newest.",
+          "type" : "string"
+        },
+        "search" : {
+          "description" : "A word to narrow functions, strings or symbols by.",
+          "type" : "string"
+        },
+        "what" : {
+          "description" : "The list to read. Default \"functions\".",
+          "enum" : [
+            "functions",
+            "instructions",
+            "c",
+            "uses",
+            "strings",
+            "symbols",
+            "references",
+            "post_codes"
+          ],
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "code_query",
+    "title" : "Read a module's code analysis"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The PE32/TE modules of a dump that have a stored code analysis: their image `node`, name, the analyses (`recipes`, newest first) and how many functions the newest found. The modules are found by their bytes — the same module in another dump has the same analysis — including those inside compressed sections, which are opened for it: seconds on a large image the first time. Read one with `code_query`, show it with `open_code`.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "document" : {
+          "description" : "The dump. Default: the focused one.",
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "code_modules",
+    "title" : "List a dump's analyzed modules"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Opens the Code panel of a module — its functions, ASM and C beside its bytes — over the dump, at a `function` or an instruction `address` when given, and brings it forward: what the person's Open with Code does. Give the dump `document` and the image `node` (`code_modules`), or a Code panel as `document` to move it to another place. `view` chooses the side the reader lands on: `c` for the decompiled listing, `asm` for the assembly. A panel of the same module already open is raised rather than opened twice. Answers the panel's `document` id, which `code_query` reads.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "address" : {
+          "description" : "Or an instruction's Ghidra address to open at.",
+          "type" : "string"
+        },
+        "document" : {
+          "description" : "The dump, or a Code panel. Default: the focused one.",
+          "type" : "string"
+        },
+        "function" : {
+          "description" : "A function name or Ghidra entry address to open at.",
+          "type" : "string"
+        },
+        "node" : {
+          "description" : "The module's PE32/TE image node in the dump.",
+          "type" : "string"
+        },
+        "view" : {
+          "description" : "Which side to show: \"c\" for the decompiled listing, \"asm\" for the assembly. Default: the panel keeps the side it has.",
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "open_code",
+    "title" : "Open a module's code"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The modules that have a kept Ghidra project: `module` (SHA-256), `name`, whether an owner is `running`, whether the project holds a review (`reviewed`), and its last publish (`published`: artifact, recipe, revision).",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+
+      },
+      "type" : "object"
+    },
+    "name" : "ghidra_modules",
+    "title" : "List the modules kept in Ghidra"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Opens a module for a review in Ghidra and answers its owner's `hello`: program, functions, unpublished changes. Give the PE32/TE image `node` of a dump (`uefi_find` with `name: \"PE32 image\"` or `\"TE image\"` lists them) and its `document`: its bytes go to Ghidra, whose project is made the first time — seconds for a PEIM, a minute for a large DXE driver. A module seen before opens by `module`, the SHA-256 the answer gives. Ghidra is the analysis server's when Settings ▸ Code Analysis names one, and this Mac's own otherwise. Then read, rename, type and comment with the other `ghidra_` tools and `ghidra_publish`: every ByteRipper reading shows the result. A review aims at C that reads like source — enums for constants, structures for pointer walks, comments a source would have; the MCP instructions spell the rules out.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "document" : {
+          "description" : "The dump the node is in. Default: the focused one.",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "Or a module already opened, by its SHA-256.",
+          "type" : "string"
+        },
+        "name" : {
+          "description" : "What to call the module. Default: the file it is in.",
+          "type" : "string"
+        },
+        "node" : {
+          "description" : "The PE32 or TE image node, e.g. \"0.6.4.0.0.199.3\".",
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "ghidra_open",
+    "title" : "Open a module in Ghidra"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The module's functions as Ghidra holds them now: entry, name, name_source, size, signature. Paged by `offset` and `limit`; `more` says whether there are more.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "limit" : {
+          "description" : "The most items one page holds — a ceiling: a page stops sooner when the answer would pass the size bound, and says so with `truncated: \"size\"`. Default 200, at most 1000.",
+          "maximum" : 1000,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "offset" : {
+          "description" : "How many to skip. Default 0.",
+          "type" : "integer"
+        }
+      },
+      "required" : [
+        "module"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_functions",
+    "title" : "List a module's functions"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "One function as Ghidra holds it now: its signature, its parameters and locals with their `storage` and `first_use` (what `ghidra_rename_variable` names a local by), its comments, and its decompiled C — fresh after every write, ahead of what the app shows until a publish.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "address" : {
+          "description" : "The function's entry address, e.g. \"0x68A\".",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module",
+        "address"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_function",
+    "title" : "Read one function"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The instructions of the function at `address`, with their bytes, references and the names of their constants (`equates`). A large function comes in pages: `limit` instructions from `from`; `next` is the address to pass as `from` for the rest.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "address" : {
+          "description" : "An address in the function.",
+          "type" : "string"
+        },
+        "from" : {
+          "description" : "The first instruction of the page. Default: the function's first.",
+          "type" : "string"
+        },
+        "limit" : {
+          "description" : "The most instructions in the page. Default: all.",
+          "type" : "integer"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module",
+        "address"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_disassembly",
+    "title" : "Read a function's instructions"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The references `to` an address (who calls a function, reads a global) or `from` one.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "from" : {
+          "description" : "Or references from this address.",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "to" : {
+          "description" : "References to this address.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_xrefs",
+    "title" : "Find references"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The defined data — named globals, GUIDs, tables — with address, name and type. Paged.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "limit" : {
+          "description" : "The most items one page holds — a ceiling: a page stops sooner when the answer would pass the size bound, and says so with `truncated: \"size\"`. Default 200, at most 1000.",
+          "maximum" : 1000,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "offset" : {
+          "description" : "How many to skip. Default 0.",
+          "type" : "integer"
+        }
+      },
+      "required" : [
+        "module"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_data",
+    "title" : "List a module's defined data"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The strings Ghidra found, with address and value. Paged.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "limit" : {
+          "description" : "The most items one page holds — a ceiling: a page stops sooner when the answer would pass the size bound, and says so with `truncated: \"size\"`. Default 200, at most 1000.",
+          "maximum" : 1000,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "offset" : {
+          "description" : "How many to skip. Default 0.",
+          "type" : "integer"
+        }
+      },
+      "required" : [
+        "module"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_strings",
+    "title" : "List a module's strings"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The module's description as the project holds it now: `text` (Markdown, null while there is none), its `sections` (the `## ` headings, in order) and its size in `bytes`. Read it before `ghidra_describe` changes it.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_description",
+    "title" : "Read the module's description"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The type `name` three ways: as the module's program holds it (`program`), as the shared review archive holds it now (`shared`, what another review published), and as the EDK2 archive holds it (`edk2`); a key is left out where the type is not. Each has its C, `size`, and for a structure or union every field's `offset`, `size`, `name` and `type`. `same` says whether the program's and the shared one agree. Read the types `ghidra_publish` reports in `type_conflicts` with it, and bring yours in line with `ghidra_type`.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "name" : {
+          "description" : "The type's name, e.g. \"EFI_PEI_SERVICES\" or \"AMD_APOB_HEADER\".",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module",
+        "name"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_type_definition",
+    "title" : "Read a type's definition"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Names the function at `address`. A name Ghidra would make unique (`Foo_1`) is refused: choose another. `reason` says why, as the app shows it.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "address" : {
+          "description" : "The function's entry address.",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "name" : {
+          "description" : "The new name.",
+          "type" : "string"
+        },
+        "reason" : {
+          "description" : "Why this name, in a few words.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module",
+        "address",
+        "name"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_rename",
+    "title" : "Name a function"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Names the label at `address` — a jump target the C prints as `LAB_<address>`, which is a step of the flow: an error exit, a loop's head, the place a structure starts being read. `ghidra_rename` names functions only: given an address inside one it renames the function, so a label needs this call. A function's entry, and an address no instruction starts at, are refused.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "address" : {
+          "description" : "The label's address, e.g. \"0x9A05373\".",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "name" : {
+          "description" : "The new name, e.g. \"ErrorHeaderDoesNotFit\".",
+          "type" : "string"
+        },
+        "reason" : {
+          "description" : "Why this name, in a few words.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module",
+        "address",
+        "name"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_label",
+    "title" : "Name a branch label"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Makes a function at `address`: code only a table points at — a slot of a services table, a member of a PPI or a protocol — which no call names, so Ghidra left it outside any function and `ghidra_rename` finds nothing there. Disassembles it first if needed. With `name`, names it as `ghidra_rename` would. A function already there is answered as it is.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "address" : {
+          "description" : "The entry address, e.g. the value in the table's slot.",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "name" : {
+          "description" : "A name for it, optional.",
+          "type" : "string"
+        },
+        "reason" : {
+          "description" : "Why this name, in a few words.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module",
+        "address"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_function_create",
+    "title" : "Make a function where Ghidra made none"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Names, and perhaps types, a local by its `storage` and, for a register, `first_use` — as `ghidra_function` lists them — or a parameter by its `ordinal`. Never by Ghidra's own name for it (`iVar4`): those renumber.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "first_use" : {
+          "description" : "For a register local: the address of its first use.",
+          "type" : "string"
+        },
+        "function" : {
+          "description" : "The function's entry address.",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "name" : {
+          "description" : "The new name.",
+          "type" : "string"
+        },
+        "ordinal" : {
+          "description" : "Or a parameter by its position, from 0.",
+          "type" : "integer"
+        },
+        "storage" : {
+          "description" : "The local's storage, e.g. \"EAX:4\" or \"Stack[-0x18]:4\".",
+          "type" : "string"
+        },
+        "type" : {
+          "description" : "A C type for it, e.g. \"EFI_PEI_SERVICES **\".",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module",
+        "function",
+        "name"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_rename_variable",
+    "title" : "Name a parameter or a local"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Sets the C signature of the function at `address`, the EDK2 way if wanted (`EFI_STATUS EFIAPI Foo (IN CONST EFI_PEI_SERVICES **PeiServices)`). Types the module lacks come from the EDK2 archive or from types a review defined. For a function no calling convention fits — a linker's clone that takes an argument in EDX, or returns through a pointer in ECX — give `storage`, one place per parameter as `ghidra_function` lists storage (`[\"ECX:4\", \"Stack[0x4]:4\"]`), and `return_storage` if the result is not where the convention puts it (`EDX:4,EAX:4` for 64 bits, high part first, `void`). Then no dummy parameter is needed for a register the function does not read.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "address" : {
+          "description" : "The function's entry address.",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "reason" : {
+          "description" : "Why, in a few words.",
+          "type" : "string"
+        },
+        "return_storage" : {
+          "description" : "Where the result is: \"EAX:4\", \"EDX:4,EAX:4\", \"void\".",
+          "type" : "string"
+        },
+        "signature" : {
+          "description" : "The C prototype.",
+          "type" : "string"
+        },
+        "storage" : {
+          "description" : "Where each parameter is, in order: \"EDX:4\", \"Stack[0x4]:4\".",
+          "items" : {
+            "type" : "string"
+          },
+          "type" : "array"
+        }
+      },
+      "required" : [
+        "module",
+        "address",
+        "signature"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_signature",
+    "title" : "Set a function's signature"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Sets the comment of `kind` at `address`, replacing the one there; empty `text` clears it. A plate comment heads a function in the C; pre and eol comments show in the C too.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "address" : {
+          "description" : "The address.",
+          "type" : "string"
+        },
+        "kind" : {
+          "description" : "Default \"pre\".",
+          "enum" : [
+            "pre",
+            "post",
+            "eol",
+            "plate",
+            "repeatable"
+          ],
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "text" : {
+          "description" : "The comment; empty clears it.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module",
+        "address",
+        "text"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_comment",
+    "title" : "Write a comment"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Reads the code in [`start`, `end`) as 16-bit or as 32-bit x86. A 32-bit module holds 16-bit code at its reset vector (real mode, before the switch to protected mode), which Ghidra decodes as 32-bit and so gets wrong: overlapping instructions, nonsense C. The instructions in the range are cleared and decoded again from `start` in the given size, without leaving the range; functions there get their bodies fixed. Addresses stay offsets: real-mode segments are not modelled, so a `cs:[F490h]` operand names F490h, not where it lands. `ghidra_disassembly` marks 16-bit instructions `bits: 16`. Defined data in the range is refused: clear it first.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "bits" : {
+          "description" : "The operand and address size.",
+          "enum" : [
+            16,
+            32
+          ],
+          "type" : "integer"
+        },
+        "end" : {
+          "description" : "The first address past it: the range is [start, end).",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "reason" : {
+          "description" : "Why, in a few words: what shows the code is 16-bit.",
+          "type" : "string"
+        },
+        "start" : {
+          "description" : "The first address of the code, e.g. \"0x9DFE6E0\".",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module",
+        "start",
+        "end",
+        "bits"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_code_mode",
+    "title" : "Read a range as 16-bit or 32-bit code"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Names a constant an instruction holds — an I/O port (`PCI_CONFIG_ADDRESS` for 0xCF8), an MSR or register index, a magic value — as a Ghidra equate on that operand; the disassembly and the C show the name instead of the number, also where the number reaches an `out()` through a register. `value` picks the operand that holds it; `operand` picks one by index instead. Empty `name` removes it. One name stands for one value: a name already used for another is refused. A number the code computes (`ADD DL,4` to reach 0xCFC) is in no operand and gets a comment instead. Give every name an `enum` that groups it (`FCH_IO_PORT`, `AMD_MSR`, `LPC_DECODE_BITS`) and a `comment`: what the name stands for and where that is known from (a spec and its section, a coreboot or EDK2 header, the PPR, or `not confirmed`). The app shows the comment when the reader clicks the name, and the enum is shared with the next module reviewed, so a name given once brings its comment along: later, `name` and `enum` are enough. One value has one name in an enum.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "address" : {
+          "description" : "The instruction's address.",
+          "type" : "string"
+        },
+        "comment" : {
+          "description" : "What the name stands for and its source; replaces the member's comment.",
+          "type" : "string"
+        },
+        "enum" : {
+          "description" : "The enum the name is a member of; made when missing.",
+          "type" : "string"
+        },
+        "enum_comment" : {
+          "description" : "What the enum groups, e.g. \"FCH legacy I/O ports\".",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "name" : {
+          "description" : "A C identifier, in the module's convention; empty removes it.",
+          "type" : "string"
+        },
+        "operand" : {
+          "description" : "Or the operand by its index, from 0.",
+          "type" : "integer"
+        },
+        "value" : {
+          "description" : "The constant, e.g. \"0xCF8\", to pick the operand that holds it.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module",
+        "address",
+        "name"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_equate",
+    "title" : "Name a constant in an instruction"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Names and/or types the datum at `address`, e.g. a GUID or a table.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "address" : {
+          "description" : "The address.",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "name" : {
+          "description" : "Its name.",
+          "type" : "string"
+        },
+        "type" : {
+          "description" : "Its C type, e.g. \"EFI_GUID\" or \"UINT32[4]\".",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module",
+        "address"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_set_data",
+    "title" : "Name or type a datum"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Writes the module's description — Markdown, what the module is for, how it works and how it is built — kept in the project and published with the review as an object of its own, which the app shows beside the code. With `section`, `text` replaces the body of that `## ` section only (added at the end if missing; empty `text` removes it); without it, `text` is the whole description (empty clears it). Up to 256 KiB. Its sections, in this order, headed exactly so: `# <ModuleName>` and a one-paragraph summary; `## Identity` (file GUID, type, image, base, entry, the board and the module's place in the firmware's layout — never the dump file it was read from, the same module is in every dump of the board — source package and how sure); `## Purpose`; `## Interfaces` (what it consumes and produces — PPIs, protocols, HOBs, variables, callbacks — a table: interface, GUID, kind, where); `## Flow` (numbered, from the entry point); `## Internal structure` (functions by role, globals, tables, the review's types); `## Hardware and data`; `## Errors and diagnostics` (status, POST and halt codes, messages, what the bench sees); `## Findings`; `## Open questions`; `## Review status`. A section with nothing to say yet is left out. Link a function as `[Name](0xADDRESS)`; the app follows it. Mark what is not proven (`probably`, `not confirmed`). Markdown: headings, paragraphs, `-` and `1.` lists, tables, fenced code, `code`, **bold**, *italic*, links.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "section" : {
+          "description" : "The `## ` heading whose body `text` replaces, e.g. \"Flow\".",
+          "type" : "string"
+        },
+        "text" : {
+          "description" : "The Markdown: the whole description, or one section's body without its heading.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module",
+        "text"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_describe",
+    "title" : "Write the module's description"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Adds a structure, union, enum or typedef from C to the module, shared with modules opened after the next publish. Write the tag: `typedef struct _NAME { … } NAME;`. Without `c`, `name` picks a type the module or its archives hold. `description` says what the type is and where its layout is known from; `comments` gives fields or enum members theirs — what each holds and its source. The app shows them when the reader clicks the type or a field; an empty comment removes one. Comments are set after the C, which drops its own.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "c" : {
+          "description" : "The C text.",
+          "type" : "string"
+        },
+        "comments" : {
+          "additionalProperties" : {
+            "type" : "string"
+          },
+          "description" : "A comment per field or enum member, by its name.",
+          "type" : "object"
+        },
+        "description" : {
+          "description" : "What the type is, and its source.",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "name" : {
+          "description" : "Without `c`: the type to describe or comment.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_type",
+    "title" : "Define a type"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Saves the module's program and stores its artifact and review document as the next revision: every ByteRipper reading this store shows the new names. Publishing an unchanged program is the same revision. `type_conflicts` names types another review defines differently, which stay in this module only: `ghidra_type_definition` shows both.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_publish",
+    "title" : "Publish the review"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Publishes what this session changed and gives the module's write lease back, so another session or a person can write.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_done",
+    "title" : "End the review session"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Overwrites bytes in a document open in a tab, as one step of its undo named by `label` — write the label in the person's language, it is what their Edit menu offers to undo. The bytes replace as many as they are, never inserting or deleting: a write past the end of the file is refused. The written bytes show red until the person saves, and the dump scrolls to them. `expect` makes the write conditional: the bytes there now must be these, or nothing is written and the answer says what is there. Needs the person's permission — Settings ▸ Agent, \"Let agents edit open files\"; without it the write is refused. Never saves; checksums are not updated — use a module's fix, such as `uefi_fix_checksum`.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "bytes" : {
+          "description" : "The bytes as hex, e.g. \"DE AD BE EF\" or \"deadbeef\"; at most 64 KiB.",
+          "type" : "string"
+        },
+        "document" : {
+          "description" : "The document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "expect" : {
+          "description" : "The bytes that must be at `offset` now, as hex. Optional.",
+          "type" : "string"
+        },
+        "label" : {
+          "description" : "What the change is, for the undo step: \"Enable the debug option\".",
+          "type" : "string"
+        },
+        "offset" : {
+          "description" : "Where the bytes go, e.g. \"0x7F3000\".",
+          "type" : [
+            "integer",
+            "string"
+          ]
+        }
+      },
+      "required" : [
+        "offset",
+        "bytes",
+        "label"
+      ],
+      "type" : "object"
+    },
+    "name" : "write",
+    "title" : "Write bytes"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Copies a range of one of a tab's two files over the same addresses in the other — what Edit ▸ Copy to Other Pane (⌥⌘C) does with the selection. The bytes go from file to file inside ByteRipper and never through you, so there is no size limit: a whole region or volume is one call. Overwrites only: a range past the end of the other file is refused, never grown. One undo step in the receiving file, named by `label`; the copied bytes show red until the person saves, and its pane scrolls to them. The answer says how many bytes actually changed and where in the firmware the range lies. Needs the person's permission — Settings ▸ Agent, \"Let agents edit open files\". Never saves; checksums are not updated.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "document" : {
+          "description" : "The file to copy from: one of a tab's two files, by its id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "label" : {
+          "description" : "What the copy is, for the undo step, in the person's language. Default: Copy to Other Pane.",
+          "type" : "string"
+        },
+        "length" : {
+          "description" : "How many bytes, at least 1.",
+          "type" : [
+            "integer",
+            "string"
+          ]
+        },
+        "offset" : {
+          "description" : "The first byte, e.g. \"0x7F3000\".",
+          "type" : [
+            "integer",
+            "string"
+          ]
+        }
+      },
+      "required" : [
+        "offset",
+        "length"
+      ],
+      "type" : "object"
+    },
+    "name" : "copy_to_other_pane",
+    "title" : "Copy bytes to the other pane"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Puts a part's bytes back into the document it was opened from — File ▸ Update in Parent. The part's codec says how: a copy goes back as it is, a decompressed body is compressed again and the image laid out around it, a decoded block is encoded again with its checksum. One undo step in the parent; the parent's bytes show red until the person saves, and the parent is shown where they landed. A part with nothing new answers `updated: false`. Refused, with nothing written: when the parent is closed or read-only; when the codec cannot put the bytes back (a part whose length changed, a body that no longer fits once compressed — the answer gives the codec's reason); when the parent changed while the update was worked out (call again); and when the bytes the part came from have changed in the parent since it was opened — then ask the person, and call again with `overwrite_changed_source: true` only if they agree. A refusal that is a caution rather than an impossibility — a part of the BIOS image an AMD PSP decompresses itself, which the PSP may not accept once compressed again — says so: then explain the risk to the person, and call again with `update_anyway: true` only if they agree. Needs the person's permission — Settings ▸ Agent, \"Let agents edit open files\". Never saves.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "document" : {
+          "description" : "The part's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "overwrite_changed_source" : {
+          "description" : "Overwrite the parent's bytes even though they changed since the part was opened. Only after the person said so. Default false.",
+          "type" : "boolean"
+        },
+        "update_anyway" : {
+          "description" : "Go on past the codec's caution, as the dialog's Update Anyway does — the PSP's BIOS image compressed again although it is not known whether the PSP accepts it. Only after the person said so. Default false.",
+          "type" : "boolean"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "update_in_parent",
+    "title" : "Update in Parent"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The Intel ME / CSME / TXE / SPS firmware in the image, as the ME Analyzer panel's Summary tab gives it: family, version, release, type, SKU, the platform, the security version (SVN), whether the firmware database knows this build, and the analysis's messages (a corrupted partition, a module whose hash fails, an update that will not apply). `tone` marks a verdict: good, caution or bad. A value of \"Coming soon\" is a row this engine does not answer yet. The File System State row carries `basis`: what each of the three steps that decide it found (the reserved MFS files, whether the EFS volume holds files, the configuration partitions), which step decided it, `complete: false` when a step that could have raised the state could not be taken — an EFS partition that could not be read — and an `explanation`. Say the basis when you report the state: Configured with an unreadable EFS is not the same fact as Configured with an empty one. The first call on a dump analyses its ME region, which takes a second or two.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "document" : {
+          "description" : "The document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "me_summary",
+    "title" : "ME summary"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The structure the ME engine decoded, as the ME Analyzer panel's Full Info tab shows it: the partition table, partitions, code partition manifests and modules, the MFS or EFS file system and its files, the configuration records, the checksums. Without `node`, the top groups; with it, that node's fields and its children. Each node: `id` (pass it back as `node`; ids are positions, so they hold for this dump only), `title`, `subtitle`, its bytes (`start`, `end`) when it stands for some, `children` as a count, and `problem` with its lines when the panel marks one. An MFS or EFS file has no one range: its bytes are scattered over the volume's pages, so it says `stretches`, how many, and asked for as `node` lists them as `extents`, in the file's own order. Pages: `limit` is the most children on one page, a ceiling — a page also stops before the answer passes the size bound and then says `truncated: \"size\"`; pass `next` back as `after` until it is null. `total` counts the children.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "after" : {
+          "description" : "The `next` of the page before, to go on from where it stopped.",
+          "type" : "string"
+        },
+        "document" : {
+          "description" : "The document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "limit" : {
+          "description" : "The most items one page holds — a ceiling: a page stops sooner when the answer would pass the size bound, and says so with `truncated: \"size\"`. Default 100, at most 400.",
+          "maximum" : 400,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "node" : {
+          "description" : "A node id such as \"2.0.3\" from an earlier answer. Default: the top.",
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "me_tree",
+    "title" : "ME structure"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The Firmware Interface Table as the FIT panel reads it: where the pointer at the top of the image leads, the table's place and checksum, and its rows — type, address, size, version and what the row points at (a microcode with its CPUID, revision and date; a region the tree names). `problems` are the specification's rules the table breaks, each with its row and address. The Top Swap backup's copy of the table follows under `backup` when the image keeps one. With `entry` (the row's place, 0 is the header) that row's every field as well. Whether a newer microcode exists is the panel's to say, not this answer's.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "document" : {
+          "description" : "The document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "entry" : {
+          "description" : "A row's place in the table, 0 for the header: its fields in full.",
+          "type" : "integer"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "fit_table",
+    "title" : "FIT table"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The Intel microcode the online collection at github.com/platomav/CPUMicrocodes holds — the catalogue the FIT panel's Add Microcode lists — read from the file names, so nothing is downloaded. Each file: `path` (pass it to `fit_add_microcode` or `fit_replace_microcode`), CPUID, platform mask, revision, date, `production` (false for a pre-release), size. One update with an extended signature table is filed once under each processor it serves. With `in_image`, only files for processors the image's FIT microcodes serve — their extended tables' included — and `installed` says each microcode row's processors and platforms, its revision and how it stands against the catalogue (`latest`, `outdated` with the newest revision, `undecided` where a newer file's platform mask only partly meets the installed one's, so the board's own platform decides, `not_rated`); a file then says which rows it `serves_rows` and whether it is `newer_than_installed`. `cpuid` narrows by the CPUID's first digits. Pages: `limit` is a ceiling — a page also stops before the answer passes the size bound and says `truncated: \"size\"`; pass `next` back as `after` until it is null.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "after" : {
+          "description" : "The `next` of the page before, to go on from where it stopped.",
+          "type" : "string"
+        },
+        "cpuid" : {
+          "description" : "Only files whose CPUID starts with this, e.g. \"906E\".",
+          "type" : "string"
+        },
+        "document" : {
+          "description" : "The document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "in_image" : {
+          "description" : "Only files for processors the image's microcodes serve, and how each row stands. Default false.",
+          "type" : "boolean"
+        },
+        "latest_only" : {
+          "description" : "Only the newest revision for each CPUID and platform mask. Default false.",
+          "type" : "boolean"
+        },
+        "limit" : {
+          "description" : "The most items one page holds — a ceiling: a page stops sooner when the answer would pass the size bound, and says so with `truncated: \"size\"`. Default 50, at most 300.",
+          "maximum" : 300,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "production_only" : {
+          "description" : "Leave out pre-release files. Default false.",
+          "type" : "boolean"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "microcode_catalogue",
+    "title" : "Microcode catalogue"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The structure of a firmware image as the UEFI Structure panel shows it: regions, volumes, files, sections, NVRAM stores and the rest. Without `node`, the top of the tree and a one-line summary of the image; with it, that node and its children. `depth` (1–3) goes further down. Each node: `id` (pass it back as `node` — never show it to the person), `label` (what to call it to the person: its name, with its addresses where the name is only a kind such as Unused), on a file on disk `link` (the label as a Markdown link that opens the node in ByteRipper — write it where you name the node), type, subtype, name, GUID, its bytes (`start`, `end`, or `in_compressed: true` when it lives inside a decompressed section and has no file address), `compressed` — a compressed section's own algorithm, or for a node it decompresses to the algorithm it came out of — and `compressed_in`, the innermost section it was decompressed out of, on every node with `in_compressed`; `encoded` (\"XOR 77\") for a LENV block or entry stored encoded in the file; `counterpart` and `decoded_in` for a node also open in a part (see `uefi_at`: {document, node, as}), and `children` — a count, or \"unread\" for a container not opened yet (asking for it opens it). With `depth` above 1 a child carries the levels under it as `below`. Pages: `limit` is the most children of `node` on one page, a ceiling — a page also stops before the answer passes the size bound and then says `truncated: \"size\"`; pass `next` back as `after` until it is null. A child whose levels below are too large alone comes without them, marked `truncated: \"item\"`; ask for it as `node`. Ids belong to the document they were listed on: a part opened with `open_part` has a tree of its own, with ids that start over (the parent's 0.3.4.1.2.5 is 0.0.5 in the decoded block), so give the `document` the id came from. Asked of the parent while the focus is on its part, or the other way round, the answer carries a `focus_note`; a refusal over an id of the other one names the document that has it.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "after" : {
+          "description" : "The `next` of the page before, to go on from where it stopped.",
+          "type" : "string"
+        },
+        "depth" : {
+          "description" : "How many levels below the node. Default 1, at most 3.",
+          "type" : "integer"
+        },
+        "document" : {
+          "description" : "The document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "limit" : {
+          "description" : "The most items one page holds — a ceiling: a page stops sooner when the answer would pass the size bound, and says so with `truncated: \"size\"`. Default 100, at most 400.",
+          "maximum" : 400,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "node" : {
+          "description" : "A node id such as \"0.2.5\" from an earlier answer. Default: the top.",
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "uefi_tree",
+    "title" : "UEFI tree"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "Everything the UEFI Structure panel's detail says about one node: its fields (header values, sizes, attributes, checksums — a wrong checksum is marked `problem`), its tables, the path of names down to it, and the parser's diagnostics inside its bytes. NVRAM variables come with their value decoded. A module with a dependency expression adds `dependencies`: the expression in words, the GUIDs it pushes, every opcode with its offset, and what does not parse.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "document" : {
+          "description" : "The document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "node" : {
+          "description" : "The node's id, e.g. \"0.2.5\".",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "node"
+      ],
+      "type" : "object"
+    },
+    "name" : "uefi_node",
+    "title" : "UEFI node"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "Finds nodes anywhere in the image — opening every volume and decompressing every section it can, which takes a few seconds on a large image the first time. Give any of: `name` (part of the name, any case; the whole name with `exact`), `guid` (exact), `type` (the Type column, e.g. \"File\", \"Section\", \"Volume\", \"VSS entry\", \"NVAR entry\"), `depends_on` (a PPI or protocol GUID — the files whose dependency expression pushes it, and only files). All given must match. Each match has its id and the path of names to it; `total` counts them all. Pages: `limit` is a ceiling — a page also stops before the answer passes the size bound and then says `truncated: \"size\"`; pass `next` back as `after` until it is null.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "after" : {
+          "description" : "The `next` of the page before, to go on from where it stopped.",
+          "type" : "string"
+        },
+        "depends_on" : {
+          "description" : "A PPI or protocol GUID a module's dependency expression pushes.",
+          "type" : "string"
+        },
+        "document" : {
+          "description" : "The document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "exact" : {
+          "description" : "Match the whole name rather than a part of it. Default false.",
+          "type" : "boolean"
+        },
+        "guid" : {
+          "description" : "A GUID, e.g. \"8C8CE578-8A3D-4F1C-9935-896185C32DD3\".",
+          "type" : "string"
+        },
+        "limit" : {
+          "description" : "The most items one page holds — a ceiling: a page stops sooner when the answer would pass the size bound, and says so with `truncated: \"size\"`. Default 50, at most 200.",
+          "maximum" : 200,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "name" : {
+          "description" : "Part of the node's name, any case.",
+          "type" : "string"
+        },
+        "type" : {
+          "description" : "The node type as the Type column shows it.",
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "uefi_find",
+    "title" : "Find UEFI nodes"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The chain of nodes that hold a byte of the file, outermost first — region, volume, file, section — opening the containers on the way. The last one is the innermost. Each node as `uefi_tree` gives it, with `encoded` (\"XOR 77\") for a LENV block or entry stored encoded and `compressed` / `compressed_in` for one inside a compressed section. A node whose bytes are also those of an open part, or of the parent of the part asked about, names its node there as `counterpart` ({document, node, as: \"decoded\" | \"encoded\" | \"same\"}), and `decoded_in` when that part is its LENV block opened decoded — read and show it there. Asked of the parent while the focus is on its part, or the other way round, the answer carries a `focus_note`.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "document" : {
+          "description" : "The document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "offset" : {
+          "description" : "A file address, e.g. \"0x7F3000\".",
+          "type" : [
+            "integer",
+            "string"
+          ]
+        }
+      },
+      "required" : [
+        "offset"
+      ],
+      "type" : "object"
+    },
+    "name" : "uefi_at",
+    "title" : "UEFI nodes at an address"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "Checks every checksum the UEFI Structure panel checks — a volume's header checksum, a file's header and data checksums, a microcode's, an AMD PSP or BIOS directory's — in the whole image or under `node`, opening every volume and decompressing every section it can, and lists the nodes whose checksums are wrong: which field, what is stored and what it should be. A node inside a compressed section is checked against what the section decompresses to; it is marked `in_compressed` and cannot be fixed in place. `checked` counts the nodes that carry a checksum, `wrong` those listed. `uefi_fix_checksum` puts them right, one node or all at once. Pages: `limit` is a ceiling — a page also stops before the answer passes the size bound and then says `truncated: \"size\"`; pass `next` back as `after` until it is null.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "after" : {
+          "description" : "The `next` of the page before, to go on from where it stopped.",
+          "type" : "string"
+        },
+        "document" : {
+          "description" : "The document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "limit" : {
+          "description" : "The most items one page holds — a ceiling: a page stops sooner when the answer would pass the size bound, and says so with `truncated: \"size\"`. Default 50, at most 200.",
+          "maximum" : 200,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "node" : {
+          "description" : "Check only under this node, e.g. \"0.2\". Default: the whole image.",
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "uefi_checksums",
+    "title" : "Check the UEFI checksums"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "Judges by their bytes the nodes the parser cannot name — Padding (the flash map's Unused, Unknown and named areas among them) and Raw files and sections — under `node` (default: the BIOS region), in address order. A node its children divide is replaced by them; one whose only child covers it whole stays, naming the child as `inner`. Each: `node`, `name`, `type`, `subtype`, `guid`, `start`, `end`, `size`; `fill` (the share of 0xFF and 0x00 bytes), `first_nonfill` and `last_nonfill` (the first and the last other byte); `class` — `empty` (at least 99% fill), `text` (most of the other bytes are ASCII or UTF-16LE strings of 4 characters or more), `code` (x86-64 instructions, by a heuristic: frequent REX.W moves, calls and returns, or a PE image), else `data`; and up to five `strings` with their addresses. The bytes themselves are never answered: `read` or `uefi_node_data` read them. An area whose name in the flash map says MSDM, Password or Key gives its class and sizes, no strings, and `redacted: true`. `kinds` picks the node types (the Type or Subtype column), default Padding and Raw; `min_size` leaves out smaller nodes. Pages: `limit`, `after` as in `uefi_find`. With `survey`, the same area across a folder of dumps.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "after" : {
+          "description" : "The `next` of the page before, to go on from where it stopped.",
+          "type" : "string"
+        },
+        "document" : {
+          "description" : "The document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "kinds" : {
+          "description" : "Node types to take, as the Type or Subtype column shows them. Default [\"Padding\", \"Raw\"].",
+          "items" : {
+            "type" : "string"
+          },
+          "type" : "array"
+        },
+        "limit" : {
+          "description" : "The most items one page holds — a ceiling: a page stops sooner when the answer would pass the size bound, and says so with `truncated: \"size\"`. Default 50, at most 200.",
+          "maximum" : 200,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "min_size" : {
+          "description" : "Leave out nodes smaller than this. Default 0x100.",
+          "type" : [
+            "integer",
+            "string"
+          ]
+        },
+        "node" : {
+          "description" : "Scan under this node, e.g. \"0.2\". Default: the BIOS region, or the whole image.",
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "region_scan",
+    "title" : "Scan the nameless areas"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The image's DMI areas — where the firmware keeps the board's identity: serial numbers, UUID, model — as the UEFI Structure panel's DMI button finds them. It opens every container in the file, but no compressed section. Each area: `layout` (\"Lenovo DMI store\", \"GPNV store\", \"Acer DMI\", \"Panasonic DMI\" — the Type column calls these Padding — or \"HP DMI\", a VSS entry that may be one the store marks deleted, as most HP boards keep it, or \"Apple DMI\", a SysF store), its node as `uefi_tree` gives it (`id`, `label`, `link`, `start`, `end`, `encoded` for an XORed LENV block), `size`, `path`, and the panel's `fields` and `tables` for it; `uefi_node` on its children reads further, `uefi_node_data` reads the bytes. The parser finds a DMI area only by its algorithms for the dump layouts it knows: Lenovo's DMI store (an LDBG change log and two LENV blocks), AMI's GPNV store as ASUS writes it, Acer's 8 KiB DMI area, Panasonic's DMI area (a MEI_ header, a directory and records), and HP's HP_MUD variable in the main VSS2 store, with BuildId, FactoryConfig (the feature byte) and HP_TAGS (the asset tracking number) beside it — what HP's BCU reports, and Apple's SysF store of the Mac's serial number (ssn), configuration code (hwc) and sales order number (son), with the board's serial read from the names of its calibration variables. An area that is not found is not therefore absent from the dump: it may be in a layout the parser does not know, or a known one that is damaged, wiped or moved so its checks fail. So an empty `areas` means only that the parser recognised none — say so to the person, never that the dump has no DMI; `region_scan` judges the nameless areas by their bytes, which is where to look next. With `survey`, group a folder of dumps by \"total\" or \"areas.0.layout\" — the whole answer holds each board's own serials, so no two dumps would share a group.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "document" : {
+          "description" : "The document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "uefi_dmi",
+    "title" : "DMI area"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The NVRAM variables the image keeps, from every VSS, VSS2, NVAR, Dell DVAR and GPNV store — those inside compressed sections too, so the first call on a large image takes a few seconds. `stores` lists the stores the rows are in, with how many variables each holds. One row per variable: the copy that stands for it now. `copies` above 1 says the store still keeps earlier values (`uefi_node` on the entry lists them); `deleted: true` is a variable the store no longer holds, listed only with `deleted`. Each row: name, GUID, the store's and the entry's node ids, the value's bytes (`start`, `end`, `size`), and `value` — the value read as its type (a number, text, a boot option, a device path, a signature list) or as hex when it is short. Other stores (EVSA, Apple SysF, flash maps) are in `uefi_tree`. Pages: `limit` is a ceiling — a page also stops before the answer passes the size bound and then says `truncated: \"size\"`; pass `next` back as `after` until it is null. `total` counts every row. A row too large alone comes without its `value`, marked `truncated: \"item\"`; `read` its bytes.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "after" : {
+          "description" : "The `next` of the page before, to go on from where it stopped.",
+          "type" : "string"
+        },
+        "deleted" : {
+          "description" : "Also list variables the store no longer holds. Default false.",
+          "type" : "boolean"
+        },
+        "document" : {
+          "description" : "The document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "guid" : {
+          "description" : "The vendor GUID, exact.",
+          "type" : "string"
+        },
+        "limit" : {
+          "description" : "The most items one page holds — a ceiling: a page stops sooner when the answer would pass the size bound, and says so with `truncated: \"size\"`. Default 80, at most 300.",
+          "maximum" : 300,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "name" : {
+          "description" : "Part of the variable's name, any case.",
+          "type" : "string"
+        },
+        "store" : {
+          "description" : "Only this store's variables: its node id from an earlier answer.",
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "variables",
+    "title" : "NVRAM variables"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "Reads a node's bytes as `read` reads a document's — rows of 16 with their address, text, or integers — at addresses inside the node's `part` (`body` by default, `header`, or `all`), from 0. Works for a node inside a compressed section too, which has no file address and which `read` cannot reach: its bytes are what the tree decompressed it to, and `source` says which compressed section in the file they came out of. For a compressed section itself, part `decompressed` is what it decompresses to — the buffer its children are in. `size` is the whole part's, to read on by `offset`; at most 4096 bytes at a time. A node of the file gives `file_start` as well: its bytes are the document's at that address, unsaved edits included, and `read`, `reveal` and `write` work there. `find_bytes` with `node` searches the node and everything decompressed or decoded under it.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "document" : {
+          "description" : "The document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "endian" : {
+          "description" : "For u16, u32 and u64. Default \"little\".",
+          "enum" : [
+            "little",
+            "big"
+          ],
+          "type" : "string"
+        },
+        "format" : {
+          "description" : "How to show them. Default \"hex\".",
+          "enum" : [
+            "hex",
+            "ascii",
+            "utf16le",
+            "u8",
+            "u16",
+            "u32",
+            "u64"
+          ],
+          "type" : "string"
+        },
+        "length" : {
+          "description" : "How many bytes. Default 256, at most 4096.",
+          "type" : [
+            "integer",
+            "string"
+          ]
+        },
+        "node" : {
+          "description" : "The node's id, e.g. \"0.2.5.0.0.1.0.530.2\".",
+          "type" : "string"
+        },
+        "offset" : {
+          "description" : "Where to start inside the part. Default 0x0.",
+          "type" : [
+            "integer",
+            "string"
+          ]
+        },
+        "part" : {
+          "description" : "Which bytes of the node. Default \"body\".",
+          "enum" : [
+            "body",
+            "header",
+            "all",
+            "decompressed"
+          ],
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "node"
+      ],
+      "type" : "object"
+    },
+    "name" : "uefi_node_data",
+    "title" : "UEFI node bytes"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "Sets the files of the ME file systems of two documents side by side — `document` and `against` — by what each volume calls them (an MFS file's index, an EFS file's file ID) and by what they hold, not by address. An MFS volume moves its pages to spread the wear, so one machine's two dumps keep the same file in different places, and `diff` over the MFS partition mostly finds pages moved; this says which files changed. Content is compared without the Integrity table a protected file ends with; that table changes whenever the engine writes the file again, so it is reported apart (`integrity_differs`). Answers `counts` (same — and of those, `moved` and `rewritten` — different, only in one, incomplete), the files that differ with both sizes and how many content bytes differ, and the files only in one dump. `name` is the file table's path or name where it gives one. A volume that could not be read on either side is under `not_compared` with the reason, and its files are not listed as missing. `incomplete` is a file whose chain of chunks broke off, so what it holds is not known whole. With `extents`, each listed file says where it is stored in each dump: the stretches in the file's own order, which `read` reads back. Pages: the lists are one sequence — `different`, `only_in_document`, `only_in_against`, `incomplete` — and `limit` is the most items of it on one page, a ceiling: a page also stops before the answer passes the size bound and then says `truncated: \"size\"`. Pass `next` back as `after` until it is null; `counts` are of the whole comparison. A file whose extents are too many for one answer lists the first of them, marked `truncated: \"item\"`; `me_tree` on the file lists them. `encrypted` is the file table's flag: an encrypted file the engine wrote again with a new nonce differs in nearly every byte, so for it `different` says it was written, not that what it holds changed.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "after" : {
+          "description" : "The `next` of the page before, to go on from where it stopped.",
+          "type" : "string"
+        },
+        "against" : {
+          "description" : "The id of the document to set beside it, from `documents` or `open_dump`.",
+          "type" : "string"
+        },
+        "document" : {
+          "description" : "The first document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "extents" : {
+          "description" : "Say where each listed file is stored in each dump. Default false.",
+          "type" : "boolean"
+        },
+        "limit" : {
+          "description" : "The most items one page holds — a ceiling: a page stops sooner when the answer would pass the size bound, and says so with `truncated: \"size\"`. Default 40, at most 200.",
+          "maximum" : 200,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "name" : {
+          "description" : "Only files whose name contains this, any case.",
+          "type" : "string"
+        },
+        "volume" : {
+          "description" : "Only this volume: \"mfs\" or \"efs\". Default: both.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "against"
+      ],
+      "type" : "object"
+    },
+    "name" : "me_files_compare",
+    "title" : "Compare ME files"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "Sets the NVRAM variables of two documents side by side — `document` and `against` — by name and GUID, not by address, so two dumps of different boards or BIOS versions compare as well as two of one board. A name and GUID kept twice in an image (live and default stores) is paired by which time it is met. Answers the variables only in one of them, those whose values differ — with both sizes, the bytes that differ as offsets into the value, and both values read as their type — and how many are the same. Variables a store no longer holds are left out. `survey` with this tool and a fixed `against` compares a folder of dumps with one. Pages: the three lists are one sequence — `changed`, then `only_in_document`, then `only_in_against` — and `limit` is the most items of it on one page, a ceiling: a page also stops before the answer passes the size bound and then says `truncated: \"size\"`. Pass `next` back as `after` until it is null; `counts` and `same` are of the whole comparison. A changed variable too large alone comes without its values, marked `truncated: \"item\"`.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "after" : {
+          "description" : "The `next` of the page before, to go on from where it stopped.",
+          "type" : "string"
+        },
+        "against" : {
+          "description" : "The id of the document to set beside it, from `documents` or `open_dump`.",
+          "type" : "string"
+        },
+        "document" : {
+          "description" : "The first document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "limit" : {
+          "description" : "The most items one page holds — a ceiling: a page stops sooner when the answer would pass the size bound, and says so with `truncated: \"size\"`. Default 40, at most 200.",
+          "maximum" : 200,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "name" : {
+          "description" : "Only variables whose name contains this, any case.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "against"
+      ],
+      "type" : "object"
+    },
+    "name" : "variables_compare",
+    "title" : "Compare NVRAM variables"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Writes the checksum the FIT table should have into its header row — and into the Top Swap backup's copy when that copy is the same table — as the FIT panel's Fix Checksum does, as one undo step. Refused when there is no table, when its checksum is not checked or already correct, and without the person's permission to edit.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "document" : {
+          "description" : "The document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "fit_fix_checksum",
+    "title" : "Fix the FIT checksum"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Downloads a catalogue file (`path` from `microcode_catalogue`) and adds it to the FIT, as the panel's Add Microcode does, as one undo step: where a row's update already serves the same processor — its extended signature table counted — the new one takes that row's place (`change`: \"replaced\", with what it `replaced`), otherwise it gets a row of its own (\"added\"). Refused, with the reason, when the very same update is already in the table under another of its CPUIDs, when the file is not a microcode or its checksum is wrong, when the table or the run cannot grow, inside a Boot Guard IBB, when a Top Swap backup differs, and without the person's permission to edit. Says where the component went, how many microcodes behind it `moved`, the `top_swap_backup` it was made in too, and what it means for the `protected_ranges`.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "document" : {
+          "description" : "The document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "path" : {
+          "description" : "A file's `path` from `microcode_catalogue`.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "path"
+      ],
+      "type" : "object"
+    },
+    "name" : "fit_add_microcode",
+    "title" : "Add a microcode"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Downloads a catalogue file (`path` from `microcode_catalogue`) and puts it in the place of row `entry`'s microcode, as the panel's Replace Microcode does, as one undo step — whatever the new update's CPUID. Refused when the same update is already in the table, and when the new one serves a processor, on a shared platform, that another row's update already serves — extended signature tables counted — since the table would then hold two microcodes for one processor: that row is the one to replace. Refused too for the reasons `fit_add_microcode` gives. Says as it does what changed.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "document" : {
+          "description" : "The document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "entry" : {
+          "description" : "The microcode row's place in the table, from `fit_table`.",
+          "type" : "integer"
+        },
+        "path" : {
+          "description" : "A file's `path` from `microcode_catalogue`.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "entry",
+        "path"
+      ],
+      "type" : "object"
+    },
+    "name" : "fit_replace_microcode",
+    "title" : "Replace a microcode"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Takes row `entry` and its microcode out of the FIT, as the panel's Remove Microcode does, as one undo step: the components behind it move up into the space and the rows follow them, and the bytes freed at the end of the run are erased. Refused for the table's last microcode, inside a Boot Guard IBB, when a Top Swap backup differs, and without the person's permission to edit. Says how many `moved` and what was `erased`.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "document" : {
+          "description" : "The document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "entry" : {
+          "description" : "The microcode row's place in the table, from `fit_table`.",
+          "type" : "integer"
+        }
+      },
+      "required" : [
+        "entry"
+      ],
+      "type" : "object"
+    },
+    "name" : "fit_remove_microcode",
+    "title" : "Remove a microcode"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Puts checksums right — a volume's header checksum, a file's header and data checksums, a microcode's, an AMD PSP or BIOS directory's — computed by the code the UEFI Structure panel's Fix Checksum runs, and writes them as one undo step. Give `node` for one node, or `all: true` for every wrong checksum in the image (or under `node`) that can be written in place: a file that holds a volume is put right after the files inside it, over their fixed bytes. `uefi_checksums` lists the wrong ones, `uefi_node` marks one with `problem`. A node inside a compressed section is never written (the file holds those bytes compressed): refused by itself, left out of `all` and counted in `skipped_compressed`. Refused when nothing is wrong, and without the person's permission to edit.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "all" : {
+          "description" : "Every wrong checksum in the image, or under `node`. Default false.",
+          "type" : "boolean"
+        },
+        "document" : {
+          "description" : "The document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "node" : {
+          "description" : "The node's id, e.g. \"0.2.5\". With `all`, only under it.",
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "uefi_fix_checksum",
+    "title" : "Fix UEFI checksums"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Chooses a node in the open UEFI Structure panel, as a click would: the tree opens down to it and selects it, the detail shows its fields, and the dump scrolls to its bytes with them outlined. A step of the navigation history, so the person's Back returns. Needs the panel open in the document's tab — `open_panel` opens it. The id is the one listed on the document the call goes to: a part has its own ids, not its parent's.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "document" : {
+          "description" : "The document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "node" : {
+          "description" : "The node's id, e.g. \"0.2.5\".",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "node"
+      ],
+      "type" : "object"
+    },
+    "name" : "uefi_select",
+    "title" : "Choose a UEFI node in the panel"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The node chosen in the open UEFI Structure panel — what the person means by \"this node\" — or null when nothing is chosen. Needs the panel open in the document's tab.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "document" : {
+          "description" : "The document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "uefi_selection",
+    "title" : "The UEFI node the reader chose"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Opens a tool panel on a document, the way the Tools menu does: the panel down the left of its tab switches to `module` and reads that document. The panel that was there keeps its place for when the person returns to it, and the switch is a step of the navigation history. Refused while the person is in the middle of something in that window — a dialog, a sheet. Modules: \"me-analyzer\" (ME Analyzer), \"fit\" (FIT Table), \"uefi-structure\" (UEFI Structure), \"zonesketch\" (Zone Sketch).",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "document" : {
+          "description" : "The document's id from `documents`. Default: the focused one.",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "Which panel.",
+          "enum" : [
+            "me-analyzer",
+            "fit",
+            "uefi-structure",
+            "zonesketch"
+          ],
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module"
+      ],
+      "type" : "object"
+    },
+    "name" : "open_panel",
+    "title" : "Open a tool panel"
+  }
+]

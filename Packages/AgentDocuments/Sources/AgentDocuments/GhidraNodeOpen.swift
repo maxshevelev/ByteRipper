@@ -42,12 +42,21 @@ public enum GhidraNodeOpen {
         ) { call in
             let arguments = call.arguments
             if let node = try arguments.optionalString("node") {
-                let (image, name, document) = try await self.image(
-                    node: node, document: try arguments.optionalString("document"), in: documents)
-                let chosen = try arguments.optionalString("name") ?? name
-                return try await GhidraTools.answer {
-                    try await backend.openImage(image, name: chosen, document: document, node: node)
+                let found = try await self.image(node: node, document: try arguments.optionalString("document"),
+                                                 in: documents)
+                let chosen = try arguments.optionalString("name") ?? found.name
+                let answer = try await GhidraTools.answer {
+                    try await backend.openImage(found.image, name: chosen,
+                                                document: found.document.label.isEmpty
+                                                    ? found.document.id : found.document.label,
+                                                node: node)
                 }
+                // The answer says which document it read and carries its disk
+                // mark, as a query's does: an agent calls `documents` once and
+                // works in `uefi_tree`, `read` and `ghidra_open` after, so
+                // that is where it has to see the mark
+                // (`Design/SERVER_HEADLESS_PLAN.md` decision 9).
+                return ToolQueryTools.stamped(answer, with: found.document)
             }
             return try await GhidraTools.answer {
                 try await backend.openModule(try GhidraTools.module(arguments))
@@ -56,10 +65,11 @@ public enum GhidraNodeOpen {
     }
 
     /// The node's image bytes, a name for the module — the file it is in —
-    /// and the dump's name.
+    /// and the document they were read from.
     @MainActor
     static func image(node text: String, document id: String?,
-                      in documents: any AgentDocumentSet) async throws -> (Data, String, String) {
+                      in documents: any AgentDocumentSet) async throws -> (image: Data, name: String,
+                                                                          document: any AgentDocument) {
         let document = try documents.resolve(id)
         let found = try await UEFIAgentNodeData.bytes(document.readHost(), node: text, part: .body)
         guard let bytes = found.reader.bytes(found.range), bytes.count == found.range.count else {
@@ -76,7 +86,7 @@ public enum GhidraNodeOpen {
             CharacterSet.alphanumerics.contains($0) && $0.isASCII || "._-".unicodeScalars.contains($0)
                 ? Character($0) : "-"
         })
-        return (image, name.isEmpty ? "module" : name, document.label.isEmpty ? document.id : document.label)
+        return (image, name.isEmpty ? "module" : name, document)
     }
 }
 

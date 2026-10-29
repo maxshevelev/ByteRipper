@@ -27,3 +27,7 @@ Signing.local.xcconfig
 # here is a machine's own, and does not belong to the repository.
 .claude/
 Skills/**/__pycache__
+
+# What AgentToolListTests writes when the app's tool list no longer matches
+# the golden: read it, then replace `ByteRipperTests/AgentToolList.json`.
+ByteRipperTests/AgentToolList.actual.json

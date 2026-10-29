@@ -159,7 +159,7 @@ server both link:
 | the document rule | `AgentDesk.place(named:)` | `AgentDocumentSet` (`@MainActor` protocol): `documents()` and `resolve(_ document: String?) throws -> any AgentDocument`; an `AgentDocument` is an id, a label, the `disk` mark and a read host. The rule of a host with no focus is `AgentDocumentRule` — one open: implied; several: required, the error lists ids and names; none: the host's own message. The app keeps its own rule, the focused document when none is named, since the person is looking at one. Size and version stay with each host's `documents` tool, which is not moved |
 | the query adapter | `AgentModuleTools.query`/`runQuery` (`ByteRipperApp/Agent/AgentModuleTools.swift:48-105`) | `ToolQueryTools.tool(for: ToolAgentQuery, documents:)`: adds `document`, resolves it, runs the query on the document's `ToolReadHost`, puts `document` into the answer, and `disk` beside it when the resolved `AgentDocument` reports one (the server's does; the app's reports none). The app wraps it with its own node links (`AgentNodeLinks`), which belong to parts and stay in the app |
 | the code readings | `AgentCodeTools` query and modules tools | `CodeReadings`: `code_query` and `code_modules` over a `ToolReadHost & UEFITreeProviding` and a `ContentStore`, with the GUID catalogue passed in as a closure (as `UEFIAgentQueries.all(catalogue:)` takes it). `open_code` stays in the app — it opens a panel |
-| `ghidra_open` by a node | `AgentGhidraTools.openTool` | `GhidraNodeOpen`: reads the node's body through `UEFIAgentNodeData.bytes` and opens it on a `GhidraBackend`; by `module` for a project already made. Both hosts use `GhidraTools.tools(backend:includeOpenByImage: false)` and **replace** its `ghidra_open` with this one — two tools of one name in one list is a defect |
+| `ghidra_open` by a node | `AgentGhidraTools.openTool` | `GhidraNodeOpen`: reads the node's body through `UEFIAgentNodeData.bytes` and opens it on a `GhidraBackend`; by `module` for a project already made. Both hosts use `GhidraTools.tools(backend:includeOpenByImage: false)` and **replace** its `ghidra_open` with this one — two tools of one name in one list is a defect. The answer names the document it read and carries its `disk` mark, as a query's does: an agent works in `ghidra_open` after calling `documents` once (decision 9) |
 
 Depends on `AgentKit`, `ToolModuleKit`, `UEFIImage`, `UEFITool` (the pure
 target), `CodeAnalysis`, `GhidraHost`. It is listed in `packages:` in
@@ -392,7 +392,9 @@ Every phase ends with its packages' tests green and the server starting.
 3. **`AgentDocuments`** — done: the package, `AgentDocumentSet`,
    `ToolQueryTools`, `CodeReadings`, `GhidraNodeOpen`; the app moved onto
    them with no change in what its agent sees — its tool list, names,
-   descriptions and schemas, is the same byte for byte before and after.
+   descriptions and schemas, is the same byte for byte before and after, and
+   `AgentToolListTests` pins it in a golden file so the next move cannot drift
+   it unseen.
    Each host gives the tools their words (`CodeReadings.Wording`, the
    description of `ghidra_open`), so the server's can name no panel.
    `UEFICodeOpening` moved to the UEFI Structure's pure target, its codec
