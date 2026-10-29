@@ -1767,6 +1767,7 @@
 "Sent: %1$@ new, %2$@ already there, %3$@ not taken, %4$@ kept aside." = "Gesendet: %1$@ neu, %2$@ schon vorhanden, %3$@ nicht übernommen, %4$@ beiseitegelegt.";
 "The server's address is not of the form http://host:port." = "Die Adresse des Servers hat nicht die Form http://host:port.";
 "The project's code analyses did not reach the analysis server" = "Die Codeanalysen des Projekts haben den Analyseserver nicht erreicht";
+"The analysis server cannot be reached" = "Der Analyseserver ist nicht erreichbar";
 "The server does not accept the token." = "Der Server nimmt das Token nicht an.";
 "The server does not answer: %1$@" = "Der Server antwortet nicht: %1$@";
 "The server is not an analysis server of this version." = "Der Server ist kein Analyseserver dieser Version.";

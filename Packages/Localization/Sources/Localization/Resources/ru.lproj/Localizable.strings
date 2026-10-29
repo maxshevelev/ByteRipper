@@ -1767,6 +1767,7 @@
 "Sent: %1$@ new, %2$@ already there, %3$@ not taken, %4$@ kept aside." = "Отправлено: новых — %1$@, уже было — %2$@, не принято — %3$@, отложено — %4$@.";
 "The server's address is not of the form http://host:port." = "Адрес сервера должен иметь вид http://host:port.";
 "The project's code analyses did not reach the analysis server" = "Разборы кода проекта не переданы на сервер разборов";
+"The analysis server cannot be reached" = "Сервер разборов недоступен";
 "The server does not accept the token." = "Сервер не принимает токен.";
 "The server does not answer: %1$@" = "Сервер не отвечает: %1$@";
 "The server is not an analysis server of this version." = "Сервер не является сервером разборов этой версии.";
