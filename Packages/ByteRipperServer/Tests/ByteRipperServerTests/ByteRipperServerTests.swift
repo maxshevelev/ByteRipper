@@ -99,6 +99,53 @@ final class ServerTests: XCTestCase {
         }
     }
 
+    /// The rights matrix over the wire (`Design/SERVER_HEADLESS_PLAN.md`
+    /// decision 4): every token reads the store, `cas.write` writes it,
+    /// `ghidra.use` reaches Ghidra, and a refusal names the right it lacks.
+    func testEachRouteAsksForItsRight() async throws {
+        let tokens = try TokenStore.open(at: directory.appendingPathComponent("tokens.json"))
+        try tokens.add(name: "admin", rights: TokenPreset.admin.rights)
+        let (_, reader) = try tokens.add(name: "reader", rights: TokenPreset.reader.rights)
+        let (_, app) = try tokens.add(name: "app", rights: TokenPreset.app.rights)
+        var configuration = ServerConfiguration()
+        configuration.roles = [.cas, .ghidra]
+        configuration.port = 0
+        configuration.store = directory.appendingPathComponent("store")
+        configuration.projects = directory.appendingPathComponent("projects")
+        configuration.tokensFile = directory.appendingPathComponent("tokens.json")
+        let server = Server(configuration: configuration, log: { _ in })
+        let port = try await server.start()
+        defer { server.stop() }
+        let base = URL(string: "http://127.0.0.1:\(port)")!
+
+        func call(_ method: String, _ path: String, _ token: String, body: Data? = nil) async throws -> (Int, String) {
+            var request = URLRequest(url: base.appendingPathComponent(path))
+            request.httpMethod = method
+            request.httpBody = body
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            let (data, response) = try await URLSession.shared.data(for: request)
+            return ((response as! HTTPURLResponse).statusCode, String(decoding: data, as: UTF8.self))
+        }
+        let object = Data("bytes".utf8)
+        let objectPath = "cas/v1/objects/\(SHA256Digest(data: object).hex)"
+
+        let status1 = try await call("GET", "cas/v1/hello", reader).0
+        XCTAssertEqual(status1, 200)
+        let (written, refusal) = try await call("PUT", objectPath, reader, body: object)
+        XCTAssertEqual(written, 403)
+        XCTAssertTrue(refusal.contains("cas.write"), refusal)
+        let (ghidra, why) = try await call("GET", "ghidra/v1/modules", reader)
+        XCTAssertEqual(ghidra, 403)
+        XCTAssertTrue(why.contains("ghidra.use"), why)
+        let status2 = try await call("POST", "mcp", reader, body: Data("{}".utf8)).0
+        XCTAssertEqual(status2, 403)
+
+        let status3 = try await call("PUT", objectPath, app, body: object).0
+        XCTAssertEqual(status3, 204)
+        let status4 = try await call("GET", "ghidra/v1/modules", app).0
+        XCTAssertEqual(status4, 200)
+    }
+
     /// Without an admin token the console cannot be opened and the file cannot
     /// be corrected through it, so the server names the command instead of
     /// starting (`Design/SERVER_HEADLESS_PLAN.md` decision 16).

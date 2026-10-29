@@ -3,6 +3,14 @@ import HTTPService
 import XCTest
 @testable import ServerAuth
 
+/// What a callback said, in order, from any thread.
+final class Lines: @unchecked Sendable {
+    private let lock = NSLock()
+    private var items: [String] = []
+    func add(_ line: String) { lock.lock(); items.append(line); lock.unlock() }
+    var all: [String] { lock.lock(); defer { lock.unlock() }; return items }
+}
+
 /// A temporary directory of its own for one test.
 final class ScratchDirectory: @unchecked Sendable {
     let url: URL
@@ -130,6 +138,45 @@ final class TokenStoreTests: XCTestCase {
         }
     }
 
+    /// A file that stops reading closes the door rather than serving on from
+    /// what was read before — the old cache would still hold tokens the file
+    /// has since revoked. It opens again when the file reads again.
+    func testAFileThatStopsReadingClosesTheDoor() throws {
+        let store = try TokenStore.open(at: scratch.tokens)
+        let problems = Lines()
+        store.onProblem = { problems.add($0) }
+        let (_, secret) = try store.add(name: "laptop", rights: [.casWrite])
+        XCTAssertNotNil(store.principal(for: secret))
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: scratch.tokens.path)
+        // The mode alone changes no stamp; a hand edit that breaks the JSON does.
+        let text = try String(contentsOf: scratch.tokens, encoding: .utf8)
+        try Data((text + "\n").utf8).write(to: scratch.tokens)
+        XCTAssertNil(store.principal(for: secret))
+        XCTAssertNil(store.principal(for: secret))
+        XCTAssertEqual(problems.all.count, 1, "the problem is said once, not per request")
+        XCTAssertTrue(problems.all[0].contains("chmod 600"), problems.all[0])
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: scratch.tokens.path)
+        XCTAssertNotNil(store.principal(for: secret))
+        XCTAssertTrue(problems.all.last!.contains("reads again"))
+    }
+
+    /// A lock another process holds is waited for, then given up on — never
+    /// waited for forever.
+    func testALockHeldElsewhereIsGivenUpOn() throws {
+        let store = try TokenStore.open(at: scratch.tokens)
+        try store.add(name: "admin", rights: [.admin])
+        let held = open(scratch.tokens.path + ".lock", O_RDWR)
+        XCTAssertEqual(flock(held, LOCK_EX), 0)
+        defer { flock(held, LOCK_UN); close(held) }
+        let started = Date()
+        XCTAssertThrowsError(try store.add(name: "app", rights: [])) { error in
+            XCTAssertEqual(error as? TokenStore.Failure, .cannotLock(scratch.tokens.path + ".lock"))
+        }
+        XCTAssertLessThan(Date().timeIntervalSince(started), TokenStore.lockWait + 1)
+    }
+
     /// A revocation made by the command line reaches a server that is already
     /// running: the file's stamp is checked before each request.
     func testAChangeMadeBesideTheServerIsSeen() throws {
@@ -166,11 +213,11 @@ final class ServerAuthorizerTests: XCTestCase {
     }
 
     func testABearerIsAcceptedOnAnyPath() async throws {
-        let principal = try await authorizer.principal(for: request(
+        let principal = try authorizer.principal(for: request(
             "GET", "/cas/v1/hello", headers: ["authorization": "Bearer \(secret!)"]))
         XCTAssertEqual(principal.name, "admin")
         do {
-            _ = try await authorizer.principal(for: request(
+            _ = try authorizer.principal(for: request(
                 "GET", "/cas/v1/hello", headers: ["authorization": "Bearer wrong"]))
             XCTFail("accepted a wrong secret")
         } catch let error as HTTPError {
@@ -181,14 +228,14 @@ final class ServerAuthorizerTests: XCTestCase {
     func testWithoutABearerOnlyTheConsoleIsReachableAndOnlySignedIn() async throws {
         for path in ["/cas/v1/hello", "/ghidra/v1/modules", "/"] {
             do {
-                _ = try await authorizer.principal(for: request("GET", path))
+                _ = try authorizer.principal(for: request("GET", path))
                 XCTFail("served \(path) without a token")
             } catch let error as HTTPError {
                 XCTAssertEqual(error.status, .unauthorized)
             }
         }
         do {
-            _ = try await authorizer.principal(for: request("GET", "/admin/documents"))
+            _ = try authorizer.principal(for: request("GET", "/admin/documents"))
             XCTFail("opened the console without a session")
         } catch let error as HTTPError {
             XCTAssertEqual(error.status, .unauthorized)
@@ -197,16 +244,16 @@ final class ServerAuthorizerTests: XCTestCase {
 
     func testACookieSessionOpensTheConsoleAndNothingElse() async throws {
         let principal = try XCTUnwrap(store.principal(for: secret))
-        let session = authorizer.sessions.start(principal)
+        let session = try authorizer.signIn(secret: secret)
         let cookie = "\(AdminCookie.session)=\(session.id); \(AdminCookie.csrf)=\(session.csrf)"
 
-        let page = try await authorizer.principal(for: request("GET", "/admin", headers: ["cookie": cookie]))
+        let page = try authorizer.principal(for: request("GET", "/admin", headers: ["cookie": cookie]))
         XCTAssertEqual(page.id, principal.id)
 
         do {
             // The browser carries the cookie to whatever the address serves;
             // the store is not one of the console's pages.
-            _ = try await authorizer.principal(for: request("GET", "/cas/v1/hello", headers: ["cookie": cookie]))
+            _ = try authorizer.principal(for: request("GET", "/cas/v1/hello", headers: ["cookie": cookie]))
             XCTFail("a console cookie opened the store")
         } catch let error as HTTPError {
             XCTAssertEqual(error.status, .unauthorized)
@@ -215,16 +262,16 @@ final class ServerAuthorizerTests: XCTestCase {
 
     func testAConsoleFormNeedsTheCsrfValueTwice() async throws {
         let principal = try XCTUnwrap(store.principal(for: secret))
-        let session = authorizer.sessions.start(principal)
+        let session = try authorizer.signIn(secret: secret)
         let cookie = "\(AdminCookie.session)=\(session.id); \(AdminCookie.csrf)=\(session.csrf)"
         let headers = ["cookie": cookie, AdminCookie.header: session.csrf]
 
-        _ = try await authorizer.principal(for: request("POST", "/admin/api/tokens", headers: headers))
+        _ = try authorizer.principal(for: request("POST", "/admin/api/tokens", headers: headers))
         for wrong in [["cookie": cookie],
                       ["cookie": cookie, AdminCookie.header: "nope"],
                       ["cookie": "\(AdminCookie.session)=\(session.id)", AdminCookie.header: session.csrf]] {
             do {
-                _ = try await authorizer.principal(for: request("POST", "/admin/api/tokens", headers: wrong))
+                _ = try authorizer.principal(for: request("POST", "/admin/api/tokens", headers: wrong))
                 XCTFail("accepted a form without its CSRF value")
             } catch let error as HTTPError {
                 XCTAssertEqual(error.status, .forbidden)
@@ -235,11 +282,11 @@ final class ServerAuthorizerTests: XCTestCase {
     /// A revoked token's console session ends with it.
     func testARevokedTokenClosesItsConsoleSession() async throws {
         let principal = try XCTUnwrap(store.principal(for: secret))
-        let session = authorizer.sessions.start(principal)
+        let session = try authorizer.signIn(secret: secret)
         let cookie = "\(AdminCookie.session)=\(session.id)"
         try store.revoke(principal.id)
         do {
-            _ = try await authorizer.principal(for: request("GET", "/admin", headers: ["cookie": cookie]))
+            _ = try authorizer.principal(for: request("GET", "/admin", headers: ["cookie": cookie]))
             XCTFail("served the console on a revoked token")
         } catch let error as HTTPError {
             XCTAssertEqual(error.status, .unauthorized)
@@ -247,9 +294,37 @@ final class ServerAuthorizerTests: XCTestCase {
         XCTAssertEqual(authorizer.sessions.count, 0)
     }
 
+    /// A rotated secret ends the console sessions it signed in: a secret is
+    /// rotated because it got out.
+    func testARotatedTokenClosesItsConsoleSession() async throws {
+        let session = try authorizer.signIn(secret: secret)
+        let cookie = "\(AdminCookie.session)=\(session.id)"
+        _ = try authorizer.principal(for: request("GET", "/admin", headers: ["cookie": cookie]))
+        let rotated = try store.rotate("admin")
+        do {
+            _ = try authorizer.principal(for: request("GET", "/admin", headers: ["cookie": cookie]))
+            XCTFail("served the console on a rotated secret's session")
+        } catch let error as HTTPError {
+            XCTAssertEqual(error.status, .unauthorized)
+        }
+        let again = try authorizer.signIn(secret: rotated)
+        _ = try authorizer.principal(for: request("GET", "/admin", headers: ["cookie": "\(AdminCookie.session)=\(again.id)"]))
+    }
+
+    /// Only an admin token signs in to the console.
+    func testOnlyAnAdminTokenSignsIn() throws {
+        let (_, app) = try store.add(name: "app", rights: TokenPreset.app.rights)
+        XCTAssertThrowsError(try authorizer.signIn(secret: app)) { error in
+            XCTAssertEqual((error as? HTTPError)?.status, .forbidden)
+        }
+        XCTAssertThrowsError(try authorizer.signIn(secret: "nope")) { error in
+            XCTAssertEqual((error as? HTTPError)?.status, .unauthorized)
+        }
+    }
+
     func testASessionEndsAtSignOut() async throws {
         let principal = try XCTUnwrap(store.principal(for: secret))
-        let session = authorizer.sessions.start(principal)
+        let session = try authorizer.signIn(secret: secret)
         authorizer.sessions.end(session.id)
         XCTAssertNil(authorizer.sessions.session(session.id))
     }

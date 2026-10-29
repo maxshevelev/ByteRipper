@@ -103,8 +103,9 @@ public enum TokenCommand: Equatable, Sendable {
                 \(secret)
 
                 token \(token.id) "\(token.name)", rights \(Self.names(token.rights)), in \(file.path)
-                The secret is shown once. The app's Settings ▸ Code analysis and the skill's
-                scripts read the file it goes in.
+                The secret is shown once and kept nowhere. Paste it into the app's
+                Settings ▸ Code Analysis: the app writes it to the file the skill's
+                scripts read on that Mac.
                 """
         case .list(let file):
             let tokens = try TokenStore.open(at: file).all()

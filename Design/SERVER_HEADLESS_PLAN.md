@@ -201,27 +201,42 @@ imports AppKit in several files: the server stays macOS-only in v1.
   an authorizer — both loopback exemptions go — and calls
   `onRequest(method, path, status, duration, principal)`, which is where the
   REST activity rows come from.
-- The body limit becomes per route: `HTTPRouter` lets a route name its own
-  maximum, which the parser reads once the request line and headers are in;
-  the default stays what it is now.
-- `CASService.routes(access:)`: `cas.read` for the GETs (hello, objects,
-  analyses, reviews, conflicts, refs, verify, changes, export); `cas.write` for
-  `PUT objects`, `POST analyses`/`reviews`/`import`, `PUT`/`DELETE refs`.
-- `GhidraRoutes.routes(host:published:access:)`: `ghidra.use` for reads and
-  edits; `publish` and `release` need `ghidra.use && cas.write`.
+- **A request is authorized on its headers, before its body is read.** The
+  parser asks the server once the request line and headers are in; the
+  authorizer is synchronous for that reason. A request without an accepted
+  token is answered 401 and its body never read — the connection goes unless
+  there was no body — so nobody without a token can make the server hold an
+  upload. Every path is asked for a token, a route or not, so a stranger
+  learns nothing of what is served.
+- Each route names its body limit and its access in `HTTPRouter.add`:
+  `maxBodyBytes` (nil: the server's default, which stays what it is now) and
+  `access` — `.token` (any accepted token; the default), `.rights([…])`
+  (checked by the router before the handler; a request with no principal is
+  refused), or `.open` (no token: the console's sign-in alone).
+- CAS: `cas.read` for the GETs (hello, objects, analyses, reviews, conflicts,
+  refs, verify, changes) and for `POST export`, which only reads; `cas.write`
+  for `PUT objects`, `POST analyses`/`reviews`/`import`, `PUT`/`DELETE refs`.
+- Ghidra: `ghidra.use` for reads and edits; `publish` and `release` need
+  `ghidra.use` and `cas.write`. `/mcp`, until it goes (§9), needs both.
 - The console cookie is accepted **only** under `/admin`, so a browser session
   cannot reach CAS or Ghidra.
-- Sign-in: `GET/POST /admin/login` with the admin token (URL-encoded body); a
-  32-byte session id kept in memory; `Set-Cookie: br_admin=…; HttpOnly;
-  SameSite=Strict; Path=/admin`. CSRF is double-submit: a `br_csrf` cookie plus
-  `X-CSRF-Token` (or a hidden field); `Host`/`Origin` checked against decision
-  19's names; failed sign-ins delayed and throttled. `Secure` waits for TLS.
+- Sign-in: `GET/POST /admin/login`, the open routes, with the admin token
+  (URL-encoded body), through `ServerAuthorizer.signIn` — only an admin token
+  signs in; a 32-byte session id kept in memory, with the hash of the secret
+  it signed in with, so a rotation ends it as a revocation does; `Set-Cookie:
+  br_admin=…; HttpOnly; SameSite=Strict; Path=/admin`. CSRF is double-submit:
+  a `br_csrf` cookie plus `X-CSRF-Token`; `Host`/`Origin` checked against
+  decision 19's names; failed sign-ins delayed and throttled. `Secure` waits
+  for TLS.
 - `tokens.json`: `{version, tokens: [{id, name, hash, rights, created,
   last_used, revoked}]}`; SHA-256 (the secret is 32 random bytes, so a slow
-  hash buys nothing), constant-time compare, file lock. `last_used` is kept in
-  memory and written at most once a minute and at stop — never a file write
-  per request. CLI: `byteripper-server token add|list|rotate|revoke`, the
-  secret printed once.
+  hash buys nothing), constant-time compare, a file lock waited for two
+  seconds at most, written 0600 from its first byte and renamed into place; a
+  file that stops reading leaves the server with no token accepted until it
+  reads again, and says so in the log once. `last_used` is kept in memory and
+  written at most once a minute and at stop — never a file write per request.
+  CLI: `byteripper-server token add|list|rotate|revoke`, the secret printed
+  once.
 - `TokenFile` and `--token-file` are deleted.
 
 ## 6. Documents
@@ -343,7 +358,9 @@ Every phase ends with its packages' tests green and the server starting.
    existing `HTTPServiceTests`, `CASServiceTests` and `ByteRipperServerTests`
    moved onto a test token; new tests for the once-only secret, revocation,
    the refusal to start without an admin token, and `last_used` not written
-   per request.
+   per request. The rights on the roles (first planned as phase 6) landed
+   here too: tokens with presets were being issued, and without them a
+   `reader` token could publish through `/mcp`.
 2. **The app side of tokens**: the app sends its token on loopback, names a
    missing right on 403, and its Settings caption names `token add` — through
    `L()` in English, Russian and German; `help_coverage.py` and
@@ -364,8 +381,8 @@ Every phase ends with its packages' tests green and the server starting.
    the relay, `MCPEndpoint` removed; tests for the forbidden tools, unique
    names, the answer keys of `documents`, `uefi_tree`/`read` on the synthetic
    image, the relay's isolation and a call through the socket.
-6. **Rights on the roles**: `CASService.routes(access:)`,
-   `GhidraRoutes.routes(access:)`, the rights matrix end to end.
+6. **Rights on the roles** — done in phase 1: each route names its access,
+   and the rights matrix is tested end to end over a running server.
 7. **The console**: pages, sign-in and CSRF, decision 19, documents and upload,
    activity, tokens, status; loopback tests.
 8. **Documentation and measurements**: `SERVER_PLAN.md` and the skill; RSS and

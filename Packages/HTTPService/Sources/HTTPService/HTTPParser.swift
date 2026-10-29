@@ -11,21 +11,37 @@ public struct HTTPParser: Sendable {
         case needMore
         case request(HTTPRequest)
         case refused(HTTPStatus, String)
+        /// What `admit` refused, with the head it was asked about. Its body is
+        /// never read: `canContinue` says whether the connection may go on —
+        /// only when there was no body to skip.
+        case denied(HTTPRequest, HTTPError, canContinue: Bool)
+    }
+
+    /// What the server answers about a request once its headers are in.
+    public enum Admission: Equatable, Sendable {
+        /// Read the body, up to `maxBodyBytes` (nil: the parser's default),
+        /// and hand the request on as `principal`'s.
+        case admit(maxBodyBytes: Int?, principal: HTTPPrincipal?)
+        case refuse(HTTPError)
     }
 
     public var maxHeaderBytes = 64 * 1024
     public var maxBodyBytes: Int
-    /// The limit a route names for its own body, asked once the request line
-    /// and headers are in — the upload route takes more than the rest
-    /// (`Design/SERVER_HEADLESS_PLAN.md` §5, decision 12). nil keeps
-    /// `maxBodyBytes`.
-    public var bodyLimit: (@Sendable (String, String) -> Int?)?
+    /// Asked once the request line and headers are in, with an empty body:
+    /// whether to read the body at all, how much of it a route takes, and as
+    /// whose (`Design/SERVER_HEADLESS_PLAN.md` §5). A request without a token
+    /// is refused here, before the server holds its body. nil admits every
+    /// request with the default limit.
+    public var admit: (@Sendable (HTTPRequest) -> Admission)?
 
     private var buffer = Data()
+    /// The answer for the request at the front of `buffer`, kept while its
+    /// body arrives so `admit` is asked once per request.
+    private var admitted: Admission?
 
-    public init(maxBodyBytes: Int, bodyLimit: (@Sendable (String, String) -> Int?)? = nil) {
+    public init(maxBodyBytes: Int, admit: (@Sendable (HTTPRequest) -> Admission)? = nil) {
         self.maxBodyBytes = maxBodyBytes
-        self.bodyLimit = bodyLimit
+        self.admit = admit
     }
 
     public mutating func feed(_ data: Data) {
@@ -72,18 +88,33 @@ public struct HTTPParser: Sendable {
         let target = String(requestLine[1])
         let (path, query) = Self.split(target)
         guard let path else { return .refused(.badRequest, "the path is not percent-encoded UTF-8") }
-        let method = String(requestLine[0])
-        let limit = bodyLimit?(method, path) ?? maxBodyBytes
-        guard length <= limit else {
-            return .refused(.payloadTooLarge, "the body is longer than \(limit) bytes")
-        }
+        var request = HTTPRequest(method: String(requestLine[0]), path: path, query: query, headers: headers)
+        let admission = admitted ?? admit?(request) ?? .admit(maxBodyBytes: nil, principal: nil)
         let bodyStart = end.upperBound
-        guard buffer.endIndex - bodyStart >= length else { return .needMore }
-        let body = Data(buffer[bodyStart..<(bodyStart + length)])
-        buffer = Data(buffer[(bodyStart + length)...])
-
-        return .request(HTTPRequest(method: method, path: path, query: query,
-                                    headers: headers, body: body))
+        switch admission {
+        case .refuse(let error):
+            admitted = nil
+            // A refused body is not read: with none to skip the next request
+            // can follow, otherwise the connection goes.
+            guard length == 0 else { return .denied(request, error, canContinue: false) }
+            buffer = Data(buffer[bodyStart...])
+            return .denied(request, error, canContinue: true)
+        case .admit(let routeLimit, let principal):
+            let limit = routeLimit ?? maxBodyBytes
+            guard length <= limit else {
+                admitted = nil
+                return .refused(.payloadTooLarge, "the body is longer than \(limit) bytes")
+            }
+            guard buffer.endIndex - bodyStart >= length else {
+                admitted = admission
+                return .needMore
+            }
+            admitted = nil
+            request.body = Data(buffer[bodyStart..<(bodyStart + length)])
+            request.principal = principal
+            buffer = Data(buffer[(bodyStart + length)...])
+            return .request(request)
+        }
     }
 
     static func split(_ target: String) -> (String?, [String: String]) {

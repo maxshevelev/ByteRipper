@@ -17,16 +17,19 @@ enum GhidraRoutes {
     static let writes: Set<String> = ["rename/function", "rename/label", "create/function", "rename/variable", "set/signature", "set/comment",
                                       "set/data", "set/description", "set/code-mode", "set/equate", "type", "save"]
 
+    /// `ghidra.use` for every route; publish and release write into the store
+    /// too, and need `cas.write` beside it (`Design/SERVER_HEADLESS_PLAN.md`
+    /// decision 4).
     static func routes(host: GhidraHost, published: @escaping @Sendable () async -> Void) -> HTTPRouter {
         var router = HTTPRouter()
 
-        router.add("GET", "\(prefix)/modules") { _ in
+        router.add("GET", "\(prefix)/modules", access: .rights([.ghidraUse])) { _ in
             .json(await host.summaries())
         }
 
         // Open a module by its bytes: its project is made the first time —
         // tens of seconds for a large DXE driver — and its owner started.
-        router.add("POST", "\(prefix)/modules") { request in
+        router.add("POST", "\(prefix)/modules", access: .rights([.ghidraUse])) { request in
             guard !request.body.isEmpty else { throw HTTPError(.badRequest, "send the module's bytes as the body") }
             let name = request.query["name"].flatMap { $0.isEmpty ? nil : $0 } ?? "module"
             guard name.unicodeScalars.allSatisfy({ CharacterSet.alphanumerics.contains($0) || "._-".unicodeScalars.contains($0) }) else {
@@ -49,7 +52,7 @@ enum GhidraRoutes {
                                 phase: state.module.phase, reviewed: state.reviewed, published: state.published))
         }
 
-        router.add("GET", "\(prefix)/modules/:module/*call") { request in
+        router.add("GET", "\(prefix)/modules/:module/*call", access: .rights([.ghidraUse])) { request in
             let module = try digest(request.parameters["module"])
             let call = request.parameters["call"] ?? ""
             guard reads.contains(where: { $0.hasSuffix("/") ? call.hasPrefix($0) && call.count > $0.count : call == $0 }) else {
@@ -59,7 +62,7 @@ enum GhidraRoutes {
             return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
         }
 
-        router.add("POST", "\(prefix)/modules/:module/write/*call") { request in
+        router.add("POST", "\(prefix)/modules/:module/write/*call", access: .rights([.ghidraUse])) { request in
             let module = try digest(request.parameters["module"])
             let call = request.parameters["call"] ?? ""
             guard writes.contains(call) else { throw HTTPError(.notFound, "\(call) is not a write of the bridge") }
@@ -67,14 +70,14 @@ enum GhidraRoutes {
             return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
         }
 
-        router.add("POST", "\(prefix)/modules/:module/publish") { request in
+        router.add("POST", "\(prefix)/modules/:module/publish", access: .rights([.ghidraUse, .casWrite])) { request in
             let module = try digest(request.parameters["module"])
             let publication = try await answer { try await host.publish(module, by: by(request)) }
             await published()
             return .json(Published(manifest: publication.manifest, typeConflicts: publication.typeConflicts))
         }
 
-        router.add("POST", "\(prefix)/modules/:module/release") { request in
+        router.add("POST", "\(prefix)/modules/:module/release", access: .rights([.ghidraUse, .casWrite])) { request in
             let module = try digest(request.parameters["module"])
             guard let publication = try await answer({ try await host.release(module, by: by(request)) }) else {
                 return .json(Published(manifest: nil, typeConflicts: []))
@@ -83,7 +86,7 @@ enum GhidraRoutes {
             return .json(Published(manifest: publication.manifest, typeConflicts: publication.typeConflicts))
         }
 
-        router.add("POST", "\(prefix)/modules/:module/stop") { request in
+        router.add("POST", "\(prefix)/modules/:module/stop", access: .rights([.ghidraUse])) { request in
             let module = try digest(request.parameters["module"])
             return .json(["stopped": await host.stop(module)])
         }

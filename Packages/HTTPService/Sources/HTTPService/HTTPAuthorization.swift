@@ -44,12 +44,29 @@ public struct HTTPPrincipal: Equatable, Hashable, Sendable {
     }
 }
 
+/// Who a route lets in (`Design/SERVER_HEADLESS_PLAN.md` §5).
+public enum HTTPAccess: Equatable, Sendable {
+    /// No token: the console's sign-in page and nothing else. The request
+    /// reaches the route with no principal.
+    case open
+    /// Any token the authorizer accepts.
+    case token
+    /// A token carrying every one of these rights; a missing one is a 403
+    /// that names it.
+    case rights(Set<HTTPRight>)
+}
+
 /// Turns a request into the principal it may be served as, or the refusal to
 /// answer it with. The server has no anonymous mode: `HTTPServer` will not
 /// start without one, on any address (`Design/SERVER_HEADLESS_PLAN.md`
 /// decision 3).
+///
+/// It is asked once the request line and headers are in, before the body is
+/// read — `request.body` is empty — so a request without a token is refused
+/// before the server holds a byte of what it sends. Synchronous for the same
+/// reason: the parser asks it in the middle of reading.
 public protocol HTTPAuthorizer: Sendable {
-    func principal(for request: HTTPRequest) async throws -> HTTPPrincipal
+    func principal(for request: HTTPRequest) throws -> HTTPPrincipal
 }
 
 /// One bearer token that opens everything — the package's own tests, and a
@@ -63,7 +80,7 @@ public struct StaticAuthorizer: HTTPAuthorizer {
         self.granted = principal
     }
 
-    public func principal(for request: HTTPRequest) async throws -> HTTPPrincipal {
+    public func principal(for request: HTTPRequest) throws -> HTTPPrincipal {
         guard HTTPBearer.matches(request.headers["authorization"], token: token) else {
             throw HTTPError(.unauthorized, "a bearer token is required")
         }
@@ -75,9 +92,11 @@ public struct StaticAuthorizer: HTTPAuthorizer {
 /// nothing about how much of a guess was right.
 public enum HTTPBearer {
     /// The secret a header carries, or nil when it is not a bearer header.
+    /// The scheme's name is matched in any case (RFC 7235 §2.1).
     public static func token(_ header: String?) -> String? {
-        guard let header, header.hasPrefix("Bearer ") else { return nil }
-        return String(header.dropFirst("Bearer ".count))
+        guard let header, header.lowercased().hasPrefix("bearer ") else { return nil }
+        let secret = header.dropFirst("bearer ".count).trimmingCharacters(in: .whitespaces)
+        return secret.isEmpty ? nil : secret
     }
 
     public static func matches(_ header: String?, token: String) -> Bool {

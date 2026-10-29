@@ -17,7 +17,9 @@ enum MCPEndpoint {
 
     static func routes(server: AgentServer, log: @escaping @Sendable (String) -> Void) -> HTTPRouter {
         var router = HTTPRouter()
-        router.add("POST", path) { request in
+        // Its tools reach Ghidra and publish into the store: the rights of
+        // both, until the endpoint goes (`Design/SERVER_HEADLESS_PLAN.md` §9).
+        router.add("POST", path, access: .rights([.ghidraUse, .casWrite])) { request in
             guard let message = try? JSONValue.parse(request.body) else {
                 return rpcError(-32700, "Parse error")
             }

@@ -159,4 +159,9 @@ public enum ServerPaths {
     public static var defaultTokensFile: URL {
         support.appendingPathComponent("tokens.json", isDirectory: false)
     }
+
+    /// Where an earlier build kept its one token (`--token-file`'s default).
+    public static var legacyTokenFile: URL {
+        support.appendingPathComponent("token", isDirectory: false)
+    }
 }

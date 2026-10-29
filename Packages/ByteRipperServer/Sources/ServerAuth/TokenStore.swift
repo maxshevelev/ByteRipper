@@ -12,6 +12,11 @@ import HTTPService
 /// by that server's next `last_used` flush. A read re-checks the file's stamp
 /// first, so a revocation takes effect at the next request.
 ///
+/// A file that can no longer be read — made readable by others, broken by a
+/// hand edit — closes the door: the store holds no token until the file reads
+/// again, and `onProblem` says why. Serving on from what was read before
+/// would keep a token the file has since revoked.
+///
 /// `last_used` is kept in memory and written at most once a minute, and at
 /// stop — never a file write per request, which would be a write per call the
 /// agent makes.
@@ -78,7 +83,16 @@ public final class TokenStore: @unchecked Sendable {
     public static let lastUsedInterval: TimeInterval = 60
 
     public let url: URL
+    /// What went wrong with the file, and when it reads again — once per
+    /// change, not per request. The server's log.
+    public var onProblem: (@Sendable (String) -> Void)?
     private let lock = NSLock()
+    private var problem: String?
+    /// A flush is on its way to the file, off the request's path.
+    private var flushQueued = false
+    private let flushQueue = DispatchQueue(label: "TokenStore.flush", qos: .utility)
+    /// How long a writer waits for another process's lock before it gives up.
+    static let lockWait: TimeInterval = 2
     private var contents = Contents(version: 1, tokens: [])
     private var stamp: Stamp?
     /// A use seen since the last flush, by token id.
@@ -122,8 +136,17 @@ public final class TokenStore: @unchecked Sendable {
             return nil
         }
         pending[token.id] = Date()
-        if Date().timeIntervalSince(lastFlush) >= Self.lastUsedInterval {
-            try? flushLocked()
+        if !flushQueued, Date().timeIntervalSince(lastFlush) >= Self.lastUsedInterval {
+            // The write — and the wait for the file's lock — happens off the
+            // request: a request never waits on the disk.
+            flushQueued = true
+            flushQueue.async { [weak self] in
+                guard let self else { return }
+                try? self.flush()
+                self.lock.lock()
+                self.flushQueued = false
+                self.lock.unlock()
+            }
         }
         return HTTPPrincipal(id: token.id, name: token.name, rights: token.granted)
     }
@@ -134,6 +157,16 @@ public final class TokenStore: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         try flushLocked()
+    }
+
+    /// Whether a token is live and still has the secret whose hash is `hash`:
+    /// what a console session signed in with must still be, so a rotation
+    /// ends it as a revocation does.
+    public func isCurrent(id: String, hash: String) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        reloadIfChangedLocked()
+        return contents.tokens.contains { $0.id == id && !$0.revoked && Self.equal($0.hash, hash) }
     }
 
     // MARK: - Changing
@@ -201,20 +234,37 @@ public final class TokenStore: @unchecked Sendable {
 
     /// A change another process made must reach this one: the stamp is a
     /// modification date, a size and an inode, which a rename or a write
-    /// always changes.
+    /// always changes. A file that does not read closes the door (see the
+    /// type's comment); one that is gone is an empty store, which the next
+    /// `Server` start refuses.
     private func reloadIfChangedLocked() {
-        guard let current = stamp else {
-            if FileManager.default.fileExists(atPath: url.path) { try? loadLocked() }
-            return
-        }
-        guard let now = Self.stampOf(url) else {
-            // Deleted under us: an empty store is the honest answer, and the
-            // next `Server` start refuses it.
+        let now = Self.stampOf(url)
+        guard now != stamp || (now != nil && problem != nil) else { return }
+        guard now != nil else {
             contents = Contents(version: 1, tokens: [])
             stamp = nil
+            report("\(url.path) is gone: no token is accepted until it is back")
             return
         }
-        if now != current { try? loadLocked() }
+        do {
+            try loadLocked()
+            report(nil)
+        } catch {
+            contents = Contents(version: 1, tokens: [])
+            stamp = nil
+            report("\(error): no token is accepted until it reads again")
+        }
+    }
+
+    private func report(_ text: String?) {
+        guard text != problem else { return }
+        let was = problem
+        problem = text
+        if let text {
+            onProblem?(text)
+        } else if was != nil {
+            onProblem?("\(url.path) reads again")
+        }
     }
 
     private func read() throws -> Contents {
@@ -262,6 +312,10 @@ public final class TokenStore: @unchecked Sendable {
         }
     }
 
+    /// Written beside the file, 0600 from its first byte, and renamed over it:
+    /// a reader sees the old file or the new one, never a half-written one,
+    /// and never one others could read — which would close the door for the
+    /// moment it took to chmod (see `reloadIfChangedLocked`).
     private func save(_ file: Contents) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
@@ -270,12 +324,21 @@ public final class TokenStore: @unchecked Sendable {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
                                                 withIntermediateDirectories: true,
                                                 attributes: [.posixPermissions: 0o700])
-        try data.write(to: url, options: .atomic)
-        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+        let temporary = url.path + ".\(UUID().uuidString).new"
+        let descriptor = Darwin.open(temporary, O_CREAT | O_EXCL | O_WRONLY, 0o600)
+        guard descriptor >= 0 else { throw Failure.unreadable(temporary) }
+        let written = data.withUnsafeBytes { write(descriptor, $0.baseAddress, $0.count) }
+        let synced = fsync(descriptor)
+        close(descriptor)
+        guard written == data.count, synced == 0, rename(temporary, url.path) == 0 else {
+            unlink(temporary)
+            throw Failure.unreadable(url.path)
+        }
     }
 
     /// The sidecar a rename cannot replace, so two processes lock the same
-    /// thing.
+    /// thing. A lock another process holds is waited for `lockWait`, then
+    /// given up on — a stuck command line must not stop the server.
     private func lockFile() throws -> Int32 {
         let path = url.path + ".lock"
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
@@ -283,9 +346,13 @@ public final class TokenStore: @unchecked Sendable {
                                                 attributes: [.posixPermissions: 0o700])
         let descriptor = Darwin.open(path, O_CREAT | O_RDWR, 0o600)
         guard descriptor >= 0 else { throw Failure.cannotLock(path) }
-        guard flock(descriptor, LOCK_EX) == 0 else {
-            close(descriptor)
-            throw Failure.cannotLock(path)
+        let deadline = Date().addingTimeInterval(Self.lockWait)
+        while flock(descriptor, LOCK_EX | LOCK_NB) != 0 {
+            guard errno == EWOULDBLOCK, Date() < deadline else {
+                close(descriptor)
+                throw Failure.cannotLock(path)
+            }
+            usleep(20_000)
         }
         return descriptor
     }

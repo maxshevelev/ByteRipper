@@ -29,6 +29,14 @@ public final class Server: @unchecked Sendable {
     @discardableResult
     public func start() async throws -> UInt16 {
         let tokens = try TokenStore.open(at: configuration.tokensFile)
+        tokens.onProblem = log
+        // An earlier build's single token: nothing reads it any more, and a
+        // secret that looks live should not be left lying about.
+        if FileManager.default.fileExists(atPath: ServerPaths.legacyTokenFile.path) {
+            log("\(ServerPaths.legacyTokenFile.path) is an earlier build's token and is not read any more: "
+                + "delete it, and give each app a token of its own with "
+                + "`byteripper-server token add --name <mac> --preset app`")
+        }
         // Without an admin token the console cannot be opened and the file
         // cannot be corrected through it, so there is nothing to start
         // (`Design/SERVER_HEADLESS_PLAN.md` decision 16).

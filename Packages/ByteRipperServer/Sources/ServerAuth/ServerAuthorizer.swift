@@ -6,7 +6,6 @@ public enum AdminCookie {
     public static let session = "br_admin"
     public static let csrf = "br_csrf"
     public static let header = "x-csrf-token"
-    public static let csrfField = "csrf"
 }
 
 /// Who is signed in to the console, in memory only: the server keeps no
@@ -16,7 +15,11 @@ public enum AdminCookie {
 public final class AdminSessions: @unchecked Sendable {
     public struct Session: Sendable {
         public let principal: HTTPPrincipal
-        /// The value the CSRF cookie and the form's field must both carry.
+        /// The hash of the secret the session signed in with: a rotation
+        /// changes it, and the session ends with the old secret.
+        public let tokenHash: String
+        /// The value the CSRF cookie and the `X-CSRF-Token` header must both
+        /// carry.
         public let csrf: String
         public var lastSeen: Date
     }
@@ -29,11 +32,11 @@ public final class AdminSessions: @unchecked Sendable {
     public init() {}
 
     /// A new session and its CSRF value.
-    public func start(_ principal: HTTPPrincipal) -> (id: String, csrf: String) {
+    func start(_ principal: HTTPPrincipal, tokenHash: String) -> (id: String, csrf: String) {
         let id = Self.makeID()
         let csrf = Self.makeID()
         lock.lock()
-        sessions[id] = Session(principal: principal, csrf: csrf, lastSeen: Date())
+        sessions[id] = Session(principal: principal, tokenHash: tokenHash, csrf: csrf, lastSeen: Date())
         lock.unlock()
         return (id, csrf)
     }
@@ -104,7 +107,18 @@ public final class ServerAuthorizer: HTTPAuthorizer, @unchecked Sendable {
         self.sessions = sessions
     }
 
-    public func principal(for request: HTTPRequest) async throws -> HTTPPrincipal {
+    /// Signs in to the console with a token's secret: a session for an admin
+    /// token, nothing for any other (`Design/SERVER_HEADLESS_PLAN.md` §5).
+    /// The sign-in route is the one open route; this is what it calls.
+    public func signIn(secret: String) throws -> (id: String, csrf: String) {
+        guard let principal = tokens.principal(for: secret) else {
+            throw HTTPError(.unauthorized, "that is not a token of this server")
+        }
+        try principal.require(.admin)
+        return sessions.start(principal, tokenHash: TokenStore.hash(secret))
+    }
+
+    public func principal(for request: HTTPRequest) throws -> HTTPPrincipal {
         if let secret = HTTPBearer.token(request.headers["authorization"]) {
             guard let principal = tokens.principal(for: secret) else {
                 throw HTTPError(.unauthorized, "the bearer token is not one of this server's")
@@ -118,11 +132,12 @@ public final class ServerAuthorizer: HTTPAuthorizer, @unchecked Sendable {
               let session = sessions.session(id) else {
             throw HTTPError(.unauthorized, "sign in at /admin/login")
         }
-        // A revocation reaches the sessions it signed in, not only the next
-        // request that carries the secret.
-        guard tokens.all().contains(where: { $0.id == session.principal.id && !$0.revoked }) else {
+        // A revocation or a rotation reaches the sessions the old secret
+        // signed in, not only the next request that carries it: a secret is
+        // rotated because it got out.
+        guard tokens.isCurrent(id: session.principal.id, hash: session.tokenHash) else {
             sessions.end(id)
-            throw HTTPError(.unauthorized, "the token this session signed in with was revoked")
+            throw HTTPError(.unauthorized, "the token this session signed in with was revoked or rotated")
         }
         if !Self.isSafe(request.method) {
             let given = request.headers[AdminCookie.header]
@@ -139,8 +154,8 @@ public final class ServerAuthorizer: HTTPAuthorizer, @unchecked Sendable {
         path == "/admin" || path.hasPrefix("/admin/")
     }
 
-    /// GET and HEAD change nothing, and a browser sends neither with a form's
-    /// CSRF field to be missed.
+    /// The methods that change nothing: GET, HEAD and a CORS preflight's
+    /// OPTIONS, none of which a console route answers with a change.
     public static func isSafe(_ method: String) -> Bool {
         method == "GET" || method == "HEAD" || method == "OPTIONS"
     }

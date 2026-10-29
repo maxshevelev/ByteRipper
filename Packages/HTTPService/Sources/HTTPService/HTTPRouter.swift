@@ -15,6 +15,7 @@ public struct HTTPRouter: Sendable {
         let pattern: [String]
         /// The body this route alone accepts; nil is the server's default.
         let maxBodyBytes: Int?
+        let access: HTTPAccess
         let handler: Handler
     }
 
@@ -25,24 +26,27 @@ public struct HTTPRouter: Sendable {
     /// `maxBodyBytes` gives this route a body limit of its own, in place of the
     /// server's rather than in addition to it — an upload route exists to take
     /// more than every other route does (`Design/SERVER_HEADLESS_PLAN.md`
-    /// decision 12).
+    /// decision 12). `access` is who may call it: any token by default, the
+    /// rights it names, or — for the console's sign-in alone — nobody's.
     public mutating func add(_ method: String, _ pattern: String, maxBodyBytes: Int? = nil,
-                             _ handler: @escaping Handler) {
+                             access: HTTPAccess = .token, _ handler: @escaping Handler) {
         routes.append(Route(method: method.uppercased(),
                             pattern: pattern.split(separator: "/").map(String.init),
                             maxBodyBytes: maxBodyBytes,
+                            access: access,
                             handler: handler))
     }
 
-    /// The body limit of the route that will answer `method` and `path`, or nil
-    /// for the server's default. The parser asks this once the headers are in,
-    /// before it waits for the body (`Design/SERVER_HEADLESS_PLAN.md` §5).
-    public func bodyLimit(method: String, path: String) -> Int? {
+    /// The body limit and the access of the route that will answer `method`
+    /// and `path`, or nil when none will. The server asks this once the
+    /// headers are in, before it reads the body (`Design/SERVER_HEADLESS_PLAN.md`
+    /// §5).
+    public func route(method: String, path: String) -> (maxBodyBytes: Int?, access: HTTPAccess)? {
         let segments = path.split(separator: "/").map(String.init)
         for route in routes {
             guard Self.match(route.pattern, segments) != nil else { continue }
             guard route.method == method || (method == "HEAD" && route.method == "GET") else { continue }
-            return route.maxBodyBytes
+            return (route.maxBodyBytes, route.access)
         }
         return nil
     }
@@ -64,6 +68,7 @@ public struct HTTPRouter: Sendable {
             var matched = request
             matched.parameters = parameters
             do {
+                try Self.check(route.access, request.principal)
                 var response = try await route.handler(matched)
                 if request.method == "HEAD" {
                     response.headers["content-length"] = String(response.body.count)
@@ -79,6 +84,15 @@ public struct HTTPRouter: Sendable {
         return pathMatched
             ? .error(HTTPError(.methodNotAllowed, "\(request.method) is not served at \(request.path)"))
             : .error(HTTPError(.notFound, "nothing is served at \(request.path)"))
+    }
+
+    /// The rights a route names, on the principal the server set. A route
+    /// that names rights refuses a request with no principal at all — one a
+    /// test or a caller handed in directly — rather than serving it.
+    static func check(_ access: HTTPAccess, _ principal: HTTPPrincipal?) throws {
+        guard case .rights(let rights) = access else { return }
+        guard let principal else { throw HTTPError(.unauthorized, "a bearer token is required") }
+        for right in rights.sorted(by: { $0.rawValue < $1.rawValue }) { try principal.require(right) }
     }
 
     static func match(_ pattern: [String], _ segments: [String]) -> [String: String]? {

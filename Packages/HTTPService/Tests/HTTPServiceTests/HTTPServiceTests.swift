@@ -50,25 +50,75 @@ final class HTTPParserTests: XCTestCase {
     /// A route may take more than the parser's default, and only it
     /// (`Design/SERVER_HEADLESS_PLAN.md` §5, decision 12).
     func testARouteNamesItsOwnBodyLimit() {
-        var parser = HTTPParser(maxBodyBytes: 10, bodyLimit: { method, path in
-            method == "POST" && path == "/upload" ? 4096 : nil
-        })
+        let upload: @Sendable (HTTPRequest) -> HTTPParser.Admission = { head in
+            .admit(maxBodyBytes: head.method == "POST" && head.path == "/upload" ? 4096 : nil, principal: nil)
+        }
+        var parser = HTTPParser(maxBodyBytes: 10, admit: upload)
         parser.feed(Data("POST /upload HTTP/1.1\r\nContent-Length: 3000\r\n\r\n".utf8))
         XCTAssertEqual(parser.next(), .needMore)
         parser.feed(Data(count: 3000))
-        guard case .request(let upload) = parser.next() else { return XCTFail("the upload was not read") }
-        XCTAssertEqual(upload.body.count, 3000)
+        guard case .request(let read) = parser.next() else { return XCTFail("the upload was not read") }
+        XCTAssertEqual(read.body.count, 3000)
 
         for text in ["POST /upload HTTP/1.1\r\nContent-Length: 4097\r\n\r\n",
                      "POST /other HTTP/1.1\r\nContent-Length: 11\r\n\r\n"] {
-            var refusing = HTTPParser(maxBodyBytes: 10, bodyLimit: { method, path in
-                method == "POST" && path == "/upload" ? 4096 : nil
-            })
+            var refusing = HTTPParser(maxBodyBytes: 10, admit: upload)
             refusing.feed(Data(text.utf8))
             guard case .refused(let status, _) = refusing.next() else { return XCTFail("not refused: \(text)") }
             XCTAssertEqual(status.code, 413)
         }
     }
+}
+
+extension HTTPParserTests {
+    /// A request the server will not serve is refused on its headers: the
+    /// body is never waited for, so a stranger cannot make the server hold
+    /// one (`Design/SERVER_HEADLESS_PLAN.md` §5).
+    func testARefusedRequestIsAnsweredBeforeItsBody() {
+        let nobody: @Sendable (HTTPRequest) -> HTTPParser.Admission = { _ in
+            .refuse(HTTPError(.unauthorized, "a bearer token is required"))
+        }
+        var parser = HTTPParser(maxBodyBytes: 1 << 30, admit: nobody)
+        parser.feed(Data("PUT /cas/v1/objects/ab HTTP/1.1\r\nContent-Length: 536870912\r\n\r\n".utf8))
+        guard case .denied(let head, let error, let canContinue) = parser.next() else {
+            return XCTFail("waited for the body")
+        }
+        XCTAssertEqual(head.path, "/cas/v1/objects/ab")
+        XCTAssertEqual(error.status, .unauthorized)
+        XCTAssertFalse(canContinue, "an unread body ends the connection")
+
+        var bodyless = HTTPParser(maxBodyBytes: 10, admit: nobody)
+        bodyless.feed(Data("GET /a HTTP/1.1\r\n\r\nGET /b HTTP/1.1\r\n\r\n".utf8))
+        guard case .denied(_, _, true) = bodyless.next(),
+              case .denied(let second, _, true) = bodyless.next() else {
+            return XCTFail("a request without a body did not let the next one follow")
+        }
+        XCTAssertEqual(second.path, "/b")
+    }
+
+    /// The answer is asked once per request, however many reads its body takes.
+    func testAdmissionIsAskedOncePerRequest() {
+        let asked = Counter()
+        var parser = HTTPParser(maxBodyBytes: 100, admit: { _ in
+            asked.increment()
+            return .admit(maxBodyBytes: nil, principal: .all())
+        })
+        parser.feed(Data("POST /a HTTP/1.1\r\nContent-Length: 4\r\n\r\n".utf8))
+        XCTAssertEqual(parser.next(), .needMore)
+        parser.feed(Data("ab".utf8))
+        XCTAssertEqual(parser.next(), .needMore)
+        parser.feed(Data("cd".utf8))
+        guard case .request(let request) = parser.next() else { return XCTFail("no request") }
+        XCTAssertEqual(request.principal?.name, "test")
+        XCTAssertEqual(asked.value, 1)
+    }
+}
+
+final class Counter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    func increment() { lock.lock(); count += 1; lock.unlock() }
+    var value: Int { lock.lock(); defer { lock.unlock() }; return count }
 }
 
 final class HTTPRouterTests: XCTestCase {
@@ -155,7 +205,7 @@ final class HTTPServerTests: XCTestCase {
     /// it does not give are named in the refusal.
     func testTheRouteSeesThePrincipalAndItsRefusalNamesTheRight() async throws {
         struct Reader: HTTPAuthorizer {
-            func principal(for request: HTTPRequest) async throws -> HTTPPrincipal {
+            func principal(for request: HTTPRequest) throws -> HTTPPrincipal {
                 HTTPPrincipal(id: "t1", name: "laptop", rights: [.casRead])
             }
         }
@@ -163,10 +213,7 @@ final class HTTPServerTests: XCTestCase {
         router.add("GET", "/who") { request in
             .bytes(Data((request.principal?.name ?? "nobody").utf8))
         }
-        router.add("PUT", "/store") { request in
-            try request.principal?.require(.casWrite)
-            return .json(["stored": true])
-        }
+        router.add("PUT", "/store", access: .rights([.casWrite])) { _ in .json(["stored": true]) }
         let server = HTTPServer(configuration: .init(port: 0, authorizer: Reader()), router: router)
         let base = URL(string: "http://127.0.0.1:\(try await server.start())")!
         defer { server.stop() }
@@ -256,6 +303,30 @@ final class HTTPServerTests: XCTestCase {
         XCTAssertEqual(echo.0, 413)
     }
 
+    /// An open route is served without a token, and only it; a route that
+    /// names rights refuses a request no server authorized.
+    func testAnOpenRouteNeedsNoTokenAndARightsRouteNeedsAPrincipal() async throws {
+        let (server, base) = try await serve { router in
+            router.add("GET", "/admin/login", access: .open) { request in
+                .bytes(Data((request.principal?.name ?? "nobody").utf8))
+            }
+            router.add("GET", "/admin") { _ in .json(["ok": true]) }
+        }
+        defer { server.stop() }
+        let (login, body) = try await call(base.appendingPathComponent("admin/login"))
+        XCTAssertEqual(login, 200)
+        XCTAssertEqual(String(data: body, encoding: .utf8), "nobody")
+        let (console, _) = try await call(base.appendingPathComponent("admin"))
+        XCTAssertEqual(console, 401)
+
+        var router = HTTPRouter()
+        router.add("PUT", "/store", access: .rights([.casWrite])) { _ in .json(["stored": true]) }
+        let direct = await router.handle(HTTPRequest(method: "PUT", path: "/store"))
+        XCTAssertEqual(direct.status, .unauthorized)
+        let granted = await router.handle(HTTPRequest(method: "PUT", path: "/store", principal: .all()))
+        XCTAssertEqual(granted.status, .ok)
+    }
+
     func testTheTokenComparisonNeedsEveryByte() {
         XCTAssertTrue(HTTPBearer.matches("Bearer abc", token: "abc"))
         XCTAssertFalse(HTTPBearer.matches("Bearer abcd", token: "abc"))
@@ -263,6 +334,8 @@ final class HTTPServerTests: XCTestCase {
         XCTAssertFalse(HTTPBearer.matches("Basic abc", token: "abc"))
         XCTAssertFalse(HTTPBearer.matches(nil, token: "abc"))
         XCTAssertEqual(HTTPBearer.token("Bearer abc"), "abc")
+        XCTAssertEqual(HTTPBearer.token("bearer abc"), "abc", "the scheme's name is matched in any case")
+        XCTAssertNil(HTTPBearer.token("Bearer "))
         XCTAssertNil(HTTPBearer.token("Basic abc"))
     }
 }

@@ -182,9 +182,29 @@ public final class HTTPServer: @unchecked Sendable {
         }
         connection.start(queue: queue)
         let router = self.router
+        let authorizer = configuration.authorizer
         receive(on: connection, parser: HTTPParser(
             maxBodyBytes: configuration.maxBodyBytes,
-            bodyLimit: { method, path in router.bodyLimit(method: method, path: path) }))
+            admit: { Self.admit($0, router: router, authorizer: authorizer) }))
+    }
+
+    /// Who a request is, decided from its headers before its body is read: an
+    /// open route asks for nobody, every other path — a route or not, so a
+    /// stranger learns nothing of what is served — for a token the authorizer
+    /// accepts (`Design/SERVER_HEADLESS_PLAN.md` §5).
+    static func admit(_ head: HTTPRequest, router: HTTPRouter,
+                      authorizer: any HTTPAuthorizer) -> HTTPParser.Admission {
+        let route = router.route(method: head.method, path: head.path)
+        if route?.access == .open {
+            return .admit(maxBodyBytes: route?.maxBodyBytes, principal: nil)
+        }
+        do {
+            return .admit(maxBodyBytes: route?.maxBodyBytes, principal: try authorizer.principal(for: head))
+        } catch let error as HTTPError {
+            return .refuse(error)
+        } catch {
+            return .refuse(HTTPError(.internalError, "\(error)"))
+        }
     }
 
     private func receive(on connection: NWConnection, parser: HTTPParser) {
@@ -195,6 +215,12 @@ public final class HTTPServer: @unchecked Sendable {
             return
         case .refused(let status, let message):
             send(.error(HTTPError(status, message)), on: connection, keepAlive: false)
+            return
+        case .denied(let request, let error, let canContinue):
+            report(request, status: error.status, duration: 0)
+            let keepAlive = canContinue && request.headers["connection"]?.lowercased() != "close"
+            send(.error(error), on: connection, keepAlive: keepAlive)
+            if keepAlive { receive(on: connection, parser: parser) }
             return
         case .needMore:
             break
@@ -213,32 +239,24 @@ public final class HTTPServer: @unchecked Sendable {
 
     private func answer(_ request: HTTPRequest, on connection: NWConnection, parser: HTTPParser) {
         let keepAlive = request.headers["connection"]?.lowercased() != "close"
-        let authorizer = configuration.authorizer
         let router = self.router
-        let log = configuration.log
-        let onRequest = configuration.onRequest
         Task {
             let started = Date()
-            var request = request
-            let response: HTTPResponse
-            do {
-                request.principal = try await authorizer.principal(for: request)
-                response = await router.handle(request)
-            } catch let error as HTTPError {
-                response = .error(error)
-            } catch {
-                response = .error(HTTPError(.internalError, "\(error)"))
-            }
-            let duration = Date().timeIntervalSince(started)
-            let milliseconds = Int((duration * 1000).rounded())
-            log?("\(request.method) \(request.path) \(response.status.code) \(milliseconds) ms")
-            onRequest?(HTTPActivity(method: request.method, path: request.path, status: response.status,
-                                    duration: duration, principal: request.principal))
+            let response = await router.handle(request)
+            self.report(request, status: response.status, duration: Date().timeIntervalSince(started))
             self.queue.async {
                 self.send(response, on: connection, keepAlive: keepAlive)
                 if keepAlive { self.receive(on: connection, parser: parser) }
             }
         }
+    }
+
+    /// One answered request, to the log and to the activity rows.
+    private func report(_ request: HTTPRequest, status: HTTPStatus, duration: TimeInterval) {
+        let milliseconds = Int((duration * 1000).rounded())
+        configuration.log?("\(request.method) \(request.path) \(status.code) \(milliseconds) ms")
+        configuration.onRequest?(HTTPActivity(method: request.method, path: request.path, status: status,
+                                              duration: duration, principal: request.principal))
     }
 
     private func send(_ response: HTTPResponse, on connection: NWConnection, keepAlive: Bool) {

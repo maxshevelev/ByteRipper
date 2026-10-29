@@ -409,5 +409,5 @@ final class CodeAgentTests: XCTestCase {
 /// A listener that asks nothing of a request: what a test whose subject is not
 /// the token runs on.
 struct OpenDoor: HTTPAuthorizer {
-    func principal(for request: HTTPRequest) async throws -> HTTPPrincipal { .all() }
+    func principal(for request: HTTPRequest) throws -> HTTPPrincipal { .all() }
 }
