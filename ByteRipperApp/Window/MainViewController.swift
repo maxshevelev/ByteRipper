@@ -2489,11 +2489,17 @@ final class MainViewController: NSViewController {
     }
 
     /// Gives the dock its height, or takes it away when the last panel closes.
-    /// Called by the panels themselves, which know when that happens.
-    func setFragmentDockVisible(_ visible: Bool) {
+    /// Called by the panels themselves, which know when that happens; a
+    /// change made without animation sets the height at once.
+    func setFragmentDockVisible(_ visible: Bool, animated: Bool = true) {
         guard let dockHeight = fragmentDockHeight else { return }
         let target: CGFloat = visible ? FragmentDockStrip.height : 0
         guard dockHeight.constant != target else { return }
+        guard animated else {
+            dockHeight.constant = target
+            contentContainer.layoutSubtreeIfNeeded()
+            return
+        }
         NSAnimationContext.runAnimationGroup { context in
             context.duration = visible ? 0.12 : 0.10
             context.allowsImplicitAnimation = true

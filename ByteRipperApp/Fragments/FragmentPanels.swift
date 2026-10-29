@@ -392,7 +392,7 @@ import ToolModuleKit
         // And the dock first, so a panel that has just been opened has a pill
         // to grow out of — at its full height and laid out, so the stage the
         // panel is measured against is the one it will stand on.
-        refreshDock()
+        refreshDock(animated: animated)
         if transition.raising != nil {
             host?.settleFragmentDock()
             // A panel coming up is what the reader is to look at: the large
@@ -440,7 +440,9 @@ import ToolModuleKit
                     entry.view.removeFromSuperview()
                     self.hideContainerIfClear()
                 }
-                if transition.removed == folding { self.tearDown(entry, closesDocument: closesDocument) }
+                if transition.removed == folding {
+                    self.tearDown(entry, closesDocument: closesDocument, animated: animated)
+                }
                 // One at a time: the panel that is leaving finishes leaving
                 // before the next one starts arriving, or the two flights read
                 // as one muddle.
@@ -460,7 +462,7 @@ import ToolModuleKit
         } else {
             raise()
             if let removed = transition.removed, let entry = entries.removeValue(forKey: removed) {
-                tearDown(entry, closesDocument: closesDocument)
+                tearDown(entry, closesDocument: closesDocument, animated: animated)
             }
         }
 
@@ -471,7 +473,7 @@ import ToolModuleKit
     }
 
     /// Lets go of everything behind a panel that has left the dock.
-    private func tearDown(_ entry: Entry, closesDocument: Bool) {
+    private func tearDown(_ entry: Entry, closesDocument: Bool, animated: Bool) {
         entries.removeValue(forKey: entry.id)
         entry.view.removeFromSuperview()
         entry.surface.removeFromParent()
@@ -490,7 +492,7 @@ import ToolModuleKit
         // a document nobody can see. A panel let go of rather than closed keeps
         // its document — it is on its way to a tab of its own.
         if closesDocument { entry.pane.close() }
-        refreshDock()
+        refreshDock(animated: animated)
         hideContainerIfClear()
     }
 
@@ -689,8 +691,10 @@ import ToolModuleKit
     // MARK: - The dock's pills
 
     /// Brings the pills in line with what the panels hold — names, the one that
-    /// is up, and which of them have bytes the parent has not got back.
-    func refreshDock() {
+    /// is up, and which of them have bytes the parent has not got back. The
+    /// dock grows or goes with an animation unless the change that called for
+    /// it was asked for without one.
+    func refreshDock(animated: Bool = true) {
         strip.setItems(dock.panels.compactMap { id in
             guard let entry = entries[id] else { return nil }
             let transform = Self.transform(of: entry.pane)
@@ -705,7 +709,7 @@ import ToolModuleKit
                 transformExplanation: transform?.explanation
             )
         })
-        host?.setFragmentDockVisible(!dock.isEmpty)
+        host?.setFragmentDockVisible(!dock.isEmpty, animated: animated)
         // The Tools popup names the tool-module of whatever is in front, so
         // raising or folding a panel changes what it should read.
         host?.revalidateToolbar()

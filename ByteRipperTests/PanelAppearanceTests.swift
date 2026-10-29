@@ -85,9 +85,28 @@ final class PanelAppearanceTests: XCTestCase {
     /// in a dark window. All five zones are the same view; Replace and Open-as-
     /// Second merely get re-painted by a hover more often, which is why only
     /// the strips looked wrong.
+    ///
+    /// From macOS 26 the plate is clear glass and the layer has no fill at all,
+    /// so what follows the theme is the zone's edge: `tertiaryLabelColor`,
+    /// light on a dark window and dark on a light one.
     func testDropZonePlateFollowsAppearance() {
         let zone = DropTargetView(title: SingleFileDropTarget.replace.title)
         defer { zone.removeFromSuperview() }
+
+        if #available(macOS 26.0, *) {
+            zone.appearance = NSAppearance(named: .darkAqua)
+            zone.viewDidChangeEffectiveAppearance()
+            XCTAssertNil(zone.layer?.backgroundColor, "the glass is the plate: no launch-theme fill under it")
+            XCTAssertGreaterThan(backgroundComponent(zone.layer?.borderColor), 0.5,
+                                 "the idle edge is light in dark mode")
+
+            zone.appearance = NSAppearance(named: .aqua)
+            zone.viewDidChangeEffectiveAppearance()
+            XCTAssertNil(zone.layer?.backgroundColor)
+            XCTAssertLessThan(backgroundComponent(zone.layer?.borderColor), 0.5,
+                              "the idle edge returns to dark in light mode")
+            return
+        }
 
         zone.appearance = NSAppearance(named: .darkAqua)
         zone.viewDidChangeEffectiveAppearance()
