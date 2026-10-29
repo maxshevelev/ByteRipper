@@ -75,6 +75,10 @@
 
 * { box-sizing: border-box; }
 
+/* `hidden` hides, whatever display a class gives the element: the tabs of
+   Add a dump and the browser's filter are switched by it. */
+[hidden] { display: none !important; }
+
 html, body { height: 100%; }
 
 body {

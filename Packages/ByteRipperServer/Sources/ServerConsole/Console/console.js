@@ -606,7 +606,7 @@
         ? `${docs.length - missing} served${missing ? ` · ${missing} missing` : ""} · ids last across restarts`
         : "ids last across restarts and are never given to another file";
       if (!docs.length) {
-        fill(list.body, empty("chip", "No dumps yet", "Open one from a dump root, or upload one. An agent sees it in `documents` at once."));
+        fill(list.body, empty("chip", "No dumps yet", "Open one from a dump root, or upload one. An agent sees it in its documents at once."));
         return;
       }
       const rows = docs.map((doc, index) => documentRow(doc, index, docs));
