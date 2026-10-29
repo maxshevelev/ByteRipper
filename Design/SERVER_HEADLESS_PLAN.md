@@ -375,6 +375,20 @@ imports AppKit in several files: the server stays macOS-only in v1.
   outcome) — in memory, one row per connection. A call is logged when it
   starts and replaced by its finished record under the same id, so a tool
   still working shows as a running line.
+- A call's line keeps its arguments as compact JSON, cut at 2048 characters,
+  the tool's error in its own words, and the answer's size. A connection is
+  "at work" while a call runs and for two seconds after one ends — the app's
+  `AgentService.activityHold` — and the console shows that as a red lamp
+  blinking where Live stands, at the app's toolbar dot's rate (steady under
+  Reduce Motion).
+- The Activity card shows the last three calls and opens the connection's
+  log in a panel from the right: the calls newest first with time, tool, the
+  arguments that say what it was about, duration as a bar and a number, the
+  answer's size and the outcome; a search over tools, arguments and errors;
+  filters for errors, running calls and one tool; Live tail, which paused
+  holds the list still and counts the calls since; and the selected call's
+  error and arguments, with a copy, below. Arrow keys move the selection,
+  Escape closes it.
 - The console's Configuration page carries the connection itself (`GET
   /admin/api/configuration`, `ConsoleAgent`), for the clients the app's
   Settings ▸ Agents offers: Claude Code (`claude mcp add --scope user`),

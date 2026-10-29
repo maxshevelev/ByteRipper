@@ -4,7 +4,7 @@ import Foundation
 import HTTPService
 import ServerAuth
 @testable import ServerConsole
-import ServerMCP
+@testable import ServerMCP
 import XCTest
 @testable import ByteRipperServer
 
@@ -456,17 +456,20 @@ final class ServerConsoleTests: XCTestCase {
         activity.opened(number: 1, about: "test")
         let id = UUID()
         let started = Date()
-        let running = AgentCallRecord(id: id, client: "x", tool: "uefi_find", arguments: .object([:]),
+        let running = AgentCallRecord(id: id, client: "x", tool: "uefi_find", arguments: ["name": "PE32 image"],
                                       started: started, duration: .zero, finished: started,
                                       answerBytes: 0, outcome: .running)
         activity.started(running, connection: 1)
         var row = try XCTUnwrap(activity.listed.first)
         XCTAssertTrue(row.isWorking, "a call in flight is what the lamp blinks for")
+        XCTAssertTrue(row.isActive())
+        XCTAssertEqual(row.log[0].arguments, #"{"name":"PE32 image"}"#, "the question shows while it runs")
         XCTAssertEqual(row.log.map(\.tool), ["uefi_find"])
         XCTAssertTrue(row.log[0].isRunning)
 
-        let finished = AgentCallRecord(id: id, client: "x", tool: "uefi_find", arguments: .object([:]),
-                                       started: started, duration: .milliseconds(120), finished: Date(),
+        let ended = Date()
+        let finished = AgentCallRecord(id: id, client: "x", tool: "uefi_find", arguments: ["name": "PE32 image"],
+                                       started: started, duration: .milliseconds(120), finished: ended,
                                        answerBytes: 42, outcome: .answered)
         activity.finished(finished, connection: 1)
         row = try XCTUnwrap(activity.listed.first)
@@ -475,6 +478,18 @@ final class ServerConsoleTests: XCTestCase {
         XCTAssertEqual(row.log.count, 1, "the answer replaces the running line")
         XCTAssertEqual(row.log[0].outcome, "answered")
         XCTAssertEqual(row.log[0].duration, 0.12, accuracy: 0.001)
+        XCTAssertEqual(row.log[0].answerBytes, 42)
+        // The lamp holds a moment after the call, as the app's dot does, and
+        // then goes out.
+        XCTAssertTrue(row.isActive(at: ended.addingTimeInterval(1)))
+        XCTAssertFalse(row.isActive(at: ended.addingTimeInterval(ServerActivity.activityHold + 0.5)))
+        activity.closed(1)
+        XCTAssertFalse(try XCTUnwrap(activity.listed.first).isActive(), "an ended connection is not at work")
+
+        let long = JSONValue.string(String(repeating: "x", count: 5000))
+        let cut = ServerActivity.arguments(["hex": long])
+        XCTAssertEqual(cut.count, ServerActivity.argumentsLimit + 1, "cut, with an ellipsis")
+        XCTAssertTrue(cut.hasSuffix("…"))
     }
 
     /// A burst of failed attempts is spaced by the pause, not let through

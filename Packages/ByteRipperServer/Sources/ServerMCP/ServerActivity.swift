@@ -16,6 +16,11 @@ public final class ServerActivity {
         public let id: UUID
         public let tool: String
         public let started: Date
+        /// The call's arguments as compact JSON, cut at `argumentsLimit`
+        /// characters: what the console's log shows of the question.
+        public fileprivate(set) var arguments = ""
+        /// How long the answer was, once there is one.
+        public fileprivate(set) var answerBytes: Int?
         public fileprivate(set) var finished: Date?
         public fileprivate(set) var duration: TimeInterval = 0
         /// "running", "answered", "error", "cancelled" or "over bound".
@@ -48,8 +53,25 @@ public final class ServerActivity {
         /// Whether a tool is working on a call right now.
         public var isWorking: Bool { log.contains(where: \.isRunning) }
 
+        /// Whether the agent is at work, as the app's toolbar dot says it
+        /// (`AgentService.isActive`): a call running, or one that ended less
+        /// than `activityHold` ago. A call often takes a few milliseconds; held
+        /// a moment after each, a run of calls reads as one stretch of work.
+        public func isActive(at now: Date = Date()) -> Bool {
+            guard isOpen else { return false }
+            if isWorking { return true }
+            guard let last = lastCall else { return false }
+            return now.timeIntervalSince(last) < ServerActivity.activityHold
+        }
+
         public var id: Int { number }
     }
+
+    /// How long a connection counts as at work after its last call: the app's
+    /// `AgentService.activityHold`.
+    public nonisolated static let activityHold: TimeInterval = 2
+    /// How much of a call's arguments its log line keeps.
+    public nonisolated static let argumentsLimit = 2048
 
     /// The most finished connections the list keeps beside the live ones.
     public var keptFinished = 10
@@ -79,7 +101,8 @@ public final class ServerActivity {
         guard let index = rows.firstIndex(where: { $0.number == number }) else { return }
         rows[index].lastTool = record.tool
         rows[index].lastCall = record.started
-        rows[index].log.append(Call(id: record.id, tool: record.tool, started: record.started))
+        rows[index].log.append(Call(id: record.id, tool: record.tool, started: record.started,
+                                    arguments: Self.arguments(record.arguments)))
         trim(&rows[index])
     }
 
@@ -119,12 +142,20 @@ public final class ServerActivity {
         rows.filter(\.isOpen) + rows.filter { !$0.isOpen }
     }
 
+    /// `value` as compact JSON, cut with an ellipsis past `argumentsLimit`.
+    nonisolated static func arguments(_ value: JSONValue) -> String {
+        let text = value.jsonText
+        guard text.count > argumentsLimit else { return text }
+        return String(text.prefix(argumentsLimit)) + "…"
+    }
+
     private func trim(_ row: inout Row) {
         if row.log.count > keptCalls { row.log.removeFirst(row.log.count - keptCalls) }
     }
 
     private static func call(_ record: AgentCallRecord) -> Call {
         var call = Call(id: record.id, tool: record.tool, started: record.started,
+                        arguments: arguments(record.arguments), answerBytes: record.answerBytes,
                         finished: record.finished, duration: seconds(record.duration))
         switch record.outcome {
         case .answered:

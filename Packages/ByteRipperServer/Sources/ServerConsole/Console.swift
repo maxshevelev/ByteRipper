@@ -394,6 +394,7 @@ public struct Console: Sendable {
             "errors": .count(row.errors),
             "open": .bool(row.isOpen),
             "working": .bool(row.isWorking),
+            "active": .bool(row.isActive()),
             "log": .array(row.log.map(call))
         ]
         if let about = row.about { members["client"] = .string(about) }
@@ -414,6 +415,8 @@ public struct Console: Sendable {
         ]
         if let finished = call.finished { members["finished"] = .string(date(finished)) }
         if let detail = call.detail { members["detail"] = .string(detail) }
+        if !call.arguments.isEmpty { members["arguments"] = .string(call.arguments) }
+        if let bytes = call.answerBytes { members["answer_bytes"] = .count(bytes) }
         return .object(members)
     }
 
