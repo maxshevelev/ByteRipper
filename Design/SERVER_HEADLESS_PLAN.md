@@ -379,8 +379,9 @@ Every phase ends with its packages' tests green and the server starting.
    here too: tokens with presets were being issued, and without them a
    `reader` token could publish through `/mcp`.
 2. **The app side of tokens** — done: the app sends its token on loopback
-   (a test now holds the server to it), a 403 carries the missing right as a
-   field and the app names it, a refused token is its own state instead of an
+   (a test now holds the server to it), a 403 carries every missing right as
+   a field (`"rights"`, all of them in one refusal) and the app names them, a
+   refused token — or none kept on this Mac — is its own state instead of an
    unreachable server, and the Settings caption and the page on the Code
    Analysis settings name `token add` in English, Russian and German;
    `help_coverage.py` and `help_names.py` are clean.

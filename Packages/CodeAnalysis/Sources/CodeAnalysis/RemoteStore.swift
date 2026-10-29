@@ -15,9 +15,9 @@ public struct RemoteStore: Sendable {
         /// The server could not be reached, or did not answer in time: its
         /// address and the system's words for why.
         case unreachable(String)
-        /// The server answered with a refusal. `right` is the right a 403
-        /// names, when it names one.
-        case refused(status: Int, message: String, right: String?)
+        /// The server answered with a refusal. `rights` are the rights a 403
+        /// names as lacking; empty when it names none.
+        case refused(status: Int, message: String, rights: [String])
         /// The answer is not what this protocol version expects.
         case unexpected(String)
 
@@ -216,7 +216,7 @@ public struct RemoteStore: Sendable {
             let failure = try? JSONDecoder().decode(ServedStoreProtocol.Failure.self, from: data)
             let message = failure?.error
                 ?? HTTPURLResponse.localizedString(forStatusCode: http.statusCode)
-            throw Failure.refused(status: http.statusCode, message: message, right: failure?.right)
+            throw Failure.refused(status: http.statusCode, message: message, rights: failure?.rights ?? [])
         }
         return data
     }

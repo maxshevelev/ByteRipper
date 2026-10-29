@@ -91,15 +91,16 @@ public struct HTTPResponse: Sendable {
     }
 
     /// `{"error": "…"}`, the shape `byteripper-cas` refuses with — and
-    /// `"right"` beside it when the refusal names the right a token lacks, so
-    /// a client says which one instead of reading the sentence
+    /// `"rights"` beside it when the refusal names the rights a token lacks,
+    /// so a client says which instead of reading the sentence
     /// (`Design/SERVER_HEADLESS_PLAN.md` decision 4).
     public static func error(_ error: HTTPError) -> HTTPResponse {
         struct Failure: Encodable {
             let error: String
-            let right: String?
+            let rights: [String]?
         }
-        return json(Failure(error: error.message, right: error.right?.rawValue), status: error.status)
+        return json(Failure(error: error.message, rights: error.rights.isEmpty ? nil : error.rights.map(\.rawValue)),
+                    status: error.status)
     }
 
     /// The bytes on the wire, with `Content-Length` and the connection's fate.
@@ -122,15 +123,15 @@ public struct HTTPResponse: Sendable {
 public struct HTTPError: Error, Equatable, Sendable, CustomStringConvertible {
     public let status: HTTPStatus
     public let message: String
-    /// The right a 403 is about, when a route's access named it: the answer
-    /// carries it as a value, so a client names the right to add rather than
-    /// reading it out of a sentence.
-    public let right: HTTPRight?
+    /// The rights a 403 is about, when a route's access named them: the
+    /// answer carries them as values, so a client names the rights to add
+    /// rather than reading them out of a sentence.
+    public let rights: [HTTPRight]
 
-    public init(_ status: HTTPStatus, _ message: String, right: HTTPRight? = nil) {
+    public init(_ status: HTTPStatus, _ message: String, rights: [HTTPRight] = []) {
         self.status = status
         self.message = message
-        self.right = right
+        self.rights = rights
     }
 
     public var description: String { "\(status.code) \(message)" }

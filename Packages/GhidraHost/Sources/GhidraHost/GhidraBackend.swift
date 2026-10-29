@@ -130,9 +130,9 @@ public struct GhidraRemote: GhidraBackend {
         }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
-            let message = ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])?["error"] as? String
-                ?? HTTPURLResponse.localizedString(forStatusCode: status)
-            throw GhidraHostError(.refused, message, status: status)
+            let failure = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            let message = failure?["error"] as? String ?? HTTPURLResponse.localizedString(forStatusCode: status)
+            throw GhidraHostError(.refused, message, status: status, rights: failure?["rights"] as? [String] ?? [])
         }
         return data
     }

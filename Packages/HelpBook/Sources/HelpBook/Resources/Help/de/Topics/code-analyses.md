@@ -1,4 +1,4 @@
-@source-sha 1a86e4211ed3c3869dfcbec166f807a9acbb5131ce6af9bb6ae4f207dddb1059
+@source-sha 5b34d09e5f6f4de035f7c8c8f593c1f2f6b4c71d38f55f2612fe663ac59b1950
 # Codeanalysen und der Analyseserver
 
 > Eine Codeanalyse ist das, was Ghidra in einem PEI- oder DXE-Modul gefunden hat: seine Funktionen, Befehle und den dekompilierten C-Code sowie die Namen, die eine Durchsicht ihnen gegeben hat. ByteRipper liest Analysen aus einem Speicher — einem Ordner auf diesem Mac oder einem Analyseserver, den alle Macs eines Netzwerks gemeinsam nutzen.
@@ -19,7 +19,7 @@ Die Einstellung legt nur fest, woher die Analysen gelesen werden. Beim Umstellen
 Der Server wird einmal eingerichtet, im Terminal des Rechners, auf dem er läuft:
 
 1. `byteripper-server token add --name admin --rights admin` erzeugt das Admin-Token des Servers und gibt es einmal aus. Der Server speichert nur dessen Hash und startet ohne ein solches Token nicht.
-2. `byteripper-server token add --name <mac> --preset app` erzeugt das Token eines Mac: Jeder Mac und jedes Skript, das den Server liest, hat ein eigenes Token. Das Geheimnis wird einmal ausgegeben und nirgends aufbewahrt.
+2. `byteripper-server token add --name <mac-name> --preset app` erzeugt das Token eines Mac: Jeder Mac und jedes Skript, das den Server liest, hat ein eigenes Token. Das Geheimnis wird einmal ausgegeben und nirgends aufbewahrt.
 3. `byteripper-server --listen 127.0.0.1:8765 --listen 100.64.0.7:8765` startet den Server unter den angegebenen Adressen: der Loopback-Adresse für ByteRipper auf dem Server selbst — ein Mac erreicht seine eigene Adresse in einem privaten Netzwerk wie Tailscale nicht — und der Adresse im privaten Netzwerk für die anderen Macs.
 
 Jede Adresse, auf der der Server lauscht, verlangt ein Token, die Loopback-Adresse eingeschlossen. Üblich ist die Adresse des Servers in einem privaten Netzwerk wie Tailscale, das die Verbindung zudem verschlüsselt.
@@ -30,7 +30,7 @@ Auf jedem Mac unter **Einstellungen ▸ Codeanalyse**:
 2. Die Adresse in der Form `http://host:port` — auf dem Server selbst `http://localhost:8765` — und das Token eingeben, das der Server für diesen Mac ausgegeben hat.
 3. Auf **Verbinden** klicken.
 
-Die Zeile unter den Feldern zeigt, ob der Server erreichbar ist. Weist der Server das Token zurück, sagt die Zeile das und nicht, der Server sei nicht erreichbar, und nennt das fehlende Recht. Das Token liegt in einer Datei, die nur der angemeldete Benutzer lesen kann, `~/Library/Application Support/ByteRipper/Server/token`; dieselbe Datei lesen die Skripte des Ghidra-Skills auf diesem Mac. Bleibt das Tokenfeld leer, wird das bereits gespeicherte Token verwendet.
+Die Zeile unter den Feldern zeigt, ob der Server erreichbar ist. Weist der Server das Token zurück oder ist auf diesem Mac kein Token gespeichert, meldet die Zeile genau das und nicht, der Server sei nicht erreichbar. Das Token liegt in einer Datei, die nur der angemeldete Benutzer lesen kann, `~/Library/Application Support/ByteRipper/Server/token`; dieselbe Datei lesen die Skripte des Ghidra-Skills auf diesem Mac. Bleibt das Tokenfeld leer, wird das bereits gespeicherte Token verwendet.
 
 ## Arbeiten mit einem Server
 
@@ -44,7 +44,7 @@ Betreibt der Analyseserver auch Ghidra, kann ein mit ByteRipper verbundener Agen
 
 ## Die Analysen dieses Macs senden
 
-**Analysen dieses Macs an den Server senden** kopiert jede Analyse aus dem Ordner dieses Macs auf den Server. Das ist für die erste Verbindung gedacht, wenn dieser Mac Analysen hat, die dem Server fehlen. Der Server übernimmt jede Analyse nach denselben Regeln wie die eines Projekts: Eine spätere Revision einer Durchsicht ersetzt eine frühere, die Durchsicht eines Moduls aus einem anderen Projekt wird beiseitegelegt, statt die vorhandene zu ersetzen, und eine bereits vorhandene Analyse bleibt unverändert. Die Zeile unter der Schaltfläche nennt die Anzahlen.
+**Analysen dieses Macs an den Server senden** kopiert jede Analyse aus dem Ordner dieses Macs auf den Server. Das ist für die erste Verbindung gedacht, wenn dieser Mac Analysen hat, die dem Server fehlen. Der Server übernimmt jede Analyse nach denselben Regeln wie die eines Projekts: Eine spätere Revision einer Durchsicht ersetzt eine frühere, die Durchsicht eines Moduls aus einem anderen Projekt wird beiseitegelegt, statt die vorhandene zu ersetzen, und eine bereits vorhandene Analyse bleibt unverändert. Die Zeile unter der Schaltfläche nennt die Anzahlen. Zum Senden ist das Recht `cas.write` nötig; ein Token ohne dieses Recht weist der Server zurück, und die Zeile nennt das fehlende Recht.
 
 ## Was der Server nicht tut
 

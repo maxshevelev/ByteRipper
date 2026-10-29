@@ -16,11 +16,15 @@ public struct GhidraHostError: Error, Equatable, Sendable, CustomStringConvertib
     public let kind: Kind
     public let status: Int
     public let message: String
+    /// The rights a server's 403 names as lacking, by name — `ghidra.use` —
+    /// so a client can say which without reading the sentence.
+    public let rights: [String]
 
-    public init(_ kind: Kind, _ message: String, status: Int = 0) {
+    public init(_ kind: Kind, _ message: String, status: Int = 0, rights: [String] = []) {
         self.kind = kind
         self.message = message
         self.status = status
+        self.rights = rights
     }
 
     public var description: String { message }

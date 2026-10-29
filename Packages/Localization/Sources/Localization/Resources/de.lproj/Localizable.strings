@@ -1758,8 +1758,10 @@
 "Connecting to the analysis server…" = "Verbindung mit dem Analyseserver …";
 "Connected. Analyses are read from the server and follow it." = "Verbunden. Die Analysen werden vom Server gelesen und folgen ihm.";
 "The server cannot be reached; what this Mac has read is shown. %1$@" = "Der Server ist nicht erreichbar; gezeigt wird, was dieser Mac bereits gelesen hat. %1$@";
-"The server refuses this Mac's token; what this Mac has read is shown. %1$@" = "Der Server weist das Token dieses Mac zurück; gezeigt wird, was dieser Mac bereits gelesen hat. %1$@";
 "The token lacks the %1$@ right." = "Dem Token fehlt das Recht %1$@.";
+"%1$@ What this Mac has read is shown." = "%1$@ Gezeigt wird, was dieser Mac bereits gelesen hat.";
+"This Mac keeps no token for the server: enter the one made on the server by byteripper-server token add." = "Auf diesem Mac ist kein Token für den Server gespeichert: Geben Sie das Token ein, das byteripper-server token add auf dem Server erzeugt hat.";
+"The token lacks the rights %1$@." = "Dem Token fehlen die Rechte %1$@.";
 "Sending…" = "Wird gesendet …";
 "This Mac keeps no analyses to send." = "Auf diesem Mac liegen keine Analysen zum Senden.";
 "Sent: %1$@ new, %2$@ already there, %3$@ not taken, %4$@ kept aside." = "Gesendet: %1$@ neu, %2$@ schon vorhanden, %3$@ nicht übernommen, %4$@ beiseitegelegt.";

@@ -1758,8 +1758,10 @@
 "Connecting to the analysis server…" = "Подключение к серверу разборов…";
 "Connected. Analyses are read from the server and follow it." = "Подключено. Разборы читаются с сервера и обновляются вместе с ним.";
 "The server cannot be reached; what this Mac has read is shown. %1$@" = "Сервер недоступен; показано то, что этот Mac уже прочитал. %1$@";
-"The server refuses this Mac's token; what this Mac has read is shown. %1$@" = "Сервер не принимает токен этого Mac; показано то, что этот Mac уже прочитал. %1$@";
 "The token lacks the %1$@ right." = "В токене нет права %1$@.";
+"%1$@ What this Mac has read is shown." = "%1$@ Показано то, что этот Mac уже прочитал.";
+"This Mac keeps no token for the server: enter the one made on the server by byteripper-server token add." = "На этом Mac нет токена для сервера: введите токен, созданный на сервере командой byteripper-server token add.";
+"The token lacks the rights %1$@." = "В токене нет прав %1$@.";
 "Sending…" = "Отправка…";
 "This Mac keeps no analyses to send." = "На этом Mac нет разборов для отправки.";
 "Sent: %1$@ new, %2$@ already there, %3$@ not taken, %4$@ kept aside." = "Отправлено: новых — %1$@, уже было — %2$@, не принято — %3$@, отложено — %4$@.";

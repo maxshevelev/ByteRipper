@@ -33,8 +33,20 @@ public struct HTTPPrincipal: Equatable, Hashable, Sendable {
     /// Refuses with a 403 that names the right, so the app can say which one
     /// is missing instead of reporting a network failure (decision 4).
     public func require(_ right: HTTPRight) throws {
-        guard allows(right) else {
-            throw HTTPError(.forbidden, "this token has no \(right.rawValue) right", right: right)
+        try require([right])
+    }
+
+    /// Refuses with a 403 that names every right the token lacks at once — a
+    /// publish needs two, and an operator adding them one refusal at a time
+    /// would go round twice.
+    public func require(_ rights: Set<HTTPRight>) throws {
+        let missing = rights.filter { !allows($0) }.sorted { $0.rawValue < $1.rawValue }
+        guard missing.isEmpty else {
+            let names = missing.map(\.rawValue)
+            let message = missing.count == 1
+                ? "this token has no \(names[0]) right"
+                : "this token has none of the rights \(names.joined(separator: ", "))"
+            throw HTTPError(.forbidden, message, rights: missing)
         }
     }
 

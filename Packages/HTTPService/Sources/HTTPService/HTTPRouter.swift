@@ -92,7 +92,7 @@ public struct HTTPRouter: Sendable {
     static func check(_ access: HTTPAccess, _ principal: HTTPPrincipal?) throws {
         guard case .rights(let rights) = access else { return }
         guard let principal else { throw HTTPError(.unauthorized, "a bearer token is required") }
-        for right in rights.sorted(by: { $0.rawValue < $1.rawValue }) { try principal.require(right) }
+        try principal.require(rights)
     }
 
     static func match(_ pattern: [String], _ segments: [String]) -> [String: String]? {

@@ -1,5 +1,6 @@
 import CodeAnalysis
 import Foundation
+import GhidraHost
 import HTTPService
 import ServerAuth
 import XCTest
@@ -141,6 +142,15 @@ final class ServerTests: XCTestCase {
         XCTAssertTrue(why.contains("ghidra.use"), why)
         let status2 = try await call("POST", "mcp", reader, body: Data("{}".utf8)).0
         XCTAssertEqual(status2, 403)
+        // A publish lacks two rights, and one refusal names both — through
+        // the client the app relays Ghidra calls with, as values.
+        do {
+            _ = try await GhidraRemote(base: base, token: reader).publishModule(SHA256Digest(data: object), by: "test")
+            XCTFail("a reader token published")
+        } catch let error as GhidraHostError {
+            XCTAssertEqual(error.status, 403)
+            XCTAssertEqual(error.rights, ["cas.write", "ghidra.use"])
+        }
 
         let status3 = try await call("PUT", objectPath, app, body: object).0
         XCTAssertEqual(status3, 204)

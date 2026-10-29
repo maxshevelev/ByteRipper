@@ -214,6 +214,7 @@ final class HTTPServerTests: XCTestCase {
             .bytes(Data((request.principal?.name ?? "nobody").utf8))
         }
         router.add("PUT", "/store", access: .rights([.casWrite])) { _ in .json(["stored": true]) }
+        router.add("POST", "/publish", access: .rights([.ghidraUse, .casWrite])) { _ in .json(["published": true]) }
         let server = HTTPServer(configuration: .init(port: 0, authorizer: Reader()), router: router)
         let base = URL(string: "http://127.0.0.1:\(try await server.start())")!
         defer { server.stop() }
@@ -227,7 +228,12 @@ final class HTTPServerTests: XCTestCase {
         // The right is an answer field, not only a word of the sentence: a
         // client says which right to add without reading English.
         let named = try XCTUnwrap(try JSONSerialization.jsonObject(with: body) as? [String: Any])
-        XCTAssertEqual(named["right"] as? String, "cas.write")
+        XCTAssertEqual(named["rights"] as? [String], ["cas.write"])
+        // Every right the token lacks is named in one refusal, not one per try.
+        let (both, lacking) = try await call(base.appendingPathComponent("publish"), method: "POST")
+        XCTAssertEqual(both, 403)
+        let all = try XCTUnwrap(try JSONSerialization.jsonObject(with: lacking) as? [String: Any])
+        XCTAssertEqual(all["rights"] as? [String], ["cas.write", "ghidra.use"])
     }
 
     /// Every answer, a refusal included, is one activity value — the seam the
@@ -325,6 +331,7 @@ final class HTTPServerTests: XCTestCase {
 
         var router = HTTPRouter()
         router.add("PUT", "/store", access: .rights([.casWrite])) { _ in .json(["stored": true]) }
+        router.add("POST", "/publish", access: .rights([.ghidraUse, .casWrite])) { _ in .json(["published": true]) }
         let direct = await router.handle(HTTPRequest(method: "PUT", path: "/store"))
         XCTAssertEqual(direct.status, .unauthorized)
         let granted = await router.handle(HTTPRequest(method: "PUT", path: "/store", principal: .all()))

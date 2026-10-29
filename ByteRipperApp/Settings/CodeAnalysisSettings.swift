@@ -183,7 +183,9 @@ final class CodeAnalysisSettingsViewController: NSViewController {
         case .connected:
             return L("Connected. Analyses are read from the server and follow it.")
         case .refused(let reason):
-            return L("The server refuses this Mac's token; what this Mac has read is shown. %1$@", reason)
+            // The reason is the whole story — no token kept, a token the
+            // server does not know, a right it lacks — so it leads the line.
+            return L("%1$@ What this Mac has read is shown.", reason)
         case .unreachable(let reason):
             return L("The server cannot be reached; what this Mac has read is shown. %1$@", reason)
         }

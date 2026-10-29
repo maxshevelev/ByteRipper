@@ -22,7 +22,7 @@ The setting changes only where analyses are read from. Nothing is copied or dele
 The server is set up once, on the machine that runs it, in Terminal:
 
 1. `byteripper-server token add --name admin --rights admin` makes the server's admin token and prints it once. The server keeps only its hash, and it does not start without one.
-2. `byteripper-server token add --name <mac> --preset app` makes the token of one Mac: every Mac, and every script that reads the server, has a token of its own. The secret is printed once and kept nowhere.
+2. `byteripper-server token add --name <mac-name> --preset app` makes the token of one Mac: every Mac, and every script that reads the server, has a token of its own. The secret is printed once and kept nowhere.
 3. `byteripper-server --listen 127.0.0.1:8765 --listen 100.64.0.7:8765` starts the server on the addresses given: the machine's own loopback address for ByteRipper on the server itself — a Mac does not reach its own address in a private network such as Tailscale — and the private-network address for the other Macs.
 
 Every address the server listens on, its own loopback included, requires a token. The address is usually the server's address in a private network such as Tailscale, which also encrypts the connection.
@@ -33,7 +33,7 @@ On each Mac, in **Settings ▸ Code Analysis**:
 2. Enter the address as `http://host:port` — on the server itself, `http://localhost:8765` — and the token the server printed for this Mac.
 3. Click **Connect**.
 
-The line below the fields says whether the server is reached. A token the server refuses is reported as that, not as an unreachable server, and the right it lacks is named. The token is kept in a file only the current user may read, `~/Library/Application Support/ByteRipper/Server/token`; the Ghidra skill's scripts on this Mac read the same file. When the token field is left empty, the token already kept is used.
+The line below the fields says whether the server is reached. A token the server refuses, or no token kept on this Mac, is reported as that, not as an unreachable server. The token is kept in a file only the current user may read, `~/Library/Application Support/ByteRipper/Server/token`; the Ghidra skill's scripts on this Mac read the same file. When the token field is left empty, the token already kept is used.
 
 ## Working with a server
 
@@ -47,7 +47,7 @@ When the analysis server also hosts Ghidra, an agent connected to ByteRipper (se
 
 ## Sending this Mac's analyses
 
-**Send This Mac's Analyses to the Server** copies every analysis kept in this Mac's folder to the server. It is meant for the first connection, when this Mac holds analyses the server does not. The server takes each analysis by the same rules as a project's: a later revision of a review replaces an earlier one, another project's review of a module is kept aside rather than replacing the one there, and an analysis already on the server is left as it is. The line below the button gives the counts.
+**Send This Mac's Analyses to the Server** copies every analysis kept in this Mac's folder to the server. It is meant for the first connection, when this Mac holds analyses the server does not. The server takes each analysis by the same rules as a project's: a later revision of a review replaces an earlier one, another project's review of a module is kept aside rather than replacing the one there, and an analysis already on the server is left as it is. The line below the button gives the counts. Sending needs the `cas.write` right; a token without it is refused, and the line names the right it lacks.
 
 ## What the server does not do
 

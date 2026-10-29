@@ -109,6 +109,13 @@ final class CodeAnalysisLocation {
         if let storeID = AppDefaults.store.string(forKey: Self.storeKey) {
             UEFIToolModule.codeAnalysisRoot = StoreMirror.root(of: storeID, in: mirrorsRoot)
         }
+        // Every address asks for a token, loopback included (decision 3):
+        // without one there is nothing to try, and "the server does not
+        // accept the token" would send the reader looking for a wrong one.
+        guard let token = try? readToken(), !token.isEmpty else {
+            state = .refused(reason: L("This Mac keeps no token for the server: enter the one made on the server by byteripper-server token add."))
+            return
+        }
         following = Task { [weak self] in await self?.follow(mirror) }
     }
 
@@ -192,8 +199,10 @@ final class CodeAnalysisLocation {
         switch error as? RemoteStore.Failure {
         case .refused(status: 401, _, _):
             return L("The server does not accept the token.")
-        case .refused(status: 403, _, let right?):
-            return L("The token lacks the %1$@ right.", right)
+        case .refused(status: 403, _, let rights) where rights.count == 1:
+            return L("The token lacks the %1$@ right.", rights[0])
+        case .refused(status: 403, _, let rights) where rights.count > 1:
+            return L("The token lacks the rights %1$@.", rights.joined(separator: ", "))
         case .refused(_, let message, _):
             return message
         case .unreachable(let reason):
