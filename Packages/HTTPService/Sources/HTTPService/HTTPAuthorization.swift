@@ -130,24 +130,46 @@ public enum HTTPBearer {
     }
 }
 
-/// One answered request as the server's activity rows see it: what was asked,
-/// what was answered, how long it took and whose token asked. The console's
-/// REST activity and nothing else is built from these — the server keeps no
-/// history (`Design/SERVER_HEADLESS_PLAN.md` §2, decisions 6 and §8).
+/// One request as the server's activity rows see it: what was asked, what is
+/// answered so far, how long it takes and whose token asked. The server
+/// reports a request twice — when it starts and when it is answered — under
+/// one `id`, so a console can show a call while the tool is still working on
+/// it. The console's REST activity and nothing else is built from these —
+/// the server keeps no history (`Design/SERVER_HEADLESS_PLAN.md` §2,
+/// decisions 6 and §8).
 public struct HTTPActivity: Sendable {
+    public enum Phase: Sendable, Equatable {
+        /// The route is still working: `status` and `duration` say nothing.
+        case started
+        case finished
+    }
+
+    /// The call the two reports share.
+    public let id: UUID
     public let method: String
     public let path: String
-    public let status: HTTPStatus
+    public let phase: Phase
+    public let started: Date
+    /// nil while the request is still running.
+    public let status: HTTPStatus?
+    /// Zero while the request is still running.
     public let duration: TimeInterval
     /// nil when the request was refused before a principal was known.
     public let principal: HTTPPrincipal?
+    /// The client's address as the listener sees it, when it has one.
+    public let peer: String?
 
-    public init(method: String, path: String, status: HTTPStatus,
-                duration: TimeInterval, principal: HTTPPrincipal?) {
+    public init(id: UUID = UUID(), method: String, path: String, phase: Phase = .finished,
+                started: Date = Date(), status: HTTPStatus? = nil, duration: TimeInterval = 0,
+                principal: HTTPPrincipal?, peer: String? = nil) {
+        self.id = id
         self.method = method
         self.path = path
+        self.phase = phase
+        self.started = started
         self.status = status
         self.duration = duration
         self.principal = principal
+        self.peer = peer
     }
 }

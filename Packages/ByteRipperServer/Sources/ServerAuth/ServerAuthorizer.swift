@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import HTTPService
 
@@ -8,10 +9,14 @@ public enum AdminCookie {
     public static let header = "x-csrf-token"
 }
 
-/// Who is signed in to the console, in memory only: the server keeps no
-/// history and writes no session anywhere (`Design/SERVER_HEADLESS_PLAN.md`
-/// §2, decision 6). A session ends at sign-out, after `lifetime` without a
-/// request, or when the server stops.
+/// Who is signed in to the console (`Design/SERVER_HEADLESS_PLAN.md` §5): the
+/// browser keeps its session cookie for `lifetime`, and the sessions are kept
+/// in a file of their own beside `tokens.json`, so stopping the server does
+/// not sign the operator out — a restart, or a rebuild, is not a reason to
+/// paste an admin token again. What the file holds is the SHA-256 of each
+/// session id, never the id itself: a copy of the file cannot sign in. A
+/// session ends at sign-out, after `lifetime` without a request, or when the
+/// token it signed in with is rotated or revoked.
 public final class AdminSessions: @unchecked Sendable {
     public struct Session: Sendable {
         public let principal: HTTPPrincipal
@@ -24,19 +29,37 @@ public final class AdminSessions: @unchecked Sendable {
         public var lastSeen: Date
     }
 
-    public var lifetime: TimeInterval = 12 * 3600
+    /// How long a session may go without a request before it ends. A month:
+    /// the console is the operator's own, and the alternative is pasting an
+    /// admin token every time the server is rebuilt.
+    public var lifetime: TimeInterval = 30 * 24 * 3600
+
+    /// How often a touched session's last-seen date reaches the file. The
+    /// console asks every second, and a write per request would be a write
+    /// per poll.
+    public static let persistInterval: TimeInterval = 5 * 60
 
     private let lock = NSLock()
+    /// Keyed by the SHA-256 of the session id, which is also what the file
+    /// holds.
     private var sessions: [String: Session] = [:]
+    /// nil keeps the sessions in memory: what the package's tests run on.
+    private let file: URL?
+    private var persisted = Date.distantPast
 
-    public init() {}
+    public init(file: URL? = nil) {
+        self.file = file
+        load()
+    }
 
     /// A new session and its CSRF value.
     func start(_ principal: HTTPPrincipal, tokenHash: String) -> (id: String, csrf: String) {
         let id = Self.makeID()
         let csrf = Self.makeID()
         lock.lock()
-        sessions[id] = Session(principal: principal, tokenHash: tokenHash, csrf: csrf, lastSeen: Date())
+        sessions[Self.hash(id)] = Session(principal: principal, tokenHash: tokenHash,
+                                          csrf: csrf, lastSeen: Date())
+        saveLocked()
         lock.unlock()
         return (id, csrf)
     }
@@ -46,24 +69,30 @@ public final class AdminSessions: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         expireLocked()
-        guard var session = sessions[id] else { return nil }
+        let key = Self.hash(id)
+        guard var session = sessions[key] else { return nil }
         session.lastSeen = Date()
-        sessions[id] = session
+        sessions[key] = session
+        touchLocked()
         return session
     }
 
     public func end(_ id: String) {
         lock.lock()
-        sessions[id] = nil
+        sessions[Self.hash(id)] = nil
+        saveLocked()
         lock.unlock()
     }
 
     /// Ends every session of one token — what revoking it does.
     public func end(principal id: String) {
         lock.lock()
+        var ended = false
         for (session, value) in sessions where value.principal.id == id {
             sessions[session] = nil
+            ended = true
         }
+        if ended { saveLocked() }
         lock.unlock()
     }
 
@@ -76,9 +105,79 @@ public final class AdminSessions: @unchecked Sendable {
 
     private func expireLocked() {
         let now = Date()
-        for (id, session) in sessions where now.timeIntervalSince(session.lastSeen) > lifetime {
-            sessions[id] = nil
+        let before = sessions.count
+        for (key, session) in sessions where now.timeIntervalSince(session.lastSeen) > lifetime {
+            sessions[key] = nil
         }
+        if sessions.count != before { saveLocked() }
+    }
+
+    /// A used session's new date goes to the file now and then, not on every
+    /// request: the file is a convenience, not a journal.
+    private func touchLocked() {
+        guard file != nil, Date().timeIntervalSince(persisted) > Self.persistInterval else { return }
+        saveLocked()
+    }
+
+    // MARK: - The file
+
+    private struct Stored: Codable {
+        var version = 1
+        var sessions: [Entry]
+    }
+
+    /// One session as the file keeps it: no id, only its hash.
+    private struct Entry: Codable {
+        /// The SHA-256 of the session id, hex.
+        var id: String
+        var token: String
+        var name: String
+        var rights: [String]
+        var tokenHash: String
+        var csrf: String
+        var seen: Date
+    }
+
+    private func load() {
+        guard let file, let data = try? Data(contentsOf: file) else { return }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let stored = try? decoder.decode(Stored.self, from: data) else { return }
+        var loaded: [String: Session] = [:]
+        for entry in stored.sessions {
+            let rights = entry.rights.compactMap(HTTPRight.init(rawValue:))
+            guard rights.count == entry.rights.count else { continue }
+            loaded[entry.id] = Session(
+                principal: HTTPPrincipal(id: entry.token, name: entry.name, rights: Set(rights)),
+                tokenHash: entry.tokenHash, csrf: entry.csrf, lastSeen: entry.seen)
+        }
+        lock.lock()
+        sessions = loaded
+        expireLocked()
+        lock.unlock()
+    }
+
+    private func saveLocked() {
+        guard let file else { return }
+        let stored = Stored(sessions: sessions.map { key, session in
+            Entry(id: key, token: session.principal.id, name: session.principal.name,
+                  rights: session.principal.rights.map(\.rawValue).sorted(),
+                  tokenHash: session.tokenHash, csrf: session.csrf, seen: session.lastSeen)
+        }.sorted { $0.seen < $1.seen })
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(stored) else { return }
+        try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(),
+                                                 withIntermediateDirectories: true,
+                                                 attributes: [.posixPermissions: 0o700])
+        guard (try? data.write(to: file, options: .atomic)) != nil else { return }
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        persisted = Date()
+    }
+
+    private static func hash(_ id: String) -> String {
+        SHA256.hash(data: Data(id.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 
     private static func makeID() -> String {

@@ -226,7 +226,8 @@ public final class HTTPServer: @unchecked Sendable {
             send(.error(HTTPError(status, message)), on: connection, keepAlive: false)
             return
         case .denied(let request, let error, let canContinue):
-            report(request, status: error.status, duration: 0)
+            report(HTTPActivity(method: request.method, path: request.path, status: error.status,
+                                duration: 0, principal: request.principal, peer: Self.peer(connection)))
             let keepAlive = canContinue && request.headers["connection"]?.lowercased() != "close"
             send(.error(error), on: connection, keepAlive: keepAlive)
             if keepAlive { receive(on: connection, parser: parser) }
@@ -249,10 +250,19 @@ public final class HTTPServer: @unchecked Sendable {
     private func answer(_ request: HTTPRequest, on connection: NWConnection, parser: HTTPParser) {
         let keepAlive = request.headers["connection"]?.lowercased() != "close"
         let router = self.router
+        let id = UUID()
+        let started = Date()
+        let peer = Self.peer(connection)
+        // The call is reported twice under one id: the console shows it while
+        // the route works, then the answer takes its place.
+        report(HTTPActivity(id: id, method: request.method, path: request.path, phase: .started,
+                            started: started, principal: request.principal, peer: peer))
         Task {
-            let started = Date()
             let response = await router.handle(request)
-            self.report(request, status: response.status, duration: Date().timeIntervalSince(started))
+            self.report(HTTPActivity(id: id, method: request.method, path: request.path, phase: .finished,
+                                     started: started, status: response.status,
+                                     duration: Date().timeIntervalSince(started),
+                                     principal: request.principal, peer: peer))
             self.queue.async {
                 self.send(response, on: connection, keepAlive: keepAlive)
                 if keepAlive { self.receive(on: connection, parser: parser) }
@@ -260,12 +270,21 @@ public final class HTTPServer: @unchecked Sendable {
         }
     }
 
-    /// One answered request, to the log and to the activity rows.
-    private func report(_ request: HTTPRequest, status: HTTPStatus, duration: TimeInterval) {
-        let milliseconds = Int((duration * 1000).rounded())
-        configuration.log?("\(request.method) \(request.path) \(status.code) \(milliseconds) ms")
-        configuration.onRequest?(HTTPActivity(method: request.method, path: request.path, status: status,
-                                              duration: duration, principal: request.principal))
+    /// One report of a request, to the log and to the activity rows. A
+    /// request's start is for the activity only: the log keeps one line per
+    /// answered request, as it always has.
+    private func report(_ activity: HTTPActivity) {
+        if activity.phase == .finished, let status = activity.status {
+            let milliseconds = Int((activity.duration * 1000).rounded())
+            configuration.log?("\(activity.method) \(activity.path) \(status.code) \(milliseconds) ms")
+        }
+        configuration.onRequest?(activity)
+    }
+
+    /// The client's address as the listener sees it, for the activity rows.
+    private static func peer(_ connection: NWConnection) -> String? {
+        if case let .hostPort(host, port) = connection.endpoint { return "\(host):\(port)" }
+        return nil
     }
 
     private func send(_ response: HTTPResponse, on connection: NWConnection, keepAlive: Bool) {

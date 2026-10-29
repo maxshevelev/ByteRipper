@@ -226,12 +226,18 @@ imports AppKit in several files: the server stays macOS-only in v1.
   cannot reach CAS or Ghidra.
 - Sign-in: `GET/POST /admin/login`, the open routes, with the admin token
   (URL-encoded body), through `ServerAuthorizer.signIn` — only an admin token
-  signs in; a 32-byte session id kept in memory, with the hash of the secret
-  it signed in with, so a rotation ends it as a revocation does; `Set-Cookie:
-  br_admin=…; HttpOnly; SameSite=Strict; Path=/admin`. CSRF is double-submit:
-  a `br_csrf` cookie plus `X-CSRF-Token`; `Host`/`Origin` checked against
-  decision 19's names; failed sign-ins delayed and throttled. `Secure` waits
-  for TLS.
+  signs in; a 32-byte session id, with the hash of the secret it signed in
+  with, so a rotation ends it as a revocation does; `Set-Cookie:
+  br_admin=…; HttpOnly; SameSite=Strict; Path=/admin; Max-Age=…`. CSRF is
+  double-submit: a `br_csrf` cookie plus `X-CSRF-Token`; `Host`/`Origin`
+  checked against decision 19's names; failed sign-ins delayed and throttled.
+  `Secure` waits for TLS.
+- Sessions are kept in `sessions.json` beside `tokens.json` (0600, the
+  SHA-256 of each session id, never the id), so a restart or a rebuild does
+  not sign the operator out; the cookie's `Max-Age` keeps it across a browser
+  close. A session ends at sign-out, after 30 days without a request, or when
+  its token is rotated or revoked. The file's session dates reach it every few
+  minutes at most, not on every poll.
 - A console route is refused by the authorizer, before the router runs, so no
   page can answer a missing session with a redirect to the form. The shell —
   the pages' HTML, CSS and script, which hold no data — is therefore `.open`
@@ -365,7 +371,10 @@ imports AppKit in several files: the server stays macOS-only in v1.
   `BYTERIPPER_SERVER_SOCKET`. A test asserts the mode creates no HTTP listener,
   no store and no Ghidra project.
 - Activity: socket connections with start, end, client, calls, last tool,
-  documents and errors — in memory, one row per connection.
+  documents and errors, and a log of the recent calls (tool, start, duration,
+  outcome) — in memory, one row per connection. A call is logged when it
+  starts and replaced by its finished record under the same id, so a tool
+  still working shows as a running line.
 
 ## 8. The console
 
@@ -401,13 +410,17 @@ imports AppKit in several files: the server stays macOS-only in v1.
   refused too. The set is fixed when the server starts: an address a wildcard
   listener gains later — a new lease, a tunnel — is refused until the server
   restarts or the name is given with `--server-name`.
-- Polling every two seconds; no SSE or WebSocket, because `HTTPService` sends
-  complete responses only.
+- Polling: every two seconds, and every second on Activity — the page that
+  shows what a tool is doing right now. No SSE or WebSocket, because
+  `HTTPService` sends complete responses only.
 - Activity: REST rows per token from `onRequest` (name, last seen, requests,
-  refused, last method/path/status), the console's own requests not counted
-  and requests without an accepted token on a row of their own; MCP rows from
-  the socket. The log leaves out the console's answered reads, which come
-  every two seconds.
+  refused, last method/path/status, and a log of the recent requests), the
+  console's own requests not counted and requests without an accepted token on
+  a row of their own; MCP rows from the socket with the same log of calls. A
+  request is reported when it starts and again when it answers, under one id,
+  so a running call is on the page rather than only its count. A connection
+  with a call in flight blinks, as the app's toolbar badge does. The log
+  leaves out the console's answered reads.
 - Status: version, addresses, server names, roles, store, Ghidra, documents and
   bytes, limits, socket path, uptime, sessions, and the resident memory.
 - Tokens: presets `reader` (`cas.read`), `app` (`cas.read` + `cas.write` +

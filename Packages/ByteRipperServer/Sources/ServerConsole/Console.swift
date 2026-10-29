@@ -169,9 +169,13 @@ public struct Console: Sendable {
         let session = try await gate.attempt { try authorizer.signIn(secret: secret) }
         let name = tokens.principal(for: secret)?.name ?? ""
         var response = Self.json(["name": .string(name)])
+        // Max-Age: the browser keeps the session when it closes, and the
+        // server keeps it in `sessions.json` when it restarts — the operator
+        // pastes an admin token once a month, not once a rebuild.
+        let lifetime = Int(authorizer.sessions.lifetime)
         response.cookies = [
-            "\(AdminCookie.session)=\(session.id); Path=/admin; HttpOnly; SameSite=Strict",
-            "\(AdminCookie.csrf)=\(session.csrf); Path=/admin; SameSite=Strict"
+            "\(AdminCookie.session)=\(session.id); Path=/admin; Max-Age=\(lifetime); HttpOnly; SameSite=Strict",
+            "\(AdminCookie.csrf)=\(session.csrf); Path=/admin; Max-Age=\(lifetime); SameSite=Strict"
         ]
         return response
     }
@@ -333,12 +337,28 @@ public struct Console: Sendable {
             "spoke": .bool(row.spoke),
             "calls": .count(row.calls),
             "errors": .count(row.errors),
-            "open": .bool(row.isOpen)
+            "open": .bool(row.isOpen),
+            "working": .bool(row.isWorking),
+            "log": .array(row.log.map(call))
         ]
         if let about = row.about { members["client"] = .string(about) }
         if let tool = row.lastTool { members["last_tool"] = .string(tool) }
         if let call = row.lastCall { members["last_call"] = .string(date(call)) }
         if let finished = row.finished { members["finished"] = .string(date(finished)) }
+        return .object(members)
+    }
+
+    static func call(_ call: ServerActivity.Call) -> JSONValue {
+        var members: [String: JSONValue] = [
+            "id": .string(call.id.uuidString),
+            "tool": .string(call.tool),
+            "started": .string(date(call.started)),
+            "running": .bool(call.isRunning),
+            "outcome": .string(call.outcome),
+            "duration_ms": .count(Int((call.duration * 1000).rounded()))
+        ]
+        if let finished = call.finished { members["finished"] = .string(date(finished)) }
+        if let detail = call.detail { members["detail"] = .string(detail) }
         return .object(members)
     }
 
@@ -350,8 +370,24 @@ public struct Console: Sendable {
             "refused": .count(row.refused),
             "last_seen": .string(date(row.lastSeen)),
             "last": .string("\(row.lastMethod) \(row.lastPath)"),
-            "last_status": .count(row.lastStatus)
+            "last_status": .count(row.lastStatus),
+            "log": .array(row.log.map(request))
         ]
+    }
+
+    static func request(_ request: RESTActivity.Request) -> JSONValue {
+        var members: [String: JSONValue] = [
+            "id": .string(request.id.uuidString),
+            "method": .string(request.method),
+            "path": .string(request.path),
+            "started": .string(date(request.started)),
+            "running": .bool(request.isRunning),
+            "duration_ms": .count(Int((request.duration * 1000).rounded()))
+        ]
+        if let status = request.status { members["status"] = .count(status) }
+        if let finished = request.finished { members["finished"] = .string(date(finished)) }
+        if let peer = request.peer { members["peer"] = .string(peer) }
+        return .object(members)
     }
 
     static func date(_ date: Date) -> String {

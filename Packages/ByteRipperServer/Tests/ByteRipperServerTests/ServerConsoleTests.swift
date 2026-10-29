@@ -4,6 +4,7 @@ import Foundation
 import HTTPService
 import ServerAuth
 import ServerConsole
+import ServerMCP
 import XCTest
 @testable import ByteRipperServer
 
@@ -100,6 +101,7 @@ final class ServerConsoleTests: XCTestCase {
         XCTAssertTrue(session.isHTTPOnly, "the session is out of a script's reach")
         XCTAssertFalse(csrf.isHTTPOnly, "the page reads the CSRF value to send it back")
         XCTAssertEqual(session.path, "/admin")
+        XCTAssertNotNil(session.expiresDate, "the browser keeps the session after it closes")
         return Signed(session: session.value, csrf: csrf.value)
     }
 
@@ -308,6 +310,13 @@ final class ServerConsoleTests: XCTestCase {
         let refused = rest.first { $0["name"]?.stringValue == "reader" }
         XCTAssertEqual(refused?["refused"], .count(1))
         XCTAssertEqual(refused?["last_status"], .count(403))
+        let studio = rest.first { $0["name"]?.stringValue == "studio" }
+        let log = studio?["log"]?.arrayValue ?? []
+        XCTAssertEqual(log.count, 1, "the token's log carries the request itself")
+        XCTAssertEqual(log.first?["method"]?.stringValue, "GET")
+        XCTAssertEqual(log.first?["path"]?.stringValue, "/cas/v1/hello")
+        XCTAssertEqual(log.first?["status"], .count(200))
+        XCTAssertEqual(log.first?["running"], .bool(false))
         XCTAssertEqual(activity.body?["mcp"], .array([]))
 
         let status = try await call("GET", "/admin/api/status", signed: signed)
@@ -322,6 +331,60 @@ final class ServerConsoleTests: XCTestCase {
     /// A burst of failed attempts is spaced by the pause, not let through
     /// together after one: each waiter looks at the gate again when it wakes,
     /// in the turn that runs its attempt.
+    /// The activity rows carry the request itself, not only a count: a call is
+    /// listed while it runs, and the answer takes the running line's place.
+    func testActivityKeepsTheRequestsOfACall() throws {
+        let activity = RESTActivity()
+        let principal = HTTPPrincipal(id: "t-1", name: "studio", rights: [.casRead])
+        let id = UUID()
+        let started = Date()
+        activity.record(HTTPActivity(id: id, method: "POST", path: "/cas/v1/objects", phase: .started,
+                                     started: started, principal: principal, peer: "127.0.0.1:5000"))
+        var row = try XCTUnwrap(activity.listed.first)
+        XCTAssertEqual(row.requests, 0, "a running request is not counted yet")
+        XCTAssertEqual(row.log.count, 1)
+        XCTAssertTrue(row.log[0].isRunning)
+        XCTAssertEqual(row.log[0].peer, "127.0.0.1:5000")
+
+        activity.record(HTTPActivity(id: id, method: "POST", path: "/cas/v1/objects", phase: .finished,
+                                     started: started, status: .ok, duration: 0.25,
+                                     principal: principal, peer: "127.0.0.1:5000"))
+        row = try XCTUnwrap(activity.listed.first)
+        XCTAssertEqual(row.requests, 1)
+        XCTAssertEqual(row.log.count, 1, "the answer replaces the running line")
+        XCTAssertEqual(row.log[0].status, 200)
+        XCTAssertEqual(row.log[0].duration, 0.25, accuracy: 0.001)
+        XCTAssertFalse(row.log[0].isRunning)
+    }
+
+    /// The same for an agent connection: its log shows the tool while it works
+    /// and what came of it when it ends.
+    func testAnAgentsCallLogShowsTheRunningCall() throws {
+        let activity = ServerActivity()
+        activity.opened(number: 1, about: "test")
+        let id = UUID()
+        let started = Date()
+        let running = AgentCallRecord(id: id, client: "x", tool: "uefi_find", arguments: .object([:]),
+                                      started: started, duration: .zero, finished: started,
+                                      answerBytes: 0, outcome: .running)
+        activity.started(running, connection: 1)
+        var row = try XCTUnwrap(activity.listed.first)
+        XCTAssertTrue(row.isWorking, "a call in flight is what the lamp blinks for")
+        XCTAssertEqual(row.log.map(\.tool), ["uefi_find"])
+        XCTAssertTrue(row.log[0].isRunning)
+
+        let finished = AgentCallRecord(id: id, client: "x", tool: "uefi_find", arguments: .object([:]),
+                                       started: started, duration: .milliseconds(120), finished: Date(),
+                                       answerBytes: 42, outcome: .answered)
+        activity.finished(finished, connection: 1)
+        row = try XCTUnwrap(activity.listed.first)
+        XCTAssertFalse(row.isWorking)
+        XCTAssertEqual(row.calls, 1)
+        XCTAssertEqual(row.log.count, 1, "the answer replaces the running line")
+        XCTAssertEqual(row.log[0].outcome, "answered")
+        XCTAssertEqual(row.log[0].duration, 0.12, accuracy: 0.001)
+    }
+
     func testABurstOfFailedSignInsIsSpaced() async throws {
         let gate = SignInGate(pause: 0.15)
         let started = Date()

@@ -18,8 +18,10 @@ public final class Server {
     private var servers: [HTTPServer] = []
     private var watcher: CodeStoreWatcher?
     private var tokens: TokenStore?
-    /// Who is signed in to the console, for the server's life.
-    public let sessions = AdminSessions()
+    /// Who is signed in to the console. Kept in `sessions.json` beside the
+    /// tokens, so stopping the server — a rebuild, a restart — does not sign
+    /// the operator out.
+    public let sessions: AdminSessions
     public private(set) var cas: CASService?
     public private(set) var ghidra: GhidraHost?
     /// The dumps the local MCP answers over (`Design/SERVER_HEADLESS_PLAN.md` §6).
@@ -35,6 +37,11 @@ public final class Server {
                 log: @escaping @Sendable (String) -> Void = { FileHandle.standardError.write(Data(($0 + "\n").utf8)) }) {
         self.configuration = configuration
         self.log = log
+        // The sessions sit beside the tokens: the server's folder, or the
+        // temporary one a test hands it.
+        self.sessions = AdminSessions(file: configuration.tokensFile
+            .deletingLastPathComponent()
+            .appendingPathComponent("sessions.json"))
     }
 
     /// Opens the roles and listens on every address; returns the first one's port.

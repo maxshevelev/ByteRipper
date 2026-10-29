@@ -602,6 +602,48 @@ button.chip:hover { border-color: var(--accent); color: var(--text); }
 .agent-last { font-size: 12.5px; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
 .agent-last code { color: var(--text-2); }
 
+/* ---------- Activity: the call log ---------- */
+
+/* The lamp of a session that is working right now — the app's toolbar badge
+   (`AgentActivityBadge`) blinks at this same rate. */
+@keyframes blink { from { opacity: 1; } to { opacity: 0.15; } }
+.pill.blinking::before { animation: blink 0.5s ease-in-out infinite alternate; }
+
+.agent-log {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 190px;
+  overflow-y: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.log { display: flex; flex-direction: column; gap: 1px; padding: 4px 0 8px; }
+.log-line {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr) 54px max-content;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  font-size: 12.5px;
+}
+.log-line.running { background: var(--ok-soft); }
+.log-time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.log-name {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.log-ms { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.log-line .pill { justify-self: end; }
+.log-empty { color: var(--muted); font-size: 12.5px; padding: 2px 6px; }
+.log-row td { padding: 0 20px 10px; }
+.hidden { display: none; }
+
 /* ---------- Key–value lists ---------- */
 
 .kv { display: grid; grid-template-columns: minmax(120px, max-content) 1fr; gap: 12px 20px; align-items: baseline; }

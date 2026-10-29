@@ -236,8 +236,10 @@ final class HTTPServerTests: XCTestCase {
         XCTAssertEqual(all["rights"] as? [String], ["cas.write", "ghidra.use"])
     }
 
-    /// Every answer, a refusal included, is one activity value — the seam the
-    /// console's REST rows are built on (`Design/SERVER_HEADLESS_PLAN.md` §5).
+    /// Every request is two activity values — when it starts and when it is
+    /// answered, under one id — refusals included: the seam the console's REST
+    /// rows are built on, which shows a call while the route still works on it
+    /// (`Design/SERVER_HEADLESS_PLAN.md` §5, §8).
     func testEveryAnswerIsAnActivityValue() async throws {
         let seen = Activities()
         let (server, base) = try await serve(onRequest: { seen.add($0) }) { router in
@@ -247,13 +249,20 @@ final class HTTPServerTests: XCTestCase {
         _ = try await call(base.appendingPathComponent("hello"), token: "s3cret")
         _ = try await call(base.appendingPathComponent("hello"))
         let all = seen.all
-        XCTAssertEqual(all.count, 2)
-        XCTAssertEqual(all[0].method, "GET")
-        XCTAssertEqual(all[0].path, "/hello")
-        XCTAssertEqual(all[0].status, .ok)
-        XCTAssertEqual(all[0].principal?.name, "test")
-        XCTAssertEqual(all[1].status, .unauthorized)
-        XCTAssertNil(all[1].principal)
+        let answered = all.filter { $0.phase == .finished }
+        let started = all.filter { $0.phase == .started }
+        XCTAssertEqual(answered.count, 2)
+        XCTAssertEqual(started.count, 1,
+                       "only an admitted request runs; a refusal before a route is answered at once")
+        XCTAssertEqual(answered[0].method, "GET")
+        XCTAssertEqual(answered[0].path, "/hello")
+        XCTAssertEqual(answered[0].status, .ok)
+        XCTAssertEqual(answered[0].principal?.name, "test")
+        XCTAssertEqual(answered[1].status, .unauthorized)
+        XCTAssertNil(answered[1].principal)
+        XCTAssertEqual(started[0].id, answered[0].id, "a start and its answer are the same call")
+        XCTAssertNil(started[0].status, "a running call has no answer yet")
+        XCTAssertNotNil(started[0].peer, "the row can name the client's address")
     }
 
     func testASlowHandlerHoldsOnlyItsOwnConnection() async throws {

@@ -1,7 +1,8 @@
 // ByteRipper Server — the console. No framework and no build step: the page
 // is drawn with DOM calls, text always through textContent, and everything it
-// shows comes from /admin/api/*, polled every two seconds while the tab is
-// visible (Design/SERVER_HEADLESS_PLAN.md §8).
+// shows comes from /admin/api/*, polled while the tab is visible
+// (Design/SERVER_HEADLESS_PLAN.md §8). Activity is asked every second — it is
+// the page that shows what a tool is doing right now — and the rest every two.
 "use strict";
 
 (() => {
@@ -290,11 +291,14 @@
     page: null,
     timer: null,
     live: null,
+    // Which request logs the operator has opened, by token: the page is drawn
+    // again on every poll, and a log that shut itself would be unreadable.
+    openLogs: new Set(),
   };
 
   const PAGES = {
     "/admin/documents": { title: "Documents", subtitle: "The firmware images the local MCP serves.", icon: "chip", endpoint: "/admin/api/documents", mount: mountDocuments },
-    "/admin/activity": { title: "Activity", subtitle: "Who is connected now. Nothing is written down.", icon: "activity", endpoint: "/admin/api/activity", mount: mountActivity },
+    "/admin/activity": { title: "Activity", subtitle: "Who is connected now, and what each connection is doing.", icon: "activity", endpoint: "/admin/api/activity", interval: 1000, mount: mountActivity },
     "/admin/tokens": { title: "Tokens", subtitle: "Who may reach this server, and with which rights.", icon: "key", endpoint: "/admin/api/tokens", mount: mountTokens },
     "/admin/status": { title: "Status", subtitle: "The server, its roles, its limits.", icon: "gauge", endpoint: "/admin/api/status", mount: mountStatus },
   };
@@ -416,7 +420,7 @@
     document.title = `${page.title} · ByteRipper Server`;
     state.live = live;
     const view = page.mount(actions);
-    state.page = { endpoint: page.endpoint, view, content, first: true };
+    state.page = { endpoint: page.endpoint, view, content, first: true, interval: page.interval || POLL_MS };
     poll();
   }
 
@@ -453,7 +457,7 @@
       if (error.status === 401 || state.page !== page) return;
       setLive("down");
     }
-    if (state.page === page && !document.hidden) state.timer = setTimeout(poll, POLL_MS);
+    if (state.page === page && !document.hidden) state.timer = setTimeout(poll, page.interval || POLL_MS);
   }
 
   function refresh() { if (state.page) poll(); }
@@ -692,7 +696,7 @@
   // ---------- Activity ----------
 
   function mountActivity() {
-    const agents = card("Agents", "connections to the local MCP socket");
+    const agents = card("Agents", "connections to the local MCP socket, and the calls each is making");
     const clients = card("REST clients", "requests per token since the server started; the console's own are not counted");
     const root = h("div", { class: "stack" }, agents.root, clients.root);
 
@@ -710,15 +714,8 @@
         fill(clients.body, h("div", { class: "table-wrap" }, h("table", {},
           h("thead", {}, h("tr", {},
             h("th", { text: "Token" }), h("th", { class: "num", text: "Requests" }), h("th", { class: "num", text: "Refused" }),
-            h("th", { text: "Last request" }), h("th", { text: "Last seen" }))),
-          h("tbody", {}, data.rest.map((row) => h("tr", {},
-            h("td", {}, h("div", { class: "row" },
-              h("div", { class: "doc-icon" }, icon(row.token ? "key" : "alert", 16)),
-              h("div", {}, h("div", { class: "doc-title", text: row.name }), row.token ? h("div", { class: "doc-path", text: row.token }) : null))),
-            h("td", { class: "num", text: row.requests }),
-            h("td", { class: `num ${row.refused ? "danger-text" : ""}`, text: row.refused }),
-            h("td", {}, h("div", { class: "row" }, h("code", { text: row.last }), statusPill(row.last_status))),
-            h("td", { class: "muted", text: ago(row.last_seen) })))))));
+            h("th", { text: "Last request" }), h("th", { text: "Last seen" }), h("th", {}))),
+          h("tbody", {}, data.rest.flatMap(clientRows)))));
       }
     }
     return { root, update };
@@ -729,11 +726,49 @@
     return h("span", { class: `pill ${kind}`, text: String(code) });
   }
 
+  // ---------- Activity: the call log ----------
+
+  function clockTime(iso) {
+    return new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+  }
+
+  function elapsed(value) {
+    if (value === undefined || value === null) return "";
+    return value < 1000 ? `${Math.round(value)} ms` : `${(value / 1000).toFixed(1)} s`;
+  }
+
+  // The lamp of a session that is working right now: the Live indicator's
+  // colour, blinking at the rate of the app's toolbar dot (`AgentActivityBadge`
+  // fades to 0.15 and back every 0.5 s).
+  function workingPill(text) {
+    return h("span", { class: "pill ok blinking" }, h("span", { text }));
+  }
+
+  function callLine(call) {
+    const kind = call.outcome === "answered" ? "ok" : call.outcome === "cancelled" ? "plain" : "danger";
+    return h("div", { class: `log-line ${call.running ? "running" : ""}` },
+      h("span", { class: "log-time", text: clockTime(call.started) }),
+      h("code", { class: "log-name", title: call.tool, text: call.tool }),
+      h("span", { class: "log-ms", text: call.running ? "" : elapsed(call.duration_ms) }),
+      call.running ? workingPill("running") : h("span", { class: `pill ${kind}`, title: call.detail || "", text: call.outcome }));
+  }
+
+  function requestLine(request) {
+    return h("div", { class: `log-line ${request.running ? "running" : ""}` },
+      h("span", { class: "log-time", text: clockTime(request.started) }),
+      h("code", { class: "log-name", title: `${request.method} ${request.path}`, text: `${request.method} ${request.path}` }),
+      h("span", { class: "log-ms", text: request.running ? "" : elapsed(request.duration_ms) }),
+      request.running ? workingPill("running") : statusPill(request.status || 0));
+  }
+
   function agentCard(row) {
     const end = row.finished ? Date.parse(row.finished) : Date.now();
     const pill = !row.open
       ? h("span", { class: "pill plain", text: "Ended" })
-      : row.spoke ? h("span", { class: "pill ok", text: "Live" }) : h("span", { class: "pill warn", title: "Connected, has said nothing yet", text: "Silent" });
+      : row.working ? workingPill("Working")
+        : row.spoke ? h("span", { class: "pill ok", text: "Live" })
+          : h("span", { class: "pill warn", title: "Connected, has said nothing yet", text: "Silent" });
+    const log = row.log || [];
     return h("div", { class: `agent ${row.open ? "" : "ended"}` },
       h("div", { class: "agent-head" },
         h("div", { class: "agent-badge" }, icon("bot", 18)),
@@ -744,9 +779,42 @@
         h("div", { class: "agent-stat" }, h("b", { text: row.calls }), h("span", { text: "calls" })),
         h("div", { class: "agent-stat" }, h("b", { class: row.errors ? "danger-text" : "", text: row.errors }), h("span", { text: "errors" })),
         h("div", { class: "agent-stat" }, h("b", { text: duration((end - Date.parse(row.started)) / 1000) }), h("span", { text: row.open ? "connected" : "lasted" }))),
-      h("div", { class: "agent-last" },
-        row.last_tool ? h("span", {}, "Last ", h("code", { text: row.last_tool })) : h("span", { text: "No call yet" }),
-        h("span", { text: row.last_call ? ago(row.last_call) : ago(row.started) })));
+      h("div", { class: "agent-log" },
+        log.length
+          ? log.slice(-12).reverse().map(callLine)
+          : h("div", { class: "log-empty", text: "No call yet" })));
+  }
+
+  function clientRows(row) {
+    const key = row.token || "*";
+    const open = state.openLogs.has(key);
+    const log = row.log || [];
+    const working = log.some((request) => request.running);
+    const logRow = h("tr", { class: `log-row ${open ? "" : "hidden"}` },
+      h("td", { colspan: "6" },
+        h("div", { class: "log" }, log.length
+          ? log.slice(-20).reverse().map(requestLine)
+          : h("div", { class: "log-empty", text: "No request yet" }))));
+    const toggle = h("button", { class: "btn ghost small", type: "button" }, open ? "Hide log" : "Log");
+    toggle.addEventListener("click", () => {
+      const showing = !state.openLogs.has(key);
+      if (showing) state.openLogs.add(key); else state.openLogs.delete(key);
+      logRow.classList.toggle("hidden", !showing);
+      toggle.textContent = showing ? "Hide log" : "Log";
+    });
+    return [
+      h("tr", {},
+        h("td", {}, h("div", { class: "row" },
+          h("div", { class: "doc-icon" }, icon(row.token ? "key" : "alert", 16)),
+          h("div", {}, h("div", { class: "doc-title", text: row.name }), row.token ? h("div", { class: "doc-path", text: row.token }) : null),
+          working ? workingPill("in flight") : null)),
+        h("td", { class: "num", text: row.requests }),
+        h("td", { class: `num ${row.refused ? "danger-text" : ""}`, text: row.refused }),
+        h("td", {}, h("div", { class: "row" }, h("code", { text: row.last }), statusPill(row.last_status))),
+        h("td", { class: "muted", text: ago(row.last_seen) }),
+        h("td", { class: "actions" }, toggle)),
+      logRow,
+    ];
   }
 
   // ---------- Tokens ----------

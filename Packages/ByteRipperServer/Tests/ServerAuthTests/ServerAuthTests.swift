@@ -328,6 +328,45 @@ final class ServerAuthorizerTests: XCTestCase {
         authorizer.sessions.end(session.id)
         XCTAssertNil(authorizer.sessions.session(session.id))
     }
+
+    /// The console's sessions are kept beside the tokens: stopping the server
+    /// does not sign the operator out. What the file holds is the hash of each
+    /// session id, never the id itself — a copy of it cannot sign in.
+    func testASessionOutlivesTheServer() throws {
+        let file = scratch.tokens.deletingLastPathComponent().appendingPathComponent("sessions.json")
+        let first = ServerAuthorizer(tokens: store, sessions: AdminSessions(file: file))
+        let session = try first.signIn(secret: secret)
+
+        let reopened = ServerAuthorizer(tokens: store, sessions: AdminSessions(file: file))
+        XCTAssertNotNil(reopened.sessions.session(session.id), "a restart keeps the session")
+        XCTAssertNotNil(try reopened.principal(for: request(
+            "GET", "/admin", headers: ["cookie": "\(AdminCookie.session)=\(session.id)"])))
+
+        let text = try String(contentsOf: file, encoding: .utf8)
+        XCTAssertFalse(text.contains(session.id), "the file holds the id's hash, not the id")
+        XCTAssertTrue(text.contains("tokenHash"))
+    }
+
+    /// Signing out reaches the file: the session does not come back with the
+    /// next start.
+    func testSigningOutReachesTheFile() throws {
+        let file = scratch.tokens.deletingLastPathComponent().appendingPathComponent("sessions.json")
+        let sessions = AdminSessions(file: file)
+        let session = try ServerAuthorizer(tokens: store, sessions: sessions).signIn(secret: secret)
+        sessions.end(session.id)
+        XCTAssertNil(AdminSessions(file: file).session(session.id))
+    }
+
+    /// Revoking a token ends its sessions in the file too: a revocation is
+    /// what a leaked secret gets, and it must not need the browser to ask.
+    func testRevokingATokenDropsItsSessionsFromTheFile() throws {
+        let file = scratch.tokens.deletingLastPathComponent().appendingPathComponent("sessions.json")
+        let sessions = AdminSessions(file: file)
+        let session = try ServerAuthorizer(tokens: store, sessions: sessions).signIn(secret: secret)
+        let principal = try XCTUnwrap(store.principal(for: secret))
+        sessions.end(principal: principal.id)
+        XCTAssertNil(AdminSessions(file: file).session(session.id))
+    }
 }
 
 final class TokenCommandTests: XCTestCase {
