@@ -20,10 +20,15 @@ public struct DumpLimits: Equatable, Sendable {
 }
 
 /// Why a row holds its id and serves nothing (decision 18): the file is gone,
-/// its path is outside the roots, or a limit refused it.
+/// its path is outside the roots, the root it was opened under is not there,
+/// or a limit refused it.
 public enum MissingReason: Codable, Equatable, Sendable {
     case gone
     case outsideRoots
+    /// A `--dump-roots` directory that does not resolve: the document is
+    /// untouched, the volume is not mounted or the root is mistyped. Named,
+    /// because "the file is gone" would send the operator looking at the file.
+    case rootMissing(String)
     /// The limit, in words: `the limit of 8 open documents`.
     case limit(String)
 
@@ -31,6 +36,7 @@ public enum MissingReason: Codable, Equatable, Sendable {
         switch self {
         case .gone: return "the file is gone"
         case .outsideRoots: return "its path is outside the dump roots"
+        case .rootMissing(let root): return "the dump root \(root) is not there"
         case .limit(let limit): return "opening it would pass \(limit)"
         }
     }

@@ -185,7 +185,7 @@ them (the package is already listed). Its `dependencies:` gain
 | target | what | depends on |
 |---|---|---|
 | `ServerAuth` | `HTTPPrincipal`, `HTTPAuthorizer`, `TokenStore`, hashes, presets, one-time secrets, console cookie and CSRF | `HTTPService`, CryptoKit, Foundation |
-| `DumpHost` | `DocumentRegistry` (an `AgentDocumentSet`), `DocumentHost`, `SnapshotReader`, `documents.json`, uploads, limits | `AgentDocuments`, `UEFIImage`, `UEFIContentSource`, `ToolModuleKit` |
+| `DumpHost` | `DocumentRegistry` (an `AgentDocumentSet`), `DocumentHost`, `SnapshotReader`, `documents.json`, uploads, limits | `AgentDocuments`, `AgentKit`, `UEFIImage`, `UEFIContentSource`, `ToolModuleKit` |
 | `ServerMCP` | the `AgentServer`, `documents`/`read`/`find_bytes`, the tool assembly, headless descriptions, the activity registry | `AgentKit`, `AgentDocuments`, `DumpHost`, `UEFITool`, `GhidraHost`, `CodeAnalysis` |
 | `ServerConsole` | `/admin`: pages, JSON, sign-in, tokens, activity, status | `HTTPService`, `ServerAuth`, `DumpHost`, `AgentKit` |
 | `ServerRelay` | the stdio↔socket bridge; `AgentKit` only, which is what keeps the roles out of it | `AgentKit` |
@@ -291,14 +291,27 @@ imports AppKit in several files: the server stays macOS-only in v1.
   admitted if the limits (decision 11) still allow; each one that does not
   fit stays missing, so which documents open does not depend on the order the
   files happen to be read.
+- A `documents.json` that names one id twice, or whose `next_id` is already
+  passed by a row, is refused at start rather than trusted: an id handed out
+  twice is the one thing the file must never allow.
 - A missing row holds its id and serves nothing, and carries its reason: the
-  file is gone, the path is outside the roots, or a limit (named) refused it.
+  file is gone, the path is outside the roots, **the root it was opened under
+  is not there**, or a limit (named) refused it.
   `documents` does not list it; a call naming its id is told that reason —
   not that the id is unknown, and not "missing" when the file is there but
   over a limit. The console shows the same reason, and offers Reopen (which
   re-runs decision 18 and the limits) and Forget.
 - Limits: `--max-documents` (8), `--max-open-bytes` (512 MiB), counted over
   file sizes and checked before opening.
+- A `--dump-roots` that does not resolve is kept, not dropped: `absentRoots`
+  names it, the server says so at start, and a document under it is missing
+  for that reason, never as "the file is gone". Mounting the volume and
+  restarting brings its ids back. A root that is there does not excuse a file
+  that went: that stays "the file is gone".
+- Opening, reopening, a restore and an upload read and write in a detached
+  task, off the main actor, which also runs the tools and the console; the
+  `stat` is taken before the read (decision 10). `documents.json` itself is
+  written on the main actor — it is small.
 - Upload: `POST /admin/documents?name=…` with a raw body (there is no multipart
   parser), checked against `--max-upload-bytes`, hashed, and written
   atomically to `Uploads/<sha256>` mode 0600 — the file is named by its hash,
@@ -412,10 +425,13 @@ Every phase ends with its packages' tests green and the server starting.
    server tests (`ByteRipperServerTests/SyntheticDump.swift`); a test that a
    file rewritten in place after open does not change what the snapshot
    answers. A Reopen of an open document that would pass a limit is refused
-   and leaves it open. The registry is not yet started by the server: the
-   flags (`--dump-roots`, `--max-documents`, `--max-open-bytes`,
-   `--max-upload-bytes`) and the restore at start come with phase 5, which
-   is the first to serve the documents.
+   and leaves it open; a `documents.json` that would reuse an id stops the
+   start; a `--dump-roots` that is not there is named as such, and its
+   documents are missing for that reason, not as deleted files. Reads and the
+   upload's write run off the main actor. The registry is not yet started by
+   the server: the flags (`--dump-roots`, `--max-documents`,
+   `--max-open-bytes`, `--max-upload-bytes`) and the restore at start come
+   with phase 5, which is the first to serve the documents.
 5. **`ServerMCP` and `ServerRelay`**: tool assembly, descriptions, the socket,
    the relay, `MCPEndpoint` removed; tests for the forbidden tools, unique
    names, the answer keys of `documents`, `uefi_tree`/`read` on the synthetic
