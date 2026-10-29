@@ -4,6 +4,7 @@ import CodeAnalysis
 import DumpHost
 import Foundation
 import GhidraHost
+import ToolModuleKit
 import UEFITool
 
 /// Every tool the server serves (`Design/SERVER_HEADLESS_PLAN.md` §7): the
@@ -18,9 +19,6 @@ import UEFITool
 public enum ServerTools {
     public static func all(documents: DocumentRegistry, store: URL, ghidra: GhidraBackend?) -> [AgentTool] {
         var tools = ServerDocuments.tools(documents)
-        let queries = UEFIAgentQueries.all(catalogue: { .empty })
-            + UEFIAgentChecksums.all + UEFIAgentRegions.all + UEFIAgentDMI.all
-            + UEFIAgentVariables.queries + UEFIAgentNodeData.all
         tools += queries.map { query in
             ToolQueryTools.tool(for: ServerToolText.query(query), documents: documents,
                                 document: ServerDocuments.documentHelp)
@@ -33,6 +31,14 @@ public enum ServerTools {
                                           document: ServerDocuments.documentHelp)
         }
         return tools
+    }
+
+    /// The UEFI Structure's queries the server serves, in the module's words
+    /// (`ServerToolText` rewords some).
+    static var queries: [ToolAgentQuery] {
+        UEFIAgentQueries.all(catalogue: { .empty })
+            + UEFIAgentChecksums.all + UEFIAgentRegions.all + UEFIAgentDMI.all
+            + UEFIAgentVariables.queries + UEFIAgentNodeData.all
     }
 
     /// `code_query` and `code_modules` in a host's words: the app's name a
@@ -80,8 +86,8 @@ public enum ServerTools {
             A list comes in pages: pass `next` back as `after` until it is null. `read` reads bytes of a \
             document's snapshot, `find_bytes` searches them, the `uefi_` tools read a firmware image's \
             structure, `code_query` and `code_modules` read the code store. A node id belongs to the \
-            document it was listed on. To the person, name a file or a node by its `label`, never by an \
-            id (d1, 0.2.5). Nothing here edits a dump or shows anything on a screen; a tool refuses an \
+            document it was listed on. To the person, name a file by its `name` and a node by its \
+            `label`, never by an id (d1, 0.2.5). Nothing here edits a dump or shows anything on a screen; a tool refuses an \
             argument it does not take.
             """
         return ghidra ? host + "\n\n" + GhidraTools.instructions : host

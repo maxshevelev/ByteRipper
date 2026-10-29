@@ -26,6 +26,7 @@ let package = Package(
         .package(path: "../ToolModuleKit"),
         .package(path: "../UEFIImage"),
         .package(path: "../UEFIContentSource"),
+        .package(path: "../BytePattern"),
         .package(path: "../../Modules/UEFITool")
     ],
     targets: [
@@ -52,8 +53,10 @@ let package = Package(
             "DumpHost",
             .product(name: "AgentDocuments", package: "AgentDocuments"),
             .product(name: "AgentKit", package: "AgentKit"),
+            .product(name: "BytePattern", package: "BytePattern"),
             .product(name: "CodeAnalysis", package: "CodeAnalysis"),
             .product(name: "GhidraHost", package: "GhidraHost"),
+            .product(name: "ToolModuleKit", package: "ToolModuleKit"),
             .product(name: "UEFITool", package: "UEFITool")
         ]),
         // The stdio↔socket bridge, and nothing else: a target whose only

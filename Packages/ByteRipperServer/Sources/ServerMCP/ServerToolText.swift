@@ -3,9 +3,12 @@ import ToolModuleKit
 
 /// What the server's tools say (`Design/SERVER_HEADLESS_PLAN.md` §7). A
 /// tool-module's text names the app's panels and the person at them; this host
-/// has neither, so the four that do are worded again here — same facts, no
-/// panel, no `open_part`, no `survey`, no `_fix_checksum`. The rest keep the
-/// module's own words, and `Modules/UEFITool` is not edited.
+/// has neither, so the ones that do are worded again here — same facts, no
+/// panel, no part, no focus, no `survey`, no `reveal`, no `write`, no
+/// `_fix_checksum`. The rest keep the module's own words, and
+/// `Modules/UEFITool` is not edited. `ServerMCPTests` keeps both honest: every
+/// key here is a query the server serves, and no description it serves names
+/// what the server has not got.
 public enum ServerToolText {
     /// `query` with this host's description, when it has one.
     public static func query(_ query: ToolAgentQuery) -> ToolAgentQuery {
@@ -52,6 +55,39 @@ public enum ServerToolText {
             and the parser's diagnostics inside its bytes. NVRAM variables come with their value decoded. \
             A module with a dependency expression adds `dependencies`: the expression in words, the GUIDs \
             it pushes, every opcode with its offset, and what does not parse.
+            """,
+        "uefi_at": """
+            The chain of nodes that hold a byte of the file, outermost first — region, volume, file, \
+            section — opening the containers on the way. The last one is the innermost. Each node as \
+            `uefi_tree` gives it, with `encoded` ("XOR 77") for a LENV block or entry stored encoded and \
+            `compressed` / `compressed_in` for one inside a compressed section.
+            """,
+        "region_scan": """
+            Judges by their bytes the nodes the parser cannot name — Padding (the flash map's Unused, \
+            Unknown and named areas among them) and Raw files and sections — under `node` (default: the \
+            BIOS region), in address order. A node its children divide is replaced by them; one whose only \
+            child covers it whole stays, naming the child as `inner`. Each: `node`, `name`, `type`, \
+            `subtype`, `guid`, `start`, `end`, `size`; `fill` (the share of 0xFF and 0x00 bytes), \
+            `first_nonfill` and `last_nonfill` (the first and the last other byte); `class` — `empty` (at \
+            least 99% fill), `text` (most of the other bytes are ASCII or UTF-16LE strings of 4 characters \
+            or more), `code` (x86-64 instructions, by a heuristic: frequent REX.W moves, calls and \
+            returns, or a PE image), else `data`; and up to five `strings` with their addresses. The \
+            bytes themselves are never answered: `read` or `uefi_node_data` read them. An area whose name \
+            in the flash map says MSDM, Password or Key gives its class and sizes, no strings, and \
+            `redacted: true`. `kinds` picks the node types (`type` or `subtype` as `uefi_tree` gives \
+            them), default Padding and Raw; `min_size` leaves out smaller nodes. Pages: `limit`, `after` \
+            as in `uefi_find`.
+            """,
+        "uefi_node_data": """
+            Reads a node's bytes as `read` reads a document's — rows of 16 with their address, text, or \
+            integers — at addresses inside the node's `part` (`body` by default, `header`, or `all`), \
+            from 0. Works for a node inside a compressed section too, which has no file address and \
+            which `read` cannot reach: its bytes are what the tree decompressed it to, and `source` says \
+            which compressed section in the file they came out of. For a compressed section itself, part \
+            `decompressed` is what it decompresses to — the buffer its children are in. `size` is the \
+            whole part's, to read on by `offset`; at most 4096 bytes at a time. A node of the file gives \
+            `file_start` as well: its bytes are the snapshot's at that address, which `read` and \
+            `find_bytes` reach too.
             """,
         "uefi_checksums": """
             Checks every checksum the parser knows — a volume's header checksum, a file's header and data \

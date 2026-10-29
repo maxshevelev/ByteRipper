@@ -1,5 +1,6 @@
 import AgentDocuments
 import AgentKit
+import BytePattern
 import DumpHost
 import Foundation
 
@@ -28,8 +29,9 @@ public enum ServerDocuments {
                 Lists the firmware images this server holds: its `id` (pass it as `document` to the other \
                 tools — never show it to the person), `name` (what to call it to the person), `size`, \
                 `version` — raised by every Reopen, so a node id read from an older version is not \
-                silently read against other bytes — `link` for the file on disk (the name as a Markdown \
-                link that opens it in ByteRipper — write it where you name the file), and `disk`: \
+                silently read against other bytes — `link` for a file opened from the server's disk (the \
+                name as a Markdown link that opens it in ByteRipper on this Mac, where the app is \
+                installed; none for an upload, which is kept under its hash), and `disk`: \
                 `changed` when the file on disk is no longer the one read, `gone` when it is not there. \
                 The snapshot goes on answering either way. Only these documents exist; the operator opens \
                 and closes them in the console.
@@ -48,7 +50,7 @@ public enum ServerDocuments {
             "size": hex(host.contentSize),
             "version": .count(host.version)
         ]
-        if let link = link(to: row.path) {
+        if !row.uploaded, let link = link(to: row.path) {
             entry["link"] = .string("[\(row.name)](\(link.absoluteString))")
         }
         if let disk = host.diskState() { entry["disk"] = .string(disk.rawValue) }
@@ -128,8 +130,9 @@ public enum ServerDocuments {
                 with `??` for a byte that may be anything ("24 ?? 4D 49"). `offset`/`end` limit the range. \
                 Each match: `start`, `end` (half-open addresses) and the `encoding` that matched. Matches \
                 do not overlap unless `overlapping`: "AA" in "AAAA" is two, or three with it. `total` \
-                counts every match in the range; a page holds up to `limit` from `after`, and `next` is \
-                the offset to pass back as `after`, or null at the end.
+                counts every match in the range. Pages: `limit` is a ceiling — a page also stops before \
+                the answer passes the size bound and then says `truncated: "size"`; pass `next` back as \
+                `after` until it is null.
                 """,
             inputSchema: AgentSchema.object([
                 "document": AgentSchema.string(documentHelp),
@@ -142,113 +145,96 @@ public enum ServerDocuments {
                 "offset": AgentSchema.offset("Where the search starts. Default 0x0."),
                 "end": AgentSchema.offset("The first byte after the searched range. Default: the end."),
                 "limit": AgentSchema.limit(default: 100, maximum: 1000),
-                "after": AgentSchema.offset("The offset to go on from — the `next` of the page before.")
+                "after": AgentSchema.after
             ])
         ) { call in
             try await find(call.arguments, documents)
         }
     }
 
+    /// One pattern the search runs, and what its matches are called.
+    struct Wanted {
+        var pattern: MaskedPattern
+        var encoding: String
+    }
+
+    /// The search runs off the main actor, which also serves every other
+    /// call and the console: a snapshot may be hundreds of megabytes. The
+    /// scan is `BytePattern`'s, the find bar's and the app's own.
     static func find(_ arguments: AgentArguments, _ documents: DocumentRegistry) async throws -> AgentAnswer {
         let document = try documents.resolve(arguments.optionalString("document"))
         let host = document.readHost()
-        let size = host.contentSize
+        let reader = try host.snapshot()
+        let size = reader.size
         let from = try arguments.optionalOffset("offset") ?? 0
-        let to = min(try arguments.optionalOffset("end") ?? size, size)
-        let after = try arguments.optionalOffset("after")
-        let limit = try arguments.limit(default: 100, maximum: 1000)
+        let to = try arguments.optionalOffset("end") ?? size
+        guard from < to, to <= size else {
+            throw AgentToolError("The range \(hexText(from))–\(hexText(to)) is not inside \(document.named), "
+                + "which is \(hexText(size)) bytes long.")
+        }
+        let wanted = try patterns(arguments)
         let overlapping = try arguments.bool("overlapping", default: false)
-        let ignoreCase = try arguments.bool("ignore_case", default: false)
-        guard from <= to else { throw AgentToolError("Argument `end` is before `offset`.") }
+        let limit = try arguments.limit(default: 100, maximum: 1000)
+        let paging = try AgentPage(arguments, fingerprint: AgentPage.fingerprint(
+            [document.id, host.contentVersion,
+             JSONValue.object(arguments.values.filter { $0.key != "after" && $0.key != "limit" }).jsonText]))
+        let first = paging.first
+        let patterns = wanted.map(\.pattern)
+        let (total, page) = try await Task.detached(priority: .userInitiated) {
+            var total = 0
+            var page: [(range: Range<UInt64>, pattern: Int)] = []
+            try PatternScan.matches(of: patterns, size: size, range: from..<to, overlapping: overlapping,
+                                    read: { try reader.read(at: $0, length: $1) }) { match, pattern in
+                if total >= first, page.count < limit { page.append((match, pattern)) }
+                total += 1
+                return true
+            }
+            return (total, page)
+        }.value
 
+        let items: [JSONValue] = page.map { match in
+            .object([
+                "start": hex(match.range.lowerBound),
+                "end": hex(match.range.upperBound),
+                "encoding": .string(wanted[match.pattern].encoding)
+            ])
+        }
+        let answer = try paging.answer(["total": .count(total)], key: "matches", items: items, total: total,
+                                       bound: arguments.answerBound)
+        return ToolQueryTools.stamped(.json(answer), with: document)
+    }
+
+    /// `hex`, or `text` in the encodings asked for — as the app builds them.
+    static func patterns(_ arguments: AgentArguments) throws -> [Wanted] {
         let text = try arguments.optionalString("text")
         let hex = try arguments.optionalString("hex")
-        guard (text == nil) != (hex == nil) else { throw AgentToolError("Give one of `text` or `hex`.") }
-        var requested: [(bytes: [UInt8?], encoding: String)] = []
-        if let hex {
-            requested = [(try hexPattern(hex), "hex")]
-        } else if let text {
+        switch (text, hex) {
+        case (nil, nil), (.some, .some):
+            throw AgentToolError("Give `text` or `hex`, one of them.")
+        case (_, .some(let hex)):
+            do {
+                return [Wanted(pattern: try MaskedPattern.hex(hex), encoding: "hex")]
+            } catch {
+                throw AgentToolError("`hex` is not a byte pattern. Give pairs of hex digits and `??` for any byte, "
+                    + "e.g. \"24 ?? 4D 49\"; a pattern of `??` alone matches everywhere.")
+            }
+        case (.some(let text), _):
+            guard !text.isEmpty else { throw AgentToolError("`text` is empty.") }
             let encoding = try arguments.choice("encoding", from: ["ascii", "utf16le", "both"], default: "both")
-            if encoding != "utf16le" { requested.append((text.utf8.map { Optional($0) }, "ascii")) }
-            if encoding != "ascii" { requested.append((utf16le(text), "utf16le")) }
+            let ignoreCase = try arguments.bool("ignore_case", default: false)
+            var wanted: [Wanted] = []
+            if encoding != "utf16le" {
+                guard let ascii = try? MaskedPattern.ascii(text, ignoringCase: ignoreCase) else {
+                    throw AgentToolError("`text` is not ASCII; look for it with `encoding` \"utf16le\".")
+                }
+                wanted.append(Wanted(pattern: ascii, encoding: "ascii"))
+            }
+            if encoding != "ascii" {
+                wanted.append(Wanted(pattern: try MaskedPattern.utf16LE(text, ignoringCase: ignoreCase),
+                                     encoding: "utf16le"))
+            }
+            return wanted
         }
-        guard requested.allSatisfy({ !$0.bytes.isEmpty }) else { throw AgentToolError("The pattern is empty.") }
-
-        let bytes = try host.snapshot().read(at: from, length: Int(to - from))
-        var found: [(offset: UInt64, length: Int, encoding: String)] = []
-        for pattern in requested {
-            for index in matches(of: pattern.bytes, in: bytes, ignoreCase: ignoreCase, overlapping: overlapping) {
-                found.append((from + UInt64(index), pattern.bytes.count, pattern.encoding))
-            }
-        }
-        found.sort { $0.offset < $1.offset }
-
-        let remaining = after.map { offset in found.filter { $0.offset > offset } } ?? found
-        let page = Array(remaining.prefix(limit))
-        var answer: [String: JSONValue] = [
-            "total": .count(found.count),
-            "matches": .array(page.map { match in
-                .object([
-                    "start": .string(hexText(match.offset)),
-                    "end": .string(hexText(match.offset + UInt64(match.length))),
-                    "encoding": .string(match.encoding)
-                ])
-            })
-        ]
-        if remaining.count > page.count { answer["next"] = .string(hexText(remaining[page.count].offset)) }
-        return ToolQueryTools.stamped(.json(.object(answer)), with: document)
-    }
-
-    // MARK: - Searching
-
-    /// "24 ?? 4D 49": two hex digits a byte, `??` any byte.
-    static func hexPattern(_ text: String) throws -> [UInt8?] {
-        try text.split(separator: " ").map { part in
-            if part == "??" || part == "?" { return nil }
-            guard part.count == 2, let value = UInt8(part, radix: 16) else {
-                throw AgentToolError("\"\(part)\" is not two hex digits or `??`.")
-            }
-            return value
-        }
-    }
-
-    static func utf16le(_ text: String) -> [UInt8?] {
-        text.utf16.flatMap { unit in [UInt8(truncatingIfNeeded: unit), UInt8(truncatingIfNeeded: unit >> 8)] }
-            .map { Optional($0) }
-    }
-
-    /// Where `pattern` matches `bytes`, each nil a byte that may be anything.
-    static func matches(of pattern: [UInt8?], in bytes: [UInt8], ignoreCase: Bool,
-                        overlapping: Bool) -> [Int] {
-        guard !pattern.isEmpty, bytes.count >= pattern.count else { return [] }
-        let length = pattern.count
-        let last = bytes.count - length
-        func same(_ have: UInt8, _ want: UInt8) -> Bool { ignoreCase ? fold(have) == fold(want) : have == want }
-        var found: [Int] = []
-        var index = 0
-        while index <= last {
-            if let first = pattern[0], !same(bytes[index], first) {
-                index += 1
-                continue
-            }
-            var matched = true
-            for back in 1..<length {
-                guard let want = pattern[back] else { continue }
-                if !same(bytes[index + back], want) { matched = false; break }
-            }
-            if matched {
-                found.append(index)
-                index += overlapping ? 1 : length
-            } else {
-                index += 1
-            }
-        }
-        return found
-    }
-
-    /// ASCII lower case, which is what `ignore_case` promises.
-    static func fold(_ byte: UInt8) -> UInt8 {
-        (0x41...0x5A).contains(byte) ? byte + 0x20 : byte
     }
 
     // MARK: - Shapes

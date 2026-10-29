@@ -51,7 +51,9 @@ public enum ServerCommand: Equatable {
                           folder by default
 
           relay           copy MCP between stdin/stdout and the local socket,
-                          for an agent's client; it starts none of the roles
+                          for an agent's client; it starts none of the roles.
+                          The socket is --mcp-socket, else
+                          $BYTERIPPER_SERVER_SOCKET, else the default
         """
 
     public struct Failure: Error, Equatable, CustomStringConvertible {

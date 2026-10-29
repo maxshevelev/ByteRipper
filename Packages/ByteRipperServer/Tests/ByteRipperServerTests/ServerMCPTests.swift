@@ -4,7 +4,7 @@ import CodeAnalysis
 import DumpHost
 import Foundation
 import GhidraHost
-import ServerMCP
+@testable import ServerMCP
 import ServerRelay
 import XCTest
 @testable import ByteRipperServer
@@ -146,6 +146,71 @@ final class ServerMCPTests: XCTestCase {
             tool: "find_bytes", arguments: AgentArguments(["hex": "4D ?? 00 00"])))
         guard case .json(.object(let anyMembers)) = any else { return XCTFail("\(any)") }
         XCTAssertGreaterThanOrEqual(anyMembers["total"]?.int64Value ?? 0, 1, "\(any)")
+    }
+
+    /// Paging loses nothing: a match a page stopped before is the next
+    /// page's first, and the ASCII and UTF-16LE matches at one address are
+    /// two matches, both listed.
+    func testFindBytesPagesThroughEveryMatch() async throws {
+        var bytes = [UInt8](repeating: 0, count: 64)
+        for index in stride(from: 0, to: 64, by: 8) { bytes[index] = 0x41 }
+        let url = directory.appendingPathComponent("dumps/pattern.bin")
+        try Data(bytes).write(to: url)
+        let id = try await registry.open(path: url)
+        let find = try tool("find_bytes", tools())
+
+        var seen: [String] = []
+        var after: JSONValue?
+        var pages = 0
+        repeat {
+            var arguments: [String: JSONValue] = ["document": .string(id), "text": "A", "limit": 3]
+            if let after { arguments["after"] = after }
+            let answer = try await find.run(AgentCall(tool: "find_bytes", arguments: AgentArguments(arguments)))
+            guard case .json(let value) = answer else { return XCTFail("\(answer)") }
+            XCTAssertEqual(value["total"], .count(16), "every A is an ASCII match and a UTF-16LE one")
+            seen += (value["matches"]?.arrayValue ?? []).compactMap { match in
+                guard let start = match["start"]?.stringValue, let encoding = match["encoding"]?.stringValue else {
+                    return nil
+                }
+                return "\(start) \(encoding)"
+            }
+            // `JSONValue` takes `nil` as `.null`: the end is said in so many words.
+            if let next = value["next"], !next.isNull { after = next } else { after = nil }
+            pages += 1
+        } while after != nil && pages < 20
+        let expected = stride(from: 0, to: 64, by: 8).flatMap { offset in
+            ["0x\(String(offset, radix: 16, uppercase: true)) ascii", "0x\(String(offset, radix: 16, uppercase: true)) utf16le"]
+        }
+        XCTAssertEqual(seen, expected)
+    }
+
+    /// No description the server serves sends an agent to what only the app
+    /// has: a panel, a part, the focus, a survey, an edit.
+    func testNoDescriptionNamesWhatTheServerHasNot() {
+        let forbidden = ["survey", "reveal", "open_part", "annotate", "open_panel", "_fix_checksum", "panel",
+                         "focus", "unsaved", "`write`", "open_code", "counterpart", "open_dump"]
+        for tool in tools(ghidra: NoGhidra()) {
+            for word in forbidden where tool.description.localizedCaseInsensitiveContains(word) {
+                XCTFail("\(tool.name) names \(word)")
+            }
+        }
+        // The instructions say there is no focus, which is the point of saying it.
+        let instructions = ServerTools.instructions(ghidra: true)
+        for word in forbidden where word != "focus" && instructions.localizedCaseInsensitiveContains(word) {
+            XCTFail("the instructions name \(word)")
+        }
+    }
+
+    /// Every rewording is of a query the server serves, and is what it serves:
+    /// a query renamed in the module would otherwise bring the panel's text
+    /// back without a word.
+    func testEveryRewordingIsServed() throws {
+        let served = Dictionary(uniqueKeysWithValues: tools().map { ($0.name, $0.description) })
+        let queries = Set(ServerTools.queries.map(\.name))
+        for (name, text) in ServerToolText.overrides {
+            XCTAssertTrue(queries.contains(name), "\(name) is reworded but is no query of the module")
+            XCTAssertEqual(served[name], text, "\(name) is not served in the server's words")
+        }
     }
 
     /// The socket the local MCP is served on: a client connects, asks for the

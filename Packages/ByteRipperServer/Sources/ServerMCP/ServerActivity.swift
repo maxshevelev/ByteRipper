@@ -36,6 +36,7 @@ public final class ServerActivity {
 
     public init() {}
 
+    @discardableResult
     public func opened(number: Int, about: String?) -> Row {
         let row = Row(number: number, about: about, started: Date())
         rows.append(row)

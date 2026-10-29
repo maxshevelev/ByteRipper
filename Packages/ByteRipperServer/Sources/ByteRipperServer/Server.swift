@@ -87,7 +87,12 @@ public final class Server {
                                         uploads: configuration.uploads,
                                         file: configuration.documentsFile,
                                         limits: configuration.limits)
-        try await registry.restore()
+        do {
+            try await registry.restore()
+        } catch {
+            stop()
+            throw error
+        }
         for root in registry.absentRoots {
             log("dump root \(root.path) is not there; its documents stay missing until it is")
         }

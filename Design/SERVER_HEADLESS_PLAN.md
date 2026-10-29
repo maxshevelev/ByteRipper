@@ -186,7 +186,7 @@ them (the package is already listed). Its `dependencies:` gain
 |---|---|---|
 | `ServerAuth` | `HTTPPrincipal`, `HTTPAuthorizer`, `TokenStore`, hashes, presets, one-time secrets, console cookie and CSRF | `HTTPService`, CryptoKit, Foundation |
 | `DumpHost` | `DocumentRegistry` (an `AgentDocumentSet`), `DocumentHost`, `SnapshotReader`, `documents.json`, uploads, limits | `AgentDocuments`, `AgentKit`, `UEFIImage`, `UEFIContentSource`, `ToolModuleKit` |
-| `ServerMCP` | the `AgentServer`, `documents`/`read`/`find_bytes`, the tool assembly, headless descriptions, the activity registry | `AgentKit`, `AgentDocuments`, `DumpHost`, `UEFITool`, `GhidraHost`, `CodeAnalysis` |
+| `ServerMCP` | the `AgentServer`, `documents`/`read`/`find_bytes`, the tool assembly, headless descriptions, the activity registry | `AgentKit`, `AgentDocuments`, `DumpHost`, `UEFITool`, `ToolModuleKit`, `BytePattern`, `GhidraHost`, `CodeAnalysis` |
 | `ServerConsole` | `/admin`: pages, JSON, sign-in, tokens, activity, status | `HTTPService`, `ServerAuth`, `DumpHost`, `AgentKit` |
 | `ServerRelay` | the stdio↔socket bridge; `AgentKit` only, which is what keeps the roles out of it | `AgentKit` |
 | `ByteRipperServer` | role composition, CLI, the removal of `MCPEndpoint` | all of the above + `CASService`, `GhidraHost`, `HTTPService` |
@@ -455,6 +455,12 @@ Every phase ends with its packages' tests green and the server starting.
    absent and the served ones present once, `documents`' keys, the tree and
    the bytes of the synthetic image, the disk mark in an answer, a search,
    a call through the socket, and the relay with and without a server.
+   `find_bytes` runs `BytePattern`'s scan off the main actor and pages with
+   `AgentPage`, as the app's does; a test pages through every match, the
+   ASCII and UTF-16LE ones at one address both. `uefi_at`, `region_scan` and
+   `uefi_node_data` are reworded too, and two tests keep the rewordings
+   honest: every one is of a served query, and no served description names
+   a panel, a part, the focus, `survey`, `reveal` or `write`.
 6. **Rights on the roles** — done in phase 1: each route names its access,
    and the rights matrix is tested end to end over a running server.
 7. **The console**: pages, sign-in and CSRF, decision 19, documents and upload,
