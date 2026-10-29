@@ -87,10 +87,10 @@
     window between a `stat` and the read in which a writer could put new bytes
     under the old hash and `version`. The stored `stat` serves the `disk` mark
     only, and is refreshed from the file at restore — taken before the read, so
-    a write that lands during the read shows as `changed` rather than hiding. A restored file whose
-    hash differs is opened with `version` set to the stored one
-    plus one, so an agent's node ids from before are not silently read against
-    other bytes. It carries no `disk` mark: its snapshot is the file on disk
+    a write that lands during the read shows as `changed` rather than hiding.
+    A restored file whose hash differs is opened with `version` set to the
+    stored one plus one, so an agent's node ids from before are not silently
+    read against other bytes. It carries no `disk` mark: its snapshot is the file on disk
     now, and the bumped `version` is what tells the agent.
     **An id is never given to another file.** `documents.json` keeps `next_id`,
     and a new document takes it and advances it — not `max+1` over the rows
