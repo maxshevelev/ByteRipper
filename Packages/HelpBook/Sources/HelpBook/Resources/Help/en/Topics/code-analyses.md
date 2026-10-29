@@ -33,7 +33,7 @@ On each Mac, in **Settings ▸ Code Analysis**:
 2. Enter the address as `http://host:port` — on the server itself, `http://localhost:8765` — and the token the server printed for this Mac.
 3. Click **Connect**.
 
-The line below the fields says whether the server is reached. A token the server refuses, or no token kept on this Mac, is reported as that, not as an unreachable server; a refusal names the rights the token lacks. The token is kept in a file only the current user may read, `~/Library/Application Support/ByteRipper/Server/token`; the Ghidra skill's scripts on this Mac read the same file. When the token field is left empty, the token already kept is used.
+The line below the fields says whether the server is reached. A token the server refuses, or no token kept on this Mac, is reported as that, not as an unreachable server; a refusal names the rights the token lacks. The token is kept in a file only the current user may read, `~/Library/Application Support/ByteRipper/Server/token`. When the token field is left empty, the token already kept is used.
 
 ## Working with a server
 

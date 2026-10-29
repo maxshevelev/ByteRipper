@@ -142,6 +142,30 @@ final class CodeAnalysisLocationTests: XCTestCase {
         await wait("the connection") { if case .connected = location.state { return true } else { return false } }
     }
 
+    /// The line under the fields wraps: an unreachable server's line carries
+    /// the system's words and the address, longer than the tab is wide.
+    func testTheStatusLineWrapsRatherThanCuttingOff() async throws {
+        try location.choose(.server, server: "http://127.0.0.1:1", token: "secret")
+        await wait("the failure") { if case .unreachable = location.state { return true } else { return false } }
+        let settings = CodeAnalysisSettingsViewController()
+        settings.location = location
+        let window = NSWindow(contentViewController: settings)
+        defer { window.close() }
+        settings.refresh()
+        settings.view.layoutSubtreeIfNeeded()
+        let label = try XCTUnwrap(Self.labels(in: settings.view).first {
+            $0.stringValue.hasPrefix(L("The server cannot be reached; what this Mac has read is shown. %1$@", ""))
+        })
+        let needed = label.cell!.cellSize(forBounds: NSRect(x: 0, y: 0, width: label.frame.width,
+                                                            height: .greatestFiniteMagnitude)).height
+        XCTAssertGreaterThan(needed, label.font!.pointSize * 2, "the line is longer than the tab: \(label.stringValue)")
+        XCTAssertGreaterThanOrEqual(label.frame.height + 1, needed, "the label is as tall as its lines")
+    }
+
+    private static func labels(in view: NSView) -> [NSTextField] {
+        view.subviews.flatMap { ($0 as? NSTextField).map { [$0] } ?? [] + labels(in: $0) }
+    }
+
     /// A 403 names the rights the token lacks, in the tab's words and in the
     /// send button's line.
     func testAMissingRightIsNamed() {

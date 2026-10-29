@@ -1749,7 +1749,7 @@
 "The token made on the server by byteripper-server token add" = "Токен, который на сервере создала команда byteripper-server token add";
 "Connect" = "Подключить";
 "Keep the analyses on this server and read them from it" = "Хранить разборы на этом сервере и читать их с него";
-"The token is kept in a file only you may read, the same file the Ghidra skill's scripts read on this Mac. Leave the field empty to keep the token already there." = "Токен хранится в файле, который можете читать только вы; этот же файл читают скрипты скилла Ghidra на этом Mac. Чтобы оставить уже сохранённый токен, не заполняйте поле.";
+"The token is kept in a file only you may read. Leave the field empty to keep the token already there." = "Токен хранится в файле, который можете читать только вы. Чтобы оставить уже сохранённый токен, не заполняйте поле.";
 "Send This Mac's Analyses to the Server" = "Отправить разборы этого Mac на сервер";
 "Copy the analyses kept on this Mac to the analysis server" = "Скопировать разборы, хранящиеся на этом Mac, на сервер разборов";
 "The server takes each analysis by the same rules as a project's: a later reading replaces an earlier one, and another project's reading of a module is kept aside rather than replacing the one there." = "Сервер принимает каждый разбор по тем же правилам, что и разборы проекта: более поздняя ревизия заменяет более раннюю, а разбор модуля из другого проекта откладывается отдельно и не заменяет имеющийся.";

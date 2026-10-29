@@ -21,7 +21,7 @@ final class CodeAnalysisSettingsViewController: NSViewController {
     private let addressField = NSTextField()
     private let tokenField = NSSecureTextField()
     private let connectButton = NSButton(title: "", target: nil, action: nil)
-    private let statusLabel = NSTextField(labelWithString: "")
+    private let statusLabel = NSTextField(wrappingLabelWithString: "")
     private let sendButton = NSButton(title: "", target: nil, action: nil)
     private let sendStatus = NSTextField(wrappingLabelWithString: "")
     private var observer: NSObjectProtocol?
@@ -56,10 +56,9 @@ final class CodeAnalysisSettingsViewController: NSViewController {
         grid.column(at: 0).xPlacement = .trailing
         addressField.widthAnchor.constraint(greaterThanOrEqualToConstant: 280).isActive = true
         tokenField.widthAnchor.constraint(equalTo: addressField.widthAnchor).isActive = true
-        let serverCaption = small(L("The token is kept in a file only you may read, the same file the Ghidra skill's scripts read on this Mac. Leave the field empty to keep the token already there."))
+        let serverCaption = small(L("The token is kept in a file only you may read. Leave the field empty to keep the token already there."))
 
         statusLabel.font = .systemFont(ofSize: 11)
-        statusLabel.lineBreakMode = .byTruncatingTail
 
         // help: settings.code-analysis.send
         sendButton.title = L("Send This Mac's Analyses to the Server")
