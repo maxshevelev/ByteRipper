@@ -126,6 +126,7 @@ final class ServerCommandTests: XCTestCase {
         try #"{"stroe": "/tmp/s"}"#.write(to: file, atomically: true, encoding: .utf8)
         XCTAssertThrowsError(try ServerCommand.parse([], home: home)) { error in
             XCTAssertTrue("\(error)".contains("stroe"), "the key is named: \(error)")
+            XCTAssertTrue("\(error)".contains("did you mean \"store\""), "and the one meant: \(error)")
         }
         try #"{"idle": "soon"}"#.write(to: file, atomically: true, encoding: .utf8)
         XCTAssertThrowsError(try ServerCommand.parse([], home: home)) { error in
@@ -171,6 +172,22 @@ final class ServerCommandTests: XCTestCase {
         guard case .serve(let repeated) = try ServerCommand.parse(
             ["--listen", "127.0.0.1:18765", "--listen", "127.0.0.1:18765"], home: emptyHome()) else { return XCTFail() }
         XCTAssertEqual(repeated.listens.count, 1, "one address is bound once")
+    }
+
+    /// `serverName` is the flag's own spelling and takes a string or a list;
+    /// `serverNames` is still read, and a misspelt key suggests the one meant.
+    func testTheNamesTheConsoleAnswersUnder() throws {
+        let home = emptyHome()
+        let file = ServerConfiguration.defaultFile(in: home)
+        try #"{"serverName": "admins-imac"}"#.write(to: file, atomically: true, encoding: .utf8)
+        guard case .serve(let one) = try ServerCommand.parse([], home: home) else { return XCTFail() }
+        XCTAssertEqual(one.serverNames, ["admins-imac"])
+        try #"{"serverNames": ["a.local", "b.local"]}"#.write(to: file, atomically: true, encoding: .utf8)
+        guard case .serve(let list) = try ServerCommand.parse([], home: home) else { return XCTFail() }
+        XCTAssertEqual(list.serverNames, ["a.local", "b.local"])
+        try #"{"serverName": ["a.local"]}"#.write(to: file, atomically: true, encoding: .utf8)
+        guard case .serve(let listed) = try ServerCommand.parse([], home: home) else { return XCTFail() }
+        XCTAssertEqual(listed.serverNames, ["a.local"], "the flag's key takes a list too")
     }
 
     /// The token and relay verbs take `--config` too, and it is not refused.

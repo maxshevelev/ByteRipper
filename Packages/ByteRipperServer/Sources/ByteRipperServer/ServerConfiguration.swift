@@ -69,9 +69,9 @@ public enum ServerCommand: Equatable {
 
           ~/.byteripper-server.json takes the flags above as its keys — support,
           store, projects, ghidraHome, ghidraScripts, tokens, mcpSocket,
-          dumpRoots, serverNames, listen, idle, maxDocuments, maxOpenBytes,
+          dumpRoots, serverName, listen, idle, maxDocuments, maxOpenBytes,
           maxUploadBytes — paths as strings, lists as arrays, sizes as numbers
-          or "512 MiB".
+          or "512 MiB"; serverName is a name or a list of names.
 
           relay           copy MCP between stdin/stdout and the local socket,
                           for an agent's client; it starts none of the roles.
@@ -356,6 +356,30 @@ public struct ServerConfiguration: Equatable, Sendable {
         }
     }
 
+    /// The setting a misspelt key probably meant: `"stroe"` is one move from
+    /// `"store"`, `"serverNames"` one from `"serverName"`.
+    static func closest(_ key: String, among options: Set<String>) -> String? {
+        func distance(_ a: [Character], _ b: [Character]) -> Int {
+            if a.isEmpty { return b.count }
+            if b.isEmpty { return a.count }
+            var previous = Array(0...b.count)
+            for i in 1...a.count {
+                var current = [i] + Array(repeating: 0, count: b.count)
+                for j in 1...b.count {
+                    current[j] = min(previous[j] + 1, current[j - 1] + 1,
+                                     previous[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1))
+                }
+                previous = current
+            }
+            return previous[b.count]
+        }
+        let lower = Array(key.lowercased())
+        let scored = options.map { (option: $0, score: distance(lower, Array($0.lowercased()))) }
+            .min { $0.score < $1.score }
+        guard let scored, scored.score <= 2 else { return nil }
+        return scored.option
+    }
+
     /// Reads a configuration file into `configuration`. Each key is a flag
     /// without its `--`; a key the server does not know is refused rather
     /// than dropped, and a value of the wrong type is refused with its key.
@@ -375,13 +399,15 @@ public struct ServerConfiguration: Equatable, Sendable {
             throw ServerCommand.Failure(description: "\(file.path): \(Self.jsonProblem(data) ?? "not a JSON object")")
         }
         let known: Set<String> = ["support", "store", "projects", "ghidraHome", "ghidraScripts",
-                                  "tokens", "mcpSocket", "dumpRoots", "serverNames", "listen",
-                                  "idle", "maxDocuments", "maxOpenBytes", "maxUploadBytes"]
+                                  "tokens", "mcpSocket", "dumpRoots", "serverName", "serverNames",
+                                  "listen", "idle", "maxDocuments", "maxOpenBytes", "maxUploadBytes"]
         let unknown = object.keys.filter { !known.contains($0) }.sorted()
         guard unknown.isEmpty else {
             throw ServerCommand.Failure(description: "\(file.path): "
-                + unknown.map { "\"\($0)\"" }.joined(separator: ", ")
-                + " \(unknown.count == 1 ? "is not a setting" : "are not settings") of the server")
+                + unknown.map { key in
+                    let hint = Self.closest(key, among: known).map { "; did you mean \"\($0)\"?" } ?? ""
+                    return "\"\(key)\" is not a setting of the server\(hint)"
+                }.joined(separator: " "))
         }
         func text(_ key: String) throws -> String? {
             guard let value = object[key] else { return nil }
@@ -399,6 +425,14 @@ public struct ServerConfiguration: Equatable, Sendable {
                 throw ServerCommand.Failure(description: "\(file.path): \(key) is a list of strings")
             }
             return list
+        }
+        /// A name or a list of names: `--server-name` is repeatable, and a
+        /// file's single name is the same thing with one entry.
+        func names(_ key: String) throws -> [String]? {
+            guard let value = object[key] else { return nil }
+            if let text = value as? String { return [text] }
+            if let list = value as? [String] { return list }
+            throw ServerCommand.Failure(description: "\(file.path): \(key) is a name or a list of names")
         }
         func number(_ key: String) throws -> Int? {
             guard let value = object[key] else { return nil }
@@ -428,7 +462,9 @@ public struct ServerConfiguration: Equatable, Sendable {
         if let roots = try list("dumpRoots") {
             configuration.dumpRoots = roots.map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath) }
         }
-        if let names = try list("serverNames") { configuration.serverNames = names }
+        if let names = try names("serverName") ?? names("serverNames") {
+            configuration.serverNames = names
+        }
         if let listens = try list("listen") {
             configuration.listens = try listens.map { try ServerCommand.listen($0) }
             configuration.listensFromFile = true

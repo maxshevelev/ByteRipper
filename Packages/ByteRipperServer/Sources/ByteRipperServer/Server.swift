@@ -110,7 +110,12 @@ public final class Server {
             throw error
         }
         for root in registry.absentRoots {
-            log("dump root \(root.path) is not there; its documents stay missing until it is")
+            // A path pasted from a shell keeps its backslashes: in JSON,
+            // `~/Google\ Drive` is a folder literally named `Google\ Drive`.
+            let hint = root.path.contains("\\")
+                ? " (a backslash in the path is part of the name; write the spaces plainly)"
+                : ""
+            log("dump root \(root.path) is not there; its documents stay missing until it is\(hint)")
         }
         documents = registry
         log("documents: \(registry.rows.filter { $0.host != nil }.count) open of \(registry.rows.count)")

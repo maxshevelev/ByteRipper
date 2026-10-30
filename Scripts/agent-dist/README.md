@@ -23,12 +23,13 @@ If that answers `Permission denied`, the copy lost its executable bit on the
 way here (a file taken from a web view, a drive without file modes):
 `chmod 755 bin/* scripts/*.sh` once.
 
-or, by hand:
+Or, by hand:
 
 ```bash
 ./scripts/start-server.sh   # idempotent; makes the console token on first start
-./scripts/doctor.sh         # what is there, what is missing
 ./scripts/stop-server.sh
+./scripts/restart-server.sh # stop, then start — after a configuration change
+./scripts/doctor.sh         # what is there, what is missing
 ```
 
 The console is at `http://127.0.0.1:<port>/admin` — the first free port from
@@ -53,14 +54,15 @@ so nothing in the file stands in the way of what you type.
 
 Every flag of `byteripper-server --help` is a key without its `--`: `support`,
 `store`, `projects`, `dumpRoots`, `ghidraHome`, `ghidraScripts`, `tokens`,
-`mcpSocket`, `listen`, `serverNames`, `idle`, `maxDocuments`, `maxOpenBytes`,
+`mcpSocket`, `listen`, `serverName`, `idle`, `maxDocuments`, `maxOpenBytes`,
 `maxUploadBytes`. Paths are strings (`~` is expanded), lists are arrays, sizes
-are numbers or `"512 MiB"`. `listen` and `dumpRoots` are lists a flag adds to:
+are numbers or `"512 MiB"`, and `serverName` is a name or a list of names.
+`listen` and `dumpRoots` are lists a flag adds to:
 the launchers' `--listen 127.0.0.1:<port>` does not drop the tailnet address
 the file names. `--config <file>` names another file and
 `--no-config` reads none; a key the server does not know is refused with its
-name, never ignored. `INSTALL.md` has the table and an example that keeps a
-copy self-contained.
+name — and a close one is suggested — never ignored. `INSTALL.md` has the
+table and an example that keeps a copy self-contained.
 
 ## What is where
 
@@ -68,7 +70,7 @@ copy self-contained.
 bin/            byteripper-server, byteripper-cas
 ghidra/         the Ghidra scripts the server compiles and runs
 skills/         the review skill the agent reads (SKILL.md, reference/)
-scripts/        start-server, stop-server, agent, doctor
+scripts/        start-server, stop-server, restart-server, agent, doctor
 var/            everything this install keeps: store, projects, support, dumps, log
 CLAUDE.md       what the agent is told about this folder
 VERSION         what was built, from which commit

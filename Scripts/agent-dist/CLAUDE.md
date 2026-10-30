@@ -31,9 +31,9 @@ structures, the artifact and the store. Read it before the first review;
 ## The server
 
 - `scripts/start-server.sh` brings it up, `scripts/stop-server.sh` takes it
-  down, `scripts/doctor.sh` says what is missing. `scripts/agent.sh` does the
-  first, writes `.mcp.json` with this folder's absolute paths and starts a
-  Claude Code session here.
+  down, `scripts/restart-server.sh` does both, `scripts/doctor.sh` says what is
+  missing. `scripts/agent.sh` does the first, writes `.mcp.json` with this
+  folder's absolute paths and starts a Claude Code session here.
 - The console is `http://127.0.0.1:<port>/admin` (the port is in `var/port`);
   its token is `var/support/admin-token.txt`.
 - Ghidra is not shipped. `GHIDRA_HOME` names an install; otherwise the newest

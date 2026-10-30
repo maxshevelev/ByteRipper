@@ -83,7 +83,8 @@ Put a dump in `var/dumps` — the one folder the console may open dumps from —
 and open it in the console. The agent's tools see what the console has open.
 
 ```bash
-./scripts/doctor.sh     # now says the server is up and reads var/.../ghidra/scripts
+./scripts/doctor.sh       # now says the server is up and reads var/.../ghidra/scripts
+./scripts/restart-server.sh   # stop, then start — after a configuration change
 ./scripts/stop-server.sh
 ```
 
@@ -166,7 +167,7 @@ none.) Each key is a flag without its `--`:
 | `ghidraScripts` | the folder of the Ghidra scripts, if not the `ghidra/` beside the binary |
 | `tokens`, `mcpSocket` | files, when they are not inside `support` |
 | `listen` | `host:port` addresses to serve the console on |
-| `serverNames` | names the console answers under besides the addresses |
+| `serverName` | names the console answers under besides the addresses — a name or a list of names (`serverNames` is accepted too) |
 | `idle` | seconds an owner waits before it saves and exits |
 | `maxDocuments`, `maxOpenBytes`, `maxUploadBytes` | limits: a count, and byte counts as numbers or `"512 MiB"` |
 
