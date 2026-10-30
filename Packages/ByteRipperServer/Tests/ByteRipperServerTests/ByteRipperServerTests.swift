@@ -190,6 +190,30 @@ final class ServerCommandTests: XCTestCase {
         XCTAssertEqual(listed.serverNames, ["a.local"], "the flag's key takes a list too")
     }
 
+    /// A `tokens` or `mcpSocket` in the file survives the launchers'
+    /// `--support`; `--tokens` on the line still wins over both.
+    func testAFileTokenOutlivesASupportOnTheLine() throws {
+        let home = emptyHome()
+        let file = ServerConfiguration.defaultFile(in: home)
+        try #"{"tokens": "/tmp/shared/tokens.json"}"#.write(to: file, atomically: true, encoding: .utf8)
+        guard case .serve(let kept) = try ServerCommand.parse(["--support", "/tmp/sup"],
+                                                              home: home) else { return XCTFail() }
+        XCTAssertEqual(kept.tokensFile.path, "/tmp/shared/tokens.json")
+        XCTAssertEqual(kept.clientTokenFile.path, "/tmp/shared/token",
+                       "the client token is checked beside the tokens it is checked against")
+        XCTAssertEqual(kept.mcpSocket.path, "/tmp/sup/mcp.sock", "the socket still follows the folder")
+        guard case .serve(let line) = try ServerCommand.parse(["--support", "/tmp/sup",
+                                                              "--tokens", "/tmp/line.json"],
+                                                             home: home) else { return XCTFail() }
+        XCTAssertEqual(line.tokensFile.path, "/tmp/line.json")
+
+        try #"{"mcpSocket": "/tmp/there.sock"}"#.write(to: file, atomically: true, encoding: .utf8)
+        guard case .serve(let socket) = try ServerCommand.parse(["--support", "/tmp/sup"],
+                                                               home: home) else { return XCTFail() }
+        XCTAssertEqual(socket.mcpSocket.path, "/tmp/there.sock")
+        XCTAssertEqual(socket.tokensFile.path, "/tmp/sup/tokens.json", "the tokens follow the folder")
+    }
+
     /// The token and relay verbs take `--config` too, and it is not refused.
     func testTheOtherVerbsTakeTheConfigurationFile() throws {
         let home = emptyHome()

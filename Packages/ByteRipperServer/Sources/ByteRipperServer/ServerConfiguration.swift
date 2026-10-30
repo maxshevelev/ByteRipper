@@ -238,9 +238,18 @@ public enum ServerCommand: Equatable {
             }
             // One folder for the server's own files: a flag on any of them
             // still wins over it, whichever came first on the line.
+            // A `--support` on the line fills what neither the line nor the
+            // file names: a file's `tokens` outlives it, and `--tokens` on
+            // the line outlives both.
             if let support {
-                configuration.useFolder(support, tokens: tokensGiven, socket: socketGiven)
+                configuration.useFolder(support,
+                                        tokens: tokensGiven || configuration.tokensFromFile,
+                                        socket: socketGiven || configuration.socketFromFile)
             }
+            // The file the app and the scripts send their token from sits
+            // beside the tokens it is checked against, wherever those are.
+            configuration.clientTokenFile = configuration.tokensFile
+                .deletingLastPathComponent().appendingPathComponent("token", isDirectory: false)
             // The store is this server's own and always served
             // (`Design/SERVER_HEADLESS_PLAN.md` decision 17); Ghidra alone is
             // optional.
@@ -300,6 +309,9 @@ public struct ServerConfiguration: Equatable, Sendable {
     /// The file of tokens, by hash and right: the only credential the server
     /// has (`Design/SERVER_HEADLESS_PLAN.md` §5).
     public var tokensFile = ServerPaths.defaultTokensFile
+    /// Whether the configuration file named `tokens` itself: a `--support` on
+    /// the line then leaves it alone, as the file's own `support` would.
+    public var tokensFromFile = false
     /// The `--dump-roots` a document's path must resolve inside. A root that
     /// is not there is kept and reported (`DocumentRegistry.absentRoots`).
     public var dumpRoots: [URL] = []
@@ -308,6 +320,9 @@ public struct ServerConfiguration: Equatable, Sendable {
     public var serverNames: [String] = []
     /// The local MCP's socket, `mcp.sock` in the server's folder.
     public var mcpSocket = ServerPaths.defaultSocket
+    /// Whether the configuration file named `mcpSocket` itself — the socket
+    /// stays where it says when a `--support` comes from the line.
+    public var socketFromFile = false
     /// `Uploads` beside the tokens, and the documents' file — the server's
     /// own unless a test hands it another.
     public var uploads = ServerPaths.uploads
@@ -328,7 +343,8 @@ public struct ServerConfiguration: Equatable, Sendable {
 
     /// Points the server's own files at one folder (`--support`, or the
     /// file's `support`): the tokens, the local MCP's socket, the documents
-    /// and their uploads, and this Mac's client token.
+    /// and their uploads. The client token the server checks at start follows
+    /// the tokens file, which a file may put elsewhere — see `parse`.
     public mutating func useFolder(_ folder: URL, tokens tokensNamed: Bool = false,
                                    socket socketNamed: Bool = false) {
         support = folder
@@ -336,7 +352,6 @@ public struct ServerConfiguration: Equatable, Sendable {
         if !socketNamed { mcpSocket = folder.appendingPathComponent("mcp.sock") }
         documentsFile = folder.appendingPathComponent("documents.json")
         uploads = folder.appendingPathComponent("Uploads", isDirectory: true)
-        clientTokenFile = folder.appendingPathComponent("token")
     }
 
     /// The file that was expected, and the one thing it reads.
@@ -453,8 +468,14 @@ public struct ServerConfiguration: Equatable, Sendable {
         let tokens = try path("tokens")
         let socket = try path("mcpSocket")
         if let folder { configuration.useFolder(folder, tokens: tokens != nil, socket: socket != nil) }
-        if let tokens { configuration.tokensFile = tokens }
-        if let socket { configuration.mcpSocket = socket }
+        if let tokens {
+            configuration.tokensFile = tokens
+            configuration.tokensFromFile = true
+        }
+        if let socket {
+            configuration.mcpSocket = socket
+            configuration.socketFromFile = true
+        }
         if let store = try path("store") { configuration.store = store }
         if let projects = try path("projects") { configuration.projects = projects }
         if let home = try path("ghidraHome") { configuration.ghidraHome = home }

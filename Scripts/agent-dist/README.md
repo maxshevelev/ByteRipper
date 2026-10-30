@@ -59,10 +59,12 @@ Every flag of `byteripper-server --help` is a key without its `--`: `support`,
 are numbers or `"512 MiB"`, and `serverName` is a name or a list of names.
 `listen` and `dumpRoots` are lists a flag adds to:
 the launchers' `--listen 127.0.0.1:<port>` does not drop the tailnet address
-the file names. `--config <file>` names another file and
-`--no-config` reads none; a key the server does not know is refused with its
-name — and a close one is suggested — never ignored. `INSTALL.md` has the
-table and an example that keeps a copy self-contained.
+the file names. A `tokens` (or `mcpSocket`) in the file outlives the
+launchers' `--support`: it keeps the store's credentials where the app keeps
+them, and `--tokens` on the line still wins. `--config <file>` names another
+file and `--no-config` reads none; a key the server does not know is refused
+with its name — and a close one is suggested — never ignored. `INSTALL.md` has
+the table and an example that keeps a copy self-contained.
 
 ## What is where
 

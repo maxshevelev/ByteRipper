@@ -176,7 +176,10 @@ none. A key the server does not know is refused with its name rather than
 dropped, and `--help` lists every flag. `listen` and `dumpRoots` are lists:
 what the file names is kept and a flag on the line adds to it, so the
 launchers' own `--listen 127.0.0.1:<port>` does not take the tailnet address
-away.
+away. A `tokens` or `mcpSocket` named in the file survives the launchers'
+`--support` — a server that shares the app's tokens names that file here —
+and the client-token check follows the tokens file. `--tokens` on the line
+wins over all of it.
 
 ## One server, several Macs
 
