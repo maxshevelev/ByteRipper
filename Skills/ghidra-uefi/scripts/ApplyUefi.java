@@ -31,7 +31,7 @@
 //
 // <uefi.gdt> is `uefi_X64.gdt` or `uefi_Ia32.gdt` (BuildUefiTypes.java);
 // <guids.tsv> is `<32 hex digits of the GUID's bytes>\t<name>` per line, the
-// names with their g…Guid spelling (uefi_types.py writes it).
+// names with their g…Guid spelling (the server's `UEFITypes` writes it).
 // @category ByteRipper
 
 import java.io.BufferedReader;

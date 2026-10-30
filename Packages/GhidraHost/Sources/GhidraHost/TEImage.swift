@@ -1,9 +1,7 @@
 import Foundation
 
 /// A PE32/PE32+ file rebuilt from an EFI TE image, for Ghidra's PE loader,
-/// which starts at a DOS header and refuses `VZ` — `te_to_pe.py`, byte for
-/// byte, so a project made here and one made by the skill import the same
-/// file.
+/// which starts at a DOS header and refuses `VZ`.
 ///
 /// The reconstruction is exact when `StrippedSize` still has room for a full
 /// PE header with sixteen data directories; otherwise the payload moves and the

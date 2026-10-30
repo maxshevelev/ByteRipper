@@ -3,8 +3,7 @@ import Foundation
 
 extension GhidraHost {
     /// PEI or DXE, when the caller does not say: a TE image is a PEIM, and so,
-    /// on a PC, is a 32-bit PE; a 64-bit one is a DXE driver
-    /// (`code_artifact.guess_phase`).
+    /// on a PC, is a 32-bit PE; a 64-bit one is a DXE driver.
     public enum Phase: String, Sendable {
         case pei, dxe
     }

@@ -6,9 +6,8 @@ import Foundation
 /// It is deliberately not a general executable parser. It reads the section
 /// table, the image base and the header size, validates the table's bounds, and
 /// refuses a module it cannot trust. The layout is read from the **original**
-/// module, not from the PE `te_to_pe.py` rebuilds for Ghidra: expanding a TE
-/// header moves section data, while the virtual addresses stay the same
-/// (`Skills/ghidra-uefi/scripts/te_to_pe.py`).
+/// module, not from the PE rebuilt for Ghidra: expanding a TE header moves
+/// section data, while the virtual addresses stay the same.
 ///
 /// Addresses are Ghidra's: `imageBase + RVA`. For a TE image the header's
 /// `StrippedSize` names the header bytes the TE file does not contain; an

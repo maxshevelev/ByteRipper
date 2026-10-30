@@ -22,12 +22,12 @@ final class UEFITypesTests: XCTestCase {
     }
 
     /// The table built here from the cached EDK2 and catalogue equals the
-    /// one `uefi_types.py` wrote; skipped where the skill never built it.
-    func testTheTableEqualsTheOneThePythonScriptBuilt() throws {
+    /// cached one; skipped where no cache was built on this machine.
+    func testTheTableEqualsTheCachedOne() throws {
         let paths = UEFITypes.Paths(root: UEFITypes.cacheRoot)
         guard FileManager.default.fileExists(atPath: paths.guidsTSV.path),
               FileManager.default.fileExists(atPath: paths.edk2.path) else {
-            throw XCTSkip("no GUID table built by the skill on this machine")
+            throw XCTSkip("no GUID table built on this machine")
         }
         let out = FileManager.default.temporaryDirectory.appendingPathComponent("guids-\(UUID()).tsv")
         defer { try? FileManager.default.removeItem(at: out) }
@@ -36,10 +36,10 @@ final class UEFITypesTests: XCTestCase {
     }
 }
 
-/// The tarball path against the clone `uefi_types.py` made: the same
-/// headers. Downloads EDK2 from GitHub; run with `FETCH_EDK2=1`.
+/// The tarball path against the cached headers: the same ones. Downloads EDK2
+/// from GitHub; run with `FETCH_EDK2=1`.
 final class UEFITypesFetchTests: XCTestCase {
-    func testTheTarballHoldsTheHeadersTheCloneHas() async throws {
+    func testTheTarballHoldsTheCachedHeaders() async throws {
         guard ProcessInfo.processInfo.environment["FETCH_EDK2"] == "1" else {
             throw XCTSkip("FETCH_EDK2 is not 1")
         }

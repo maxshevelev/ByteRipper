@@ -4,8 +4,7 @@ import Foundation
 
 /// The owners of the modules' kept projects, hosted: started on demand,
 /// called over loopback, written to under one lease per module, published
-/// into a store (`Design/SERVER_PLAN.md` §6, the Swift side of
-/// `ghidra_owner.py`).
+/// into a store (`Design/SERVER_PLAN.md` §6).
 ///
 /// The host holds the lease, not its client: it takes it on the first write
 /// to a module, keeps it while writes come, and gives it back — publishing —
@@ -137,8 +136,7 @@ public actor GhidraHost {
     // MARK: - Publish
 
     /// The program's artifact, its review document and the module's
-    /// description, from the owner, into the store — `ghidra_owner.publish`,
-    /// step for step.
+    /// description, from the owner, into the store.
     ///
     /// A program nobody has reviewed publishes the mechanical reading. A
     /// reviewed one publishes a revision of this project's reading — one more
@@ -366,9 +364,9 @@ public actor GhidraHost {
 
     // MARK: -
 
-    /// `code_artifact.recipe_for`: the exporter and the Ghidra that wrote the
-    /// artifact, and what the program was typed with when the UEFI pass ran;
-    /// a types revision past the first (`…-r2`) is in the id too.
+    /// The exporter and the Ghidra that wrote the artifact, and what the
+    /// program was typed with when the UEFI pass ran; a types revision past
+    /// the first (`…-r2`) is in the id too.
     static func recipe(for artifact: [String: Any], types: String?, passes: [String]) -> AnalysisRecipe {
         let exporter = artifact["script_version"] as? Int ?? 0
         let ghidra = artifact["ghidra"] as? String

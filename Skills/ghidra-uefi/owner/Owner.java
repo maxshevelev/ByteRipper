@@ -10,7 +10,7 @@
 // artifact. The client stores both. Nothing here writes to the store, and
 // nothing here runs a script a client names.
 //
-// How it is built and run is `scripts/ghidra_owner.py`'s business: javac
+// How it is built and run is `GhidraHost`'s business: javac
 // against every jar of the Ghidra install, then
 //
 //   java -cp <ghidra jars>:owner.jar Owner --project-dir D --project-name N

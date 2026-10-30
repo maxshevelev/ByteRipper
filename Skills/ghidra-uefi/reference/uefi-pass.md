@@ -7,12 +7,12 @@ specifications fix, without guessing at what they do not.
 
 ## What it needs
 
-`uefi_types.py ensure` builds, once, into
+The server's `UEFITypes` builds, once, into
 `~/Library/Application Support/ByteRipper/Ghidra`:
 
 | File | From | What |
 | --- | --- | --- |
-| `edk2-stable202608/` | a sparse clone of EDK2 at the pinned tag | `MdePkg/Include`, `MdePkg.dec`, `MdeModulePkg.dec` (about 10 MB) |
+| `edk2-stable202608/` | EDK2's tarball at the pinned tag | `MdePkg/Include`, `MdePkg.dec`, `MdeModulePkg.dec` (about 10 MB) |
 | `uefi_X64-<tag>-r2.gdt`, `uefi_Ia32-<tag>-r2.gdt` | `BuildUefiTypes.java`, Ghidra's C parser over MdePkg | the PI and UEFI tables, every PPI and protocol (about 23 800 types each) |
 | `guids.csv` | LongSoft's `common/guids.csv`, the catalogue the app names its tree by | vendor GUIDs EDK2 does not declare |
 | `guids-….tsv` | both `.dec` files, then the catalogue | `<16 bytes as hex>\t<g…Guid name>`; EDK2's name wins |
@@ -37,11 +37,9 @@ subclasses, so a composition of members would be a guess. `-r2` is
 (`code-v4-types2-ghidra-…`), so a module typed by the new archive is a recipe
 beside the old one. A project keeps the archive it was made with.
 
-Each step says what it is when it starts, how long it has run while it runs
-(a line every 15 s in a log, a self-rewriting line on a terminal), and how long
-it took (`progress.py`). Each has a limit — the clone and the checkout 10
-minutes, the archives 20, a download 30 s of silence, a Ghidra analysis 30 —
-so an unreachable GitHub ends in a sentence, not a wait.
+Each step says what it is when it starts and how long it took, with a limit —
+the download and the unpacking, the archives, a Ghidra analysis — so an
+unreachable GitHub ends in a sentence, not a wait.
 
 Ghidra ships `CreateUEFIGDTArchivesScript.java` but not the archives, and that
 script reads a fixed path; `BuildUefiTypes.java` is the same parse with the

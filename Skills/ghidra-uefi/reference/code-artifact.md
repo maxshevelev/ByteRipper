@@ -2,8 +2,8 @@
 
 The one-time half of the plan: Ghidra reads a module once, and what it found is
 kept under the module's SHA-256 so the panel and an agent can read it later
-without Ghidra. `ExportModule.java` answers a single question about a module;
-this artifact is the whole module, and is the shape the Code panel will read.
+without Ghidra. It is the whole module, and it is the shape the Code panel
+reads.
 
 ## Store
 
@@ -24,10 +24,10 @@ key: a new Ghidra is a second analysis beside the first, never an overwrite.
 The manifest records the module, the recipe, the object, the source document
 and node, and the counts.
 
-`code_artifact.py` looks the module up before doing anything: an analysis from
-the current exporter is reused; `--force` runs the analysis again. Bump
-`SCRIPT_VERSION` in the script and in `ExportCode.java` whenever the exporter's
-output changes.
+The server looks the module up before it exports: an analysis from the current
+exporter is reused, and a publish of a kept project is a new reading of the
+same analysis. Bump `SCRIPT_VERSION` in `ExportCode.java` whenever the
+exporter's output changes.
 
 ## What is in `code.json`
 
@@ -200,42 +200,43 @@ status-code module's choice.
   repeatable, the first there is) carries it as `comment`; the Code panel
   shows it when the name is clicked, with the value the image holds.
 
-The Swift reader (`CodeArtifact.supportedScriptVersions`) and `code_query.py`
-(`SUPPORTED_SCRIPT_VERSIONS`) accept the same set and refuse any other. A v3
-run is a new recipe beside the v2 one; the v2 analysis stays readable.
+The Swift reader (`CodeArtifact.supportedScriptVersions`) and the `code_query`
+tool accept the same set and refuse any other. A v3 run is a new recipe beside
+the v2 one; the v2 analysis stays readable.
 
 ## Reading it
 
-```bash
-# one-time; Ghidra
-python3 Skills/ghidra-uefi/scripts/code_artifact.py CpuPei.te --name CpuPei \
-    --document "CSME 15.bin" --node 0.5.5.2.0.1.0.8.1
+A module with a kept project is exported by a publish:
 
-# later; no Ghidra
-python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te summary
-python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te functions
-python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te function 0x4BF
-python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te disasm 0x4BF --limit 20
-python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te decompile 0x4BF
-python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te xrefs 0x4BF
-python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te uses 0x4BF
-python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te search 0x11004
-python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te strings
-python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te post-codes
-python3 Skills/ghidra-uefi/scripts/code_query.py CpuPei.te status-codes
+```
+ghidra_open(node: "0.5.5.2.0.1.0.8.1", document: <id>)   # or module: <sha256>
+ghidra_publish()                                         # artifact, revision, review
 ```
 
-A target may be the module file (its hash is computed) or the SHA-256 itself.
-`--json` gives the same answer as data, for an agent that wants to post-process
-it.
+Later, with no Ghidra in the picture:
 
-`--document` and `--node` are provenance with a use: the UEFI panel matches the
-manifest's `source.document` to the file name it shows, opens the branch
-`source.node` names, and puts the code badge on that image node — including a
-PEI image inside a compressed Boot FV, which the lazy tree has not materialized
-otherwise. The body's SHA-256 still decides whether the analysis applies; the
-path is only where to look. Naming an existing analysis this way does not run
-Ghidra again.
+```
+code_modules(document: <id>)                             # what the store holds
+code_query(module: <sha256>, what: "functions")
+code_query(module: <sha256>, what: "c", function: "0x4BF")
+code_query(module: <sha256>, what: "instructions", function: "0x4BF", limit: 20)
+code_query(module: <sha256>, what: "references", function: "0x4BF")
+code_query(module: <sha256>, what: "uses", address: "0x4BF")
+code_query(module: <sha256>, what: "strings", search: "Boot")
+code_query(module: <sha256>, what: "symbols")
+code_query(module: <sha256>, what: "post_codes")
+```
+
+A module may be named by its image `node` in a document instead of the SHA-256;
+the bytes are hashed to find the analysis, and the answer also carries each
+address's offset in the module — the number the hex view shows.
+
+The node and document a module is opened by are provenance with a use: the UEFI
+panel matches the manifest's `source.document` to the file name it shows, opens
+the branch `source.node` names, and puts the code badge on that image node —
+including a PEI image inside a compressed Boot FV, which the lazy tree has not
+materialized otherwise. The body's SHA-256 still decides whether the analysis
+applies; the path is only where to look.
 
 ## What CpuPei looks like in it
 
@@ -243,15 +244,15 @@ Ghidra again.
 - one status-code candidate at `0x535`, a `CALL dword ptr [ECX + 0x58]` with
   the pushes `0x80000002`, `0x11004`, the core id and the descriptor — the
   `ReportStatusCode` call the analysis found by hand;
-- `search 0x11004` finds the `PUSH`, and `decompile 0x4BF` shows the loop that
-  reports it per core.
+- `what: "uses", address: "0x11004"` finds the `PUSH`, and `what: "c",
+  function: "0x4BF"` shows the loop that reports it per core.
 
 ## Boundaries
 
 - The artifact is a snapshot. New user-guided analysis (retyping a function,
-  resolving an indirect call) needs `analyzeHeadless` again; the store then
-  replaces the entry. The module bytes determine the key; an exporter change
-  determines the version.
+  resolving an indirect call) is made in the kept project and published; the
+  store then takes it as a new reading. The module bytes determine the key; an
+  exporter change determines the version.
 - Ghidra is not needed to read an artifact, and this script does not start it.
 - A status-code candidate is exactly that: a candidate. The function, the
   context and the decompiled C say whether it is `ReportStatusCode`.

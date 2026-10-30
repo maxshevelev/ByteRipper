@@ -2,9 +2,8 @@ import CodeAnalysis
 import Foundation
 
 /// `state.json` beside a module's kept project: what made it and what was
-/// last published (`Design/GHIDRA_SHARED_PLAN.md` §6.2). The same file
-/// `ghidra_owner.py` writes, field for field, so either opens a project the
-/// other made.
+/// last published (`Design/GHIDRA_SHARED_PLAN.md` §6.2), field for field the
+/// same wherever the project was made, so an owner opens one another made.
 public struct ProjectState: Codable, Equatable, Sendable {
     public struct Module: Codable, Equatable, Sendable {
         public var sha256: String

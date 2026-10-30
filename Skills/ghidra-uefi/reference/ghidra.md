@@ -1,17 +1,10 @@
-# Ghidra: the review tools and headless runs
+# Ghidra: the review tools
 
-Two ways to get at a module:
-
-- **a review** — the `ghidra_` tools of ByteRipper's own MCP server, relayed to
-  `byteripper-server`: a kept project per module, held
-  open by an owner (`owner/Owner.java`), every change published into the CAS;
-  good for following a call graph, renaming and typing, and reading the
-  decompiler as you go;
-- **headless** — `analyzeHeadless` plus the shipped `ExportModule.java`, which
-  writes one JSON file; good for a batch answer or a diff.
-
-Both use the same loader and the same analysis, so a function's address and
-decompiled body are the same in either.
+A module is reached one way: the `ghidra_` tools of ByteRipper's own MCP
+server, relayed to `byteripper-server`. The server keeps a project per module,
+holds it open through an owner (`owner/Owner.java`), and publishes every change
+into the CAS; a review follows a call graph, renames and types, and reads the
+decompiler as it goes.
 
 A Ghidra window with an MCP extension of its own (GhydraMCP and the like) is
 not a way in: what it changes stays in that window's program, never reaches the
@@ -104,50 +97,14 @@ base applied.
 - **A rebuilt PE needs all sixteen data directories.** The loader reads entry
   14 (COM descriptor) even when `NumberOfRvaAndSizes` is 2. A short table leaves
   that entry pointing into the section table; a large value there aborts the
-  import with `Invalid index: <value>`. `te_to_pe.py` therefore writes the full
+  import with `Invalid index: <value>`. The conversion therefore writes the full
   table, with only base-reloc and debug filled.
 - Warnings about `Unusual file alignment: 0x20`, `Non-standard optional header
   size` and a skipped data directory are normal for UEFI images and do not
   affect the analysis.
 - The image is mapped at `ImageBase`. A compressed module with base 0 maps at
-  0; `te_to_pe.py --image-base 0x10000000` gives it a stand-in base if that is
-  easier to read.
-
-## Headless recipe
-
-```bash
-G=~/Projects/ghidra/ghidra_12.1.2_PUBLIC
-$G/support/analyzeHeadless /tmp/proj uefi \
-    -import module.pe -overwrite \
-    -scriptPath Skills/ghidra-uefi/scripts \
-    -postScript ExportModule.java /tmp/module.json
-
-# later, without re-analysis
-$G/support/analyzeHeadless /tmp/proj uefi \
-    -process module.pe -noanalysis \
-    -scriptPath Skills/ghidra-uefi/scripts \
-    -postScript ExportModule.java /tmp/module.again.json
-```
-
-`ghidra_import.py` wraps the first form (and converts a TE first). Its JSON:
-
-```json
-{
-  "program": "module.pe", "language": "x86:LE:64:default",
-  "image_base": "0xFFA8510C", "sha256": "…",
-  "blocks": [{"name": ".text", "start": "…", "end": "…", "executable": true}],
-  "function_count": 15,
-  "functions": [{
-    "name": "FUN_ffa853ac", "entry": "0xFFA853AC", "size": 64,
-    "external": false, "thunk": false,
-    "signature": "void FUN_ffa853ac(void)",
-    "callers": [], "callees": ["0xFFA853BC"],
-    "c": "void FUN_ffa853ac(void) { … }"
-  }]
-}
-```
-
-`--no-decompile` omits `c` and is much faster on a large module.
+  0; the conversion can place it at a stand-in base instead if that is easier
+  to read.
 
 ## Reading a UEFI module in Ghidra
 
@@ -173,10 +130,11 @@ $G/support/analyzeHeadless /tmp/proj uefi \
 6. **Everything is `FUN_…` until named.** Keep the names from the module's own
    debug strings where they exist; they are the best ground truth.
 
-## A long-lived owner (`owner/Owner.java`)
+## The owner's Java (`owner/Owner.java`)
 
-What phase 0 of `Design/GHIDRA_SHARED_PLAN.md` found, for anyone writing Java
-that keeps Ghidra open:
+`GhidraHost` in the server builds this file and runs it; what phase 0 of
+`Design/GHIDRA_SHARED_PLAN.md` found, for anyone writing Java that keeps Ghidra
+open:
 
 - **A script under `analyzeHeadless` cannot be a server.** It runs inside the
   launcher's transaction and cannot save (`ReadOnlyException`).
@@ -232,15 +190,13 @@ that keeps Ghidra open:
 - **A converted TE keeps its RVAs.** The section data is at the offsets the TE
   table gives; the conversion restores the header size, not the section
   layout. Do not "fix" a section pointer because the headers grew — the delta
-  is applied to every pointer by `te_to_pe.py`.
-- **A module inside a compressed section has no file address.** Extract it with
-  `--part body`; `uefi_node_data` reads the decompressed buffer. Do not try to
-  find the same bytes in the file — they are not there.
+  is applied to every pointer by the conversion.
+- **A module inside a compressed section has no file address.**
+  `uefi_node_data` reads the decompressed buffer; there is no file offset to
+  look at. Do not try to find the same bytes in the file — they are not there.
 - **Image base 0 is not an error.** It means the module is relocated at load
   time; the analysis is still correct relative to the image.
 - **Large modules produce large JSON.** 100 KiB of x86 can be tens of MB of
-  decompiled C. Filter with `jq` (`.functions[] | select(.size > 200)`) or run
-  with `--no-decompile` and read only the functions that matter with
-  `ghidra_function`.
+  decompiled C. Read only the functions that matter with `ghidra_function`.
 - **Ghidra 12.1.2 has no TE loader.** Newer versions may add one; until then
   the conversion is part of the path, not a workaround for one version.

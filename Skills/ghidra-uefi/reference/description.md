@@ -17,9 +17,8 @@ the code at every publish.
 
 - In the module's Ghidra project, in the program's `ByteRipper` options, so
   it is saved and kept with the review (`Owner.java`, `Harvest.java`).
-- Written with `ghidra_describe` (or `ghidra_owner.py describe`) under the
-  write lease, and read back with `ghidra_description` (`GET /v1/description`:
-  `text`, `sections`, `bytes`).
+- Written with `ghidra_describe` under the write lease, and read back with
+  `ghidra_description` (`text`, `sections`, `bytes`).
 - Published with the review: the publish snapshots it, stores it in the CAS
   as an object of its own (`text/markdown`, UTF-8) and names it in the
   reading — `reading.description` in the manifest and `description` in the

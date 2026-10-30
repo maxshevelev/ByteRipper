@@ -11,15 +11,15 @@
 // <out-dir>. The program the headless run imports is not touched; a script
 // needs one to run.
 //
-// <edk2> is a checkout whose MdePkg/Include is present (a sparse clone of a
-// tagged `edk2-stable` release is enough; `uefi_types.py` makes one).
+// <edk2> is a checkout whose MdePkg/Include is present (the tarball of a
+// tagged `edk2-stable` release is enough; `UEFITypes` unpacks one).
 //
 // After the parse, two integer types become enums, so the decompiler prints
 // `EFI_INVALID_PARAMETER` where it printed `0x80000002`. EDK2 spells their
 // values as `#define`s, which the parser keeps — each as a one-value enum
 // `define_<NAME>` under `/<header>/defines` — but ties to no type. A change
 // here is a change of every typed analysis: raise `TYPES_REVISION` in
-// `uefi_types.py` and `UEFITypes.swift` with it.
+// `UEFITypes.swift` with it.
 // @category ByteRipper
 
 import java.io.File;

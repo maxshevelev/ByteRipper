@@ -41,8 +41,7 @@ public struct OwnerSources: Equatable, Sendable {
 /// The owner compiled for one Ghidra: a jar built with `javac` against the
 /// install's jars, again whenever a source is newer than it. A jar built for
 /// one Ghidra does not load in another, so each install has its own; the
-/// folder is the one `ghidra_owner.py` builds into, and either reuses the
-/// other's build.
+/// folder is shared by every owner, and an existing build is reused.
 enum OwnerBuild {
     static func cache(for install: GhidraInstall) -> URL {
         FileManager.default.homeDirectoryForCurrentUser

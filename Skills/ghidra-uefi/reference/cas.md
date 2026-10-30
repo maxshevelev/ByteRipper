@@ -16,7 +16,8 @@ between the app and the skill.
 repository with `swift build -c release` into
 `~/Library/Caches/ByteRipper/byteripper-cas` — once, about 20 seconds, and
 again whenever a source of the package is newer than the build. A machine that
-runs the skill therefore needs Xcode or its command line tools.
+builds it therefore needs Xcode or its command line tools; one that sets
+`BYTERIPPER_CAS` needs neither.
 
 ```
 byteripper-cas [--store <root>] [--no-create] <command>
@@ -91,7 +92,7 @@ the module description — the review's Markdown, an object of its own
   can be a different build.
 - The recipe is the exporter version and the Ghidra version. A new Ghidra may
   find other functions, so it gets a second recipe rather than overwriting the
-  first. `code_artifact.py` reuses an analysis only from the current exporter.
+  first. The server reuses an analysis only from the current exporter.
 - The same artifact under the same key is the same analysis: a put merges the
   source it names, and takes a newer reading (over none, or a later revision of
   the same project) — a comment changes the review document, and a description
@@ -158,21 +159,22 @@ folder. Entries are written stored, not deflated, so the Swift store in
 ## Commands
 
 ```bash
-python3 Skills/ghidra-uefi/scripts/cas_cli.py list
-python3 Skills/ghidra-uefi/scripts/cas_cli.py show <module-sha>
-python3 Skills/ghidra-uefi/scripts/cas_cli.py ref add laptop <module-sha>/<recipe>
-python3 Skills/ghidra-uefi/scripts/cas_cli.py ref list
-python3 Skills/ghidra-uefi/scripts/cas_cli.py verify
-python3 Skills/ghidra-uefi/scripts/cas_cli.py gc --apply
-python3 Skills/ghidra-uefi/scripts/cas_cli.py gc --analyses --apply
-python3 Skills/ghidra-uefi/scripts/cas_cli.py export --all --out analyses.zip
-python3 Skills/ghidra-uefi/scripts/cas_cli.py import analyses.zip
-python3 Skills/ghidra-uefi/scripts/cas_cli.py conflicts
-python3 Skills/ghidra-uefi/scripts/cas_cli.py history <module-sha>
+python3 scripts/cas_cli.py list
+python3 scripts/cas_cli.py show <module-sha>
+python3 scripts/cas_cli.py ref add laptop <module-sha>/<recipe>
+python3 scripts/cas_cli.py ref list
+python3 scripts/cas_cli.py verify
+python3 scripts/cas_cli.py gc --apply
+python3 scripts/cas_cli.py gc --analyses --apply
+python3 scripts/cas_cli.py export --all --out analyses.zip
+python3 scripts/cas_cli.py import analyses.zip
+python3 scripts/cas_cli.py conflicts
+python3 scripts/cas_cli.py history <module-sha>
 ```
 
-`code_artifact.py` writes through this store and `code_query.py` reads through
-it, both with the same `--store`.
+The server writes through this store — a publish is a write — and its
+`code_query` tool reads it. `cas_cli.py` takes the same `--store` and is how a
+person reads, verifies or moves what the store holds.
 
 ## A served store
 
@@ -192,8 +194,7 @@ byteripper-server --listen 100.64.0.7:8765                # a tailnet address; l
 # scripts read.
 
 # on any machine
-python3 Skills/ghidra-uefi/scripts/cas_cli.py --store http://100.64.0.7:8765 list
-python3 Skills/ghidra-uefi/scripts/code_artifact.py module.efi --store http://100.64.0.7:8765
+python3 scripts/cas_cli.py --store http://100.64.0.7:8765 list
 ```
 
 - `--store http://host:port` works for every script; `byteripper-cas` takes it
@@ -209,8 +210,8 @@ python3 Skills/ghidra-uefi/scripts/code_artifact.py module.efi --store http://10
   the server connects to `<Server>/mcp.sock` through `byteripper-server relay`
   (`Design/SERVER_HEADLESS_PLAN.md` §7).
 - `gc` is refused over the network: run it on the server, against its own
-  directory. A write made there directly — `byteripper-cas`, `code_artifact.py`
-  — is seen by the server's FSEvents stream and announced like any other.
+  directory. A write made there directly — `byteripper-cas` — is seen by the
+  server's FSEvents stream and announced like any other.
 - The protocol is `/cas/v1` (`ServedStoreProtocol`). A client is told of a
   change by a long poll, `GET /cas/v1/changes?since=<seq>&epoch=<epoch>&wait=<s>`:
   it answers as soon as a module's manifests or history change, with the
@@ -232,13 +233,15 @@ script; a missing store is not an error, only a prompt to analyze again.
 - The lock is local to one machine. A network store is a served store (above),
   never a shared filesystem: `flock` over SMB or NFS is not to be trusted.
 - The old flat store from the first slice (`<module-sha>/manifest.json`) is not
-  read; re-run `code_artifact.py` to put the same module into the CAS.
+  read; analyze the module again to put it into the CAS.
 
 ## Tests
 
 ```bash
-python3 -m unittest discover -s Skills/ghidra-uefi/tests
+python3 -m unittest discover -s tests
 ```
+
+(The paths here are the skill's own: run them from its directory.)
 
 The suite runs the skill's client against the real tool and covers duplicate
 and corrupt objects, recipe separation, replacement by reading, unknown fields,

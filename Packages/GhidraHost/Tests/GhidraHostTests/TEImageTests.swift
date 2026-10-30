@@ -4,9 +4,9 @@ import CodeAnalysis
 @testable import GhidraHost
 
 final class TEImageTests: XCTestCase {
-    /// A two-section 32-bit TE image built here, and the PE `te_to_pe.py`
-    /// makes of it (generated once, pinned as hex).
-    func testASyntheticImageConvertsAsThePythonScriptDoes() throws {
+    /// A two-section 32-bit TE image built here, and the PE the conversion
+    /// makes of it (pinned as a hex hash).
+    func testASyntheticImageConvertsAsPinned() throws {
         var te = [UInt8](repeating: 0, count: 40 + 2 * 40 + 0x40)
         func put(_ at: Int, _ value: UInt64, _ size: Int) {
             for i in 0..<size { te[at + i] = UInt8(truncatingIfNeeded: value >> (8 * i)) }
@@ -31,9 +31,9 @@ final class TEImageTests: XCTestCase {
 
     static let expected = "7a880d30478f01dc4237306e9fd4c0dc84cb353b31f155cdb7905519a305feab"
 
-    /// Every TE image of a folder against the `.pe` `te_to_pe.py` wrote beside
-    /// it; run with `TE_PARITY_DIR` set.
-    func testRealImagesMatchThePythonScript() throws {
+    /// Every TE image of a folder against the `.pe` stored beside it; run with
+    /// `TE_PARITY_DIR` set.
+    func testRealImagesMatchTheirPairs() throws {
         guard let folder = ProcessInfo.processInfo.environment["TE_PARITY_DIR"] else {
             throw XCTSkip("TE_PARITY_DIR names no folder of .te and .pe pairs")
         }

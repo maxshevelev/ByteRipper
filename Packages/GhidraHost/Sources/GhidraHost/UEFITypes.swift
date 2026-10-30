@@ -1,16 +1,15 @@
 import Foundation
 
 /// The EDK2 type archives and the GUID table `ApplyUefi.java` names a module
-/// with — `uefi_types.py` in Swift, building into the same cache, so either
-/// uses what the other built.
+/// with, built once into a cache every owner shares.
 ///
 /// EDK2 comes as the pinned tag's tarball from GitHub, of which only
 /// `MdePkg/Include` and the two `.dec` files are unpacked: a Mac without the
 /// command line tools has no working `git`, and has `tar`.
 public enum UEFITypes {
     public static let edk2Tag = "edk2-stable202608"
-    /// What `BuildUefiTypes.java` makes of the headers, `TYPES_REVISION` in
-    /// `uefi_types.py`. 2: `EFI_STATUS` and `EFI_STATUS_CODE_TYPE` are enums.
+    /// What `BuildUefiTypes.java` makes of the headers, the recipe's
+    /// `TYPES_REVISION`. 2: `EFI_STATUS` and `EFI_STATUS_CODE_TYPE` are enums.
     public static let typesRevision = 2
     /// The archives' name and the recipe's `types`: the tag and the revision.
     public static let types = "\(edk2Tag)-r\(typesRevision)"

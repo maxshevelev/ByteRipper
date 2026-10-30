@@ -30,8 +30,8 @@ public struct GhidraHostError: Error, Equatable, Sendable, CustomStringConvertib
     public var description: String { message }
 }
 
-/// A Ghidra installation and the JDK that runs it — what
-/// `ghidra_import.find_ghidra` and `ghidra_owner.java_home` find in Python.
+/// A Ghidra installation and the JDK that runs it — the home is given, read
+/// from `GHIDRA_HOME`, or taken as the newest `ghidra_*` install.
 public struct GhidraInstall: Equatable, Sendable {
     public let home: URL
     public let version: String

@@ -93,8 +93,7 @@ typedef struct {
 ```
 
 Type 0 holds uncompressed sections; type 1 is the Tiano/EFI 1.1 algorithm
-(EDK2's `EfiDecompress`/`TianoDecompress`) and has no stdlib decoder. ByteRipper
-implements it; `module_scan.py` reports such a section as closed and stops.
+(EDK2's `EfiDecompress`/`TianoDecompress`), which ByteRipper implements.
 
 ### GUID-defined (`0x02`)
 
@@ -152,7 +151,7 @@ the **original PE file offsets** in `PointerToRawData`; the bytes are at
 TE_offset = PointerToRawData - StrippedSize + 40
 ```
 
-from the start of the TE file. That is the relation `te_to_pe.py` inverts when
+from the start of the TE file. That is the relation the conversion inverts when
 it rebuilds a PE: the header region is restored to `StrippedSize` bytes (or
 larger, and then every pointer shifts by the same delta) and the payload is
 placed after it, so the original offsets become valid again.

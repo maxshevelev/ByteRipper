@@ -4,11 +4,11 @@ import XCTest
 @testable import GhidraHost
 
 /// A project made from a module's bytes here, published through an owner,
-/// against the artifact `code_artifact.py` stored for the same bytes. Run with
+/// against an artifact stored for the same bytes earlier. Run with
 /// `GHIDRA_PARITY_MODULE` naming the module and `GHIDRA_PARITY_ARTIFACT` the
-/// artifact the script wrote; skipped otherwise.
+/// artifact; skipped otherwise.
 final class GhidraHostCreateTests: XCTestCase {
-    func testAProjectMadeHerePublishesTheScriptsArtifact() async throws {
+    func testAProjectMadeHerePublishesTheStoredArtifact() async throws {
         let environment = ProcessInfo.processInfo.environment
         guard let modulePath = environment["GHIDRA_PARITY_MODULE"],
               let artifactPath = environment["GHIDRA_PARITY_ARTIFACT"] else {

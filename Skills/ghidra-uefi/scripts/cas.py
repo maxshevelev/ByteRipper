@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """The local content-addressed store for code artifacts, as the skill sees it.
 
 The store has two kinds of record:
@@ -34,9 +33,6 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import progress
 
 SCHEMA = 1
 PROTOCOL = 1
@@ -85,6 +81,20 @@ def _newest_source() -> float:
 _tool: Path | None = None
 
 
+def _run(command: list[str], label: str, log: Path, timeout: float) -> int:
+    """Runs a program with its output in `log`, saying what it is on stderr
+    while it runs; past `timeout` seconds the program is stopped."""
+    print(f"{label} …", file=sys.stderr, flush=True)
+    with open(log, "w", encoding="utf-8") as handle:
+        process = subprocess.Popen(command, stdout=handle, stderr=subprocess.STDOUT)
+        try:
+            return process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+            raise CASError(f"{label}: stopped after {int(timeout)} s; log: {log}") from None
+
+
 def tool() -> Path:
     """The `byteripper-cas` to run, built first when it is missing or older
     than the package's sources."""
@@ -107,8 +117,8 @@ def tool() -> Path:
         command = ["swift", "build", "-c", "release", "--product", "byteripper-cas",
                    "--package-path", str(PACKAGE), "--scratch-path", str(scratch)]
         try:
-            status = progress.run(command, "Building byteripper-cas, the store's tool (once)",
-                                  log=log, timeout=900)
+            status = _run(command, "Building byteripper-cas, the store's tool (once)",
+                          log=log, timeout=900)
         except FileNotFoundError as error:
             raise CASError("swift is not installed: install Xcode or its command line "
                            "tools, or set BYTERIPPER_CAS") from error
