@@ -56,6 +56,10 @@ public enum TokenCommand: Equatable, Sendable {
             switch flag {
             case "--tokens":
                 file = URL(fileURLWithPath: try value())
+            case "--config":
+                _ = try value()   // read by ServerCommand before this
+            case "--no-config":
+                break
             case "--name":
                 name = try value()
             case "--rights":

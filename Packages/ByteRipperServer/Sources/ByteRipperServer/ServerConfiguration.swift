@@ -154,6 +154,8 @@ public enum ServerCommand: Equatable {
             while let flag = rest.popFirst() {
                 switch flag {
                 case "--mcp-socket": path = URL(fileURLWithPath: try value(flag))
+                case "--config": _ = try value(flag)   // read before the loop
+                case "--no-config": break
                 case "--help", "-h": return .help
                 default: throw Failure(description: "relay does not take \(flag)")
                 }
@@ -324,18 +326,40 @@ public struct ServerConfiguration: Equatable, Sendable {
         clientTokenFile = folder.appendingPathComponent("token")
     }
 
+    /// The file that was expected, and the one thing it reads.
+    static func jsonProblem(_ data: Data) -> String? {
+        do {
+            let parsed = try JSONSerialization.jsonObject(with: data)
+            switch parsed {
+            case is [Any]: return "the top level is a list, not an object of settings"
+            case is String: return "the top level is a string, not an object of settings"
+            case is NSNumber: return "the top level is a number, not an object of settings"
+            case is NSNull: return "the file is null, not an object of settings"
+            default: return "the top level is not an object of settings"
+            }
+        } catch {
+            let debug = (error as NSError).userInfo[NSDebugDescriptionErrorKey] as? String
+            return debug ?? error.localizedDescription
+        }
+    }
+
     /// Reads a configuration file into `configuration`. Each key is a flag
     /// without its `--`; a key the server does not know is refused rather
     /// than dropped, and a value of the wrong type is refused with its key.
     public static func load(_ file: URL, into configuration: inout ServerConfiguration) throws {
-        let data: Data
+        var data: Data
         do {
             data = try Data(contentsOf: file)
         } catch {
             throw ServerCommand.Failure(description: "\(file.path): \(error.localizedDescription)")
         }
-        guard let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
-            throw ServerCommand.Failure(description: "\(file.path) is not a JSON object")
+        // An editor may save a UTF-8 byte-order mark; the parser counts it as
+        // a character and stops on it.
+        if data.starts(with: [0xEF, 0xBB, 0xBF]) { data = Data(data.dropFirst(3)) }
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            // The parser's own words say where: "Invalid value around line 3,
+            // column 1." — a message without them is a search through the file.
+            throw ServerCommand.Failure(description: "\(file.path): \(Self.jsonProblem(data) ?? "not a JSON object")")
         }
         let known: Set<String> = ["support", "store", "projects", "ghidraHome", "ghidraScripts",
                                   "tokens", "mcpSocket", "dumpRoots", "serverNames", "listen",

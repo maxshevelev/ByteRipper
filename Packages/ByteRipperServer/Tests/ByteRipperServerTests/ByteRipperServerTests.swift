@@ -137,6 +137,35 @@ final class ServerCommandTests: XCTestCase {
         XCTAssertThrowsError(try ServerCommand.parse(["--config", home.path + "/nothing.json"], home: home),
                              "a named file that is not there is refused")
     }
+
+    /// A file that does not parse says where the parser stopped, and a file
+    /// that parses to something else says what it is.
+    func testABrokenConfigurationFileSaysWhere() throws {
+        let home = emptyHome()
+        let file = ServerConfiguration.defaultFile(in: home)
+        try "{\n  \"store\": /tmp/x\n}\n".write(to: file, atomically: true, encoding: .utf8)
+        XCTAssertThrowsError(try ServerCommand.parse([], home: home)) { error in
+            let text = "\(error)"
+            XCTAssertTrue(text.contains(file.path), "the file is named: \(text)")
+            XCTAssertTrue(text.lowercased().contains("line"), "the parser's place is kept: \(text)")
+        }
+        try #"[1, 2]"#.write(to: file, atomically: true, encoding: .utf8)
+        XCTAssertThrowsError(try ServerCommand.parse([], home: home)) { error in
+            XCTAssertTrue("\(error)".contains("a list"), "what it is instead: \(error)")
+        }
+    }
+
+    /// The token and relay verbs take `--config` too, and it is not refused.
+    func testTheOtherVerbsTakeTheConfigurationFile() throws {
+        let home = emptyHome()
+        let support = home.appendingPathComponent("support", isDirectory: true)
+        try #"{"support": "\#(support.path)"}"#.write(to: ServerConfiguration.defaultFile(in: home),
+                                                     atomically: true, encoding: .utf8)
+        XCTAssertEqual(try ServerCommand.parse(["token", "list"], home: home),
+                       .token(.list(file: support.appendingPathComponent("tokens.json"))))
+        guard case .relay(let path) = try ServerCommand.parse(["relay"], home: home) else { return XCTFail() }
+        XCTAssertEqual(path, support.appendingPathComponent("mcp.sock").path)
+    }
 }
 
 @MainActor
