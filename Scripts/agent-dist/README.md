@@ -34,11 +34,11 @@ Or, by hand:
 
 On the first start the admin token is made in the tokens file the
 configuration names — or in `var/support/tokens.json` when it names none — and
-the secret is written to `var/support/admin-token.txt`.
+the secret is written to `var/admin-token.txt`.
 
 The console is at `http://127.0.0.1:<port>/admin` — the first free port from
 8765, written to `var/port`, or `BYTERIPPER_PORT`; the token is in
-`var/support/admin-token.txt`. Open a dump from it — the dumps it may open are
+`var/admin-token.txt`. Open a dump from it — the dumps it may open are
 under `var/dumps` — and the agent's tools see it.
 
 ## Configuration
@@ -67,7 +67,10 @@ are numbers or `"512 MiB"`, and `serverName` is a name or a list of names;
 the launchers' `--listen 127.0.0.1:<port>` does not drop the tailnet address
 the file names. A `tokens` (or `mcpSocket`) in the file outlives the
 launchers' `--support`: it keeps the store's credentials where the app keeps
-them, and `--tokens` on the line still wins. `--config <file>` names another
+them, and `--tokens` on the line still wins. `support`, `store` and `projects`
+in the file put this copy on another set of folders — the app's, say — and the
+launchers then leave those flags out; only one server may run on them at a
+time. `--config <file>` names another
 file and `--no-config` reads none; a key the server does not know is refused
 with its name — and a close one is suggested — never ignored. `INSTALL.md` has
 the table and an example that keeps a copy self-contained.

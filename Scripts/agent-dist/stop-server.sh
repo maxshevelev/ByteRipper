@@ -6,24 +6,46 @@ set -euo pipefail
 
 dir="$(cd "$(dirname "$0")/.." && pwd)"
 server="$dir/bin/byteripper-server"
-support="$dir/var/support"
 pidfile="$dir/var/server.pid"
+
+source "$dir/scripts/common.sh"
+support="$(support_for "$dir/var/support")"
+support_named="$(config_value support)"
+
+matches_this_copy() {
+    local line="$1"
+    case " $line " in
+        *" --support $support "*) return 0 ;;
+    esac
+    [ -n "$support_named" ] || return 1
+    case " $line " in
+        *" --support "*) return 1 ;;
+    esac
+    return 0
+}
 
 server_pid() {
     local candidate line
     for candidate in $(pgrep -f -- "$server" 2>/dev/null); do
         line="$(ps -p "$candidate" -o command= 2>/dev/null || true)"
-        case " $line " in
-            *" --support $support "*) printf '%s\n' "$candidate"; return 0 ;;
-        esac
+        if matches_this_copy "$line"; then printf '%s\n' "$candidate"; return 0; fi
     done
     return 1
 }
 
 if ! pid="$(server_pid)"; then
-    echo "server not running"
-    rm -f "$pidfile"
-    exit 0
+    # A start from before a configuration change keeps another folder; its
+    # process is still this copy's, and the pid file names it.
+    candidate="$(cat "$pidfile" 2>/dev/null || true)"
+    line="$(ps -p "$candidate" -o command= 2>/dev/null || true)"
+    case "$line" in
+        *"$server"*) pid="$candidate" ;;
+        *)
+            echo "server not running"
+            rm -f "$pidfile"
+            exit 0
+            ;;
+    esac
 fi
 kill "$pid"
 for _ in $(seq 1 100); do

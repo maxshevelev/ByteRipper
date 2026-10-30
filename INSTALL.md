@@ -77,7 +77,7 @@ It makes the install's admin token on the first run, starts the server in the
 background and waits for its socket. The first free port from 8765 is taken
 (the app's own server usually has 8765) and written to `var/port`; the console
 answers at `http://127.0.0.1:<port>/admin`, and its token is in
-`var/support/admin-token.txt`.
+`var/admin-token.txt`.
 
 Put a dump in `var/dumps` — the one folder the console may open dumps from —
 and open it in the console. The agent's tools see what the console has open.
@@ -186,6 +186,14 @@ folder the file is in, not from wherever the server was started. `idle` is a
 whole number of seconds, 0 or more; `maxDocuments` is a count, 1 or more; a
 size is a number of bytes or `"512 MiB"`. A setting of the wrong shape is
 refused with its key and the file's line.
+
+A configuration may also put the copy on the app's own folders: `support`,
+`store` and `projects` name them, and the launchers pass their own only when
+the file names none. A copy set that way serves the store and the kept
+projects the app uses, opens the documents its `documents.json` already lists,
+and listens on the same `mcp.sock` — so an agent on this Mac reaches it through
+the connection it already has. Only one server may run on those folders at a
+time: stop the app's before starting the copy's, and the other way round.
 
 ## One server, several Macs
 

@@ -26,8 +26,14 @@ else
 fi
 command -v javac >/dev/null && ok "javac: $(command -v javac)" || no "javac is missing (a JDK is needed)"
 
-if [ -S "$dir/var/support/mcp.sock" ]; then
-    ok "server socket: $dir/var/support/mcp.sock"
+source "$dir/scripts/common.sh"
+support="$(support_for "$dir/var/support")"
+tokens_file="$(tokens_file_for "$support")"
+note "configuration: $(config_file)"
+note "support: $support"
+
+if [ -S "$support/mcp.sock" ]; then
+    ok "server socket: $support/mcp.sock"
 else
     note "the server is not running (scripts/start-server.sh)"
 fi
@@ -49,10 +55,8 @@ if [ -f "$dir/var/log/server.log" ]; then
     done
 fi
 source "$dir/scripts/common.sh"
-tokens_file="$(tokens_file_for "$dir/var/support")"
-note "configuration: $(config_file)"
+note "tokens: $tokens_file"
 if [ -f "$tokens_file" ]; then
-    note "tokens: $tokens_file"
     "$dir/bin/byteripper-server" token list --tokens "$tokens_file" 2>&1 | sed 's/^/      /'
 else
     note "no tokens yet ($tokens_file); the first start makes one"

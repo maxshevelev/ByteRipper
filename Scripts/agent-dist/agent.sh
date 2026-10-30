@@ -7,18 +7,22 @@ set -euo pipefail
 dir="$(cd "$(dirname "$0")/.." && pwd)"
 "$dir/scripts/start-server.sh"
 
+source "$dir/scripts/common.sh"
+support="$(support_for "$dir/var/support")"
+socket="$support/mcp.sock"
+
 # The store's command line and the Ghidra scripts, wherever the skill's Python
 # and the server look for them.
 export BYTERIPPER_CAS="$dir/bin/byteripper-cas"
 export BYTERIPPER_GHIDRA_SCRIPTS="$dir/ghidra"
-export BYTERIPPER_SERVER_SOCKET="$dir/var/support/mcp.sock"
+export BYTERIPPER_SERVER_SOCKET="$socket"
 
 cat > "$dir/.mcp.json" <<JSON
 {
   "mcpServers": {
     "byteripper": {
       "command": "$dir/bin/byteripper-server",
-      "args": ["relay", "--mcp-socket", "$dir/var/support/mcp.sock"]
+      "args": ["relay", "--mcp-socket", "$socket"]
     }
   }
 }
