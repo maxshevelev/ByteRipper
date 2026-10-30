@@ -102,6 +102,17 @@ The tool panel answers the questions a bench asks of one dump. An agent can ask 
 
 A title and a note on a place in a file — *what these bytes are*, *what was found here* — drawn over the bytes as a dashed outline wherever the file is on screen, the note named the moment the pointer reaches its outline — not over every byte inside it, which stay readable. **Add Annotation…** on a selection or on a node of the UEFI tree makes one by hand, in green; an agent's are violet. A node inside a compressed section or an encoded LENV block is annotated in the bytes it decodes to. An annotation belongs to the file, so it comes back when the file is opened again. **Window ▸ Annotations** (or the toolbar button after **Segments**) lists all of them as cards, open files or not — the newest first, a new one tagged *New*, any card dragged to where you want it, the order kept between launches. A double click goes to the place, decompressing the way to it if it has to, and in a comparison makes the note's own pane the active one, with **UEFI Structure** moved to that file. Right-clicking a byte under annotations offers **Open Annotation “…”** for each; ⌘A selects every card, ⌘Z puts back the ones just removed, and the window's ‹ › return to the place a note was made on.
 
+## The analysis server
+
+A headless copy for the bench and for an agent that works without the app: it holds a dump, the UEFI tree and the code store, hosts the kept Ghidra projects of the modules reviewed in them, and speaks MCP to an agent — the same `uefi_`, `code_` and `ghidra_` tools the app gives one, plus the Ghidra review skill.
+
+- **It is a folder, not an installation.** `Scripts/make-agent-dist.sh` builds `dist/byteripper-analysis-<version>/` and a tarball of it: the server and the store's command line, the Ghidra scripts it compiles, the review skill, launchers, and an empty `var/` that holds everything the copy keeps — store, projects, documents, uploads, socket, logs. Unpack it anywhere; nothing in it points at this repository or at the app.
+- **It needs Ghidra and a JDK**, nothing else. `GHIDRA_HOME` names the install, or the newest `~/Projects/ghidra/ghidra_*` is used; the EDK2 headers the UEFI pass types a module with are fetched once.
+- **Starting it:** `scripts/start-server.sh` (idempotent; makes the console token on the first run) and `scripts/agent.sh`, which starts it, writes `.mcp.json` and opens a Claude Code session in the folder. The console is at `http://127.0.0.1:<port>/admin`, the port written to `var/port`; `scripts/doctor.sh` says what is missing.
+- **The server reads `~/.byteripper-server.json`** when it exists — any of its flags as a key, flags on the line still winning — with `--config` naming another file and `--no-config` reading none. Every path it keeps has its own flag, so one server on a shared bench can serve several Macs.
+
+Its README, unpacked with the folder, is the place to read for the first install.
+
 ## Standing on other people's work
 
 The formats these tools read were not worked out here. The algorithms and the reference data behind the EFI-side tools were **ported from public projects** whose authors did the hard part — years of reading firmware, writing down what is in it, and keeping that current as Intel moved — and what ByteRipper adds is a native Mac interface to their work, beside the dump and inside the editor:
