@@ -133,9 +133,11 @@ be deleted at any time; the next run rebuilds them.
 
 ## Configuration
 
-The server reads `~/.byteripper-server.json` when there is one, before any flag
-on the line — a flag still wins, so no file can stand in the way of a command
-you type. Each key is a flag without its `--`:
+The server reads **`~/.byteripper-server.json`** — a file you make in your home
+folder, by hand or with an editor — every time it starts, and reads it before
+any flag on the line. A flag still wins, so no file can stand in the way of a
+command you type. (`--config <file>` names another file, `--no-config` reads
+none.) Each key is a flag without its `--`:
 
 ```json
 {
@@ -208,6 +210,10 @@ not to do is run two servers on the same `var/`.
   type archives; `var/log/server.log` and the console's activity say so. On a
   machine with no network, copy
   `~/Library/Application Support/ByteRipper/Ghidra` from one that has it.
+- **`Permission denied` on a script or a binary** — the copy came through
+  something that does not keep the executable bit (a file taken from a web
+  view, a drive formatted without file modes). Put it back once:
+  `chmod 755 bin/* scripts/*.sh`.
 - **A token is refused** — the secret goes into the client once, and is shown
   once; `token list` says what a file holds, `token rotate` replaces a secret
   without revoking the name.

@@ -19,6 +19,10 @@ anywhere and start an agent session in it.
 ./scripts/agent.sh          # the server, then a Claude Code session here
 ```
 
+If that answers `Permission denied`, the copy lost its executable bit on the
+way here (a file taken from a web view, a drive without file modes):
+`chmod 755 bin/* scripts/*.sh` once.
+
 or, by hand:
 
 ```bash
@@ -31,6 +35,30 @@ The console is at `http://127.0.0.1:<port>/admin` — the first free port from
 8765, written to `var/port`, or `BYTERIPPER_PORT`; the token is in
 `var/support/admin-token.txt`. Open a dump from it — the dumps it may open are
 under `var/dumps` — and the agent's tools see it.
+
+## Configuration
+
+The server reads **`~/.byteripper-server.json`** — a file you make in your home
+folder — every time it starts. A flag on the command line still wins over it,
+so nothing in the file stands in the way of what you type.
+
+```json
+{
+  "ghidraHome": "~/Projects/ghidra/ghidra_12.1.2_PUBLIC",
+  "dumpRoots": ["~/Dumps"],
+  "listen": ["127.0.0.1:8765"],
+  "idle": 1800
+}
+```
+
+Every flag of `byteripper-server --help` is a key without its `--`: `support`,
+`store`, `projects`, `dumpRoots`, `ghidraHome`, `ghidraScripts`, `tokens`,
+`mcpSocket`, `listen`, `serverNames`, `idle`, `maxDocuments`, `maxOpenBytes`,
+`maxUploadBytes`. Paths are strings (`~` is expanded), lists are arrays, sizes
+are numbers or `"512 MiB"`. `--config <file>` names another file and
+`--no-config` reads none; a key the server does not know is refused with its
+name, never ignored. `INSTALL.md` has the table and an example that keeps a
+copy self-contained.
 
 ## What is where
 

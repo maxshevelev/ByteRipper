@@ -21,7 +21,7 @@ mkdir -p "$stage"/{bin,ghidra/owner,ghidra/scripts,skills/ghidra-uefi/scripts,sc
 
 cp "$repo/Packages/ByteRipperServer/.build/release/byteripper-server" "$stage/bin/"
 cp "$repo/Packages/CodeAnalysis/.build/release/byteripper-cas" "$stage/bin/"
-chmod +x "$stage"/bin/*
+chmod 755 "$stage"/bin/*
 
 # The Ghidra scripts the server compiles and runs — the layout OwnerSources
 # reads: owner/ with the owner's sources, scripts/ with the passes.
@@ -38,7 +38,7 @@ cp -R "$repo/Skills/ghidra-uefi/tests" "$stage/skills/ghidra-uefi/"
 cp "$repo/Scripts/agent-dist/"*.sh "$stage/scripts/"
 cp "$repo/Scripts/agent-dist/README.md" "$repo/Scripts/agent-dist/CLAUDE.md" "$stage/"
 cp "$repo/INSTALL.md" "$stage/"
-chmod +x "$stage"/scripts/*.sh
+chmod 755 "$stage"/scripts/*.sh
 
 ln -s ../../skills/ghidra-uefi "$stage/.claude/skills/ghidra-uefi"
 
