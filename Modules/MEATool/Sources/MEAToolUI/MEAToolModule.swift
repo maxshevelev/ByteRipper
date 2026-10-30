@@ -5,6 +5,7 @@ import MEFirmware
 import MEATool
 import MEPresentation
 import MEReads
+import PartCodec
 import ToolModuleKit
 import UEFIImage
 
@@ -180,6 +181,7 @@ struct MEAParkedState: PersistableToolSessionState {
         controller.onWillChoose = { [weak self] in self?.host.noteNavigationStep() }
         controller.onTabChanged = { [weak self] tab in self?.selectTab(tab) }
         controller.onRetry = { [weak self] in self?.reparse() }
+        controller.onOpen = { [weak self] path in self?.open(path) }
         // A copy is confirmed over the window rather than in the status row: it
         // is an answer about the whole panel, and the user is looking away from
         // the panel by then — at the place they are about to paste into. The
@@ -522,6 +524,18 @@ struct MEAParkedState: PersistableToolSessionState {
         if let path, path == MEACurator.checksumsPath(in: roots) {
             loadChecksums()
         }
+    }
+
+    /// Opens a row in a fragment panel: a copy of its bytes, or an MFS or EFS
+    /// file gathered from its chunks (`MEAParts`). A row without bytes opens
+    /// nothing.
+    ///
+    /// Public because a double-click cannot be simulated — the level the app's
+    /// tests drive.
+    // help: panel.me.open
+    public func open(_ path: [Int]) {
+        guard let node = MEATree.node(at: path, in: roots), let part = MEAParts.open(node) else { return }
+        host.openPart(named: part.name, linkedTo: part.source, codec: part.codec)
     }
 
     /// Compute the region's digests off the main actor and put them into the

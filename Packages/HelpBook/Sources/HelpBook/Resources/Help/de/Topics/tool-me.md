@@ -1,4 +1,4 @@
-@source-sha cd1226d40b551035d84158162834f337d166fa4ea6cf70609017324bbd3f433f
+@source-sha e75fd384f3816f55ae599d16240511f25855e1421040af18c44ec14a345b8fd6
 # ME Analyzer
 
 > Welche Intel-Management-Engine-Firmware das Image enthält und aus welchen Strukturen sie besteht.
@@ -19,7 +19,7 @@ Die beiden Tasten in der Registerkartenzeile kopieren die Registerkarte als Text
 
 Die decodierten Strukturen als Baum, in dem jeder Zeile tatsächliche Bytes der Region entsprechen: die [[term:fpt|Partitionstabelle]], die [[term:cpd|Code-Partitionen]] und ihre Module, die [[term:manifest|Manifeste]], das [[term:mfs|Dateisystem]] und seine Konfiguration, die [[term:oem-config|OEM-Konfiguration]] und die [[term:utok|Unlock-Token]].
 
-Die Auswahl einer Zeile scrollt den Dump zu diesen Bytes und umrandet sie. Eine Datei des [[term:mfs|MFS]]- oder [[term:efs|EFS]]-Volumes liegt nicht an einem Stück: Ihre Zeile umrandet jeden Chunk der Datei, wo immer das Volume ihn abgelegt hat, und der Dump springt zu dem Chunk, mit dem die Datei beginnt (siehe [[term:zone|Zone]]). Die Detailliste unter dem Baum enthält die Felder des Headers dieser Zeile so, wie sie in der Datei stehen.
+Die Auswahl einer Zeile scrollt den Dump zu diesen Bytes und umrandet sie. Eine Datei des [[term:mfs|MFS]]- oder [[term:efs|EFS]]-Volumes liegt nicht an einem Stück: Ihre Zeile umrandet jeden Chunk der Datei, wo immer das Volume ihn abgelegt hat, und der Dump springt zu dem Chunk, mit dem die Datei beginnt (siehe [[term:zone|Zone]]). Eine Datei ohne Daten erscheint grau, wie eine leere Partition. Ein Doppelklick auf eine Zeile öffnet ihre Bytes in einem [[topic:fragments|Fragmentbereich]]; eine Datei des Volumes öffnet sich als ihr aus den Chunks zusammengesetzter Inhalt, mit dem Abzeichen **Zusammengesetzt**, und wird beim Zurückschreiben an dieselben Stellen gelegt. Die Detailliste unter dem Baum enthält die Felder des Headers dieser Zeile so, wie sie in der Datei stehen.
 
 ## Was das Werkzeug meldet
 

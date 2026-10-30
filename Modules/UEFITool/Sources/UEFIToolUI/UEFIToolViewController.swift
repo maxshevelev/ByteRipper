@@ -81,6 +81,9 @@ import UEFITool
     /// resolve against different trees and the session keeps the two focuses
     /// apart too.
     var onSelectME: (([Int]?) -> Void)?
+    /// An ME row was double-clicked: open it in a fragment panel, by its path
+    /// in the ME tree.
+    var onOpenME: (([Int]) -> Void)?
     /// The ME region node was opened: run the ME analysis (reusing the pane's
     /// cache) and open the row on the sub-tree it presents. The node is not
     /// expandable in the UEFI tree, so this is the only thing that opens it.
@@ -3118,7 +3121,13 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     /// A double click: the node's content opens as a panel. A row that is no
     /// UEFI node — an ME row, a Loading row — has none to open.
     private func openContent(atRow row: Int) {
-        guard row >= 0, let item = outline.item(atRow: row), let node = node(of: item) else { return }
+        guard row >= 0, let item = outline.item(atRow: row) else { return }
+        // An ME row opens through the ME tree, by its path there.
+        if let meRow = item as? MEOutlineRow {
+            onOpenME?(meRow.path)
+            return
+        }
+        guard let node = node(of: item) else { return }
         onOpenContent?(node.id)
     }
 

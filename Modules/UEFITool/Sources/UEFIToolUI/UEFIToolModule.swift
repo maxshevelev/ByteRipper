@@ -380,6 +380,7 @@ private struct ChecksumPass: Sendable {
         controller.onRevealMatch = { [weak self] range in self?.host.reveal(range, select: true) }
         controller.onOpenMatch = { [weak self] match in self?.openContentMatch(match) }
         controller.onSelectME = { [weak self] path in self?.selectME(path) }
+        controller.onOpenME = { [weak self] path in self?.openME(path) }
         controller.onOpenMERegion = { [weak self] id in self?.openMERegion(id) }
         controller.onMERegionLoading = { [weak self] id, loading in
             self?.meRegionLoading(id, loading: loading)
@@ -1036,6 +1037,18 @@ private struct ChecksumPass: Sendable {
         meFocus = path
         focus = nil
         followSelection { [weak self] in self?.loadChecksumsIfShown(path) }
+    }
+
+    /// A double-click on an ME row opens it in a fragment panel, as the ME
+    /// Analyzer does (`MEAParts`): a copy of its bytes, or an MFS or EFS file
+    /// gathered from its chunks. The ME region is the file's own bytes, so
+    /// it opens as an image like any other part of the file.
+    ///
+    /// Public because a double-click cannot be simulated.
+    // help: panel.uefi.open-me
+    public func openME(_ path: [Int]) {
+        guard let node = MEATree.node(at: path, in: meRoots), let part = MEAParts.open(node) else { return }
+        openPart(named: part.name, linkedTo: part.source, layout: .image, codec: part.codec)
     }
 
     /// The ME half of `showUEFIFocus`: a row the panel picked rather than the

@@ -27,6 +27,9 @@ import ToolModuleKit
     func focusTree() {
         view.window?.makeFirstResponder(outline)
     }
+    /// A row was double-clicked: open it in a fragment panel. The value is the
+    /// row's tree path.
+    var onOpen: (([Int]) -> Void)?
     /// The user picked a tab (0 = Summary, 1 = Full Info).
     var onTabChanged: ((Int) -> Void)?
     /// The status row's Try Again was pressed, after a failed analysis.
@@ -490,6 +493,8 @@ import ToolModuleKit
         outline.allowsColumnReordering = false
         outline.dataSource = self
         outline.delegate = self
+        outline.target = self
+        outline.doubleAction = #selector(rowDoubleClicked)
 
         let name = NSTableColumn(identifier: Column.name)
         name.title = L("Name")
@@ -1161,6 +1166,15 @@ extension MEAToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
         let node = row >= 0 ? outline.item(atRow: row) as? MEANode : nil
         if outline.isHandlingClick { onWillChoose?() }
         onSelect?(node?.path)
+    }
+
+    /// A double-click opens the row's bytes in a fragment panel, as a
+    /// double-click on a UEFI Structure row does. A group row expands and
+    /// collapses as it always has, and opens nothing.
+    @objc private func rowDoubleClicked() {
+        let row = outline.clickedRow
+        guard row >= 0, let node = outline.item(atRow: row) as? MEANode else { return }
+        onOpen?(node.path)
     }
 }
 

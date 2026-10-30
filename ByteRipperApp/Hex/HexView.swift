@@ -33,6 +33,10 @@ struct HexZoneSpan: Equatable {
     let isFocused: Bool
     /// For a note: the person's rather than the agent's, drawn in its hue.
     var byPerson = false
+    /// Which stretch of a scattered zone this is, from 1 in the owner's order
+    /// — drawn as a badge on the stretch's first corner. Nil for a zone of
+    /// one stretch.
+    var piece: Int? = nil
 }
 
 /// Supplies the bytes and selection the hex view renders (§6).
@@ -1043,6 +1047,7 @@ final class HexView: NSView {
         // visible range rather than per row, the way the mirror contour is,
         // since a zone is one shape however many rows it covers.
         drawZoneContours(layout: layout, fileSize: fileSize, rows: rows)
+        drawZonePieceBadges(layout: layout, fileSize: fileSize, rows: rows)
         // An agent's marks over the zones: what it is pointing at right now
         // is the thing the reader is asked to look at.
         drawAgentMarkContours(layout: layout, fileSize: fileSize, rows: rows)
@@ -2198,6 +2203,47 @@ final class HexView: NSView {
         }
     }
 
+    /// The number of each stretch of a scattered zone — an ME file's chunks —
+    /// on the stretch's top-left corner, in the outline's own hue: the order
+    /// the file is read in, which is not the order of the addresses (#31).
+    ///
+    /// Over the outline, centred on its corner, so the most of it lies in the
+    /// gaps beside the first byte and the row above it. Only for a stretch
+    /// whose first row is drawn: the corner is where it begins.
+    private func drawZonePieceBadges(layout: HexLayout, fileSize: UInt64, rows: Range<Int>) {
+        guard let dataSource, !rows.isEmpty, fileSize > 0 else { return }
+        // One row further down too: a badge reaches half a row above its
+        // stretch, so repainting the row above must draw it again.
+        let badgeRows = rows.lowerBound..<(rows.upperBound + 1)
+        let lower = UInt64(badgeRows.lowerBound) * UInt64(HexLayout.bytesPerRow)
+        let upper = UInt64(badgeRows.upperBound) * UInt64(HexLayout.bytesPerRow)
+        let spans = dataSource.hexZoneSpans(in: lower..<upper)
+        guard spans.contains(where: { $0.piece != nil }) else { return }
+        let font = NSFont.monospacedDigitSystemFont(ofSize: Self.zonePieceFontSize, weight: .semibold)
+        let height = ceil(font.ascender - font.descender) + 1
+        for span in spans.sorted(by: { !$0.isFocused && $1.isFocused }) {
+            guard let piece = span.piece, span.range.lowerBound < fileSize else { continue }
+            let row = Int(span.range.lowerBound / UInt64(HexLayout.bytesPerRow))
+            guard badgeRows.contains(row) else { continue }
+            let column = Int(span.range.lowerBound % UInt64(HexLayout.bytesPerRow))
+            // The outline's own corner (`contour(of:)`): padded out at a word
+            // boundary, flush otherwise.
+            let x = layout.hexByteX(column: column)
+                - (column % layout.wordSize == 0 ? Self.mirrorContourPadding : 0)
+            let top = layout.rowFrame(row: row).minY
+            let text = NSAttributedString(string: String(piece), attributes: [
+                .font: font, .foregroundColor: NSColor.black,
+            ])
+            let width = max(height, ceil(text.size().width) + 6)
+            // Centred on the corner: half of it over the gap before the byte.
+            let badge = NSRect(x: x - width / 2, y: top - height / 2, width: width, height: height)
+            (span.isFocused ? HexTheme.zoneFrame : HexTheme.zoneFrameInactive).setFill()
+            NSBezierPath(roundedRect: badge, xRadius: height / 2, yRadius: height / 2).fill()
+            text.draw(at: NSPoint(x: badge.midX - text.size().width / 2,
+                                  y: badge.midY - text.size().height / 2))
+        }
+    }
+
     /// The wash inside the focused zone, in the outline's own hue.
     ///
     /// Only the focused one is filled. A map is a dozen regions and they nest;
@@ -2347,6 +2393,9 @@ final class HexView: NSView {
     /// see a region's extent and far too little to compete with a difference or
     /// a selection showing through it.
     static let zoneFillAlpha: CGFloat = 0.10
+    /// The size of the number on a scattered zone's stretch: small enough to
+    /// sit on the outline's corner without hiding the byte it starts at.
+    static let zonePieceFontSize: CGFloat = 9
 
     private func drawMirrorContour() {
         drawContours(mirrorContours())

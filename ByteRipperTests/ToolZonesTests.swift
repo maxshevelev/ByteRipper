@@ -113,6 +113,25 @@ final class ToolZonesTests: XCTestCase {
         XCTAssertEqual(controller.windowModel.pane1.hexZoneSpans(in: 0x00..<0x100).map(\.name), ["A"])
     }
 
+    /// A scattered zone reaches the dump as its stretches, each numbered in the
+    /// owner's order for its badge; a zone of one stretch carries no number.
+    func testAScatteredZoneReachesTheDumpAsNumberedStretches() throws {
+        let (controller, _) = try makeController()
+        let host = try host(controller)
+        host.publish(ZoneMap(zones: [
+            Zone(id: "file", name: "File", ranges: [0x80..<0xA0, 0x20..<0x40]),
+            Zone(id: "one", name: "One", range: 0x100..<0x110),
+        ], focus: "file"))
+
+        let spans = controller.windowModel.pane1.hexZoneSpans(in: 0..<0x200)
+
+        XCTAssertEqual(spans.map(\.range), [0x80..<0xA0, 0x20..<0x40, 0x100..<0x110])
+        XCTAssertEqual(spans.map(\.piece), [1, 2, nil])
+        XCTAssertEqual(spans.map(\.isFocused), [true, true, false])
+        XCTAssertTrue(controller.windowModel.pane1.hexZoneSpans(in: 0x40..<0x80).isEmpty,
+                      "nothing between the stretches")
+    }
+
     /// Nothing else draws zones, so when the session goes the dump must stop
     /// showing a tool-module's reading of a file after that tool-module has gone.
     func testEndingTheSessionTakesTheMapOffTheDump() throws {

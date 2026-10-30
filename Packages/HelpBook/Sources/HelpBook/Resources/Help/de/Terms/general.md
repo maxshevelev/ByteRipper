@@ -1,4 +1,4 @@
-@source-sha 65c3f7f58ee0798f4af65e68bc34c03cc3b968c24c6bd2026e480d191f815ec7
+@source-sha 175c67b8d010962315e2b518c252e8b04e07d106a1241c09f2d96f9792c84990
 @term dump
 @name Dump
 @short Der Inhalt eines Chips, in eine Datei ausgelesen.
@@ -73,7 +73,7 @@ Wählen Sie eine Zeile in einem Werkzeugbereich, veröffentlicht er deren Byte-B
 
 Eine Zone ist ein Umriss und keine Hintergrundfüllung, verdeckt also nie einen Unterschied oder eine ungesicherte Änderung darunter.
 
-Nicht jede Struktur liegt an einem Stück. Eine Datei des ME-[[term:mfs|Dateisystems]] ist eine Kette kleiner Chunks, die über das Volume verteilt sind; auf jeden Chunk folgt seine Prüfsumme. Die Zone einer solchen Datei umrandet jeden Chunk und nichts dazwischen, und der Dump springt zu dem Chunk, mit dem die Datei beginnt – das muss nicht der an der niedrigsten Adresse sein. **Zone sichern unter…** schreibt die Chunks in der Reihenfolge, in der die Datei gelesen wird, hintereinander, also den Inhalt der Datei; **Zone öffnen** öffnet dieselben Bytes als Fragment, und das Zurückschreiben in die Quelle legt sie an dieselben Stellen zurück. **Zone auswählen** wählt den Chunk aus, auf den mit der rechten Maustaste geklickt wurde.
+Nicht jede Struktur liegt an einem Stück. Eine Datei des ME-[[term:mfs|Dateisystems]] ist eine Kette kleiner Chunks, die über das Volume verteilt sind; auf jeden Chunk folgt seine Prüfsumme. Die Zone einer solchen Datei umrandet jeden Chunk und nichts dazwischen, jeden mit seiner Nummer in der Lesereihenfolge der Datei an der oberen linken Ecke, und der Dump springt zu dem Chunk, mit dem die Datei beginnt – das muss nicht der an der niedrigsten Adresse sein. **Zone sichern unter…** schreibt die Chunks in der Reihenfolge, in der die Datei gelesen wird, hintereinander, also den Inhalt der Datei; **Zone öffnen** öffnet dieselben Bytes als Fragment, und das Zurückschreiben in die Quelle legt sie an dieselben Stellen zurück. **Zone auswählen** wählt den Chunk aus, auf den mit der rechten Maustaste geklickt wurde.
 
 @see topic:tools-overview
 

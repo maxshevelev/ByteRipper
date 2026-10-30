@@ -45,6 +45,8 @@ let package = Package(
         .package(path: "../../Packages/MEFirmware"),
         .package(path: "../../Packages/MEPresentation"),
         .package(path: "../../Packages/MEReads"),
+        // The codec a row's fragment opens with (`MEAParts`).
+        .package(path: "../../Packages/PartCodec"),
         .package(path: "../../Packages/UEFIImage"),
         // What the module answers an agent with (`MEAAgentQueries`,
         // Design/AGENT_PLAN.md).
@@ -77,6 +79,7 @@ let package = Package(
             .product(name: "MEReads", package: "MEReads"),
             .product(name: "ALSplitView", package: "ALSplitView"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
+            .product(name: "PartCodec", package: "PartCodec"),
             .product(name: "UEFIImage", package: "UEFIImage")
         ]),
         .testTarget(name: "MEAToolTests", dependencies: [

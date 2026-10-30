@@ -517,7 +517,9 @@ public enum MEACurator {
                        subtitle: mfsFileSubtitle(file, named: record != nil),
                        extents: file.extents.map(addresses),
                        fields: fields, children: children,
-                       isEmptySection: file.size == 0)
+                       // Empty by what the file holds, as the subtitle says:
+                       // a chain carrying only its Integrity table is no data.
+                       isEmptySection: (file.contentSize ?? file.size) == 0)
     }
 
     /// A file's extents as the file addresses a node speaks in.
@@ -557,7 +559,8 @@ public enum MEACurator {
         return MEANode(path: [], title: title,
                        subtitle: "\(kind) #\(record.fileIndex)",
                        fields: fields,
-                       children: record.children.map { homeRow($0) })
+                       children: record.children.map { homeRow($0) },
+                       isEmptySection: !record.isFolder && record.size == 0)
     }
 
     /// The image's *final* Chipset Initialization Tables, as a root of their

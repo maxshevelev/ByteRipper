@@ -1440,11 +1440,12 @@ final class PaneViewModel: HexViewDataSource {
         // A scattered zone is drawn as its stretches, each outlined in the
         // zone's colour, and nothing between them (#31).
         return zones.zones.flatMap { zone in
-            zone.ranges.compactMap { stretch in
+            zone.ranges.enumerated().compactMap { index, stretch in
                 guard stretch.lowerBound < range.upperBound,
                       range.lowerBound < stretch.upperBound else { return nil }
                 return HexZoneSpan(range: stretch, name: zone.name,
-                                   isFocused: zone.id == zones.focus)
+                                   isFocused: zone.id == zones.focus,
+                                   piece: zone.isScattered ? index + 1 : nil)
             }
         }
     }
