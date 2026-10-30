@@ -165,6 +165,22 @@ final class MinimapZoneTests: XCTestCase {
                        "exactly the focused zone is drawn as focused")
     }
 
+    /// A scattered zone — an ME file's chunks — is a bracket per stretch, never
+    /// one over the span, and each stretch nests in the zone around it (#31).
+    func testAScatteredZoneIsABracketPerStretch() {
+        let map = ZoneMap(zones: [
+            zone("volume", "Volume", 0..<0x400),
+            Zone(id: "file", name: "File", ranges: [0x200..<0x240, 0x100..<0x140]),
+        ], focus: "file").normalized(contentSize: 0x400)
+        let brackets = MinimapView.brackets(for: map)
+
+        XCTAssertEqual(brackets.map(\.id), ["volume", "file", "file"])
+        XCTAssertEqual(brackets.map(\.range), [0..<0x400, 0x100..<0x140, 0x200..<0x240],
+                       "the stretches, in address order, and nothing between them")
+        XCTAssertEqual(brackets.map(\.lane), [0, 1, 1])
+        XCTAssertEqual(brackets.filter(\.isFocused).count, 2, "every stretch is the focused zone")
+    }
+
     // MARK: - Layout
 
     /// No tool-module has anything to say about most files, so the gutter is

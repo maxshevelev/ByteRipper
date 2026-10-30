@@ -220,6 +220,54 @@ public struct CopyPartCodec: PartCodec {
     }
 }
 
+/// A thing the file holds in scattered stretches — an MFS file's chunks —
+/// read as one: the stretches' bytes one after another, in the owner's order.
+/// The source is their span; the bytes between them (a chunk's CRC, other
+/// files' chunks) are not the part's and go back untouched.
+public struct GatherPartCodec: PartCodec {
+    /// The stretches, absolute in the parent, in the owner's order; each inside
+    /// the source.
+    public var stretches: [Range<UInt64>]
+
+    public init(stretches: [Range<UInt64>]) {
+        self.stretches = stretches
+    }
+
+    public func decode(_ parent: PartParent) throws -> [UInt8] {
+        var bytes: [UInt8] = []
+        bytes.reserveCapacity(stretches.reduce(0) { $0 + $1.count })
+        for stretch in stretches { bytes += try parent.content.read(stretch) }
+        return bytes
+    }
+
+    /// The span as it is now, with the part's bytes laid back over the
+    /// stretches in order — a run as long as the source, which keeps its place.
+    public func encode(_ part: [UInt8], into parent: PartParent) throws -> PartUpdate {
+        let length = stretches.reduce(0) { $0 + $1.count }
+        guard part.count == length else {
+            throw PartRefusal.lengthChanged(part: parent.partName, parent: parent.name,
+                                            source: length, now: part.count)
+        }
+        var span = try parent.sourceBytes()
+        var read = 0
+        for stretch in stretches {
+            let at = Int(stretch.lowerBound - parent.source.lowerBound)
+            span.replaceSubrange(at..<at + stretch.count, with: part[read..<read + stretch.count])
+            read += stretch.count
+        }
+        return .overwriting(parent.source, with: span)
+    }
+
+    /// Byte `n` of the part is not byte `n` of the span once a stretch is
+    /// skipped over.
+    public var keepsOffsets: Bool { false }
+
+    public var badge: PartBadge? {
+        PartBadge(L("Assembled", context: "part badge"),
+                  explanation: L("These bytes are gathered from several places of the file, in the order the file is read. Update in Parent writes them back to the same places and leaves the bytes between them as they are."))
+    }
+}
+
 /// Bytes worked out of the source that nothing here can turn back into it —
 /// a variable's text unpacked from a format there is no encoder for. They open
 /// as given and are refused on the way back, with the reason.

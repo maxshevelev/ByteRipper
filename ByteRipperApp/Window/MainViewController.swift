@@ -3346,7 +3346,7 @@ final class MainViewController: NSViewController {
         // — the same rule the strip's items follow with their labels (§21.3). An
         // unnamed zone is named by where it starts, which is all there is.
         let named = zone.name.isEmpty
-            ? L("at %1$@", zone.range.lowerBound.bareAddress)
+            ? L("at %1$@", zone.start.bareAddress)
             : "“\(zone.name)”"
 
         func item(_ title: String, _ action: Selector) -> NSMenuItem {
@@ -3375,13 +3375,14 @@ final class MainViewController: NSViewController {
     /// tool-module that published it is told, which is the same pair of acts the
     /// dump's own zone menu performs (`selectZone`) — the bytes are the pane's
     /// to select, and what the zone *stands for* only the tool-module knows.
+    /// A scattered zone's first stretch: a selection is one stretch.
     @objc private func minimapMenuSelectZone(_ sender: NSMenuItem) {
         guard let target = sender.representedObject as? ZoneMenuTarget,
               let pane = target.pane, pane.isOpen,
               let zone = pane.zones.zones.first(where: { $0.id == target.zoneID }) else { return }
         recordJump(in: pane)
-        pane.select(range: zone.range)
-        filePaneView(for: pane)?.revealOffsetCentered(zone.range.lowerBound)
+        pane.select(range: zone.ranges[0])
+        filePaneView(for: pane)?.revealOffsetCentered(zone.start)
         tools(reading: pane).zoneSelected(zone.id, in: pane)
     }
 
@@ -4824,7 +4825,7 @@ final class MainViewController: NSViewController {
         func item(_ title: String, _ action: Selector, _ zone: Zone) -> NSMenuItem {
             let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
             item.target = self
-            item.representedObject = ZoneContextTarget(pane: pane, zone: zone)
+            item.representedObject = ZoneContextTarget(pane: pane, zone: zone, offset: offset)
             return item
         }
         // One zone is a single named item — there is nothing to choose between —
@@ -4892,10 +4893,11 @@ final class MainViewController: NSViewController {
 
     /// Selects a zone's bytes, and tells the tool-module that published it —
     /// the panel is where the zone means something, and the row it stands for
-    /// should come to the front there.
+    /// should come to the front there. A selection is one stretch, so for a
+    /// scattered zone it is the stretch the menu was opened on.
     @objc func selectZone(_ sender: NSMenuItem) {
         guard let target = sender.representedObject as? ZoneContextTarget else { return }
-        target.pane.select(range: target.zone.range)
+        target.pane.select(range: target.zone.stretch(containing: target.offset) ?? target.zone.ranges[0])
         tools(reading: target.pane).zoneSelected(target.zone.id, in: target.pane)
     }
 
@@ -5338,14 +5340,16 @@ final class MainViewController: NSViewController {
     /// file the user names. The same read-only export as Save Selection as…: the
     /// pane's source is never written, and the bytes saved are what is on
     /// screen, edits and all. The name leads with the zone's own name — that is
-    /// what the user is looking for — over the offsets.
+    /// what the user is looking for — over the offsets. A scattered zone is
+    /// saved as its stretches one after another, in the owner's order — for a
+    /// file, its content — never as the span with the bytes between them.
     @objc func saveZone(_ sender: NSMenuItem) {
         guard let target = sender.representedObject as? ZoneContextTarget, target.pane.isOpen else { return }
         let zone = target.zone
-        saveRange(zone.range, of: target.pane,
-                  suggestedName: zoneExportName(fileName: target.pane.status.fileName,
-                                                zoneName: zone.name, range: zone.range),
-                  purpose: L("the zone"))
+        saveRanges(zone.ranges, of: target.pane,
+                   suggestedName: zoneExportName(fileName: target.pane.status.fileName,
+                                                 zoneName: zone.name, range: zone.range),
+                   purpose: L("the zone"))
     }
 
     /// Takes a zone's bytes out into a panel of their own.
@@ -5367,6 +5371,17 @@ final class MainViewController: NSViewController {
     /// copy is, wherever the reader asked from.
     private func openZone(_ zone: Zone, of pane: PaneViewModel) {
         guard pane.isOpen, pane.document != nil else { return }
+        // A scattered zone opens as its stretches gathered in the owner's
+        // order — for a file, its content — and goes back to the same places.
+        // It is nothing the UEFI tree lays out, so it goes back as it is.
+        if zone.isScattered {
+            let name = zone.name.isEmpty
+                ? "\(zone.start.bareAddress)-\(zone.range.upperBound.bareAddress)"
+                : zone.name
+            openPart(named: name, from: pane, source: zone.range,
+                     codec: GatherPartCodec(stretches: zone.ranges))
+            return
+        }
         // Linked back to the zone, and told what the bytes are when the file's
         // UEFI tree knows (`Design/UEFI/UPDATE_IN_PARENT.md` §2.1). A zone that
         // is a volume, a file or a section goes back through the rebuild
@@ -5389,10 +5404,19 @@ final class MainViewController: NSViewController {
     /// names the range in the error strings ("the selection", "the zone").
     private func saveRange(_ range: Range<UInt64>, of pane: PaneViewModel,
                            suggestedName: String, purpose: String) {
+        saveRanges([range], of: pane, suggestedName: suggestedName, purpose: purpose)
+    }
+
+    /// `saveRange` for the stretches of a scattered zone: their bytes one after
+    /// another, in the order given.
+    private func saveRanges(_ ranges: [Range<UInt64>], of pane: PaneViewModel,
+                            suggestedName: String, purpose: String) {
         guard let doc = pane.document else { return }
-        let bytes: [UInt8]
+        var bytes: [UInt8] = []
         do {
-            bytes = try doc.read(at: range.lowerBound, length: Int(range.count))
+            for range in ranges {
+                bytes += try doc.read(at: range.lowerBound, length: Int(range.count))
+            }
         } catch {
             presentFileError(L("Could not read %1$@.", purpose), error, url: doc.url)
             return
@@ -8381,10 +8405,13 @@ private func pasteboardBytes() throws -> [UInt8] {
 private final class ZoneContextTarget: NSObject {
     let pane: PaneViewModel
     let zone: Zone
+    /// The byte the menu was opened on — which stretch of a scattered zone.
+    let offset: UInt64
 
-    init(pane: PaneViewModel, zone: Zone) {
+    init(pane: PaneViewModel, zone: Zone, offset: UInt64) {
         self.pane = pane
         self.zone = zone
+        self.offset = offset
     }
 }
 

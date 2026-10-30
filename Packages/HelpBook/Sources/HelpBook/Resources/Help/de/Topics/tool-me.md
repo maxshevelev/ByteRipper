@@ -1,4 +1,4 @@
-@source-sha e8541a923fd3e193afa375c49e8e5b7c0cccd10d9bd4f255a638860cf94da3a7
+@source-sha cd1226d40b551035d84158162834f337d166fa4ea6cf70609017324bbd3f433f
 # ME Analyzer
 
 > Welche Intel-Management-Engine-Firmware das Image enthält und aus welchen Strukturen sie besteht.
@@ -19,7 +19,7 @@ Die beiden Tasten in der Registerkartenzeile kopieren die Registerkarte als Text
 
 Die decodierten Strukturen als Baum, in dem jeder Zeile tatsächliche Bytes der Region entsprechen: die [[term:fpt|Partitionstabelle]], die [[term:cpd|Code-Partitionen]] und ihre Module, die [[term:manifest|Manifeste]], das [[term:mfs|Dateisystem]] und seine Konfiguration, die [[term:oem-config|OEM-Konfiguration]] und die [[term:utok|Unlock-Token]].
 
-Die Auswahl einer Zeile scrollt den Dump zu diesen Bytes und umrandet sie. Die Detailliste unter dem Baum enthält die Felder des Headers dieser Zeile so, wie sie in der Datei stehen.
+Die Auswahl einer Zeile scrollt den Dump zu diesen Bytes und umrandet sie. Eine Datei des [[term:mfs|MFS]]- oder [[term:efs|EFS]]-Volumes liegt nicht an einem Stück: Ihre Zeile umrandet jeden Chunk der Datei, wo immer das Volume ihn abgelegt hat, und der Dump springt zu dem Chunk, mit dem die Datei beginnt (siehe [[term:zone|Zone]]). Die Detailliste unter dem Baum enthält die Felder des Headers dieser Zeile so, wie sie in der Datei stehen.
 
 ## Was das Werkzeug meldet
 

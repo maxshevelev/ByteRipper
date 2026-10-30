@@ -20,7 +20,7 @@ The two buttons in the tab row copy the tab as text or as an image of the panel.
 
 The structures the analysis decoded, as a tree in which every row corresponds to actual bytes of the region: the [[term:fpt|partition table]], the [[term:cpd|code partitions]] and their modules, the [[term:manifest|manifests]], the [[term:mfs|file system]] and its configuration, the [[term:oem-config|OEM configuration]] and the [[term:utok|unlock tokens]].
 
-Selecting a row scrolls the dump to those bytes and outlines them. The detail list under the tree holds the fields of that row's header as they are recorded in the file.
+Selecting a row scrolls the dump to those bytes and outlines them. A file of the [[term:mfs|MFS]] or [[term:efs|EFS]] volume is not stored in one piece: its row outlines every chunk of the file wherever the volume put it, and the dump goes to the chunk the file begins with (see [[term:zone|zone]]). The detail list under the tree holds the fields of that row's header as they are recorded in the file.
 
 ## What the tool reports
 

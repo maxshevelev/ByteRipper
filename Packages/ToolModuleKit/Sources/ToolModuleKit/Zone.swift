@@ -22,18 +22,54 @@ public struct Zone: Equatable, Identifiable, Sendable {
     /// What the dump calls it. May be empty — a region worth showing is worth
     /// showing even before it has a name.
     public var name: String
-    /// Half-open `[start, end)`, like every other byte range in this project.
-    public var range: Range<UInt64>
+    /// The stretches of the file the zone is, half-open `[start, end)` like
+    /// every other byte range in this project — one for almost everything a
+    /// panel points at, several for a thing whose bytes the firmware scattered:
+    /// an MFS file is a chain of chunks spread over the volume's pages.
+    ///
+    /// In the owner's order — for a file, the order its bytes are read in,
+    /// which is not address order: wear levelling puts a later chunk before an
+    /// earlier one. Disjoint. What draws them sorts a copy; what reads the
+    /// zone's bytes reads them in this order.
+    public var ranges: [Range<UInt64>]
     /// Reserved. The uses are real — protected by Boot Guard, padding, an empty
     /// slot, a region open for editing (issue #10) — and each of them
     /// wants a tool-module that has something to say first.
     public var kind: ZoneKind
 
     public init(id: String, name: String, range: Range<UInt64>, kind: ZoneKind = .plain) {
+        self.init(id: id, name: name, ranges: [range], kind: kind)
+    }
+
+    /// A zone of several stretches, in the owner's order (`ranges`).
+    public init(id: String, name: String, ranges: [Range<UInt64>], kind: ZoneKind = .plain) {
         self.id = id
         self.name = name
-        self.range = range
+        self.ranges = ranges
         self.kind = kind
+    }
+
+    /// The zone's one stretch, or the span from its lowest start to its
+    /// highest end when it has several — which claims the bytes between them
+    /// too, so it orders and nests zones and is never read as the zone's bytes.
+    public var range: Range<UInt64> {
+        guard let first = ranges.first else { return 0..<0 }
+        if ranges.count == 1 { return first }
+        let lower = ranges.lazy.map(\.lowerBound).min() ?? first.lowerBound
+        let upper = ranges.lazy.map(\.upperBound).max() ?? first.upperBound
+        return lower..<upper
+    }
+
+    /// Where the zone begins for a reader: the first byte of its first stretch
+    /// in the owner's order — where a reveal or a focus takes the dump.
+    public var start: UInt64 { ranges.first?.lowerBound ?? 0 }
+
+    /// True when the zone is more than one stretch.
+    public var isScattered: Bool { ranges.count > 1 }
+
+    /// The stretch `offset` lies in, nil for a byte between two stretches.
+    public func stretch(containing offset: UInt64) -> Range<UInt64>? {
+        ranges.first { $0.contains(offset) }
     }
 }
 
@@ -70,12 +106,13 @@ public struct ZoneMap: Equatable, Sendable {
     /// re-read behind, and something asks to draw in between. So this is a
     /// repair rather than a rejection —
     ///
-    /// - a zone reaching past the end is **clamped**, because the part of it
+    /// - a stretch reaching past the end is **clamped**, because the part of it
     ///   that is still in the file is still worth drawing;
-    /// - a zone starting at or past the end is **dropped**, since nothing of it
-    ///   is left;
-    /// - an empty range is dropped: a zone is a stretch, and a stretch of no
+    /// - a stretch starting at or past the end is **dropped**, since nothing of
+    ///   it is left;
+    /// - an empty stretch is dropped: a zone is bytes, and a stretch of no
     ///   bytes is a mark, which this app already has in bookmarks (§20);
+    /// - a zone left with no stretch is dropped;
     /// - a repeated id is dropped after its first use, so the focus names one
     ///   zone rather than an argument;
     /// - a focus naming nothing that survived becomes `nil`.
@@ -86,19 +123,24 @@ public struct ZoneMap: Equatable, Sendable {
     ///
     /// The order is the drawing order: by start, and for a shared start the
     /// longer range first, so a parent is drawn before the children that sit
-    /// inside it. Ties beyond that fall back to the id, so the result is the
-    /// same map whatever order it arrived in.
+    /// inside it — a scattered zone by its span (`Zone.range`), its stretches
+    /// keeping the owner's order. Ties beyond that fall back to the id, so the
+    /// result is the same map whatever order it arrived in.
     public func normalized(contentSize: UInt64) -> ZoneMap {
         var seen = Set<Zone.ID>()
         var kept: [Zone] = []
         kept.reserveCapacity(zones.count)
 
         for zone in zones {
-            guard zone.range.lowerBound < zone.range.upperBound else { continue }
-            guard zone.range.lowerBound < contentSize else { continue }
+            let stretches = zone.ranges.compactMap { stretch -> Range<UInt64>? in
+                guard stretch.lowerBound < stretch.upperBound,
+                      stretch.lowerBound < contentSize else { return nil }
+                return stretch.lowerBound..<min(stretch.upperBound, contentSize)
+            }
+            guard !stretches.isEmpty else { continue }
             guard seen.insert(zone.id).inserted else { continue }
             var clamped = zone
-            clamped.range = zone.range.lowerBound..<min(zone.range.upperBound, contentSize)
+            clamped.ranges = stretches
             kept.append(clamped)
         }
 
@@ -117,8 +159,10 @@ public struct ZoneMap: Equatable, Sendable {
     }
 
     /// The zones covering `offset`, outermost first — what a click in the dump
-    /// resolves to once the host asks that question (stage 5).
+    /// resolves to once the host asks that question (stage 5). By the
+    /// stretches, not the span: the gap between two chunks of a file is not
+    /// the file.
     public func zones(containing offset: UInt64) -> [Zone] {
-        zones.filter { $0.range.contains(offset) }
+        zones.filter { $0.stretch(containing: offset) != nil }
     }
 }

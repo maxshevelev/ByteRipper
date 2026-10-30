@@ -1503,6 +1503,8 @@
 "part badge|Read-only" = "Только чтение";
 "part badge|Structure" = "Структура";
 "part badge|Plain" = "Без кодирования";
+"part badge|Assembled" = "Собран";
+"These bytes are gathered from several places of the file, in the order the file is read. Update in Parent writes them back to the same places and leaves the bytes between them as they are." = "Эти байты собраны из нескольких мест файла в том порядке, в котором файл читается. «Записать в исходный файл» возвращает их на те же места; байты между ними не меняются.";
 "%1$@ (Valid for the body encoded again)" = "%1$@ (сходится для закодированного блока)";
 "LENV block" = "Блок LENV";
 "Key header" = "Заголовок ключа";

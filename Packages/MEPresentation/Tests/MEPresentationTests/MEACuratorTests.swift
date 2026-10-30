@@ -768,6 +768,26 @@ final class MEACuratorTests: XCTestCase {
         XCTAssertTrue(MEAZones.build(focus: roots[0]).zones.isEmpty)
     }
 
+    /// An MFS file's row zones its chunks wherever the volume put them, as one
+    /// zone in the file's order — not the span from the first to the last.
+    func testAFileRowZonesItsExtentsInTheFilesOrder() {
+        let file = MEANode(path: [2, 0, 5], title: "/home/mctp/smt2_devices", subtitle: "",
+                           extents: [0x9000..<0x9040, 0x8000..<0x8040, 0xA000..<0xA010],
+                           fields: [])
+
+        let map = MEAZones.build(focus: file)
+
+        XCTAssertEqual(map.zones.count, 1)
+        XCTAssertEqual(map.focus, "2/0/5")
+        XCTAssertEqual(map.zones[0].name, "/home/mctp/smt2_devices")
+        XCTAssertEqual(map.zones[0].ranges, [0x9000..<0x9040, 0x8000..<0x8040, 0xA000..<0xA010])
+        XCTAssertEqual(map.zones[0].start, 0x9000, "the dump goes to where the file begins")
+
+        // An empty file has nothing to point at.
+        let empty = MEANode(path: [2, 0, 6], title: "empty", subtitle: "", extents: [], fields: [])
+        XCTAssertTrue(MEAZones.build(focus: empty).zones.isEmpty)
+    }
+
     // MARK: - JSON pieces
 
     private func regionJSON(name: String, offset: Int, size: Int) -> [String: Any] {

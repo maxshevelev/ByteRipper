@@ -63,7 +63,7 @@ public struct MEANode: Sendable, Equatable, Hashable, Identifiable {
     /// Where a row whose bytes are scattered is stored — an MFS or EFS file,
     /// its stretches in the file's own order (`MFSFile.extents`). Nil for
     /// every other row, and for a file from an analysis made before the model
-    /// kept them. Not zoned yet: a zone is one range until #31.
+    /// kept them. Zoned as one zone of several stretches (`MEAZones`).
     public var extents: [Range<UInt64>]?
     /// The detail list shown when the row is selected.
     public var fields: [MEAField]

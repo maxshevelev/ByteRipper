@@ -259,7 +259,8 @@ import ToolModuleKit
         guard let focus = zones.focus, focus != previousFocus,
               let zone = zones.zones.first(where: { $0.id == focus }),
               let pane = boundPane else { return }
-        owner?.showZoneStartForTool(zone.range.lowerBound, in: pane)
+        // A scattered zone begins at its first stretch in the owner's order.
+        owner?.showZoneStartForTool(zone.start, in: pane)
     }
 
     /// The user picked a zone in the dump. The bytes are the host's to select;

@@ -1,4 +1,4 @@
-@source-sha 6236fd3cfb2006b2336ece0f7eb87e84f908c450080377f865999f6afea1f707
+@source-sha d89180128e9055231906154323e501a642d7da010863e3c79480d737d5059086
 # Fragment-Bereiche: ein Stück eines Dumps als eigene Datei
 
 > Einen Teil eines Images entnehmen, als eigene Datei bearbeiten und zurückschreiben.
@@ -46,6 +46,7 @@ Ein Fragment enthält nicht immer die Bytes der Datei so, wie sie dort liegen. E
 - **XOR** mit Schlüssel: Die Bytes wurden dekodiert; beim Aktualisieren werden sie wieder kodiert und die Prüfsumme neu berechnet.
 - **Unkodiert**: ein LENV-Block, der unkodiert gespeichert ist. Beim Aktualisieren wird nur seine Prüfsumme neu berechnet.
 - **Nur lesbar**: Die Bytes wurden durch eine Umformung gewonnen, die das Programm nicht umkehren kann; sie lassen sich nicht zurückschreiben.
+- **Zusammengesetzt**: Die Bytes stammen aus mehreren Stellen der Datei – den Chunks einer Datei des ME-Dateisystems – und stehen in der Reihenfolge, in der die Datei gelesen wird. Beim Zurückschreiben kommen sie an dieselben Stellen, die Bytes dazwischen bleiben unverändert; die Länge kann sich nicht ändern.
 
 Ein Fragment ohne Abzeichen ist eine einfache Kopie: Seine Bytes sind die der Datei und werden unverändert zurückgeschrieben.
 

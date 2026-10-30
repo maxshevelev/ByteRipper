@@ -1503,6 +1503,8 @@
 "part badge|Read-only" = "Nur lesbar";
 "part badge|Structure" = "Struktur";
 "part badge|Plain" = "Unkodiert";
+"part badge|Assembled" = "Zusammengesetzt";
+"These bytes are gathered from several places of the file, in the order the file is read. Update in Parent writes them back to the same places and leaves the bytes between them as they are." = "Diese Bytes stammen aus mehreren Stellen der Datei und stehen in der Reihenfolge, in der die Datei gelesen wird. „In der Quelle aktualisieren“ schreibt sie an dieselben Stellen zurück; die Bytes dazwischen bleiben unverändert.";
 "%1$@ (Valid for the body encoded again)" = "%1$@ (gültig für den kodierten Block)";
 "LENV block" = "LENV-Block";
 "Key header" = "Schlüsselkopf";

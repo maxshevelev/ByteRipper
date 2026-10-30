@@ -35,4 +35,20 @@ final class PartCodecTests: XCTestCase {
         }
         XCTAssertFalse(codec.keepsOffsets)
     }
+
+    /// A scattered thing opens as its stretches one after another, in the
+    /// owner's order, and goes back to the same places: the bytes between them
+    /// stay what they were.
+    func testAGatheredPartOpensInTheOwnersOrderAndGoesBackToTheSamePlaces() throws {
+        let scattered = PartParent(content: Bytes(bytes: Array(0..<32)), source: 4..<16, name: "dump.bin")
+        let codec = GatherPartCodec(stretches: [12..<16, 4..<6])
+
+        XCTAssertEqual(try codec.decode(scattered), [12, 13, 14, 15, 4, 5])
+        XCTAssertEqual(try codec.encode([0xA, 0xB, 0xC, 0xD, 0xE, 0xF], into: scattered),
+                       .overwriting(4..<16, with: [0xE, 0xF, 6, 7, 8, 9, 10, 11, 0xA, 0xB, 0xC, 0xD]))
+        XCTAssertFalse(codec.keepsOffsets)
+        XCTAssertThrowsError(try codec.encode([1, 2, 3], into: scattered)) {
+            XCTAssertEqual(($0 as? PartRefusal)?.title.text(in: .english), "The length changed")
+        }
+    }
 }
