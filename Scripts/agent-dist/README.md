@@ -55,7 +55,9 @@ Every flag of `byteripper-server --help` is a key without its `--`: `support`,
 `store`, `projects`, `dumpRoots`, `ghidraHome`, `ghidraScripts`, `tokens`,
 `mcpSocket`, `listen`, `serverNames`, `idle`, `maxDocuments`, `maxOpenBytes`,
 `maxUploadBytes`. Paths are strings (`~` is expanded), lists are arrays, sizes
-are numbers or `"512 MiB"`. `--config <file>` names another file and
+are numbers or `"512 MiB"`. `listen` and `dumpRoots` are lists a flag adds to:
+the launchers' `--listen 127.0.0.1:<port>` does not drop the tailnet address
+the file names. `--config <file>` names another file and
 `--no-config` reads none; a key the server does not know is refused with its
 name, never ignored. `INSTALL.md` has the table and an example that keeps a
 copy self-contained.

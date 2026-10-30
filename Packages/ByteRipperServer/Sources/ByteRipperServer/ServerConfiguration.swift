@@ -31,7 +31,9 @@ public enum ServerCommand: Equatable {
           --ghidra        host the Ghidra owners
           --listen        an address to listen on, 127.0.0.1:8765 by default;
                           repeat it for several (loopback for this Mac's own
-                          app, the tailnet address for the others)
+                          app, the tailnet address for the others). A `listen`
+                          list in the configuration file is kept, and a flag
+                          adds to it rather than replacing it
           --store         the store's directory, the app's own by default
           --tokens        the tokens' file, tokens.json in the server's folder
                           by default; every address needs a token
@@ -226,7 +228,14 @@ public enum ServerCommand: Equatable {
                     throw Failure(description: "serve does not take \(flag)")
                 }
             }
-            if !listens.isEmpty { configuration.listens = listens }
+            // The file's list is kept and a flag adds to it; without a file,
+            // what the line names is the whole list. The same address twice
+            // would bind twice and fail.
+            if !listens.isEmpty {
+                var merged = configuration.listensFromFile ? configuration.listens : []
+                for listen in listens where !merged.contains(listen) { merged.append(listen) }
+                configuration.listens = merged
+            }
             // One folder for the server's own files: a flag on any of them
             // still wins over it, whichever came first on the line.
             if let support {
@@ -262,6 +271,10 @@ public struct ServerConfiguration: Equatable, Sendable {
     public var roles: Set<Role> = [.cas, .ghidra]
     /// Every address the server listens on, the same routes behind each.
     public var listens = [Listen(host: "127.0.0.1", port: 8765)]
+    /// Whether the configuration file named its `listen` list: a `--listen`
+    /// on the line then adds to it instead of replacing it, as `--dump-roots`
+    /// adds to the file's roots.
+    public var listensFromFile = false
 
     /// The first address — the one a single `--listen` names.
     public var host: String {
@@ -418,6 +431,7 @@ public struct ServerConfiguration: Equatable, Sendable {
         if let names = try list("serverNames") { configuration.serverNames = names }
         if let listens = try list("listen") {
             configuration.listens = try listens.map { try ServerCommand.listen($0) }
+            configuration.listensFromFile = true
         }
         if let idle = try number("idle") { configuration.idle = idle }
         if let documents = try number("maxDocuments") { configuration.limits.documents = documents }

@@ -171,7 +171,10 @@ none.) Each key is a flag without its `--`:
 
 `byteripper-server --config <file>` reads another file, `--no-config` reads
 none. A key the server does not know is refused with its name rather than
-dropped, and `--help` lists every flag.
+dropped, and `--help` lists every flag. `listen` and `dumpRoots` are lists:
+what the file names is kept and a flag on the line adds to it, so the
+launchers' own `--listen 127.0.0.1:<port>` does not take the tailnet address
+away.
 
 ## One server, several Macs
 

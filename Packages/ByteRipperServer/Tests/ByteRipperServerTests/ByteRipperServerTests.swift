@@ -155,6 +155,24 @@ final class ServerCommandTests: XCTestCase {
         }
     }
 
+    /// A `listen` list in the file is kept and a flag adds to it; without the
+    /// file, the flags are the whole list.
+    func testAFlagListenAddsToTheFilesList() throws {
+        let home = emptyHome()
+        try #"{"listen": ["100.64.1.2:9000"]}"#
+            .write(to: ServerConfiguration.defaultFile(in: home), atomically: true, encoding: .utf8)
+        guard case .serve(let both) = try ServerCommand.parse(["--listen", "127.0.0.1:18765"],
+                                                              home: home) else { return XCTFail() }
+        XCTAssertEqual(both.listens, [.init(host: "100.64.1.2", port: 9000),
+                                      .init(host: "127.0.0.1", port: 18765)])
+        guard case .serve(let alone) = try ServerCommand.parse(["--listen", "127.0.0.1:18765"],
+                                                              home: emptyHome()) else { return XCTFail() }
+        XCTAssertEqual(alone.listens, [.init(host: "127.0.0.1", port: 18765)])
+        guard case .serve(let repeated) = try ServerCommand.parse(
+            ["--listen", "127.0.0.1:18765", "--listen", "127.0.0.1:18765"], home: emptyHome()) else { return XCTFail() }
+        XCTAssertEqual(repeated.listens.count, 1, "one address is bound once")
+    }
+
     /// The token and relay verbs take `--config` too, and it is not refused.
     func testTheOtherVerbsTakeTheConfigurationFile() throws {
         let home = emptyHome()
