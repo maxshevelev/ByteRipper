@@ -18,9 +18,11 @@ the server's own tree, and the review is made through the `ghidra_` tools.
 ## The pieces
 
 The Ghidra scripts are compiled and run by the analysis server —
-`byteripper-server` or the app's when Settings ▸ Code Analysis names one. A
-review does not run them by hand; they are listed here because their rules and
-their output are what a review reads.
+`byteripper-server` or the app's when Settings ▸ Code Analysis names one — and
+live in its scripts folder, `owner/` and `scripts/`: `Skills/ghidra-uefi` in
+the repository, `ghidra/` in an installed copy. A review does not run them by
+hand; they are listed here because their rules and their output are what a
+review reads.
 
 | piece | what it does |
 |---|---|

@@ -81,8 +81,10 @@ public final class Server {
                 throw ServerCommand.Failure(description: "the Ghidra role publishes into this server's store, which did not open")
             }
             let writer: AnalysisWriter = cas.store
+            let sources = OwnerSources.resolved(explicit: configuration.ghidraScripts)
             let host = GhidraHost(configuration: .init(projectsRoot: configuration.projects,
                                                        ghidraHome: configuration.ghidraHome,
+                                                       sources: sources,
                                                        idle: configuration.idle),
                                   writer: writer)
             let feed = cas.feed
@@ -91,7 +93,7 @@ public final class Server {
             ghidra = host
             let ghidraNote = (try? await host.ghidra()).map { "Ghidra \($0.version) at \($0.home.path)" }
                 ?? "no Ghidra found yet"
-            log("projects \(configuration.projects.path); \(ghidraNote)")
+            log("projects \(configuration.projects.path); scripts \(sources.scripts.path); \(ghidraNote)")
         }
         // The documents and the local MCP: always on (decision 14), and it has
         // the dumps and the store whether or not Ghidra is a role. The socket

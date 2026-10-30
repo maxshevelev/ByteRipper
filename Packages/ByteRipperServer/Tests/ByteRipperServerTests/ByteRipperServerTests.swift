@@ -7,8 +7,22 @@ import XCTest
 @testable import ByteRipperServer
 
 final class ServerCommandTests: XCTestCase {
+    /// A home no configuration file is in, so the defaults are the defaults.
+    private func emptyHome() -> URL {
+        let home = FileManager.default.temporaryDirectory
+            .appendingPathComponent("byteripper-home-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: home) }
+        return home
+    }
+
+    /// The line parsed as on a Mac with no configuration file.
+    private func parse(_ arguments: [String]) throws -> ServerCommand {
+        try ServerCommand.parse(arguments, home: emptyHome())
+    }
+
     func testTheDefaultsServeTheStoreOnLoopback() throws {
-        guard case .serve(let configuration) = try ServerCommand.parse([]) else { return XCTFail() }
+        guard case .serve(let configuration) = try parse([]) else { return XCTFail() }
         XCTAssertEqual(configuration.roles, [.cas, .ghidra])
         XCTAssertEqual(configuration.host, "127.0.0.1")
         XCTAssertEqual(configuration.port, 8765)
@@ -17,20 +31,20 @@ final class ServerCommandTests: XCTestCase {
     }
 
     func testAnAddressAStoreAndATokensFile() throws {
-        let parsed = try ServerCommand.parse(["serve", "--cas", "--listen", "100.64.1.2:9000",
+        let parsed = try parse(["serve", "--cas", "--listen", "100.64.1.2:9000",
                                               "--store", "/tmp/s", "--tokens", "/tmp/t.json"])
         guard case .serve(let configuration) = parsed else { return XCTFail() }
         XCTAssertEqual(configuration.host, "100.64.1.2")
         XCTAssertEqual(configuration.port, 9000)
         XCTAssertEqual(configuration.store.path, "/tmp/s")
         XCTAssertEqual(configuration.tokensFile.path, "/tmp/t.json")
-        guard case .serve(let ipv6) = try ServerCommand.parse(["--listen", "[::1]:8765"]) else { return XCTFail() }
+        guard case .serve(let ipv6) = try parse(["--listen", "[::1]:8765"]) else { return XCTFail() }
         XCTAssertEqual(ipv6.host, "::1")
-        guard case .serve(let both) = try ServerCommand.parse(["--listen", "127.0.0.1:8765",
+        guard case .serve(let both) = try parse(["--listen", "127.0.0.1:8765",
                                                                "--listen", "admins-imac:8765"]) else { return XCTFail() }
         XCTAssertEqual(both.listens, [.init(host: "127.0.0.1", port: 8765), .init(host: "admins-imac", port: 8765)])
 
-        guard case .serve(let named) = try ServerCommand.parse(["--server-name", "studio.local",
+        guard case .serve(let named) = try parse(["--server-name", "studio.local",
                                                                 "--server-name", "studio.tail.ts.net"]) else { return XCTFail() }
         XCTAssertEqual(named.serverNames, ["studio.local", "studio.tail.ts.net"], "the console's names, repeatable")
     }
@@ -38,30 +52,90 @@ final class ServerCommandTests: XCTestCase {
     /// The store is always served (`Design/SERVER_HEADLESS_PLAN.md` decision
     /// 17): `--ghidra` alone is every role, and `--cas` alone turns Ghidra off.
     func testTheStoreIsServedWhateverTheRolesNamed() throws {
-        guard case .serve(let ghidra) = try ServerCommand.parse(["--ghidra"]) else { return XCTFail() }
+        guard case .serve(let ghidra) = try parse(["--ghidra"]) else { return XCTFail() }
         XCTAssertEqual(ghidra.roles, [.cas, .ghidra])
-        guard case .serve(let cas) = try ServerCommand.parse(["--cas"]) else { return XCTFail() }
+        guard case .serve(let cas) = try parse(["--cas"]) else { return XCTFail() }
         XCTAssertEqual(cas.roles, [.cas])
     }
 
     func testWhatIsRefused() {
-        XCTAssertThrowsError(try ServerCommand.parse(["--idle", "-1"]))
-        XCTAssertThrowsError(try ServerCommand.parse(["--listen", "nowhere"]))
-        XCTAssertThrowsError(try ServerCommand.parse(["--store"]))
-        XCTAssertThrowsError(try ServerCommand.parse(["--bogus"]))
-        XCTAssertThrowsError(try ServerCommand.parse(["--cas-url", "http://100.64.0.7:8765"]),
+        XCTAssertThrowsError(try parse(["--idle", "-1"]))
+        XCTAssertThrowsError(try parse(["--listen", "nowhere"]))
+        XCTAssertThrowsError(try parse(["--store"]))
+        XCTAssertThrowsError(try parse(["--bogus"]))
+        XCTAssertThrowsError(try parse(["--cas-url", "http://100.64.0.7:8765"]),
                              "--cas-url is gone: the store is this server's own")
-        XCTAssertThrowsError(try ServerCommand.parse(["frobnicate"]))
+        XCTAssertThrowsError(try parse(["frobnicate"]))
     }
 
     func testTheTokenCommands() throws {
-        XCTAssertEqual(try ServerCommand.parse(["token", "add", "--name", "admin", "--rights", "admin"]),
+        XCTAssertEqual(try parse(["token", "add", "--name", "admin", "--rights", "admin"]),
                        .token(.add(name: "admin", rights: [.admin], file: ServerPaths.defaultTokensFile)))
-        XCTAssertEqual(try ServerCommand.parse(["token", "list", "--tokens", "/tmp/t.json"]),
+        XCTAssertEqual(try parse(["token", "list", "--tokens", "/tmp/t.json"]),
                        .token(.list(file: URL(fileURLWithPath: "/tmp/t.json"))))
-        XCTAssertEqual(try ServerCommand.parse(["token", "revoke", "laptop"]),
+        XCTAssertEqual(try parse(["token", "revoke", "laptop"]),
                        .token(.revoke(id: "laptop", file: ServerPaths.defaultTokensFile)))
-        XCTAssertThrowsError(try ServerCommand.parse(["token", "add"]))
+        XCTAssertThrowsError(try parse(["token", "add"]))
+    }
+
+    /// `~/.byteripper-server.json` fills what the line does not say; a flag
+    /// still wins, and `--no-config` reads none.
+    func testTheConfigurationFileFillsWhatTheFlagsDoNot() throws {
+        let home = emptyHome()
+        let support = home.appendingPathComponent("var/support", isDirectory: true)
+        try """
+        {
+          "support": "\(support.path)",
+          "store": "\(home.path)/store",
+          "dumpRoots": ["\(home.path)/dumps"],
+          "idle": 60,
+          "maxOpenBytes": "64 MiB",
+          "listen": ["127.0.0.1:18765"]
+        }
+        """.write(to: ServerConfiguration.defaultFile(in: home), atomically: true, encoding: .utf8)
+
+        guard case .serve(let configuration) = try ServerCommand.parse([], home: home) else { return XCTFail() }
+        XCTAssertEqual(configuration.support?.path, support.path)
+        XCTAssertEqual(configuration.tokensFile, support.appendingPathComponent("tokens.json"))
+        XCTAssertEqual(configuration.mcpSocket, support.appendingPathComponent("mcp.sock"))
+        XCTAssertEqual(configuration.documentsFile, support.appendingPathComponent("documents.json"))
+        XCTAssertEqual(configuration.uploads.path, support.appendingPathComponent("Uploads").path)
+        XCTAssertEqual(configuration.store, home.appendingPathComponent("store"))
+        XCTAssertEqual(configuration.dumpRoots, [home.appendingPathComponent("dumps")])
+        XCTAssertEqual(configuration.idle, 60)
+        XCTAssertEqual(configuration.limits.openBytes, UInt64(64 << 20))
+        XCTAssertEqual(configuration.port, 18765)
+
+        // The token commands keep the file's tokens, and a flag beats the file.
+        XCTAssertEqual(try ServerCommand.parse(["token", "list"], home: home),
+                       .token(.list(file: support.appendingPathComponent("tokens.json"))))
+        guard case .serve(let overridden) = try ServerCommand.parse(["--store", "/tmp/other",
+                                                                     "--support", "/tmp/sup"],
+                                                                    home: home) else { return XCTFail() }
+        XCTAssertEqual(overridden.store.path, "/tmp/other")
+        XCTAssertEqual(overridden.tokensFile.path, "/tmp/sup/tokens.json")
+
+        guard case .serve(let none) = try ServerCommand.parse(["--no-config"], home: home) else { return XCTFail() }
+        XCTAssertNil(none.support)
+        XCTAssertEqual(none.tokensFile, ServerPaths.defaultTokensFile)
+    }
+
+    func testAConfigurationFileTheServerDoesNotKnowIsRefused() throws {
+        let home = emptyHome()
+        let file = ServerConfiguration.defaultFile(in: home)
+        try #"{"stroe": "/tmp/s"}"#.write(to: file, atomically: true, encoding: .utf8)
+        XCTAssertThrowsError(try ServerCommand.parse([], home: home)) { error in
+            XCTAssertTrue("\(error)".contains("stroe"), "the key is named: \(error)")
+        }
+        try #"{"idle": "soon"}"#.write(to: file, atomically: true, encoding: .utf8)
+        XCTAssertThrowsError(try ServerCommand.parse([], home: home)) { error in
+            XCTAssertTrue("\(error)".contains("idle"), "the key is named: \(error)")
+        }
+        try "not json".write(to: file, atomically: true, encoding: .utf8)
+        XCTAssertThrowsError(try ServerCommand.parse([], home: home))
+        try #"{"support": "/tmp/s"}"#.write(to: file, atomically: true, encoding: .utf8)
+        XCTAssertThrowsError(try ServerCommand.parse(["--config", home.path + "/nothing.json"], home: home),
+                             "a named file that is not there is refused")
     }
 }
 

@@ -14,8 +14,11 @@ public struct OwnerSources: Equatable, Sendable {
         self.scripts = scripts
     }
 
-    /// The skill in a checkout of the repository: `Skills/ghidra-uefi`.
-    public static func skill(at root: URL) -> OwnerSources {
+    /// The scripts a folder holds, in the layout this server reads: `owner/`
+    /// with the owner's three sources and `scripts/` with the Ghidra scripts.
+    /// The repository's `Skills/ghidra-uefi` has it, and so does the
+    /// distribution's `ghidra/`.
+    public static func directory(at root: URL) -> OwnerSources {
         let scripts = root.appendingPathComponent("scripts", isDirectory: true)
         let owner = root.appendingPathComponent("owner", isDirectory: true)
         return OwnerSources(files: [owner.appendingPathComponent("Owner.java"),
@@ -25,10 +28,30 @@ public struct OwnerSources: Equatable, Sendable {
                             scripts: scripts)
     }
 
+    /// The script folder resolved when the server starts, in order: what the
+    /// caller names (`--ghidra-scripts`), `$BYTERIPPER_GHIDRA_SCRIPTS`, the
+    /// `ghidra` folder beside the binary (`<bin>/../ghidra`, the
+    /// distribution's layout), and the checkout this package was built from.
+    public static func resolved(explicit: URL? = nil) -> OwnerSources {
+        if let explicit { return directory(at: explicit) }
+        if let named = ProcessInfo.processInfo.environment["BYTERIPPER_GHIDRA_SCRIPTS"], !named.isEmpty {
+            return directory(at: URL(fileURLWithPath: named))
+        }
+        if let executable = Bundle.main.executableURL?.resolvingSymlinksInPath() {
+            let beside = executable.deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("ghidra", isDirectory: true)
+            if FileManager.default.fileExists(atPath: beside.appendingPathComponent("owner/Owner.java").path) {
+                return directory(at: beside)
+            }
+        }
+        return .checkout
+    }
+
     /// The skill of the checkout this package was built from — a server built
     /// from the repository on the machine that runs it.
     public static var checkout: OwnerSources {
-        skill(at: URL(fileURLWithPath: #filePath)
+        directory(at: URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // GhidraHost
             .deletingLastPathComponent()   // Sources
             .deletingLastPathComponent()   // GhidraHost package

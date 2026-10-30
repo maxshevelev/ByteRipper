@@ -17,9 +17,9 @@ public enum ServerCommand: Equatable {
     public static let usage = """
         usage: byteripper-server [serve] [--cas] [--ghidra] [--listen <host>:<port>]
                                  [--server-name <name>] [--store <dir>] [--tokens <file>]
-                                 [--dump-roots <dir>] [--max-documents <n>]
+                                 [--support <dir>] [--dump-roots <dir>] [--max-documents <n>]
                                  [--max-open-bytes <n>] [--max-upload-bytes <n>] [--mcp-socket <path>]
-                                 [--ghidra-home <dir>] [--projects <dir>] [--idle <s>]
+                                 [--ghidra-home <dir>] [--ghidra-scripts <dir>] [--projects <dir>] [--idle <s>]
                byteripper-server token add --name <name> [--rights <right,…> | --preset <reader|app|admin>]
                byteripper-server token list | rotate <id|name> | revoke <id|name>
                byteripper-server relay [--mcp-socket <path>]
@@ -35,7 +35,15 @@ public enum ServerCommand: Equatable {
           --store         the store's directory, the app's own by default
           --tokens        the tokens' file, tokens.json in the server's folder
                           by default; every address needs a token
+          --support       the server's own folder — tokens.json, sessions,
+                          mcp.sock, documents.json and Uploads in one place,
+                          as an installed copy keeps them; --tokens and
+                          --mcp-socket still win
           --ghidra-home   the Ghidra install; GHIDRA_HOME or the newest found
+          --ghidra-scripts
+                          the folder of the Ghidra scripts, `owner/` and
+                          `scripts/`; the `ghidra` folder beside the binary by
+                          default, else the checkout this build came from
           --projects      the modules' kept projects, the app's folder by default
           --idle          seconds an owner waits for a call before it saves and
                           exits, 1800 by default
@@ -53,6 +61,15 @@ public enum ServerCommand: Equatable {
                           the most one upload may be, 256 MiB by default
           --mcp-socket    the local MCP's socket, mcp.sock in the server's
                           folder by default
+          --config        a configuration file — ~/.byteripper-server.json by
+                          default — read before the flags, which still win
+          --no-config     read no configuration file
+
+          ~/.byteripper-server.json takes the flags above as its keys — support,
+          store, projects, ghidraHome, ghidraScripts, tokens, mcpSocket,
+          dumpRoots, serverNames, listen, idle, maxDocuments, maxOpenBytes,
+          maxUploadBytes — paths as strings, lists as arrays, sizes as numbers
+          or "512 MiB".
 
           relay           copy MCP between stdin/stdout and the local socket,
                           for an agent's client; it starts none of the roles.
@@ -77,12 +94,49 @@ public enum ServerCommand: Equatable {
         return value
     }
 
-    public static func parse(_ arguments: [String]) throws -> ServerCommand {
+    /// `host:port`, with an IPv6 host in brackets.
+    static func listen(_ address: String) throws -> ServerConfiguration.Listen {
+        guard let colon = address.lastIndex(of: ":"),
+              let port = UInt16(address[address.index(after: colon)...]) else {
+            throw Failure(description: "--listen takes <host>:<port>, not \(address)")
+        }
+        return ServerConfiguration.Listen(
+            host: String(address[..<colon]).trimmingCharacters(in: CharacterSet(charactersIn: "[]")),
+            port: port)
+    }
+
+    public static func parse(_ arguments: [String],
+                             home: URL = FileManager.default.homeDirectoryForCurrentUser) throws -> ServerCommand {
         var rest = arguments[...]
         var verb = "serve"
         if let first = rest.first, !first.hasPrefix("-") {
             verb = first
             rest = rest.dropFirst()
+        }
+        // `--config` and `--no-config` may stand anywhere on the line, so
+        // they are read first, and the loop below only steps over them.
+        var configFile: URL? = ServerConfiguration.defaultFile(in: home)
+        var scan = rest[...]
+        while let flag = scan.popFirst() {
+            switch flag {
+            case "--config":
+                guard let next = scan.popFirst() else { throw Failure(description: "--config needs a file") }
+                configFile = URL(fileURLWithPath: next)
+            case "--no-config":
+                configFile = nil
+            case "--help", "-h":
+                return .help
+            default:
+                break
+            }
+        }
+        var fromFile = ServerConfiguration()
+        if let configFile {
+            if FileManager.default.fileExists(atPath: configFile.path) {
+                try ServerConfiguration.load(configFile, into: &fromFile)
+            } else if configFile != ServerConfiguration.defaultFile(in: home) {
+                throw Failure(description: "\(configFile.path) is not there")
+            }
         }
         func value(_ flag: String) throws -> String {
             guard let next = rest.first, !next.hasPrefix("--") else {
@@ -96,7 +150,7 @@ public enum ServerCommand: Equatable {
             return .help
         case "relay":
             var path = ProcessInfo.processInfo.environment["BYTERIPPER_SERVER_SOCKET"]
-                .map { URL(fileURLWithPath: $0) } ?? ServerPaths.defaultSocket
+                .map { URL(fileURLWithPath: $0) } ?? fromFile.mcpSocket
             while let flag = rest.popFirst() {
                 switch flag {
                 case "--mcp-socket": path = URL(fileURLWithPath: try value(flag))
@@ -107,14 +161,17 @@ public enum ServerCommand: Equatable {
             return .relay(path: path.path)
         case "token":
             do {
-                return .token(try TokenCommand.parse(Array(rest), defaultFile: ServerPaths.defaultTokensFile))
+                return .token(try TokenCommand.parse(Array(rest), defaultFile: fromFile.tokensFile))
             } catch let failure as TokenCommand.Failure {
                 throw Failure(description: failure.description)
             }
         case "serve":
-            var configuration = ServerConfiguration()
+            var configuration = fromFile
             var roles: Set<ServerConfiguration.Role> = []
             var listens: [ServerConfiguration.Listen] = []
+            var support: URL?
+            var tokensGiven = false
+            var socketGiven = false
             while let flag = rest.popFirst() {
                 switch flag {
                 case "--cas":
@@ -123,6 +180,10 @@ public enum ServerCommand: Equatable {
                     roles.insert(.ghidra)
                 case "--ghidra-home":
                     configuration.ghidraHome = URL(fileURLWithPath: try value(flag))
+                case "--ghidra-scripts":
+                    configuration.ghidraScripts = URL(fileURLWithPath: try value(flag))
+                case "--support":
+                    support = URL(fileURLWithPath: try value(flag))
                 case "--projects":
                     configuration.projects = URL(fileURLWithPath: try value(flag))
                 case "--idle":
@@ -130,17 +191,12 @@ public enum ServerCommand: Equatable {
                     guard let idle = Int(text), idle >= 0 else { throw Failure(description: "--idle takes seconds") }
                     configuration.idle = idle
                 case "--listen":
-                    let address = try value(flag)
-                    guard let colon = address.lastIndex(of: ":"),
-                          let port = UInt16(address[address.index(after: colon)...]) else {
-                        throw Failure(description: "--listen takes <host>:<port>, not \(address)")
-                    }
-                    listens.append(.init(host: String(address[..<colon])
-                        .trimmingCharacters(in: CharacterSet(charactersIn: "[]")), port: port))
+                    listens.append(try Self.listen(try value(flag)))
                 case "--store":
                     configuration.store = URL(fileURLWithPath: try value(flag))
                 case "--tokens":
                     configuration.tokensFile = URL(fileURLWithPath: try value(flag))
+                    tokensGiven = true
                 case "--server-name":
                     configuration.serverNames.append(try value(flag))
                 case "--dump-roots":
@@ -157,6 +213,11 @@ public enum ServerCommand: Equatable {
                     configuration.limits.uploadBytes = try Self.bytes(flag, try value(flag))
                 case "--mcp-socket":
                     configuration.mcpSocket = URL(fileURLWithPath: try value(flag))
+                    socketGiven = true
+                case "--config":
+                    _ = try value(flag)   // read before the loop
+                case "--no-config":
+                    break
                 case "--help", "-h":
                     return .help
                 default:
@@ -164,6 +225,11 @@ public enum ServerCommand: Equatable {
                 }
             }
             if !listens.isEmpty { configuration.listens = listens }
+            // One folder for the server's own files: a flag on any of them
+            // still wins over it, whichever came first on the line.
+            if let support {
+                configuration.useFolder(support, tokens: tokensGiven, socket: socketGiven)
+            }
             // The store is this server's own and always served
             // (`Design/SERVER_HEADLESS_PLAN.md` decision 17); Ghidra alone is
             // optional.
@@ -206,9 +272,16 @@ public struct ServerConfiguration: Equatable, Sendable {
         set { listens[0].port = newValue }
     }
     public var ghidraHome: URL?
+    /// The folder of the Ghidra scripts — `owner/` and `scripts/`, the
+    /// skill's layout and the distribution's. Nil: `OwnerSources.resolved`.
+    public var ghidraScripts: URL?
     public var projects = GhidraHost.defaultProjectsRoot
     public var idle = 1800
     public var store = CodeAnalysisPaths.defaultRoot
+    /// The folder the server keeps its own files in (`--support`): the
+    /// tokens, the console's sessions, the local MCP's socket, the documents
+    /// and their uploads. Nil: `ServerPaths`, the app's shared folder.
+    public var support: URL?
     /// The file of tokens, by hash and right: the only credential the server
     /// has (`Design/SERVER_HEADLESS_PLAN.md` §5).
     public var tokensFile = ServerPaths.defaultTokensFile
@@ -231,6 +304,102 @@ public struct ServerConfiguration: Equatable, Sendable {
     public var clientTokenFile = ServerPaths.clientTokenFile
 
     public init() {}
+
+    /// `~/.byteripper-server.json`: what the server does when a flag on the
+    /// line does not say. Read before the flags, which still win.
+    public static func defaultFile(in home: URL = FileManager.default.homeDirectoryForCurrentUser) -> URL {
+        home.appendingPathComponent(".byteripper-server.json", isDirectory: false)
+    }
+
+    /// Points the server's own files at one folder (`--support`, or the
+    /// file's `support`): the tokens, the local MCP's socket, the documents
+    /// and their uploads, and this Mac's client token.
+    public mutating func useFolder(_ folder: URL, tokens tokensNamed: Bool = false,
+                                   socket socketNamed: Bool = false) {
+        support = folder
+        if !tokensNamed { tokensFile = folder.appendingPathComponent("tokens.json") }
+        if !socketNamed { mcpSocket = folder.appendingPathComponent("mcp.sock") }
+        documentsFile = folder.appendingPathComponent("documents.json")
+        uploads = folder.appendingPathComponent("Uploads", isDirectory: true)
+        clientTokenFile = folder.appendingPathComponent("token")
+    }
+
+    /// Reads a configuration file into `configuration`. Each key is a flag
+    /// without its `--`; a key the server does not know is refused rather
+    /// than dropped, and a value of the wrong type is refused with its key.
+    public static func load(_ file: URL, into configuration: inout ServerConfiguration) throws {
+        let data: Data
+        do {
+            data = try Data(contentsOf: file)
+        } catch {
+            throw ServerCommand.Failure(description: "\(file.path): \(error.localizedDescription)")
+        }
+        guard let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            throw ServerCommand.Failure(description: "\(file.path) is not a JSON object")
+        }
+        let known: Set<String> = ["support", "store", "projects", "ghidraHome", "ghidraScripts",
+                                  "tokens", "mcpSocket", "dumpRoots", "serverNames", "listen",
+                                  "idle", "maxDocuments", "maxOpenBytes", "maxUploadBytes"]
+        let unknown = object.keys.filter { !known.contains($0) }.sorted()
+        guard unknown.isEmpty else {
+            throw ServerCommand.Failure(description: "\(file.path): "
+                + unknown.map { "\"\($0)\"" }.joined(separator: ", ")
+                + " \(unknown.count == 1 ? "is not a setting" : "are not settings") of the server")
+        }
+        func text(_ key: String) throws -> String? {
+            guard let value = object[key] else { return nil }
+            guard let text = value as? String else {
+                throw ServerCommand.Failure(description: "\(file.path): \(key) is a string, not \(value)")
+            }
+            return text
+        }
+        func path(_ key: String) throws -> URL? {
+            try text(key).map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath) }
+        }
+        func list(_ key: String) throws -> [String]? {
+            guard let value = object[key] else { return nil }
+            guard let list = value as? [String] else {
+                throw ServerCommand.Failure(description: "\(file.path): \(key) is a list of strings")
+            }
+            return list
+        }
+        func number(_ key: String) throws -> Int? {
+            guard let value = object[key] else { return nil }
+            guard let number = value as? NSNumber else {
+                throw ServerCommand.Failure(description: "\(file.path): \(key) is a number, not \(value)")
+            }
+            return number.intValue
+        }
+        func size(_ key: String) throws -> UInt64? {
+            guard let value = object[key] else { return nil }
+            if let number = value as? NSNumber { return number.uint64Value }
+            if let text = value as? String { return try ServerCommand.bytes(key, text) }
+            throw ServerCommand.Failure(description: "\(file.path): \(key) is a byte count, "
+                + "a number or \"512 MiB\"")
+        }
+
+        let folder = try path("support")
+        let tokens = try path("tokens")
+        let socket = try path("mcpSocket")
+        if let folder { configuration.useFolder(folder, tokens: tokens != nil, socket: socket != nil) }
+        if let tokens { configuration.tokensFile = tokens }
+        if let socket { configuration.mcpSocket = socket }
+        if let store = try path("store") { configuration.store = store }
+        if let projects = try path("projects") { configuration.projects = projects }
+        if let home = try path("ghidraHome") { configuration.ghidraHome = home }
+        if let scripts = try path("ghidraScripts") { configuration.ghidraScripts = scripts }
+        if let roots = try list("dumpRoots") {
+            configuration.dumpRoots = roots.map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath) }
+        }
+        if let names = try list("serverNames") { configuration.serverNames = names }
+        if let listens = try list("listen") {
+            configuration.listens = try listens.map { try ServerCommand.listen($0) }
+        }
+        if let idle = try number("idle") { configuration.idle = idle }
+        if let documents = try number("maxDocuments") { configuration.limits.documents = documents }
+        if let bytes = try size("maxOpenBytes") { configuration.limits.openBytes = bytes }
+        if let bytes = try size("maxUploadBytes") { configuration.limits.uploadBytes = bytes }
+    }
 }
 
 public enum ServerPaths {

@@ -1,7 +1,7 @@
 """The local CAS, without Ghidra and without a dump: the skill's client
 against the real `byteripper-cas`, which `cas.tool()` builds once.
 
-    python3 -m unittest discover -s Skills/ghidra-uefi/tests
+    python3 -m unittest discover -s tests
 """
 
 from __future__ import annotations
