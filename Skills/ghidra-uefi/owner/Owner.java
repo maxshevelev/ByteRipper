@@ -1831,6 +1831,29 @@ public class Owner {
      * artifact carries to the reader. An empty comment removes one.
      */
     private JsonObject addType(JsonObject body) throws Exception {
+        // A type a review no longer wants — a probe, a mistake — goes from the
+        // program and from the review's list, so the next publish cannot carry
+        // it. Archives are read-only here and are refused by the manager check.
+        if (body.has("delete") && body.get("delete").getAsBoolean()) {
+            String name = required(body, "name");
+            DataType found = find(program.getDataTypeManager(), name.trim());
+            if (found == null || found.getDataTypeManager() != program.getDataTypeManager()) {
+                throw new Failure(404, "no type " + name + " of this program to delete; archives are read-only here");
+            }
+            try {
+                if (!program.getDataTypeManager().remove(found)) {
+                    throw new Failure(409, found.getName() + " is still used and cannot be deleted");
+                }
+            } catch (Failure failure) {
+                throw failure;
+            } catch (Exception error) {
+                throw new Failure(409, error.getMessage());
+            }
+            Harvest.forgetType(program, found.getName());
+            JsonObject answer = identity();
+            answer.addProperty("deleted", found.getName());
+            return answer;
+        }
         String c = string(body, "c", null);
         DataType resolved;
         if (c != null) {

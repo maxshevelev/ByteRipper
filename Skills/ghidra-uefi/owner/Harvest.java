@@ -366,6 +366,15 @@ final class Harvest {
         return types;
     }
 
+    /** A type the review no longer defines: it leaves the review's list with it. */
+    static void forgetType(Program program, String name) {
+        TreeMap<String, String> types = reviewTypes(program);
+        if (types.remove(name) == null) return;
+        JsonObject stored = new JsonObject();
+        types.forEach(stored::addProperty);
+        program.getOptions(OPTIONS).setString(TYPES, stored.toString());
+    }
+
     static void recordType(Program program, String name, String c) {
         TreeMap<String, String> types = reviewTypes(program);
         types.put(name, c);

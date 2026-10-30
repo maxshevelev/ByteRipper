@@ -1753,7 +1753,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "Adds a structure, union, enum or typedef from C to the module, shared with modules opened after the next publish. Write the tag: `typedef struct _NAME { … } NAME;`. Without `c`, `name` picks a type the module or its archives hold. `description` says what the type is and where its layout is known from; `comments` gives fields or enum members theirs — what each holds and its source. The app shows them when the reader clicks the type or a field; an empty comment removes one. Comments are set after the C, which drops its own.",
+    "description" : "Adds a structure, union, enum or typedef from C to the module, shared with modules opened after the next publish. Write the tag: `typedef struct _NAME { … } NAME;`. Without `c`, `name` picks a type the module or its archives hold. `description` says what the type is and where its layout is known from; `comments` gives fields or enum members theirs — what each holds and its source. The app shows them when the reader clicks the type or a field; an empty comment removes one. Comments are set after the C, which drops its own. `delete: true` with `name` removes a type the program holds — a probe or a mistake — so a publish cannot carry it; a type an archive holds is refused.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -1768,6 +1768,10 @@
           "description" : "A comment per field or enum member, by its name.",
           "type" : "object"
         },
+        "delete" : {
+          "description" : "Remove the type `name` from the program. No `c` with it.",
+          "type" : "boolean"
+        },
         "description" : {
           "description" : "What the type is, and its source.",
           "type" : "string"
@@ -1777,7 +1781,7 @@
           "type" : "string"
         },
         "name" : {
-          "description" : "Without `c`: the type to describe or comment.",
+          "description" : "Without `c`: the type to describe, comment or delete.",
           "type" : "string"
         }
       },

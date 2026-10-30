@@ -589,14 +589,23 @@ public enum GhidraTools {
                   + "`name` picks a type the module or its archives hold. `description` says what the type is "
                   + "and where its layout is known from; `comments` gives fields or enum members theirs — what "
                   + "each holds and its source. The app shows them when the reader clicks the type or a field; "
-                  + "an empty comment removes one. Comments are set after the C, which drops its own.",
+                  + "an empty comment removes one. Comments are set after the C, which drops its own. "
+                  + "`delete: true` with `name` removes a type the program holds — a probe or a mistake — so a "
+                  + "publish cannot carry it; a type an archive holds is refused.",
                   ["c": AgentSchema.string("The C text."),
-                   "name": AgentSchema.string("Without `c`: the type to describe or comment."),
+                   "name": AgentSchema.string("Without `c`: the type to describe, comment or delete."),
                    "description": AgentSchema.string("What the type is, and its source."),
+                   "delete": AgentSchema.boolean("Remove the type `name` from the program. No `c` with it."),
                    "comments": ["type": "object", "additionalProperties": ["type": "string"],
                                 "description": "A comment per field or enum member, by its name."]],
                   required: []) { arguments in
                 var body = try optional(arguments, ["c", "name", "description"])
+                if try arguments.bool("delete", default: false) {
+                    guard body["c"] == nil, body["name"] != nil else {
+                        throw AgentToolError("`delete` takes `name` and no `c`.")
+                    }
+                    body["delete"] = .bool(true)
+                }
                 guard body["c"] != nil || body["name"] != nil else {
                     throw AgentToolError("Give the type's `c`, or the `name` of one the module holds.")
                 }
