@@ -2232,7 +2232,7 @@ final class HexView: NSView {
                 - (column % layout.wordSize == 0 ? Self.mirrorContourPadding : 0)
             let top = layout.rowFrame(row: row).minY
             let text = NSAttributedString(string: String(piece), attributes: [
-                .font: font, .foregroundColor: NSColor.black,
+                .font: font, .foregroundColor: HexTheme.zonePieceInk,
             ])
             let width = max(height, ceil(text.size().width) + 6)
             // Centred on the corner: half of it over the gap before the byte.
@@ -3709,6 +3709,13 @@ enum HexTheme {
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
             ? NSColor.systemBlue.withAlphaComponent(0.35)
             : NSColor.systemBlue.withAlphaComponent(0.22)
+    }
+
+    /// The number on a scattered zone's stretch, over the zone's own hue:
+    /// white in the light theme, where that hue is the deeper shade, and black
+    /// in the dark one, where it is the paler.
+    static let zonePieceInk = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? .black : .white
     }
 
     static let eofFill = NSColor(name: nil) { appearance in
