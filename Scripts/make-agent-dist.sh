@@ -68,4 +68,7 @@ for path in "$out"/byteripper-analysis-*; do
     rm -rf "$path"
 done
 
-echo "made $out/$name.tar.gz"
+# One name to hand out: it follows the newest tarball, whatever its version.
+ln -sfn "$name.tar.gz" "$out/byteripper-analysis.tgz"
+
+echo "made $out/$name.tar.gz (aliased as $out/byteripper-analysis.tgz)"

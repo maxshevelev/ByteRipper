@@ -37,9 +37,10 @@ It builds `byteripper-server` and `byteripper-cas` in release, stages the
 folder as `dist/byteripper-analysis-<version>/`, and writes a tarball beside
 it. Only one build is kept: an earlier folder and tarball in the output folder
 are removed once the new one is written — after a successful build, so a
-failure leaves the last good copy. The binaries are built for the architecture
-of the Mac that builds them — build on an Apple-silicon Mac for Apple-silicon
-Macs.
+failure leaves the last good copy. `dist/byteripper-analysis.tgz` is a symlink
+that always names the newest tarball, whatever its version: that is the file to
+hand out. The binaries are built for the architecture of the Mac that builds
+them — build on an Apple-silicon Mac for Apple-silicon Macs.
 
 ## Install it
 
