@@ -58,6 +58,8 @@ public enum TokenCommand: Equatable, Sendable {
                 file = URL(fileURLWithPath: try value())
             case "--config":
                 _ = try value()   // read by ServerCommand before this
+            case "--support":
+                _ = try value()   // read by ServerCommand before this
             case "--no-config":
                 break
             case "--name":

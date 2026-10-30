@@ -1,4 +1,5 @@
 import CodeAnalysis
+import CoreFoundation
 import DumpHost
 import Foundation
 import GhidraHost
@@ -118,14 +119,18 @@ public enum ServerCommand: Equatable {
         // `--config` and `--no-config` may stand anywhere on the line, so
         // they are read first, and the loop below only steps over them.
         var configFile: URL? = ServerConfiguration.defaultFile(in: home)
+        var lineSupport: URL?
         var scan = rest[...]
         while let flag = scan.popFirst() {
             switch flag {
             case "--config":
                 guard let next = scan.popFirst() else { throw Failure(description: "--config needs a file") }
-                configFile = URL(fileURLWithPath: next)
+                configFile = URL(fileURLWithPath: (next as NSString).expandingTildeInPath)
             case "--no-config":
                 configFile = nil
+            case "--support":
+                guard let next = scan.popFirst() else { throw Failure(description: "--support needs a folder") }
+                lineSupport = URL(fileURLWithPath: (next as NSString).expandingTildeInPath)
             case "--help", "-h":
                 return .help
             default:
@@ -140,6 +145,13 @@ public enum ServerCommand: Equatable {
                 throw Failure(description: "\(configFile.path) is not there")
             }
         }
+        // `--support` stands for every verb: `token` and `relay` read their
+        // file and socket from the folder too. The serve loop applies it
+        // again with what its own flags name; both give the same result.
+        if let lineSupport {
+            fromFile.useFolder(lineSupport, tokens: fromFile.tokensFromFile,
+                               socket: fromFile.socketFromFile)
+        }
         func value(_ flag: String) throws -> String {
             guard let next = rest.first, !next.hasPrefix("--") else {
                 throw Failure(description: "\(flag) needs a value")
@@ -147,22 +159,27 @@ public enum ServerCommand: Equatable {
             rest = rest.dropFirst()
             return next
         }
+        // A path a shell would have expanded, and `~/x` written in quotes.
+        func path(_ flag: String) throws -> URL {
+            URL(fileURLWithPath: (try value(flag) as NSString).expandingTildeInPath)
+        }
         switch verb {
         case "help":
             return .help
         case "relay":
-            var path = ProcessInfo.processInfo.environment["BYTERIPPER_SERVER_SOCKET"]
+            var socket = ProcessInfo.processInfo.environment["BYTERIPPER_SERVER_SOCKET"]
                 .map { URL(fileURLWithPath: $0) } ?? fromFile.mcpSocket
             while let flag = rest.popFirst() {
                 switch flag {
-                case "--mcp-socket": path = URL(fileURLWithPath: try value(flag))
+                case "--mcp-socket": socket = try path(flag)
+                case "--support": _ = try value(flag)   // read before the loop
                 case "--config": _ = try value(flag)   // read before the loop
                 case "--no-config": break
                 case "--help", "-h": return .help
                 default: throw Failure(description: "relay does not take \(flag)")
                 }
             }
-            return .relay(path: path.path)
+            return .relay(path: socket.path)
         case "token":
             do {
                 return .token(try TokenCommand.parse(Array(rest), defaultFile: fromFile.tokensFile))
@@ -183,13 +200,13 @@ public enum ServerCommand: Equatable {
                 case "--ghidra":
                     roles.insert(.ghidra)
                 case "--ghidra-home":
-                    configuration.ghidraHome = URL(fileURLWithPath: try value(flag))
+                    configuration.ghidraHome = try path(flag)
                 case "--ghidra-scripts":
-                    configuration.ghidraScripts = URL(fileURLWithPath: try value(flag))
+                    configuration.ghidraScripts = try path(flag)
                 case "--support":
-                    support = URL(fileURLWithPath: try value(flag))
+                    support = try path(flag)
                 case "--projects":
-                    configuration.projects = URL(fileURLWithPath: try value(flag))
+                    configuration.projects = try path(flag)
                 case "--idle":
                     let text = try value(flag)
                     guard let idle = Int(text), idle >= 0 else { throw Failure(description: "--idle takes seconds") }
@@ -197,14 +214,14 @@ public enum ServerCommand: Equatable {
                 case "--listen":
                     listens.append(try Self.listen(try value(flag)))
                 case "--store":
-                    configuration.store = URL(fileURLWithPath: try value(flag))
+                    configuration.store = try path(flag)
                 case "--tokens":
-                    configuration.tokensFile = URL(fileURLWithPath: try value(flag))
+                    configuration.tokensFile = try path(flag)
                     tokensGiven = true
                 case "--server-name":
                     configuration.serverNames.append(try value(flag))
                 case "--dump-roots":
-                    configuration.dumpRoots.append(URL(fileURLWithPath: try value(flag)))
+                    configuration.dumpRoots.append(try path(flag))
                 case "--max-documents":
                     let text = try value(flag)
                     guard let count = Int(text), count > 0 else {
@@ -216,7 +233,7 @@ public enum ServerCommand: Equatable {
                 case "--max-upload-bytes":
                     configuration.limits.uploadBytes = try Self.bytes(flag, try value(flag))
                 case "--mcp-socket":
-                    configuration.mcpSocket = URL(fileURLWithPath: try value(flag))
+                    configuration.mcpSocket = try path(flag)
                     socketGiven = true
                 case "--config":
                     _ = try value(flag)   // read before the loop
@@ -341,6 +358,17 @@ public struct ServerConfiguration: Equatable, Sendable {
         home.appendingPathComponent(".byteripper-server.json", isDirectory: false)
     }
 
+    /// A path written in a configuration file: `~` expanded, and a relative
+    /// one read from the folder the file is in rather than from wherever the
+    /// server happened to be started.
+    static func path(_ text: String, in file: URL) -> URL {
+        let expanded = (text as NSString).expandingTildeInPath
+        if expanded.hasPrefix("/") {
+            return URL(fileURLWithPath: expanded).standardizedFileURL
+        }
+        return file.deletingLastPathComponent().appendingPathComponent(expanded).standardizedFileURL
+    }
+
     /// Points the server's own files at one folder (`--support`, or the
     /// file's `support`): the tokens, the local MCP's socket, the documents
     /// and their uploads. The client token the server checks at start follows
@@ -432,7 +460,7 @@ public struct ServerConfiguration: Equatable, Sendable {
             return text
         }
         func path(_ key: String) throws -> URL? {
-            try text(key).map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath) }
+            try text(key).map { Self.path($0, in: file) }
         }
         func list(_ key: String) throws -> [String]? {
             guard let value = object[key] else { return nil }
@@ -451,8 +479,12 @@ public struct ServerConfiguration: Equatable, Sendable {
         }
         func number(_ key: String) throws -> Int? {
             guard let value = object[key] else { return nil }
-            guard let number = value as? NSNumber else {
+            guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else {
                 throw ServerCommand.Failure(description: "\(file.path): \(key) is a number, not \(value)")
+            }
+            let double = number.doubleValue
+            guard double == double.rounded(), double >= Double(Int.min), double <= Double(Int.max) else {
+                throw ServerCommand.Failure(description: "\(file.path): \(key) is a whole number, not \(value)")
             }
             return number.intValue
         }
@@ -481,17 +513,32 @@ public struct ServerConfiguration: Equatable, Sendable {
         if let home = try path("ghidraHome") { configuration.ghidraHome = home }
         if let scripts = try path("ghidraScripts") { configuration.ghidraScripts = scripts }
         if let roots = try list("dumpRoots") {
-            configuration.dumpRoots = roots.map { URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath) }
+            configuration.dumpRoots = roots.map { Self.path($0, in: file) }
         }
         if let names = try names("serverName") ?? names("serverNames") {
             configuration.serverNames = names
         }
         if let listens = try list("listen") {
-            configuration.listens = try listens.map { try ServerCommand.listen($0) }
+            var unique: [ServerConfiguration.Listen] = []
+            for address in listens {
+                let listen = try ServerCommand.listen(address)
+                if !unique.contains(listen) { unique.append(listen) }
+            }
+            configuration.listens = unique
             configuration.listensFromFile = true
         }
-        if let idle = try number("idle") { configuration.idle = idle }
-        if let documents = try number("maxDocuments") { configuration.limits.documents = documents }
+        if let idle = try number("idle") {
+            guard idle >= 0 else {
+                throw ServerCommand.Failure(description: "\(file.path): idle is seconds, 0 or more")
+            }
+            configuration.idle = idle
+        }
+        if let documents = try number("maxDocuments") {
+            guard documents > 0 else {
+                throw ServerCommand.Failure(description: "\(file.path): maxDocuments is a count, 1 or more")
+            }
+            configuration.limits.documents = documents
+        }
         if let bytes = try size("maxOpenBytes") { configuration.limits.openBytes = bytes }
         if let bytes = try size("maxUploadBytes") { configuration.limits.uploadBytes = bytes }
     }

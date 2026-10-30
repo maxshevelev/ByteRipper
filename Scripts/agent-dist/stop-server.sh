@@ -1,17 +1,30 @@
 #!/bin/bash
-# Stops this copy's analysis server. The owners it started save and exit with
+# Stops this copy's analysis server, found by its process rather than by the
+# pid file it may not have written. The owners it started save and exit with
 # it; nothing in var/ is removed.
 set -euo pipefail
 
 dir="$(cd "$(dirname "$0")/.." && pwd)"
+server="$dir/bin/byteripper-server"
+support="$dir/var/support"
 pidfile="$dir/var/server.pid"
 
-if [ ! -f "$pidfile" ] || ! kill -0 "$(cat "$pidfile")" 2>/dev/null; then
+server_pid() {
+    local candidate line
+    for candidate in $(pgrep -f -- "$server" 2>/dev/null); do
+        line="$(ps -p "$candidate" -o command= 2>/dev/null || true)"
+        case " $line " in
+            *" --support $support "*) printf '%s\n' "$candidate"; return 0 ;;
+        esac
+    done
+    return 1
+}
+
+if ! pid="$(server_pid)"; then
     echo "server not running"
     rm -f "$pidfile"
     exit 0
 fi
-pid="$(cat "$pidfile")"
 kill "$pid"
 for _ in $(seq 1 100); do
     kill -0 "$pid" 2>/dev/null || break

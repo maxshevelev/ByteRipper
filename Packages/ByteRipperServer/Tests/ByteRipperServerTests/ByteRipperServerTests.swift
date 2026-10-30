@@ -214,6 +214,37 @@ final class ServerCommandTests: XCTestCase {
         XCTAssertEqual(socket.tokensFile.path, "/tmp/sup/tokens.json", "the tokens follow the folder")
     }
 
+    /// A relative path in the file is read from the file's folder, a count is
+    /// a whole number, and a repeated listen is bound once.
+    func testTheFilesPathsNumbersAndLists() throws {
+        let home = emptyHome()
+        let file = ServerConfiguration.defaultFile(in: home)
+        try #"{"store": "store", "dumpRoots": ["dumps"], "listen": ["127.0.0.1:9000", "127.0.0.1:9000"]}"#
+            .write(to: file, atomically: true, encoding: .utf8)
+        guard case .serve(let relative) = try ServerCommand.parse([], home: home) else { return XCTFail() }
+        XCTAssertEqual(relative.store.path, home.appendingPathComponent("store").standardizedFileURL.path)
+        XCTAssertEqual(relative.dumpRoots.map(\.path),
+                       [home.appendingPathComponent("dumps").standardizedFileURL.path])
+        XCTAssertEqual(relative.listens, [.init(host: "127.0.0.1", port: 9000)], "one address is bound once")
+
+        for broken in [#"{"idle": true}"#, #"{"idle": -5}"#, #"{"idle": 1.5}"#, #"{"maxDocuments": 0}"#] {
+            try broken.write(to: file, atomically: true, encoding: .utf8)
+            XCTAssertThrowsError(try ServerCommand.parse([], home: home), broken)
+        }
+    }
+
+    /// `--support` reaches the token and relay verbs too, which take their
+    /// file and socket from it.
+    func testSupportReachesEveryVerb() throws {
+        let home = emptyHome()
+        let support = home.appendingPathComponent("sup", isDirectory: true)
+        XCTAssertEqual(try ServerCommand.parse(["token", "list", "--support", support.path], home: home),
+                       .token(.list(file: support.appendingPathComponent("tokens.json"))))
+        guard case .relay(let path) = try ServerCommand.parse(["relay", "--support", support.path],
+                                                              home: home) else { return XCTFail() }
+        XCTAssertEqual(path, support.appendingPathComponent("mcp.sock").path)
+    }
+
     /// The token and relay verbs take `--config` too, and it is not refused.
     func testTheOtherVerbsTakeTheConfigurationFile() throws {
         let home = emptyHome()

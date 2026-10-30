@@ -36,19 +36,26 @@ if [ -f "$dir/var/port" ]; then
 fi
 if [ -f "$dir/var/log/server.log" ]; then
     resolved="$(grep -o 'scripts [^;]*' "$dir/var/log/server.log" | tail -1 | cut -d' ' -f2- || true)"
-    if [ "$resolved" = "$dir/ghidra/scripts" ]; then
+    # The server resolves the symlink it was started through; compare the
+    # folders themselves, not the two spellings of one path.
+    physical="$(cd "$dir" && pwd -P)/ghidra/scripts"
+    if [ "$resolved" = "$physical" ]; then
         ok "server reads the Ghidra scripts from this copy"
     elif [ -n "$resolved" ]; then
-        no "the server reads the Ghidra scripts from $resolved, not $dir/ghidra/scripts"
+        no "the server reads the Ghidra scripts from $resolved, not $physical"
     fi
     grep -o 'Ghidra [0-9.]* at [^;]*' "$dir/var/log/server.log" | tail -1 | while read -r line; do
         note "server: $line"
     done
 fi
-if [ -f "$dir/var/support/tokens.json" ]; then
-    "$dir/bin/byteripper-server" token list --tokens "$dir/var/support/tokens.json" 2>&1 | sed 's/^/      /'
+source "$dir/scripts/common.sh"
+tokens_file="$(tokens_file_for "$dir/var/support")"
+note "configuration: $(config_file)"
+if [ -f "$tokens_file" ]; then
+    note "tokens: $tokens_file"
+    "$dir/bin/byteripper-server" token list --tokens "$tokens_file" 2>&1 | sed 's/^/      /'
 else
-    note "no tokens.json yet; the first start makes one"
+    note "no tokens yet ($tokens_file); the first start makes one"
 fi
 
 [ "$bad" -eq 0 ] && echo "ready" || echo "$bad problem(s)"

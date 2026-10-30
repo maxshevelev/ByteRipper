@@ -181,6 +181,12 @@ away. A `tokens` or `mcpSocket` named in the file survives the launchers'
 and the client-token check follows the tokens file. `--tokens` on the line
 wins over all of it.
 
+A path in the file may be written with `~`, and a relative one is read from the
+folder the file is in, not from wherever the server was started. `idle` is a
+whole number of seconds, 0 or more; `maxDocuments` is a count, 1 or more; a
+size is a number of bytes or `"512 MiB"`. A setting of the wrong shape is
+refused with its key and the file's line.
+
 ## One server, several Macs
 
 The server serves the store and the console on `--listen` addresses, each
@@ -221,6 +227,9 @@ not to do is run two servers on the same `var/`.
   type archives; `var/log/server.log` and the console's activity say so. On a
   machine with no network, copy
   `~/Library/Application Support/ByteRipper/Ghidra` from one that has it.
+- **`Address already in use`** — an address the file lists is taken: remove
+  that line from `listen`, or free the port. The launcher's own address is
+  picked free from 8765; the file's are bound as written.
 - **`Permission denied` on a script or a binary** — the copy came through
   something that does not keep the executable bit (a file taken from a web
   view, a drive formatted without file modes). Put it back once:

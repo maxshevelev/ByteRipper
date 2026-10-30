@@ -12,11 +12,30 @@ log="$dir/var/log/server.log"
 socket="$support/mcp.sock"
 port="${BYTERIPPER_PORT:-}"
 
-if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
-    echo "server already running (pid $(cat "$pidfile"))"
+# A server is running when one of this copy's processes is, whatever the pid
+# file still says — it may be gone, or from a start that never wrote one.
+server_pid() {
+    local candidate line
+    for candidate in $(pgrep -f -- "$server" 2>/dev/null); do
+        line="$(ps -p "$candidate" -o command= 2>/dev/null || true)"
+        case " $line " in
+            *" --support $support "*) printf '%s\n' "$candidate"; return 0 ;;
+        esac
+    done
+    return 1
+}
+
+if pid="$(server_pid)"; then
+    printf '%s\n' "$pid" > "$pidfile"
+    echo "server already running (pid $pid)"
     exit 0
 fi
 mkdir -p "$dir/var/store" "$dir/var/projects" "$dir/var/dumps" "$dir/var/log" "$support"
+
+# The tokens file the configuration names, when it names one: the server reads
+# that file, so a token made here and left in the folder would never be used.
+source "$dir/scripts/common.sh"
+tokens_file="$(tokens_file_for "$support")"
 
 # A port of its own: the ByteRipper app's server usually has 8765 on a Mac
 # that analyses dumps, so the first free one from 8765 on is taken.
@@ -34,9 +53,9 @@ if [ -z "$port" ]; then
 fi
 echo "$port" > "$dir/var/port"
 
-if [ ! -f "$support/tokens.json" ]; then
-    echo "first start: making this install's admin token"
-    secret="$("$server" token add --name admin --rights admin --tokens "$support/tokens.json")"
+if [ ! -f "$tokens_file" ]; then
+    echo "first start: making this install's admin token in $tokens_file"
+    secret="$("$server" token add --name admin --rights admin --tokens "$tokens_file")"
     ( umask 077; printf '%s\n' "$secret" | head -1 > "$support/admin-token.txt" )
     echo "  the console's token is in $support/admin-token.txt"
 fi

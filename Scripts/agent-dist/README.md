@@ -32,6 +32,10 @@ Or, by hand:
 ./scripts/doctor.sh         # what is there, what is missing
 ```
 
+On the first start the admin token is made in the tokens file the
+configuration names — or in `var/support/tokens.json` when it names none — and
+the secret is written to `var/support/admin-token.txt`.
+
 The console is at `http://127.0.0.1:<port>/admin` — the first free port from
 8765, written to `var/port`, or `BYTERIPPER_PORT`; the token is in
 `var/support/admin-token.txt`. Open a dump from it — the dumps it may open are
@@ -55,8 +59,10 @@ so nothing in the file stands in the way of what you type.
 Every flag of `byteripper-server --help` is a key without its `--`: `support`,
 `store`, `projects`, `dumpRoots`, `ghidraHome`, `ghidraScripts`, `tokens`,
 `mcpSocket`, `listen`, `serverName`, `idle`, `maxDocuments`, `maxOpenBytes`,
-`maxUploadBytes`. Paths are strings (`~` is expanded), lists are arrays, sizes
-are numbers or `"512 MiB"`, and `serverName` is a name or a list of names.
+`maxUploadBytes`. Paths are strings (`~` is expanded, and a relative one is
+read from the file's folder), lists are arrays, sizes
+are numbers or `"512 MiB"`, and `serverName` is a name or a list of names;
+`idle` is whole seconds, 0 or more, and `maxDocuments` a count, 1 or more.
 `listen` and `dumpRoots` are lists a flag adds to:
 the launchers' `--listen 127.0.0.1:<port>` does not drop the tailnet address
 the file names. A `tokens` (or `mcpSocket`) in the file outlives the

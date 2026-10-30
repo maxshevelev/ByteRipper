@@ -44,7 +44,7 @@ cp -R "$repo/Skills/ghidra-uefi/tests" "$stage/skills/ghidra-uefi/"
 cp "$repo/Scripts/agent-dist/"*.sh "$stage/scripts/"
 cp "$repo/Scripts/agent-dist/README.md" "$repo/Scripts/agent-dist/CLAUDE.md" "$stage/"
 cp "$repo/INSTALL.md" "$stage/"
-chmod 755 "$stage"/scripts/*.sh
+chmod 755 "$stage"/scripts/{start-server,stop-server,restart-server,agent,doctor}.sh
 
 ln -s ../../skills/ghidra-uefi "$stage/.claude/skills/ghidra-uefi"
 
