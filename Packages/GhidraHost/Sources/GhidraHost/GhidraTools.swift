@@ -146,26 +146,69 @@ public enum GhidraTools {
             }
         }
         return [
-            paged("ghidra_functions", "functions", "List a module's functions",
-                  "The module's functions as Ghidra holds them now: entry, name, name_source, size, signature. "
-                  + "Paged by `offset` and `limit`; `more` says whether there are more."),
+            AgentTool(
+                name: "ghidra_functions",
+                title: "List a module's functions",
+                description: """
+                    The module's functions as Ghidra holds them now: entry, name, name_source, size, \
+                    signature. `name_contains` and `name_source` (a Ghidra source such as USER_DEFINED) \
+                    narrow the list, `address_from`/`address_to` narrow it by entry. `filter: \
+                    "unfinished"` keeps what a review has not passed — a parameter or a local Ghidra \
+                    still names itself or holds as `undefined`, or no plate comment — each with \
+                    `leftovers`, and `summary` says how many of how many; that filter decompiles every \
+                    function, so it is slow on a large module. Paged by `offset` and `limit`; `next` \
+                    says where the next page starts.
+                    """,
+                inputSchema: AgentSchema.object([
+                    "module": moduleProperty,
+                    "offset": AgentSchema.integer("How many to skip. Default 0."),
+                    "limit": AgentSchema.limit(default: 200, maximum: 1000),
+                    "filter": AgentSchema.choice(["unfinished"], "Only the functions a review has not passed."),
+                    "name_contains": AgentSchema.string("Only functions whose name holds this text."),
+                    "name_source": AgentSchema.string(
+                        "Only functions from this Ghidra source: DEFAULT, ANALYSIS, IMPORTED, USER_DEFINED."),
+                    "address_from": AgentSchema.offset("Only functions whose entry is at or after this address."),
+                    "address_to": AgentSchema.offset("Only functions whose entry is at or before this address.")
+                ], required: ["module"])
+            ) { call_ in
+                let arguments = call_.arguments
+                let module = try module(arguments)
+                var query: [String: String] = ["limit": String(try arguments.limit(default: 200, maximum: 1000))]
+                if arguments.has("offset") { query["offset"] = String(try arguments.integer("offset")) }
+                if let filter = try arguments.optionalString("filter") { query["filter"] = filter }
+                if let contains = try arguments.optionalString("name_contains") { query["name_contains"] = contains }
+                if let source = try arguments.optionalString("name_source") { query["name_source"] = source }
+                if let from = try arguments.optionalOffset("address_from") {
+                    query["address_from"] = String(format: "0x%llX", from)
+                }
+                if let to = try arguments.optionalOffset("address_to") {
+                    query["address_to"] = String(format: "0x%llX", to)
+                }
+                return try await answer { try await backend.readCall(module, "functions", query: query) }
+            },
             AgentTool(
                 name: "ghidra_function",
                 title: "Read one function",
                 description: """
                     One function as Ghidra holds it now: its signature, its parameters and locals with \
                     their `storage` and `first_use` (what `ghidra_rename_variable` names a local by), its \
-                    comments, and its decompiled C — fresh after every write, ahead of what the app shows \
-                    until a publish.
+                    plate comment, what is left to name (`leftovers`), and its decompiled C — fresh \
+                    after every write, ahead of what the app shows until a publish. `summary: true` \
+                    leaves the C and the equates out, for walking a module without its text.
                     """,
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,
-                    "address": AgentSchema.string("The function's entry address, e.g. \"0x68A\".")
+                    "address": AgentSchema.string("The function's entry address, e.g. \"0x68A\"."),
+                    "summary": AgentSchema.boolean(
+                        "Leave out the decompiled C and the equates: signature, parameters, locals, "
+                        + "plate, leftovers.")
                 ], required: ["module", "address"])
             ) { call in
                 let module = try module(call.arguments)
                 let address = try call.arguments.string("address")
-                return try await answer { try await backend.readCall(module, "function/\(address)", query: [:]) }
+                var query: [String: String] = [:]
+                if try call.arguments.bool("summary", default: false) { query["summary"] = "1" }
+                return try await answer { try await backend.readCall(module, "function/\(address)", query: query) }
             },
             AgentTool(
                 name: "ghidra_disassembly",
@@ -241,6 +284,34 @@ public enum GhidraTools {
                 let module = try module(call.arguments)
                 let name = try call.arguments.string("name")
                 return try await answer { try await backend.readCall(module, "type", query: ["name": name]) }
+            },
+            AgentTool(
+                name: "ghidra_types",
+                title: "List the module's types",
+                description: """
+                    The types the program holds — what a review defined and what the module used — with \
+                    `kind` (struct, union, enum, typedef, function, pointer, array), `size` and `source` \
+                    (the program, or the archive the type came from). `contains` narrows by name, \
+                    `source` by origin, and `builtin` adds Ghidra's own types, left out by default. Paged \
+                    by `offset` and `limit`; `total` is how many match.
+                    """,
+                inputSchema: AgentSchema.object([
+                    "module": moduleProperty,
+                    "contains": AgentSchema.string("Only types whose name holds this text."),
+                    "source": AgentSchema.string("Only types from this origin: \"program\", or an archive's name."),
+                    "builtin": AgentSchema.boolean("Add Ghidra's own types. Default false."),
+                    "offset": AgentSchema.integer("How many to skip. Default 0."),
+                    "limit": AgentSchema.limit(default: 200, maximum: 1000)
+                ], required: ["module"])
+            ) { call in
+                let arguments = call.arguments
+                let module = try module(arguments)
+                var query: [String: String] = ["limit": String(try arguments.limit(default: 200, maximum: 1000))]
+                if arguments.has("offset") { query["offset"] = String(try arguments.integer("offset")) }
+                if let contains = try arguments.optionalString("contains") { query["contains"] = contains }
+                if let source = try arguments.optionalString("source") { query["source"] = source }
+                if try arguments.bool("builtin", default: false) { query["builtin"] = "1" }
+                return try await answer { try await backend.readCall(module, "types", query: query) }
             }
         ]
     }
@@ -269,9 +340,12 @@ public enum GhidraTools {
         }
         return [
             write("ghidra_rename", "rename/function", "Name a function",
-                  "Names the function at `address`. A name Ghidra would make unique (`Foo_1`) is refused: "
+                  "Names the function at `address`. Any address inside a function names that function, "
+                  + "and the answer says which it matched (`matched: \"entry\"` or `\"containing\"`); an "
+                  + "address that carries a label is refused — a label is named with `ghidra_label`, "
+                  + "which is not this call. A name Ghidra would make unique (`Foo_1`) is refused: "
                   + "choose another. `reason` says why, as the app shows it.",
-                  ["address": AgentSchema.string("The function's entry address."),
+                  ["address": AgentSchema.string("The function's entry address, or any address inside it."),
                    "name": AgentSchema.string("The new name."),
                    "reason": AgentSchema.string("Why this name, in a few words.")],
                   required: ["address", "name"]) { arguments in
@@ -306,20 +380,65 @@ public enum GhidraTools {
                 body["by"] = "agent"
                 return body
             },
-            write("ghidra_rename_variable", "rename/variable", "Name a parameter or a local",
-                  "Names, and perhaps types, a local by its `storage` and, for a register, `first_use` — as "
-                  + "`ghidra_function` lists them — or a parameter by its `ordinal`. Never by Ghidra's own "
-                  + "name for it (`iVar4`): those renumber.",
-                  ["function": AgentSchema.string("The function's entry address."),
-                   "name": AgentSchema.string("The new name."),
-                   "storage": AgentSchema.string("The local's storage, e.g. \"EAX:4\" or \"Stack[-0x18]:4\"."),
-                   "first_use": AgentSchema.string("For a register local: the address of its first use."),
-                   "ordinal": AgentSchema.integer("Or a parameter by its position, from 0."),
-                   "type": AgentSchema.string("A C type for it, e.g. \"EFI_PEI_SERVICES **\".")],
-                  required: ["function", "name"]) { arguments in
+            AgentTool(
+                name: "ghidra_rename_variable",
+                title: "Name or type a parameter or a local",
+                description: """
+                    Names, and perhaps types, a local by its `storage` and, for a register, \
+                    `first_use` — as `ghidra_function` lists them — or a parameter by its `ordinal`. \
+                    Never by Ghidra's own name for it (`iVar4`): those renumber. `type` alone types it \
+                    and keeps the name. `items` does several in one call, each in a transaction of its \
+                    own: the answer lists what applied and why an entry did not.
+                    """,
+                inputSchema: AgentSchema.object([
+                    "module": moduleProperty,
+                    "function": AgentSchema.string(
+                        "The function's entry address; with `items`, the function they all belong to."),
+                    "name": AgentSchema.string("The new name; leave it out to type only."),
+                    "storage": AgentSchema.string("The local's storage, e.g. \"EAX:4\" or \"Stack[-0x18]:4\"."),
+                    "first_use": AgentSchema.string("For a register local: the address of its first use."),
+                    "ordinal": AgentSchema.integer("Or a parameter by its position, from 0."),
+                    "type": AgentSchema.string("A C type for it, e.g. \"EFI_PEI_SERVICES **\"."),
+                    "items": ["type": "array",
+                              "items": AgentSchema.object([
+                                  "name": AgentSchema.string("The new name; leave it out to type only."),
+                                  "storage": AgentSchema.string("The local's storage."),
+                                  "first_use": AgentSchema.string(
+                                      "For a register local: the address of its first use."),
+                                  "ordinal": AgentSchema.integer("Or a parameter by its position, from 0."),
+                                  "type": AgentSchema.string("A C type for it.")
+                              ]),
+                              "description": "Several variables of the function in one call."]
+                ], required: ["module", "function"]),
+                annotations: .edit
+            ) { call_ in
+                let arguments = call_.arguments
+                let module = try module(arguments)
+                let function = try arguments.string("function")
+                if let items = arguments["items"] {
+                    guard case .array(let list) = items else {
+                        throw AgentToolError("`items` is a list of variables.")
+                    }
+                    var requests: [JSONValue] = []
+                    for item in list {
+                        guard case .object(var fields) = item else {
+                            throw AgentToolError("An item of `items` is an object.")
+                        }
+                        fields["function"] = .string(function)
+                        requests.append(.object(fields))
+                    }
+                    let payload = JSONValue.object(["items": .array(requests)]).encoded()
+                    return try await answer {
+                        try await backend.writeCall(module, "rename/variables", body: payload)
+                    }
+                }
+                guard try arguments.optionalString("name") != nil || arguments.has("type") else {
+                    throw AgentToolError("Give `name`, `type`, or both — or `items` for several variables.")
+                }
                 var body = try optional(arguments, ["function", "name", "storage", "first_use", "type"])
                 if arguments.has("ordinal") { body["ordinal"] = .int(try arguments.integer("ordinal")) }
-                return body
+                let payload = JSONValue.object(body).encoded()
+                return try await answer { try await backend.writeCall(module, "rename/variable", body: payload) }
             },
             write("ghidra_signature", "set/signature", "Set a function's signature",
                   "Sets the C signature of the function at `address`, the EDK2 way if wanted "
@@ -348,14 +467,50 @@ public enum GhidraTools {
                 body["by"] = "agent"
                 return body
             },
-            write("ghidra_comment", "set/comment", "Write a comment",
-                  "Sets the comment of `kind` at `address`, replacing the one there; empty `text` clears it. "
-                  + "A plate comment heads a function in the C; pre and eol comments show in the C too.",
-                  ["address": AgentSchema.string("The address."),
-                   "text": AgentSchema.string("The comment; empty clears it."),
-                   "kind": AgentSchema.choice(["pre", "post", "eol", "plate", "repeatable"], "Default \"pre\".")],
-                  required: ["address", "text"]) { arguments in
-                try optional(arguments, ["address", "text", "kind"])
+            AgentTool(
+                name: "ghidra_comment",
+                title: "Write a comment",
+                description: """
+                    Sets the comment of `kind` at `address`, replacing the one there; empty `text` \
+                    clears it. A plate comment heads a function in the C; pre and eol comments show in \
+                    the C too. `items` writes several in one call, each in a transaction of its own.
+                    """,
+                inputSchema: AgentSchema.object([
+                    "module": moduleProperty,
+                    "address": AgentSchema.string("The address."),
+                    "text": AgentSchema.string("The comment; empty clears it."),
+                    "kind": AgentSchema.choice(["pre", "post", "eol", "plate", "repeatable"], "Default \"pre\"."),
+                    "items": ["type": "array",
+                              "items": AgentSchema.object([
+                                  "address": AgentSchema.string("The address."),
+                                  "text": AgentSchema.string("The comment; empty clears it."),
+                                  "kind": AgentSchema.choice(["pre", "post", "eol", "plate", "repeatable"],
+                                                             "Default \"pre\".")
+                              ], required: ["address", "text"]),
+                              "description": "Several comments in one call."]
+                ], required: ["module"]),
+                annotations: .edit
+            ) { call_ in
+                let arguments = call_.arguments
+                let module = try module(arguments)
+                if let items = arguments["items"] {
+                    guard case .array(let list) = items else {
+                        throw AgentToolError("`items` is a list of comments.")
+                    }
+                    for item in list {
+                        guard case .object = item else {
+                            throw AgentToolError("An item of `items` is an object.")
+                        }
+                    }
+                    let payload = JSONValue.object(["items": .array(list)]).encoded()
+                    return try await answer { try await backend.writeCall(module, "set/comments", body: payload) }
+                }
+                guard arguments.has("address"), arguments.has("text") else {
+                    throw AgentToolError("Give `address` and `text` — or `items` for several comments.")
+                }
+                let body = try optional(arguments, ["address", "text", "kind"])
+                let payload = JSONValue.object(body).encoded()
+                return try await answer { try await backend.writeCall(module, "set/comment", body: payload) }
             },
             write("ghidra_code_mode", "set/code-mode", "Read a range as 16-bit or 32-bit code",
                   "Reads the code in [`start`, `end`) as 16-bit or as 32-bit x86. A 32-bit module holds "
@@ -462,12 +617,22 @@ public enum GhidraTools {
                 Saves the module's program and stores its artifact and review document as the next \
                 revision: every ByteRipper reading this store shows the new names. Publishing an unchanged \
                 program is the same revision. `type_conflicts` names types another review defines \
-                differently, which stay in this module only: `ghidra_type_definition` shows both.
+                differently, which stay in this module only: `ghidra_type_definition` shows both. \
+                `dry_run: true` answers the same without storing: the artifact's counts, the revision \
+                it would become, the description's size and the type conflicts — the export is done, so \
+                it costs what a publish costs.
                 """,
-            inputSchema: AgentSchema.object(["module": moduleProperty], required: ["module"]),
+            inputSchema: AgentSchema.object([
+                "module": moduleProperty,
+                "dry_run": AgentSchema.boolean(
+                    "Answer what a publish would store — counts, the revision, the conflicts — and store nothing.")
+            ], required: ["module"]),
             annotations: .edit
         ) { call in
             let module = try module(call.arguments)
+            if try call.arguments.bool("dry_run", default: false) {
+                return try await answer { try await backend.publishPreview(module) }
+            }
             return try await answer { try await backend.publishModule(module, by: "agent") }
         }
     }

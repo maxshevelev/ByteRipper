@@ -244,7 +244,7 @@ public class Owner {
             if (method.equals("GET")) {
                 if (path.equals("/v1/hello")) { json(exchange, 200, hello()); return; }
                 if (path.equals("/v1/functions")) { json(exchange, 200, functions(query)); return; }
-                if (path.startsWith("/v1/function/")) { json(exchange, 200, function(path.substring(13))); return; }
+                if (path.startsWith("/v1/function/")) { json(exchange, 200, function(path.substring(13), query)); return; }
                 if (path.startsWith("/v1/disassembly/")) { json(exchange, 200, disassembly(path.substring(16), query)); return; }
                 if (path.equals("/v1/xrefs")) { json(exchange, 200, xrefs(query)); return; }
                 if (path.equals("/v1/data")) { json(exchange, 200, data(query, false)); return; }
@@ -253,6 +253,7 @@ public class Owner {
                 if (path.equals("/v1/review/description")) { publishedDescription(exchange); return; }
                 if (path.equals("/v1/description")) { json(exchange, 200, description()); return; }
                 if (path.equals("/v1/type")) { json(exchange, 200, readType(query)); return; }
+                if (path.equals("/v1/types")) { json(exchange, 200, types(query)); return; }
             } else if (method.equals("DELETE") && path.equals("/v1/lease")) {
                 json(exchange, 200, release(exchange));
                 return;
@@ -264,6 +265,8 @@ public class Owner {
                     case "/v1/rename/label" -> write(exchange, this::renameLabel);
                     case "/v1/create/function" -> write(exchange, this::createFunction);
                     case "/v1/rename/variable" -> write(exchange, this::renameVariable);
+                    case "/v1/rename/variables" -> batch(exchange, this::renameVariable);
+                    case "/v1/set/comments" -> batch(exchange, this::setComment);
                     case "/v1/set/signature" -> write(exchange, this::setSignature);
                     case "/v1/set/comment" -> write(exchange, this::setComment);
                     case "/v1/set/data" -> write(exchange, this::setData);
@@ -322,35 +325,129 @@ public class Owner {
         return answer;
     }
 
-    private JsonObject functions(Map<String, String> query) throws Failure {
-        int offset = integer(query, "offset", 0), limit = Math.min(integer(query, "limit", 500), 5000);
-        JsonArray list = new JsonArray();
-        int index = 0;
-        boolean more = false;
-        for (Function function : program.getFunctionManager().getFunctions(true)) {
-            if (index++ < offset) continue;
-            if (list.size() == limit) { more = true; break; }
-            JsonObject item = new JsonObject();
-            item.addProperty("entry", hex(function.getEntryPoint()));
-            item.addProperty("name", function.getName());
-            item.addProperty("name_source", function.getSymbol().getSource().toString());
-            item.addProperty("size", function.getBody().getNumAddresses());
-            item.addProperty("signature", function.getPrototypeString(false, false));
-            list.add(item);
+    /** The names that say a review has not passed: Ghidra's placeholders. */
+    private static final java.util.regex.Pattern PLACEHOLDER = java.util.regex.Pattern.compile(
+        "^(param_\\d+|local_[0-9a-fA-F]+|[a-z]{1,3}Var\\d+|extraout_[A-Z0-9]+|in_[A-Z0-9]+"
+        + "|unaff_[A-Z0-9]+|undefined.*)$");
+
+    private static boolean placeholder(String name) {
+        return name != null && PLACEHOLDER.matcher(name).matches();
+    }
+
+    private static boolean undefined(DataType type) {
+        if (type == null) return true;
+        if (type instanceof ghidra.program.model.data.Undefined) return true;
+        String name = type.getDisplayName();
+        return name != null && name.startsWith("undefined");
+    }
+
+    /**
+     * What a review has left in this function: parameters and locals Ghidra
+     * still names itself or holds as `undefined`, and no plate comment. Null
+     * when there are none — `filter=unfinished` and the finished-function bar
+     * of the skill read this, one call each.
+     */
+    private JsonObject leftovers(Function function) {
+        int parameters = 0, locals = 0;
+        for (Parameter parameter : function.getParameters()) {
+            if (placeholder(parameter.getName()) || undefined(parameter.getDataType())) parameters++;
         }
-        JsonObject answer = identity();
-        answer.add("functions", list);
-        if (more) answer.addProperty("next", offset + limit);
+        DecompileResults results = decompile(function);
+        HighFunction high = results == null ? null : results.getHighFunction();
+        if (high != null) {
+            Iterator<HighSymbol> symbols = high.getLocalSymbolMap().getSymbols();
+            while (symbols.hasNext()) {
+                HighSymbol symbol = symbols.next();
+                if (symbol.isParameter()) continue;
+                if (symbol instanceof ghidra.program.model.pcode.EquateSymbol) continue;
+                if (placeholder(symbol.getName()) || undefined(symbol.getDataType())) locals++;
+            }
+        }
+        String plate = function.getComment();
+        boolean noPlate = plate == null || plate.isBlank();
+        if (parameters == 0 && locals == 0 && !noPlate) return null;
+        JsonObject answer = new JsonObject();
+        if (parameters > 0) answer.addProperty("params", parameters);
+        if (locals > 0) answer.addProperty("locals", locals);
+        if (noPlate) answer.addProperty("no_plate", true);
         return answer;
     }
 
-    private JsonObject function(String text) throws Failure {
+    private JsonObject item(Function function) {
+        JsonObject item = new JsonObject();
+        item.addProperty("entry", hex(function.getEntryPoint()));
+        item.addProperty("name", function.getName());
+        item.addProperty("name_source", function.getSymbol().getSource().toString());
+        item.addProperty("size", function.getBody().getNumAddresses());
+        item.addProperty("signature", function.getPrototypeString(false, false));
+        return item;
+    }
+
+    /**
+     * The functions, narrowed: `name_contains`, `address_from`/`address_to`
+     * (their entries), `name_source` (a Ghidra `SourceType` such as
+     * `USER_DEFINED`), and `filter=unfinished` — the functions a review has
+     * not passed. That one decompiles every function to see its locals, and
+     * says how many it checked in `summary`.
+     */
+    private JsonObject functions(Map<String, String> query) throws Failure {
+        int offset = integer(query, "offset", 0), limit = Math.min(integer(query, "limit", 500), 5000);
+        String filter = query.getOrDefault("filter", "");
+        if (!filter.isEmpty() && !filter.equals("unfinished")) {
+            throw new Failure(400, "filter is \"unfinished\" or left out");
+        }
+        boolean unfinished = filter.equals("unfinished");
+        String contains = query.get("name_contains");
+        String source = query.get("name_source");
+        Long from = query.containsKey("address_from") ? address(query.get("address_from")).getOffset() : null;
+        Long to = query.containsKey("address_to") ? address(query.get("address_to")).getOffset() : null;
+        JsonArray matched = new JsonArray();
+        int scanned = 0;
+        for (Function function : program.getFunctionManager().getFunctions(true)) {
+            scanned++;
+            if (contains != null && !function.getName().toLowerCase(java.util.Locale.ROOT)
+                    .contains(contains.toLowerCase(java.util.Locale.ROOT))) continue;
+            if (source != null && !function.getSymbol().getSource().toString().equalsIgnoreCase(source)) continue;
+            long entry = function.getEntryPoint().getOffset();
+            if (from != null && entry < from) continue;
+            if (to != null && entry > to) continue;
+            JsonObject leftovers = unfinished ? leftovers(function) : null;
+            if (unfinished && leftovers == null) continue;
+            JsonObject item = item(function);
+            if (leftovers != null) item.add("leftovers", leftovers);
+            matched.add(item);
+        }
+        int total = matched.size();
+        int start = Math.min(offset, total), end = Math.min(start + limit, total);
+        JsonArray page = new JsonArray();
+        for (int index = start; index < end; index++) page.add(matched.get(index));
+        JsonObject answer = identity();
+        answer.add("functions", page);
+        if (end < total) answer.addProperty("next", end);
+        if (unfinished) {
+            JsonObject summary = new JsonObject();
+            summary.addProperty("functions", scanned);
+            summary.addProperty("unfinished", total);
+            answer.add("summary", summary);
+        }
+        return answer;
+    }
+
+    /**
+     * One function. `summary=1` leaves the decompiled C and the equates out —
+     * signature, parameters, locals, plate comment and what is left to name —
+     * for walking a module without its text.
+     */
+    private JsonObject function(String text, Map<String, String> query) throws Failure {
+        boolean summary = "1".equals(query.get("summary")) || "true".equals(query.get("summary"));
         Function function = functionAt(text);
         JsonObject answer = identity();
         answer.addProperty("entry", hex(function.getEntryPoint()));
         answer.addProperty("name", function.getName());
         answer.addProperty("name_source", function.getSymbol().getSource().toString());
         answer.addProperty("signature", function.getPrototypeString(false, false));
+        String plate = function.getComment();
+        if (plate != null && !plate.isBlank()) answer.addProperty("plate", plate);
         JsonArray parameters = new JsonArray();
         for (Parameter parameter : function.getParameters()) {
             JsonObject item = new JsonObject();
@@ -385,12 +482,71 @@ public class Owner {
             }
         }
         answer.add("locals", locals);
-        answer.add("equates", equatesIn(function));
-        answer.addProperty("c", results != null && results.getDecompiledFunction() != null
-                           ? results.getDecompiledFunction().getC() : null);
+        JsonObject leftovers = leftovers(function);
+        if (leftovers != null) answer.add("leftovers", leftovers);
+        if (!summary) {
+            answer.add("equates", equatesIn(function));
+            answer.addProperty("c", results != null && results.getDecompiledFunction() != null
+                               ? results.getDecompiledFunction().getC() : null);
+        }
         if (results != null && !results.decompileCompleted()) {
             answer.addProperty("decompile_error", results.getErrorMessage());
         }
+        return answer;
+    }
+
+    private static String kind(DataType type) {
+        if (type instanceof ghidra.program.model.data.Structure) return "struct";
+        if (type instanceof ghidra.program.model.data.Union) return "union";
+        if (type instanceof ghidra.program.model.data.Enum) return "enum";
+        if (type instanceof ghidra.program.model.data.TypeDef) return "typedef";
+        if (type instanceof ghidra.program.model.data.FunctionDefinition) return "function";
+        if (type instanceof ghidra.program.model.data.Pointer) return "pointer";
+        if (type instanceof ghidra.program.model.data.Array) return "array";
+        return "other";
+    }
+
+    /**
+     * The types the program holds — what a review defined and what it used —
+     * with their kind, size and origin: `program`, or the archive they came
+     * from. `contains` narrows by name, `source` by origin, and `builtin=1`
+     * adds Ghidra's own types, left out by default.
+     */
+    private JsonObject types(Map<String, String> query) throws Failure {
+        int offset = integer(query, "offset", 0), limit = Math.min(integer(query, "limit", 500), 5000);
+        String contains = query.get("contains");
+        String source = query.get("source");
+        boolean builtins = "1".equals(query.get("builtin")) || "true".equals(query.get("builtin"));
+        java.util.List<JsonObject> matched = new java.util.ArrayList<>();
+        Iterator<DataType> all = program.getDataTypeManager().getAllDataTypes();
+        while (all.hasNext()) {
+            DataType type = all.next();
+            if (type instanceof ghidra.program.model.data.BuiltInDataType && !builtins) continue;
+            if (contains != null && !type.getName().toLowerCase(java.util.Locale.ROOT)
+                    .contains(contains.toLowerCase(java.util.Locale.ROOT))) continue;
+            ghidra.program.model.data.SourceArchive archive = type.getSourceArchive();
+            String origin = archive == null || archive.getSourceArchiveID() == null
+                || archive.getArchiveType() == ghidra.program.model.data.ArchiveType.PROGRAM
+                ? "program" : archive.getName();
+            if (source != null && !origin.equalsIgnoreCase(source)) continue;
+            JsonObject item = new JsonObject();
+            item.addProperty("name", type.getName());
+            item.addProperty("path", type.getPathName());
+            item.addProperty("kind", kind(type));
+            item.addProperty("size", type.getLength());
+            item.addProperty("source", origin);
+            String description = type.getDescription();
+            if (description != null && !description.isEmpty()) item.addProperty("description", description);
+            matched.add(item);
+        }
+        int total = matched.size();
+        int start = Math.min(offset, total), end = Math.min(start + limit, total);
+        JsonArray page = new JsonArray();
+        for (int index = start; index < end; index++) page.add(matched.get(index));
+        JsonObject answer = identity();
+        answer.add("types", page);
+        answer.addProperty("total", total);
+        if (end < total) answer.addProperty("next", end);
         return answer;
     }
 
@@ -545,7 +701,11 @@ public class Owner {
      * the client stores the body and decides what that publish is.
      */
     private void publish(HttpExchange exchange) throws Exception {
-        if (program.isChanged()) program.save("publish", TaskMonitor.DUMMY);
+        // A preview exports the same artifact and works out the same conflicts
+        // without saving the program or merging types into the shared archive:
+        // what a publish would store, before it is stored.
+        boolean dryRun = "1".equals(query(exchange.getRequestURI().getRawQuery()).get("dry_run"));
+        if (!dryRun && program.isChanged()) program.save("publish", TaskMonitor.DUMMY);
         File out = File.createTempFile("owner-export-", ".json");
         try {
             ExportCode export = new ExportCode();
@@ -556,7 +716,8 @@ public class Owner {
             byte[] artifact = Files.readAllBytes(out.toPath());
             if (artifact.length == 0) throw new Failure(500, "the export wrote nothing");
             published = Harvest.of(program, options.get("module"), options.get("project-id"));
-            java.util.List<String> conflicts = mergeReviewTypes();
+            java.util.List<String> conflicts = mergeReviewTypes(!dryRun);
+            exchange.getResponseHeaders().set("X-Owner-Dry-Run", Boolean.toString(dryRun));
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.getResponseHeaders().set("X-Owner-Modification", Long.toString(program.getModificationNumber()));
             exchange.getResponseHeaders().set("X-Owner-Reviewed", Boolean.toString(published.reviewed));
@@ -582,10 +743,22 @@ public class Owner {
      * the program keeps its own, and choosing is a person's (§16.5). The
      * lock is held for the length of the merge, a second or so.
      */
-    private java.util.List<String> mergeReviewTypes() throws Exception {
+    private java.util.List<String> mergeReviewTypes(boolean apply) throws Exception {
         java.util.List<String> conflicts = new java.util.ArrayList<>();
         java.util.TreeMap<String, String> mine = Harvest.reviewTypes(program);
         if (reviewTypes == null || mine.isEmpty()) return conflicts;
+        if (!apply) {
+            if (!reviewTypes.isFile()) return conflicts;
+            try (FileChannel channel = lockChannel(); FileLock lock = channel.lock()) {
+                FileDataTypeManager shared = FileDataTypeManager.openFileArchive(reviewTypes, false);
+                try {
+                    conflicts.addAll(typeConflicts(mine, shared));
+                } finally {
+                    shared.close();
+                }
+            }
+            return conflicts;
+        }
         reviewTypes.getParentFile().mkdirs();
         try (FileChannel channel = lockChannel(); FileLock lock = channel.lock()) {
             FileDataTypeManager shared = reviewTypes.isFile()
@@ -623,6 +796,45 @@ public class Owner {
             }
         }
         return conflicts;
+    }
+
+    /** The names a merge would refuse, read-only: the same rules, no writes. */
+    private java.util.List<String> typeConflicts(java.util.TreeMap<String, String> mine,
+                                                 FileDataTypeManager shared) {
+        java.util.List<String> conflicts = new java.util.ArrayList<>();
+        for (String name : mine.keySet()) {
+            java.util.List<DataType> here = new java.util.ArrayList<>();
+            program.getDataTypeManager().findDataTypes(name, here);
+            if (here.isEmpty()) continue;
+            java.util.List<DataType> there = new java.util.ArrayList<>();
+            shared.findDataTypes(name, there);
+            if (there.isEmpty()) continue;
+            DataType ours = here.get(0), theirs = there.get(0);
+            if (theirs instanceof ghidra.program.model.data.Enum sharedEnum
+                && ours instanceof ghidra.program.model.data.Enum ownEnum) {
+                if (enumConflict(ownEnum, sharedEnum)) conflicts.add(name);
+            } else if (!theirs.isEquivalent(ours) && commentsConflict(ours, theirs)) {
+                conflicts.add(name);
+            }
+        }
+        return conflicts;
+    }
+
+    private static boolean enumConflict(ghidra.program.model.data.Enum own,
+                                        ghidra.program.model.data.Enum shared) {
+        for (String name : own.getNames()) {
+            long value = own.getValue(name);
+            if (shared.contains(name) ? shared.getValue(name) != value : shared.contains(value)) return true;
+        }
+        return false;
+    }
+
+    private static boolean commentsConflict(DataType own, DataType shared) {
+        DataType ownBase = own instanceof ghidra.program.model.data.TypeDef def ? def.getBaseDataType() : own;
+        DataType sharedBase = shared instanceof ghidra.program.model.data.TypeDef def ? def.getBaseDataType() : shared;
+        if (!(ownBase instanceof ghidra.program.model.data.Composite mine)
+            || !(sharedBase instanceof ghidra.program.model.data.Composite theirs)) return true;
+        return !uncommented(mine).isEquivalent(uncommented(theirs));
     }
 
     /**
@@ -857,8 +1069,72 @@ public class Owner {
         }
     }
 
+    /**
+     * Several changes of one kind in one call — `{"items": [{…}, …]}` — each
+     * in a transaction of its own, so one refused entry leaves the others
+     * done: a function with fifteen locals is one call, and the answer says
+     * which entries applied and why the others did not.
+     */
+    private JsonObject batch(HttpExchange exchange, Change change) throws Exception {
+        requireLease(exchange);
+        JsonObject body = body(exchange);
+        JsonElement items = body.get("items");
+        if (items == null || !items.isJsonArray()) throw new Failure(400, "items is a list of changes");
+        JsonArray requests = items.getAsJsonArray();
+        if (requests.size() > 200) throw new Failure(400, "items holds at most 200 changes");
+        JsonArray answers = new JsonArray();
+        for (JsonElement element : requests) {
+            if (!element.isJsonObject()) {
+                JsonObject refused = new JsonObject();
+                refused.addProperty("ok", false);
+                refused.addProperty("error", "an item is an object");
+                answers.add(refused);
+                continue;
+            }
+            int transaction = program.startTransaction("batch item");
+            boolean done = false;
+            try {
+                JsonObject answer = change.apply(element.getAsJsonObject()).deepCopy();
+                answer.addProperty("ok", true);
+                answers.add(answer);
+                done = true;
+            } catch (Failure failure) {
+                JsonObject refused = new JsonObject();
+                refused.addProperty("ok", false);
+                refused.addProperty("status", failure.status);
+                refused.addProperty("error", failure.getMessage());
+                answers.add(refused);
+            } catch (Exception error) {
+                JsonObject refused = new JsonObject();
+                refused.addProperty("ok", false);
+                refused.addProperty("error", error.toString());
+                answers.add(refused);
+            } finally {
+                program.endTransaction(transaction, done);
+            }
+        }
+        System.out.println("OWNER BATCH " + leaseHolder + " "
+                           + exchange.getRequestURI().getPath() + " " + answers.size());
+        JsonObject answer = identity();
+        answer.add("items", answers);
+        return answer;
+    }
+
     private JsonObject renameFunction(JsonObject body) throws Exception {
-        Function function = functionAt(required(body, "address"));
+        Address at = address(required(body, "address"));
+        Function function = program.getFunctionManager().getFunctionAt(at);
+        if (function == null) {
+            // A label at the address is what a caller usually meant: a rename
+            // here would silently rename the function around it (see the
+            // skill's `ghidra_label`). Refused, with where the name belongs.
+            Symbol atAddress = program.getSymbolTable().getPrimarySymbol(at);
+            if (atAddress != null && atAddress.getSymbolType() == ghidra.program.model.symbol.SymbolType.LABEL) {
+                throw new Failure(409, hex(at) + " is a label, not a function's entry: name it with "
+                                  + "/v1/rename/label");
+            }
+            function = program.getFunctionManager().getFunctionContaining(at);
+        }
+        if (function == null) throw new Failure(404, "no function at " + hex(at));
         String name = required(body, "name");
         // Ghidra takes `*Name` for a name; C, the panel and a reader do not.
         if (!name.matches("[A-Za-z_][A-Za-z0-9_]*")) throw new Failure(400, name + " is not a C identifier");
@@ -877,6 +1153,9 @@ public class Owner {
         JsonObject answer = identity();
         answer.addProperty("entry", hex(function.getEntryPoint()));
         answer.addProperty("name", function.getName());
+        // Where the address really pointed, when it was not the entry: a
+        // client that meant a label sees it here without rereading the C.
+        answer.addProperty("matched", function.getEntryPoint().equals(at) ? "entry" : "containing");
         return answer;
     }
 
@@ -1265,12 +1544,13 @@ public class Owner {
      */
     private JsonObject renameVariable(JsonObject body) throws Exception {
         Function function = functionAt(required(body, "function"));
-        String name = required(body, "name");
+        String name = string(body, "name", null);
         String storage = string(body, "storage", null);
         String firstUse = string(body, "first_use", null);
         Integer ordinal = body.has("ordinal") && !body.get("ordinal").isJsonNull() ? body.get("ordinal").getAsInt() : null;
         if (storage == null && ordinal == null) throw new Failure(400, "name the variable by storage (and first_use) or ordinal");
         DataType type = body.has("type") && !body.get("type").isJsonNull() ? type(body.get("type").getAsString()) : null;
+        if (name == null && type == null) throw new Failure(400, "give a name, a type, or both");
         DecompileResults results = decompile(function);
         HighFunction high = results == null ? null : results.getHighFunction();
         if (high == null) throw new Failure(500, "the function does not decompile");
@@ -1294,8 +1574,9 @@ public class Owner {
             match = symbol;
         }
         if (match == null) throw new Failure(404, "no such variable in " + function.getName());
+        String applied = name != null ? name : match.getName();
         try {
-            HighFunctionDBUtil.updateDBVariable(match, name, type, SourceType.USER_DEFINED);
+            HighFunctionDBUtil.updateDBVariable(match, applied, type, SourceType.USER_DEFINED);
         } catch (Exception error) {
             throw new Failure(400, error.getMessage());
         }
@@ -1304,13 +1585,13 @@ public class Owner {
         decompiled.remove(function.getEntryPoint());
         JsonObject answer = identity();
         answer.addProperty("function", hex(function.getEntryPoint()));
-        answer.addProperty("name", name);
+        answer.addProperty("name", applied);
         HighFunction after = decompile(function).getHighFunction();
         if (after != null) {
             Iterator<HighSymbol> now = after.getLocalSymbolMap().getSymbols();
             while (now.hasNext()) {
                 HighSymbol symbol = now.next();
-                if (!symbol.getName().equals(name)) continue;
+                if (!symbol.getName().equals(applied)) continue;
                 answer.addProperty("storage", symbol.getStorage().toString());
                 Address first = symbol.getPCAddress();
                 answer.addProperty("first_use", first == null ? null : hex(first));

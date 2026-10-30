@@ -933,10 +933,31 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
-    "description" : "The module's functions as Ghidra holds them now: entry, name, name_source, size, signature. Paged by `offset` and `limit`; `more` says whether there are more.",
+    "description" : "The module's functions as Ghidra holds them now: entry, name, name_source, size, signature. `name_contains` and `name_source` (a Ghidra source such as USER_DEFINED) narrow the list, `address_from`/`address_to` narrow it by entry. `filter: \"unfinished\"` keeps what a review has not passed — a parameter or a local Ghidra still names itself or holds as `undefined`, or no plate comment — each with `leftovers`, and `summary` says how many of how many; that filter decompiles every function, so it is slow on a large module. Paged by `offset` and `limit`; `next` says where the next page starts.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
+        "address_from" : {
+          "description" : "Only functions whose entry is at or after this address.",
+          "type" : [
+            "integer",
+            "string"
+          ]
+        },
+        "address_to" : {
+          "description" : "Only functions whose entry is at or before this address.",
+          "type" : [
+            "integer",
+            "string"
+          ]
+        },
+        "filter" : {
+          "description" : "Only the functions a review has not passed.",
+          "enum" : [
+            "unfinished"
+          ],
+          "type" : "string"
+        },
         "limit" : {
           "description" : "The most items one page holds — a ceiling: a page stops sooner when the answer would pass the size bound, and says so with `truncated: \"size\"`. Default 200, at most 1000.",
           "maximum" : 1000,
@@ -945,6 +966,14 @@
         },
         "module" : {
           "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "name_contains" : {
+          "description" : "Only functions whose name holds this text.",
+          "type" : "string"
+        },
+        "name_source" : {
+          "description" : "Only functions from this Ghidra source: DEFAULT, ANALYSIS, IMPORTED, USER_DEFINED.",
           "type" : "string"
         },
         "offset" : {
@@ -967,7 +996,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
-    "description" : "One function as Ghidra holds it now: its signature, its parameters and locals with their `storage` and `first_use` (what `ghidra_rename_variable` names a local by), its comments, and its decompiled C — fresh after every write, ahead of what the app shows until a publish.",
+    "description" : "One function as Ghidra holds it now: its signature, its parameters and locals with their `storage` and `first_use` (what `ghidra_rename_variable` names a local by), its plate comment, what is left to name (`leftovers`), and its decompiled C — fresh after every write, ahead of what the app shows until a publish. `summary: true` leaves the C and the equates out, for walking a module without its text.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -978,6 +1007,10 @@
         "module" : {
           "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
           "type" : "string"
+        },
+        "summary" : {
+          "description" : "Leave out the decompiled C and the equates: signature, parameters, locals, plate, leftovers.",
+          "type" : "boolean"
         }
       },
       "required" : [
@@ -1182,16 +1215,62 @@
   {
     "annotations" : {
       "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The types the program holds — what a review defined and what the module used — with `kind` (struct, union, enum, typedef, function, pointer, array), `size` and `source` (the program, or the archive the type came from). `contains` narrows by name, `source` by origin, and `builtin` adds Ghidra's own types, left out by default. Paged by `offset` and `limit`; `total` is how many match.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "builtin" : {
+          "description" : "Add Ghidra's own types. Default false.",
+          "type" : "boolean"
+        },
+        "contains" : {
+          "description" : "Only types whose name holds this text.",
+          "type" : "string"
+        },
+        "limit" : {
+          "description" : "The most items one page holds — a ceiling: a page stops sooner when the answer would pass the size bound, and says so with `truncated: \"size\"`. Default 200, at most 1000.",
+          "maximum" : 1000,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "offset" : {
+          "description" : "How many to skip. Default 0.",
+          "type" : "integer"
+        },
+        "source" : {
+          "description" : "Only types from this origin: \"program\", or an archive's name.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_types",
+    "title" : "List the module's types"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
       "idempotentHint" : false,
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "Names the function at `address`. A name Ghidra would make unique (`Foo_1`) is refused: choose another. `reason` says why, as the app shows it.",
+    "description" : "Names the function at `address`. Any address inside a function names that function, and the answer says which it matched (`matched: \"entry\"` or `\"containing\"`); an address that carries a label is refused — a label is named with `ghidra_label`, which is not this call. A name Ghidra would make unique (`Foo_1`) is refused: choose another. `reason` says why, as the app shows it.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
         "address" : {
-          "description" : "The function's entry address.",
+          "description" : "The function's entry address, or any address inside it.",
           "type" : "string"
         },
         "module" : {
@@ -1299,7 +1378,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "Names, and perhaps types, a local by its `storage` and, for a register, `first_use` — as `ghidra_function` lists them — or a parameter by its `ordinal`. Never by Ghidra's own name for it (`iVar4`): those renumber.",
+    "description" : "Names, and perhaps types, a local by its `storage` and, for a register, `first_use` — as `ghidra_function` lists them — or a parameter by its `ordinal`. Never by Ghidra's own name for it (`iVar4`): those renumber. `type` alone types it and keeps the name. `items` does several in one call, each in a transaction of its own: the answer lists what applied and why an entry did not.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -1308,15 +1387,45 @@
           "type" : "string"
         },
         "function" : {
-          "description" : "The function's entry address.",
+          "description" : "The function's entry address; with `items`, the function they all belong to.",
           "type" : "string"
+        },
+        "items" : {
+          "description" : "Several variables of the function in one call.",
+          "items" : {
+            "additionalProperties" : false,
+            "properties" : {
+              "first_use" : {
+                "description" : "For a register local: the address of its first use.",
+                "type" : "string"
+              },
+              "name" : {
+                "description" : "The new name; leave it out to type only.",
+                "type" : "string"
+              },
+              "ordinal" : {
+                "description" : "Or a parameter by its position, from 0.",
+                "type" : "integer"
+              },
+              "storage" : {
+                "description" : "The local's storage.",
+                "type" : "string"
+              },
+              "type" : {
+                "description" : "A C type for it.",
+                "type" : "string"
+              }
+            },
+            "type" : "object"
+          },
+          "type" : "array"
         },
         "module" : {
           "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
           "type" : "string"
         },
         "name" : {
-          "description" : "The new name.",
+          "description" : "The new name; leave it out to type only.",
           "type" : "string"
         },
         "ordinal" : {
@@ -1334,13 +1443,12 @@
       },
       "required" : [
         "module",
-        "function",
-        "name"
+        "function"
       ],
       "type" : "object"
     },
     "name" : "ghidra_rename_variable",
-    "title" : "Name a parameter or a local"
+    "title" : "Name or type a parameter or a local"
   },
   {
     "annotations" : {
@@ -1398,13 +1506,46 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "Sets the comment of `kind` at `address`, replacing the one there; empty `text` clears it. A plate comment heads a function in the C; pre and eol comments show in the C too.",
+    "description" : "Sets the comment of `kind` at `address`, replacing the one there; empty `text` clears it. A plate comment heads a function in the C; pre and eol comments show in the C too. `items` writes several in one call, each in a transaction of its own.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
         "address" : {
           "description" : "The address.",
           "type" : "string"
+        },
+        "items" : {
+          "description" : "Several comments in one call.",
+          "items" : {
+            "additionalProperties" : false,
+            "properties" : {
+              "address" : {
+                "description" : "The address.",
+                "type" : "string"
+              },
+              "kind" : {
+                "description" : "Default \"pre\".",
+                "enum" : [
+                  "pre",
+                  "post",
+                  "eol",
+                  "plate",
+                  "repeatable"
+                ],
+                "type" : "string"
+              },
+              "text" : {
+                "description" : "The comment; empty clears it.",
+                "type" : "string"
+              }
+            },
+            "required" : [
+              "address",
+              "text"
+            ],
+            "type" : "object"
+          },
+          "type" : "array"
         },
         "kind" : {
           "description" : "Default \"pre\".",
@@ -1427,9 +1568,7 @@
         }
       },
       "required" : [
-        "module",
-        "address",
-        "text"
+        "module"
       ],
       "type" : "object"
     },
@@ -1657,10 +1796,14 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "Saves the module's program and stores its artifact and review document as the next revision: every ByteRipper reading this store shows the new names. Publishing an unchanged program is the same revision. `type_conflicts` names types another review defines differently, which stay in this module only: `ghidra_type_definition` shows both.",
+    "description" : "Saves the module's program and stores its artifact and review document as the next revision: every ByteRipper reading this store shows the new names. Publishing an unchanged program is the same revision. `type_conflicts` names types another review defines differently, which stay in this module only: `ghidra_type_definition` shows both. `dry_run: true` answers the same without storing: the artifact's counts, the revision it would become, the description's size and the type conflicts — the export is done, so it costs what a publish costs.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
+        "dry_run" : {
+          "description" : "Answer what a publish would store — counts, the revision, the conflicts — and store nothing.",
+          "type" : "boolean"
+        },
         "module" : {
           "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
           "type" : "string"

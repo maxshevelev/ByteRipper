@@ -193,6 +193,52 @@ public actor GhidraHost {
         return Publication(manifest: manifest, typeConflicts: conflicts)
     }
 
+    /// What a publish would store, and nothing stored: the owner exports the
+    /// artifact and works out the type conflicts without saving the program or
+    /// merging into the shared archive, and the counts, the revision it would
+    /// become and those conflicts come back. The export is the cost a publish
+    /// already pays; this one pays it to look first.
+    func preview(_ module: SHA256Digest) async throws -> Data {
+        let project = self.project(module)
+        let record = try await owner(of: module)
+        let state = try project.state()
+        let (raw, headers) = try await Self.call(record.port, "POST", "/v1/publish?dry_run=1", timeout: 3600)
+        let document = try await Self.call(record.port, "GET", "/v1/review").data
+        let description = try await Self.call(record.port, "GET", "/v1/review/description").data
+        guard let artifact = try JSONSerialization.jsonObject(with: raw) as? [String: Any] else {
+            throw GhidraHostError(.owner, "the owner's artifact is not a JSON object")
+        }
+        let reviewed = headers["x-owner-reviewed"] == "true"
+        let conflicts = (headers["x-owner-type-conflicts"] ?? "").split(separator: ",").map(String.init)
+        let artifactDigest = SHA256Digest(data: raw).hex
+        let documentDigest = SHA256Digest(data: document).hex
+        let descriptionDigest: String? = description.isEmpty ? nil : SHA256Digest(data: description).hex
+        let last = state.published
+        let changed = last?.artifact != artifactDigest || last?.review != documentDigest
+            || last?.description != descriptionDigest
+        let functions = artifact["functions"] as? [[String: Any]] ?? []
+        let instructions = functions.reduce(0) { $0 + (($1["instructions"] as? [Any])?.count ?? 0) }
+        var preview: [String: Any] = [
+            "dry_run": true,
+            "reviewed": reviewed,
+            "changed": changed,
+            "artifact": ["sha256": artifactDigest, "size": raw.count],
+            "document": ["sha256": documentDigest, "size": document.count],
+            "functions": functions.count,
+            "instructions": instructions,
+            "types": (artifact["types"] as? [Any])?.count ?? 0,
+            "strings": (artifact["strings"] as? [Any])?.count ?? 0,
+            "type_conflicts": conflicts
+        ]
+        if let descriptionDigest {
+            preview["description"] = ["sha256": descriptionDigest, "size": description.count]
+        }
+        if reviewed {
+            preview["revision"] = max(1, (last?.rev ?? 0) + (changed ? 1 : 0))
+        }
+        return try JSONSerialization.data(withJSONObject: preview, options: [.sortedKeys])
+    }
+
     /// Publish what the lease changed and give the lease back; nil when the
     /// host holds no lease of the module.
     public func release(_ module: SHA256Digest, by: String?) async throws -> Publication? {

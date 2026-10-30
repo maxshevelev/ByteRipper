@@ -13,7 +13,16 @@ public protocol GhidraBackend: Sendable {
     func readCall(_ module: SHA256Digest, _ call: String, query: [String: String]) async throws -> Data
     func writeCall(_ module: SHA256Digest, _ call: String, body: Data) async throws -> Data
     func publishModule(_ module: SHA256Digest, by: String) async throws -> Data
+    /// What a publish would store, exported, and nothing written anywhere.
+    func publishPreview(_ module: SHA256Digest) async throws -> Data
     func releaseModule(_ module: SHA256Digest, by: String) async throws -> Data
+}
+
+public extension GhidraBackend {
+    /// A backend with no preview of its own: the host and the server have one.
+    func publishPreview(_ module: SHA256Digest) async throws -> Data {
+        throw GhidraHostError(.owner, "this connection cannot preview a publish")
+    }
 }
 
 /// The answers a backend gives about a publish.
@@ -63,6 +72,10 @@ extension GhidraHost: GhidraBackend {
         return try Self.encode(PublishAnswer(manifest: publication.manifest, typeConflicts: publication.typeConflicts))
     }
 
+    public func publishPreview(_ module: SHA256Digest) async throws -> Data {
+        try await preview(module)
+    }
+
     public func releaseModule(_ module: SHA256Digest, by: String) async throws -> Data {
         let publication = try await release(module, by: by)
         return try Self.encode(PublishAnswer(manifest: publication?.manifest, typeConflicts: publication?.typeConflicts ?? []))
@@ -103,6 +116,10 @@ public struct GhidraRemote: GhidraBackend {
 
     public func publishModule(_ module: SHA256Digest, by: String) async throws -> Data {
         try await call("POST", "modules/\(module.hex)/publish", query: ["by": by], timeout: 3600)
+    }
+
+    public func publishPreview(_ module: SHA256Digest) async throws -> Data {
+        try await call("POST", "modules/\(module.hex)/publish", query: ["dry_run": "1"], timeout: 3600)
     }
 
     public func releaseModule(_ module: SHA256Digest, by: String) async throws -> Data {

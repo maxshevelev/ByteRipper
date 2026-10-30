@@ -12,9 +12,10 @@ enum GhidraRoutes {
 
     /// The owner's read calls a client may make (`Design/GHIDRA_SHARED_PLAN.md` §7.1).
     static let reads: [String] = ["hello", "functions", "function/", "disassembly/", "xrefs", "data", "strings", "review", "type",
-                                   "description"]
+                                   "types", "description"]
     /// The owner's write calls, each under the host's lease.
-    static let writes: Set<String> = ["rename/function", "rename/label", "create/function", "rename/variable", "set/signature", "set/comment",
+    static let writes: Set<String> = ["rename/function", "rename/label", "create/function", "rename/variable",
+                                      "rename/variables", "set/signature", "set/comment", "set/comments",
                                       "set/data", "set/description", "set/code-mode", "set/equate", "type", "save"]
 
     /// `ghidra.use` for every route; publish and release write into the store
@@ -72,6 +73,12 @@ enum GhidraRoutes {
 
         router.add("POST", "\(prefix)/modules/:module/publish", access: .rights([.ghidraUse, .casWrite])) { request in
             let module = try digest(request.parameters["module"])
+            // `dry_run`: what the publish would store, exported and answered —
+            // nothing is written, so the store's right is not needed for it.
+            if let dryRun = request.query["dry_run"], dryRun != "0", !dryRun.isEmpty {
+                let data = try await answer { try await host.publishPreview(module) }
+                return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
+            }
             let publication = try await answer { try await host.publish(module, by: by(request)) }
             await published()
             return .json(Published(manifest: publication.manifest, typeConflicts: publication.typeConflicts))
