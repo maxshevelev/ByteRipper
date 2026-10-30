@@ -477,7 +477,9 @@ public class Owner {
                 item.addProperty("first_use", first == null ? null : hex(first));
                 // Ghidra's names for unnamed locals renumber when another is
                 // named; a client addresses a local by storage and first use.
-                item.addProperty("named", symbol.getSymbol() != null);
+                // A name Ghidra still made up is not one — typing a local
+                // alone leaves it unnamed, and `leftovers` agrees.
+                item.addProperty("named", symbol.getSymbol() != null && !placeholder(symbol.getName()));
                 locals.add(item);
             }
         }
@@ -1551,6 +1553,11 @@ public class Owner {
         if (storage == null && ordinal == null) throw new Failure(400, "name the variable by storage (and first_use) or ordinal");
         DataType type = body.has("type") && !body.get("type").isJsonNull() ? type(body.get("type").getAsString()) : null;
         if (name == null && type == null) throw new Failure(400, "give a name, a type, or both");
+        // Ghidra would sanitize an empty or odd name into one of its own
+        // (`local_RAX_-1`), so a name that is not a C identifier is refused.
+        if (name != null && !name.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            throw new Failure(400, "\"" + name + "\" is not a C identifier: leave `name` out to set only the type");
+        }
         DecompileResults results = decompile(function);
         HighFunction high = results == null ? null : results.getHighFunction();
         if (high == null) throw new Failure(500, "the function does not decompile");
