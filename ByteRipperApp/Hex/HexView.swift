@@ -2204,7 +2204,8 @@ final class HexView: NSView {
     }
 
     /// The number of each stretch of a scattered zone — an ME file's chunks —
-    /// on the stretch's top-left corner, in the outline's own hue: the order
+    /// on the stretch's top-left corner, in a shade of the outline's hue
+    /// (`HexTheme.zonePieceFill`): the order
     /// the file is read in, which is not the order of the addresses (#31).
     ///
     /// Over the outline, centred on its corner, so the most of it lies in the
@@ -2237,7 +2238,7 @@ final class HexView: NSView {
             let width = max(height, ceil(text.size().width) + 6)
             // Centred on the corner: half of it over the gap before the byte.
             let badge = NSRect(x: x - width / 2, y: top - height / 2, width: width, height: height)
-            (span.isFocused ? HexTheme.zoneFrame : HexTheme.zoneFrameInactive).setFill()
+            (span.isFocused ? HexTheme.zonePieceFill : HexTheme.zonePieceFillInactive).setFill()
             NSBezierPath(roundedRect: badge, xRadius: height / 2, yRadius: height / 2).fill()
             text.draw(at: NSPoint(x: badge.midX - text.size().width / 2,
                                   y: badge.midY - text.size().height / 2))
@@ -3717,6 +3718,27 @@ enum HexTheme {
     static let zonePieceInk = NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? .black : .white
     }
+
+    /// The badge on a scattered zone's stretch: the outline's own hue, a step
+    /// darker in the light theme and a step lighter in the dark one, so the
+    /// number stands off the line it sits on.
+    static let zonePieceFill = zonePieceShade(of: zoneFrame)
+    static let zonePieceFillInactive = zonePieceShade(of: zoneFrameInactive)
+
+    private static func zonePieceShade(of colour: NSColor) -> NSColor {
+        NSColor(name: nil) { appearance in
+            var resolved = colour
+            appearance.performAsCurrentDrawingAppearance {
+                resolved = colour.usingColorSpace(.sRGB) ?? colour
+            }
+            let dark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            return resolved.blended(withFraction: zonePieceShadeFraction,
+                                    of: dark ? .white : .black) ?? resolved
+        }
+    }
+
+    /// How far the badge is taken towards black or white.
+    private static let zonePieceShadeFraction: CGFloat = 0.2
 
     static let eofFill = NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
