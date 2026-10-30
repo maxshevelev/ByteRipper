@@ -484,7 +484,7 @@ final class ServerConsoleTests: XCTestCase {
         XCTAssertTrue(row.isActive(at: ended.addingTimeInterval(1)))
         XCTAssertFalse(row.isActive(at: ended.addingTimeInterval(ServerActivity.activityHold + 0.5)))
         activity.closed(1)
-        XCTAssertFalse(try XCTUnwrap(activity.listed.first).isActive(), "an ended connection is not at work")
+        XCTAssertTrue(activity.listed.isEmpty, "a closed connection takes its row with it")
 
         let long = JSONValue.string(String(repeating: "x", count: 5000))
         let cut = ServerActivity.arguments(["hex": long])

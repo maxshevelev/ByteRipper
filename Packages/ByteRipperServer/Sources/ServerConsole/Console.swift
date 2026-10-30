@@ -392,7 +392,6 @@ public struct Console: Sendable {
             "spoke": .bool(row.spoke),
             "calls": .count(row.calls),
             "errors": .count(row.errors),
-            "open": .bool(row.isOpen),
             "working": .bool(row.isWorking),
             "active": .bool(row.isActive()),
             "log": .array(row.log.map(call))
@@ -400,7 +399,6 @@ public struct Console: Sendable {
         if let about = row.about { members["client"] = .string(about) }
         if let tool = row.lastTool { members["last_tool"] = .string(tool) }
         if let call = row.lastCall { members["last_call"] = .string(date(call)) }
-        if let finished = row.finished { members["finished"] = .string(date(finished)) }
         return .object(members)
     }
 

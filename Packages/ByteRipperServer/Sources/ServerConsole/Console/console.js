@@ -931,16 +931,15 @@
   }
 
   function connectionState(row) {
-    if (!row.open) return h("span", { class: "pill plain", text: "Ended" });
     if (row.active) return lamp();
     if (row.spoke) return h("span", { class: "pill ok", text: "Live" });
     return h("span", { class: "pill warn", title: "Connected, has said nothing yet", text: "Silent" });
   }
 
   function agentCard(row) {
-    const end = row.finished ? Date.parse(row.finished) : Date.now();
+    const end = Date.now();
     const log = row.log || [];
-    return h("div", { class: `agent ${row.open ? "" : "ended"} ${row.active ? "active" : ""}` },
+    return h("div", { class: `agent ${row.active ? "active" : ""}` },
       h("div", { class: "agent-head" },
         h("div", { class: "agent-badge" }, icon("bot", 18)),
         h("div", {}, h("div", { class: "agent-title", text: `Connection ${row.number}` }),
@@ -949,7 +948,7 @@
       h("div", { class: "agent-stats" },
         h("div", { class: "agent-stat" }, h("b", { text: row.calls }), h("span", { text: "calls" })),
         h("div", { class: "agent-stat" }, h("b", { class: row.errors ? "danger-text" : "", text: row.errors }), h("span", { text: "errors" })),
-        h("div", { class: "agent-stat" }, h("b", { text: duration((end - Date.parse(row.started)) / 1000) }), h("span", { text: row.open ? "connected" : "lasted" }))),
+        h("div", { class: "agent-stat" }, h("b", { text: duration((end - Date.parse(row.started)) / 1000) }), h("span", { text: "connected" }))),
       h("div", { class: "agent-log" },
         log.length
           ? log.slice(-3).reverse().map(callLine)
@@ -1080,7 +1079,7 @@
     if (log.number === null || !log.row) return;
     const row = log.row;
     const parts = log.parts;
-    const end = row.finished ? Date.parse(row.finished) : Date.now();
+    const end = Date.now();
     fill(parts.head,
       h("div", { class: "agent-badge" }, icon("bot", 18)),
       h("div", { class: "grow" }, h("div", { class: "agent-title", text: `Connection ${row.number}` }),
@@ -1090,7 +1089,7 @@
     fill(parts.stats,
       h("span", {}, h("b", { text: row.calls }), " calls"),
       h("span", {}, h("b", { class: row.errors ? "danger-text" : "", text: row.errors }), " errors"),
-      h("span", {}, h("b", { text: duration((end - Date.parse(row.started)) / 1000) }), row.open ? " connected" : " lasted"),
+      h("span", {}, h("b", { text: duration((end - Date.parse(row.started)) / 1000) }), " connected"),
       h("span", { class: "muted", text: "the last 50 calls are kept, in memory only" }));
 
     [...parts.outcomes.children].forEach((b) => b.classList.toggle("on", b.dataset.outcome === log.outcome));

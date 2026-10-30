@@ -2,12 +2,11 @@ import AgentKit
 import Foundation
 
 /// Who is connected to the local MCP, in memory only
-/// (`Design/SERVER_HEADLESS_PLAN.md` §7, decision 6): a row per connection —
-/// when it came, what is behind it, how many calls and which was last, and
-/// when it went, with the recent calls themselves so the console shows what a
-/// connection is doing while it does it. Nothing is written down, and nothing
-/// older than the last few finished connections is kept: the console shows
-/// what is happening, not a history.
+/// (`Design/SERVER_HEADLESS_PLAN.md` §7, decision 6): a row per open
+/// connection — when it came, what is behind it, how many calls and which was
+/// last, with the recent calls themselves so the console shows what a
+/// connection is doing while it does it. A connection that closes takes its
+/// row with it: the console shows what is happening, not a history.
 @MainActor
 public final class ServerActivity {
     /// One call of a connection's log: the record a call is given when it
@@ -44,11 +43,8 @@ public final class ServerActivity {
         public fileprivate(set) var errors = 0
         public fileprivate(set) var lastTool: String?
         public fileprivate(set) var lastCall: Date?
-        public fileprivate(set) var finished: Date?
         /// The recent calls, oldest first, at most `keptCalls`.
         public fileprivate(set) var log: [Call] = []
-
-        public var isOpen: Bool { finished == nil }
 
         /// Whether a tool is working on a call right now.
         public var isWorking: Bool { log.contains(where: \.isRunning) }
@@ -58,7 +54,6 @@ public final class ServerActivity {
         /// than `activityHold` ago. A call often takes a few milliseconds; held
         /// a moment after each, a run of calls reads as one stretch of work.
         public func isActive(at now: Date = Date()) -> Bool {
-            guard isOpen else { return false }
             if isWorking { return true }
             guard let last = lastCall else { return false }
             return now.timeIntervalSince(last) < ServerActivity.activityHold
@@ -73,8 +68,6 @@ public final class ServerActivity {
     /// How much of a call's arguments its log line keeps.
     public nonisolated static let argumentsLimit = 2048
 
-    /// The most finished connections the list keeps beside the live ones.
-    public var keptFinished = 10
     /// How many calls a connection's log keeps. Older ones go: the console
     /// shows what is happening, not a history.
     public var keptCalls = 50
@@ -130,17 +123,15 @@ public final class ServerActivity {
         rows[index] = row
     }
 
+    /// A connection is gone: its row goes with it. What it did is read while
+    /// it was open; a card that stays after the client left would be a
+    /// history, and this is not one.
     public func closed(_ number: Int) {
-        guard let index = rows.firstIndex(where: { $0.number == number }) else { return }
-        rows[index].finished = Date()
-        let finished = rows.indices.filter { rows[$0].finished != nil }
-        for index in finished.dropLast(keptFinished).reversed() { rows.remove(at: index) }
+        rows.removeAll { $0.number == number }
     }
 
-    /// The rows the console shows: live ones first, the last finished after.
-    public var listed: [Row] {
-        rows.filter(\.isOpen) + rows.filter { !$0.isOpen }
-    }
+    /// The rows the console shows: the open connections.
+    public var listed: [Row] { rows }
 
     /// `value` as compact JSON, cut with an ellipsis past `argumentsLimit`.
     nonisolated static func arguments(_ value: JSONValue) -> String {
