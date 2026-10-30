@@ -12,6 +12,12 @@ version="$(git -C "$repo" describe --tags --always --dirty 2>/dev/null || echo d
 name="byteripper-analysis-$version"
 stage="$out/$name"
 
+if [ -z "$out" ] || [ "$out" = "/" ] || [ "$out" = "$HOME" ]; then
+    echo "refusing to use $out as the output folder" >&2
+    exit 1
+fi
+mkdir -p "$out"
+
 echo "building byteripper-server and byteripper-cas (release)"
 swift build -c release --package-path "$repo/Packages/ByteRipperServer" --product byteripper-server
 swift build -c release --package-path "$repo/Packages/CodeAnalysis" --product byteripper-cas
@@ -51,4 +57,15 @@ ghidra: 12.1.2 — the analyses' recipe; another version is a second recipe
 EOF
 
 tar -C "$out" -czf "$out/$name.tar.gz" "$name"
+
+# One build is kept: an earlier folder and tarball in the output folder go
+# once this one is written, so a failed build never costs the last good copy.
+for path in "$out"/byteripper-analysis-*; do
+    [ -e "$path" ] || continue
+    base="$(basename "$path")"
+    [ "$base" = "$name" ] && continue
+    [ "$base" = "$name.tar.gz" ] && continue
+    rm -rf "$path"
+done
+
 echo "made $out/$name.tar.gz"

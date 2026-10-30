@@ -35,8 +35,11 @@ Scripts/make-agent-dist.sh
 
 It builds `byteripper-server` and `byteripper-cas` in release, stages the
 folder as `dist/byteripper-analysis-<version>/`, and writes a tarball beside
-it. The binaries are built for the architecture of the Mac that builds them —
-build on an Apple-silicon Mac for Apple-silicon Macs.
+it. Only one build is kept: an earlier folder and tarball in the output folder
+are removed once the new one is written — after a successful build, so a
+failure leaves the last good copy. The binaries are built for the architecture
+of the Mac that builds them — build on an Apple-silicon Mac for Apple-silicon
+Macs.
 
 ## Install it
 
