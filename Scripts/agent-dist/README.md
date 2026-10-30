@@ -49,3 +49,6 @@ VERSION         what was built, from which commit
 Untar a new copy beside this one and keep its `var/` — or replace `bin/`,
 `ghidra/`, `skills/` and `scripts/` in place and leave `var/` alone. The store
 and the kept projects carry the reviews; a newer server reads them as they are.
+
+The full guide — requirements, building from the repository, configuration,
+troubleshooting — is `INSTALL.md` beside this file.

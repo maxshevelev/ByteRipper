@@ -111,7 +111,10 @@ A headless copy for the bench and for an agent that works without the app: it ho
 - **Starting it:** `scripts/start-server.sh` (idempotent; makes the console token on the first run) and `scripts/agent.sh`, which starts it, writes `.mcp.json` and opens a Claude Code session in the folder. The console is at `http://127.0.0.1:<port>/admin`, the port written to `var/port`; `scripts/doctor.sh` says what is missing.
 - **The server reads `~/.byteripper-server.json`** when it exists — any of its flags as a key, flags on the line still winning — with `--config` naming another file and `--no-config` reading none. Every path it keeps has its own flag, so one server on a shared bench can serve several Macs.
 
-Its README, unpacked with the folder, is the place to read for the first install.
+Its `README.md` is the short card of the folder, and `INSTALL.md` — in the
+repository and unpacked with the folder — is the guide for a first install:
+what it needs, how it is built and started, an agent session, the configuration
+file, and what to do when something is wrong.
 
 ## Standing on other people's work
 
