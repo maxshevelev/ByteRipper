@@ -1251,6 +1251,47 @@ final class MEASummaryTests: XCTestCase {
         XCTAssertNil(try XCTUnwrap(rows.first { $0.identifier == "EomFirstBootEnabled" }).note)
     }
 
+    /// A condition and a switch-off are the setting's own, not its file's: in a
+    /// file that holds a conditional setting, a switched-off one and a plain
+    /// one, each row carries only what the tool says about that setting.
+    func testAConditionBelongsToItsSettingNotToItsFile() throws {
+        var a = try analysis([
+            "family": "csme", "manifest": manifestJSON(),
+            "version": ["major": 15, "minor": 0, "hotfix": 1, "build": 100],
+        ])
+        a.configuration = [
+            ConfigurationFile(path: "/home/mctp/smt2_devices", alias: "Smt2Devices",
+                              mfs: .init(size: 8, settings: [
+                                  ConfigurationSetting(name: "Plain", number: 1),
+                                  ConfigurationSetting(
+                                      name: "MctpEcAddress", number: 0,
+                                      condition: ConfigurationCondition(name: "eSpiEnabled",
+                                                                        value: 0, assumed: true)),
+                                  ConfigurationSetting(
+                                      name: "SwitchedOff", number: 2,
+                                      disabled: ConfigurationCondition(name: "eSpiEnabled", value: 1)),
+                              ])),
+        ]
+        let rows = try XCTUnwrap(MEAConfiguration.build(a, in: .english).first).rows
+        func row(_ identifier: String) throws -> MEAConfigurationRow {
+            try XCTUnwrap(rows.first { $0.identifier == identifier })
+        }
+
+        let plain = try row("Plain")
+        XCTAssertNil(plain.note, "a plain setting beside a conditional one has nothing to add")
+        XCTAssertNil(plain.condition)
+        XCTAssertFalse(plain.disabled, "and is not drawn quiet")
+
+        let address = try row("MctpEcAddress")
+        XCTAssertEqual(address.note, "eSpiEnabled = No, assumed")
+        XCTAssertFalse(address.disabled, "the switch-off is the other setting's")
+
+        let off = try row("SwitchedOff")
+        XCTAssertEqual(off.note, "disabled by eSpiEnabled = Yes")
+        XCTAssertNil(off.condition, "the condition is the other setting's")
+        XCTAssertTrue(off.disabled)
+    }
+
     /// The tab reads the board's own half of the generation's map: a file the
     /// mobile map lays out and the desktop one does not is labelled from the
     /// mobile map and reaches the desktop tab by its identifier alone — the

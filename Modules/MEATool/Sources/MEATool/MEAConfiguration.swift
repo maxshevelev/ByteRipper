@@ -56,9 +56,12 @@ public enum MEAConfiguration {
                 // What placed the setting, and what switches it off: the
                 // tool's own identifiers and option words, kept for the `?`'s
                 // popover — a row's name has no room for them, and a name
-                // three phrases long reads as no name at all.
-                let condition = (fitc + mfs).compactMap(\.condition).first
-                let disabled = (fitc + mfs).compactMap(\.disabled).first
+                // three phrases long reads as no name at all. This setting's
+                // own, in either copy: a file's other settings say nothing
+                // about this one.
+                let copies = (fitc + mfs).filter { $0.name == name }
+                let condition = copies.compactMap(\.condition).first
+                let disabled = copies.compactMap(\.disabled).first
                 var note: [String] = []
                 if let condition {
                     note.append(MEAText.configurationCondition(condition, in: map, language: language))
