@@ -159,14 +159,16 @@ Names alone do not get there. Every review applies these rules:
    names that say their role, in the module's own convention (EDK2:
    `CamelCase`, `Ptr` only where a pointer and its target both appear). A
    function is named for what it does for its caller, not for its first call.
-   After a signature change, list the locals again before `rename-var`: Ghidra
-   merges and retypes them, and the old storages no longer exist.
+   After a signature change, or any change to a variable, list the locals
+   again before `rename-var`: Ghidra merges and retypes them, the old storages
+   no longer exist, and a type alone gives a local a `HASH:` storage.
    Branch labels are names too. Ghidra prints an unnamed jump target as
    `LAB_<address>`, and that label is a step of the flow — an error exit, a
    loop's head, the place a structure starts being read — so it gets a name
    that says which (`ErrorShortRead`, `NextSection`,
    `CheckMachineAndSections`), never the address. A label is not a function and
-   has its own call: `ghidra_label`, which names the symbol at the address;
+   has its own call: `ghidra_label`, which names the symbol at the address and
+   takes an empty name to delete one;
    `ghidra_rename` takes any address but names the function around it, so a
    label given to it leaves the label as it was and renames the function —
    read the answer's `entry` back.

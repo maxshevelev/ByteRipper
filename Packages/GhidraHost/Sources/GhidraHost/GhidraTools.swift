@@ -358,7 +358,7 @@ public enum GhidraTools {
                   + "step of the flow: an error exit, a loop's head, the place a structure starts being "
                   + "read. `ghidra_rename` names functions only: given an address inside one it renames the "
                   + "function, so a label needs this call. A function's entry, and an address no "
-                  + "instruction starts at, are refused.",
+                  + "instruction starts at, are refused. An empty `name` deletes the label there.",
                   ["address": AgentSchema.string("The label's address, e.g. \"0x9A05373\"."),
                    "name": AgentSchema.string("The new name, e.g. \"ErrorHeaderDoesNotFit\"."),
                    "reason": AgentSchema.string("Why this name, in a few words.")],
@@ -387,8 +387,10 @@ public enum GhidraTools {
                     Names, and perhaps types, a local by its `storage` and, for a register, \
                     `first_use` — as `ghidra_function` lists them — or a parameter by its `ordinal`. \
                     Never by Ghidra's own name for it (`iVar4`): those renumber. `type` alone types it \
-                    and keeps the name. `items` does several in one call, each in a transaction of its \
-                    own: the answer lists what applied and why an entry did not.
+                    and keeps the name. After any call, read the function again: a local's `storage` \
+                    can change, and a type alone gives it a `HASH:` storage. `items` does several in \
+                    one call, each in a transaction of its own: the answer lists what applied and why \
+                    an entry did not.
                     """,
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,

@@ -1171,14 +1171,33 @@ public class Owner {
      */
     private JsonObject renameLabel(JsonObject body) throws Exception {
         Address at = address(required(body, "address"));
-        String name = required(body, "name");
-        if (!name.matches("[A-Za-z_][A-Za-z0-9_]*")) throw new Failure(400, name + " is not a C identifier");
+        String name = string(body, "name", null);
         if (program.getFunctionManager().getFunctionAt(at) != null) {
             throw new Failure(409, hex(at) + " is a function's entry: rename the function with /v1/rename/function");
         }
         if (program.getListing().getInstructionAt(at) == null) {
             throw new Failure(404, "no instruction starts at " + hex(at) + ": a label marks code");
         }
+        // An empty name takes the label away — a name given to a jump target
+        // by mistake leaves nothing behind, as an empty comment clears one.
+        if (name != null && name.isEmpty()) {
+            Symbol symbol = program.getSymbolTable().getPrimarySymbol(at);
+            if (symbol == null || symbol.getSymbolType() != ghidra.program.model.symbol.SymbolType.LABEL) {
+                throw new Failure(404, "no label at " + hex(at) + " to delete");
+            }
+            String removed = symbol.getName();
+            try {
+                symbol.delete();
+            } catch (Exception error) {
+                throw new Failure(409, error.getMessage());
+            }
+            JsonObject answer = identity();
+            answer.addProperty("address", hex(at));
+            answer.addProperty("deleted", removed);
+            return answer;
+        }
+        if (name == null) throw new Failure(400, "give a name, or an empty one to delete the label");
+        if (!name.matches("[A-Za-z_][A-Za-z0-9_]*")) throw new Failure(400, name + " is not a C identifier");
         for (Symbol other : program.getSymbolTable().getGlobalSymbols(name)) {
             if (!other.getAddress().equals(at)) {
                 throw new Failure(409, name + " already names " + hex(other.getAddress()));
