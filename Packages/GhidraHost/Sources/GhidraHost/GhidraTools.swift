@@ -110,7 +110,9 @@ public enum GhidraTools {
             title: "Open a module in Ghidra",
             description: """
                 Starts the module's owner — Ghidra holding its project open — and answers its `hello`: \
-                program, functions, whether there are unpublished changes. A module seen before is opened \
+                program, functions, whether there are unpublished changes. The owner saves the program \
+                when it idles out, is stopped or gets a signal, so work between publishes survives a \
+                server restart — only an owner killed outright or crashed loses it. A module seen before is opened \
                 by `module`.\(byImage ? " A new one is sent as `image_base64` with a `name`: its project is made first — Ghidra's analysis and the UEFI pass, seconds for a PEIM, a minute for a large DXE driver." : "")
                 """,
             inputSchema: AgentSchema.object(properties),
@@ -606,7 +608,8 @@ public enum GhidraTools {
                   + "each holds and its source. The app shows them when the reader clicks the type or a field; "
                   + "an empty comment removes one. Comments are set after the C, which drops its own — a type "
                   + "defined again keeps its fields' comments by name, and the answer says how many came back "
-                  + "(`comments_kept`) and gives the type's `size`. A structure is laid out by the compiler spec "
+                  + "(`comments_kept`), whether the C declares what the program already held (`unchanged`) and "
+                  + "gives the type's `size`. A structure is laid out by the compiler spec "
                   + "unless the C says otherwise: `#pragma pack(1)` … `#pragma pack()` is how a packed record is "
                   + "written, and `size` beside the field offsets is how a wrong layout shows. "
                   + "`delete: true` with `name` removes a type the program holds — a probe or a mistake — so a "
@@ -656,7 +659,9 @@ public enum GhidraTools {
                 holds them separately; a dry run with both flags says what would be taken. \
                 `dry_run: true` answers the same without storing: the artifact's counts, the revision \
                 it would become, the description's size and the type conflicts — the export is done, so \
-                it costs what a publish costs.
+                it costs what a publish costs. Publishing is the point another host sees the work; the \
+                owner also saves the program on idle, stop and signal, so only an owner killed outright \
+                or crashed loses what came after the last publish.
                 """,
             inputSchema: AgentSchema.object([
                 "module": moduleProperty,

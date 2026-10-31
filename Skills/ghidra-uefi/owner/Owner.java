@@ -2046,11 +2046,14 @@ public class Owner {
         String c = string(body, "c", null);
         DataType resolved;
         int commentsKept = 0;
+        boolean unchanged = false;
         if (c != null) {
-            // The comments of the types this C names, read before the parser
-            // touches the manager: CParser adds a type as it parses it, so by
-            // the time it returns, the fields' old comments are gone.
-            java.util.Map<String, java.util.Map<String, String>> kept = keptComments(c);
+            // Read before the parser touches the manager: CParser adds a type
+            // as it parses it, so by the time it returns, the old fields'
+            // comments are gone and the old type is no longer what the manager
+            // holds.
+            java.util.TreeMap<String, DataType> previous = namedTypes(c);
+            java.util.Map<String, java.util.Map<String, String>> kept = keptComments(previous);
             // The fields may name what only an archive holds — `CHAR8`, a PI
             // structure, another review's type — as a signature may.
             importTypes(c);
@@ -2061,10 +2064,21 @@ public class Owner {
                 throw new Failure(400, "the C does not parse: " + error.getMessage());
             }
             if (parsed == null) throw new Failure(400, "the C declares no type");
+            // The C the program already holds: the answer says so, and the
+            // fields' comments are still put back — the parser replaced the
+            // type on its way through, comments and all.
+            unchanged = declaredSame(previous, parsed);
             // A type defined again — a corrected layout — replaces the one in
             // the program, and the parsed C carries no comments: the fields'
             // old comments are put back by name, so a correction is one call,
-            // not two. A field the new C dropped keeps nothing.
+            // not two. A field the new C dropped keeps nothing. Comments of a
+            // type the C only mentions are left where they are.
+            java.util.Set<String> declared = new java.util.HashSet<>();
+            declared.add(parsed.getName());
+            if (parsed instanceof ghidra.program.model.data.TypeDef def && def.getBaseDataType() != null) {
+                declared.add(def.getBaseDataType().getName());
+            }
+            kept.keySet().retainAll(declared);
             resolved = program.getDataTypeManager().resolve(parsed, DataTypeConflictHandler.REPLACE_HANDLER);
             commentsKept = restoreComments(resolved, kept);
         } else {
@@ -2102,30 +2116,74 @@ public class Owner {
         // Always present, zero included: a reader must be able to tell "nothing
         // came back" from "this build has no such field".
         answer.addProperty("comments_kept", commentsKept);
+        answer.addProperty("unchanged", unchanged);
         return answer;
     }
 
     /**
-     * The comments of the program's types a C names, by type and field, read
-     * before the C is parsed: the parser replaces a type it defines as it
-     * goes, so a snapshot taken afterwards is of the new, uncommented type.
+     * The program's types a C names, by name, read before the C is parsed: the
+     * parser replaces a type it defines as it goes, so a lookup afterwards
+     * finds the new one.
      */
-    private java.util.Map<String, java.util.Map<String, String>> keptComments(String c) {
-        java.util.Map<String, java.util.Map<String, String>> kept = new java.util.LinkedHashMap<>();
+    private java.util.TreeMap<String, DataType> namedTypes(String c) {
+        java.util.TreeMap<String, DataType> found = new java.util.TreeMap<>();
         java.util.regex.Matcher words = java.util.regex.Pattern.compile("[A-Za-z_][A-Za-z0-9_]*").matcher(c);
         while (words.find()) {
             DataType existing = find(program.getDataTypeManager(), words.group());
             if (existing == null || existing.getDataTypeManager() != program.getDataTypeManager()) continue;
-            // Comments sit on the structure or enum a typedef names, and a C
-            // names both: one entry per such type, or a field would be
-            // counted once per spelling.
-            DataType base = existing instanceof ghidra.program.model.data.TypeDef def && def.getBaseDataType() != null
-                ? def.getBaseDataType() : existing;
-            if (base.getDataTypeManager() != program.getDataTypeManager()) continue;
+            // A copy, not the type: resolve changes a replaced type in place,
+            // so a reference taken here would show the new layout when the C
+            // is compared after parsing.
+            found.putIfAbsent(existing.getName(), existing.copy(null));
+            if (existing instanceof ghidra.program.model.data.TypeDef def && def.getBaseDataType() != null
+                && def.getBaseDataType().getDataTypeManager() == program.getDataTypeManager()) {
+                found.putIfAbsent(def.getBaseDataType().getName(), def.getBaseDataType().copy(null));
+            }
+        }
+        return found;
+    }
+
+    /**
+     * The comments of the types a C names, by type and field. Comments sit on
+     * the structure or enum a typedef names, and a C names both: one entry per
+     * such type, or a field would be counted once per spelling.
+     */
+    private java.util.Map<String, java.util.Map<String, String>> keptComments(java.util.TreeMap<String, DataType> named) {
+        java.util.Map<String, java.util.Map<String, String>> kept = new java.util.LinkedHashMap<>();
+        for (DataType type : named.values()) {
+            DataType base = type instanceof ghidra.program.model.data.TypeDef def && def.getBaseDataType() != null
+                ? def.getBaseDataType() : type;
             java.util.Map<String, String> comments = fieldComments(base);
             if (!comments.isEmpty()) kept.putIfAbsent(base.getName(), comments);
         }
         return kept;
+    }
+
+    /** Do the types a C declares match the ones the program held before it was parsed? */
+    private static boolean declaredSame(java.util.TreeMap<String, DataType> previous, DataType parsed) {
+        DataType named = previous.get(parsed.getName());
+        if (named == null || !sameShape(named, parsed)) return false;
+        if (!(parsed instanceof ghidra.program.model.data.TypeDef def) || def.getBaseDataType() == null) return true;
+        DataType base = def.getBaseDataType();
+        DataType before = previous.get(base.getName());
+        return before != null && sameShape(before, base);
+    }
+
+    /**
+     * The same type in shape: fields, names and offsets. Comments and the
+     * description are not the C's, so a type whose comments a review has set
+     * still matches the C that declares it.
+     */
+    private static boolean sameShape(DataType a, DataType b) {
+        DataType left = a instanceof ghidra.program.model.data.TypeDef defA && defA.getBaseDataType() != null
+            ? defA.getBaseDataType() : a;
+        DataType right = b instanceof ghidra.program.model.data.TypeDef defB && defB.getBaseDataType() != null
+            ? defB.getBaseDataType() : b;
+        if (left instanceof ghidra.program.model.data.Composite mine
+            && right instanceof ghidra.program.model.data.Composite theirs) {
+            return uncommented(mine).isEquivalent(uncommented(theirs));
+        }
+        return left.isEquivalent(right);
     }
 
     /** The comments a structure's fields, or an enum's members, hold, by name. */
