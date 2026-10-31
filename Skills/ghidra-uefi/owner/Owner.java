@@ -518,6 +518,16 @@ public class Owner {
         int offset = integer(query, "offset", 0), limit = Math.min(integer(query, "limit", 500), 5000);
         String contains = query.get("contains");
         String source = query.get("source");
+        // `kind` narrows by what the type is: `struct`, `union`, `enum`,
+        // `typedef`, `function`, `pointer`, `array` — one, or several
+        // separated by commas, because a description's type list wants the
+        // four a review defines and nothing else.
+        java.util.Set<String> kinds = new java.util.HashSet<>();
+        if (query.get("kind") != null) {
+            for (String part : query.get("kind").split(",")) {
+                if (!part.trim().isEmpty()) kinds.add(part.trim().toLowerCase(java.util.Locale.ROOT));
+            }
+        }
         boolean builtins = "1".equals(query.get("builtin")) || "true".equals(query.get("builtin"));
         java.util.List<JsonObject> matched = new java.util.ArrayList<>();
         Iterator<DataType> all = program.getDataTypeManager().getAllDataTypes();
@@ -531,10 +541,12 @@ public class Owner {
                 || archive.getArchiveType() == ghidra.program.model.data.ArchiveType.PROGRAM
                 ? "program" : archive.getName();
             if (source != null && !origin.equalsIgnoreCase(source)) continue;
+            String what = kind(type);
+            if (!kinds.isEmpty() && !kinds.contains(what)) continue;
             JsonObject item = new JsonObject();
             item.addProperty("name", type.getName());
             item.addProperty("path", type.getPathName());
-            item.addProperty("kind", kind(type));
+            item.addProperty("kind", what);
             item.addProperty("size", type.getLength());
             item.addProperty("source", origin);
             String description = type.getDescription();
@@ -712,8 +724,9 @@ public class Owner {
         // replaces the shared one — the explicit exception to "choosing is a
         // person's", for a layout that was published wrong. An enum is never
         // taken: a member's value clashing means one of the two is wrong, and
-        // an overwrite would break the module that added the other.
-        boolean take = !dryRun && "1".equals(parameters.get("take_type_conflicts"));
+        // an overwrite would break the module that added the other. With
+        // `dry_run` it answers what would be taken, and nothing is written.
+        boolean take = "1".equals(parameters.get("take_type_conflicts"));
         if (!dryRun && program.isChanged()) program.save("publish", TaskMonitor.DUMMY);
         File out = File.createTempFile("owner-export-", ".json");
         try {
@@ -732,17 +745,21 @@ public class Owner {
             exchange.getResponseHeaders().set("X-Owner-Reviewed", Boolean.toString(published.reviewed));
             if (!merge.conflicts.isEmpty()) {
                 exchange.getResponseHeaders().set("X-Owner-Type-Conflicts", String.join(",", merge.conflicts));
-                // `NAME=module,…`: which module wrote the shared version each
-                // conflict names, for the client to show beside it.
-                StringBuilder origins = new StringBuilder();
-                for (java.util.Map.Entry<String, String> origin : merge.origins.entrySet()) {
-                    if (origin.getValue() == null || origin.getValue().isEmpty()) continue;
-                    if (origins.length() > 0) origins.append(',');
-                    origins.append(origin.getKey()).append('=').append(origin.getValue());
-                }
-                if (origins.length() > 0) {
-                    exchange.getResponseHeaders().set("X-Owner-Type-Origins", origins.toString());
-                }
+            }
+            if (!merge.taken.isEmpty()) {
+                exchange.getResponseHeaders().set("X-Owner-Type-Taken", String.join(",", merge.taken));
+            }
+            // `NAME=module,…`: which module wrote the shared version each type
+            // names — the conflict it stayed in, or the one this publish
+            // replaced.
+            StringBuilder origins = new StringBuilder();
+            for (java.util.Map.Entry<String, String> origin : merge.origins.entrySet()) {
+                if (origin.getValue() == null || origin.getValue().isEmpty()) continue;
+                if (origins.length() > 0) origins.append(',');
+                origins.append(origin.getKey()).append('=').append(origin.getValue());
+            }
+            if (origins.length() > 0) {
+                exchange.getResponseHeaders().set("X-Owner-Type-Origins", origins.toString());
             }
             exchange.sendResponseHeaders(200, artifact.length);
             try (OutputStream body = exchange.getResponseBody()) { body.write(artifact); }
@@ -760,6 +777,8 @@ public class Owner {
     private static final class Merge {
         /** The names a publish would leave in this module only. */
         final java.util.List<String> conflicts = new java.util.ArrayList<>();
+        /** The names this publish replaced in the shared archive — or would, in a preview. */
+        final java.util.List<String> taken = new java.util.ArrayList<>();
         /** For each conflict, the module that wrote the shared version, when the sidecar knows it. */
         final java.util.TreeMap<String, String> origins = new java.util.TreeMap<>();
         /** A shared type was added or replaced: the sidecar has something to record. */
@@ -853,7 +872,14 @@ public class Owner {
                 continue;
             }
             if (!apply) {
-                if (conflictsWith(here, there.get(0))) recordConflict(merge, origins, name);
+                if (conflictsWith(here, there.get(0))) {
+                    if (take && replaceable(here, there.get(0))) {
+                        merge.taken.add(name);
+                        merge.origins.put(name, originOf(origins, name));
+                    } else {
+                        recordConflict(merge, origins, name);
+                    }
+                }
                 continue;
             }
             DataType theirs = there.get(0);
@@ -863,7 +889,9 @@ public class Owner {
                 if (merged < 0) recordConflict(merge, origins, name);
                 else if (merged > 0) changed = true;
             } else if (!theirs.isEquivalent(here)) {
-                if (take) {
+                if (take && replaceable(here, theirs)) {
+                    merge.taken.add(name);
+                    merge.origins.put(name, originOf(origins, name));
                     replaceShared(shared, theirs, here);
                     changed = true;
                     merge.written = true;
@@ -878,6 +906,12 @@ public class Owner {
             }
         }
         return changed;
+    }
+
+    /** A take replaces a structure, a union or a typedef — never an enum. */
+    private static boolean replaceable(DataType own, DataType shared) {
+        return !(own instanceof ghidra.program.model.data.Enum)
+            && !(shared instanceof ghidra.program.model.data.Enum);
     }
 
     /** Would a publish report this type? The same tests as the merge, without writing. */
@@ -1985,6 +2019,7 @@ public class Owner {
         }
         String c = string(body, "c", null);
         DataType resolved;
+        int commentsKept = 0;
         if (c != null) {
             // The fields may name what only an archive holds — `CHAR8`, a PI
             // structure, another review's type — as a signature may.
@@ -1996,7 +2031,13 @@ public class Owner {
                 throw new Failure(400, "the C does not parse: " + error.getMessage());
             }
             if (parsed == null) throw new Failure(400, "the C declares no type");
+            // A type defined again — a corrected layout — replaces the one in
+            // the program, and the parsed C carries no comments: the fields'
+            // old comments are kept by name, so a correction is one call, not
+            // two. A name the new C dropped keeps nothing.
+            java.util.Map<String, java.util.Map<String, String>> kept = keptComments(parsed);
             resolved = program.getDataTypeManager().resolve(parsed, DataTypeConflictHandler.REPLACE_HANDLER);
+            commentsKept = restoreComments(resolved, kept);
         } else {
             String name = required(body, "name");
             importTypes(name);
@@ -2027,8 +2068,59 @@ public class Owner {
                            ? c : ExportCode.typeC(resolved));
         answer.addProperty("name", resolved.getName());
         answer.addProperty("path", resolved.getPathName());
+        answer.addProperty("size", resolved.getLength());
         answer.addProperty("c", ExportCode.typeC(resolved));
+        if (commentsKept > 0) answer.addProperty("comments_kept", commentsKept);
         return answer;
+    }
+
+    /** The comments the program's copies of the types a C declares hold, by type and field. */
+    private java.util.Map<String, java.util.Map<String, String>> keptComments(DataType parsed) {
+        java.util.Map<String, java.util.Map<String, String>> kept = new java.util.LinkedHashMap<>();
+        java.util.List<DataType> declared = new java.util.ArrayList<>();
+        declared.add(parsed);
+        if (parsed instanceof ghidra.program.model.data.TypeDef def && def.getBaseDataType() != null) {
+            declared.add(def.getBaseDataType());
+        }
+        for (DataType type : declared) {
+            DataType existing = find(program.getDataTypeManager(), type.getName());
+            if (existing == null || existing.getDataTypeManager() != program.getDataTypeManager()) continue;
+            java.util.Map<String, String> comments = fieldComments(existing);
+            if (!comments.isEmpty()) kept.put(existing.getName(), comments);
+        }
+        return kept;
+    }
+
+    /** The comments a structure's fields, or an enum's members, hold, by name. */
+    private static java.util.Map<String, String> fieldComments(DataType type) {
+        DataType base = type instanceof ghidra.program.model.data.TypeDef def ? def.getBaseDataType() : type;
+        java.util.Map<String, String> comments = new java.util.LinkedHashMap<>();
+        if (base instanceof ghidra.program.model.data.Composite composite) {
+            for (ghidra.program.model.data.DataTypeComponent component : composite.getDefinedComponents()) {
+                String comment = component.getComment();
+                if (comment != null && !comment.isEmpty()) comments.put(ExportCode.fieldName(component), comment);
+            }
+        } else if (base instanceof ghidra.program.model.data.Enum values) {
+            for (String member : values.getNames()) {
+                String comment = values.getComment(member);
+                if (comment != null && !comment.isEmpty()) comments.put(member, comment);
+            }
+        }
+        return comments;
+    }
+
+    /** Puts kept comments back on the types that replaced them; answers how many landed. */
+    private int restoreComments(DataType resolved, java.util.Map<String, java.util.Map<String, String>> kept) {
+        int restored = 0;
+        for (java.util.Map.Entry<String, java.util.Map<String, String>> entry : kept.entrySet()) {
+            DataType type = find(program.getDataTypeManager(), entry.getKey());
+            if (type == null || type.getDataTypeManager() != program.getDataTypeManager()) continue;
+            DataType base = type instanceof ghidra.program.model.data.TypeDef def ? def.getBaseDataType() : type;
+            for (java.util.Map.Entry<String, String> comment : entry.getValue().entrySet()) {
+                if (comment(base, comment.getKey(), comment.getValue())) restored++;
+            }
+        }
+        return restored;
     }
 
     /** A field's or an enum member's comment; false when the type has no such member. */

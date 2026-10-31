@@ -16,19 +16,21 @@ public protocol GhidraBackend: Sendable {
     /// this review's — the explicit answer to a layout published wrong.
     func publishModule(_ module: SHA256Digest, by: String, takeTypeConflicts: Bool) async throws -> Data
     /// What a publish would store, exported, and nothing written anywhere.
-    func publishPreview(_ module: SHA256Digest) async throws -> Data
+    /// `takeTypeConflicts` answers what a publish would replace in the shared
+    /// archive; nothing is written either way.
+    func publishPreview(_ module: SHA256Digest, takeTypeConflicts: Bool) async throws -> Data
     func releaseModule(_ module: SHA256Digest, by: String) async throws -> Data
 }
 
 public extension GhidraBackend {
-    /// A backend with no preview of its own: the host and the server have one.
-    func publishPreview(_ module: SHA256Digest) async throws -> Data {
-        throw GhidraHostError(.owner, "this connection cannot preview a publish")
-    }
-
     /// The conflicts left in this module.
     func publishModule(_ module: SHA256Digest, by: String) async throws -> Data {
         try await publishModule(module, by: by, takeTypeConflicts: false)
+    }
+
+    /// A backend with no shared archive of its own to ask.
+    func publishPreview(_ module: SHA256Digest) async throws -> Data {
+        try await publishPreview(module, takeTypeConflicts: false)
     }
 }
 
@@ -36,11 +38,13 @@ public extension GhidraBackend {
 struct PublishAnswer: Codable {
     var manifest: AnalysisManifest?
     var typeConflicts: [String]
+    var typeConflictsTaken: [String]
     var typeConflictOrigins: [String: String]
 
     private enum CodingKeys: String, CodingKey {
         case manifest
         case typeConflicts = "type_conflicts"
+        case typeConflictsTaken = "type_conflicts_taken"
         case typeConflictOrigins = "type_conflict_origins"
     }
 }
@@ -81,17 +85,19 @@ extension GhidraHost: GhidraBackend {
         let publication = try await publish(module, by: by, takeTypeConflicts: takeTypeConflicts)
         return try Self.encode(PublishAnswer(manifest: publication.manifest,
                                              typeConflicts: publication.typeConflicts,
+                                             typeConflictsTaken: publication.typeConflictsTaken,
                                              typeConflictOrigins: publication.typeConflictOrigins))
     }
 
-    public func publishPreview(_ module: SHA256Digest) async throws -> Data {
-        try await preview(module)
+    public func publishPreview(_ module: SHA256Digest, takeTypeConflicts: Bool) async throws -> Data {
+        try await preview(module, takeTypeConflicts: takeTypeConflicts)
     }
 
     public func releaseModule(_ module: SHA256Digest, by: String) async throws -> Data {
         let publication = try await release(module, by: by)
         return try Self.encode(PublishAnswer(manifest: publication?.manifest,
                                              typeConflicts: publication?.typeConflicts ?? [],
+                                             typeConflictsTaken: publication?.typeConflictsTaken ?? [],
                                              typeConflictOrigins: publication?.typeConflictOrigins ?? [:]))
     }
 }
@@ -135,8 +141,10 @@ public struct GhidraRemote: GhidraBackend {
         return try await call("POST", "modules/\(module.hex)/publish", query: query, timeout: 3600)
     }
 
-    public func publishPreview(_ module: SHA256Digest) async throws -> Data {
-        try await call("POST", "modules/\(module.hex)/publish", query: ["dry_run": "1"], timeout: 3600)
+    public func publishPreview(_ module: SHA256Digest, takeTypeConflicts: Bool) async throws -> Data {
+        var query = ["dry_run": "1"]
+        if takeTypeConflicts { query["take_type_conflicts"] = "1" }
+        return try await call("POST", "modules/\(module.hex)/publish", query: query, timeout: 3600)
     }
 
     public func releaseModule(_ module: SHA256Digest, by: String) async throws -> Data {

@@ -18,6 +18,7 @@ import ghidra.program.model.data.DataType;
 import ghidra.program.model.data.DataTypeComponent;
 import ghidra.program.model.data.Enum;
 import ghidra.program.model.data.FunctionDefinition;
+import ghidra.program.model.data.PackingType;
 import ghidra.program.model.data.Pointer;
 import ghidra.program.model.data.Structure;
 import ghidra.program.model.data.TypeDef;
@@ -42,7 +43,15 @@ final class TypeText {
         DataType base = type instanceof TypeDef def ? def.getBaseDataType() : type;
         if (type instanceof TypeDef def) answer.addProperty("base", def.getDataType().getPathName());
         if (base instanceof Composite composite) {
-            answer.addProperty("packed", composite.isPackingEnabled());
+            // Not `isPackingEnabled`: Ghidra enables its alignment machinery
+            // for a default structure too, and that reads as "packed". The
+            // packing type says what the C asked for; a value is there only
+            // when it asked explicitly, as `#pragma pack(1)` does.
+            PackingType packing = composite.getPackingType();
+            answer.addProperty("packing", packing.name().toLowerCase(java.util.Locale.ROOT));
+            if (packing == PackingType.EXPLICIT) {
+                answer.addProperty("packing_value", composite.getExplicitPackingValue());
+            }
             answer.addProperty("alignment", composite.getAlignment());
             JsonArray fields = new JsonArray();
             for (DataTypeComponent component : composite.getDefinedComponents()) {

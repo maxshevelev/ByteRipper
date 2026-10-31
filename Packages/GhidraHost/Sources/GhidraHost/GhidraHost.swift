@@ -45,12 +45,15 @@ public actor GhidraHost {
     public struct Publication: Sendable {
         public var manifest: AnalysisManifest
         public var typeConflicts: [String]
+        /// The shared types this publish replaced with its own.
+        public var typeConflictsTaken: [String]
         public var typeConflictOrigins: [String: String]
 
-        public init(manifest: AnalysisManifest, typeConflicts: [String],
+        public init(manifest: AnalysisManifest, typeConflicts: [String], typeConflictsTaken: [String] = [],
                     typeConflictOrigins: [String: String] = [:]) {
             self.manifest = manifest
             self.typeConflicts = typeConflicts
+            self.typeConflictsTaken = typeConflictsTaken
             self.typeConflictOrigins = typeConflictOrigins
         }
     }
@@ -167,6 +170,7 @@ public actor GhidraHost {
         }
         let reviewed = headers["x-owner-reviewed"] == "true"
         let conflicts = (headers["x-owner-type-conflicts"] ?? "").split(separator: ",").map(String.init)
+        let taken = (headers["x-owner-type-taken"] ?? "").split(separator: ",").map(String.init)
         let origins = Self.typeOrigins(headers["x-owner-type-origins"])
         let last = state.published
         var reading: AnalysisReading?
@@ -202,7 +206,8 @@ public actor GhidraHost {
                                 description: described?.hex, rev: reading?.rev, at: Self.now())
         state.reviewed = reviewed
         try project.write(state)
-        return Publication(manifest: manifest, typeConflicts: conflicts, typeConflictOrigins: origins)
+        return Publication(manifest: manifest, typeConflicts: conflicts, typeConflictsTaken: taken,
+                           typeConflictOrigins: origins)
     }
 
     /// `NAME=module,…`, the owner's header: which module wrote the shared
@@ -222,11 +227,12 @@ public actor GhidraHost {
     /// merging into the shared archive, and the counts, the revision it would
     /// become and those conflicts come back. The export is the cost a publish
     /// already pays; this one pays it to look first.
-    func preview(_ module: SHA256Digest) async throws -> Data {
+    func preview(_ module: SHA256Digest, takeTypeConflicts: Bool = false) async throws -> Data {
         let project = self.project(module)
         let record = try await owner(of: module)
         let state = try project.state()
-        let (raw, headers) = try await Self.call(record.port, "POST", "/v1/publish?dry_run=1", timeout: 3600)
+        let path = takeTypeConflicts ? "/v1/publish?dry_run=1&take_type_conflicts=1" : "/v1/publish?dry_run=1"
+        let (raw, headers) = try await Self.call(record.port, "POST", path, timeout: 3600)
         let document = try await Self.call(record.port, "GET", "/v1/review").data
         let description = try await Self.call(record.port, "GET", "/v1/review/description").data
         guard let artifact = try JSONSerialization.jsonObject(with: raw) as? [String: Any] else {
@@ -254,6 +260,8 @@ public actor GhidraHost {
             "strings": (artifact["strings"] as? [Any])?.count ?? 0,
             "type_conflicts": conflicts
         ]
+        let taken = (headers["x-owner-type-taken"] ?? "").split(separator: ",").map(String.init)
+        if !taken.isEmpty { preview["type_conflicts_taken"] = taken }
         let origins = Self.typeOrigins(headers["x-owner-type-origins"])
         if !origins.isEmpty { preview["type_conflict_origins"] = origins }
         if let descriptionDigest {

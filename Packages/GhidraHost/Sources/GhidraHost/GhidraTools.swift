@@ -292,12 +292,16 @@ public enum GhidraTools {
                     The types the program holds — what a review defined and what the module used — with \
                     `kind` (struct, union, enum, typedef, function, pointer, array), `size` and `source` \
                     (the program, or the archive the type came from). `contains` narrows by name, \
-                    `source` by origin, and `builtin` adds Ghidra's own types, left out by default. Paged \
-                    by `offset` and `limit`; `total` is how many match.
+                    `kind` by what a type is — one kind, or several separated by commas — `source` by \
+                    origin, and `builtin` adds Ghidra's own types, left out by default. Paged by `offset` \
+                    and `limit`; `total` is how many match.
                     """,
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,
                     "contains": AgentSchema.string("Only types whose name holds this text."),
+                    "kind": AgentSchema.string(
+                        "Only types of this kind — struct, union, enum, typedef, function, pointer, array — "
+                        + "or of several, separated by commas."),
                     "source": AgentSchema.string("Only types from this origin: \"program\", or an archive's name."),
                     "builtin": AgentSchema.boolean("Add Ghidra's own types. Default false."),
                     "offset": AgentSchema.integer("How many to skip. Default 0."),
@@ -309,6 +313,7 @@ public enum GhidraTools {
                 var query: [String: String] = ["limit": String(try arguments.limit(default: 200, maximum: 1000))]
                 if arguments.has("offset") { query["offset"] = String(try arguments.integer("offset")) }
                 if let contains = try arguments.optionalString("contains") { query["contains"] = contains }
+                if let kind = try arguments.optionalString("kind") { query["kind"] = kind }
                 if let source = try arguments.optionalString("source") { query["source"] = source }
                 if try arguments.bool("builtin", default: false) { query["builtin"] = "1" }
                 return try await answer { try await backend.readCall(module, "types", query: query) }
@@ -589,7 +594,11 @@ public enum GhidraTools {
                   + "`name` picks a type the module or its archives hold. `description` says what the type is "
                   + "and where its layout is known from; `comments` gives fields or enum members theirs — what "
                   + "each holds and its source. The app shows them when the reader clicks the type or a field; "
-                  + "an empty comment removes one. Comments are set after the C, which drops its own. "
+                  + "an empty comment removes one. Comments are set after the C, which drops its own — a type "
+                  + "defined again keeps its fields' comments by name, and the answer says how many came back "
+                  + "(`comments_kept`) and gives the type's `size`. A structure is laid out by the compiler spec "
+                  + "unless the C says otherwise: `#pragma pack(1)` … `#pragma pack()` is how a packed record is "
+                  + "written, and `size` beside the field offsets is how a wrong layout shows. "
                   + "`delete: true` with `name` removes a type the program holds — a probe or a mistake — so a "
                   + "publish cannot carry it; a type an archive holds is refused.",
                   ["c": AgentSchema.string("The C text."),
@@ -632,7 +641,9 @@ public enum GhidraTools {
                 `type_conflict_origins` names the module that wrote the shared copy. \
                 `take_type_conflicts: true` replaces the shared copy of each conflicting type with this \
                 module's — the answer to a layout that was published wrong, and never an enum, whose \
-                clashing member means one of the two reviews is wrong. \
+                clashing member means one of the two reviews is wrong. The types replaced come back as \
+                `type_conflicts_taken`, a typedef and the structure it names each named, since the archive \
+                holds them separately; a dry run with both flags says what would be taken. \
                 `dry_run: true` answers the same without storing: the artifact's counts, the revision \
                 it would become, the description's size and the type conflicts — the export is done, so \
                 it costs what a publish costs.
@@ -647,10 +658,12 @@ public enum GhidraTools {
             annotations: .edit
         ) { call in
             let module = try module(call.arguments)
-            if try call.arguments.bool("dry_run", default: false) {
-                return try await answer { try await backend.publishPreview(module) }
-            }
             let take = try call.arguments.bool("take_type_conflicts", default: false)
+            if try call.arguments.bool("dry_run", default: false) {
+                return try await answer {
+                    try await backend.publishPreview(module, takeTypeConflicts: take)
+                }
+            }
             return try await answer { try await backend.publishModule(module, by: "agent", takeTypeConflicts: take) }
         }
     }
