@@ -172,7 +172,7 @@ import ToolModuleKit
     private let functionLabel = CodeTitleField(labelWithString: "")
     /// After the function's name, a library function's badge as the
     /// navigator draws it, with what the library registry says of it.
-    let registryMark = NSImageView()
+    let registryMark = CodeBaselineImageView()
     private var zoomObserver: NSObjectProtocol?
     /// Set while the view moves a table's selection itself, so the table's
     /// delegate does not take the move for a click.
@@ -918,6 +918,7 @@ import ToolModuleKit
         let mark = CodeNavigatorIcon.library(Self.badge(of: section), style: style)
         let side = CodeNavigatorIcon.side(forFontSize: ToolPanelFont.title().pointSize)
         registryMark.image = CodeNavigatorIcon.image(mark.glyph, color: mark.color, side: side)
+        registryMark.lineFont = ToolPanelFont.title()
         registryMark.isHidden = false
         let detail = Self.registryDetail(function)
             ?? L("Library function: %1$@. The library registry does not hold it.", Self.title(of: section))
@@ -3750,6 +3751,22 @@ private final class CodePlaceBox: NSObject {
 /// The header's function name: selectable, so it can be copied, with the
 /// function's own right-click menu in place of the text field's — also while
 /// it is selected, when the field editor is what the click lands on.
+/// An image that stands in a line of text by its middle: the line aligns by
+/// baseline, and an image's own baseline is its bottom edge, which would put
+/// it above the words. Its middle sits at the middle of the capitals of
+/// `lineFont`.
+final class CodeBaselineImageView: NSImageView {
+    var lineFont: NSFont = .systemFont(ofSize: NSFont.systemFontSize) {
+        didSet { invalidateIntrinsicContentSize() }
+    }
+
+    private var height: CGFloat { image?.size.height ?? 0 }
+
+    override var firstBaselineOffsetFromTop: CGFloat { height / 2 + lineFont.capHeight / 2 }
+    override var lastBaselineOffsetFromBottom: CGFloat { height / 2 - lineFont.capHeight / 2 }
+    override var baselineOffsetFromBottom: CGFloat { lastBaselineOffsetFromBottom }
+}
+
 final class CodeTitleField: NSTextField {
     var onMenu: (() -> NSMenu?)?
 
