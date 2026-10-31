@@ -390,7 +390,20 @@ public class Owner {
     /** A decompiler piece of a register or a `unique:` space, not a stored variable. */
     private static boolean fragment(ghidra.program.model.listing.VariableStorage storage) {
         if (storage == null) return false;
-        return storage.isRegisterStorage() || storage.isUniqueStorage() || storage.isHashStorage();
+        if (storage.isRegisterStorage() || storage.isUniqueStorage() || storage.isHashStorage()) return true;
+        // A value the decompiler split over two registers — `EDX:4,EAX:4` for a
+        // 64-bit one — is that same piece: `isRegisterStorage()` is true of a
+        // single register only, so without this such a temporary counted as a
+        // local the review had missed and kept a finished function from `full`.
+        ghidra.program.model.pcode.Varnode[] pieces = storage.getVarnodes();
+        if (pieces == null || pieces.length == 0) return false;
+        for (ghidra.program.model.pcode.Varnode piece : pieces) {
+            if (piece.getAddress().getAddressSpace().getType()
+                    != ghidra.program.model.address.AddressSpace.TYPE_REGISTER) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** A function a review has not passed: a placeholder parameter or local, or no plate. */
@@ -2744,7 +2757,19 @@ public class Owner {
                         || (symbol.getPCAddress() != null && hex(symbol.getPCAddress()).equalsIgnoreCase(firstUse)));
             }
             if (!fits) continue;
-            if (match != null) throw new Failure(409, "several variables are stored in " + storage + "; give first_use");
+            if (match != null) {
+                // Two decompiler pieces can share a storage and a first use —
+                // one byte read twice, say. A function holds one variable per
+                // storage, so no argument here can single one of them out; the
+                // refusal says that instead of asking for a first_use that was
+                // given.
+                throw new Failure(409, firstUse == null
+                    ? "several variables are stored in " + storage + "; give first_use"
+                    : "several variables in " + function.getName() + " share the storage " + storage
+                        + " and the first use " + firstUse
+                        + "; Ghidra holds one variable per storage, so they cannot be named apart"
+                        + " — say what each is in the plate comment");
+            }
             match = symbol;
         }
         if (match == null) {

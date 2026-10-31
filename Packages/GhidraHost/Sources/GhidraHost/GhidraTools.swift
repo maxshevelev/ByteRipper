@@ -272,7 +272,7 @@ public enum GhidraTools {
                     none for a bare `library` tag. `name_contains` and `name_source` (a Ghidra source such as USER_DEFINED) \
                     narrow the list, `address_from`/`address_to` narrow it by entry. `filter: \
                     "unfinished"` keeps what a review has not passed — a parameter or a local Ghidra \
-                    still names itself or holds as `undefined`, or no plate comment — each with \
+                    still names itself, or one still typed `undefined`, or no plate comment — each with \
                     `leftovers`, and `summary` says how many of how many; that filter decompiles every \
                     function, so it is slow on a large module. `leftovers.fragments` counts the \
                     register and `unique:` pieces the decompiler splits off while a review types a \
@@ -315,8 +315,9 @@ public enum GhidraTools {
                     name on the EDK2 list, `tag` for a review's library tag — and `library_kind`, whose: \
                     edk2, amd or intel; its parameters and locals with \
                     their `storage` and `first_use` (what `ghidra_rename_variable` names a local by), its \
-                    plate comment, what is left to name (`leftovers`, whose `fragments` are the \
-                    decompiler's register pieces rather than missing names), and its decompiled C — \
+                    plate comment, what is left to name or type — a name Ghidra made up, or an \
+                    `undefined` type — (`leftovers`, whose `fragments` are the decompiler's register \
+                    pieces rather than missing names), and its decompiled C — \
                     fresh after every write, ahead of what the app shows until a publish. \
                     `summary: true` leaves the C and the equates out, for walking a module without \
                     its text.
@@ -522,8 +523,10 @@ public enum GhidraTools {
                 description: """
                     Names, and perhaps types, a local by its `storage` and, for a register, \
                     `first_use` — as `ghidra_function` lists them — or a parameter by its `ordinal`. \
-                    Never by Ghidra's own name for it (`iVar4`): those renumber. `type` alone types it \
-                    and keeps the name. After any call, read the function again: a local's `storage` \
+                    Never by Ghidra's own name for it (`iVar4`): those renumber. Two locals that share \
+                    a storage and a first use cannot be told apart — a function holds one variable per \
+                    storage — and naming either is refused; say what each is in the plate comment. \
+                    `type` alone types it and keeps the name. After any call, read the function again: a local's `storage` \
                     can change, and a type alone gives it a `HASH:` storage. `items` does several in \
                     one call, each in a transaction of its own: the answer lists what applied and why \
                     an entry did not. A name already held is answered with the holder — its kind, \

@@ -117,7 +117,8 @@ Every function carries `review_level`, how far the review has got with it, and
 `name_source` and `name_reason`, and before the C. The levels are:
 
 - `full` — a plate comment; at least one step comment on an instruction; every
-  parameter and local named and typed (a decompiler fragment of a register or
+  parameter and local named and typed (a decompiler fragment of a register —
+  one register, or a value split over two such as `EDX:4,EAX:4` — or of a
   `unique:` space does not count as a name); and a name that is not Ghidra's
   `FUN_` placeholder. Ghidra's own variable names (`iVar1`, `EVar1`, `uVar2`,
   `local_4`, `param_1`) are placeholders too.

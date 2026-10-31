@@ -497,9 +497,20 @@ public class ExportCode extends GhidraScript {
 
     // A decompiler piece of a register or a `unique:` space, not a stored
     // variable: a value split as a review types around it, not a name missed.
+    // A value split over two registers — `EDX:4,EAX:4` for a 64-bit one — is
+    // one piece too: `isRegisterStorage()` is true of a single register only.
     private static boolean fragment(ghidra.program.model.listing.VariableStorage storage) {
         if (storage == null) return false;
-        return storage.isRegisterStorage() || storage.isUniqueStorage() || storage.isHashStorage();
+        if (storage.isRegisterStorage() || storage.isUniqueStorage() || storage.isHashStorage()) return true;
+        ghidra.program.model.pcode.Varnode[] pieces = storage.getVarnodes();
+        if (pieces == null || pieces.length == 0) return false;
+        for (ghidra.program.model.pcode.Varnode piece : pieces) {
+            if (piece.getAddress().getAddressSpace().getType()
+                    != ghidra.program.model.address.AddressSpace.TYPE_REGISTER) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static boolean library(Function function) {
