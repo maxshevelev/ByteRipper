@@ -179,7 +179,9 @@
 "Call tree" = "Дерево вызовов";
 "Grouped by review state" = "По уровню разбора";
 "Function order" = "Порядок функций";
-"Choose how the functions are listed: by address, as a call tree, or grouped by review state" = "Выберите, как перечислены функции: по адресу, деревом вызовов или по уровню разбора";
+"List the functions in the order they lie in the module" = "Перечислить функции в порядке их расположения в модуле";
+"Hang each function under the one that calls it" = "Показать каждую функцию под той, что её вызывает";
+"Gather the functions by how far the review has got with each" = "Сгруппировать функции по степени готовности разбора";
 "Fully reviewed" = "Разобрана полностью";
 "Partly reviewed" = "Разобрана частично";
 "Decompiler only" = "Только декомпилятор";

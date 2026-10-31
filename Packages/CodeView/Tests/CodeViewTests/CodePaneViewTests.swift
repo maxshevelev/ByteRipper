@@ -791,6 +791,44 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(next.functionOrder, .review, "the next panel opens in it")
     }
 
+    /// The layouts are three separate flat buttons, not the segments of one
+    /// control: the one in front carries the plate, and a click on another
+    /// moves it.
+    func testTheFunctionViewIsThreeSeparateButtons() throws {
+        let suiteName = "CodePaneViewTests.orderButtons"
+        let suite = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        suite.removePersistentDomain(forName: suiteName)
+        CodePaneView.defaults = suite
+        defer {
+            suite.removePersistentDomain(forName: suiteName)
+            CodePaneView.defaults = .standard
+        }
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 480, height: 400)
+        view.layoutSubtreeIfNeeded()
+
+        let buttons = view.navigatorOrderButtons.compactMap { $0 as? CodeOrderButton }
+        XCTAssertEqual(buttons.count, 3, "each layout is a button of its own")
+        XCTAssertEqual(buttons.map(\.isChosen), [true, false, false])
+        XCTAssertEqual(buttons.map(\.toolTip), [
+            "List the functions in the order they lie in the module",
+            "Hang each function under the one that calls it",
+            "Gather the functions by how far the review has got with each"
+        ])
+        for button in buttons {
+            XCTAssertFalse(button.isBordered, "a flat symbol, not a boxed control")
+            XCTAssertEqual(button.imagePosition, .imageOnly)
+            XCTAssertEqual(button.state, button.isChosen ? .on : .off,
+                           "the choice is a state, not only a plate")
+        }
+
+        buttons[2].performClick(nil)
+        XCTAssertEqual(view.functionOrder, .review)
+        XCTAssertEqual(buttons.map(\.isChosen), [false, false, true], "the plate moves")
+        XCTAssertEqual(buttons.map(\.state), [.off, .off, .on])
+    }
+
     /// In the grouped order a function's hover says where its review stands:
     /// the level, and what still keeps it from full.
     func testTheGroupedRowsSayWhereTheReviewStands() throws {

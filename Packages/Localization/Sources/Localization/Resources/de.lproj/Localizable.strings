@@ -179,7 +179,9 @@
 "Call tree" = "Aufrufbaum";
 "Grouped by review state" = "Nach Analysestand";
 "Function order" = "Reihenfolge der Funktionen";
-"Choose how the functions are listed: by address, as a call tree, or grouped by review state" = "Wählen Sie, wie die Funktionen aufgelistet werden: nach Adresse, als Aufrufbaum oder nach Analysestand";
+"List the functions in the order they lie in the module" = "Die Funktionen in der Reihenfolge auflisten, in der sie im Modul liegen";
+"Hang each function under the one that calls it" = "Jede Funktion unter der Funktion anzeigen, die sie aufruft";
+"Gather the functions by how far the review has got with each" = "Die Funktionen nach dem Stand ihrer Analyse gruppieren";
 "Fully reviewed" = "Vollständig analysiert";
 "Partly reviewed" = "Teilweise analysiert";
 "Decompiler only" = "Nur Dekompiler";

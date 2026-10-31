@@ -140,6 +140,11 @@ import ToolModuleKit
     /// the switch that lays the Functions list out. Then how far a call
     /// tree's row is set in per level.
     private static let navigatorBarHeight: CGFloat = 30
+    /// A function-view button: the square each symbol sits in, and the room
+    /// between two of them — enough that three read as three buttons.
+    private static let orderButtonWidth: CGFloat = 24
+    private static let orderButtonHeight: CGFloat = 22
+    private static let orderButtonGap: CGFloat = 2
     private static let navigatorIndent: CGFloat = 14
     /// How far a review group's function starts past the group's mark.
     private static let groupMemberIndent: CGFloat = 13
@@ -149,8 +154,12 @@ import ToolModuleKit
     /// Where the Functions list's order is kept, like the navigator's width.
     static let navigatorOrderKey = "CodeNavigatorFunctionOrder"
     private let navigatorBar = CodeNavigatorBar()
-    private let orderControl = NSSegmentedControl()
-    /// The filter runs to the bar's edge where the switch is not there.
+    /// The three function-view buttons, kept apart rather than joined into one
+    /// segmented control: each is a flat symbol, and the one whose layout is
+    /// in front carries a plate behind it.
+    private let orderButtons = NSStackView()
+    private var orderButtonViews: [CodeOrderButton] = []
+    /// The filter runs to the bar's edge where the buttons are not there.
     private var searchToOrder: NSLayoutConstraint!
     private var searchToEdge: NSLayoutConstraint!
     private let staleLabel = NSTextField(labelWithString: "")
@@ -553,10 +562,10 @@ import ToolModuleKit
         // The switch speaks about the functions only: with another list in
         // front the filter takes its room.
         let showsOrder = state.list == .functions
-        orderControl.isHidden = !showsOrder
+        orderButtons.isHidden = !showsOrder
         searchToOrder.isActive = showsOrder
         searchToEdge.isActive = !showsOrder
-        orderControl.selectedSegment = state.functionOrder.rawValue
+        markChosenOrder(state.functionOrder)
         layOutNavigatorColumns()
         drawEmptyList()
         syncingSelection = true
@@ -571,21 +580,33 @@ import ToolModuleKit
         syncingSelection = false
     }
 
-    /// How the Functions list is laid out, as the bar's switch has it.
+    /// How the Functions list is laid out, as the bar's buttons have it.
     public var functionOrder: FunctionOrder { state.functionOrder }
+
+    /// The bar's function-view buttons, in the order they are drawn, for a
+    /// test to find them by.
+    var navigatorOrderButtons: [NSButton] { orderButtonViews }
 
     /// Lays the Functions list out in `order`, as the switch in the bar does,
     /// and keeps the choice for the next code panel.
     public func setFunctionOrder(_ order: FunctionOrder) {
         Self.defaults.set(order.rawValue, forKey: Self.navigatorOrderKey)
-        orderControl.selectedSegment = order.rawValue
+        markChosenOrder(order)
         guard state.show(order) else { return }
         drawNavigator()
     }
 
-    @objc private func orderChanged() {
-        guard let order = FunctionOrder(rawValue: orderControl.selectedSegment) else { return }
+    @objc private func orderChosen(_ sender: NSButton) {
+        guard let order = FunctionOrder(rawValue: sender.tag) else { return }
         setFunctionOrder(order)
+    }
+
+    /// Puts the plate behind the button whose layout is in front and takes it
+    /// from the others.
+    private func markChosenOrder(_ order: FunctionOrder) {
+        for (index, button) in orderButtonViews.enumerated() {
+            button.isChosen = index == order.rawValue
+        }
     }
 
     private static func orderSymbol(_ order: FunctionOrder) -> String {
@@ -1524,32 +1545,57 @@ import ToolModuleKit
         emptyListLabel.translatesAutoresizingMaskIntoConstraints = false
         functionPane.addSubview(emptyListLabel)
 
-        // The switch beside the filter: how the functions are laid out. The
-        // list of functions is the only one it speaks about, so under Strings,
-        // POST and Status the filter has the bar to itself.
-        orderControl.trackingMode = .selectOne
-        orderControl.controlSize = .small
-        orderControl.target = self
-        orderControl.action = #selector(orderChanged)
-        orderControl.translatesAutoresizingMaskIntoConstraints = false
-        orderControl.segmentCount = FunctionOrder.allCases.count
-        let orderPhrases = [L("By address"), L("Call tree"), L("Grouped by review state")]
-        for (segment, order) in FunctionOrder.allCases.enumerated() where segment < orderPhrases.count {
-            orderControl.setImage(NSImage(systemSymbolName: Self.orderSymbol(order),
-                                          accessibilityDescription: nil), forSegment: segment)
-            orderControl.setToolTip(orderPhrases[segment], forSegment: segment)
-        }
-        orderControl.selectedSegment = state.functionOrder.rawValue
+        // The buttons beside the filter: how the functions are laid out. Three
+        // flat symbols, each with its own tooltip, rather than a segmented
+        // control drawing them as one joined piece of chrome. The list of
+        // functions is the only one they speak about, so under Strings, POST
+        // and Status the filter has the bar to itself.
+        orderButtons.orientation = .horizontal
+        orderButtons.spacing = Self.orderButtonGap
+        orderButtons.alignment = .centerY
+        orderButtons.translatesAutoresizingMaskIntoConstraints = false
+        orderButtons.setContentHuggingPriority(.required, for: .horizontal)
+        orderButtons.setContentCompressionResistancePriority(.required, for: .horizontal)
+        // A screen reader lands on the buttons one by one; the group is the
+        // sentence that says what the three of them choose.
+        orderButtons.setAccessibilityRole(.group)
+        orderButtons.setAccessibilityLabel(L("Function order"))
+        let orderPhrases: [(name: String, tooltip: String)] = [
+            (L("By address"), L("List the functions in the order they lie in the module")),
+            (L("Call tree"), L("Hang each function under the one that calls it")),
+            (L("Grouped by review state"), L("Gather the functions by how far the review has got with each"))
+        ]
         // help: panel.code.function-view
-        ControlHelp.describe(orderControl, name: L("Function order"),
-                             tooltip: L("Choose how the functions are listed: by address, as a call tree, or grouped by review state"))
-        orderControl.setContentHuggingPriority(.required, for: .horizontal)
-        orderControl.setContentCompressionResistancePriority(.required, for: .horizontal)
+        for (index, order) in FunctionOrder.allCases.enumerated() where index < orderPhrases.count {
+            let button = CodeOrderButton()
+            button.image = NSImage(systemSymbolName: Self.orderSymbol(order),
+                                   accessibilityDescription: nil)
+            button.imagePosition = .imageOnly
+            button.isBordered = false
+            button.bezelStyle = .inline
+            // A choice, not an action: the state is what a screen reader
+            // reads as selected, and what draws the plate.
+            button.setButtonType(.pushOnPushOff)
+            button.contentTintColor = .secondaryLabelColor
+            button.tag = index
+            button.target = self
+            button.action = #selector(orderChosen(_:))
+            button.translatesAutoresizingMaskIntoConstraints = false
+            button.widthAnchor.constraint(equalToConstant: Self.orderButtonWidth).isActive = true
+            button.heightAnchor.constraint(equalToConstant: Self.orderButtonHeight).isActive = true
+            button.setContentHuggingPriority(.required, for: .horizontal)
+            button.setContentCompressionResistancePriority(.required, for: .horizontal)
+            ControlHelp.describe(button, name: orderPhrases[index].name,
+                                 tooltip: orderPhrases[index].tooltip)
+            orderButtons.addArrangedSubview(button)
+            orderButtonViews.append(button)
+        }
+        markChosenOrder(state.functionOrder)
         navigatorBar.translatesAutoresizingMaskIntoConstraints = false
         navigatorBar.addSubview(searchField)
-        navigatorBar.addSubview(orderControl)
+        navigatorBar.addSubview(orderButtons)
         functionPane.addSubview(navigatorBar)
-        searchToOrder = searchField.trailingAnchor.constraint(equalTo: orderControl.leadingAnchor, constant: -6)
+        searchToOrder = searchField.trailingAnchor.constraint(equalTo: orderButtons.leadingAnchor, constant: -6)
         searchToEdge = searchField.trailingAnchor.constraint(equalTo: navigatorBar.trailingAnchor, constant: -8)
         NSLayoutConstraint.activate([
             emptyListLabel.topAnchor.constraint(equalTo: listControl.bottomAnchor, constant: 16),
@@ -1572,8 +1618,8 @@ import ToolModuleKit
             searchField.leadingAnchor.constraint(equalTo: navigatorBar.leadingAnchor, constant: 8),
             searchField.centerYAnchor.constraint(equalTo: navigatorBar.centerYAnchor, constant: 0.5),
             searchToOrder,
-            orderControl.trailingAnchor.constraint(equalTo: navigatorBar.trailingAnchor, constant: -8),
-            orderControl.centerYAnchor.constraint(equalTo: navigatorBar.centerYAnchor, constant: 0.5)
+            orderButtons.trailingAnchor.constraint(equalTo: navigatorBar.trailingAnchor, constant: -6),
+            orderButtons.centerYAnchor.constraint(equalTo: navigatorBar.centerYAnchor, constant: 0.5)
         ])
 
         codeContent.wantsLayer = true
@@ -3430,6 +3476,41 @@ final class CodeNavigatorCell: NSTableCellView {
 
 /// The bar under the navigator's list: the panel's background and a hairline
 /// over it, where the list scrolls under — Xcode's filter bar.
+/// One of the navigator's function-view buttons: a flat symbol, with a plate
+/// behind the one whose layout is in front.
+///
+/// The three layouts are three buttons, not the segments of one control: the
+/// bar reads as a row of separate buttons, and a segmented control would draw
+/// them as a single joined frame with dividers — chrome the bar does not have.
+/// The plate is drawn rather than left to the bezel, because a bordered button
+/// would box every symbol whether or not it is the one in front.
+final class CodeOrderButton: NSButton {
+    /// Whether this button's layout is the one shown. The button's own state
+    /// follows it, which is what a screen reader reads as selected.
+    var isChosen: Bool = false {
+        didSet {
+            guard isChosen != oldValue else { return }
+            state = isChosen ? .on : .off
+            contentTintColor = isChosen ? .controlAccentColor : .secondaryLabelColor
+            needsDisplay = true
+        }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        if isChosen {
+            NSColor.controlAccentColor.withAlphaComponent(0.18).setFill()
+            NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5),
+                         xRadius: 5, yRadius: 5).fill()
+        }
+        super.draw(dirtyRect)
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
+}
+
 private final class CodeNavigatorBar: NSView {
     override func draw(_ dirtyRect: NSRect) {
         NSColor.windowBackgroundColor.setFill()
