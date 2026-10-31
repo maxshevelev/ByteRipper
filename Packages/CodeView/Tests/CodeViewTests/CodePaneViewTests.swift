@@ -825,9 +825,9 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(try tooltip(3), "Review: library function")
     }
 
-    /// A function's name carries the code mark; in the call tree a function
-    /// shown because something calls it carries a turn-down arrow instead.
-    func testFunctionNamesCarryTheCodeMarkAndCalledOnesTheArrow() throws {
+    /// Every function's name carries the function mark, a call in the tree
+    /// as much as its root; a review group's heading carries its level's.
+    func testFunctionsCarryTheFunctionMarkAndGroupsTheirLevels() throws {
         let suiteName = "CodePaneViewTests.navigatorIcons"
         let suite = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         suite.removePersistentDomain(forName: suiteName)
@@ -857,8 +857,7 @@ final class CodePaneViewTests: XCTestCase {
             try XCTUnwrap(table.view(atColumn: column, row: row, makeIfNecessary: true)
                 as? CodeNavigatorCell)
         }
-        let code = "ellipsis.curlybraces"
-        let arrow = "arrow.turn.down.right"
+        let code = "function"
 
         // By address: the name column carries the code mark, the address none.
         let nameColumn = try XCTUnwrap(list.tableColumns.firstIndex {
@@ -867,13 +866,13 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(try cell(list, nameColumn, 0).iconName, code)
         XCTAssertNil(try cell(list, 0, 0).iconName, "an address is not a function")
 
-        // Call tree: the root reads as a function, its call as a call.
+        // Call tree: the root and its call carry the same mark.
         view.setFunctionOrder(.calls)
         view.layoutSubtreeIfNeeded()
         XCTAssertEqual(try cell(list, 0, 0).textField?.stringValue, "Root")
         XCTAssertEqual(try cell(list, 0, 0).iconName, code)
         XCTAssertEqual(try cell(list, 0, 1).textField?.stringValue, "Leaf")
-        XCTAssertEqual(try cell(list, 0, 1).iconName, arrow)
+        XCTAssertEqual(try cell(list, 0, 1).iconName, code, "a call is a function too")
 
         // A search result is not a call of anything on screen.
         view.filter(by: "Leaf")
@@ -886,7 +885,11 @@ final class CodePaneViewTests: XCTestCase {
         view.setFunctionOrder(.review)
         view.layoutSubtreeIfNeeded()
         let member = try cell(list, 0, 1)
-        XCTAssertEqual(member.iconName, code, "a group's member is a function, not a call")
+        XCTAssertEqual(member.iconName, code, "a group's member is a function")
+        // A heading carries its level's mark.
+        let heading = try cell(list, 0, 0)
+        XCTAssertTrue(heading.iconName?.hasPrefix("group.") == true)
+        XCTAssertNotNil(heading.icon.image)
     }
 
     /// A revision the panel receives marks the functions it changed: they read

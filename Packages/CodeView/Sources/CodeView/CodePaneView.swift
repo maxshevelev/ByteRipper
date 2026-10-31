@@ -131,23 +131,25 @@ import ToolModuleKit
         return min(max(stored, navigatorWidths.lowerBound), navigatorWidths.upperBound)
     }
     private static let dumpBarHeight: CGFloat = 24
-    /// The navigator's header: its fields sit a little taller and further apart
-    /// than AppKit's small controls place them, which at the panel's width read
-    /// as one cramped block.
+    /// The navigator's header: its fields sit a little further apart than
+    /// AppKit's small controls place them, which at the panel's width read as
+    /// one cramped block.
     private static let navigatorSpacing: CGFloat = 10
-    private static let navigatorSearchHeight: CGFloat = 26
-    /// The bar under the Functions list, holding the switch that lays the list
-    /// out, and how far a call tree's row is set in per level.
-    private static let navigatorBarHeight: CGFloat = 28
+    /// The bar under the list, as Xcode's navigator has it: the filter, and
+    /// the switch that lays the Functions list out. Then how far a call
+    /// tree's row is set in per level.
+    private static let navigatorBarHeight: CGFloat = 30
     private static let navigatorIndent: CGFloat = 14
     /// How deep a call tree's row is drawn: deeper levels keep the last one's
     /// inset rather than running the names off the pane.
     private static let navigatorLevels: Int = 10
     /// Where the Functions list's order is kept, like the navigator's width.
     static let navigatorOrderKey = "CodeNavigatorFunctionOrder"
-    private let navigatorBar = CodeDumpBar()
+    private let navigatorBar = CodeNavigatorBar()
     private let orderControl = NSSegmentedControl()
-    private var navigatorBarHeight: NSLayoutConstraint!
+    /// The filter runs to the bar's edge where the switch is not there.
+    private var searchToOrder: NSLayoutConstraint!
+    private var searchToEdge: NSLayoutConstraint!
     private let staleLabel = NSTextField(labelWithString: "")
     /// The header's first line — the module, its revision, the function —
     /// kept to follow the zoom. The versions line under it follows with
@@ -543,10 +545,11 @@ import ToolModuleKit
         navigatorLabel.stringValue = title(for: state.list)
         listControl.selectedSegment = state.list.rawValue
         // The switch speaks about the functions only: with another list in
-        // front its bar is not there.
+        // front the filter takes its room.
         let showsOrder = state.list == .functions
-        navigatorBar.isHidden = !showsOrder
-        navigatorBarHeight.constant = showsOrder ? Self.navigatorBarHeight : 0
+        orderControl.isHidden = !showsOrder
+        searchToOrder.isActive = showsOrder
+        searchToEdge.isActive = !showsOrder
         orderControl.selectedSegment = state.functionOrder.rawValue
         layOutNavigatorColumns()
         drawEmptyList()
@@ -659,8 +662,60 @@ import ToolModuleKit
 
     /// Opens or closes a function's calls in the tree.
     private func toggleCalls(of index: Int) {
-        state.toggleExpanded(index)
-        drawNavigator()
+        foldRows { $0.toggleExpanded(index) }
+        if let row = state.row(ofFunction: index) {
+            describeDisclosure(at: row, state.isExpanded(index) ? L("Hide calls") : L("Show calls"))
+        }
+    }
+
+    /// Opens or closes rows of the Functions list as `change` has the state
+    /// do: the rows that come slide in under the one clicked, the rows that
+    /// go slide up into it, and every other row keeps its cell — the chevron
+    /// clicked is turning still. A change the rows cannot follow one by one
+    /// draws the list again.
+    private func foldRows(_ change: (inout CodeReaderState) -> Void) {
+        func rows() -> [CodeReaderState.FunctionRow] {
+            (0..<state.rowCount).compactMap(state.functionRow(at:))
+        }
+        let before = state.list == .functions ? rows() : []
+        change(&state)
+        guard state.list == .functions, before.count == functionTable.numberOfRows else {
+            drawNavigator()
+            return
+        }
+        let difference = rows().difference(from: before)
+        var removed = IndexSet(), inserted = IndexSet()
+        for step in difference {
+            switch step {
+            case let .remove(offset, _, _): removed.insert(offset)
+            case let .insert(offset, _, _): inserted.insert(offset)
+            }
+        }
+        syncingSelection = true
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.2
+            context.allowsImplicitAnimation = true
+            functionTable.beginUpdates()
+            functionTable.removeRows(at: removed, withAnimation: [.slideUp, .effectFade])
+            functionTable.insertRows(at: inserted, withAnimation: [.slideDown, .effectFade])
+            functionTable.endUpdates()
+        }
+        // The function the reader is in keeps its row where the list still
+        // shows it.
+        if let function = state.function, let row = state.row(ofFunction: function) {
+            functionTable.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        }
+        syncingSelection = false
+        drawEmptyList()
+    }
+
+    /// The words of the chevron on `row` after it turned: it is not drawn
+    /// again, so it does not take them from the row.
+    private func describeDisclosure(at row: Int, _ phrase: String) {
+        guard row < functionTable.numberOfRows,
+              let cell = functionTable.view(atColumn: 0, row: row, makeIfNecessary: false)
+                as? CodeNavigatorCell else { return }
+        ControlHelp.describe(cell.disclosure, phrase)
     }
 
     /// The functions a revision the panel received changed, and that the
@@ -1329,7 +1384,11 @@ import ToolModuleKit
         listControl.setContentHuggingPriority(.defaultLow, for: .horizontal)
         listControl.translatesAutoresizingMaskIntoConstraints = false
 
-        searchField.placeholderString = L("Search")
+        searchField.placeholderString = L("Filter")
+        // Xcode's filter mark in place of the magnifier: the field narrows the
+        // list, it does not go looking.
+        (searchField.cell as? NSSearchFieldCell)?.searchButtonCell?.image =
+            NSImage(systemSymbolName: "line.3.horizontal.decrease.circle", accessibilityDescription: nil)
         searchField.target = self
         searchField.action = #selector(searchChanged)
         searchField.sendsSearchStringImmediately = true
@@ -1349,7 +1408,6 @@ import ToolModuleKit
         functionPane.translatesAutoresizingMaskIntoConstraints = false
         functionPane.addSubview(navigatorLabel)
         functionPane.addSubview(listControl)
-        functionPane.addSubview(searchField)
         functionPane.addSubview(functionScroll)
         emptyListLabel.textColor = .secondaryLabelColor
         emptyListLabel.alignment = .center
@@ -1358,9 +1416,9 @@ import ToolModuleKit
         emptyListLabel.translatesAutoresizingMaskIntoConstraints = false
         functionPane.addSubview(emptyListLabel)
 
-        // The switch under the list: how the functions are laid out. The list
-        // of functions is the only one it speaks about, so the bar under
-        // Strings, POST and Status is not there at all.
+        // The switch beside the filter: how the functions are laid out. The
+        // list of functions is the only one it speaks about, so under Strings,
+        // POST and Status the filter has the bar to itself.
         orderControl.trackingMode = .selectOne
         orderControl.controlSize = .small
         orderControl.target = self
@@ -1377,12 +1435,16 @@ import ToolModuleKit
         // help: panel.code.function-view
         ControlHelp.describe(orderControl, name: L("Function order"),
                              tooltip: L("Choose how the functions are listed: by address, as a call tree, or grouped by review state"))
+        orderControl.setContentHuggingPriority(.required, for: .horizontal)
+        orderControl.setContentCompressionResistancePriority(.required, for: .horizontal)
         navigatorBar.translatesAutoresizingMaskIntoConstraints = false
+        navigatorBar.addSubview(searchField)
         navigatorBar.addSubview(orderControl)
         functionPane.addSubview(navigatorBar)
-        navigatorBarHeight = navigatorBar.heightAnchor.constraint(equalToConstant: Self.navigatorBarHeight)
+        searchToOrder = searchField.trailingAnchor.constraint(equalTo: orderControl.leadingAnchor, constant: -6)
+        searchToEdge = searchField.trailingAnchor.constraint(equalTo: navigatorBar.trailingAnchor, constant: -8)
         NSLayoutConstraint.activate([
-            emptyListLabel.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 16),
+            emptyListLabel.topAnchor.constraint(equalTo: listControl.bottomAnchor, constant: 16),
             emptyListLabel.leadingAnchor.constraint(equalTo: functionPane.leadingAnchor, constant: 16),
             emptyListLabel.trailingAnchor.constraint(equalTo: functionPane.trailingAnchor, constant: -16),
             navigatorLabel.leadingAnchor.constraint(equalTo: functionPane.leadingAnchor, constant: 12),
@@ -1391,20 +1453,19 @@ import ToolModuleKit
             listControl.topAnchor.constraint(equalTo: navigatorLabel.bottomAnchor, constant: Self.navigatorSpacing),
             listControl.leadingAnchor.constraint(equalTo: functionPane.leadingAnchor, constant: 8),
             listControl.trailingAnchor.constraint(equalTo: functionPane.trailingAnchor, constant: -8),
-            searchField.topAnchor.constraint(equalTo: listControl.bottomAnchor, constant: Self.navigatorSpacing),
-            searchField.leadingAnchor.constraint(equalTo: functionPane.leadingAnchor, constant: 8),
-            searchField.trailingAnchor.constraint(equalTo: functionPane.trailingAnchor, constant: -8),
-            searchField.heightAnchor.constraint(equalToConstant: Self.navigatorSearchHeight),
-            functionScroll.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: Self.navigatorSpacing),
+            functionScroll.topAnchor.constraint(equalTo: listControl.bottomAnchor, constant: Self.navigatorSpacing),
             functionScroll.leadingAnchor.constraint(equalTo: functionPane.leadingAnchor, constant: 8),
             functionScroll.trailingAnchor.constraint(equalTo: functionPane.trailingAnchor, constant: -8),
-            functionScroll.bottomAnchor.constraint(equalTo: navigatorBar.topAnchor, constant: -6),
+            functionScroll.bottomAnchor.constraint(equalTo: navigatorBar.topAnchor),
             navigatorBar.leadingAnchor.constraint(equalTo: functionPane.leadingAnchor),
             navigatorBar.trailingAnchor.constraint(equalTo: functionPane.trailingAnchor),
             navigatorBar.bottomAnchor.constraint(equalTo: functionPane.bottomAnchor),
-            navigatorBarHeight,
-            orderControl.centerXAnchor.constraint(equalTo: navigatorBar.centerXAnchor),
-            orderControl.centerYAnchor.constraint(equalTo: navigatorBar.centerYAnchor)
+            navigatorBar.heightAnchor.constraint(equalToConstant: Self.navigatorBarHeight),
+            searchField.leadingAnchor.constraint(equalTo: navigatorBar.leadingAnchor, constant: 8),
+            searchField.centerYAnchor.constraint(equalTo: navigatorBar.centerYAnchor, constant: 0.5),
+            searchToOrder,
+            orderControl.trailingAnchor.constraint(equalTo: navigatorBar.trailingAnchor, constant: -8),
+            orderControl.centerYAnchor.constraint(equalTo: navigatorBar.centerYAnchor, constant: 0.5)
         ])
 
         codeContent.wantsLayer = true
@@ -2818,15 +2879,9 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
                 // level keeps the last one's inset rather than running the
                 // name off the pane.
                 cell.indent = CGFloat(min(functionRow.level, Self.navigatorLevels)) * Self.navigatorIndent
-                // A function the tree shows because something calls it carries
-                // a turn-down arrow; every other name, the mark the app gives
-                // an analysed module.
-                let called = state.functionOrder == .calls && state.searchText.isEmpty
-                    && functionRow.level > 0
-                // The analysis mark reads a weight up from the name beside it;
-                // the arrow stays light.
-                cell.showsIcon(called ? "arrow.turn.down.right" : "ellipsis.curlybraces",
-                               weight: called ? .regular : .semibold)
+                // Every function carries the same mark, a root of the tree and
+                // a call under it alike: the indent says which it is.
+                cell.showsIcon("function")
                 if unopenedChanges.contains(index) {
                     cell.textField?.font = Self.navigatorBoldFont()
                     cell.badge.text = L("New")
@@ -3020,7 +3075,7 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
         cell.textField?.textColor = .secondaryLabelColor
         cell.textField?.stringValue = Self.title(of: group)
             + " (\(state.groupCount(at: row) ?? 0))"
-        cell.showsIcon(nil)
+        cell.showsIcon("group.\(group)")
         cell.showsBadge(false)
         cell.indent = 0
         cell.showsDisclosure(true)
@@ -3035,8 +3090,10 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
 
     /// Opens or closes a review group's functions.
     private func toggleGroup(_ group: FunctionGroup) {
-        state.toggleGroupExpanded(group)
-        drawNavigator()
+        foldRows { $0.toggleGroupExpanded(group) }
+        if let row = (0..<state.rowCount).first(where: { state.functionRow(at: $0)?.group == group }) {
+            describeDisclosure(at: row, state.isGroupExpanded(group) ? L("Hide functions") : L("Show functions"))
+        }
     }
 
 }
@@ -3047,10 +3104,11 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
 /// A function that changed in a revision the panel received reads bold, with
 /// **New** in a capsule until the reader opens it.
 final class CodeNavigatorCell: NSTableCellView {
-    let disclosure = NSButton()
+    let disclosure = CodeDisclosureButton()
     let icon = NSImageView()
     let badge = PartBadgeView(text: "")
-    /// The SF Symbol the row's icon is drawn from, for a test to read.
+    /// What the row's mark stands for — `function`, or `group.<level>` —
+    /// for a test to read.
     private(set) var iconName: String?
     private var leading: NSLayoutConstraint!
     private var disclosureWidth: NSLayoutConstraint!
@@ -3076,11 +3134,7 @@ final class CodeNavigatorCell: NSTableCellView {
         field.setContentHuggingPriority(.defaultLow, for: .horizontal)
         field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        // AppKit's own disclosure triangle, the one the UEFI tree folds with:
-        // ▸ closed, ▾ open.
-        disclosure.title = ""
-        disclosure.bezelStyle = .disclosure
-        disclosure.setButtonType(.onOff)
+        // A chevron that turns down as the row opens.
         disclosure.target = self
         disclosure.action = #selector(toggle)
         disclosure.translatesAutoresizingMaskIntoConstraints = false
@@ -3101,6 +3155,7 @@ final class CodeNavigatorCell: NSTableCellView {
         for subview in [disclosure, icon, field, badge] { addSubview(subview) }
         leading = disclosure.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4)
         disclosureWidth = disclosure.widthAnchor.constraint(equalToConstant: 13)
+        disclosure.heightAnchor.constraint(equalToConstant: 13).isActive = true
         disclosureGap = icon.leadingAnchor.constraint(equalTo: disclosure.trailingAnchor, constant: 0)
         iconWidth = icon.widthAnchor.constraint(equalToConstant: 16)
         iconGap = field.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 4)
@@ -3135,24 +3190,27 @@ final class CodeNavigatorCell: NSTableCellView {
     /// open or closed; one without shows nothing in the room kept for it.
     func showsCalls(expandable: Bool, expanded: Bool) {
         disclosure.isHidden = !expandable
-        disclosure.state = expanded ? .on : .off
+        disclosure.setOpen(expanded, animated: false)
     }
 
-    /// The row's symbol: the code mark on a function, a turn-down arrow on a
-    /// function the call tree shows because something calls it. Nil for a
-    /// row that is not a function.
-    func showsIcon(_ name: String?, weight: NSFont.Weight = .regular) {
+    /// The row's mark: a function's `f`, or a review group's level, each a
+    /// glyph on a coloured square. Nil for a row that is not a function.
+    func showsIcon(_ name: String?) {
         iconName = name
-        icon.image = name.flatMap {
-            NSImage(systemSymbolName: $0, accessibilityDescription: nil)?
-                .withSymbolConfiguration(.init(pointSize: Self.navigatorIconSize, weight: weight))
+        let mark: (glyph: CodeNavigatorIcon.Glyph, color: NSColor)? = switch name {
+        case "function"?: CodeNavigatorIcon.function
+        case let name? where name.hasPrefix("group."):
+            CodeReaderState.FunctionGroup.allCases
+                .first { "group.\($0)" == name }
+                .map(CodeNavigatorIcon.group)
+        default: nil
         }
-        icon.isHidden = name == nil
-        iconWidth.constant = name == nil ? 0 : 16
-        iconGap.constant = name == nil ? 0 : 4
+        let side = CodeNavigatorIcon.side(forFontSize: CodePaneView.navigatorSize)
+        icon.image = mark.map { CodeNavigatorIcon.image($0.glyph, color: $0.color, side: side) }
+        icon.isHidden = mark == nil
+        iconWidth.constant = mark == nil ? 0 : side
+        iconGap.constant = mark == nil ? 0 : 5
     }
-
-    private static let navigatorIconSize: CGFloat = 11.5
 
     /// The capsule a revision puts on a function it changed.
     func showsBadge(_ shows: Bool) {
@@ -3161,10 +3219,31 @@ final class CodeNavigatorCell: NSTableCellView {
         fieldToEdge.isActive = !shows
     }
 
-    @objc private func toggle() { onToggle?() }
+    /// The click has already flipped the button's state: the chevron turns
+    /// to it, and the rows follow.
+    @objc private func toggle() {
+        disclosure.setOpen(disclosure.state == .on, animated: true)
+        onToggle?()
+    }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+}
+
+/// The bar under the navigator's list: the panel's background and a hairline
+/// over it, where the list scrolls under — Xcode's filter bar.
+private final class CodeNavigatorBar: NSView {
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.windowBackgroundColor.setFill()
+        bounds.fill()
+        NSColor.separatorColor.setFill()
+        NSRect(x: bounds.minX, y: isFlipped ? bounds.minY : bounds.maxY - 1, width: bounds.width, height: 1).fill()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
 }
 
 private final class CodeDumpBar: NSView {
