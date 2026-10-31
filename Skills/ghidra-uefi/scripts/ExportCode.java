@@ -500,11 +500,21 @@ public class ExportCode extends GhidraScript {
     }
 
     private static boolean library(Function function) {
-        if (LIBRARY_NAMES.contains(function.getName())) return true;
+        return libraryBasis(function) != null;
+    }
+
+    /**
+     * Why a function is written at the `library` level: `edk2_name` for a
+     * name on the EDK2 list, `tag` for a review's `library` tag, null for a
+     * function that is not one. The owner answers with it, so a review sees
+     * the reason the exporter will use.
+     */
+    static String libraryBasis(Function function) {
+        if (LIBRARY_NAMES.contains(function.getName())) return "edk2_name";
         for (FunctionTag tag : function.getTags()) {
-            if (tag != null && "library".equalsIgnoreCase(tag.getName())) return true;
+            if (tag != null && "library".equalsIgnoreCase(tag.getName())) return "tag";
         }
-        return false;
+        return null;
     }
 
     // How far a review has got with a function, and the gaps that keep it

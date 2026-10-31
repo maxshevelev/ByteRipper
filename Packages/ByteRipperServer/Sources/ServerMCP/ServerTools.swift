@@ -57,7 +57,9 @@ public enum ServerTools {
             (`via`) — `search` narrows by value — and, last, the writes whose value or port the code does \
             not say (`unresolved`). A function's `name_source` says where its name came from: DEFAULT is \
             Ghidra's FUN_ placeholder, ANALYSIS a name the UEFI pass read from the module (`name_reason` \
-            says from what), IMPORTED the image's own. Addresses come twice: `entry`/`address` is \
+            says from what), IMPORTED the image's own. `review_level` is how far the review has got — full, partial, \
+            decompiled, library or no_body; null in an analysis made before it was recorded — and \
+            `review_gaps` what keeps it from full: name, plate, comments, params, locals. Addresses come twice: `entry`/`address` is \
             Ghidra's virtual address, `offset` the same byte's offset in the module, the number the hex \
             view shows (none when read by `module` alone). These are stored observations, not a live \
             disassembly; the C is Ghidra's reading of the instructions, not the source.

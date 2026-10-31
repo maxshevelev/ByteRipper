@@ -155,7 +155,8 @@ public enum GhidraTools {
                 title: "List a module's functions",
                 description: """
                     The module's functions as Ghidra holds them now: entry, name, name_source, size, \
-                    signature. `name_contains` and `name_source` (a Ghidra source such as USER_DEFINED) \
+                    signature, `tags`, and `library` — `edk2_name` or `tag` — for a function the \
+                    export writes at the library review level. `name_contains` and `name_source` (a Ghidra source such as USER_DEFINED) \
                     narrow the list, `address_from`/`address_to` narrow it by entry. `filter: \
                     "unfinished"` keeps what a review has not passed — a parameter or a local Ghidra \
                     still names itself or holds as `undefined`, or no plate comment — each with \
@@ -196,7 +197,9 @@ public enum GhidraTools {
                 name: "ghidra_function",
                 title: "Read one function",
                 description: """
-                    One function as Ghidra holds it now: its signature, its parameters and locals with \
+                    One function as Ghidra holds it now: its signature, its `tags` and — for a function \
+                    the export writes at the library review level — `library`, why: `edk2_name` for a \
+                    name on the EDK2 list, `tag` for a review's `library` tag; its parameters and locals with \
                     their `storage` and `first_use` (what `ghidra_rename_variable` names a local by), its \
                     plate comment, what is left to name (`leftovers`, whose `fragments` are the \
                     decompiler's register pieces rather than missing names), and its decompiled C — \

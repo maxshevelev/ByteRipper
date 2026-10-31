@@ -266,6 +266,8 @@ public final class CodeReadings {
                     "signature": function.signature.map(JSONValue.string) ?? .null,
                     "name_source": function.nameSource.map(JSONValue.string) ?? .null,
                     "name_reason": function.nameReason.map(JSONValue.string) ?? .null,
+                    "review_level": function.reviewLevel.map { JSONValue.string($0.rawValue) } ?? .null,
+                    "review_gaps": .array(function.reviewGaps.map(JSONValue.string)),
                     "callers": .array(function.callers.map { .string($0.description) }),
                     "callees": .array(function.callees.map { .string($0.description) })
                 ])

@@ -397,6 +397,7 @@ public class Owner {
         item.addProperty("name_source", function.getSymbol().getSource().toString());
         item.addProperty("size", function.getBody().getNumAddresses());
         item.addProperty("signature", function.getPrototypeString(false, false));
+        addTags(item, function);
         return item;
     }
 
@@ -463,6 +464,7 @@ public class Owner {
         answer.addProperty("name", function.getName());
         answer.addProperty("name_source", function.getSymbol().getSource().toString());
         answer.addProperty("signature", function.getPrototypeString(false, false));
+        addTags(answer, function);
         String plate = function.getComment();
         if (plate != null && !plate.isBlank()) answer.addProperty("plate", plate);
         JsonArray parameters = new JsonArray();
@@ -1434,6 +1436,15 @@ public class Owner {
         JsonObject answer = identity();
         answer.addProperty("entry", hex(function.getEntryPoint()));
         answer.addProperty("name", function.getName());
+        addTags(answer, function);
+        return answer;
+    }
+
+    /**
+     * The function's Ghidra tags, sorted, and — for a function the export
+     * writes at the `library` level — `library`: why, `edk2_name` or `tag`.
+     */
+    private static void addTags(JsonObject answer, Function function) {
         JsonArray tags = new JsonArray();
         java.util.TreeSet<String> sorted = new java.util.TreeSet<>();
         for (ghidra.program.model.listing.FunctionTag held : function.getTags()) {
@@ -1441,7 +1452,8 @@ public class Owner {
         }
         for (String name : sorted) tags.add(name);
         answer.add("tags", tags);
-        return answer;
+        String basis = ExportCode.libraryBasis(function);
+        if (basis != null) answer.addProperty("library", basis);
     }
 
     /**
