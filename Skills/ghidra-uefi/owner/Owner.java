@@ -1538,6 +1538,14 @@ public class Owner {
         answer.addProperty("mode", mode);
         String oldName = function.getName();
         String name = required(entry, "name");
+        // The review's own reason for a name it keeps stays: only a rename
+        // says why in the registry's words.
+        Address at = function.getEntryPoint();
+        StringPropertyMap reasons = program.getUsrPropertyManager().getStringPropertyMap(Harvest.REASON);
+        StringPropertyMap bys = program.getUsrPropertyManager().getStringPropertyMap(Harvest.BY);
+        String keptReason = reasons == null ? null : reasons.getString(at);
+        String keptBy = bys == null ? null : bys.getString(at);
+        boolean wasNamed = function.getSymbol().getSource() == SourceType.USER_DEFINED;
         if (!oldName.equals(name)) {
             for (Symbol other : program.getSymbolTable().getGlobalSymbols(name)) {
                 if (!other.getAddress().equals(function.getEntryPoint())) {
@@ -1558,13 +1566,21 @@ public class Owner {
         for (Parameter parameter : function.getParameters()) {
             if (!placeholder(parameter.getName())) reviewedParameters = true;
         }
-        if (whole || !reviewedParameters) {
+        if (sameSignature(function, entry)) {
+            // Nothing to write: the function already has the entry's.
+        } else if (whole || !reviewedParameters) {
             applySignature(function, entry, why);
             filled.add("signature");
         } else {
             fillParameters(function, entry, filled, differences);
         }
-        why(function.getEntryPoint(), why);
+        if (!oldName.equals(name) || !wasNamed) {
+            why(at, why);
+        } else {
+            StringPropertyMap reasonMap = propertyMap(Harvest.REASON), byMap = propertyMap(Harvest.BY);
+            if (keptReason != null) reasonMap.add(at, keptReason); else reasonMap.remove(at);
+            if (keptBy != null) byMap.add(at, keptBy); else byMap.remove(at);
+        }
         applyLocals(function, entry, whole, filled, differences, unplaced);
         String plate = string(entry, "plate", "");
         String ownPlate = function.getComment();
@@ -1619,6 +1635,20 @@ public class Owner {
         return copy;
     }
 
+    /** The function's signature, convention and parameter storage are the entry's already. */
+    private static boolean sameSignature(Function function, JsonObject entry) {
+        if (!function.getPrototypeString(false, false).equals(string(entry, "signature", null))) return false;
+        if (!function.getCallingConventionName().equals(string(entry, "calling_convention", ""))) return false;
+        JsonArray params = entry.has("params") ? entry.getAsJsonArray("params") : new JsonArray();
+        Parameter[] current = function.getParameters();
+        if (params.size() != current.length) return false;
+        for (int index = 0; index < current.length; index++) {
+            String place = params.get(index).getAsJsonObject().get("storage").getAsString();
+            if (!current[index].getVariableStorage().toString().equals(place)) return false;
+        }
+        return true;
+    }
+
     private void applySignature(Function function, JsonObject entry, JsonObject why) throws Exception {
         JsonObject request = why.deepCopy();
         request.addProperty("address", hex(function.getEntryPoint()));
@@ -1660,13 +1690,17 @@ public class Owner {
             JsonObject theirs = params.get(index).getAsJsonObject();
             Parameter parameter = current[index];
             String name = theirs.get("name").getAsString(), type = theirs.get("type").getAsString();
-            if (placeholder(parameter.getName())) {
+            if (parameter.getName().equals(name)) {
+                // already the entry's
+            } else if (placeholder(parameter.getName())) {
                 parameter.setName(name, SourceType.USER_DEFINED);
                 filled.add("param " + index + " name");
             } else if (!parameter.getName().equals(name)) {
                 differences.add("param " + index + " name: " + parameter.getName() + ", entry " + name);
             }
-            if (undefined(parameter.getDataType())) {
+            if (parameter.getDataType().getDisplayName().equals(type)) {
+                // already the entry's
+            } else if (undefined(parameter.getDataType())) {
                 parameter.setDataType(type(type), SourceType.USER_DEFINED);
                 filled.add("param " + index + " type");
             } else if (!parameter.getDataType().getDisplayName().equals(type)) {
@@ -1675,7 +1709,9 @@ public class Owner {
             }
         }
         String returned = string(entry, "return_type", null);
-        if (returned != null && undefined(function.getReturnType())) {
+        if (returned == null || function.getReturnType().getDisplayName().equals(returned)) {
+            // already the entry's
+        } else if (undefined(function.getReturnType())) {
             function.setReturnType(type(returned), SourceType.USER_DEFINED);
             filled.add("return type");
         } else if (returned != null && !function.getReturnType().getDisplayName().equals(returned)) {
@@ -1710,14 +1746,15 @@ public class Owner {
                     filled.add("local " + name);
                     continue;
                 }
+                boolean sameName = held.getName().equals(name);
+                boolean sameType = held.getDataType().getDisplayName().equals(type.getDisplayName());
+                if (sameName && sameType) continue;
                 boolean ownName = !placeholder(held.getName()), ownType = !undefined(held.getDataType());
-                if (whole || !ownName) held.setName(name, SourceType.USER_DEFINED);
-                else if (!held.getName().equals(name)) differences.add("local " + held.getName() + ": entry " + name);
-                if (whole || !ownType) held.setDataType(type, SourceType.USER_DEFINED);
-                else if (!held.getDataType().getDisplayName().equals(type.getDisplayName())) {
-                    differences.add("local " + held.getName() + " type: entry " + type.getDisplayName());
-                }
-                if (whole || !ownName || !ownType) filled.add("local " + name);
+                if (!sameName && (whole || !ownName)) held.setName(name, SourceType.USER_DEFINED);
+                else if (!sameName) differences.add("local " + held.getName() + ": entry " + name);
+                if (!sameType && (whole || !ownType)) held.setDataType(type, SourceType.USER_DEFINED);
+                else if (!sameType) differences.add("local " + held.getName() + " type: entry " + type.getDisplayName());
+                if ((!sameName && (whole || !ownName)) || (!sameType && (whole || !ownType))) filled.add("local " + name);
             } catch (Failure failure) {
                 unplaced.add("local " + name + " at " + place + ": " + failure.getMessage());
             } catch (Exception error) {

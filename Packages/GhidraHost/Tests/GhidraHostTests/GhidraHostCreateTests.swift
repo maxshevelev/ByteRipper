@@ -87,6 +87,16 @@ final class GhidraHostLibraryTests: XCTestCase {
         let entry = try XCTUnwrap(try store.object(store.libraryIndex().entries[added.id]!.entry))
         XCTAssertNotNil(try json(entry)["constants"], "an entry records its body's constants")
 
+        // Applied to the module it came from, the entry changes nothing but
+        // the mark: the review's own reasons stay, and the revision too.
+        let own = try json(await host.library(reviewed, .init(action: .apply)))
+        let ownResult = try XCTUnwrap((own["results"] as? [[String: Any]])?.first)
+        XCTAssertEqual(ownResult["marked"] as? Bool, true, "\(ownResult)")
+        XCTAssertNil(ownResult["filled"], "\(ownResult)")
+        let republished = try await host.publish(reviewed, by: "agent")
+        let code = try store.artifact(for: republished.manifest)
+        XCTAssertEqual(code.functions.first { $0.entry == CodeAddress(hex: copyGuid) }?.nameReason, "EDK2 BaseLib CopyGuid")
+
         // The other module named the same body its own way.
         let theirs = try await function(of: 25, in: other, host: host)
         _ = try await host.write(other, "/v1/rename/function", body: body([
