@@ -94,11 +94,50 @@ final class CodeArtifactTests: XCTestCase {
     // MARK: - Refusals
 
     func testAnUnknownScriptVersionIsRefused() {
-        // One past what the exporter writes: 6 is a version this app reads.
-        let json = #"{"script_version": 7, "ghidra": "12.1.2", "functions": []}"#
+        // One past what the exporter writes: 7 is a version this app reads.
+        let json = #"{"script_version": 8, "ghidra": "12.1.2", "functions": []}"#
         XCTAssertThrowsError(try decoded(json)) { error in
-            XCTAssertEqual(error as? CodeArtifactError, .unsupportedVersion(7))
+            XCTAssertEqual(error as? CodeArtifactError, .unsupportedVersion(8))
         }
+    }
+
+    // MARK: - Review levels (v7)
+
+    /// A v7 function carries how far its review has got and what keeps it
+    /// from full.
+    func testAReviewLevelAndItsGapsDecode() throws {
+        let artifact = try decoded("""
+        {"script_version": 7, "ghidra": "12.1.2", "functions": [
+          {"entry": "0x10", "name": "Initialize", "instructions": [],
+           "review_level": "partial", "review_gaps": ["plate", "locals"]}
+        ]}
+        """)
+        let function = try XCTUnwrap(artifact.functions.first)
+        XCTAssertEqual(function.reviewLevel, .partial)
+        XCTAssertEqual(function.reviewGaps, ["plate", "locals"])
+    }
+
+    /// An artifact from before v7 writes neither field: the level is
+    /// unrecorded, not guessed, and the gaps are empty.
+    func testAFunctionWithoutAReviewLevelHasNone() throws {
+        let artifact = try decoded("""
+        {"script_version": 6, "functions": [{"entry": "0x10", "name": "F"}]}
+        """)
+        let function = try XCTUnwrap(artifact.functions.first)
+        XCTAssertNil(function.reviewLevel)
+        XCTAssertTrue(function.reviewGaps.isEmpty)
+    }
+
+    /// A level this reader does not know is a later exporter's, and must not
+    /// fail the module: the function reads with no recorded level.
+    func testAnUnknownReviewLevelDecodesAsNil() throws {
+        let artifact = try decoded("""
+        {"script_version": 7, "functions": [
+          {"entry": "0x10", "name": "F", "review_level": "extremely-full"}
+        ]}
+        """)
+        let function = try XCTUnwrap(artifact.functions.first)
+        XCTAssertNil(function.reviewLevel)
     }
 
     // MARK: - POST codes (v5)

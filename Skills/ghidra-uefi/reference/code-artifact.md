@@ -33,7 +33,7 @@ exporter's output changes.
 
 ```json
 {
-  "script_version": 3,
+  "script_version": 7,
   "ghidra": "12.1.2",
   "program": {
     "name": "CpuPei", "language": "x86:LE:32:default",
@@ -49,6 +49,9 @@ exporter's output changes.
     "entry": "0x4BF", "name": "FUN_000004bf", "size": 242,
     "signature": "...", "external": false, "thunk": false,
     "callers": ["0x355"], "callees": ["0x35E", "0x5E8"],
+    "name_source": "DEFAULT",
+    "review_level": "decompiled",
+    "review_gaps": ["name", "plate", "comments", "params", "locals"],
     "c": "undefined4 __fastcall FUN_000004bf(...) { ... }",
     "instructions": [{
       "address": "0x4BF", "bytes": "55 8B EC 83 E4 F8 ...",
@@ -102,6 +105,34 @@ exporter's output changes.
 | 3 | Same shape. UTF-16 strings kept and scanned for; status-code candidates only in a 32-bit image. |
 | 4 | Adds, all optional: a function's `name_source` and `name_reason`, its `c_spans`, and the top-level `symbols`. `c` is written from the decompiler's tokens. |
 | 5 | `post_codes` are the POST codes followed back through their wrappers, with `value`, `width`, `via` and `unresolved`; the other ports' writes are `port_writes`; a function's `c_sites` place its calls in `c`. |
+| 6 | A call the processor model makes into one of its named operations (x86's `SIDT`) is a `pcode` span, not a function with no target. |
+| 7 | Adds a function's `review_level` and `review_gaps`: how far the review has got with it, and what keeps it from `full`. |
+
+### v7: review level
+
+Every function carries `review_level`, how far the review has got with it, and
+`review_gaps`, what still keeps it from `full`; both are written after
+`name_source` and `name_reason`, and before the C. The levels are:
+
+- `full` — a plate comment; at least one step comment on an instruction; every
+  parameter and local named and typed (a decompiler fragment of a register or
+  `unique:` space does not count as a name); and a name that is not Ghidra's
+  `FUN_` placeholder. Ghidra's own variable names (`iVar1`, `EVar1`, `uVar2`,
+  `local_4`, `param_1`) are placeholders too.
+- `partial` — some of that is done. `review_gaps` names what is missing:
+  `name`, `plate`, `comments`, `params` or `locals`.
+- `decompiled` — nothing of the review: no plate, no step comments, and no
+  parameter, local or function name a person gave. A name the UEFI pass read
+  or the image carried is not review work.
+- `library` — an EDK2 library routine the module statically links in
+  (`CopyMem`, `ZeroMem`, `AsmCpuid`, …), or a function carrying Ghidra's
+  `library` tag. It is complete as it is, so its gaps are empty.
+- `no_body` — external or thunk; the exporter writes no C for it, so there is
+  nothing to review and its gaps are empty.
+
+`review_gaps` is always written, empty when there are none. A v2–v6 artifact
+has neither field, and the panel shows its functions as "Review level not
+recorded".
 
 ### v5: POST codes
 

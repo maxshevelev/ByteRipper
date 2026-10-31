@@ -45,6 +45,27 @@ public struct CodeAddress: Decodable, Hashable, Sendable, Comparable, CustomStri
     }
 }
 
+/// How far a review has got with a function (v7).
+///
+/// The exporter writes it per function, so the panel can group a module by
+/// what still lacks work. An artifact from before v7 has no level: nothing
+/// is known about those functions, and they are shown as unrecorded rather
+/// than guessed into `decompiled`.
+public enum ReviewLevel: String, Decodable, Sendable, CaseIterable {
+    /// No gap remains: a plate, a step comment, and real names and types
+    /// for every parameter and local.
+    case full
+    /// Some work is done, but at least one gap remains.
+    case partial
+    /// Nothing of the review: a placeholder name and nothing else.
+    case decompiled
+    /// A library routine the module links in, or a function tagged
+    /// `library`; complete as it is.
+    case library
+    /// An external function or a thunk: the exporter writes no C for it.
+    case noBody = "no_body"
+}
+
 /// The typed form of `code.json` (`Skills/ghidra-uefi/reference/code-artifact.md`).
 ///
 /// The artifact is the one-time result of Ghidra reading a module. This type is
@@ -74,7 +95,11 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
     /// 6 adds one span kind: a call the processor model makes into one of its
     /// own named operations (x86's `InterruptDescriptorTableRegister` for
     /// SIDT) is written as `pcode` instead of a function with no target.
-    public static let supportedScriptVersions: Set<Int> = [2, 3, 4, 5, 6]
+    ///
+    /// 7 adds each function's review level and the gaps that keep it from
+    /// full (`review_level`, `review_gaps`). Both are optional: an older
+    /// artifact has no level, and its functions are shown as not recorded.
+    public static let supportedScriptVersions: Set<Int> = [2, 3, 4, 5, 6, 7]
 
     public let scriptVersion: Int
     public let ghidra: String
@@ -240,6 +265,13 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         public let nameSource: String?
         /// Why the UEFI pass gave the name, in the pass's words.
         public let nameReason: String?
+        /// How far the review has got (v7); nil when the artifact predates
+        /// it or names a level this reader does not know.
+        public let reviewLevel: ReviewLevel?
+        /// What keeps the function from `full` (v7): a subset of `name`,
+        /// `plate`, `comments`, `params`, `locals`. Empty for a library
+        /// function, for a `no_body` one, and before v7.
+        public let reviewGaps: [String]
         public let instructions: [Instruction]
 
         /// Whether the name is Ghidra's placeholder rather than evidence.
@@ -264,6 +296,11 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             cUnreachable = try container.decodeIfPresent(CUnreachable.self, forKey: .cUnreachable)
             nameSource = try container.decodeIfPresent(String.self, forKey: .nameSource)
             nameReason = try container.decodeIfPresent(String.self, forKey: .nameReason)
+            // Decoded as the raw string so an unknown level is nil, not a
+            // refusal of the whole artifact: a later exporter may add one.
+            reviewLevel = try container.decodeIfPresent(String.self, forKey: .reviewLevel)
+                .flatMap(ReviewLevel.init(rawValue:))
+            reviewGaps = try container.decodeIfPresent([String].self, forKey: .reviewGaps) ?? []
             instructions = try container.decodeIfPresent(
                 [Instruction].self, forKey: .instructions) ?? []
         }
@@ -277,6 +314,8 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             case cUnreachable = "c_unreachable"
             case nameSource = "name_source"
             case nameReason = "name_reason"
+            case reviewLevel = "review_level"
+            case reviewGaps = "review_gaps"
         }
     }
 

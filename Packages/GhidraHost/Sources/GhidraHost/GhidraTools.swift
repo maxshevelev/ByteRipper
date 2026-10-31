@@ -30,7 +30,9 @@ public enum GhidraTools {
         or `ghidra_open`; read with `ghidra_functions`, `ghidra_function` (decompiled C, parameters and \
         locals with their storage), `ghidra_disassembly`, `ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_type_definition`, \
         `ghidra_description`; write with `ghidra_rename`, `ghidra_function_create`, `ghidra_rename_variable`, `ghidra_signature`, \
-        `ghidra_type`, `ghidra_set_data`, `ghidra_comment`, `ghidra_describe`, `ghidra_code_mode`, `ghidra_equate`. `ghidra_publish` makes the review visible to the app — every \
+        `ghidra_type`, `ghidra_set_data`, `ghidra_comment`, `ghidra_describe`, `ghidra_code_mode`, `ghidra_equate`, \
+        `ghidra_function_tag`. `ghidra_function_tag` marks an EDK2 library routine the module statically links \
+        in as `library`, which the artifact records as its review level and needs no further review. `ghidra_publish` makes the review visible to the app — every \
         ByteRipper that reads this store — as a new revision; publish at coherent checkpoints, not after \
         every rename. `ghidra_done` publishes and ends the session.
 
@@ -584,6 +586,18 @@ public enum GhidraTools {
                 var body = try optional(arguments, ["address", "name", "value", "enum", "comment", "enum_comment"])
                 if arguments.has("operand") { body["operand"] = .int(try arguments.integer("operand")) }
                 return body
+            },
+            write("ghidra_function_tag", "tag/function", "Tag a function",
+                  "Tags the function containing `address`, as the other function writes find it. `tag` "
+                  + "\"library\" marks an EDK2 library routine the module statically links in (`CopyMem`, "
+                  + "`ZeroMem`, `AsmReadMsr64`, …) that the automatic detection did not recognise: the "
+                  + "exported code artifact records a function carrying that tag at the `library` review "
+                  + "level, complete as it is, whatever its name or comments. An empty `tag`, or `none`, "
+                  + "removes the `library` tag. The answer lists the function's tags, sorted.",
+                  ["address": AgentSchema.string("The function's entry address, or any address inside it."),
+                   "tag": AgentSchema.string("The tag, e.g. \"library\"; empty or \"none\" removes the library tag.")],
+                  required: ["address", "tag"]) { arguments in
+                try optional(arguments, ["address", "tag"])
             },
             write("ghidra_set_data", "set/data", "Name or type a datum",
                   "Names and/or types the datum at `address`, e.g. a GUID or a table.",

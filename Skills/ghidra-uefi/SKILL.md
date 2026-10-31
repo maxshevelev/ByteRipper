@@ -89,6 +89,10 @@ read as 16-bit or 32-bit code — the reset vector's real-mode code in a 32-bit
 module), `ghidra_equate` (a name for a constant an instruction holds: an I/O
 port, an MSR, a PCI config address — as an enum member with a comment saying
 what it is and its source, which the app shows when the name is clicked);
+`ghidra_function_tag` (a function the module statically links in from EDK2 —
+`CopyMem`, `ZeroMem`, … — tagged `library`, which the exported artifact records
+as its review level: complete as it is, no further review; an empty tag removes
+it);
 `ghidra_description` and `ghidra_describe` for the module description (the
 whole document, or one `## ` section); `ghidra_publish` at a coherent
 checkpoint, `ghidra_done` at the end. The rules a review keeps are in "What a

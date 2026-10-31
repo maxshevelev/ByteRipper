@@ -16,7 +16,8 @@ enum GhidraRoutes {
     /// The owner's write calls, each under the host's lease.
     static let writes: Set<String> = ["rename/function", "rename/label", "create/function", "rename/variable",
                                       "rename/variables", "set/signature", "set/comment", "set/comments",
-                                      "set/data", "set/description", "set/code-mode", "set/equate", "type", "save"]
+                                      "set/data", "set/description", "set/code-mode", "set/equate",
+                                      "tag/function", "type", "save"]
 
     /// `ghidra.use` for every route; publish and release write into the store
     /// too, and need `cas.write` beside it (`Design/SERVER_HEADLESS_PLAN.md`

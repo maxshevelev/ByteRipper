@@ -14,8 +14,12 @@ import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -49,7 +53,9 @@ import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.FunctionIterator;
 import ghidra.program.model.listing.Instruction;
 import ghidra.program.model.listing.InstructionIterator;
+import ghidra.program.model.listing.FunctionTag;
 import ghidra.program.model.listing.Listing;
+import ghidra.program.model.listing.Parameter;
 import ghidra.program.model.mem.MemoryBlock;
 import ghidra.program.model.pcode.HighFunction;
 import ghidra.program.model.pcode.HighSymbol;
@@ -85,7 +91,7 @@ public class ExportCode extends GhidraScript {
         Listing listing = currentProgram.getListing();
         StringBuilder json = new StringBuilder(1 << 22);
         json.append("{\n");
-        json.append("  \"script_version\": 6,\n");
+        json.append("  \"script_version\": 7,\n");
         json.append("  \"ghidra\": ").append(quote(Application.getApplicationVersion())).append(",\n");
         json.append("  \"program\": {\n");
         json.append("    \"name\": ").append(quote(currentProgram.getName())).append(",\n");
@@ -244,17 +250,18 @@ public class ExportCode extends GhidraScript {
                 json.append("      \"name_reason\": ").append(quote(reason)).append(",\n");
             }
 
+            DecompileResults decompiled = null;
             if (!function.isExternal() && !function.isThunk()) {
-                DecompileResults results = decompiler.decompileFunction(function, 120, monitor);
-                if (results != null && results.decompileCompleted()
-                        && results.getCCodeMarkup() != null) {
-                    appendC(json, function, results);
-                }
-                if (results != null && results.decompileCompleted() && results.getHighFunction() != null) {
-                    ports.collect(function, results.getHighFunction());
+                decompiled = decompiler.decompileFunction(function, 120, monitor);
+                if (decompiled != null && decompiled.decompileCompleted()
+                        && decompiled.getHighFunction() != null) {
+                    ports.collect(function, decompiled.getHighFunction());
                 }
             }
 
+            // The step comments the review wrote, which are part of how far
+            // it has got.
+            int steps = 0;
             List<String> instructions = new ArrayList<>();
             List<String> recent = new ArrayList<>();
             InstructionIterator code = listing.getInstructions(function.getBody(), true);
@@ -272,6 +279,10 @@ public class ExportCode extends GhidraScript {
                     if (reference.getReferenceType().isFallthrough()) continue;
                     references.add("{\"to\": " + quote(hex(reference.getToAddress()))
                         + ", \"type\": " + quote(reference.getReferenceType().toString()) + "}");
+                }
+                for (CommentType kind : new CommentType[] { CommentType.PRE, CommentType.EOL, CommentType.POST }) {
+                    String said = instruction.getComment(kind);
+                    if (said != null && !said.isBlank()) steps++;
                 }
                 String text = instruction.toString();
                 // A call through a table entry at +0x58 is the PEI
@@ -296,6 +307,13 @@ public class ExportCode extends GhidraScript {
 
                 recent.add(text);
                 if (recent.size() > 8) recent.remove(0);
+            }
+            // How far the review has got with it: after the instructions for
+            // their comments, and before the C, which is what it is about.
+            appendReview(json, function, decompiled, steps);
+            if (decompiled != null && decompiled.decompileCompleted()
+                    && decompiled.getCCodeMarkup() != null) {
+                appendC(json, function, decompiled);
             }
             json.append("      \"instructions\": [\n        ")
                 .append(String.join(",\n        ", instructions)).append("\n      ]\n");
@@ -446,6 +464,109 @@ public class ExportCode extends GhidraScript {
         json.append("      \"c_sites\": [").append(String.join(", ", sites)).append("],\n");
         json.append("      \"c_fields\": [").append(String.join(", ", fields)).append("],\n");
         if (folded != null) json.append("      \"c_unreachable\": ").append(folded).append(",\n");
+    }
+
+    // EDK2's library routines, which a module statically links in: a review
+    // does not name them, and the panel groups them apart. A function
+    // carrying Ghidra's `library` tag is one whatever its name.
+    private static final Set<String> LIBRARY_NAMES = new HashSet<>(Arrays.asList(
+        "CopyMem", "SetMem", "ZeroMem", "CompareMem", "CopyGuid", "CompareGuid",
+        "ScanMem8", "StrLen", "StrCmp", "AsciiStrLen", "AsciiStrCmp", "CpuDeadLoop",
+        "CpuPause", "AsmCpuid", "AsmReadMsr64", "AsmWriteMsr64", "GetTickCount",
+        "IsZeroBuffer", "CalculateSum8", "CalculateCheckSum8"));
+
+    // The names that say a review has not passed: Ghidra's placeholders. The
+    // owner reads the same pattern, so both call the same work unfinished.
+    private static final Pattern PLACEHOLDER = Pattern.compile(
+        "^(param_\\d+|local_[0-9a-fA-F]+|[A-Za-z_][A-Za-z0-9_]*Var\\d+|extraout_[A-Z0-9]+"
+        + "|in_[A-Z0-9]+|unaff_[A-Z0-9]+|undefined.*)$");
+
+    private static boolean placeholder(String name) {
+        return name != null && PLACEHOLDER.matcher(name).matches();
+    }
+
+    private static boolean undefined(DataType type) {
+        if (type == null) return true;
+        if (type instanceof ghidra.program.model.data.Undefined) return true;
+        String name = type.getDisplayName();
+        return name != null && name.startsWith("undefined");
+    }
+
+    // A decompiler piece of a register or a `unique:` space, not a stored
+    // variable: a value split as a review types around it, not a name missed.
+    private static boolean fragment(ghidra.program.model.listing.VariableStorage storage) {
+        if (storage == null) return false;
+        return storage.isRegisterStorage() || storage.isUniqueStorage() || storage.isHashStorage();
+    }
+
+    private static boolean library(Function function) {
+        if (LIBRARY_NAMES.contains(function.getName())) return true;
+        for (FunctionTag tag : function.getTags()) {
+            if (tag != null && "library".equalsIgnoreCase(tag.getName())) return true;
+        }
+        return false;
+    }
+
+    // How far a review has got with a function, and the gaps that keep it
+    // from `full`. A library routine is complete as it is, and a function
+    // whose body the exporter does not write has nothing to review. Written
+    // after the name and before the C, so the verdict meets a reader before
+    // the code it is about.
+    private static void appendReview(StringBuilder json, Function function,
+            DecompileResults decompiled, int steps) {
+        String level;
+        List<String> gaps = new ArrayList<>();
+        if (library(function)) {
+            level = "library";
+        } else if (function.isExternal() || function.isThunk()) {
+            level = "no_body";
+        } else {
+            boolean placeholderName = function.getSymbol().getSource() == SourceType.DEFAULT;
+            boolean noPlate = function.getComment() == null || function.getComment().isBlank();
+            // What the review itself did: a plate, a step comment, or a name
+            // a person gave the function or one of its variables. A name the
+            // UEFI pass read or the image carried is not review work.
+            boolean reviewWork = function.getSymbol().getSource() == SourceType.USER_DEFINED
+                || !noPlate || steps > 0;
+            boolean badParameter = false;
+            for (Parameter parameter : function.getParameters()) {
+                if (parameter.getSymbol().getSource() == SourceType.USER_DEFINED) reviewWork = true;
+                if (placeholder(parameter.getName()) || undefined(parameter.getDataType())) {
+                    badParameter = true;
+                }
+            }
+            boolean badLocal = false;
+            HighFunction high = decompiled == null ? null : decompiled.getHighFunction();
+            if (high != null) {
+                Iterator<HighSymbol> symbols = high.getLocalSymbolMap().getSymbols();
+                while (symbols.hasNext()) {
+                    HighSymbol symbol = symbols.next();
+                    if (symbol.isParameter()) continue;
+                    if (symbol instanceof ghidra.program.model.pcode.EquateSymbol) continue;
+                    Symbol held = symbol.getSymbol();
+                    if (held != null && held.getSource() == SourceType.USER_DEFINED) reviewWork = true;
+                    // A register or `unique:` piece is the decompiler's split
+                    // of a value, not a stored variable: it is not a name the
+                    // review missed.
+                    if (fragment(symbol.getStorage())) continue;
+                    if (placeholder(symbol.getName()) || undefined(symbol.getDataType())) {
+                        badLocal = true;
+                    }
+                }
+            }
+            if (placeholderName) gaps.add("name");
+            if (noPlate) gaps.add("plate");
+            if (steps == 0) gaps.add("comments");
+            if (badParameter) gaps.add("params");
+            if (badLocal) gaps.add("locals");
+            if (gaps.isEmpty()) level = "full";
+            else if (!reviewWork) level = "decompiled";
+            else level = "partial";
+        }
+        json.append("      \"review_level\": ").append(quote(level)).append(",\n");
+        List<String> quoted = new ArrayList<>();
+        for (String gap : gaps) quoted.add(quote(gap));
+        json.append("      \"review_gaps\": [").append(String.join(", ", quoted)).append("],\n");
     }
 
     // What a review wrote at a named datum: its plate comment, else its pre,

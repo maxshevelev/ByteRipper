@@ -1687,6 +1687,40 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
+    "description" : "Tags the function containing `address`, as the other function writes find it. `tag` \"library\" marks an EDK2 library routine the module statically links in (`CopyMem`, `ZeroMem`, `AsmReadMsr64`, …) that the automatic detection did not recognise: the exported code artifact records a function carrying that tag at the `library` review level, complete as it is, whatever its name or comments. An empty `tag`, or `none`, removes the `library` tag. The answer lists the function's tags, sorted.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "address" : {
+          "description" : "The function's entry address, or any address inside it.",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "tag" : {
+          "description" : "The tag, e.g. \"library\"; empty or \"none\" removes the library tag.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module",
+        "address",
+        "tag"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_function_tag",
+    "title" : "Tag a function"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
     "description" : "Names and/or types the datum at `address`, e.g. a GUID or a table.",
     "inputSchema" : {
       "additionalProperties" : false,
