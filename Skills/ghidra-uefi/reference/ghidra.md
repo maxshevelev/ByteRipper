@@ -198,5 +198,6 @@ open:
   time; the analysis is still correct relative to the image.
 - **Large modules produce large JSON.** 100 KiB of x86 can be tens of MB of
   decompiled C. Read only the functions that matter with `ghidra_function`.
-- **Ghidra 12.1.2 has no TE loader.** Newer versions may add one; until then
-  the conversion is part of the path, not a workaround for one version.
+- **Ghidra has no TE loader** — 12.2 neither (checked in its `Base.jar`).
+  Until one comes, the conversion is part of the path, not a workaround for
+  one version.

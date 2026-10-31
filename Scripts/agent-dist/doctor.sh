@@ -24,7 +24,11 @@ if [ -n "$ghidra" ] && [ -x "$ghidra/support/analyzeHeadless" ]; then
 else
     no "no Ghidra install found (set GHIDRA_HOME)"
 fi
-command -v javac >/dev/null && ok "javac: $(command -v javac)" || no "javac is missing (a JDK is needed)"
+if jdk="$(/usr/libexec/java_home -v 25+ 2>/dev/null)"; then
+    ok "JDK 25 or newer: $jdk"
+else
+    no "no JDK 25 or newer (Ghidra 12.2 needs it): install one, or set JAVA_HOME"
+fi
 
 source "$dir/scripts/common.sh"
 support="$(support_for "$dir/var/support")"
