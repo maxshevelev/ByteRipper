@@ -1203,6 +1203,11 @@ public class Owner {
         answer.add("params", parameters);
         java.util.TreeMap<String, JsonObject> locals = new java.util.TreeMap<>();
         for (ghidra.program.model.listing.Variable local : function.getLocalVariables()) {
+            // A decompiler temporary (`HASH:…`, `unique:…`) is named by a hash
+            // of the module's own p-code: no other module has a place for it,
+            // so it is the module's, not the entry's.
+            ghidra.program.model.listing.VariableStorage held = local.getVariableStorage();
+            if (held.isHashStorage() || held.isUniqueStorage()) continue;
             JsonObject item = new JsonObject();
             String storage = local.getVariableStorage().toString();
             item.addProperty("storage", storage);
