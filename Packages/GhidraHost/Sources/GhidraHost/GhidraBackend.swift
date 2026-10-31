@@ -12,7 +12,9 @@ public protocol GhidraBackend: Sendable {
     func openModule(_ module: SHA256Digest) async throws -> Data
     func readCall(_ module: SHA256Digest, _ call: String, query: [String: String]) async throws -> Data
     func writeCall(_ module: SHA256Digest, _ call: String, body: Data) async throws -> Data
-    func publishModule(_ module: SHA256Digest, by: String) async throws -> Data
+    /// `takeTypeConflicts` replaces the shared copy of a conflicting type with
+    /// this review's — the explicit answer to a layout published wrong.
+    func publishModule(_ module: SHA256Digest, by: String, takeTypeConflicts: Bool) async throws -> Data
     /// What a publish would store, exported, and nothing written anywhere.
     func publishPreview(_ module: SHA256Digest) async throws -> Data
     func releaseModule(_ module: SHA256Digest, by: String) async throws -> Data
@@ -23,16 +25,23 @@ public extension GhidraBackend {
     func publishPreview(_ module: SHA256Digest) async throws -> Data {
         throw GhidraHostError(.owner, "this connection cannot preview a publish")
     }
+
+    /// The conflicts left in this module.
+    func publishModule(_ module: SHA256Digest, by: String) async throws -> Data {
+        try await publishModule(module, by: by, takeTypeConflicts: false)
+    }
 }
 
 /// The answers a backend gives about a publish.
 struct PublishAnswer: Codable {
     var manifest: AnalysisManifest?
     var typeConflicts: [String]
+    var typeConflictOrigins: [String: String]
 
     private enum CodingKeys: String, CodingKey {
         case manifest
         case typeConflicts = "type_conflicts"
+        case typeConflictOrigins = "type_conflict_origins"
     }
 }
 
@@ -67,9 +76,12 @@ extension GhidraHost: GhidraBackend {
         try await write(module, "/v1/\(call)", body: body)
     }
 
-    public func publishModule(_ module: SHA256Digest, by: String) async throws -> Data {
-        let publication = try await publish(module, by: by)
-        return try Self.encode(PublishAnswer(manifest: publication.manifest, typeConflicts: publication.typeConflicts))
+    public func publishModule(_ module: SHA256Digest, by: String,
+                              takeTypeConflicts: Bool) async throws -> Data {
+        let publication = try await publish(module, by: by, takeTypeConflicts: takeTypeConflicts)
+        return try Self.encode(PublishAnswer(manifest: publication.manifest,
+                                             typeConflicts: publication.typeConflicts,
+                                             typeConflictOrigins: publication.typeConflictOrigins))
     }
 
     public func publishPreview(_ module: SHA256Digest) async throws -> Data {
@@ -78,7 +90,9 @@ extension GhidraHost: GhidraBackend {
 
     public func releaseModule(_ module: SHA256Digest, by: String) async throws -> Data {
         let publication = try await release(module, by: by)
-        return try Self.encode(PublishAnswer(manifest: publication?.manifest, typeConflicts: publication?.typeConflicts ?? []))
+        return try Self.encode(PublishAnswer(manifest: publication?.manifest,
+                                             typeConflicts: publication?.typeConflicts ?? [],
+                                             typeConflictOrigins: publication?.typeConflictOrigins ?? [:]))
     }
 }
 
@@ -114,8 +128,11 @@ public struct GhidraRemote: GhidraBackend {
         try await self.call("POST", "modules/\(module.hex)/write/\(call)", body: body)
     }
 
-    public func publishModule(_ module: SHA256Digest, by: String) async throws -> Data {
-        try await call("POST", "modules/\(module.hex)/publish", query: ["by": by], timeout: 3600)
+    public func publishModule(_ module: SHA256Digest, by: String,
+                              takeTypeConflicts: Bool) async throws -> Data {
+        var query = ["by": by]
+        if takeTypeConflicts { query["take_type_conflicts"] = "1" }
+        return try await call("POST", "modules/\(module.hex)/publish", query: query, timeout: 3600)
     }
 
     public func publishPreview(_ module: SHA256Digest) async throws -> Data {

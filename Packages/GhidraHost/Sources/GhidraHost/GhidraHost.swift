@@ -40,10 +40,19 @@ public actor GhidraHost {
     }
 
     /// What a publish stored, and the review types another review defines
-    /// differently, which stayed in this program (§6.5).
+    /// differently, which stayed in this program (§6.5) — with the module
+    /// that wrote the shared copy of each, where the archive's sidecar knows it.
     public struct Publication: Sendable {
         public var manifest: AnalysisManifest
         public var typeConflicts: [String]
+        public var typeConflictOrigins: [String: String]
+
+        public init(manifest: AnalysisManifest, typeConflicts: [String],
+                    typeConflictOrigins: [String: String] = [:]) {
+            self.manifest = manifest
+            self.typeConflicts = typeConflicts
+            self.typeConflictOrigins = typeConflictOrigins
+        }
     }
 
     public struct Summary: Codable, Equatable, Sendable {
@@ -144,11 +153,13 @@ public actor GhidraHost {
     /// changed — naming the document and the description, which are stored
     /// first, then recorded in the module's history with `by`. The recipe takes the exporter and the Ghidra from the
     /// artifact, the types and passes from what made the project (§5.2).
-    public func publish(_ module: SHA256Digest, by: String?) async throws -> Publication {
+    public func publish(_ module: SHA256Digest, by: String?,
+                        takeTypeConflicts: Bool = false) async throws -> Publication {
         let project = self.project(module)
         let record = try await owner(of: module)
         var state = try project.state()
-        let (raw, headers) = try await Self.call(record.port, "POST", "/v1/publish", timeout: 3600)
+        let path = takeTypeConflicts ? "/v1/publish?take_type_conflicts=1" : "/v1/publish"
+        let (raw, headers) = try await Self.call(record.port, "POST", path, timeout: 3600)
         let document = try await Self.call(record.port, "GET", "/v1/review").data
         let description = try await Self.call(record.port, "GET", "/v1/review/description").data
         guard let artifact = try JSONSerialization.jsonObject(with: raw) as? [String: Any] else {
@@ -156,6 +167,7 @@ public actor GhidraHost {
         }
         let reviewed = headers["x-owner-reviewed"] == "true"
         let conflicts = (headers["x-owner-type-conflicts"] ?? "").split(separator: ",").map(String.init)
+        let origins = Self.typeOrigins(headers["x-owner-type-origins"])
         let last = state.published
         var reading: AnalysisReading?
         var review: SHA256Digest?
@@ -190,7 +202,19 @@ public actor GhidraHost {
                                 description: described?.hex, rev: reading?.rev, at: Self.now())
         state.reviewed = reviewed
         try project.write(state)
-        return Publication(manifest: manifest, typeConflicts: conflicts)
+        return Publication(manifest: manifest, typeConflicts: conflicts, typeConflictOrigins: origins)
+    }
+
+    /// `NAME=module,…`, the owner's header: which module wrote the shared
+    /// version of each type a publish called a conflict.
+    static func typeOrigins(_ text: String?) -> [String: String] {
+        guard let text, !text.isEmpty else { return [:] }
+        var origins: [String: String] = [:]
+        for pair in text.split(separator: ",") {
+            let parts = pair.split(separator: "=", maxSplits: 1)
+            if parts.count == 2, !parts[1].isEmpty { origins[String(parts[0])] = String(parts[1]) }
+        }
+        return origins
     }
 
     /// What a publish would store, and nothing stored: the owner exports the
@@ -230,6 +254,8 @@ public actor GhidraHost {
             "strings": (artifact["strings"] as? [Any])?.count ?? 0,
             "type_conflicts": conflicts
         ]
+        let origins = Self.typeOrigins(headers["x-owner-type-origins"])
+        if !origins.isEmpty { preview["type_conflict_origins"] = origins }
         if let descriptionDigest {
             preview["description"] = ["sha256": descriptionDigest, "size": description.count]
         }

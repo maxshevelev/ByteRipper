@@ -212,6 +212,6 @@ private struct NoGhidra: GhidraBackend {
     func openModule(_ module: SHA256Digest) async throws -> Data { Data() }
     func readCall(_ module: SHA256Digest, _ call: String, query: [String: String]) async throws -> Data { Data() }
     func writeCall(_ module: SHA256Digest, _ call: String, body: Data) async throws -> Data { Data() }
-    func publishModule(_ module: SHA256Digest, by: String) async throws -> Data { Data() }
+    func publishModule(_ module: SHA256Digest, by: String, takeTypeConflicts: Bool) async throws -> Data { Data() }
     func releaseModule(_ module: SHA256Digest, by: String) async throws -> Data { Data() }
 }

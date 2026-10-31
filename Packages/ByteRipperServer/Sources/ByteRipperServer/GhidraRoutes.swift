@@ -79,18 +79,25 @@ enum GhidraRoutes {
                 let data = try await answer { try await host.publishPreview(module) }
                 return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
             }
-            let publication = try await answer { try await host.publish(module, by: by(request)) }
+            // `take_type_conflicts`: this publish's version of a conflicting
+            // type replaces the shared one — a layout that was published wrong.
+            let take = request.query["take_type_conflicts"] == "1"
+            let publication = try await answer {
+                try await host.publish(module, by: by(request), takeTypeConflicts: take)
+            }
             await published()
-            return .json(Published(manifest: publication.manifest, typeConflicts: publication.typeConflicts))
+            return .json(Published(manifest: publication.manifest, typeConflicts: publication.typeConflicts,
+                                   typeConflictOrigins: publication.typeConflictOrigins))
         }
 
         router.add("POST", "\(prefix)/modules/:module/release", access: .rights([.ghidraUse, .casWrite])) { request in
             let module = try digest(request.parameters["module"])
             guard let publication = try await answer({ try await host.release(module, by: by(request)) }) else {
-                return .json(Published(manifest: nil, typeConflicts: []))
+                return .json(Published(manifest: nil, typeConflicts: [], typeConflictOrigins: [:]))
             }
             await published()
-            return .json(Published(manifest: publication.manifest, typeConflicts: publication.typeConflicts))
+            return .json(Published(manifest: publication.manifest, typeConflicts: publication.typeConflicts,
+                                   typeConflictOrigins: publication.typeConflictOrigins))
         }
 
         router.add("POST", "\(prefix)/modules/:module/stop", access: .rights([.ghidraUse])) { request in
@@ -112,10 +119,13 @@ enum GhidraRoutes {
     struct Published: Codable {
         var manifest: AnalysisManifest?
         var typeConflicts: [String]
+        /// The module that wrote the shared copy of each conflict, when known.
+        var typeConflictOrigins: [String: String]
 
         private enum CodingKeys: String, CodingKey {
             case manifest
             case typeConflicts = "type_conflicts"
+            case typeConflictOrigins = "type_conflict_origins"
         }
     }
 

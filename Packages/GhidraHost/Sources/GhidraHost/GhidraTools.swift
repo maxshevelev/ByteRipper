@@ -628,7 +628,11 @@ public enum GhidraTools {
                 Saves the module's program and stores its artifact and review document as the next \
                 revision: every ByteRipper reading this store shows the new names. Publishing an unchanged \
                 program is the same revision. `type_conflicts` names types another review defines \
-                differently, which stay in this module only: `ghidra_type_definition` shows both. \
+                differently, which stay in this module only: `ghidra_type_definition` shows both, and \
+                `type_conflict_origins` names the module that wrote the shared copy. \
+                `take_type_conflicts: true` replaces the shared copy of each conflicting type with this \
+                module's — the answer to a layout that was published wrong, and never an enum, whose \
+                clashing member means one of the two reviews is wrong. \
                 `dry_run: true` answers the same without storing: the artifact's counts, the revision \
                 it would become, the description's size and the type conflicts — the export is done, so \
                 it costs what a publish costs.
@@ -636,7 +640,9 @@ public enum GhidraTools {
             inputSchema: AgentSchema.object([
                 "module": moduleProperty,
                 "dry_run": AgentSchema.boolean(
-                    "Answer what a publish would store — counts, the revision, the conflicts — and store nothing.")
+                    "Answer what a publish would store — counts, the revision, the conflicts — and store nothing."),
+                "take_type_conflicts": AgentSchema.boolean(
+                    "Replace the shared copy of each conflicting type with this module's. An enum is never taken.")
             ], required: ["module"]),
             annotations: .edit
         ) { call in
@@ -644,7 +650,8 @@ public enum GhidraTools {
             if try call.arguments.bool("dry_run", default: false) {
                 return try await answer { try await backend.publishPreview(module) }
             }
-            return try await answer { try await backend.publishModule(module, by: "agent") }
+            let take = try call.arguments.bool("take_type_conflicts", default: false)
+            return try await answer { try await backend.publishModule(module, by: "agent", takeTypeConflicts: take) }
         }
     }
 

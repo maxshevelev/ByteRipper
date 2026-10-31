@@ -1800,7 +1800,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "Saves the module's program and stores its artifact and review document as the next revision: every ByteRipper reading this store shows the new names. Publishing an unchanged program is the same revision. `type_conflicts` names types another review defines differently, which stay in this module only: `ghidra_type_definition` shows both. `dry_run: true` answers the same without storing: the artifact's counts, the revision it would become, the description's size and the type conflicts — the export is done, so it costs what a publish costs.",
+    "description" : "Saves the module's program and stores its artifact and review document as the next revision: every ByteRipper reading this store shows the new names. Publishing an unchanged program is the same revision. `type_conflicts` names types another review defines differently, which stay in this module only: `ghidra_type_definition` shows both, and `type_conflict_origins` names the module that wrote the shared copy. `take_type_conflicts: true` replaces the shared copy of each conflicting type with this module's — the answer to a layout that was published wrong, and never an enum, whose clashing member means one of the two reviews is wrong. `dry_run: true` answers the same without storing: the artifact's counts, the revision it would become, the description's size and the type conflicts — the export is done, so it costs what a publish costs.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -1811,6 +1811,10 @@
         "module" : {
           "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
           "type" : "string"
+        },
+        "take_type_conflicts" : {
+          "description" : "Replace the shared copy of each conflicting type with this module's. An enum is never taken.",
+          "type" : "boolean"
         }
       },
       "required" : [

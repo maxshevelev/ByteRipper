@@ -706,7 +706,14 @@ public class Owner {
         // A preview exports the same artifact and works out the same conflicts
         // without saving the program or merging types into the shared archive:
         // what a publish would store, before it is stored.
-        boolean dryRun = "1".equals(query(exchange.getRequestURI().getRawQuery()).get("dry_run"));
+        java.util.Map<String, String> parameters = query(exchange.getRequestURI().getRawQuery());
+        boolean dryRun = "1".equals(parameters.get("dry_run"));
+        // `take_type_conflicts`: this publish's version of a conflicting type
+        // replaces the shared one — the explicit exception to "choosing is a
+        // person's", for a layout that was published wrong. An enum is never
+        // taken: a member's value clashing means one of the two is wrong, and
+        // an overwrite would break the module that added the other.
+        boolean take = !dryRun && "1".equals(parameters.get("take_type_conflicts"));
         if (!dryRun && program.isChanged()) program.save("publish", TaskMonitor.DUMMY);
         File out = File.createTempFile("owner-export-", ".json");
         try {
@@ -718,13 +725,24 @@ public class Owner {
             byte[] artifact = Files.readAllBytes(out.toPath());
             if (artifact.length == 0) throw new Failure(500, "the export wrote nothing");
             published = Harvest.of(program, options.get("module"), options.get("project-id"));
-            java.util.List<String> conflicts = mergeReviewTypes(!dryRun);
+            Merge merge = mergeReviewTypes(!dryRun, take);
             exchange.getResponseHeaders().set("X-Owner-Dry-Run", Boolean.toString(dryRun));
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.getResponseHeaders().set("X-Owner-Modification", Long.toString(program.getModificationNumber()));
             exchange.getResponseHeaders().set("X-Owner-Reviewed", Boolean.toString(published.reviewed));
-            if (!conflicts.isEmpty()) {
-                exchange.getResponseHeaders().set("X-Owner-Type-Conflicts", String.join(",", conflicts));
+            if (!merge.conflicts.isEmpty()) {
+                exchange.getResponseHeaders().set("X-Owner-Type-Conflicts", String.join(",", merge.conflicts));
+                // `NAME=module,…`: which module wrote the shared version each
+                // conflict names, for the client to show beside it.
+                StringBuilder origins = new StringBuilder();
+                for (java.util.Map.Entry<String, String> origin : merge.origins.entrySet()) {
+                    if (origin.getValue() == null || origin.getValue().isEmpty()) continue;
+                    if (origins.length() > 0) origins.append(',');
+                    origins.append(origin.getKey()).append('=').append(origin.getValue());
+                }
+                if (origins.length() > 0) {
+                    exchange.getResponseHeaders().set("X-Owner-Type-Origins", origins.toString());
+                }
             }
             exchange.sendResponseHeaders(200, artifact.length);
             try (OutputStream body = exchange.getResponseBody()) { body.write(artifact); }
@@ -738,28 +756,42 @@ public class Owner {
         return FileChannel.open(lock.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
     }
 
+    /** What a merge of this review's types into the shared archive found or did. */
+    private static final class Merge {
+        /** The names a publish would leave in this module only. */
+        final java.util.List<String> conflicts = new java.util.ArrayList<>();
+        /** For each conflict, the module that wrote the shared version, when the sidecar knows it. */
+        final java.util.TreeMap<String, String> origins = new java.util.TreeMap<>();
+        /** A shared type was added or replaced: the sidecar has something to record. */
+        boolean written;
+    }
+
     /**
      * Puts this review's types into the shared archive, under its lock, for
      * the modules opened after it. A type the archive already has under the
      * name is left alone when it is the same, and reported when it is not:
-     * the program keeps its own, and choosing is a person's (§16.5). The
-     * lock is held for the length of the merge, a second or so.
+     * the program keeps its own, and choosing is a person's (§16.5) — a
+     * publish with `take` is that choice, made once, and replaces the shared
+     * copy with this review's. A typedef and the structure it names are
+     * shared separately and merged together: a corrected typedef over a
+     * structure that kept the old layout would lay out wrong.
+     * The lock is held for the length of the merge, a second or so.
      */
-    private java.util.List<String> mergeReviewTypes(boolean apply) throws Exception {
-        java.util.List<String> conflicts = new java.util.ArrayList<>();
+    private Merge mergeReviewTypes(boolean apply, boolean take) throws Exception {
+        Merge merge = new Merge();
         java.util.TreeMap<String, String> mine = Harvest.reviewTypes(program);
-        if (reviewTypes == null || mine.isEmpty()) return conflicts;
+        if (reviewTypes == null || mine.isEmpty()) return merge;
         if (!apply) {
-            if (!reviewTypes.isFile()) return conflicts;
+            if (!reviewTypes.isFile()) return merge;
             try (FileChannel channel = lockChannel(); FileLock lock = channel.lock()) {
                 FileDataTypeManager shared = FileDataTypeManager.openFileArchive(reviewTypes, false);
                 try {
-                    conflicts.addAll(typeConflicts(mine, shared));
+                    mergeInto(shared, mine, merge, false, false, readOrigins());
                 } finally {
                     shared.close();
                 }
             }
-            return conflicts;
+            return merge;
         }
         reviewTypes.getParentFile().mkdirs();
         try (FileChannel channel = lockChannel(); FileLock lock = channel.lock()) {
@@ -768,58 +800,155 @@ public class Owner {
                 : FileDataTypeManager.createFileArchive(reviewTypes, program.getLanguageID(),
                       program.getCompilerSpec().getCompilerSpecID());
             try {
+                JsonObject origins = readOrigins();
                 boolean changed = false;
                 int transaction = shared.startTransaction("review types of " + options.get("module"));
                 try {
-                    for (String name : mine.keySet()) {
-                        java.util.List<DataType> here = new java.util.ArrayList<>();
-                        program.getDataTypeManager().findDataTypes(name, here);
-                        if (here.isEmpty()) continue;
-                        java.util.List<DataType> there = new java.util.ArrayList<>();
-                        shared.findDataTypes(name, there);
-                        if (there.isEmpty()) {
-                            shared.resolve(here.get(0), DataTypeConflictHandler.KEEP_HANDLER);
-                            changed = true;
-                        } else if (there.get(0) instanceof ghidra.program.model.data.Enum theirs
-                                   && here.get(0) instanceof ghidra.program.model.data.Enum own) {
-                            int merged = mergeEnum(own, theirs);
-                            if (merged < 0) conflicts.add(name); else if (merged > 0) changed = true;
-                        } else if (!there.get(0).isEquivalent(here.get(0))) {
-                            int merged = mergeComments(here.get(0), there.get(0));
-                            if (merged < 0) conflicts.add(name); else if (merged > 0) changed = true;
-                        }
-                    }
+                    changed = mergeInto(shared, mine, merge, true, take, origins);
                 } finally {
                     shared.endTransaction(transaction, true);
                 }
                 if (changed) shared.save();
+                if (merge.written) writeOrigins(origins);
             } finally {
                 shared.close();
             }
         }
-        return conflicts;
+        return merge;
     }
 
-    /** The names a merge would refuse, read-only: the same rules, no writes. */
-    private java.util.List<String> typeConflicts(java.util.TreeMap<String, String> mine,
-                                                 FileDataTypeManager shared) {
-        java.util.List<String> conflicts = new java.util.ArrayList<>();
+    /**
+     * The merge itself, for a preview and for a publish alike. A preview only
+     * reads — the archive is opened read-only there, so an enum is compared on
+     * the side and never grown.
+     */
+    private boolean mergeInto(FileDataTypeManager shared, java.util.TreeMap<String, String> mine, Merge merge,
+                              boolean apply, boolean take, JsonObject origins) throws Exception {
+        boolean changed = false;
+        String module = options.get("module");
+        java.util.TreeMap<String, DataType> ours = new java.util.TreeMap<>();
         for (String name : mine.keySet()) {
-            java.util.List<DataType> here = new java.util.ArrayList<>();
-            program.getDataTypeManager().findDataTypes(name, here);
-            if (here.isEmpty()) continue;
-            java.util.List<DataType> there = new java.util.ArrayList<>();
-            shared.findDataTypes(name, there);
-            if (there.isEmpty()) continue;
-            DataType ours = here.get(0), theirs = there.get(0);
-            if (theirs instanceof ghidra.program.model.data.Enum sharedEnum
-                && ours instanceof ghidra.program.model.data.Enum ownEnum) {
-                if (enumConflict(ownEnum, sharedEnum)) conflicts.add(name);
-            } else if (!theirs.isEquivalent(ours) && commentsConflict(ours, theirs)) {
-                conflicts.add(name);
+            DataType named = find(program.getDataTypeManager(), name);
+            if (named == null) continue;
+            ours.put(named.getName(), named);
+            if (named instanceof ghidra.program.model.data.TypeDef def) {
+                DataType base = def.getBaseDataType();
+                if (base != null && !base.getName().equals(named.getName())
+                    && base.getDataTypeManager() == program.getDataTypeManager()) {
+                    ours.putIfAbsent(base.getName(), base);
+                }
             }
         }
-        return conflicts;
+        for (java.util.Map.Entry<String, DataType> entry : ours.entrySet()) {
+            String name = entry.getKey();
+            DataType here = entry.getValue();
+            java.util.List<DataType> there = new java.util.ArrayList<>();
+            shared.findDataTypes(name, there);
+            if (there.isEmpty()) {
+                if (!apply) continue;
+                shared.resolve(here, DataTypeConflictHandler.KEEP_HANDLER);
+                changed = true;
+                merge.written = true;
+                recordOrigin(origins, name, module);
+                continue;
+            }
+            if (!apply) {
+                if (conflictsWith(here, there.get(0))) recordConflict(merge, origins, name);
+                continue;
+            }
+            DataType theirs = there.get(0);
+            if (theirs instanceof ghidra.program.model.data.Enum sharedEnum
+                && here instanceof ghidra.program.model.data.Enum ownEnum) {
+                int merged = mergeEnum(ownEnum, sharedEnum);
+                if (merged < 0) recordConflict(merge, origins, name);
+                else if (merged > 0) changed = true;
+            } else if (!theirs.isEquivalent(here)) {
+                if (take) {
+                    replaceShared(shared, theirs, here);
+                    changed = true;
+                    merge.written = true;
+                    recordOrigin(origins, name, module);
+                } else {
+                    recordConflict(merge, origins, name);
+                }
+            } else {
+                int merged = mergeComments(here, theirs);
+                if (merged < 0) recordConflict(merge, origins, name);
+                else if (merged > 0) changed = true;
+            }
+        }
+        return changed;
+    }
+
+    /** Would a publish report this type? The same tests as the merge, without writing. */
+    private static boolean conflictsWith(DataType own, DataType shared) {
+        if (shared instanceof ghidra.program.model.data.Enum theirs
+            && own instanceof ghidra.program.model.data.Enum mine) {
+            return enumConflict(mine, theirs);
+        }
+        return !shared.isEquivalent(own) && commentsConflict(own, shared);
+    }
+
+    private static void recordConflict(Merge merge, JsonObject origins, String name) {
+        merge.conflicts.add(name);
+        merge.origins.put(name, originOf(origins, name));
+    }
+
+    /**
+     * The shared archive's copy of a type replaced by this review's. The only
+     * caller is a publish with `take_type_conflicts`, which is the person's
+     * choice made explicit; a type the archive cannot replace — one another
+     * type still holds — stops the publish with 409 rather than leaving half
+     * of a correction behind.
+     */
+    private static void replaceShared(FileDataTypeManager shared, DataType theirs, DataType ours) throws Exception {
+        try {
+            shared.replaceDataType(theirs, ours, true);
+        } catch (Exception error) {
+            throw new Failure(409, theirs.getName() + " cannot replace the shared " + theirs.getName()
+                              + ": " + error.getMessage());
+        }
+    }
+
+    /** The module that last wrote each shared type, in a sidecar beside the archive. */
+    private File originFile() {
+        return new File(reviewTypes.getPath() + ".origin.json");
+    }
+
+    private JsonObject readOrigins() {
+        File file = originFile();
+        if (!file.isFile()) return new JsonObject();
+        try (java.io.Reader reader = new java.io.InputStreamReader(new java.io.FileInputStream(file),
+                                                                   java.nio.charset.StandardCharsets.UTF_8)) {
+            com.google.gson.JsonElement read = com.google.gson.JsonParser.parseReader(reader);
+            return read.isJsonObject() ? read.getAsJsonObject() : new JsonObject();
+        } catch (Exception error) {
+            System.out.println("OWNER ORIGINS unreadable: " + error.getMessage());
+            return new JsonObject();
+        }
+    }
+
+    private void writeOrigins(JsonObject origins) {
+        try (java.io.Writer writer = new java.io.OutputStreamWriter(new java.io.FileOutputStream(originFile()),
+                                                                    java.nio.charset.StandardCharsets.UTF_8)) {
+            writer.write(origins.toString());
+        } catch (Exception error) {
+            System.out.println("OWNER ORIGINS not written: " + error.getMessage());
+        }
+    }
+
+    private static void recordOrigin(JsonObject origins, String name, String module) {
+        if (module == null || module.isEmpty()) return;
+        JsonObject entry = new JsonObject();
+        entry.addProperty("module", module);
+        entry.addProperty("at", java.time.Instant.now().toString());
+        origins.add(name, entry);
+    }
+
+    private static String originOf(JsonObject origins, String name) {
+        if (!origins.has(name) || !origins.get(name).isJsonObject()) return "";
+        JsonObject entry = origins.getAsJsonObject(name);
+        return entry.has("module") ? entry.get("module").getAsString() : "";
     }
 
     private static boolean enumConflict(ghidra.program.model.data.Enum own,
