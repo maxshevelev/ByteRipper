@@ -156,8 +156,10 @@ public enum GhidraTools {
                     "unfinished"` keeps what a review has not passed — a parameter or a local Ghidra \
                     still names itself or holds as `undefined`, or no plate comment — each with \
                     `leftovers`, and `summary` says how many of how many; that filter decompiles every \
-                    function, so it is slow on a large module. Paged by `offset` and `limit`; `next` \
-                    says where the next page starts.
+                    function, so it is slow on a large module. `leftovers.fragments` counts the \
+                    register and `unique:` pieces the decompiler splits off while a review types a \
+                    function — its own artefacts, which do not make a function unfinished. Paged by \
+                    `offset` and `limit`; `next` says where the next page starts.
                     """,
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,
@@ -192,9 +194,11 @@ public enum GhidraTools {
                 description: """
                     One function as Ghidra holds it now: its signature, its parameters and locals with \
                     their `storage` and `first_use` (what `ghidra_rename_variable` names a local by), its \
-                    plate comment, what is left to name (`leftovers`), and its decompiled C — fresh \
-                    after every write, ahead of what the app shows until a publish. `summary: true` \
-                    leaves the C and the equates out, for walking a module without its text.
+                    plate comment, what is left to name (`leftovers`, whose `fragments` are the \
+                    decompiler's register pieces rather than missing names), and its decompiled C — \
+                    fresh after every write, ahead of what the app shows until a publish. \
+                    `summary: true` leaves the C and the equates out, for walking a module without \
+                    its text.
                     """,
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,
@@ -482,7 +486,11 @@ public enum GhidraTools {
                 description: """
                     Sets the comment of `kind` at `address`, replacing the one there; empty `text` \
                     clears it. A plate comment heads a function in the C; pre and eol comments show in \
-                    the C too. `items` writes several in one call, each in a transaction of its own.
+                    the C too. A comment is printed where the decompiler prints the instruction it sits \
+                    on: a step folded into one expression (`&&`, a nested call) may show at the start of \
+                    that block, or not at all — so a step is safest at the first instruction of its block, \
+                    and the plate carries what the body cannot show. `items` writes several in one call, \
+                    each in a transaction of its own.
                     """,
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,

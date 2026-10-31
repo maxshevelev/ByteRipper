@@ -348,7 +348,7 @@ public class Owner {
      * of the skill read this, one call each.
      */
     private JsonObject leftovers(Function function) {
-        int parameters = 0, locals = 0;
+        int parameters = 0, locals = 0, fragments = 0;
         for (Parameter parameter : function.getParameters()) {
             if (placeholder(parameter.getName()) || undefined(parameter.getDataType())) parameters++;
         }
@@ -360,17 +360,33 @@ public class Owner {
                 HighSymbol symbol = symbols.next();
                 if (symbol.isParameter()) continue;
                 if (symbol instanceof ghidra.program.model.pcode.EquateSymbol) continue;
-                if (placeholder(symbol.getName()) || undefined(symbol.getDataType())) locals++;
+                if (!placeholder(symbol.getName()) && !undefined(symbol.getDataType())) continue;
+                // A register or `unique:` piece with a name Ghidra made up is
+                // the decompiler splitting a value as a review types around
+                // it, not a name the review missed.
+                if (fragment(symbol.getStorage())) fragments++; else locals++;
             }
         }
         String plate = function.getComment();
         boolean noPlate = plate == null || plate.isBlank();
-        if (parameters == 0 && locals == 0 && !noPlate) return null;
+        if (parameters == 0 && locals == 0 && fragments == 0 && !noPlate) return null;
         JsonObject answer = new JsonObject();
         if (parameters > 0) answer.addProperty("params", parameters);
         if (locals > 0) answer.addProperty("locals", locals);
+        if (fragments > 0) answer.addProperty("fragments", fragments);
         if (noPlate) answer.addProperty("no_plate", true);
         return answer;
+    }
+
+    /** A decompiler piece of a register or a `unique:` space, not a stored variable. */
+    private static boolean fragment(ghidra.program.model.listing.VariableStorage storage) {
+        if (storage == null) return false;
+        return storage.isRegisterStorage() || storage.isUniqueStorage() || storage.isHashStorage();
+    }
+
+    /** A function a review has not passed: a placeholder parameter or local, or no plate. */
+    private static boolean unfinished(JsonObject leftovers) {
+        return leftovers.has("params") || leftovers.has("locals") || leftovers.has("no_plate");
     }
 
     private JsonObject item(Function function) {
@@ -412,7 +428,7 @@ public class Owner {
             if (from != null && entry < from) continue;
             if (to != null && entry > to) continue;
             JsonObject leftovers = unfinished ? leftovers(function) : null;
-            if (unfinished && leftovers == null) continue;
+            if (unfinished && (leftovers == null || !unfinished(leftovers))) continue;
             JsonObject item = item(function);
             if (leftovers != null) item.add("leftovers", leftovers);
             matched.add(item);
