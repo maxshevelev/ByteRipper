@@ -87,7 +87,8 @@ enum CodeNavigatorIcon {
 
     /// The mark at `side` points. `inverted` is the mark on a selected row:
     /// what is white there takes the colour and the colour turns white, so
-    /// the mark still reads on the selection's own colour.
+    /// the mark still reads on the selection's own colour — except a library
+    /// badge, which keeps its colours on a white plate.
     static func image(_ glyph: Glyph, color: NSColor, side: CGFloat, inverted: Bool = false) -> NSImage {
         let ground = inverted ? NSColor.white : color
         let ink = inverted ? color : NSColor.white
@@ -111,26 +112,33 @@ enum CodeNavigatorIcon {
                 NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
                 drawSymbol(name, color: ink, scale: 0.7, in: rect)
             case let .badge(name, style):
-                let box = rect.insetBy(dx: 0.5, dy: 1.5)
-                let frame = NSBezierPath(roundedRect: box, xRadius: 3, yRadius: 3)
-                if style == .filled {
-                    ground.setFill()
+                // A badge keeps its own colours on a selected row, on a white
+                // plate: inverted, a filled badge would read as the outlined
+                // one beside it, and filled is what says the registry holds it.
+                if inverted {
+                    NSColor.white.setFill()
                     NSBezierPath(roundedRect: rect.insetBy(dx: 0, dy: 1), xRadius: 3.5, yRadius: 3.5).fill()
-                    drawLabel(name, color: ink, in: rect)
+                }
+                if style == .filled {
+                    color.setFill()
+                    let chip = inverted ? rect.insetBy(dx: 1.5, dy: 2.5) : rect.insetBy(dx: 0, dy: 1)
+                    NSBezierPath(roundedRect: chip, xRadius: 3, yRadius: 3).fill()
+                    drawLabel(name, color: .white, in: rect)
                 } else {
+                    let frame = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 1.5), xRadius: 3, yRadius: 3)
                     frame.lineWidth = 1
-                    ground.setStroke()
+                    color.setStroke()
                     frame.stroke()
-                    drawLabel(name, color: ground, in: rect)
+                    drawLabel(name, color: color, in: rect)
                 }
                 if style == .dotted {
                     // At the frame's top right corner, over its line, ringed
-                    // in the row's own ground so it reads off the frame.
+                    // in white so it reads off the frame.
                     let dot = (side * 0.32).rounded()
                     let spot = NSRect(x: rect.maxX - dot, y: rect.maxY - dot, width: dot, height: dot)
-                    ink.setFill()
+                    NSColor.white.setFill()
                     NSBezierPath(ovalIn: spot.insetBy(dx: -1, dy: -1)).fill()
-                    ground.setFill()
+                    color.setFill()
                     NSBezierPath(ovalIn: spot).fill()
                 }
             }
