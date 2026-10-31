@@ -15,9 +15,16 @@ review documents.
 
 ## 1. Decision in one page
 
-- **What goes in**: every function a review tagged `library.edk2`,
-  `library.amd` or `library.intel`, at every publish of its module. Nothing
-  else: a module's own work is not shared, and a function tagged without a kind
+- **What goes in**: a function a review tagged `library.edk2`, `library.amd` or
+  `library.intel`, at every publish of its module — and only when its review is
+  complete by the highest bar the skill sets for a function ("What a finished
+  function looks like"): a name that is not a placeholder, every parameter and
+  local named and typed, a plate that opens with the evidence for its kind, and
+  step comments. The exporter does not ask this of a library function in its
+  own module; the registry does, because what it holds is copied into every
+  module with the same body. A tagged function short of the bar stays in its
+  module and is listed in the publish answer with its gaps. Nothing else goes
+  in: a module's own work is not shared, and a function tagged without a kind
   is not either.
 - **The key is the body, as Ghidra's Function ID hashes it**: the full hash and
   the specific hash of `FidService.hashFunction`, with the code-unit count. The
@@ -54,16 +61,37 @@ review documents.
     keeps the module's version or improves the entry with it. Such a function
     is part review, part registry: it carries no `libraryEntry` mark, and a
     later version of the entry is offered to it as a candidate, not applied.
-- **A match on the full hash only** (the same shape with other constants — an
-  AGESA routine built with another assert code) is a candidate: `ghidra_library`
-  shows it, and the agent applies or declines it.
+- **Other constants are another function — except an assert code.** Two
+  bodies with the same full hash and size but another specific hash differ
+  only in operand values. An MSR number, a port, a mask or a size changes what
+  the code does, so such bodies are two functions and two entries. One kind of
+  value does not: the code an assert routine is called with — AGESA's
+  `file id << 16 | line`, which moves when the source file gains a line above
+  the call. Bodies that differ only there are **variants** of one entry: one
+  review (name, signature, variables, plate, comments) and several bodies,
+  each with the codes it carries.
+  - The owner compares two such bodies instruction by instruction and lists
+    every operand that differs — where, and both values. A difference is an
+    assert code when the operand is the argument of a call to a function the
+    registry holds as an assert routine (`AgesaAssertHalt`; Intel's when one is
+    reviewed). That test is mechanical.
+  - When every difference passes it, the open applies the entry to the new body
+    as an exact match would, and the next publish adds the body to the entry as
+    a variant, with its codes. When any difference fails it, the body is a
+    candidate: `ghidra_library` shows it with the list of differences, and the
+    agent reviews it as a function of its own — or, when it finds the values
+    make no difference after all, says why and adds it as a variant.
+  - The panel shows a variant as the entry's function, with "variant 2 of 3,
+    assert 0x10196" in its hover.
 - **One entry per key, improved in place.** A publish whose tagged function has
   the key of an existing entry does not add an entry: when its review equals the
   entry, nothing changes; when it differs, it is a proposed change to the one
   entry, reported in the publish answer with the module that wrote the entry,
   and `take_library_conflicts: true` makes it the entry's next version — which
   then reaches every module that applied the entry. The module that wrote the
-  entry changes it by publishing, without a conflict.
+  entry changes it by publishing, without a conflict. The agent that reviews and
+  publishes resolves a conflict: it reads both reviews, keeps the better one or
+  merges them, and gives a reason, which the entry's history keeps.
 - **Readers see where a function came from**: the artifact records a function
   applied from the registry (`library_entry`: key, version, source module), the
   panel shows it beside the badge and opens the source module's function, and
@@ -72,13 +100,16 @@ review documents.
 ## 2. Storage
 
 ```
-library/index.json                 { key → { version, entry: <sha256>, kind, name, source } }
-library/history/<key>.json         every version of one key: { version, entry, source, recorded_at, by }
+library/index.json                 { body → { id, version } ;  id → { version, entry: <sha256>, kind, name, variants } }
+library/history/<id>.json          every version of one entry: { version, entry, source, reason, recorded_at, by }
 objects/<sha256>                   the entries, as review documents are
 ```
 
-- `key` is `<size>-<fullhash>-<specifichash>`, in hex, so an index is readable
-  and a near match (same size and full hash) is a prefix scan.
+- A **body** is `<size>-<fullhash>-<specifichash>`, in hex; an **entry** has an
+  id of its own (its first body), and its `variants` are the bodies it covers,
+  each with the assert codes it carries and the module it was first seen in.
+  Every body of every variant is in the index, so an exact match is one
+  lookup, and a near match (same size and full hash) is a prefix scan.
 - An entry is a JSON object of its own, deterministic like the review document
   (sorted keys, no time inside): an unchanged review stores the same object.
 - Writers: the host at publish, through `AnalysisWriter` — a new
@@ -167,8 +198,7 @@ functions and offers its matches as candidates only, never applied by itself.
 
 ## 8. Open questions
 
-- Who may take a conflict: any publisher, as with types, or only a person?
-- A library function whose body differs between two vendors' builds by a
-  constant (the same AGESA routine with another assert code) is two entries
-  with one full hash. The full-hash candidate covers it; is that enough, or
-  should the registry group them as one function with variants?
+- None at the moment. Decided with the person: entries only at the highest
+  bar; one body, one entry, renamed to converge; the agent resolves conflicts
+  with a reason; other constants are other functions, assert codes make
+  variants.
