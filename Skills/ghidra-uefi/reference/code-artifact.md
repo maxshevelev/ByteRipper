@@ -33,7 +33,7 @@ exporter's output changes.
 
 ```json
 {
-  "script_version": 7,
+  "script_version": 8,
   "ghidra": "12.1.2",
   "program": {
     "name": "CpuPei", "language": "x86:LE:32:default",
@@ -107,6 +107,7 @@ exporter's output changes.
 | 5 | `post_codes` are the POST codes followed back through their wrappers, with `value`, `width`, `via` and `unresolved`; the other ports' writes are `port_writes`; a function's `c_sites` place its calls in `c`. |
 | 6 | A call the processor model makes into one of its named operations (x86's `SIDT`) is a `pcode` span, not a function with no target. |
 | 7 | Adds a function's `review_level` and `review_gaps`: how far the review has got with it, and what keeps it from `full`. |
+| 8 | Adds a library function's `library_kind`: `edk2`, `amd` or `intel`. |
 
 ### v7: review level
 
@@ -124,15 +125,30 @@ Every function carries `review_level`, how far the review has got with it, and
 - `decompiled` — nothing of the review: no plate, no step comments, and no
   parameter, local or function name a person gave. A name the UEFI pass read
   or the image carried is not review work.
-- `library` — an EDK2 library routine the module statically links in
-  (`CopyMem`, `ZeroMem`, `AsmCpuid`, …), or a function carrying Ghidra's
-  `library` tag. It is complete as it is, so its gaps are empty.
+- `library` — library code the module statically links in: a name on the
+  exporter's EDK2 list (`CopyMem`, `ZeroMem`, `AsmCpuid`, …), or a function
+  carrying a library tag. It is complete as it is, so its gaps are empty.
 - `no_body` — external or thunk; the exporter writes no C for it, so there is
   nothing to review and its gaps are empty.
 
 `review_gaps` is always written, empty when there are none. A v2–v6 artifact
 has neither field, and the panel shows its functions as "Review level not
 recorded".
+
+### v8: library kind
+
+A `library` function carries `library_kind`, written after `review_level`:
+
+- `edk2` — EDK2's libraries; the kind of every name on the exporter's EDK2
+  list, and of a function tagged `library.edk2`.
+- `amd` — AGESA's own libraries, tagged `library.amd`.
+- `intel` — the FSP's and Reference Code's own libraries, tagged
+  `library.intel`.
+
+The criteria for each kind are the skill's ("Library functions" in
+`SKILL.md`). A function carrying the bare `library` tag of a review made before
+the kinds has no `library_kind`; nor has a v7 artifact. The panel shows such a
+function as a library of no recorded kind.
 
 ### v5: POST codes
 

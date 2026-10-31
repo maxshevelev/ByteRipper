@@ -1412,24 +1412,41 @@ public class Owner {
     /**
      * A Ghidra tag on the function at `address` — a mark of what a function
      * is that the code itself does not say. This is how a review says a
-     * function is an EDK2 library routine the module statically links in
-     * that the automatic detection did not recognise: the tag `library`
-     * makes ExportCode write the function at the `library` review level,
-     * complete as it is, whatever its name or comments. The function is the
-     * one containing the address, as with the other function writes; a tag
-     * name is letters, digits, '.', '_' and '-', up to 40 of them. An empty
-     * `tag`, or `none`, removes the `library` tag. The answer lists the
+     * function is library code the module statically links in that the
+     * automatic detection did not recognise, and whose: `library.edk2`,
+     * `library.amd` (AGESA) or `library.intel` (FSP/RC) makes ExportCode
+     * write the function at the `library` review level with that kind,
+     * complete as it is, whatever its name or comments. A function holds one
+     * library tag: a new one replaces it. The bare `library` is refused as a
+     * new tag, and still read where an earlier review left it, as a library
+     * of no recorded kind. The function is
+     * the one containing the address, as with the other function writes; a
+     * tag name is letters, digits, '.', '_' and '-', up to 40 of them. An
+     * empty `tag`, or `none`, removes the library tag. The answer lists the
      * function's tags, sorted.
      */
     private JsonObject tagFunction(JsonObject body) throws Exception {
         Function function = functionAt(required(body, "address"));
         String tag = string(body, "tag", null);
         if (tag == null || tag.isEmpty() || tag.equalsIgnoreCase("none")) {
-            function.removeTag("library");
+            removeLibraryTags(function);
         } else {
             if (!tag.matches("[A-Za-z0-9._-]{1,40}")) {
                 throw new Failure(400, tag + " is not a tag name: letters, digits, '.', '_' and '-', "
                                   + "up to 40");
+            }
+            // A function is one kind of library: a new library tag replaces
+            // the one it had.
+            if (tag.toLowerCase(java.util.Locale.ROOT).startsWith("library")) {
+                String lower = tag.toLowerCase(java.util.Locale.ROOT);
+                // The bare `library` says nothing of whose: a review names the
+                // kind (`SKILL.md`, "Library functions").
+                if (!(lower.startsWith("library.") && ExportCode.LIBRARY_KINDS.contains(lower.substring(8)))) {
+                    throw new Failure(400, tag + " is not a library tag: library.edk2, library.amd "
+                                      + "or library.intel");
+                }
+                removeLibraryTags(function);
+                tag = lower;
             }
             function.addTag(tag);
         }
@@ -1438,6 +1455,17 @@ public class Owner {
         answer.addProperty("name", function.getName());
         addTags(answer, function);
         return answer;
+    }
+
+    /** Takes every library tag off the function: `library` and `library.<kind>`. */
+    private static void removeLibraryTags(Function function) {
+        java.util.List<String> held = new java.util.ArrayList<>();
+        for (ghidra.program.model.listing.FunctionTag tag : function.getTags()) {
+            if (tag != null && tag.getName().toLowerCase(java.util.Locale.ROOT).startsWith("library")) {
+                held.add(tag.getName());
+            }
+        }
+        for (String name : held) function.removeTag(name);
     }
 
     /**
@@ -1454,6 +1482,8 @@ public class Owner {
         answer.add("tags", tags);
         String basis = ExportCode.libraryBasis(function);
         if (basis != null) answer.addProperty("library", basis);
+        String kind = basis == null ? null : ExportCode.libraryKind(function);
+        if (kind != null) answer.addProperty("library_kind", kind);
     }
 
     /**

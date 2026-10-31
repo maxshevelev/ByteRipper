@@ -22,6 +22,7 @@ import ToolModuleKit
     public typealias List = CodeReaderState.List
     public typealias FunctionOrder = CodeReaderState.FunctionOrder
     typealias FunctionGroup = CodeReaderState.FunctionGroup
+    typealias LibrarySection = CodeReaderState.LibrarySection
     typealias FunctionRow = CodeReaderState.FunctionRow
 
     /// A place in the code Back and Forward return to: the function, the
@@ -594,12 +595,32 @@ import ToolModuleKit
 
     /// A function's mark by its review: full, and every level without a
     /// mark of its own, the filled `f`; partial, the `f` in a frame; a library
-    /// routine, the columns.
-    static func functionMark(_ group: FunctionGroup) -> String {
+    /// routine, the badge of whose library it is.
+    static func functionMark(_ group: FunctionGroup, library: LibrarySection? = nil) -> String {
         switch group {
         case .partial: "function.partial"
-        case .library: "function.library"
+        case .library: "library.\(library ?? .unrecorded)"
         default: "function"
+        }
+    }
+
+    /// A library kind's heading inside Library functions.
+    static func title(of section: LibrarySection) -> String {
+        switch section {
+        case .edk2: L("EDK2")
+        case .amd: L("AMD AGESA")
+        case .intel: L("Intel FSP/RC")
+        case .unrecorded: L("Kind not recorded")
+        }
+    }
+
+    /// The short name on a library function's badge.
+    static func badge(of section: LibrarySection) -> String {
+        switch section {
+        case .edk2: L("EDK2")
+        case .amd: L("AMD")
+        case .intel: L("Intel")
+        case .unrecorded: L("LIB")
         }
     }
 
@@ -624,7 +645,14 @@ import ToolModuleKit
         case .full: level = L("fully reviewed")
         case .partial: level = L("partly reviewed")
         case .decompiled: level = L("decompiler only")
-        case .library: level = L("library function")
+        case .library:
+            let section: LibrarySection = switch function.libraryKind {
+            case .edk2: .edk2
+            case .amd: .amd
+            case .intel: .intel
+            case nil: .unrecorded
+            }
+            level = L("library function: %1$@", title(of: section))
         case .noBody: level = L("no body")
         case nil: level = L("review level not recorded")
         }
@@ -2809,11 +2837,11 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
         tableView === functionTable ? state.rowCount : state.lines.count
     }
 
-    /// A group's node is not a function: it opens and closes its rows and is
-    /// not selected.
+    /// A group's node, and a library kind's, is not a function: it opens and
+    /// closes its rows and is not selected.
     public func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
         !(tableView === functionTable && state.list == .functions
-            && state.functionRow(at: row)?.group != nil)
+            && state.functionRow(at: row)?.isHeading == true)
     }
 
     public func tableView(_ tableView: NSTableView,
@@ -2823,6 +2851,9 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
             let functionRow = state.list == .functions ? state.functionRow(at: row) : nil
             if let group = functionRow?.group {
                 return groupCell(in: tableView, group: group, row: row)
+            }
+            if let section = functionRow?.section {
+                return sectionCell(in: tableView, section: section, row: row)
             }
             // The by-address table's first column: where the function is.
             if state.list == .functions, tableColumn?.identifier.rawValue == FunctionColumn.address.rawValue,
@@ -2891,15 +2922,18 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
                 // level keeps the last one's inset rather than running the
                 // name off the pane. A group's functions start under its
                 // name, past its chevron and a step beyond its mark, as a
-                // source list nests its items.
+                // source list nests its items; a library kind's, a step
+                // further under the kind.
                 if state.functionOrder == .review, state.searchText.isEmpty {
-                    cell.indent = CodeNavigatorCell.disclosureRoom + Self.groupMemberIndent
+                    cell.indent = CodeNavigatorCell.disclosureRoom
+                        + Self.groupMemberIndent * CGFloat(functionRow.level)
                 } else {
                     cell.indent = CGFloat(min(functionRow.level, Self.navigatorLevels)) * Self.navigatorIndent
                 }
                 // The mark says how far the review has got, in every order: a
                 // root of the tree and a call under it alike.
-                cell.showsIcon(Self.functionMark(state.group(of: index)))
+                cell.showsIcon(Self.functionMark(state.group(of: index),
+                                                 library: state.librarySection(of: index)))
                 if unopenedChanges.contains(index) {
                     cell.textField?.font = Self.navigatorBoldFont()
                     cell.badge.text = L("New")
@@ -3106,6 +3140,36 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
         return cell
     }
 
+    /// A library kind's node under Library functions: its name and how many
+    /// functions it holds, set in under the group with the kind's badge, and
+    /// the chevron that opens and closes them.
+    private func sectionCell(in tableView: NSTableView, section: LibrarySection, row: Int) -> NSView {
+        let cell = cell(in: tableView, identifier: .init("code-section"), monospaced: false)
+        cell.textField?.font = .systemFont(ofSize: Self.navigatorSize, weight: .semibold)
+        cell.textField?.textColor = .secondaryLabelColor
+        cell.textField?.stringValue = Self.title(of: section)
+            + " (\(state.groupCount(at: row) ?? 0))"
+        cell.showsIcon("library.\(section)")
+        cell.showsBadge(false)
+        cell.indent = Self.groupMemberIndent
+        cell.showsDisclosure(true)
+        let expanded = state.isSectionExpanded(section)
+        cell.showsCalls(expandable: true, expanded: expanded)
+        ControlHelp.describe(cell.disclosure,
+                             expanded ? L("Hide functions") : L("Show functions"))
+        cell.toolTip = nil
+        cell.onToggle = { [weak self] in self?.toggleSection(section) }
+        return cell
+    }
+
+    /// Opens or closes a library kind's functions.
+    private func toggleSection(_ section: LibrarySection) {
+        foldRows { $0.toggleSectionExpanded(section) }
+        if let row = (0..<state.rowCount).first(where: { state.functionRow(at: $0)?.section == section }) {
+            describeDisclosure(at: row, state.isSectionExpanded(section) ? L("Hide functions") : L("Show functions"))
+        }
+    }
+
     /// Opens or closes a review group's functions.
     private func toggleGroup(_ group: FunctionGroup) {
         foldRows { $0.toggleGroupExpanded(group) }
@@ -3239,7 +3303,10 @@ final class CodeNavigatorCell: NSTableCellView {
         let mark: (glyph: CodeNavigatorIcon.Glyph, color: NSColor)? = switch name {
         case "function"?: CodeNavigatorIcon.function
         case "function.partial"?: CodeNavigatorIcon.partialFunction
-        case "function.library"?: CodeNavigatorIcon.libraryFunction
+        case let name? where name.hasPrefix("library."):
+            CodeReaderState.LibrarySection.allCases
+                .first { "library.\($0)" == name }
+                .map { CodeNavigatorIcon.library(CodePaneView.badge(of: $0)) }
         case let name? where name.hasPrefix("group."):
             CodeReaderState.FunctionGroup.allCases
                 .first { "group.\($0)" == name }
@@ -3250,7 +3317,7 @@ final class CodeNavigatorCell: NSTableCellView {
         let side = CodeNavigatorIcon.side(forFontSize: CodePaneView.navigatorSize)
         drawMark()
         icon.isHidden = mark == nil
-        iconWidth.constant = mark == nil ? 0 : side
+        iconWidth.constant = mark.map { CodeNavigatorIcon.width(of: $0.glyph, side: side) } ?? 0
         iconGap.constant = mark == nil ? 0 : 5
     }
 

@@ -94,10 +94,10 @@ final class CodeArtifactTests: XCTestCase {
     // MARK: - Refusals
 
     func testAnUnknownScriptVersionIsRefused() {
-        // One past what the exporter writes: 7 is a version this app reads.
-        let json = #"{"script_version": 8, "ghidra": "12.1.2", "functions": []}"#
+        // One past what the exporter writes: 8 is a version this app reads.
+        let json = #"{"script_version": 9, "ghidra": "12.1.2", "functions": []}"#
         XCTAssertThrowsError(try decoded(json)) { error in
-            XCTAssertEqual(error as? CodeArtifactError, .unsupportedVersion(8))
+            XCTAssertEqual(error as? CodeArtifactError, .unsupportedVersion(9))
         }
     }
 
@@ -115,6 +115,22 @@ final class CodeArtifactTests: XCTestCase {
         let function = try XCTUnwrap(artifact.functions.first)
         XCTAssertEqual(function.reviewLevel, .partial)
         XCTAssertEqual(function.reviewGaps, ["plate", "locals"])
+    }
+
+    /// A v8 library function says whose library it is; a kind this reader
+    /// does not know, and a library function without one, read as nil.
+    func testALibraryKindDecodes() throws {
+        let artifact = try decoded("""
+        {"script_version": 8, "ghidra": "12.1.2", "functions": [
+          {"entry": "0x10", "name": "IoWrite", "instructions": [],
+           "review_level": "library", "review_gaps": [], "library_kind": "amd"},
+          {"entry": "0x20", "name": "Other", "instructions": [],
+           "review_level": "library", "review_gaps": [], "library_kind": "arm"},
+          {"entry": "0x30", "name": "Old", "instructions": [],
+           "review_level": "library", "review_gaps": []}
+        ]}
+        """)
+        XCTAssertEqual(artifact.functions.map(\.libraryKind), [.amd, nil, nil])
     }
 
     /// An artifact from before v7 writes neither field: the level is

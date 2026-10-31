@@ -191,7 +191,14 @@
 "fully reviewed" = "разобрана полностью";
 "partly reviewed" = "разобрана частично";
 "decompiler only" = "только декомпилятор";
-"library function" = "библиотечная функция";
+"library function: %1$@" = "библиотечная функция: %1$@";
+"Kind not recorded" = "Категория не записана";
+"EDK2" = "EDK2";
+"AMD" = "AMD";
+"AMD AGESA" = "AMD AGESA";
+"Intel" = "Intel";
+"Intel FSP/RC" = "Intel FSP/RC";
+"LIB" = "LIB";
 "no body" = "без тела";
 "review level not recorded" = "уровень разбора не записан";
 "the name is a placeholder" = "имя — заготовка";

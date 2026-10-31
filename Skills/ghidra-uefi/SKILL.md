@@ -89,10 +89,11 @@ read as 16-bit or 32-bit code — the reset vector's real-mode code in a 32-bit
 module), `ghidra_equate` (a name for a constant an instruction holds: an I/O
 port, an MSR, a PCI config address — as an enum member with a comment saying
 what it is and its source, which the app shows when the name is clicked);
-`ghidra_function_tag` (a function the module statically links in from EDK2 —
-`CopyMem`, `ZeroMem`, … — tagged `library`, which the exported artifact records
-as its review level: complete as it is, no further review; an empty tag removes
-it);
+`ghidra_function_tag` (library code the module statically links in, tagged
+with whose it is — `library.edk2`, `library.amd`, `library.intel` — by the
+criteria in "Library functions"; the exported artifact records it at the
+`library` review level with that kind: complete as it is, no further review;
+an empty tag removes it);
 `ghidra_description` and `ghidra_describe` for the module description (the
 whole document, or one `## ` section); `ghidra_publish` at a coherent
 checkpoint, `ghidra_done` at the end. The rules a review keeps are in "What a
@@ -273,6 +274,56 @@ EFI_STATUS PeCoffLoaderGetPeHeader (PE_COFF_LOADER_IMAGE_CONTEXT *ImageContext,
 
 A review that stops at names, or at a plate with an unmarked body, is an
 intermediate state and is reported as one.
+
+### Library functions
+
+A library function is code the module links in rather than its own work. It is
+tagged instead of reviewed, and the tag says whose library it is. The panel
+groups the three kinds under Library functions and marks each function with its
+kind: **EDK2**, **AMD**, **Intel**. The kinds are reserved for every review,
+whatever vendor's module is open.
+
+| Tag | Kind | What it covers |
+| --- | --- | --- |
+| `library.edk2` | EDK2 | MdePkg, MdeModulePkg and UefiCpuPkg libraries: BaseMemoryLib, BaseLib (its 64-bit math included), HobLib, PeiServicesLib, PcdLib, IoLib, DebugLib, TimerLib; and the compiler helpers a 32-bit MSVC build links (`__allshl`, `__aullshr`, `_allmul`, `_aulldiv`). |
+| `library.amd` | AMD AGESA | AGESA's own libraries: LibAmd I/O and memory access, `AgesaAssertHalt`-style asserts, IDS debug print and IDS hook dispatch, AGESA delay and register-access helpers. |
+| `library.intel` | Intel FSP/RC | The FSP's and Reference Code's own libraries: PCH/SA/CPU register access (`PchPcr*`, `MmPciBase`), FSP debug and assert, RC delay and SMBus helpers. |
+
+A function is tagged only when all three of these hold; otherwise it is the
+module's own work and is reviewed like any other function.
+
+1. **It is a general service.** Memory, string, GUID, 64-bit math, port or
+   MMIO access, a delay, finding a HOB, a PPI or a PCD, an assert, a debug
+   print. A function that reads or fills this module's own structures,
+   programs its registers or makes a decision of its own is the module's work,
+   whoever wrote it: AGESA's fabric MMIO allocation, its PSP directory walk,
+   its APOB lookups and a library *constructor* that does such work are AMD
+   code and are still reviewed.
+2. **Its kind is shown by evidence**, at least one of:
+   - **EDK2**: the body is the EDK2 routine's — the same arguments, the same
+     checks, the same calls in the same order (the public `CopyMem` returns
+     `Destination` at once when `Length` is 0 or the two pointers are equal, and
+     otherwise calls `InternalMemCopyMem`). The function takes its EDK2 name,
+     and so does the internal routine behind a public one.
+   - **AMD**: an AGESA assert code (`file id << 16 | line`) inside a
+     general-service body; AGESA's argument conventions (`AccessWidth` 1/2/3
+     with the S3 variants 0x81–0x83, `AMD_CONFIG_PARAMS *StdHeader` last); the
+     IDS debug-print or hook dispatch; or the same body, byte for byte apart from
+     relocated addresses, in another AMD module of the same image (`find_bytes`
+     on the dump).
+   - **Intel**: a body and name matching Intel's open silicon packages
+     (IntelSiliconPkg, the FSP headers, MinPlatformPkg); Intel's conventions
+     (PCH private-register access by port ID and offset); or the same body in
+     another Intel module of the image — FSP-M, FSP-S or a Pch/Sa/Cpu PEIM.
+3. **The evidence is written down**: one line in the function's plate or name
+   reason — "EDK2 BaseMemoryLib CopyMem: returns Destination when Length is 0
+   or the pointers are equal", "AGESA LibAmdIoWrite: assert 0x10195, S3 widths
+   0x81–0x83".
+
+An EDK2 routine inside an AMD or Intel module is EDK2. Evidence short of
+point 2 is not enough: such a function is not tagged, and the review reads it.
+The bare `library` tag of an earlier review names no kind; the panel shows it
+as a library of no recorded kind until the review tags it again.
 
 ### On an analysis server
 

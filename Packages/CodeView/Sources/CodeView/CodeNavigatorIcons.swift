@@ -19,9 +19,10 @@ enum CodeNavigatorIcon {
         case framedLetter(String)
         /// A white symbol on the filled square.
         case symbol(String)
-        /// The symbol alone, in the colour, the size of a square: the first
-        /// of the names this system has.
-        case bareSymbol([String])
+        /// A short name in a frame wider than the square: a library
+        /// function's kind — EDK2, AMD, Intel. Every badge is as wide as the
+        /// widest kind's, so the names after them line up.
+        case badge(String)
     }
 
     /// A function's mark: a fully reviewed one, and any without a level of
@@ -30,10 +31,17 @@ enum CodeNavigatorIcon {
     /// A partly reviewed function: the same `f`, not yet filled in, in the
     /// partial heading's orange.
     static let partialFunction = (glyph: Glyph.framedLetter("f"), color: NSColor.systemOrange)
-    /// A library routine, in the library heading's blue. The classical
-    /// columns are new in macOS 27; an older system draws the columns it has.
-    static let libraryFunction = (glyph: Glyph.bareSymbol(["building.classical.columns.fill", "building.columns.fill"]),
-                                  color: NSColor.systemBlue)
+    /// A library routine: the badge of whose library it is, in the library
+    /// heading's blue.
+    static func library(_ name: String) -> (glyph: Glyph, color: NSColor) {
+        (.badge(name), .systemBlue)
+    }
+
+    /// How wide a mark is at `side`: a square, or a badge.
+    static func width(of glyph: Glyph, side: CGFloat) -> CGFloat {
+        if case .badge = glyph { return (side * 2.1).rounded() }
+        return side
+    }
 
     /// A review group's mark: the function names' colour for full, orange
     /// for partial, red for nothing done yet, blue for a library routine,
@@ -61,7 +69,7 @@ enum CodeNavigatorIcon {
     static func image(_ glyph: Glyph, color: NSColor, side: CGFloat, inverted: Bool = false) -> NSImage {
         let ground = inverted ? NSColor.white : color
         let ink = inverted ? color : NSColor.white
-        let size = NSSize(width: side, height: side)
+        let size = NSSize(width: width(of: glyph, side: side), height: side)
         let image = NSImage(size: size, flipped: false) { rect in
             let radius = (side * 0.26).rounded()
             switch glyph {
@@ -80,12 +88,13 @@ enum CodeNavigatorIcon {
                 ground.setFill()
                 NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
                 drawSymbol(name, color: ink, scale: 0.7, in: rect)
-            case let .bareSymbol(names):
-                if let name = names.first(where: {
-                    NSImage(systemSymbolName: $0, accessibilityDescription: nil) != nil
-                }) {
-                    drawSymbol(name, color: ground, scale: 1, in: rect)
-                }
+            case let .badge(name):
+                let frame = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 1.5),
+                                         xRadius: 3, yRadius: 3)
+                frame.lineWidth = 1
+                ground.setStroke()
+                frame.stroke()
+                drawLabel(name, color: ground, in: rect)
             }
             return true
         }
@@ -103,6 +112,25 @@ enum CodeNavigatorIcon {
         let line = CTLineCreateWithAttributedString(NSAttributedString(string: letter, attributes: [
             .font: font, .foregroundColor: color
         ]))
+        let ink = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
+        context.saveGState()
+        context.textMatrix = .identity
+        context.textPosition = CGPoint(x: rect.midX - ink.midX, y: rect.midY - ink.midY)
+        CTLineDraw(line, context)
+        context.restoreGState()
+    }
+
+    /// A badge's name, centred by its ink, in small bold capitals' size.
+    private static func drawLabel(_ label: String, color: NSColor, in rect: NSRect) {
+        guard let context = NSGraphicsContext.current?.cgContext else { return }
+        var size = rect.height * 0.5
+        var line: CTLine
+        repeat {
+            line = CTLineCreateWithAttributedString(NSAttributedString(string: label, attributes: [
+                .font: NSFont.systemFont(ofSize: size, weight: .semibold), .foregroundColor: color
+            ]))
+            size -= 0.5
+        } while CTLineGetBoundsWithOptions(line, .useGlyphPathBounds).width > rect.width - 5 && size > 5
         let ink = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
         context.saveGState()
         context.textMatrix = .identity

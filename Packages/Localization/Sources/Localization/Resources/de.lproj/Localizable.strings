@@ -191,7 +191,14 @@
 "fully reviewed" = "vollständig analysiert";
 "partly reviewed" = "teilweise analysiert";
 "decompiler only" = "nur Dekompiler";
-"library function" = "Bibliotheksfunktion";
+"library function: %1$@" = "Bibliotheksfunktion: %1$@";
+"Kind not recorded" = "Kategorie nicht erfasst";
+"EDK2" = "EDK2";
+"AMD" = "AMD";
+"AMD AGESA" = "AMD AGESA";
+"Intel" = "Intel";
+"Intel FSP/RC" = "Intel FSP/RC";
+"LIB" = "LIB";
 "no body" = "ohne Rumpf";
 "review level not recorded" = "Analysestand nicht erfasst";
 "the name is a placeholder" = "der Name ist ein Platzhalter";

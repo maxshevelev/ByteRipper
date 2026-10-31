@@ -37,10 +37,19 @@ public struct CodeReaderState: Sendable {
         case unknown
     }
 
-    /// One row of the Functions list: a heading, or a function and how deep in
-    /// the call tree it sits.
+    /// Whose library a library function is, as the grouped list sorts the
+    /// Library functions group: the three kinds a review names, then a library
+    /// whose kind was not recorded (a bare `library` tag, a v7 artifact).
+    public enum LibrarySection: Int, CaseIterable, Sendable {
+        case edk2, amd, intel, unrecorded
+    }
+
+    /// One row of the Functions list: a heading, a library kind's heading
+    /// inside the Library functions group, or a function and how deep in the
+    /// call tree or the groups it sits.
     public enum FunctionRow: Equatable, Sendable {
         case group(FunctionGroup)
+        case section(LibrarySection)
         case function(Int, level: Int)
 
         /// The function's place in the artifact, nil for a heading.
@@ -49,16 +58,30 @@ public struct CodeReaderState: Sendable {
             return nil
         }
 
-        /// The heading's group, nil for a function.
+        /// The heading's group, nil for a function and a library kind.
         public var group: FunctionGroup? {
             if case let .group(group) = self { return group }
             return nil
         }
 
-        /// How far the row is set in: a heading, or a function of the tree.
+        /// The library kind's heading, nil for any other row.
+        public var section: LibrarySection? {
+            if case let .section(section) = self { return section }
+            return nil
+        }
+
+        /// Whether the row is a heading — a group or a library kind — and not
+        /// a function.
+        public var isHeading: Bool { function == nil }
+
+        /// How far the row is set in: a group's heading, a library kind's
+        /// heading under it, or a function of the tree or the groups.
         public var level: Int {
-            if case let .function(_, level) = self { return level }
-            return 0
+            switch self {
+            case let .function(_, level): level
+            case .section: 1
+            case .group: 0
+            }
         }
     }
     /// What the left navigator lists. One at a time, so every function stays
@@ -98,6 +121,9 @@ public struct CodeReaderState: Sendable {
     /// each group holds whether it is open or closed.
     private var collapsedGroups: Set<FunctionGroup> = []
     private var groupCounts: [FunctionGroup: Int] = [:]
+    /// The same for the library kinds inside the Library functions group.
+    private var collapsedSections: Set<LibrarySection> = []
+    private var sectionCounts: [LibrarySection: Int] = [:]
 
     public init(model: CodeModel) {
         self.model = model
@@ -199,6 +225,7 @@ public struct CodeReaderState: Sendable {
     /// order in front, and the indices the view looks rows up by.
     private mutating func layOutFunctions(_ matching: [Int], searching: Bool) {
         groupCounts = [:]
+        sectionCounts = [:]
         switch functionOrder {
         case .address:
             functionRows = matching.map { .function($0, level: 0) }
@@ -225,9 +252,51 @@ public struct CodeReaderState: Sendable {
             groupCounts[group] = members.count
             rows.append(.group(group))
             guard !collapsedGroups.contains(group) else { continue }
-            rows.append(contentsOf: members.map { FunctionRow.function($0, level: 1) })
+            guard group == .library else {
+                rows.append(contentsOf: members.map { FunctionRow.function($0, level: 1) })
+                continue
+            }
+            // The library functions under their kinds, each kind a heading of
+            // its own; a kind with none is not shown.
+            for section in LibrarySection.allCases {
+                let kind = members.filter { librarySection(of: $0) == section }
+                guard !kind.isEmpty else { continue }
+                sectionCounts[section] = kind.count
+                rows.append(.section(section))
+                guard !collapsedSections.contains(section) else { continue }
+                rows.append(contentsOf: kind.map { FunctionRow.function($0, level: 2) })
+            }
         }
         return rows
+    }
+
+    /// Whose library a library function is; nil for a function at any other
+    /// level.
+    public func librarySection(of index: Int) -> LibrarySection? {
+        let function = model.functions[index]
+        guard function.reviewLevel == .library else { return nil }
+        switch function.libraryKind {
+        case .edk2: return .edk2
+        case .amd: return .amd
+        case .intel: return .intel
+        case nil: return .unrecorded
+        }
+    }
+
+    /// Whether a library kind shows its functions. Open until the reader
+    /// closes it, as a group is.
+    public func isSectionExpanded(_ section: LibrarySection) -> Bool {
+        !collapsedSections.contains(section)
+    }
+
+    /// Opens or closes a library kind's functions.
+    public mutating func toggleSectionExpanded(_ section: LibrarySection) {
+        if collapsedSections.contains(section) {
+            collapsedSections.remove(section)
+        } else {
+            collapsedSections.insert(section)
+        }
+        refilter()
     }
 
     /// Whether the review group shows its functions. True for a group whose
@@ -270,8 +339,11 @@ public struct CodeReaderState: Sendable {
     /// How many functions the heading at `row` covers, open or closed; nil
     /// when the row is not a heading.
     public func groupCount(at row: Int) -> Int? {
-        guard let group = functionRow(at: row)?.group else { return nil }
-        return groupCounts[group]
+        switch functionRow(at: row) {
+        case let .group(group)?: groupCounts[group]
+        case let .section(section)?: sectionCounts[section]
+        default: nil
+        }
     }
 
     /// One function in the call tree and the calls it makes.
@@ -428,6 +500,12 @@ public struct CodeReaderState: Sendable {
             }
             if functionOrder == .review, collapsedGroups.contains(group(of: index)) {
                 collapsedGroups.remove(group(of: index))
+                refilter()
+                changed = true
+            }
+            if functionOrder == .review, let section = librarySection(of: index),
+               collapsedSections.contains(section) {
+                collapsedSections.remove(section)
                 refilter()
                 changed = true
             }

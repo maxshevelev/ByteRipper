@@ -91,7 +91,7 @@ public class ExportCode extends GhidraScript {
         Listing listing = currentProgram.getListing();
         StringBuilder json = new StringBuilder(1 << 22);
         json.append("{\n");
-        json.append("  \"script_version\": 7,\n");
+        json.append("  \"script_version\": 8,\n");
         json.append("  \"ghidra\": ").append(quote(Application.getApplicationVersion())).append(",\n");
         json.append("  \"program\": {\n");
         json.append("    \"name\": ").append(quote(currentProgram.getName())).append(",\n");
@@ -468,7 +468,10 @@ public class ExportCode extends GhidraScript {
 
     // EDK2's library routines, which a module statically links in: a review
     // does not name them, and the panel groups them apart. A function
-    // carrying Ghidra's `library` tag is one whatever its name.
+    // carrying one of Ghidra's library tags is one whatever its name: the tag
+    // says whose library — `library.edk2`, `library.amd` (AGESA),
+    // `library.intel` (FSP/RC) — and the bare `library` of a review made
+    // before the kinds says only that it is one.
     private static final Set<String> LIBRARY_NAMES = new HashSet<>(Arrays.asList(
         "CopyMem", "SetMem", "ZeroMem", "CompareMem", "CopyGuid", "CompareGuid",
         "ScanMem8", "StrLen", "StrCmp", "AsciiStrLen", "AsciiStrCmp", "CpuDeadLoop",
@@ -511,9 +514,36 @@ public class ExportCode extends GhidraScript {
      */
     static String libraryBasis(Function function) {
         if (LIBRARY_NAMES.contains(function.getName())) return "edk2_name";
+        return libraryTag(function) != null ? "tag" : null;
+    }
+
+    /** The library kinds a tag can name, as `library.<kind>`. */
+    static final List<String> LIBRARY_KINDS = Arrays.asList("edk2", "amd", "intel");
+
+    /** The function's library tag — `library` or `library.<kind>` — or null. */
+    static String libraryTag(Function function) {
+        String found = null;
         for (FunctionTag tag : function.getTags()) {
-            if (tag != null && "library".equalsIgnoreCase(tag.getName())) return "tag";
+            if (tag == null) continue;
+            String name = tag.getName().toLowerCase(java.util.Locale.ROOT);
+            if (name.equals("library")) {
+                if (found == null) found = name;
+            } else if (name.startsWith("library.") && LIBRARY_KINDS.contains(name.substring(8))) {
+                found = name;
+            }
         }
+        return found;
+    }
+
+    /**
+     * Whose library a library function is: the kind its tag names, `edk2`
+     * for a name on the EDK2 list, null for a function that is not one or
+     * whose bare `library` tag does not say.
+     */
+    static String libraryKind(Function function) {
+        String tag = libraryTag(function);
+        if (tag != null && tag.startsWith("library.")) return tag.substring(8);
+        if (LIBRARY_NAMES.contains(function.getName())) return "edk2";
         return null;
     }
 
@@ -574,6 +604,8 @@ public class ExportCode extends GhidraScript {
             else level = "partial";
         }
         json.append("      \"review_level\": ").append(quote(level)).append(",\n");
+        String kind = "library".equals(level) ? libraryKind(function) : null;
+        if (kind != null) json.append("      \"library_kind\": ").append(quote(kind)).append(",\n");
         List<String> quoted = new ArrayList<>();
         for (String gap : gaps) quoted.add(quote(gap));
         json.append("      \"review_gaps\": [").append(String.join(", ", quoted)).append("],\n");

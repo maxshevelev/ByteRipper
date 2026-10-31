@@ -66,6 +66,19 @@ public enum ReviewLevel: String, Decodable, Sendable, CaseIterable {
     case noBody = "no_body"
 }
 
+/// Whose library a `library` function is (v8): the code a module links in
+/// rather than its own, by the vendor that ships it. The review's tags name
+/// them — `library.edk2`, `library.amd`, `library.intel` — and a name on the
+/// exporter's EDK2 list is EDK2's without a tag.
+public enum LibraryKind: String, Decodable, Sendable, CaseIterable {
+    /// EDK2's own libraries: BaseMemoryLib, HobLib, PeiServicesLib, …
+    case edk2
+    /// AMD's platform code, AGESA: its I/O, assert and debug routines.
+    case amd
+    /// Intel's platform code, FSP and its Reference Code.
+    case intel
+}
+
 /// The typed form of `code.json` (`Skills/ghidra-uefi/reference/code-artifact.md`).
 ///
 /// The artifact is the one-time result of Ghidra reading a module. This type is
@@ -99,7 +112,11 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
     /// 7 adds each function's review level and the gaps that keep it from
     /// full (`review_level`, `review_gaps`). Both are optional: an older
     /// artifact has no level, and its functions are shown as not recorded.
-    public static let supportedScriptVersions: Set<Int> = [2, 3, 4, 5, 6, 7]
+    ///
+    /// 8 adds a library function's `library_kind`: EDK2, AMD AGESA or Intel
+    /// FSP/RC. Optional: a library function without it is shown as a
+    /// library whose kind was not recorded.
+    public static let supportedScriptVersions: Set<Int> = [2, 3, 4, 5, 6, 7, 8]
 
     public let scriptVersion: Int
     public let ghidra: String
@@ -272,6 +289,9 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         /// `plate`, `comments`, `params`, `locals`. Empty for a library
         /// function, for a `no_body` one, and before v7.
         public let reviewGaps: [String]
+        /// Whose library a `library` function is (v8); nil for any other
+        /// level, and for a library function whose kind was not recorded.
+        public let libraryKind: LibraryKind?
         public let instructions: [Instruction]
 
         /// Whether the name is Ghidra's placeholder rather than evidence.
@@ -301,6 +321,8 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             reviewLevel = try container.decodeIfPresent(String.self, forKey: .reviewLevel)
                 .flatMap(ReviewLevel.init(rawValue:))
             reviewGaps = try container.decodeIfPresent([String].self, forKey: .reviewGaps) ?? []
+            libraryKind = try container.decodeIfPresent(String.self, forKey: .libraryKind)
+                .flatMap(LibraryKind.init(rawValue:))
             instructions = try container.decodeIfPresent(
                 [Instruction].self, forKey: .instructions) ?? []
         }
@@ -316,6 +338,7 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             case nameReason = "name_reason"
             case reviewLevel = "review_level"
             case reviewGaps = "review_gaps"
+            case libraryKind = "library_kind"
         }
     }
 

@@ -803,11 +803,12 @@ final class CodePaneViewTests: XCTestCase {
             CodePaneView.defaults = .standard
         }
         let art = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
-        {"script_version":7,"program":{"image_base":"0x0"},
+        {"script_version":8,"program":{"image_base":"0x0"},
          "functions":[
           {"entry":"0x100","name":"Partly","review_level":"partial",
            "review_gaps":["plate","locals"],"instructions":[]},
-          {"entry":"0x200","name":"CopyMem","review_level":"library","instructions":[]}]}
+          {"entry":"0x200","name":"CopyMem","review_level":"library","library_kind":"edk2",
+           "instructions":[]}]}
         """.utf8))
         let view = CodePaneView(manifest: manifest(), artifact: art,
                                 moduleBytes: moduleBytes, hexView: NSView())
@@ -820,9 +821,11 @@ final class CodePaneViewTests: XCTestCase {
         func tooltip(_ row: Int) throws -> String? {
             try XCTUnwrap(list.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView).toolTip
         }
-        // The partial group reads before the library one.
+        // The partial group reads before the library one; a library function
+        // sits under its kind's heading and says whose library it is.
         XCTAssertEqual(try tooltip(1), "Review: partly reviewed — missing plate comment, unnamed locals")
-        XCTAssertEqual(try tooltip(3), "Review: library function")
+        XCTAssertNil(try tooltip(3), "the kind's heading")
+        XCTAssertEqual(try tooltip(4), "Review: library function: EDK2")
     }
 
     /// Every function's name carries the function mark, a call in the tree
@@ -902,11 +905,14 @@ final class CodePaneViewTests: XCTestCase {
 
     /// A function's mark says how far its review has got: the filled `f` for
     /// full and for a level without a mark of its own, the framed `f` for
-    /// partial, the columns for a library routine.
+    /// partial, the badge of whose library it is for a library routine.
     func testAFunctionsMarkFollowsItsReviewLevel() {
         XCTAssertEqual(CodePaneView.functionMark(.full), "function")
         XCTAssertEqual(CodePaneView.functionMark(.partial), "function.partial")
-        XCTAssertEqual(CodePaneView.functionMark(.library), "function.library")
+        XCTAssertEqual(CodePaneView.functionMark(.library, library: .edk2), "library.edk2")
+        XCTAssertEqual(CodePaneView.functionMark(.library, library: .amd), "library.amd")
+        XCTAssertEqual(CodePaneView.functionMark(.library, library: .intel), "library.intel")
+        XCTAssertEqual(CodePaneView.functionMark(.library), "library.unrecorded")
         for group in [CodeReaderState.FunctionGroup.decompiled, .noBody, .unknown] {
             XCTAssertEqual(CodePaneView.functionMark(group), "function")
         }

@@ -31,8 +31,10 @@ public enum GhidraTools {
         locals with their storage), `ghidra_disassembly`, `ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_type_definition`, \
         `ghidra_description`; write with `ghidra_rename`, `ghidra_function_create`, `ghidra_rename_variable`, `ghidra_signature`, \
         `ghidra_type`, `ghidra_set_data`, `ghidra_comment`, `ghidra_describe`, `ghidra_code_mode`, `ghidra_equate`, \
-        `ghidra_function_tag`. `ghidra_function_tag` marks an EDK2 library routine the module statically links \
-        in as `library`, which the artifact records as its review level and needs no further review. `ghidra_publish` makes the review visible to the app — every \
+        `ghidra_function_tag`. `ghidra_function_tag` marks library code the module statically links in, and \
+        whose: `library.edk2`, `library.amd` (AGESA) or `library.intel` (FSP/RC), by the criteria in the \
+        skill's "Library functions"; the artifact records it at the library review level with that kind, \
+        and it needs no further review. `ghidra_publish` makes the review visible to the app — every \
         ByteRipper that reads this store — as a new revision; publish at coherent checkpoints, not after \
         every rename. `ghidra_done` publishes and ends the session.
 
@@ -155,8 +157,9 @@ public enum GhidraTools {
                 title: "List a module's functions",
                 description: """
                     The module's functions as Ghidra holds them now: entry, name, name_source, size, \
-                    signature, `tags`, and `library` — `edk2_name` or `tag` — for a function the \
-                    export writes at the library review level. `name_contains` and `name_source` (a Ghidra source such as USER_DEFINED) \
+                    signature, `tags`, and for a function the export writes at the library review \
+                    level `library` — `edk2_name` or `tag` — and `library_kind` — edk2, amd or intel; \
+                    none for a bare `library` tag. `name_contains` and `name_source` (a Ghidra source such as USER_DEFINED) \
                     narrow the list, `address_from`/`address_to` narrow it by entry. `filter: \
                     "unfinished"` keeps what a review has not passed — a parameter or a local Ghidra \
                     still names itself or holds as `undefined`, or no plate comment — each with \
@@ -199,7 +202,8 @@ public enum GhidraTools {
                 description: """
                     One function as Ghidra holds it now: its signature, its `tags` and — for a function \
                     the export writes at the library review level — `library`, why: `edk2_name` for a \
-                    name on the EDK2 list, `tag` for a review's `library` tag; its parameters and locals with \
+                    name on the EDK2 list, `tag` for a review's library tag — and `library_kind`, whose: \
+                    edk2, amd or intel; its parameters and locals with \
                     their `storage` and `first_use` (what `ghidra_rename_variable` names a local by), its \
                     plate comment, what is left to name (`leftovers`, whose `fragments` are the \
                     decompiler's register pieces rather than missing names), and its decompiled C — \
@@ -591,14 +595,20 @@ public enum GhidraTools {
                 return body
             },
             write("ghidra_function_tag", "tag/function", "Tag a function",
-                  "Tags the function containing `address`, as the other function writes find it. `tag` "
-                  + "\"library\" marks an EDK2 library routine the module statically links in (`CopyMem`, "
-                  + "`ZeroMem`, `AsmReadMsr64`, …) that the automatic detection did not recognise: the "
-                  + "exported code artifact records a function carrying that tag at the `library` review "
-                  + "level, complete as it is, whatever its name or comments. An empty `tag`, or `none`, "
-                  + "removes the `library` tag. The answer lists the function's tags, sorted.",
+                  "Tags the function containing `address`, as the other function writes find it. A library "
+                  + "tag marks code the module statically links in that the automatic detection did not "
+                  + "recognise, and says whose: `library.edk2` (EDK2's MdePkg libraries — `CopyMem`, HobLib, "
+                  + "PeiServicesLib, BaseLib's math), `library.amd` (AGESA's own libraries — LibAmd I/O, "
+                  + "assert, IDS debug print) or `library.intel` (FSP and Reference Code libraries). Which "
+                  + "one, and when a vendor routine is the module's own work rather than a library, is "
+                  + "decided by the criteria in the skill's \"Library functions\". The exported code "
+                  + "artifact records a function carrying the tag at the `library` review level with that "
+                  + "kind, complete as it is. A function holds one library tag: a new one replaces it; the "
+                  + "bare `library` is refused. An empty `tag`, or `none`, removes the library tag. The "
+                  + "answer lists the function's tags, sorted, with `library` and `library_kind`.",
                   ["address": AgentSchema.string("The function's entry address, or any address inside it."),
-                   "tag": AgentSchema.string("The tag, e.g. \"library\"; empty or \"none\" removes the library tag.")],
+                   "tag": AgentSchema.string(
+                       "The tag: library.edk2, library.amd or library.intel; empty or \"none\" removes the library tag.")],
                   required: ["address", "tag"]) { arguments in
                 try optional(arguments, ["address", "tag"])
             },

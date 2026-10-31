@@ -156,13 +156,49 @@ final class CodeReaderStateTests: XCTestCase {
             .group(.full), .function(1, level: 1), .function(0, level: 1),
             .group(.partial), .function(2, level: 1),
             .group(.decompiled), .function(3, level: 1),
-            .group(.library), .function(4, level: 1),
+            .group(.library), .section(.unrecorded), .function(4, level: 2),
             .group(.noBody), .function(5, level: 1),
             .group(.unknown), .function(6, level: 1)
-        ])
+        ], "a v7 library function records no kind")
         XCTAssertEqual(state.groupCount(at: 0), 2)
         XCTAssertEqual(state.groupCount(at: 3), 1)
-        XCTAssertEqual(state.groupCount(at: 11), 1)
+        XCTAssertEqual(state.groupCount(at: 12), 1)
+    }
+
+    /// Library functions sit under their kinds — EDK2, AMD, Intel, then a
+    /// library of no recorded kind — each kind a node of its own that says how
+    /// many it holds, opens and closes, and opens again for a hidden function
+    /// revealed. A kind with none is not shown.
+    func testLibraryFunctionsSitUnderTheirKinds() throws {
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        {"script_version":8,
+         "functions":[
+          {"entry":"0x100","name":"IoWrite","review_level":"library","library_kind":"amd","instructions":[]},
+          {"entry":"0x200","name":"ZeroMem","review_level":"library","library_kind":"edk2","instructions":[]},
+          {"entry":"0x300","name":"CopyMem","review_level":"library","library_kind":"edk2","instructions":[]},
+          {"entry":"0x400","name":"OldTag","review_level":"library","instructions":[]},
+          {"entry":"0x500","name":"Mine","review_level":"full","instructions":[]}]}
+        """.utf8))
+        var state = CodeReaderState(model: CodeModel(artifact: artifact, moduleBytes: nil))
+        state.show(.review)
+        XCTAssertEqual(state.functionRows, [
+            .group(.full), .function(4, level: 1),
+            .group(.library),
+            .section(.edk2), .function(2, level: 2), .function(1, level: 2),
+            .section(.amd), .function(0, level: 2),
+            .section(.unrecorded), .function(3, level: 2)
+        ], "no Intel heading without an Intel function")
+        XCTAssertEqual(state.groupCount(at: 2), 4, "the group holds every kind")
+        XCTAssertEqual(state.groupCount(at: 3), 2)
+        XCTAssertEqual(state.librarySection(of: 0), .amd)
+        XCTAssertNil(state.librarySection(of: 4))
+
+        state.toggleSectionExpanded(.edk2)
+        XCTAssertFalse(state.isSectionExpanded(.edk2))
+        XCTAssertEqual(state.functionRows[3...4], [.section(.edk2), .section(.amd)])
+        XCTAssertEqual(state.groupCount(at: 3), 2, "a closed kind still says how many it holds")
+        XCTAssertTrue(state.reveal(function: 1))
+        XCTAssertTrue(state.isSectionExpanded(.edk2), "revealing a hidden function opens its kind")
     }
 
     /// The call tree starts at what nothing calls, and every function a call
