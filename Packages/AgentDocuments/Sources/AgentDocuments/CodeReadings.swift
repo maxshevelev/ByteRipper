@@ -255,24 +255,7 @@ public final class CodeReadings {
         case "functions":
             let functions = model.functions(matching: search ?? "").map { model.functions[$0] }
             body["total"] = .int(Int64(functions.count))
-            body["functions"] = .array(functions.prefix(limit).map { function in
-                .object([
-                    "name": .string(function.name),
-                    "entry": .string(function.entry.description),
-                    "offset": offsetText(function.entry),
-                    "size": function.size.map { JSONValue.int(Int64($0)) } ?? JSONValue.null,
-                    "external": .bool(function.external),
-                    "thunk": .bool(function.thunk),
-                    "signature": function.signature.map(JSONValue.string) ?? .null,
-                    "name_source": function.nameSource.map(JSONValue.string) ?? .null,
-                    "name_reason": function.nameReason.map(JSONValue.string) ?? .null,
-                    "review_level": function.reviewLevel.map { JSONValue.string($0.rawValue) } ?? .null,
-                    "review_gaps": .array(function.reviewGaps.map(JSONValue.string)),
-                    "library_kind": function.libraryKind.map { JSONValue.string($0.rawValue) } ?? .null,
-                    "callers": .array(function.callers.map { .string($0.description) }),
-                    "callees": .array(function.callees.map { .string($0.description) })
-                ])
-            })
+            body["functions"] = .array(functions.prefix(limit).map { functionItem($0, offsetText) })
 
         case "instructions":
             let function = try namedFunction()
@@ -440,4 +423,28 @@ public final class CodeReadings {
         }
         return ToolQueryTools.stamped(.json(.object(body)), with: document)
     }
+}
+
+/// One function of a `functions` list. Built field by field rather than as
+/// one dictionary literal: a literal of this many optional fields takes the
+/// type checker of Xcode 26.3 past its time limit.
+private func functionItem(_ function: CodeArtifact.Function,
+                          _ offsetText: (CodeAddress) -> JSONValue) -> JSONValue {
+    func text(_ value: String?) -> JSONValue { value.map(JSONValue.string) ?? .null }
+    var item: [String: JSONValue] = [:]
+    item["name"] = .string(function.name)
+    item["entry"] = .string(function.entry.description)
+    item["offset"] = offsetText(function.entry)
+    item["size"] = function.size.map { .int(Int64($0)) } ?? .null
+    item["external"] = .bool(function.external)
+    item["thunk"] = .bool(function.thunk)
+    item["signature"] = text(function.signature)
+    item["name_source"] = text(function.nameSource)
+    item["name_reason"] = text(function.nameReason)
+    item["review_level"] = text(function.reviewLevel?.rawValue)
+    item["review_gaps"] = .array(function.reviewGaps.map(JSONValue.string))
+    item["library_kind"] = text(function.libraryKind?.rawValue)
+    item["callers"] = .array(function.callers.map { .string($0.description) })
+    item["callees"] = .array(function.callees.map { .string($0.description) })
+    return .object(item)
 }
