@@ -611,8 +611,9 @@ public enum GhidraTools {
                   + "and where its layout is known from; `comments` gives fields or enum members theirs — what "
                   + "each holds and its source. The app shows them when the reader clicks the type or a field; "
                   + "an empty comment removes one. Comments are set after the C, which drops its own — a type "
-                  + "defined again keeps its fields' comments by name, and the answer says how many came back "
-                  + "(`comments_kept`), whether the C declares what the program already held (`unchanged`) and "
+                  + "defined again keeps its fields' comments and its description, and the answer says how "
+                  + "many comments came back (`comments_kept`; it counts a redefinition, so it is 0 when no "
+                  + "`c` is given), whether the C declares what the program already held (`unchanged`) and "
                   + "gives the type's `size`. A structure is laid out by the compiler spec "
                   + "unless the C says otherwise: `#pragma pack(1)` … `#pragma pack()` is how a packed record is "
                   + "written, and `size` beside the field offsets is how a wrong layout shows. "
@@ -664,8 +665,9 @@ public enum GhidraTools {
                 `dry_run: true` answers the same without storing: the artifact's counts, the revision \
                 it would become, the description's size and the type conflicts — the export is done, so \
                 it costs what a publish costs. Publishing is the point another host sees the work; the \
-                owner also saves the program on idle, stop and signal, so only an owner killed outright \
-                or crashed loses what came after the last publish.
+                owner also writes the program out when it idles out, is stopped or gets a signal — not \
+                after every change — so only an owner killed outright or crashed loses what came after \
+                the last publish.
                 """,
             inputSchema: AgentSchema.object([
                 "module": moduleProperty,

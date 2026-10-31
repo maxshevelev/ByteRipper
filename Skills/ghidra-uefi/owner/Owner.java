@@ -831,7 +831,7 @@ public class Owner {
             try (FileChannel channel = lockChannel(); FileLock lock = channel.lock()) {
                 FileDataTypeManager shared = FileDataTypeManager.openFileArchive(reviewTypes, false);
                 try {
-                    mergeInto(shared, mine, merge, false, false, readOrigins());
+                    mergeInto(shared, mine, merge, false, take, readOrigins());
                 } finally {
                     shared.close();
                 }
@@ -2054,6 +2054,7 @@ public class Owner {
             // holds.
             java.util.TreeMap<String, DataType> previous = namedTypes(c);
             java.util.Map<String, java.util.Map<String, String>> kept = keptComments(previous);
+            java.util.Map<String, String> keptDescriptions = keptDescriptions(previous);
             // The fields may name what only an archive holds — `CHAR8`, a PI
             // structure, another review's type — as a signature may.
             importTypes(c);
@@ -2081,6 +2082,7 @@ public class Owner {
             kept.keySet().retainAll(declared);
             resolved = program.getDataTypeManager().resolve(parsed, DataTypeConflictHandler.REPLACE_HANDLER);
             commentsKept = restoreComments(resolved, kept);
+            restoreDescriptions(resolved, keptDescriptions);
         } else {
             String name = required(body, "name");
             importTypes(name);
@@ -2159,6 +2161,34 @@ public class Owner {
         return kept;
     }
 
+    /**
+     * The descriptions of the types a C names, by name. A type defined again
+     * with the same C keeps its description the way it keeps its fields'
+     * comments: the parsed C carries neither.
+     */
+    private java.util.Map<String, String> keptDescriptions(java.util.TreeMap<String, DataType> named) {
+        java.util.Map<String, String> kept = new java.util.TreeMap<>();
+        for (DataType type : named.values()) {
+            DataType base = type instanceof ghidra.program.model.data.TypeDef def && def.getBaseDataType() != null
+                ? def.getBaseDataType() : type;
+            String description = base.getDescription();
+            if (description != null && !description.isEmpty()) kept.putIfAbsent(base.getName(), description);
+        }
+        return kept;
+    }
+
+    /** Puts a kept description back, unless the call gives one of its own. */
+    private static void restoreDescriptions(DataType resolved, java.util.Map<String, String> kept) {
+        if (resolved == null) return;
+        DataType base = resolved instanceof ghidra.program.model.data.TypeDef def && def.getBaseDataType() != null
+            ? def.getBaseDataType() : resolved;
+        String description = kept.get(base.getName());
+        if (description == null) return;
+        String now = base.getDescription();
+        if (now != null && !now.isEmpty()) return;
+        base.setDescription(description);
+    }
+
     /** Do the types a C declares match the ones the program held before it was parsed? */
     private static boolean declaredSame(java.util.TreeMap<String, DataType> previous, DataType parsed) {
         DataType named = previous.get(parsed.getName());
@@ -2233,6 +2263,11 @@ public class Owner {
             holders.append(holders.length() == 0 ? " — the name is already held by " : "; ")
                    .append(symbol.getSymbolType().toString().toLowerCase(java.util.Locale.ROOT))
                    .append(" at ").append(hex(symbol.getAddress()));
+            // The address alone is the storage space's, which no call takes;
+            // the variable's storage is what to rename it by.
+            if (symbol.getObject() instanceof ghidra.program.model.listing.Variable variable) {
+                holders.append(" (storage ").append(variable.getVariableStorage()).append(")");
+            }
         }
         return holders.toString();
     }

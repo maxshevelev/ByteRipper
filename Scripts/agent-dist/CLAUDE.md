@@ -3,8 +3,10 @@
 This folder is a self-contained ByteRipper analysis server and the skill that
 reviews firmware modules with it. Everything it keeps — the code store, the
 modules' kept Ghidra projects, the documents and their uploads, the tokens, the
-MCP socket — is under `var/` here. No path points at another install, at the
-ByteRipper app's folders, or at a repository.
+MCP socket — is under `var/` here, unless `~/.byteripper-server.json` names
+another place: the config file wins, and a server pointed at the app's folders
+keeps its projects and store there, not in `var/`. No path points at another
+install or at a repository.
 
 ## The tools
 
