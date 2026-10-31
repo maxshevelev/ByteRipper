@@ -255,7 +255,8 @@ public struct CodeReaderState: Sendable {
 
     /// The review level the artifact records for a function; nil — an
     /// artifact from before v7 — is shown as unrecorded rather than guessed.
-    private func group(of index: Int) -> FunctionGroup {
+    /// The review group a function belongs to, in any order of the list.
+    public func group(of index: Int) -> FunctionGroup {
         switch model.functions[index].reviewLevel {
         case .full: .full
         case .partial: .partial

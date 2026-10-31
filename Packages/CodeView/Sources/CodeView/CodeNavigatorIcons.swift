@@ -11,12 +11,26 @@ import AppKit
 enum CodeNavigatorIcon {
     /// What the square holds.
     enum Glyph: Equatable {
+        /// A white letter on the filled square.
         case letter(String)
+        /// The letter in the colour, in the square's outline.
+        case framedLetter(String)
+        /// A white symbol on the filled square.
         case symbol(String)
+        /// The symbol alone, in the colour, the size of a square: the first
+        /// of the names this system has.
+        case bareSymbol([String])
     }
 
-    /// A function's mark.
+    /// A function's mark: a fully reviewed one, and any without a level of
+    /// its own.
     static let function = (glyph: Glyph.letter("f"), color: NSColor.systemPurple)
+    /// A partly reviewed function: the same `f`, not yet filled in.
+    static let partialFunction = (glyph: Glyph.framedLetter("f"), color: NSColor.systemPurple)
+    /// A library routine. The classical columns are new in macOS 27; an
+    /// older system draws the columns it has.
+    static let libraryFunction = (glyph: Glyph.bareSymbol(["building.classical.columns.fill", "building.columns.fill"]),
+                                  color: NSColor.systemPurple)
 
     /// A review group's mark: green for full, orange for partial, red for
     /// nothing done yet, blue for a library routine, grey where there is no
@@ -42,13 +56,28 @@ enum CodeNavigatorIcon {
         let size = NSSize(width: side, height: side)
         let image = NSImage(size: size, flipped: false) { rect in
             let radius = (side * 0.26).rounded()
-            color.setFill()
-            NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
             switch glyph {
             case let .letter(letter):
-                drawLetter(letter, in: rect)
+                color.setFill()
+                NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
+                drawLetter(letter, color: .white, in: rect)
+            case let .framedLetter(letter):
+                let frame = NSBezierPath(roundedRect: rect.insetBy(dx: 0.75, dy: 0.75),
+                                         xRadius: radius - 0.5, yRadius: radius - 0.5)
+                frame.lineWidth = 1.5
+                color.setStroke()
+                frame.stroke()
+                drawLetter(letter, color: color, in: rect)
             case let .symbol(name):
-                drawSymbol(name, in: rect)
+                color.setFill()
+                NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
+                drawSymbol(name, color: .white, scale: 0.7, in: rect)
+            case let .bareSymbol(names):
+                if let name = names.first(where: {
+                    NSImage(systemSymbolName: $0, accessibilityDescription: nil) != nil
+                }) {
+                    drawSymbol(name, color: color, scale: 1, in: rect)
+                }
             }
             return true
         }
@@ -58,13 +87,13 @@ enum CodeNavigatorIcon {
 
     /// The letter centred by its own ink, not by the font's line: an `f`
     /// has an ascender and no descender, and would sit high in a line box.
-    private static func drawLetter(_ letter: String, in rect: NSRect) {
+    private static func drawLetter(_ letter: String, color: NSColor, in rect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         let base = NSFont.systemFont(ofSize: rect.height * 0.74, weight: .bold)
         let font = base.fontDescriptor.withDesign(.rounded)
             .flatMap { NSFont(descriptor: $0, size: base.pointSize) } ?? base
         let line = CTLineCreateWithAttributedString(NSAttributedString(string: letter, attributes: [
-            .font: font, .foregroundColor: NSColor.white
+            .font: font, .foregroundColor: color
         ]))
         let ink = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
         context.saveGState()
@@ -74,12 +103,14 @@ enum CodeNavigatorIcon {
         context.restoreGState()
     }
 
-    private static func drawSymbol(_ name: String, in rect: NSRect) {
-        let configuration = NSImage.SymbolConfiguration(pointSize: rect.height * 0.56, weight: .bold)
-            .applying(.init(paletteColors: [.white]))
+    /// The symbol centred in `rect`, no larger than `scale` of it.
+    private static func drawSymbol(_ name: String, color: NSColor, scale: CGFloat, in rect: NSRect) {
+        let configuration = NSImage.SymbolConfiguration(pointSize: rect.height * 0.56 / scale * 0.7,
+                                                        weight: scale < 1 ? .bold : .regular)
+            .applying(.init(paletteColors: [color]))
         guard let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
             .withSymbolConfiguration(configuration) else { return }
-        let fit = min(1, rect.width * 0.7 / max(symbol.size.width, 1), rect.height * 0.7 / max(symbol.size.height, 1))
+        let fit = min(rect.width * scale / max(symbol.size.width, 1), rect.height * scale / max(symbol.size.height, 1))
         let size = NSSize(width: symbol.size.width * fit, height: symbol.size.height * fit)
         symbol.draw(in: NSRect(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2,
                                width: size.width, height: size.height))

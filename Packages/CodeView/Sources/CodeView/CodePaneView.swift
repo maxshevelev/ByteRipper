@@ -140,6 +140,8 @@ import ToolModuleKit
     /// tree's row is set in per level.
     private static let navigatorBarHeight: CGFloat = 30
     private static let navigatorIndent: CGFloat = 14
+    /// How far a review group's function starts past the group's mark.
+    private static let groupMemberIndent: CGFloat = 13
     /// How deep a call tree's row is drawn: deeper levels keep the last one's
     /// inset rather than running the names off the pane.
     private static let navigatorLevels: Int = 10
@@ -590,6 +592,17 @@ import ToolModuleKit
         }
     }
 
+    /// A function's mark by its review: full, and every level without a
+    /// mark of its own, the filled `f`; partial, the `f` in a frame; a library
+    /// routine, the columns.
+    static func functionMark(_ group: FunctionGroup) -> String {
+        switch group {
+        case .partial: "function.partial"
+        case .library: "function.library"
+        default: "function"
+        }
+    }
+
     /// A heading of the grouped order.
     static func title(of group: FunctionGroup) -> String {
         switch group {
@@ -692,14 +705,13 @@ import ToolModuleKit
             }
         }
         syncingSelection = true
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.2
-            context.allowsImplicitAnimation = true
-            functionTable.beginUpdates()
-            functionTable.removeRows(at: removed, withAnimation: [.slideUp, .effectFade])
-            functionTable.insertRows(at: inserted, withAnimation: [.slideDown, .effectFade])
-            functionTable.endUpdates()
-        }
+        // The table animates the rows itself. Not inside an animation group
+        // that allows implicit animation: a row view the insert makes starts
+        // at the table's origin, and would fly down from the top to its row.
+        functionTable.beginUpdates()
+        functionTable.removeRows(at: removed, withAnimation: [.slideUp, .effectFade])
+        functionTable.insertRows(at: inserted, withAnimation: [.slideDown, .effectFade])
+        functionTable.endUpdates()
         // The function the reader is in keeps its row where the list still
         // shows it.
         if let function = state.function, let row = state.row(ofFunction: function) {
@@ -2877,11 +2889,17 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
                 }
                 // A call tree's rows stand in as deep as they are; a deeper
                 // level keeps the last one's inset rather than running the
-                // name off the pane.
-                cell.indent = CGFloat(min(functionRow.level, Self.navigatorLevels)) * Self.navigatorIndent
-                // Every function carries the same mark, a root of the tree and
-                // a call under it alike: the indent says which it is.
-                cell.showsIcon("function")
+                // name off the pane. A group's functions start under its
+                // name, past its chevron and a step beyond its mark, as a
+                // source list nests its items.
+                if state.functionOrder == .review, state.searchText.isEmpty {
+                    cell.indent = CodeNavigatorCell.disclosureRoom + Self.groupMemberIndent
+                } else {
+                    cell.indent = CGFloat(min(functionRow.level, Self.navigatorLevels)) * Self.navigatorIndent
+                }
+                // The mark says how far the review has got, in every order: a
+                // root of the tree and a call under it alike.
+                cell.showsIcon(Self.functionMark(state.group(of: index)))
                 if unopenedChanges.contains(index) {
                     cell.textField?.font = Self.navigatorBoldFont()
                     cell.badge.text = L("New")
@@ -3178,6 +3196,9 @@ final class CodeNavigatorCell: NSTableCellView {
         showsBadge(false)
     }
 
+    /// The room the chevron and its gap take before a row's mark.
+    static let disclosureRoom: CGFloat = 13 + 4
+
     /// Makes room for the disclosure column — the call tree alone. The room
     /// stays for a function without calls, so names line up under names.
     func showsDisclosure(_ shows: Bool) {
@@ -3199,6 +3220,8 @@ final class CodeNavigatorCell: NSTableCellView {
         iconName = name
         let mark: (glyph: CodeNavigatorIcon.Glyph, color: NSColor)? = switch name {
         case "function"?: CodeNavigatorIcon.function
+        case "function.partial"?: CodeNavigatorIcon.partialFunction
+        case "function.library"?: CodeNavigatorIcon.libraryFunction
         case let name? where name.hasPrefix("group."):
             CodeReaderState.FunctionGroup.allCases
                 .first { "group.\($0)" == name }

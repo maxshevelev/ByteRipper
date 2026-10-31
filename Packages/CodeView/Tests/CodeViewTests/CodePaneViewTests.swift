@@ -892,6 +892,18 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertNotNil(heading.icon.image)
     }
 
+    /// A function's mark says how far its review has got: the filled `f` for
+    /// full and for a level without a mark of its own, the framed `f` for
+    /// partial, the columns for a library routine.
+    func testAFunctionsMarkFollowsItsReviewLevel() {
+        XCTAssertEqual(CodePaneView.functionMark(.full), "function")
+        XCTAssertEqual(CodePaneView.functionMark(.partial), "function.partial")
+        XCTAssertEqual(CodePaneView.functionMark(.library), "function.library")
+        for group in [CodeReaderState.FunctionGroup.decompiled, .noBody, .unknown] {
+            XCTAssertEqual(CodePaneView.functionMark(group), "function")
+        }
+    }
+
     /// A revision the panel receives marks the functions it changed: they read
     /// bold with a New badge until the reader opens one.
     func testARevisionMarksChangedFunctionsUntilTheyAreOpened() throws {
