@@ -19,9 +19,8 @@ enum CodeNavigatorIcon {
         case framedLetter(String)
         /// A white symbol on the filled square.
         case symbol(String)
-        /// A short name in a frame wider than the square: a library
-        /// function's kind — EDK2, AMD, Intel. Every badge is as wide as the
-        /// widest kind's, so the names after them line up.
+        /// A short name in a frame as wide as the name: a library function's
+        /// kind — EDK2, AMD, Intel.
         case badge(String)
     }
 
@@ -37,10 +36,24 @@ enum CodeNavigatorIcon {
         (.badge(name), .systemBlue)
     }
 
-    /// How wide a mark is at `side`: a square, or a badge.
+    /// How wide a mark is at `side`: a square, or a badge — its name and
+    /// the frame's room on either side of it.
     static func width(of glyph: Glyph, side: CGFloat) -> CGFloat {
-        if case .badge = glyph { return (side * 2.1).rounded() }
-        return side
+        guard case let .badge(name) = glyph else { return side }
+        let ink = CTLineGetBoundsWithOptions(label(name, color: .labelColor, side: side), .useGlyphPathBounds)
+        return (ink.width + 2 * badgeInset(side: side)).rounded(.up)
+    }
+
+    /// The room between a badge's frame and its name.
+    private static func badgeInset(side: CGFloat) -> CGFloat {
+        (side * 0.3).rounded()
+    }
+
+    /// A badge's name as a line: semibold, half the square's height.
+    private static func label(_ name: String, color: NSColor, side: CGFloat) -> CTLine {
+        CTLineCreateWithAttributedString(NSAttributedString(string: name, attributes: [
+            .font: NSFont.systemFont(ofSize: side * 0.5, weight: .semibold), .foregroundColor: color
+        ]))
     }
 
     /// A review group's mark: the function names' colour for full, orange
@@ -120,17 +133,10 @@ enum CodeNavigatorIcon {
         context.restoreGState()
     }
 
-    /// A badge's name, centred by its ink, in small bold capitals' size.
-    private static func drawLabel(_ label: String, color: NSColor, in rect: NSRect) {
+    /// A badge's name, centred by its ink in the frame made to fit it.
+    private static func drawLabel(_ name: String, color: NSColor, in rect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
-        var size = rect.height * 0.5
-        var line: CTLine
-        repeat {
-            line = CTLineCreateWithAttributedString(NSAttributedString(string: label, attributes: [
-                .font: NSFont.systemFont(ofSize: size, weight: .semibold), .foregroundColor: color
-            ]))
-            size -= 0.5
-        } while CTLineGetBoundsWithOptions(line, .useGlyphPathBounds).width > rect.width - 5 && size > 5
+        let line = label(name, color: color, side: rect.height)
         let ink = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
         context.saveGState()
         context.textMatrix = .identity
