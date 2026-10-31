@@ -530,10 +530,15 @@ public class Owner {
         }
         boolean builtins = "1".equals(query.get("builtin")) || "true".equals(query.get("builtin"));
         java.util.List<JsonObject> matched = new java.util.ArrayList<>();
+        java.util.TreeSet<String> sources = new java.util.TreeSet<>();
         Iterator<DataType> all = program.getDataTypeManager().getAllDataTypes();
         while (all.hasNext()) {
             DataType type = all.next();
             if (type instanceof ghidra.program.model.data.BuiltInDataType && !builtins) continue;
+            ghidra.program.model.data.SourceArchive here = type.getSourceArchive();
+            sources.add(here == null || here.getSourceArchiveID() == null
+                || here.getArchiveType() == ghidra.program.model.data.ArchiveType.PROGRAM
+                ? "program" : here.getName());
             if (contains != null && !type.getName().toLowerCase(java.util.Locale.ROOT)
                     .contains(contains.toLowerCase(java.util.Locale.ROOT))) continue;
             ghidra.program.model.data.SourceArchive archive = type.getSourceArchive();
@@ -560,6 +565,11 @@ public class Owner {
         JsonObject answer = identity();
         answer.add("types", page);
         answer.addProperty("total", total);
+        // Every origin the program's types hold, so `source` can be named
+        // rather than guessed — the reviews' archive included.
+        JsonArray origins = new JsonArray();
+        sources.forEach(origins::add);
+        answer.add("sources", origins);
         if (end < total) answer.addProperty("next", end);
         return answer;
     }
@@ -1767,7 +1777,7 @@ public class Owner {
         try {
             HighFunctionDBUtil.updateDBVariable(match, applied, type, SourceType.USER_DEFINED);
         } catch (Exception error) {
-            throw new Failure(400, error.getMessage());
+            throw new Failure(400, error.getMessage() + holderOf(applied, function));
         }
         // The storage as it is now: a decompiler temporary becomes HASH:… once
         // it is named, and that is what names it from here on.
@@ -2021,6 +2031,10 @@ public class Owner {
         DataType resolved;
         int commentsKept = 0;
         if (c != null) {
+            // The comments of the types this C names, read before the parser
+            // touches the manager: CParser adds a type as it parses it, so by
+            // the time it returns, the fields' old comments are gone.
+            java.util.Map<String, java.util.Map<String, String>> kept = keptComments(c);
             // The fields may name what only an archive holds — `CHAR8`, a PI
             // structure, another review's type — as a signature may.
             importTypes(c);
@@ -2033,9 +2047,8 @@ public class Owner {
             if (parsed == null) throw new Failure(400, "the C declares no type");
             // A type defined again — a corrected layout — replaces the one in
             // the program, and the parsed C carries no comments: the fields'
-            // old comments are kept by name, so a correction is one call, not
-            // two. A name the new C dropped keeps nothing.
-            java.util.Map<String, java.util.Map<String, String>> kept = keptComments(parsed);
+            // old comments are put back by name, so a correction is one call,
+            // not two. A field the new C dropped keeps nothing.
             resolved = program.getDataTypeManager().resolve(parsed, DataTypeConflictHandler.REPLACE_HANDLER);
             commentsKept = restoreComments(resolved, kept);
         } else {
@@ -2070,23 +2083,31 @@ public class Owner {
         answer.addProperty("path", resolved.getPathName());
         answer.addProperty("size", resolved.getLength());
         answer.addProperty("c", ExportCode.typeC(resolved));
-        if (commentsKept > 0) answer.addProperty("comments_kept", commentsKept);
+        // Always present, zero included: a reader must be able to tell "nothing
+        // came back" from "this build has no such field".
+        answer.addProperty("comments_kept", commentsKept);
         return answer;
     }
 
-    /** The comments the program's copies of the types a C declares hold, by type and field. */
-    private java.util.Map<String, java.util.Map<String, String>> keptComments(DataType parsed) {
+    /**
+     * The comments of the program's types a C names, by type and field, read
+     * before the C is parsed: the parser replaces a type it defines as it
+     * goes, so a snapshot taken afterwards is of the new, uncommented type.
+     */
+    private java.util.Map<String, java.util.Map<String, String>> keptComments(String c) {
         java.util.Map<String, java.util.Map<String, String>> kept = new java.util.LinkedHashMap<>();
-        java.util.List<DataType> declared = new java.util.ArrayList<>();
-        declared.add(parsed);
-        if (parsed instanceof ghidra.program.model.data.TypeDef def && def.getBaseDataType() != null) {
-            declared.add(def.getBaseDataType());
-        }
-        for (DataType type : declared) {
-            DataType existing = find(program.getDataTypeManager(), type.getName());
+        java.util.regex.Matcher words = java.util.regex.Pattern.compile("[A-Za-z_][A-Za-z0-9_]*").matcher(c);
+        while (words.find()) {
+            DataType existing = find(program.getDataTypeManager(), words.group());
             if (existing == null || existing.getDataTypeManager() != program.getDataTypeManager()) continue;
-            java.util.Map<String, String> comments = fieldComments(existing);
-            if (!comments.isEmpty()) kept.put(existing.getName(), comments);
+            // Comments sit on the structure or enum a typedef names, and a C
+            // names both: one entry per such type, or a field would be
+            // counted once per spelling.
+            DataType base = existing instanceof ghidra.program.model.data.TypeDef def && def.getBaseDataType() != null
+                ? def.getBaseDataType() : existing;
+            if (base.getDataTypeManager() != program.getDataTypeManager()) continue;
+            java.util.Map<String, String> comments = fieldComments(base);
+            if (!comments.isEmpty()) kept.putIfAbsent(base.getName(), comments);
         }
         return kept;
     }
@@ -2121,6 +2142,25 @@ public class Owner {
             }
         }
         return restored;
+    }
+
+    /**
+     * What holds a name in a function's namespace, for a rename Ghidra refused
+     * because the name was taken: the refusal alone names neither address nor
+     * kind, and a symbol no decompiled variable shows is otherwise invisible.
+     */
+    private String holderOf(String name, Function function) {
+        if (name == null) return "";
+        StringBuilder holders = new StringBuilder();
+        java.util.Iterator<ghidra.program.model.symbol.Symbol> symbols =
+            program.getSymbolTable().getSymbols(name, function).iterator();
+        while (symbols.hasNext()) {
+            ghidra.program.model.symbol.Symbol symbol = symbols.next();
+            holders.append(holders.length() == 0 ? " — the name is already held by " : "; ")
+                   .append(symbol.getSymbolType().toString().toLowerCase(java.util.Locale.ROOT))
+                   .append(" at ").append(hex(symbol.getAddress()));
+        }
+        return holders.toString();
     }
 
     /** A field's or an enum member's comment; false when the type has no such member. */

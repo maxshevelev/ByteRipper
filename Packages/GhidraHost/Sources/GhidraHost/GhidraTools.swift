@@ -293,8 +293,10 @@ public enum GhidraTools {
                     `kind` (struct, union, enum, typedef, function, pointer, array), `size` and `source` \
                     (the program, or the archive the type came from). `contains` narrows by name, \
                     `kind` by what a type is — one kind, or several separated by commas — `source` by \
-                    origin, and `builtin` adds Ghidra's own types, left out by default. Paged by `offset` \
-                    and `limit`; `total` is how many match.
+                    origin, and `builtin` adds Ghidra's own types, left out by default. `sources` lists \
+                    every origin the program's types hold — the reviews' archive included — so `source` \
+                    is named rather than guessed. Paged by `offset` and `limit`; `total` is how many \
+                    match.
                     """,
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,

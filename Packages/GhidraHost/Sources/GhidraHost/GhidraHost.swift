@@ -261,9 +261,10 @@ public actor GhidraHost {
             "type_conflicts": conflicts
         ]
         let taken = (headers["x-owner-type-taken"] ?? "").split(separator: ",").map(String.init)
-        if !taken.isEmpty { preview["type_conflicts_taken"] = taken }
-        let origins = Self.typeOrigins(headers["x-owner-type-origins"])
-        if !origins.isEmpty { preview["type_conflict_origins"] = origins }
+        // Always present, empty included: a reader tells "nothing to take"
+        // from "this build has no such field".
+        preview["type_conflicts_taken"] = taken
+        preview["type_conflict_origins"] = Self.typeOrigins(headers["x-owner-type-origins"])
         if let descriptionDigest {
             preview["description"] = ["sha256": descriptionDigest, "size": description.count]
         }
