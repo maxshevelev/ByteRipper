@@ -277,10 +277,14 @@ public enum GhidraTools {
                 description: """
                     The type `name` three ways: as the module's program holds it (`program`), as the \
                     shared review archive holds it now (`shared`, what another review published), and as \
-                    the EDK2 archive holds it (`edk2`); a key is left out where the type is not. Each has its C, `size`, and \
-                    for a structure or union every field's `offset`, `size`, `name` and `type`. `same` says \
-                    whether the program's and the shared one agree. Read the types `ghidra_publish` reports \
-                    in `type_conflicts` with it, and bring yours in line with `ghidra_type`.
+                    the EDK2 archive holds it (`edk2`); each is null where that place has no such type. \
+                    Each has its C, `size`, and for a structure or union every field's `offset`, `size`, \
+                    `name`, `type` and `comment`, with `packing` and `packing_value`. `same` says whether \
+                    the program's and the shared one agree. A name and its tag find each other — `NAME` \
+                    finds `_NAME` and the other way round; `resolved` gives the name that answered. \
+                    `found` says whether any of the three has the type, and `near` lists close names when \
+                    none does. Read the types `ghidra_publish` reports in `type_conflicts` with it, and \
+                    bring yours in line with `ghidra_type`.
                     """,
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,

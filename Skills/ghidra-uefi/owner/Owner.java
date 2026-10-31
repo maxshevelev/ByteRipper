@@ -2271,8 +2271,13 @@ public class Owner {
         name = name.trim();
         JsonObject answer = identity();
         answer.addProperty("name", name);
-        DataType here = find(program.getDataTypeManager(), name);
+        // A typedef and the structure it names differ by one underscore, and a
+        // reader who has the tag asks by it: `_NAME` finds what `NAME` names
+        // and the other way round.
+        String alternate = name.startsWith("_") ? name.substring(1) : "_" + name;
+        DataType here = findAny(program.getDataTypeManager(), name, alternate);
         answer.add("program", TypeText.describe(here));
+        DataType inShared = null;
         if (reviewTypes != null && reviewTypes.isFile()) {
             File copy = File.createTempFile("review-types-", ".gdt");
             try {
@@ -2281,9 +2286,9 @@ public class Owner {
                 }
                 FileDataTypeManager shared = FileDataTypeManager.openFileArchive(copy, false);
                 try {
-                    DataType there = find(shared, name);
-                    answer.add("shared", TypeText.describe(there));
-                    if (here != null && there != null) answer.addProperty("same", there.isEquivalent(here));
+                    inShared = findAny(shared, name, alternate);
+                    answer.add("shared", TypeText.describe(inShared));
+                    if (here != null && inShared != null) answer.addProperty("same", inShared.isEquivalent(here));
                 } finally {
                     shared.close();
                 }
@@ -2293,8 +2298,38 @@ public class Owner {
         } else {
             answer.add("shared", com.google.gson.JsonNull.INSTANCE);
         }
-        answer.add("edk2", TypeText.describe(archive == null ? null : find(archive, name)));
+        DataType inEdk2 = archive == null ? null : findAny(archive, name, alternate);
+        answer.add("edk2", TypeText.describe(inEdk2));
+        DataType anywhere = here != null ? here : inShared != null ? inShared : inEdk2;
+        answer.addProperty("found", anywhere != null);
+        if (anywhere != null) {
+            if (!anywhere.getName().equals(name)) answer.addProperty("resolved", anywhere.getName());
+        } else {
+            // Nothing by either spelling: say so, and list what is close, so a
+            // miss is not read as "the type is gone".
+            answer.add("near", near(name));
+        }
         return answer;
+    }
+
+    /** A type by its name or its tag; the first found, or null. */
+    private static DataType findAny(ghidra.program.model.data.DataTypeManager manager, String name, String alternate) {
+        DataType found = find(manager, name);
+        return found != null ? found : find(manager, alternate);
+    }
+
+    /** The program's type names close to one that was not found — the tag's underscore aside. */
+    private JsonArray near(String name) {
+        String needle = (name.startsWith("_") ? name.substring(1) : name).toLowerCase(java.util.Locale.ROOT);
+        JsonArray near = new JsonArray();
+        Iterator<DataType> all = program.getDataTypeManager().getAllDataTypes();
+        while (all.hasNext() && near.size() < 10) {
+            DataType type = all.next();
+            if (type instanceof ghidra.program.model.data.BuiltInDataType) continue;
+            String plain = type.getName().startsWith("_") ? type.getName().substring(1) : type.getName();
+            if (plain.toLowerCase(java.util.Locale.ROOT).contains(needle)) near.add(type.getName());
+        }
+        return near;
     }
 
     private static DataType find(ghidra.program.model.data.DataTypeManager manager, String name) {
