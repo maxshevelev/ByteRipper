@@ -387,7 +387,12 @@ public class ApplyUefi extends GhidraScript {
                 break;
             }
         }
-        if (entry == null) entry = getFunction("entry");
+        // getFunction(String) is marked for removal in Ghidra 12.2; the
+        // global functions by name are the same lookup in 12.1 and 12.2.
+        if (entry == null) {
+            List<Function> named = getGlobalFunctions("entry");
+            if (!named.isEmpty()) entry = named.get(0);
+        }
         if (entry == null) return;
         DataType status = type("EFI_STATUS");
         Parameter first, second;

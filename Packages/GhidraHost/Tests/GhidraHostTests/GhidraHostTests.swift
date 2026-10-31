@@ -139,4 +139,13 @@ final class GhidraHostOwnerTests: XCTestCase {
         let summaries = await host.summaries()
         XCTAssertEqual(summaries.first?.running, false)
     }
+
+    /// Ghidra 12.2 runs on JDK 25; the releases before it on 21.
+    func testTheJDKAGhidraNeedsFollowsItsVersion() {
+        XCTAssertEqual(GhidraInstall.minimumJDK(for: "12.1.2"), 21)
+        XCTAssertEqual(GhidraInstall.minimumJDK(for: "12.2"), 25)
+        XCTAssertEqual(GhidraInstall.minimumJDK(for: "12.2.1"), 25)
+        XCTAssertEqual(GhidraInstall.minimumJDK(for: "13.0"), 25)
+        XCTAssertEqual(GhidraInstall.minimumJDK(for: "unknown"), 25)
+    }
 }

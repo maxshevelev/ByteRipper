@@ -49,11 +49,21 @@ public struct GhidraInstall: Equatable, Sendable {
     public var java: URL { jdk.appendingPathComponent("bin/java") }
 
     /// The install named, else `GHIDRA_HOME`, else the newest `ghidra_*` in
-    /// the usual places; and a JDK 21 or newer.
+    /// the usual places; and the JDK that Ghidra needs (`minimumJDK`).
     public static func find(home explicit: URL? = nil,
                             environment: [String: String] = ProcessInfo.processInfo.environment) throws -> GhidraInstall {
         let home = try findHome(explicit, environment: environment)
-        return GhidraInstall(home: home, version: version(of: home), jdk: try findJDK(environment: environment))
+        let version = version(of: home)
+        return GhidraInstall(home: home, version: version,
+                             jdk: try findJDK(environment: environment, minimum: minimumJDK(for: version)))
+    }
+
+    /// The oldest JDK a Ghidra runs on: 25 from 12.2, 21 before it. A
+    /// version this reader cannot parse asks for the newer.
+    static func minimumJDK(for version: String) -> Int {
+        let parts = version.split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
+        guard parts.count >= 2 else { return 25 }
+        return [parts[0], parts[1]].lexicographicallyPrecedes([12, 2]) ? 21 : 25
     }
 
     static func isGhidra(_ url: URL) -> Bool {
@@ -100,26 +110,26 @@ public struct GhidraInstall: Equatable, Sendable {
         return "unknown"
     }
 
-    static func findJDK(environment: [String: String]) throws -> URL {
+    static func findJDK(environment: [String: String], minimum: Int) throws -> URL {
         if let named = environment["JAVA_HOME"], !named.isEmpty {
             return URL(fileURLWithPath: named)
         }
         let finder = Process()
         finder.executableURL = URL(fileURLWithPath: "/usr/libexec/java_home")
-        finder.arguments = ["-v", "21+"]
+        finder.arguments = ["-v", "\(minimum)+"]
         let output = Pipe()
         finder.standardOutput = output
         finder.standardError = FileHandle.nullDevice
         do {
             try finder.run()
         } catch {
-            throw GhidraHostError(.install, "no JDK 21 or newer: install one, or set JAVA_HOME")
+            throw GhidraHostError(.install, "no JDK \(minimum) or newer: install one, or set JAVA_HOME")
         }
         let data = output.fileHandleForReading.readDataToEndOfFile()
         finder.waitUntilExit()
         let path = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
         guard finder.terminationStatus == 0, !path.isEmpty else {
-            throw GhidraHostError(.install, "no JDK 21 or newer: install one, or set JAVA_HOME")
+            throw GhidraHostError(.install, "no JDK \(minimum) or newer: install one, or set JAVA_HOME")
         }
         return URL(fileURLWithPath: path)
     }
