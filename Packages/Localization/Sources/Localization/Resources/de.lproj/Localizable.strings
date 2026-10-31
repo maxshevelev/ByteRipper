@@ -193,6 +193,16 @@
 "decompiler only" = "nur Dekompiler";
 "library function: %1$@" = "Bibliotheksfunktion: %1$@";
 "Kind not recorded" = "Kategorie nicht erfasst";
+"Library registry entry, version %1$@" = "Eintrag im Bibliotheksregister, Version %1$@";
+"Library registry entry, version %1$@, changed since: the next publish makes the change its next version" = "Eintrag im Bibliotheksregister, Version %1$@, seitdem geändert: die nächste Veröffentlichung macht die Änderung zu seiner nächsten Version";
+"Matches library registry entry version %1$@; this module's review differs" = "Entspricht dem Eintrag im Bibliotheksregister, Version %1$@; die Analyse dieses Moduls weicht ab";
+"Matches library registry entry version %1$@; this module's review differs: %2$@" = "Entspricht dem Eintrag im Bibliotheksregister, Version %1$@; die Analyse dieses Moduls weicht ab: %2$@";
+"Matches library registry entry version %1$@; this module's review was made on version %2$@" = "Entspricht dem Eintrag im Bibliotheksregister, Version %1$@; die Analyse dieses Moduls beruht auf Version %2$@";
+"Matches library registry entry version %1$@; this module's review was not made on it" = "Entspricht dem Eintrag im Bibliotheksregister, Version %1$@; die Analyse dieses Moduls beruht nicht darauf";
+"Matched with library registry entry version %1$@" = "Dem Eintrag im Bibliotheksregister zugeordnet, Version %1$@";
+"A variant: assert codes %1$@" = "Eine Variante: Assert-Codes %1$@";
+"%1$@ (%2$@, %3$@ in the registry)" = "%1$@ (%2$@, davon %3$@ im Register)";
+"Library function: %1$@. The library registry does not hold it." = "Bibliotheksfunktion: %1$@. Das Bibliotheksregister enthält sie nicht.";
 "EDK2" = "EDK2";
 "AMD" = "AMD";
 "AMD AGESA" = "AMD AGESA";

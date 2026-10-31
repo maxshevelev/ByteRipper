@@ -124,6 +124,8 @@ public struct CodeReaderState: Sendable {
     /// The same for the library kinds inside the Library functions group.
     private var collapsedSections: Set<LibrarySection> = []
     private var sectionCounts: [LibrarySection: Int] = [:]
+    /// How many of a kind's functions are the library registry's entries.
+    private var sectionEntryCounts: [LibrarySection: Int] = [:]
 
     public init(model: CodeModel) {
         self.model = model
@@ -226,6 +228,7 @@ public struct CodeReaderState: Sendable {
     private mutating func layOutFunctions(_ matching: [Int], searching: Bool) {
         groupCounts = [:]
         sectionCounts = [:]
+        sectionEntryCounts = [:]
         switch functionOrder {
         case .address:
             functionRows = matching.map { .function($0, level: 0) }
@@ -262,6 +265,7 @@ public struct CodeReaderState: Sendable {
                 let kind = members.filter { librarySection(of: $0) == section }
                 guard !kind.isEmpty else { continue }
                 sectionCounts[section] = kind.count
+                sectionEntryCounts[section] = kind.filter { registryMark(of: $0) == .entry }.count
                 rows.append(.section(section))
                 guard !collapsedSections.contains(section) else { continue }
                 rows.append(contentsOf: kind.map { FunctionRow.function($0, level: 2) })
@@ -334,6 +338,26 @@ public struct CodeReaderState: Sendable {
         case .noBody: .noBody
         case nil: .unknown
         }
+    }
+
+    /// How a function stands to the library registry, as its badge says:
+    /// the entry's, matched but not the entry (edited, differing, in
+    /// conflict), or not in the registry.
+    public enum RegistryMark: Equatable, Sendable {
+        case entry
+        case matched
+    }
+
+    public func registryMark(of index: Int) -> RegistryMark? {
+        guard let entry = model.functions[index].libraryEntry else { return nil }
+        return entry.isEntry ? .entry : .matched
+    }
+
+    /// How many of the functions under the library kind's heading at `row`
+    /// are the registry's entries; nil when the row is not a kind's heading.
+    public func registryCount(at row: Int) -> Int? {
+        guard case let .section(section)? = functionRow(at: row) else { return nil }
+        return sectionEntryCounts[section]
     }
 
     /// How many functions the heading at `row` covers, open or closed; nil

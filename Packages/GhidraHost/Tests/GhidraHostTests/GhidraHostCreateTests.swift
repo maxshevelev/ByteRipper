@@ -94,7 +94,10 @@ final class GhidraHostLibraryTests: XCTestCase {
                        "\(own)")
         let republished = try await host.publish(reviewed, by: "agent")
         let code = try store.artifact(for: republished.manifest)
-        XCTAssertEqual(code.functions.first { $0.entry == CodeAddress(hex: copyGuid) }?.nameReason, "EDK2 BaseLib CopyGuid")
+        let stored = try XCTUnwrap(code.functions.first { $0.entry == CodeAddress(hex: copyGuid) })
+        XCTAssertEqual(stored.nameReason, "EDK2 BaseLib CopyGuid")
+        XCTAssertEqual(stored.libraryEntry?.state, .entry, "the artifact says the function is the entry")
+        XCTAssertEqual(stored.libraryEntry?.version, added.version)
 
         // The other module named the same body its own way.
         let theirs = try await function(of: 25, in: other, host: host)
@@ -134,6 +137,10 @@ final class GhidraHostLibraryTests: XCTestCase {
         let improved = try await host.publish(other, by: "agent")
         XCTAssertEqual(improved.library?.updated.map(\.version), [added.version + 1], "\(String(describing: improved.library))")
         XCTAssertEqual(improved.library?.conflicts, [])
+        let improvedCode = try store.artifact(for: improved.manifest)
+        let improvedEntry = improvedCode.functions.first { $0.entry == CodeAddress(hex: theirs) }?.libraryEntry
+        XCTAssertEqual(improvedEntry?.state, .entry, "exported again once the registry took the change")
+        XCTAssertEqual(improvedEntry?.version, added.version + 1)
 
         // The first module is a version behind now: its review, offered again
         // after its own edit, is a conflict like any other module's.
@@ -142,5 +149,9 @@ final class GhidraHostLibraryTests: XCTestCase {
         let behind = try await host.publish(reviewed, by: "agent")
         XCTAssertEqual(behind.library?.conflicts.map(\.base), [added.version], "\(String(describing: behind.library))")
         XCTAssertEqual(behind.library?.conflicts.first?.version, added.version + 1)
+        let behindEntry = try store.artifact(for: behind.manifest).functions
+            .first { $0.entry == CodeAddress(hex: copyGuid) }?.libraryEntry
+        XCTAssertEqual(behindEntry?.state, .conflict)
+        XCTAssertEqual(behindEntry?.base, added.version)
     }
 }

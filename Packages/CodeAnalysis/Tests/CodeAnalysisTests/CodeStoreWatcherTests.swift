@@ -62,11 +62,11 @@ final class ContentStoreArtifactTests: XCTestCase {
 
         let unknown = try store.putAnalysis(
             module: identity,
-            recipe: AnalysisRecipe(id: "code-v9-ghidra-12.1.2", exporter: 9,
+            recipe: AnalysisRecipe(id: "code-v10-ghidra-12.1.2", exporter: 10,
                                    ghidra: "12.1.2", script: "ExportCode.java"),
-            artifact: Data(#"{"script_version":9}"#.utf8))
+            artifact: Data(#"{"script_version":10}"#.utf8))
         XCTAssertThrowsError(try store.artifact(for: unknown)) { error in
-            XCTAssertEqual(error as? CodeArtifactError, .unsupportedVersion(9))
+            XCTAssertEqual(error as? CodeArtifactError, .unsupportedVersion(10))
         }
     }
 }

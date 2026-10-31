@@ -204,7 +204,8 @@ public actor GhidraHost {
         let record = try await owner(of: module)
         var state = try project.state()
         let path = options.takeTypeConflicts ? "/v1/publish?take_type_conflicts=1" : "/v1/publish"
-        let (raw, headers) = try await Self.call(record.port, "POST", path, timeout: 3600)
+        let (exported, headers) = try await Self.call(record.port, "POST", path, timeout: 3600)
+        var raw = exported
         let document = try await Self.call(record.port, "GET", "/v1/review").data
         let description = try await Self.call(record.port, "GET", "/v1/review/description").data
         guard let artifact = try JSONSerialization.jsonObject(with: raw) as? [String: Any] else {
@@ -244,7 +245,21 @@ public actor GhidraHost {
                         module: module, rev: reading?.rev, by: by, proposals: offer.proposals,
                         take: options.takeLibraryConflicts, reason: options.libraryReason)
                     library = written
-                    try await markLibrary(module, proposals: offer.proposals, result: written)
+                    // The marks may change what the artifact says of the
+                    // registry — a function that became the entry's next
+                    // version, one left in conflict: then it is exported
+                    // again, and stored in place of the first.
+                    if try await markLibrary(module, proposals: offer.proposals, result: written) > 0 {
+                        let again = try await write(module, "/v1/export", body: Data())
+                        if again != raw {
+                            raw = again
+                            if var current = reading, current.rev == last?.rev {
+                                current.rev += 1
+                                reading = current
+                                try await writer.writeRevision(module: module, reading: current, by: by)
+                            }
+                        }
+                    }
                 }
             } catch {
                 libraryError = "\(error)"
@@ -277,20 +292,35 @@ public actor GhidraHost {
     /// The functions the registry took or matched carry the version it holds
     /// now, so the next change to one is made on that version; a conflict's
     /// function keeps the mark it had.
-    func markLibrary(_ module: SHA256Digest, proposals: [LibraryProposal], result: LibraryWriteResult) async throws {
+    /// Answers how many functions read otherwise in an artifact now.
+    func markLibrary(_ module: SHA256Digest, proposals: [LibraryProposal], result: LibraryWriteResult) async throws -> Int {
         let index = try await writer.readLibraryIndex()
         let items = Self.libraryMarks(proposals, result: result, index: index)
-        guard !items.isEmpty else { return }
-        _ = try await write(module, "/v1/library/mark", body: try JSONSerialization.data(withJSONObject: ["items": items]))
+        guard !items.isEmpty else { return 0 }
+        let data = try await write(module, "/v1/library/mark",
+                                   body: try JSONSerialization.data(withJSONObject: ["items": items]))
+        return ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])?["changed"] as? Int ?? 0
     }
 
+    /// The marks a publish leaves: a function the registry took or matched
+    /// carries the version it holds; one in conflict, the entry's version and
+    /// the one its review was made on.
     static func libraryMarks(_ proposals: [LibraryProposal], result: LibraryWriteResult,
                              index: LibraryIndex) -> [[String: Any]] {
         let accepted = Set((result.added + result.updated + result.unchanged + (result.variants ?? [])).map(\.id))
+        let conflicts = Dictionary(result.conflicts.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         return proposals.compactMap { proposal in
-            guard let id = index.bodies[proposal.body.key], accepted.contains(id),
-                  let held = index.entries[id] else { return nil }
-            return ["address": proposal.address, "id": id, "version": held.version]
+            guard let id = index.bodies[proposal.body.key] ?? proposal.variantOf else { return nil }
+            if accepted.contains(id), index.bodies[proposal.body.key] == id, let held = index.entries[id] {
+                return ["address": proposal.address, "id": id, "version": held.version]
+            }
+            if let conflict = conflicts[id] {
+                var item: [String: Any] = ["address": proposal.address, "id": id, "version": conflict.version,
+                                           "conflict": true]
+                item["base"] = conflict.base
+                return item
+            }
+            return nil
         }
     }
 

@@ -266,6 +266,7 @@ public class Owner {
                 if (path.equals("/v1/library/compare")) { json(exchange, 200, libraryCompare(body(exchange))); return; }
                 if (path.equals("/v1/library/apply")) { json(exchange, 200, libraryApply(exchange)); return; }
                 if (path.equals("/v1/library/mark")) { json(exchange, 200, libraryMarkRequest(exchange)); return; }
+                if (path.equals("/v1/export")) { exportAgain(exchange); return; }
                 JsonObject write = switch (path) {
                     case "/v1/rename/function" -> write(exchange, this::renameFunction);
                     case "/v1/rename/label" -> write(exchange, this::renameLabel);
@@ -763,16 +764,10 @@ public class Owner {
         // an overwrite would break the module that added the other. With
         // `dry_run` it answers what would be taken, and nothing is written.
         boolean take = "1".equals(parameters.get("take_type_conflicts"));
+        if (!dryRun) writeLibraryStates();
         if (!dryRun && program.isChanged()) program.save("publish", TaskMonitor.DUMMY);
-        File out = File.createTempFile("owner-export-", ".json");
-        try {
-            ExportCode export = new ExportCode();
-            export.setScriptArgs(new String[] {out.getPath()});
-            PrintWriter log = new PrintWriter(System.out, true);
-            export.execute(new GhidraState(null, project.getProject(), program, null, null, null),
-                           new ScriptControls(log, log, TaskMonitor.DUMMY));
-            byte[] artifact = Files.readAllBytes(out.toPath());
-            if (artifact.length == 0) throw new Failure(500, "the export wrote nothing");
+        {
+            byte[] artifact = exportArtifact();
             published = Harvest.of(program, options.get("module"), options.get("project-id"));
             Merge merge = mergeReviewTypes(!dryRun, take);
             exchange.getResponseHeaders().set("X-Owner-Dry-Run", Boolean.toString(dryRun));
@@ -799,8 +794,52 @@ public class Owner {
             }
             exchange.sendResponseHeaders(200, artifact.length);
             try (OutputStream body = exchange.getResponseBody()) { body.write(artifact); }
+        }
+    }
+
+    /** ExportCode run on the program in this process: the artifact's bytes. */
+    private byte[] exportArtifact() throws Exception {
+        File out = File.createTempFile("owner-export-", ".json");
+        try {
+            ExportCode export = new ExportCode();
+            export.setScriptArgs(new String[] {out.getPath()});
+            PrintWriter log = new PrintWriter(System.out, true);
+            export.execute(new GhidraState(null, project.getProject(), program, null, null, null),
+                           new ScriptControls(log, log, TaskMonitor.DUMMY));
+            byte[] artifact = Files.readAllBytes(out.toPath());
+            if (artifact.length == 0) throw new Failure(500, "the export wrote nothing");
+            return artifact;
         } finally {
             out.delete();
+        }
+    }
+
+    /** The registry states the exporter reads, in a transaction of their own. */
+    private void writeLibraryStates() throws Exception {
+        int transaction = program.startTransaction("library states");
+        boolean done = false;
+        try {
+            refreshLibraryStates();
+            done = true;
+        } finally {
+            program.endTransaction(transaction, done);
+        }
+    }
+
+    /**
+     * `POST /v1/export`: the artifact again, after a publish's marks changed
+     * what it says of the registry — the program saved, nothing harvested
+     * and no types merged: the review is the one just published.
+     */
+    private void exportAgain(HttpExchange exchange) throws Exception {
+        requireLease(exchange);
+        writeLibraryStates();
+        if (program.isChanged()) program.save("library states", TaskMonitor.DUMMY);
+        byte[] artifact = exportArtifact();
+        exchange.getResponseHeaders().set("Content-Type", "application/json");
+        exchange.sendResponseHeaders(200, artifact.length);
+        try (OutputStream body = exchange.getResponseBody()) {
+            body.write(artifact);
         }
     }
 
@@ -1257,6 +1296,13 @@ public class Owner {
     static final String LIBRARY_MARK = "ByteRipper.libraryEntry";
     /** The entries a review declined for a function, by id, comma-separated. */
     static final String LIBRARY_DECLINED = "ByteRipper.libraryDeclined";
+    /**
+     * Why a function is not its entry although it was matched: `differs` — a
+     * review that named it keeps what differs (`differences`) — or `conflict`
+     * — its review, offered at a publish, was not made on the entry's current
+     * version (`base`). Written by an apply and by the marks after a publish.
+     */
+    static final String LIBRARY_ISSUE = "ByteRipper.libraryIssue";
     /** The tag of an assert routine: the codes it is called with make variants, not functions. */
     static final String ASSERT_TAG = "assert_routine";
     private static final Gson COMPACT = new GsonBuilder().disableHtmlEscaping().create();
@@ -1620,6 +1666,8 @@ public class Owner {
         ghidra.feature.fid.hash.FidHashQuad hash = new ghidra.feature.fid.service.FidService().hashFunction(function);
         JsonObject now = hash == null ? null : libraryEntry(function, kind == null ? "" : kind, bodyObject(hash));
         boolean equal = now != null && review(now).equals(review(entry));
+        StringPropertyMap issues = program.getUsrPropertyManager().getStringPropertyMap(LIBRARY_ISSUE);
+        if (issues != null) issues.remove(function.getEntryPoint());
         if (equal) {
             JsonObject mark = new JsonObject();
             mark.addProperty("id", id);
@@ -1631,6 +1679,12 @@ public class Owner {
             StringPropertyMap marks = program.getUsrPropertyManager().getStringPropertyMap(LIBRARY_MARK);
             if (marks != null) marks.remove(function.getEntryPoint());
             if (differences.size() == 0) differences.add("the review keeps more than the entry");
+            JsonObject issue = new JsonObject();
+            issue.addProperty("id", id);
+            issue.addProperty("version", version);
+            issue.addProperty("state", "differs");
+            issue.add("differences", differences);
+            propertyMap(LIBRARY_ISSUE).add(function.getEntryPoint(), COMPACT.toJson(issue));
         }
         answer.addProperty("marked", equal);
         if (filled.size() > 0) answer.add("filled", filled);
@@ -1820,14 +1874,28 @@ public class Owner {
     private JsonObject libraryMarkAll(JsonObject body) throws Exception {
         JsonArray items = body.has("items") ? body.getAsJsonArray("items") : new JsonArray();
         ghidra.feature.fid.service.FidService fid = new ghidra.feature.fid.service.FidService();
-        int marked = 0;
+        int marked = 0, changed = 0;
         for (JsonElement element : items) {
             JsonObject item = element.getAsJsonObject();
             Function function = program.getFunctionManager().getFunctionAt(address(required(item, "address")));
             if (function == null) continue;
+            String before = libraryState(function);
+            String id = required(item, "id");
+            if (item.has("conflict") && item.get("conflict").getAsBoolean()) {
+                // The mark stays what it was: the review was made on it.
+                JsonObject issue = new JsonObject();
+                issue.addProperty("id", id);
+                issue.addProperty("version", integer(item, "version", 1));
+                issue.addProperty("state", "conflict");
+                if (item.has("base") && !item.get("base").isJsonNull()) issue.add("base", item.get("base"));
+                propertyMap(LIBRARY_ISSUE).add(function.getEntryPoint(), COMPACT.toJson(issue));
+                if (!java.util.Objects.equals(before, libraryState(function))) changed++;
+                continue;
+            }
             ghidra.feature.fid.hash.FidHashQuad hash = fid.hashFunction(function);
             if (hash == null) continue;
-            String id = required(item, "id");
+            StringPropertyMap issues = program.getUsrPropertyManager().getStringPropertyMap(LIBRARY_ISSUE);
+            if (issues != null) issues.remove(function.getEntryPoint());
             JsonObject held = libraryMark(function);
             JsonObject mark = new JsonObject();
             mark.addProperty("id", id);
@@ -1836,10 +1904,52 @@ public class Owner {
             if (held != null && id.equals(string(held, "id", "")) && held.has("codes")) mark.add("codes", held.get("codes"));
             propertyMap(LIBRARY_MARK).add(function.getEntryPoint(), COMPACT.toJson(mark));
             marked++;
+            if (!java.util.Objects.equals(before, libraryState(function))) changed++;
         }
         JsonObject answer = identity();
         answer.addProperty("marked", marked);
+        // How many functions read otherwise in an artifact now: the host
+        // exports again when any do.
+        answer.addProperty("changed", changed);
         return answer;
+    }
+
+    /**
+     * What the artifact says of a function and the registry (`library_entry`):
+     * the issue an apply or a publish left, else the mark — `entry` while the
+     * function is what was applied or published, `edited` once it was changed
+     * on that version — else nothing.
+     */
+    private String libraryState(Function function) {
+        StringPropertyMap issues = program.getUsrPropertyManager().getStringPropertyMap(LIBRARY_ISSUE);
+        String issue = issues == null ? null : issues.getString(function.getEntryPoint());
+        if (issue != null && !issue.isBlank()) return issue;
+        JsonObject mark = libraryMark(function);
+        if (mark == null) return null;
+        boolean same;
+        try {
+            ghidra.feature.fid.hash.FidHashQuad hash = new ghidra.feature.fid.service.FidService().hashFunction(function);
+            same = hash != null && reviewDigest(function, hash).equals(string(mark, "digest", ""));
+        } catch (Exception error) {
+            same = false;
+        }
+        JsonObject state = new JsonObject();
+        state.add("id", mark.get("id"));
+        state.add("version", mark.get("version"));
+        state.addProperty("state", same ? "entry" : "edited");
+        if (mark.has("codes")) state.add("codes", mark.get("codes"));
+        return COMPACT.toJson(state);
+    }
+
+    /** Every function's `library_entry` written where the exporter reads it. */
+    private void refreshLibraryStates() throws Exception {
+        StringPropertyMap states = propertyMap(ExportCode.LIBRARY_STATE);
+        for (Function function : program.getFunctionManager().getFunctions(true)) {
+            String state = libraryState(function);
+            String held = states.getString(function.getEntryPoint());
+            if (java.util.Objects.equals(state, held)) continue;
+            if (state == null) states.remove(function.getEntryPoint()); else states.add(function.getEntryPoint(), state);
+        }
     }
 
     /**

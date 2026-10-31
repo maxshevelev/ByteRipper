@@ -91,7 +91,7 @@ public class ExportCode extends GhidraScript {
         Listing listing = currentProgram.getListing();
         StringBuilder json = new StringBuilder(1 << 22);
         json.append("{\n");
-        json.append("  \"script_version\": 8,\n");
+        json.append("  \"script_version\": 9,\n");
         json.append("  \"ghidra\": ").append(quote(Application.getApplicationVersion())).append(",\n");
         json.append("  \"program\": {\n");
         json.append("    \"name\": ").append(quote(currentProgram.getName())).append(",\n");
@@ -517,6 +517,20 @@ public class ExportCode extends GhidraScript {
         return libraryTag(function) != null ? "tag" : null;
     }
 
+    /**
+     * Where the owner keeps a function's `library_entry`: a JSON object it
+     * writes before each export (Owner.refreshLibraryStates). A program no
+     * owner published has none.
+     */
+    static final String LIBRARY_STATE = "ByteRipper.libraryState";
+
+    static String libraryState(Function function) {
+        ghidra.program.model.util.StringPropertyMap states =
+            function.getProgram().getUsrPropertyManager().getStringPropertyMap(LIBRARY_STATE);
+        String state = states == null ? null : states.getString(function.getEntryPoint());
+        return state == null || state.isBlank() ? null : state;
+    }
+
     /** The library kinds a tag can name, as `library.<kind>`. */
     static final List<String> LIBRARY_KINDS = Arrays.asList("edk2", "amd", "intel");
 
@@ -640,6 +654,10 @@ public class ExportCode extends GhidraScript {
         json.append("      \"review_level\": ").append(quote(level)).append(",\n");
         String kind = "library".equals(level) ? libraryKind(function) : null;
         if (kind != null) json.append("      \"library_kind\": ").append(quote(kind)).append(",\n");
+        // The function and the library registry, as the owner wrote it before
+        // the export: the entry, its version, and whether the function is it.
+        String entry = libraryState(function);
+        if (entry != null) json.append("      \"library_entry\": ").append(entry).append(",\n");
         List<String> quoted = new ArrayList<>();
         for (String gap : gaps) quoted.add(quote(gap));
         json.append("      \"review_gaps\": [").append(String.join(", ", quoted)).append("],\n");

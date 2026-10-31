@@ -108,6 +108,7 @@ exporter's output changes.
 | 6 | A call the processor model makes into one of its named operations (x86's `SIDT`) is a `pcode` span, not a function with no target. |
 | 7 | Adds a function's `review_level` and `review_gaps`: how far the review has got with it, and what keeps it from `full`. |
 | 8 | Adds a library function's `library_kind`: `edk2`, `amd` or `intel`. |
+| 9 | Adds a function's `library_entry`: the library registry entry it was matched with, and how it stands to it. |
 
 ### v7: review level
 
@@ -149,6 +150,31 @@ The criteria for each kind are the skill's ("Library functions" in
 `SKILL.md`). A function carrying the bare `library` tag of a review made before
 the kinds has no `library_kind`; nor has a v7 artifact. The panel shows such a
 function as a library of no recorded kind.
+
+### v9: library registry entry
+
+A function the library registry matched (`Design/LIBRARY_REGISTRY_PLAN.md`)
+carries `library_entry`, written after `library_kind`:
+
+```json
+"library_entry": {"id": "a-a777f5ad6ab9f4d1-7af5a0be35b7ab26", "version": 2, "state": "entry"}
+```
+
+- `id` — the entry: the key of the body it was first published with.
+- `version` — the entry's version the function was applied from or published
+  as.
+- `state` — `entry`: the function is that version; `edited`: changed on it
+  since, and the next publish makes the change the entry's next version;
+  `differs`: a review that named the function keeps what differs from the
+  entry, listed in `differences`; `conflict`: the function's review, published,
+  was not made on the entry's current version, and `base` is the one it was
+  made on.
+- `codes` — for a variant of the entry, the assert codes its body carries.
+
+The owner writes the object before each export from the function's registry
+mark, and a publish whose marks change it exports again, so the stored
+artifact says what the registry made of the publish. A function the registry
+does not hold has no `library_entry`; nor has a v8 artifact.
 
 ### v5: POST codes
 

@@ -161,6 +161,9 @@ import ToolModuleKit
     private var revisionLabel: NSTextField?
     private var pathMark: NSTextField?
     private let functionLabel = CodeTitleField(labelWithString: "")
+    /// After the function's name, a library function's badge as the
+    /// navigator draws it, with what the library registry says of it.
+    let registryMark = NSImageView()
     private var zoomObserver: NSObjectProtocol?
     /// Set while the view moves a table's selection itself, so the table's
     /// delegate does not take the move for a click.
@@ -595,13 +598,50 @@ import ToolModuleKit
 
     /// A function's mark by its review: full, and every level without a
     /// mark of its own, the filled `f`; partial, the `f` in a frame; a library
-    /// routine, the badge of whose library it is.
-    static func functionMark(_ group: FunctionGroup, library: LibrarySection? = nil) -> String {
+    /// routine, the badge of whose library it is — filled when the function
+    /// is the library registry's entry, with a dot when the registry matched
+    /// it otherwise.
+    static func functionMark(_ group: FunctionGroup, library: LibrarySection? = nil,
+                             registry: CodeReaderState.RegistryMark? = nil) -> String {
         switch group {
         case .partial: "function.partial"
-        case .library: "library.\(library ?? .unrecorded)"
+        case .library:
+            switch registry {
+            case .entry?: "library.\(library ?? .unrecorded).entry"
+            case .matched?: "library.\(library ?? .unrecorded).matched"
+            case nil: "library.\(library ?? .unrecorded)"
+            }
         default: "function"
         }
+    }
+
+    /// What the library registry says of a function, for its hover and the
+    /// header's mark; nil for a function the registry does not hold.
+    static func registryDetail(_ function: CodeArtifact.Function) -> String? {
+        guard let entry = function.libraryEntry else { return nil }
+        let version = String(entry.version)
+        var line: String
+        switch entry.state {
+        case .entry?:
+            line = L("Library registry entry, version %1$@", version)
+        case .edited?:
+            line = L("Library registry entry, version %1$@, changed since: the next publish makes the change its next version", version)
+        case .differs?:
+            line = entry.differences.isEmpty
+                ? L("Matches library registry entry version %1$@; this module's review differs", version)
+                : L("Matches library registry entry version %1$@; this module's review differs: %2$@",
+                    version, entry.differences.joined(separator: ", "))
+        case .conflict?:
+            line = entry.base.map {
+                L("Matches library registry entry version %1$@; this module's review was made on version %2$@", version, String($0))
+            } ?? L("Matches library registry entry version %1$@; this module's review was not made on it", version)
+        case nil:
+            line = L("Matched with library registry entry version %1$@", version)
+        }
+        if !entry.codes.isEmpty {
+            line += "\n" + L("A variant: assert codes %1$@", entry.codes.joined(separator: ", "))
+        }
+        return line
     }
 
     /// A library kind's heading inside Library functions.
@@ -833,6 +873,34 @@ import ToolModuleKit
         functionLabel.stringValue = name
         functionLabel.isHidden = name.isEmpty
         pathMark?.isHidden = name.isEmpty
+        updateRegistryMark()
+    }
+
+    // help: panel.code.registry
+    /// The badge after the function's name in the header: shown for a library
+    /// function, filled when it is the registry's entry, with a dot when the
+    /// registry matched it otherwise; its hover what the registry says.
+    private func updateRegistryMark() {
+        guard let index = state.function, model.functions.indices.contains(index),
+              state.group(of: index) == .library else {
+            registryMark.isHidden = true
+            registryMark.image = nil
+            return
+        }
+        let function = model.functions[index]
+        let section = state.librarySection(of: index) ?? .unrecorded
+        let style: CodeNavigatorIcon.BadgeStyle = switch state.registryMark(of: index) {
+        case .entry?: .filled
+        case .matched?: .dotted
+        case nil: .outlined
+        }
+        let mark = CodeNavigatorIcon.library(Self.badge(of: section), style: style)
+        let side = CodeNavigatorIcon.side(forFontSize: ToolPanelFont.title().pointSize)
+        registryMark.image = CodeNavigatorIcon.image(mark.glyph, color: mark.color, side: side)
+        registryMark.isHidden = false
+        let detail = Self.registryDetail(function)
+            ?? L("Library function: %1$@. The library registry does not hold it.", Self.title(of: section))
+        ControlHelp.describe(registryMark, detail)
     }
 
     /// Every call to function `index`, one row each — a caller that calls it
@@ -1550,7 +1618,11 @@ import ToolModuleKit
         self.nameLabel = nameLabel
         self.revisionLabel = revisionLabel
         self.pathMark = pathMark
-        let pathLine = NSStackView(views: [nameLabel, revisionLabel, pathMark, functionLabel])
+        registryMark.isHidden = true
+        registryMark.imageScaling = .scaleNone
+        registryMark.setContentHuggingPriority(.required, for: .horizontal)
+        registryMark.setContentCompressionResistancePriority(.required, for: .horizontal)
+        let pathLine = NSStackView(views: [nameLabel, revisionLabel, pathMark, functionLabel, registryMark])
         pathLine.orientation = .horizontal
         pathLine.alignment = .firstBaseline
         pathLine.spacing = 6
@@ -1776,6 +1848,7 @@ import ToolModuleKit
         navigatorLabel.font = ToolPanelFont.title()
         emptyListLabel.font = Self.navigatorFont()
         for field in [nameLabel, revisionLabel, pathMark, functionLabel] { field?.font = ToolPanelFont.title() }
+        updateRegistryMark()
         drawRecipeIcon()
         drawRecipeChevron()
         drawRecipeTitle()
@@ -2918,6 +2991,12 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
                     reason = [reason, Self.reviewDetail(function)]
                         .compactMap { $0 }.joined(separator: "\n")
                 }
+                // help: panel.code.registry
+                // A function the library registry matched says so wherever
+                // it is listed.
+                if let registry = Self.registryDetail(function) {
+                    reason = [reason, registry].compactMap { $0 }.joined(separator: "\n")
+                }
                 // A call tree's rows stand in as deep as they are; a deeper
                 // level keeps the last one's inset rather than running the
                 // name off the pane. A group's functions start under its
@@ -2933,7 +3012,8 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
                 // The mark says how far the review has got, in every order: a
                 // root of the tree and a call under it alike.
                 cell.showsIcon(Self.functionMark(state.group(of: index),
-                                                 library: state.librarySection(of: index)))
+                                                 library: state.librarySection(of: index),
+                                                 registry: state.registryMark(of: index)))
                 if unopenedChanges.contains(index) {
                     cell.textField?.font = Self.navigatorBoldFont()
                     cell.badge.text = L("New")
@@ -3147,8 +3227,11 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
         let cell = cell(in: tableView, identifier: .init("code-section"), monospaced: false)
         cell.textField?.font = .systemFont(ofSize: Self.navigatorSize, weight: .semibold)
         cell.textField?.textColor = .secondaryLabelColor
-        cell.textField?.stringValue = Self.title(of: section)
-            + " (\(state.groupCount(at: row) ?? 0))"
+        let count = state.groupCount(at: row) ?? 0
+        let entries = state.registryCount(at: row) ?? 0
+        cell.textField?.stringValue = entries > 0
+            ? L("%1$@ (%2$@, %3$@ in the registry)", Self.title(of: section), String(count), String(entries))
+            : Self.title(of: section) + " (\(count))"
         cell.showsIcon("library.\(section)")
         cell.showsBadge(false)
         cell.indent = Self.groupMemberIndent
@@ -3304,9 +3387,15 @@ final class CodeNavigatorCell: NSTableCellView {
         case "function"?: CodeNavigatorIcon.function
         case "function.partial"?: CodeNavigatorIcon.partialFunction
         case let name? where name.hasPrefix("library."):
-            CodeReaderState.LibrarySection.allCases
-                .first { "library.\($0)" == name }
-                .map { CodeNavigatorIcon.library(CodePaneView.badge(of: $0)) }
+            CodeReaderState.LibrarySection.allCases.lazy.compactMap { section -> (glyph: CodeNavigatorIcon.Glyph, color: NSColor)? in
+                let badge = CodePaneView.badge(of: section)
+                switch name {
+                case "library.\(section)": return CodeNavigatorIcon.library(badge)
+                case "library.\(section).entry": return CodeNavigatorIcon.library(badge, style: .filled)
+                case "library.\(section).matched": return CodeNavigatorIcon.library(badge, style: .dotted)
+                default: return nil
+                }
+            }.first
         case let name? where name.hasPrefix("group."):
             CodeReaderState.FunctionGroup.allCases
                 .first { "group.\($0)" == name }

@@ -116,7 +116,11 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
     /// 8 adds a library function's `library_kind`: EDK2, AMD AGESA or Intel
     /// FSP/RC. Optional: a library function without it is shown as a
     /// library whose kind was not recorded.
-    public static let supportedScriptVersions: Set<Int> = [2, 3, 4, 5, 6, 7, 8]
+    ///
+    /// 9 adds a function's `library_entry`: the library registry entry it was
+    /// matched with, the entry's version, and whether the function is that
+    /// entry. Optional: a function without it is not in the registry.
+    public static let supportedScriptVersions: Set<Int> = [2, 3, 4, 5, 6, 7, 8, 9]
 
     public let scriptVersion: Int
     public let ghidra: String
@@ -292,6 +296,9 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         /// Whose library a `library` function is (v8); nil for any other
         /// level, and for a library function whose kind was not recorded.
         public let libraryKind: LibraryKind?
+        /// The library registry entry the function was matched with (v9);
+        /// nil for a function the registry does not hold.
+        public let libraryEntry: LibraryEntry?
         public let instructions: [Instruction]
 
         /// Whether the name is Ghidra's placeholder rather than evidence.
@@ -323,6 +330,7 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             reviewGaps = try container.decodeIfPresent([String].self, forKey: .reviewGaps) ?? []
             libraryKind = try container.decodeIfPresent(String.self, forKey: .libraryKind)
                 .flatMap(LibraryKind.init(rawValue:))
+            libraryEntry = try container.decodeIfPresent(LibraryEntry.self, forKey: .libraryEntry)
             instructions = try container.decodeIfPresent(
                 [Instruction].self, forKey: .instructions) ?? []
         }
@@ -339,6 +347,52 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             case reviewLevel = "review_level"
             case reviewGaps = "review_gaps"
             case libraryKind = "library_kind"
+            case libraryEntry = "library_entry"
+        }
+    }
+
+    /// A function and the library registry (`Design/LIBRARY_REGISTRY_PLAN.md`
+    /// §5): one entry is one function for every module whose function has
+    /// its body, and this is how this module's function stands to it.
+    public struct LibraryEntry: Decodable, Equatable, Sendable {
+        public enum State: String, Sendable {
+            /// The function is the entry's version.
+            case entry
+            /// Changed on that version since; the next publish makes the change
+            /// the entry's next version.
+            case edited
+            /// A review that named the function keeps what differs from the
+            /// entry: `differences`.
+            case differs
+            /// The function's review, published, was not made on the entry's
+            /// current version (`base`), and the entry kept its own.
+            case conflict
+        }
+
+        public let id: String
+        public let version: Int
+        /// Nil for a state this reader does not know.
+        public let state: State?
+        /// The assert codes a variant of the entry carries.
+        public let codes: [String]
+        public let differences: [String]
+        public let base: Int?
+
+        /// Whether the function is the entry's, as the panel's filled badge says.
+        public var isEntry: Bool { state == .entry }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decode(String.self, forKey: .id)
+            version = try container.decode(Int.self, forKey: .version)
+            state = try container.decodeIfPresent(String.self, forKey: .state).flatMap(State.init(rawValue:))
+            codes = try container.decodeIfPresent([String].self, forKey: .codes) ?? []
+            differences = try container.decodeIfPresent([String].self, forKey: .differences) ?? []
+            base = try container.decodeIfPresent(Int.self, forKey: .base)
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case id, version, state, codes, differences, base
         }
     }
 

@@ -20,8 +20,17 @@ enum CodeNavigatorIcon {
         /// A white symbol on the filled square.
         case symbol(String)
         /// A short name in a frame as wide as the name: a library function's
-        /// kind — EDK2, AMD, Intel.
-        case badge(String)
+        /// kind — EDK2, AMD, Intel — drawn as the function stands to the
+        /// library registry.
+        case badge(String, BadgeStyle)
+    }
+
+    /// How a library badge is drawn: outlined for a library function the
+    /// registry does not hold; filled for one that is the registry's entry;
+    /// outlined with a dot for one the registry matched that is not its entry
+    /// — edited since, differing, or in conflict.
+    enum BadgeStyle: Equatable {
+        case outlined, filled, dotted
     }
 
     /// A function's mark: a fully reviewed one, and any without a level of
@@ -32,14 +41,14 @@ enum CodeNavigatorIcon {
     static let partialFunction = (glyph: Glyph.framedLetter("f"), color: NSColor.systemOrange)
     /// A library routine: the badge of whose library it is, in the library
     /// heading's blue.
-    static func library(_ name: String) -> (glyph: Glyph, color: NSColor) {
-        (.badge(name), .systemBlue)
+    static func library(_ name: String, style: BadgeStyle = .outlined) -> (glyph: Glyph, color: NSColor) {
+        (.badge(name, style), .systemBlue)
     }
 
     /// How wide a mark is at `side`: a square, or a badge — its name and
     /// the frame's room on either side of it.
     static func width(of glyph: Glyph, side: CGFloat) -> CGFloat {
-        guard case let .badge(name) = glyph else { return side }
+        guard case let .badge(name, _) = glyph else { return side }
         let ink = CTLineGetBoundsWithOptions(label(name, color: .labelColor, side: side), .useGlyphPathBounds)
         return (ink.width + 2 * badgeInset(side: side)).rounded(.up)
     }
@@ -101,13 +110,29 @@ enum CodeNavigatorIcon {
                 ground.setFill()
                 NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
                 drawSymbol(name, color: ink, scale: 0.7, in: rect)
-            case let .badge(name):
-                let frame = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 1.5),
-                                         xRadius: 3, yRadius: 3)
-                frame.lineWidth = 1
-                ground.setStroke()
-                frame.stroke()
-                drawLabel(name, color: ground, in: rect)
+            case let .badge(name, style):
+                let box = rect.insetBy(dx: 0.5, dy: 1.5)
+                let frame = NSBezierPath(roundedRect: box, xRadius: 3, yRadius: 3)
+                if style == .filled {
+                    ground.setFill()
+                    NSBezierPath(roundedRect: rect.insetBy(dx: 0, dy: 1), xRadius: 3.5, yRadius: 3.5).fill()
+                    drawLabel(name, color: ink, in: rect)
+                } else {
+                    frame.lineWidth = 1
+                    ground.setStroke()
+                    frame.stroke()
+                    drawLabel(name, color: ground, in: rect)
+                }
+                if style == .dotted {
+                    // At the frame's top right corner, over its line, ringed
+                    // in the row's own ground so it reads off the frame.
+                    let dot = (side * 0.32).rounded()
+                    let spot = NSRect(x: rect.maxX - dot, y: rect.maxY - dot, width: dot, height: dot)
+                    ink.setFill()
+                    NSBezierPath(ovalIn: spot.insetBy(dx: -1, dy: -1)).fill()
+                    ground.setFill()
+                    NSBezierPath(ovalIn: spot).fill()
+                }
             }
             return true
         }

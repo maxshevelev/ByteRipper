@@ -193,6 +193,16 @@
 "decompiler only" = "только декомпилятор";
 "library function: %1$@" = "библиотечная функция: %1$@";
 "Kind not recorded" = "Категория не записана";
+"Library registry entry, version %1$@" = "Запись реестра библиотечных функций, версия %1$@";
+"Library registry entry, version %1$@, changed since: the next publish makes the change its next version" = "Запись реестра библиотечных функций, версия %1$@, с тех пор изменена: следующая публикация сделает изменение её следующей версией";
+"Matches library registry entry version %1$@; this module's review differs" = "Совпадает с записью реестра библиотечных функций, версия %1$@; разбор этого модуля отличается";
+"Matches library registry entry version %1$@; this module's review differs: %2$@" = "Совпадает с записью реестра библиотечных функций, версия %1$@; разбор этого модуля отличается: %2$@";
+"Matches library registry entry version %1$@; this module's review was made on version %2$@" = "Совпадает с записью реестра библиотечных функций, версия %1$@; разбор этого модуля сделан по версии %2$@";
+"Matches library registry entry version %1$@; this module's review was not made on it" = "Совпадает с записью реестра библиотечных функций, версия %1$@; разбор этого модуля сделан не по ней";
+"Matched with library registry entry version %1$@" = "Сопоставлена с записью реестра библиотечных функций, версия %1$@";
+"A variant: assert codes %1$@" = "Вариант: коды assert %1$@";
+"%1$@ (%2$@, %3$@ in the registry)" = "%1$@ (%2$@, в реестре %3$@)";
+"Library function: %1$@. The library registry does not hold it." = "Библиотечная функция: %1$@. В реестре библиотечных функций её нет.";
 "EDK2" = "EDK2";
 "AMD" = "AMD";
 "AMD AGESA" = "AMD AGESA";

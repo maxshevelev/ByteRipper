@@ -512,6 +512,17 @@ public final class CodeReadings {
     }
 }
 
+/// A function's place in the library registry, as `code_query` answers it.
+private func libraryEntryItem(_ entry: CodeArtifact.LibraryEntry?) -> JSONValue {
+    guard let entry else { return .null }
+    var item: [String: JSONValue] = ["id": .string(entry.id), "version": .int(Int64(entry.version))]
+    item["state"] = entry.state.map { .string($0.rawValue) } ?? .null
+    if !entry.codes.isEmpty { item["codes"] = .array(entry.codes.map(JSONValue.string)) }
+    if !entry.differences.isEmpty { item["differences"] = .array(entry.differences.map(JSONValue.string)) }
+    if let base = entry.base { item["base"] = .int(Int64(base)) }
+    return .object(item)
+}
+
 /// One function of a `functions` list. Built field by field rather than as
 /// one dictionary literal: a literal of this many optional fields takes the
 /// type checker of Xcode 26.3 past its time limit.
@@ -531,6 +542,7 @@ private func functionItem(_ function: CodeArtifact.Function,
     item["review_level"] = text(function.reviewLevel?.rawValue)
     item["review_gaps"] = .array(function.reviewGaps.map(JSONValue.string))
     item["library_kind"] = text(function.libraryKind?.rawValue)
+    item["library_entry"] = libraryEntryItem(function.libraryEntry)
     item["callers"] = .array(function.callers.map { .string($0.description) })
     item["callees"] = .array(function.callees.map { .string($0.description) })
     return .object(item)

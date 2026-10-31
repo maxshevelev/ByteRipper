@@ -207,7 +207,7 @@ functions and offers its matches as candidates only, never applied by itself.
 
 ## 7. Phases
 
-Phases 1 and 2 are done.
+Phases 1, 2 and 3 are done.
 
 1. **Collect.** Owner: hashes and `GET /v1/library`. Store: `library/`, index,
    history, conflicts; `writeLibraryEntries` in `ContentStore` and

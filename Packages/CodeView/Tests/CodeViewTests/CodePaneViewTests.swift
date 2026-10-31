@@ -913,9 +913,65 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(CodePaneView.functionMark(.library, library: .amd), "library.amd")
         XCTAssertEqual(CodePaneView.functionMark(.library, library: .intel), "library.intel")
         XCTAssertEqual(CodePaneView.functionMark(.library), "library.unrecorded")
+        XCTAssertEqual(CodePaneView.functionMark(.library, library: .amd, registry: .entry), "library.amd.entry")
+        XCTAssertEqual(CodePaneView.functionMark(.library, library: .amd, registry: .matched), "library.amd.matched")
         for group in [CodeReaderState.FunctionGroup.decompiled, .noBody, .unknown] {
             XCTAssertEqual(CodePaneView.functionMark(group), "function")
         }
+    }
+
+    /// A library function the registry holds says so on its badge — filled
+    /// for the entry, dotted when matched otherwise — in its hover and on the
+    /// header beside its name, and its kind says how many it holds.
+    func testTheLibraryRegistryShowsOnTheBadgeTheHoverAndTheHeader() throws {
+        let suiteName = "CodePaneViewTests.registry"
+        let suite = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        suite.removePersistentDomain(forName: suiteName)
+        CodePaneView.defaults = suite
+        defer {
+            suite.removePersistentDomain(forName: suiteName)
+            CodePaneView.defaults = .standard
+        }
+        let art = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        {"script_version":9,"program":{"image_base":"0x0"},
+         "functions":[
+          {"entry":"0x100","name":"CopyGuid","review_level":"library","library_kind":"edk2",
+           "library_entry":{"id":"a-1","version":3,"state":"entry"},"instructions":[]},
+          {"entry":"0x200","name":"CopyMem","review_level":"library","library_kind":"edk2",
+           "library_entry":{"id":"b-1","version":2,"state":"differs","differences":["plate"]},"instructions":[]},
+          {"entry":"0x300","name":"ZeroMem","review_level":"library","library_kind":"edk2","instructions":[]},
+          {"entry":"0x400","name":"ReadSmn","review_level":"library","library_kind":"amd",
+           "library_entry":{"id":"c-1","version":1,"state":"entry","codes":["0x10199"]},"instructions":[]}]}
+        """.utf8))
+        let view = CodePaneView(manifest: manifest(), artifact: art,
+                                moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.setFunctionOrder(.review)
+        view.layoutSubtreeIfNeeded()
+        let list = try XCTUnwrap(all(NSTableView.self, in: view).first {
+            $0.tableColumns.contains { $0.identifier.rawValue == "function" }
+        })
+        func cell(_ row: Int) throws -> CodeNavigatorCell {
+            try XCTUnwrap(list.view(atColumn: 0, row: row, makeIfNecessary: true) as? CodeNavigatorCell)
+        }
+        // Library functions, EDK2 — CopyGuid, CopyMem, ZeroMem — then AMD.
+        XCTAssertEqual(try cell(1).textField?.stringValue, "EDK2 (3, 1 in the registry)")
+        XCTAssertEqual(try cell(2).iconName, "library.edk2.entry")
+        XCTAssertEqual(try cell(3).iconName, "library.edk2.matched")
+        XCTAssertEqual(try cell(4).iconName, "library.edk2")
+        XCTAssertEqual(try cell(5).textField?.stringValue, "AMD AGESA (1, 1 in the registry)")
+        XCTAssertTrue(try cell(2).toolTip?.contains("Library registry entry, version 3") == true)
+        XCTAssertTrue(try cell(3).toolTip?.contains(
+            "Matches library registry entry version 2; this module's review differs: plate") == true)
+        XCTAssertFalse(try cell(4).toolTip?.contains("registry") == true)
+        XCTAssertTrue(try cell(6).toolTip?.contains("A variant: assert codes 0x10199") == true)
+
+        view.selectFunction(at: 0)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertFalse(view.registryMark.isHidden, "the header carries the badge of a library function")
+        XCTAssertEqual(view.registryMark.toolTip, "Library registry entry, version 3")
+        view.selectFunction(at: 2)
+        XCTAssertEqual(view.registryMark.toolTip, "Library function: EDK2. The library registry does not hold it.")
     }
 
     /// A revision the panel receives marks the functions it changed: they read
