@@ -3196,6 +3196,24 @@ final class CodeNavigatorCell: NSTableCellView {
         showsBadge(false)
     }
 
+    /// The mark the row carries, drawn again when the row is selected or
+    /// let go.
+    private var mark: (glyph: CodeNavigatorIcon.Glyph, color: NSColor)?
+
+    /// A selected row draws its mark inverted: on the selection's colour the
+    /// mark's own colour would not read.
+    override var backgroundStyle: NSView.BackgroundStyle {
+        didSet { if backgroundStyle != oldValue { drawMark() } }
+    }
+
+    private func drawMark() {
+        let side = CodeNavigatorIcon.side(forFontSize: CodePaneView.navigatorSize)
+        icon.image = mark.map {
+            CodeNavigatorIcon.image($0.glyph, color: $0.color, side: side,
+                                    inverted: backgroundStyle == .emphasized)
+        }
+    }
+
     /// The room the chevron and its gap take before a row's mark.
     static let disclosureRoom: CGFloat = 13 + 4
 
@@ -3228,8 +3246,9 @@ final class CodeNavigatorCell: NSTableCellView {
                 .map(CodeNavigatorIcon.group)
         default: nil
         }
+        self.mark = mark
         let side = CodeNavigatorIcon.side(forFontSize: CodePaneView.navigatorSize)
-        icon.image = mark.map { CodeNavigatorIcon.image($0.glyph, color: $0.color, side: side) }
+        drawMark()
         icon.isHidden = mark == nil
         iconWidth.constant = mark == nil ? 0 : side
         iconGap.constant = mark == nil ? 0 : 5

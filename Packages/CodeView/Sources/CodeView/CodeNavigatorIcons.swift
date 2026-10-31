@@ -1,10 +1,12 @@
 import AppKit
 
 /// The navigator's marks, drawn as Xcode draws a symbol's kind: a glyph in
-/// white on a small coloured square with rounded corners. A function is an
-/// `f` on purple wherever the list shows one — a root of the call tree, a
-/// call under it, a member of a review group. A review group's heading
-/// carries its level's colour, so the levels read apart before their names.
+/// white on a small coloured square with rounded corners. A function's mark
+/// says how far its review has got wherever the list shows one — a root of
+/// the call tree, a call under it, a member of a review group — in the colour
+/// of its level's heading, so the levels read apart before their names. A
+/// fully reviewed function takes the colour function names have in the code;
+/// purple is not used, since the app gives it to bookmarks.
 ///
 /// The images draw when they are drawn, so a system colour follows the
 /// appearance the row is drawn in.
@@ -24,20 +26,21 @@ enum CodeNavigatorIcon {
 
     /// A function's mark: a fully reviewed one, and any without a level of
     /// its own.
-    static let function = (glyph: Glyph.letter("f"), color: NSColor.systemPurple)
-    /// A partly reviewed function: the same `f`, not yet filled in.
-    static let partialFunction = (glyph: Glyph.framedLetter("f"), color: NSColor.systemPurple)
-    /// A library routine. The classical columns are new in macOS 27; an
-    /// older system draws the columns it has.
+    static let function = (glyph: Glyph.letter("f"), color: CodeColors.function)
+    /// A partly reviewed function: the same `f`, not yet filled in, in the
+    /// partial heading's orange.
+    static let partialFunction = (glyph: Glyph.framedLetter("f"), color: NSColor.systemOrange)
+    /// A library routine, in the library heading's blue. The classical
+    /// columns are new in macOS 27; an older system draws the columns it has.
     static let libraryFunction = (glyph: Glyph.bareSymbol(["building.classical.columns.fill", "building.columns.fill"]),
-                                  color: NSColor.systemPurple)
+                                  color: NSColor.systemBlue)
 
-    /// A review group's mark: green for full, orange for partial, red for
-    /// nothing done yet, blue for a library routine, grey where there is no
-    /// level to have.
+    /// A review group's mark: the function names' colour for full, orange
+    /// for partial, red for nothing done yet, blue for a library routine,
+    /// grey where there is no level to have.
     static func group(_ group: CodeReaderState.FunctionGroup) -> (glyph: Glyph, color: NSColor) {
         switch group {
-        case .full: (.symbol("checkmark"), .systemGreen)
+        case .full: (.symbol("checkmark"), CodeColors.function)
         case .partial: (.symbol("circle.lefthalf.filled"), .systemOrange)
         case .decompiled: (.symbol("gearshape"), .systemRed)
         case .library: (.symbol("books.vertical"), .systemBlue)
@@ -52,31 +55,36 @@ enum CodeNavigatorIcon {
         (fontSize + 3).rounded()
     }
 
-    static func image(_ glyph: Glyph, color: NSColor, side: CGFloat) -> NSImage {
+    /// The mark at `side` points. `inverted` is the mark on a selected row:
+    /// what is white there takes the colour and the colour turns white, so
+    /// the mark still reads on the selection's own colour.
+    static func image(_ glyph: Glyph, color: NSColor, side: CGFloat, inverted: Bool = false) -> NSImage {
+        let ground = inverted ? NSColor.white : color
+        let ink = inverted ? color : NSColor.white
         let size = NSSize(width: side, height: side)
         let image = NSImage(size: size, flipped: false) { rect in
             let radius = (side * 0.26).rounded()
             switch glyph {
             case let .letter(letter):
-                color.setFill()
+                ground.setFill()
                 NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
-                drawLetter(letter, color: .white, in: rect)
+                drawLetter(letter, color: ink, in: rect)
             case let .framedLetter(letter):
                 let frame = NSBezierPath(roundedRect: rect.insetBy(dx: 0.75, dy: 0.75),
                                          xRadius: radius - 0.5, yRadius: radius - 0.5)
                 frame.lineWidth = 1.5
-                color.setStroke()
+                ground.setStroke()
                 frame.stroke()
-                drawLetter(letter, color: color, in: rect)
+                drawLetter(letter, color: ground, in: rect)
             case let .symbol(name):
-                color.setFill()
+                ground.setFill()
                 NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
-                drawSymbol(name, color: .white, scale: 0.7, in: rect)
+                drawSymbol(name, color: ink, scale: 0.7, in: rect)
             case let .bareSymbol(names):
                 if let name = names.first(where: {
                     NSImage(systemSymbolName: $0, accessibilityDescription: nil) != nil
                 }) {
-                    drawSymbol(name, color: color, scale: 1, in: rect)
+                    drawSymbol(name, color: ground, scale: 1, in: rect)
                 }
             }
             return true

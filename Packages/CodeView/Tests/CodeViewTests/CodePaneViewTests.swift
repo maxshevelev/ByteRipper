@@ -890,6 +890,14 @@ final class CodePaneViewTests: XCTestCase {
         let heading = try cell(list, 0, 0)
         XCTAssertTrue(heading.iconName?.hasPrefix("group.") == true)
         XCTAssertNotNil(heading.icon.image)
+
+        // A selected row draws its mark again, inverted, and gives it back
+        // when it is let go.
+        let plain = member.icon.image
+        member.backgroundStyle = .emphasized
+        XCTAssertFalse(member.icon.image === plain, "the selection inverts the mark")
+        member.backgroundStyle = .normal
+        XCTAssertNotNil(member.icon.image)
     }
 
     /// A function's mark says how far its review has got: the filled `f` for
