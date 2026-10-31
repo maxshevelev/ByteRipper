@@ -407,7 +407,10 @@ public enum GhidraTools {
                     and keeps the name. After any call, read the function again: a local's `storage` \
                     can change, and a type alone gives it a `HASH:` storage. `items` does several in \
                     one call, each in a transaction of its own: the answer lists what applied and why \
-                    an entry did not.
+                    an entry did not. A name already held is answered with the holder — its kind, \
+                    address and `storage` — and that storage renames the holder, even one the \
+                    decompiler no longer shows (the answer then says `stale: true`); freeing the name \
+                    is what lets the local take it.
                     """,
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,

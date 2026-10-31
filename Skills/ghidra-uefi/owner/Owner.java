@@ -1788,7 +1788,39 @@ public class Owner {
             if (match != null) throw new Failure(409, "several variables are stored in " + storage + "; give first_use");
             match = symbol;
         }
-        if (match == null) throw new Failure(404, "no such variable in " + function.getName());
+        if (match == null) {
+            // A variable the decompiler no longer shows — left behind by a
+            // retyping — still sits in the function's table and holds its
+            // name. The refusal of a rename names it; the table is where the
+            // rename of it lands, so the name can be freed.
+            ghidra.program.model.listing.Variable stale = null;
+            if (storage != null) {
+                for (ghidra.program.model.listing.Variable variable : function.getLocalVariables()) {
+                    if (variable.getVariableStorage().toString().equals(storage)) { stale = variable; break; }
+                }
+                if (stale == null) {
+                    for (Parameter parameter : function.getParameters()) {
+                        if (parameter.getVariableStorage().toString().equals(storage)) { stale = parameter; break; }
+                    }
+                }
+            }
+            if (stale == null) throw new Failure(404, "no such variable in " + function.getName());
+            try {
+                if (name != null) stale.setName(name, SourceType.USER_DEFINED);
+                if (type != null) stale.setDataType(type, SourceType.USER_DEFINED);
+            } catch (Exception error) {
+                throw new Failure(400, error.getMessage() + holderOf(name != null ? name : stale.getName(), function));
+            }
+            decompiled.remove(function.getEntryPoint());
+            JsonObject answer = identity();
+            answer.addProperty("function", hex(function.getEntryPoint()));
+            answer.addProperty("name", stale.getName());
+            answer.addProperty("storage", stale.getVariableStorage().toString());
+            answer.addProperty("first_use", (String) null);
+            answer.addProperty("parameter", stale instanceof Parameter);
+            answer.addProperty("stale", true);
+            return answer;
+        }
         String applied = name != null ? name : match.getName();
         try {
             HighFunctionDBUtil.updateDBVariable(match, applied, type, SourceType.USER_DEFINED);
@@ -2109,8 +2141,10 @@ public class Owner {
                 throw new Failure(404, resolved.getName() + " has no " + String.join(", ", missing));
             }
         }
-        Harvest.recordType(program, resolved.getName(), c != null && !body.has("comments") && !body.has("description")
-                           ? c : ExportCode.typeC(resolved));
+        // The canonical C, not the text the caller sent: two equivalent
+        // definitions must leave the review document byte-identical, or a
+        // redefinition for a check reads as a new revision.
+        Harvest.recordType(program, resolved.getName(), ExportCode.typeC(resolved));
         answer.addProperty("name", resolved.getName());
         answer.addProperty("path", resolved.getPathName());
         answer.addProperty("size", resolved.getLength());
