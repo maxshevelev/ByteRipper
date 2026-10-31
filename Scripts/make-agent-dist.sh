@@ -53,7 +53,7 @@ version: $version
 commit: $(git -C "$repo" rev-parse --short HEAD)
 branch: $(git -C "$repo" rev-parse --abbrev-ref HEAD)
 built: $(date -u +%Y-%m-%dT%H:%M:%SZ)
-ghidra: 12.1.2 — the analyses' recipe; another version is a second recipe
+ghidra: 12.2 — the analyses' recipe; another version is a second recipe
 EOF
 
 tar -C "$out" -czf "$out/$name.tar.gz" "$name"
