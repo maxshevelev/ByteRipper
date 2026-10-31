@@ -3276,10 +3276,16 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
         cell.textField?.textColor = .secondaryLabelColor
         let count = state.groupCount(at: row) ?? 0
         let entries = state.registryCount(at: row) ?? 0
-        cell.textField?.stringValue = entries > 0
-            ? L("%1$@ (%2$@, %3$@ in the registry)", Self.title(of: section), String(count), String(entries))
-            : Self.title(of: section) + " (\(count))"
-        cell.showsIcon("library.\(section)")
+        // A kind whose every function is the registry's entry is the registry's
+        // through and through: the badge there is the entry's own, filled, and
+        // the count says it in words rather than naming the kind's size twice.
+        let allEntries = count > 0 && entries == count
+        cell.textField?.stringValue = allEntries
+            ? L("%1$@ (%2$@ all in registry)", Self.title(of: section), String(count))
+            : entries > 0
+                ? L("%1$@ (%2$@, %3$@ in the registry)", Self.title(of: section), String(count), String(entries))
+                : Self.title(of: section) + " (\(count))"
+        cell.showsIcon(allEntries ? "library.\(section).entry" : "library.\(section)")
         cell.showsBadge(false)
         cell.indent = Self.groupMemberIndent
         cell.showsDisclosure(true)

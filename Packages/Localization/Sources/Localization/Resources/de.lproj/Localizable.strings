@@ -204,6 +204,7 @@
 "Matched with library registry entry version %1$@" = "Dem Eintrag im Bibliotheksregister zugeordnet, Version %1$@";
 "A variant: assert codes %1$@" = "Eine Variante: Assert-Codes %1$@";
 "%1$@ (%2$@, %3$@ in the registry)" = "%1$@ (%2$@, davon %3$@ im Register)";
+"%1$@ (%2$@ all in registry)" = "%1$@ (%2$@, alle im Register)";
 "Library function: %1$@. The library registry does not hold it." = "Bibliotheksfunktion: %1$@. Das Bibliotheksregister enthält sie nicht.";
 "EDK2" = "EDK2";
 "AMD" = "AMD";

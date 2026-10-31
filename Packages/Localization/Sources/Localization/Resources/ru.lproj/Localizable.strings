@@ -204,6 +204,7 @@
 "Matched with library registry entry version %1$@" = "Сопоставлена с записью реестра библиотечных функций, версия %1$@";
 "A variant: assert codes %1$@" = "Вариант: коды assert %1$@";
 "%1$@ (%2$@, %3$@ in the registry)" = "%1$@ (%2$@, в реестре %3$@)";
+"%1$@ (%2$@ all in registry)" = "%1$@ (%2$@, все в реестре)";
 "Library function: %1$@. The library registry does not hold it." = "Библиотечная функция: %1$@. В реестре библиотечных функций её нет.";
 "EDK2" = "EDK2";
 "AMD" = "AMD";

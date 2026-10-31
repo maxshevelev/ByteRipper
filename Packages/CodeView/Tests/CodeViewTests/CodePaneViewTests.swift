@@ -997,7 +997,10 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(try cell(2).iconName, "library.edk2.entry")
         XCTAssertEqual(try cell(3).iconName, "library.edk2.matched")
         XCTAssertEqual(try cell(4).iconName, "library.edk2")
-        XCTAssertEqual(try cell(5).textField?.stringValue, "AMD AGESA (1, 1 in the registry)")
+        // Every function of the kind is the registry's entry: the badge there is
+        // the entry's own, filled, and the count says it in words.
+        XCTAssertEqual(try cell(5).textField?.stringValue, "AMD AGESA (1 all in registry)")
+        XCTAssertEqual(try cell(5).iconName, "library.amd.entry")
         XCTAssertTrue(try cell(2).toolTip?.contains("Library registry entry, version 3") == true)
         XCTAssertTrue(try cell(3).toolTip?.contains(
             "Matches library registry entry version 2; this module's review differs: plate") == true)
