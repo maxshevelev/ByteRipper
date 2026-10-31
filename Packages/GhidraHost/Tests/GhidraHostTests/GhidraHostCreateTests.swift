@@ -87,12 +87,11 @@ final class GhidraHostLibraryTests: XCTestCase {
         let entry = try XCTUnwrap(try store.object(store.libraryIndex().entries[added.id]!.entry))
         XCTAssertNotNil(try json(entry)["constants"], "an entry records its body's constants")
 
-        // Applied to the module it came from, the entry changes nothing but
-        // the mark: the review's own reasons stay, and the revision too.
-        let own = try json(await host.library(reviewed, .init(action: .apply)))
-        let ownResult = try XCTUnwrap((own["results"] as? [[String: Any]])?.first)
-        XCTAssertEqual(ownResult["marked"] as? Bool, true, "\(ownResult)")
-        XCTAssertNil(ownResult["filled"], "\(ownResult)")
+        // The publish marked the function with the version the registry took:
+        // the module it came from holds the entry as any other would.
+        let own = try json(await host.library(reviewed, .init(action: .status)))
+        XCTAssertEqual((own["applied"] as? [[String: Any]])?.compactMap { $0["address"] as? String }, [copyGuid],
+                       "\(own)")
         let republished = try await host.publish(reviewed, by: "agent")
         let code = try store.artifact(for: republished.manifest)
         XCTAssertEqual(code.functions.first { $0.entry == CodeAddress(hex: copyGuid) }?.nameReason, "EDK2 BaseLib CopyGuid")
@@ -129,5 +128,19 @@ final class GhidraHostLibraryTests: XCTestCase {
         let edited = try json(await host.library(other, .init(action: .status)))
         XCTAssertEqual((edited["edited"] as? [[String: Any]])?.compactMap { $0["address"] as? String }, [theirs])
         XCTAssertEqual((edited["to_apply"] as? [Any])?.count, 0)
+
+        // That edit was made on the entry's current version: published, it is
+        // the next version, from a module that did not write the first.
+        let improved = try await host.publish(other, by: "agent")
+        XCTAssertEqual(improved.library?.updated.map(\.version), [added.version + 1], "\(String(describing: improved.library))")
+        XCTAssertEqual(improved.library?.conflicts, [])
+
+        // The first module is a version behind now: its review, offered again
+        // after its own edit, is a conflict like any other module's.
+        _ = try await host.write(reviewed, "/v1/set/comment", body: body([
+            "address": copyGuid, "kind": "eol", "text": "the first dword"]))
+        let behind = try await host.publish(reviewed, by: "agent")
+        XCTAssertEqual(behind.library?.conflicts.map(\.base), [added.version], "\(String(describing: behind.library))")
+        XCTAssertEqual(behind.library?.conflicts.first?.version, added.version + 1)
     }
 }

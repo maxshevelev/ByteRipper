@@ -240,9 +240,11 @@ public actor GhidraHost {
                 let offer = try Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data)
                 shortfalls = offer.shortfalls
                 if !offer.proposals.isEmpty {
-                    library = try await writer.writeLibraryEntries(
+                    let written = try await writer.writeLibraryEntries(
                         module: module, rev: reading?.rev, by: by, proposals: offer.proposals,
                         take: options.takeLibraryConflicts, reason: options.libraryReason)
+                    library = written
+                    try await markLibrary(module, proposals: offer.proposals, result: written)
                 }
             } catch {
                 libraryError = "\(error)"
@@ -272,6 +274,26 @@ public actor GhidraHost {
                            libraryError: libraryError)
     }
 
+    /// The functions the registry took or matched carry the version it holds
+    /// now, so the next change to one is made on that version; a conflict's
+    /// function keeps the mark it had.
+    func markLibrary(_ module: SHA256Digest, proposals: [LibraryProposal], result: LibraryWriteResult) async throws {
+        let index = try await writer.readLibraryIndex()
+        let items = Self.libraryMarks(proposals, result: result, index: index)
+        guard !items.isEmpty else { return }
+        _ = try await write(module, "/v1/library/mark", body: try JSONSerialization.data(withJSONObject: ["items": items]))
+    }
+
+    static func libraryMarks(_ proposals: [LibraryProposal], result: LibraryWriteResult,
+                             index: LibraryIndex) -> [[String: Any]] {
+        let accepted = Set((result.added + result.updated + result.unchanged + (result.variants ?? [])).map(\.id))
+        return proposals.compactMap { proposal in
+            guard let id = index.bodies[proposal.body.key], accepted.contains(id),
+                  let held = index.entries[id] else { return nil }
+            return ["address": proposal.address, "id": id, "version": held.version]
+        }
+    }
+
     /// The owner's `GET /v1/library`, as the registry takes it: each entry's
     /// object made canonical — sorted keys — so the same review stores the
     /// same object whichever owner wrote it.
@@ -292,7 +314,9 @@ public actor GhidraHost {
                                              name: name, kind: kind, address: address, entry: canonical,
                                              variantOf: item["variant_of"] as? String,
                                              codes: item["codes"] as? [String],
-                                             role: entry["assert"] as? Bool == true ? "assert" : nil))
+                                             role: entry["assert"] as? Bool == true ? "assert" : nil,
+                                             basedOn: item["based_on"] as? String,
+                                             base: item["base"] as? Int))
         }
         let below = try JSONSerialization.data(withJSONObject: answer["below_bar"] ?? [])
         let shortfalls = try JSONDecoder().decode([LibraryShortfall].self, from: below)

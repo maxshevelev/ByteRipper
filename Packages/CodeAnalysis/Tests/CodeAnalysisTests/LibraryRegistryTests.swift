@@ -3,8 +3,9 @@ import XCTest
 @testable import CodeAnalysis
 
 /// The library registry in the store (`Design/LIBRARY_REGISTRY_PLAN.md`): one
-/// entry per body, improved in place, a conflict for another module's review,
-/// taken only with a reason, and every version's object kept by collection.
+/// entry per body, improved in place by a review made on its current version
+/// from any module, a conflict for any other review, taken only with a
+/// reason, and every version's object kept by collection.
 final class LibraryRegistryTests: XCTestCase {
     private var directory: URL!
     private var store: ContentStore!
@@ -24,10 +25,11 @@ final class LibraryRegistryTests: XCTestCase {
     private let body = LibraryBody(size: 0x15, full: "00112233445566aa", specific: "0123456789abcdef")
 
     private func proposal(_ name: String, plate: String = "EDK2 BaseMemoryLib SetMem", kind: String = "edk2",
-                          body: LibraryBody? = nil, address: String = "0x9A91116") -> LibraryProposal {
+                          body: LibraryBody? = nil, address: String = "0x9A91116", base: Int? = nil) -> LibraryProposal {
         let entry: [String: Any] = ["schema": 1, "name": name, "kind": kind, "plate": plate]
         let data = try! JSONSerialization.data(withJSONObject: entry, options: .sortedKeys)
-        return LibraryProposal(body: body ?? self.body, name: name, kind: kind, address: address, entry: data)
+        return LibraryProposal(body: body ?? self.body, name: name, kind: kind, address: address, entry: data,
+                               basedOn: base == nil ? nil : (body ?? self.body).key, base: base)
     }
 
     func testANewBodyIsAnEntryAndTheSameReviewIsNoChange() throws {
@@ -47,19 +49,30 @@ final class LibraryRegistryTests: XCTestCase {
         XCTAssertEqual(try store.libraryIndex(), index)
     }
 
-    func testTheHoldingModuleImprovesItsEntry() throws {
+    /// No module holds an entry: a review made on its current version is the
+    /// next version whichever module publishes it — and the module that
+    /// published the first, now a version behind, is a conflict like any.
+    func testAChangeOnTheCurrentVersionIsTheNextOneFromAnyModule() throws {
         try store.putLibraryEntries(module: first, rev: 33, by: "agent", proposals: [proposal("SetMem")])
-        let result = try store.putLibraryEntries(module: first, rev: 34, by: "agent",
-                                                 proposals: [proposal("SetMem", plate: "better")])
+        let result = try store.putLibraryEntries(module: second, rev: 4, by: "agent",
+                                                 proposals: [proposal("SetMem", plate: "better", base: 1)])
         XCTAssertEqual(result.updated.map(\.version), [2])
+        XCTAssertTrue(result.conflicts.isEmpty)
         let history = try XCTUnwrap(try store.libraryHistory(id: body.key))
         XCTAssertEqual(history.versions.map(\.version), [1, 2])
-        XCTAssertEqual(history.versions.last?.source.rev, 34)
-        XCTAssertNil(history.versions.last?.reason)
+        XCTAssertEqual(history.versions.last?.source.module, second)
+        XCTAssertNil(history.versions.last?.reason, "a change on the current version needs no reason")
+
+        let behind = try store.putLibraryEntries(module: first, rev: 34, by: "agent",
+                                                 proposals: [proposal("SetMem", plate: "other", base: 1)])
+        XCTAssertEqual(behind.conflicts.map(\.base), [1])
+        XCTAssertEqual(behind.conflicts.first?.version, 2)
+        XCTAssertEqual(behind.conflicts.first?.heldBy.module, second)
     }
 
-    /// Another module's different review — here another name for the same
-    /// body — is a conflict, not a second entry; taking it needs a reason.
+    /// A review not made on the entry — here another name for the same body,
+    /// from a function that never carried it — is a conflict, not a second
+    /// entry; taking it needs a reason.
     func testAnotherModulesReviewIsAConflictTakenOnlyWithAReason() throws {
         try store.putLibraryEntries(module: first, rev: 33, by: "agent", proposals: [proposal("SetMem")])
         let refused = try store.putLibraryEntries(module: second, rev: 4, by: "agent",
@@ -151,7 +164,8 @@ final class LibraryRegistryTests: XCTestCase {
 
     func testCollectionKeepsEveryVersion() throws {
         try store.putLibraryEntries(module: first, rev: 33, by: "agent", proposals: [proposal("SetMem")])
-        try store.putLibraryEntries(module: first, rev: 34, by: "agent", proposals: [proposal("SetMem", plate: "v2")])
+        try store.putLibraryEntries(module: first, rev: 34, by: "agent",
+                                    proposals: [proposal("SetMem", plate: "v2", base: 1)])
         let versions = try XCTUnwrap(try store.libraryHistory(id: body.key)).versions.map(\.entry)
         _ = try store.collectGarbage(dryRun: false)
         for object in versions { XCTAssertTrue(store.hasObject(object)) }

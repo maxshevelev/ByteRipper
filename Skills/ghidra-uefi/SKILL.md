@@ -338,14 +338,18 @@ answers what happened:
   publish made, moved to their next version, or matched;
 - `library_below_bar`: the tagged functions the registry did not take, with
   their gaps — bring them to the bar and publish again;
-- `library.conflicts`: bodies another module holds with another review — its
-  name, the holding module, the name this module proposes. One body is one
-  function: there are never two entries for it. Read both reviews
-  (`library_registry` with the entry's `id` gives the held one), decide which
-  is right or merge the better parts into this module's, and publish with
-  `take_library_conflicts: true` and a `library_reason` that says why. Leave it
-  when the held review is the better one: this module's function keeps its own
-  review until the registry is applied to it.
+- `library.conflicts`: bodies whose entry holds another review than this
+  module's, which was not made on the entry's current version — the entry's
+  name and version, the version this review was made on (`base`, none when the
+  function never carried the entry), who published the current one, and the
+  name this module proposes. No module holds an entry: a change to a function
+  that is the entry's current version is its next version from any module,
+  with no conflict. One body is one function: there are never two entries for
+  it. Read both reviews (`library_registry` with the entry's `id` gives the
+  current one), decide which is right or merge the better parts into this
+  module's, and publish with `take_library_conflicts: true` and a
+  `library_reason` that says why. Leave it when the entry's review is the
+  better one, and take it with `ghidra_library_apply` and `replace: true`.
 
 `library_registry` reads the registry: its entries by name and kind, and one
 entry's review and history.

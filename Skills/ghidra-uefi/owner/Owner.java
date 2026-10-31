@@ -265,6 +265,7 @@ public class Owner {
                 if (path.equals("/v1/library/match")) { json(exchange, 200, libraryMatch(body(exchange))); return; }
                 if (path.equals("/v1/library/compare")) { json(exchange, 200, libraryCompare(body(exchange))); return; }
                 if (path.equals("/v1/library/apply")) { json(exchange, 200, libraryApply(exchange)); return; }
+                if (path.equals("/v1/library/mark")) { json(exchange, 200, libraryMarkRequest(exchange)); return; }
                 JsonObject write = switch (path) {
                     case "/v1/rename/function" -> write(exchange, this::renameFunction);
                     case "/v1/rename/label" -> write(exchange, this::renameLabel);
@@ -1163,6 +1164,12 @@ public class Owner {
             // A body applied as a variant of another entry says which, and
             // the assert codes that made it one.
             JsonObject mark = libraryMark(function);
+            // The version this review was made on: a change on the entry's
+            // current version is its next one, from any module.
+            if (mark != null) {
+                item.addProperty("based_on", mark.get("id").getAsString());
+                item.add("base", mark.get("version"));
+            }
             if (mark != null && !mark.get("id").getAsString().equals(bodyKey(hash))) {
                 item.addProperty("variant_of", mark.get("id").getAsString());
                 if (mark.has("codes")) item.add("codes", mark.get("codes"));
@@ -1802,6 +1809,57 @@ public class Owner {
         }
         if (set > 0) filled.add(set + " comments");
         if (differ > 0) differences.add(differ + " comments");
+    }
+
+    /**
+     * `POST /v1/library/mark`: after a publish, the functions the registry
+     * took or matched carry the version it holds now — `{"items": [{address,
+     * id, version}]}` — so the next change to one is made on that version.
+     * A function's codes stay when it keeps its entry.
+     */
+    private JsonObject libraryMarkAll(JsonObject body) throws Exception {
+        JsonArray items = body.has("items") ? body.getAsJsonArray("items") : new JsonArray();
+        ghidra.feature.fid.service.FidService fid = new ghidra.feature.fid.service.FidService();
+        int marked = 0;
+        for (JsonElement element : items) {
+            JsonObject item = element.getAsJsonObject();
+            Function function = program.getFunctionManager().getFunctionAt(address(required(item, "address")));
+            if (function == null) continue;
+            ghidra.feature.fid.hash.FidHashQuad hash = fid.hashFunction(function);
+            if (hash == null) continue;
+            String id = required(item, "id");
+            JsonObject held = libraryMark(function);
+            JsonObject mark = new JsonObject();
+            mark.addProperty("id", id);
+            mark.addProperty("version", integer(item, "version", 1));
+            mark.addProperty("digest", reviewDigest(function, hash));
+            if (held != null && id.equals(string(held, "id", "")) && held.has("codes")) mark.add("codes", held.get("codes"));
+            propertyMap(LIBRARY_MARK).add(function.getEntryPoint(), COMPACT.toJson(mark));
+            marked++;
+        }
+        JsonObject answer = identity();
+        answer.addProperty("marked", marked);
+        return answer;
+    }
+
+    /**
+     * The marks in one transaction, then the program saved: a publish leaves
+     * no unsaved change behind it, and marking is part of the publish.
+     */
+    private JsonObject libraryMarkRequest(HttpExchange exchange) throws Exception {
+        requireLease(exchange);
+        JsonObject body = body(exchange);
+        int transaction = program.startTransaction("library marks");
+        boolean done = false;
+        JsonObject answer;
+        try {
+            answer = libraryMarkAll(body);
+            done = true;
+        } finally {
+            program.endTransaction(transaction, done);
+        }
+        if (program.isChanged()) program.save("library marks", TaskMonitor.DUMMY);
+        return answer;
     }
 
     /** `POST /v1/library/decline`: the entry `id` is not offered for the function at `address` again. */

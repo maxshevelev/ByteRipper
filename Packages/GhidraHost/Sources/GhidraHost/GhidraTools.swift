@@ -804,9 +804,11 @@ public enum GhidraTools {
                 holds them separately; a dry run with both flags says what would be taken. \
                 The library registry is offered every function tagged `library.<kind>` whose review \
                 meets the bar of a finished function: `library` says which bodies became entries \
-                (`added`), new versions (`updated`), were the same (`unchanged`) or are held by another \
-                module with another review (`conflicts`: the entry's name and holder, and the name this \
-                module proposes); `library_below_bar` lists the tagged functions short of the bar with \
+                (`added`), new versions (`updated` — a change to a function that was the entry's current \
+                version, from any module: no module holds an entry), were the same (`unchanged`), or hold \
+                another review not made on the current version (`conflicts`: the entry's name and \
+                version, the version this review was made on as `base`, who published the current one, \
+                and the name this module proposes); `library_below_bar` lists the tagged functions short of the bar with \
                 their gaps. `take_library_conflicts: true` with `library_reason` makes this module's review \
                 of each conflicting body the entry's next version — the reason is required and kept. \
                 `dry_run: true` answers the same without storing: the artifact's counts, the revision \

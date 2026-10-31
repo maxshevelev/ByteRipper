@@ -89,17 +89,25 @@ review documents.
     assert 0x10196" in its hover.
 - **One entry per key, improved in place.** A publish whose tagged function has
   the key of an existing entry does not add an entry: when its review equals the
-  entry, nothing changes; when it differs, it is a proposed change to the one
-  entry, reported in the publish answer with the module that wrote the entry,
-  and `take_library_conflicts: true` makes it the entry's next version — which
-  then reaches every module that applied the entry. The module that wrote the
-  entry changes it by publishing, without a conflict. The agent that reviews and
-  publishes resolves a conflict: it reads both reviews, keeps the better one or
-  merges them, and gives a reason, which the entry's history keeps.
-- **Readers see where a function came from**: the artifact records a function
-  applied from the registry (`library_entry`: key, version, source module), the
-  panel shows it beside the badge and opens the source module's function, and
-  `code_query` answers it.
+  entry, nothing changes; when it differs, it is a change to the one entry.
+- **No module holds an entry.** A function in the registry belongs to every
+  module whose function has its body, alike; the module that published a
+  version is in the history, as the author of a commit, and has no say over
+  the next. What decides is the version a change was made on. Each function
+  that is the entry carries its version in its mark — applied at an open, or
+  marked by the publish that offered it. A change to such a function,
+  published, is the entry's next version, whichever module publishes it. A
+  review made on an older version, or by a function that never carried the
+  entry, is a conflict, reported with the version it was made on, and
+  `take_library_conflicts: true` with a reason makes it the next version. The
+  agent that reviews and publishes resolves a conflict: it reads both reviews,
+  keeps the better one or merges them, and gives the reason the history keeps.
+  The next version reaches every other module at its next open, where its
+  function was not edited since.
+- **Readers see that a function is the registry's**: the artifact records
+  `library_entry` (the entry, its version, and whether the function is the
+  entry, was edited on it, or differs from it), `code_query` answers it, and
+  the panel marks it on the library badge (§5).
 
 ## 2. Storage
 
@@ -172,9 +180,22 @@ under the same key is no change.
 - `ghidra_library_apply` (write): applies a candidate, or declines it.
 - `library_registry` (read, app and server): the index, by kind and name, with
   how many modules each entry was applied to.
-- The artifact's function gains `library_entry`; the panel shows "reviewed in
-  <module>" in the function's hover and on the C view's header, and the link
-  opens that module's function where the store has its analysis.
+- The artifact's function gains `library_entry` (exporter v9): `id`,
+  `version`, `state` — `entry` (the function is the entry's version), `edited`
+  (changed on that version since; the next publish makes it the next version,
+  or reports the conflict), `differs` (a review that named the function keeps
+  what differs from the entry, listed in `differences`) — and a variant's
+  `codes`. The owner writes it before each export from the mark and from what
+  the last apply left (`ByteRipper.libraryState`).
+- The panel, on the library badge: filled for `entry`; outlined with a dot for
+  `edited` and `differs`; outlined as before for a library function the
+  registry does not hold. The hover says "Library registry entry, v3" (a
+  variant adds its assert codes; `differs` lists what differs), and the C
+  view's header carries the same line. There is no "reviewed in" and no link
+  to another module: the function in this module is the entry. The
+  navigator's library groups say how many of their functions the registry
+  holds.
+- Help in every language.
 
 ## 6. Later: similar, not equal (BSim)
 

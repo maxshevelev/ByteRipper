@@ -37,9 +37,10 @@ public struct LibraryBody: Codable, Hashable, Comparable, Sendable {
     public static func < (left: Self, right: Self) -> Bool { left.key < right.key }
 }
 
-/// Where an entry's current version came from: the module, the function's
-/// address in it, the revision of the module's reading that published it, and
-/// who published it.
+/// Who published a version of an entry: the module, the function's address
+/// in it, the revision of the module's reading, and who published it. A
+/// record of the history, not an owner — every module whose function has the
+/// body holds the entry alike.
 public struct LibrarySource: Codable, Equatable, Sendable {
     public var module: SHA256Digest
     public var address: String
@@ -117,8 +118,9 @@ public struct LibraryVersion: Codable, Equatable, Sendable {
     public var version: Int
     public var entry: SHA256Digest
     public var source: LibrarySource
-    /// Why an agent took another module's review over the one held; nil for
-    /// the first version and for the holding module's own changes.
+    /// Why an agent took a review the entry's current version was not the
+    /// base of; nil for the first version and for a change made on the
+    /// current version.
     public var reason: String?
     public var recordedAt: String
 
@@ -149,9 +151,16 @@ public struct LibraryProposal: Codable, Equatable, Sendable {
     public var codes: [String]?
     /// `assert` for an assert routine.
     public var role: String?
+    /// The entry and version the function was applied from or marked with
+    /// at its last publish (its `ByteRipper.libraryEntry` mark): a change
+    /// made on the entry's current version is its next version, from any
+    /// module.
+    public var basedOn: String?
+    public var base: Int?
 
     public init(body: LibraryBody, name: String, kind: String, address: String, entry: Data,
-                variantOf: String? = nil, codes: [String]? = nil, role: String? = nil) {
+                variantOf: String? = nil, codes: [String]? = nil, role: String? = nil,
+                basedOn: String? = nil, base: Int? = nil) {
         self.body = body
         self.name = name
         self.kind = kind
@@ -160,6 +169,8 @@ public struct LibraryProposal: Codable, Equatable, Sendable {
         self.variantOf = variantOf
         self.codes = codes
         self.role = role
+        self.basedOn = basedOn
+        self.base = base
     }
 }
 
@@ -171,17 +182,22 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
         public var version: Int
     }
 
-    /// Another module holds the entry for this body, with a different review.
+    /// The entry for this body holds another review, and this module's was
+    /// not made on its current version.
     public struct Conflict: Codable, Equatable, Sendable {
         public var id: String
         /// The name the entry holds and the name this module proposes.
         public var name: String
         public var proposedName: String
+        /// Who published the entry's current version.
         public var heldBy: LibrarySource
         public var version: Int
+        /// The version this module's review was made on; nil when the
+        /// function never carried the entry.
+        public var base: Int?
 
         private enum CodingKeys: String, CodingKey {
-            case id, name, version
+            case id, name, version, base
             case proposedName = "proposed_name"
             case heldBy = "held_by"
         }
@@ -252,11 +268,12 @@ extension ContentStore {
     /// Offer a published module's library functions to the registry.
     ///
     /// A body the registry does not hold is a new entry, its id the body's
-    /// key. A body it holds: the same review is no change; another review
-    /// from the module that wrote the entry is the entry's next version; another
-    /// review from a different module is a conflict, and the entry stays —
-    /// unless `take` is set, when it becomes the next version, with `reason`,
-    /// which the history keeps and which taking requires.
+    /// key. A body it holds: the same review is no change; another review made
+    /// on the entry's current version — the function carried it — is the
+    /// next version, whichever module publishes it; any other review is a
+    /// conflict, and the entry stays — unless `take` is set, when it becomes
+    /// the next version, with `reason`, which the history keeps and which
+    /// taking requires. No module holds an entry more than another.
     @discardableResult
     public func putLibraryEntries(module: SHA256Digest, rev: Int?, by: String?,
                                   proposals: [LibraryProposal], take: Bool = false,
@@ -298,7 +315,8 @@ extension ContentStore {
                         changedIndex = true
                     } else {
                         result.conflicts.append(.init(id: id, name: held.name, proposedName: proposal.name,
-                                                      heldBy: held.source, version: held.version))
+                                                      heldBy: held.source, version: held.version,
+                                                      base: proposal.basedOn == id ? proposal.base : nil))
                     }
                     continue
                 }
@@ -328,10 +346,11 @@ extension ContentStore {
                     result.unchanged.append(.init(id: id, name: held.name, version: held.version))
                     continue
                 }
-                let own = held.source.module == module || completes
-                guard own || take else {
+                let base = proposal.basedOn == id ? proposal.base : nil
+                let current = base == held.version
+                guard current || completes || take else {
                     result.conflicts.append(.init(id: id, name: held.name, proposedName: proposal.name,
-                                                  heldBy: held.source, version: held.version))
+                                                  heldBy: held.source, version: held.version, base: base))
                     continue
                 }
                 var next = held
@@ -343,9 +362,9 @@ extension ContentStore {
                 next.source = source
                 index.entries[id] = next
                 var history = try histories[id] ?? libraryHistory(id: id) ?? LibraryHistory(id: id, versions: [])
-                let why = completes && held.source.module != module ? "the body's constants recorded" : reason
+                let why = current ? nil : completes ? "the body's constants recorded" : reason
                 history.versions.append(LibraryVersion(version: next.version, entry: digest, source: source,
-                                                       reason: own && !completes ? nil : why, recordedAt: now))
+                                                       reason: why, recordedAt: now))
                 histories[id] = history
                 result.updated.append(.init(id: id, name: proposal.name, version: next.version))
             }

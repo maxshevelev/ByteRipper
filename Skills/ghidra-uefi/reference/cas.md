@@ -133,14 +133,15 @@ Function ID code units, full hash and specific hash, written
 `index.json` maps every entry's id to its current version (an object, as a
 review document is), name, kind (`edk2`, `amd`, `intel`), source (module,
 address, revision, who) and bodies, and every body to its entry.
-`history/<id>.json` keeps every version, with the reason when an agent took
-another module's review over the one held.
+`history/<id>.json` keeps every version and who published it, with the reason
+when an agent took a review not made on the current version.
 
 A publish offers the registry its module's functions tagged `library.<kind>`
 whose review meets the bar of a finished function. A body the registry lacks
-is a new entry; the same review is no change; the holding module's new review
-is the next version; another module's different review is a conflict, and the
-entry stays unless the publish takes it with a reason. A served store takes the
+is a new entry; the same review is no change; a review made on the entry's
+current version (`based_on` and `base`, from the function's mark) is the next
+version, from any module; any other review is a conflict, and the entry stays
+unless the publish takes it with a reason. No module holds an entry. A served store takes the
 offer at `POST /cas/v1/library` and serves `GET /cas/v1/library` and
 `GET /cas/v1/library/history/<id>`; its change feed says `library: true` when
 the index changed, and a mirror copies the index (not the histories). `gc`
