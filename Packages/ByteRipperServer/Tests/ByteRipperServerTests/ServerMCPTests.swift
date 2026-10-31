@@ -318,4 +318,5 @@ private struct NoGhidra: GhidraBackend {
     func publishModule(_ module: SHA256Digest, by: String, options: GhidraHost.PublishOptions) async throws -> Data { Data() }
     func publishPreview(_ module: SHA256Digest, takeTypeConflicts: Bool) async throws -> Data { Data() }
     func releaseModule(_ module: SHA256Digest, by: String) async throws -> Data { Data() }
+    func library(_ module: SHA256Digest, _ request: GhidraHost.LibraryRequest) async throws -> Data { Data() }
 }

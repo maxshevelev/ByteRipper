@@ -47,10 +47,12 @@ review documents.
 - **Applying an exact match** when the module is opened:
   - a function no review has named (`name_source` is not `USER_DEFINED`) takes
     the whole entry: name, signature, variables, plate, comments and the
-    library tag, with a plate line saying where it came from, and carries the
-    entry's key and version (`ByteRipper.libraryEntry`) — a later version of
-    the entry re-applies itself at the next open unless the function was
-    edited since;
+    library tag, and carries the entry's key and version, with the digest of
+    what was applied (`ByteRipper.libraryEntry`) — a later version of the
+    entry re-applies itself at the next open unless the function was edited
+    since. Where it came from is in the mark, not in the plate: a plate line
+    naming the source would make the module's review differ from the entry,
+    and its next publish a conflict;
   - a function a review has named takes the entry's name — renamed if its own
     differs, the old name kept in the name's reason ("was `FindGuidHob`") — and
     the entry fills only what the review left empty: a signature or variables
@@ -58,9 +60,11 @@ review documents.
     that has none, a missing tag. What the review made stays; where it differs
     from the entry (another signature, a plate that says otherwise, another
     library kind) the open's answer lists the difference, and the agent either
-    keeps the module's version or improves the entry with it. Such a function
-    is part review, part registry: it carries no `libraryEntry` mark, and a
-    later version of the entry is offered to it as a candidate, not applied.
+    keeps the module's version, takes the entry's (`replace`), or improves the
+    entry with it. Such a function is part review, part registry: it carries
+    no `libraryEntry` mark, and a later version of the entry is offered to it,
+    not applied. A function the fill leaves equal to the entry carries the
+    mark like one that took the whole entry.
 - **Other constants are another function — except an assert code.** Two
   bodies with the same full hash and size but another specific hash differ
   only in operand values. An MSR number, a port, a mask or a size changes what
@@ -182,16 +186,22 @@ functions and offers its matches as candidates only, never applied by itself.
 
 ## 7. Phases
 
+Phases 1 and 2 are done.
+
 1. **Collect.** Owner: hashes and `GET /v1/library`. Store: `library/`, index,
    history, conflicts; `writeLibraryEntries` in `ContentStore` and
    `RemoteStore`; the server's routes and mirror. Publish answer. Read tool
    `library_registry`. Tests: an entry written, versioned, refused as a
    conflict, taken; gc keeps them.
-2. **Apply.** `/v1/library/match` and `/v1/library/apply`; the open applies
-   exact matches; `ghidra_library`, `ghidra_library_apply`; the mark and
-   re-application of a new version. Tests against a module pair that shares
-   routines (AmdSocFp6CznPei and AmdSocFp6RnPei share most of their library
-   code).
+2. **Apply.** `/v1/library/match`, `/v1/library/compare`,
+   `/v1/library/apply` and `/v1/library/decline`; the open applies the
+   matches; `ghidra_library`, `ghidra_library_apply`; the mark and
+   re-application of a new version. An entry records its body's constants
+   (`constants`, by offset and operand) so a body of its shape can be compared
+   without the source module, and an assert routine is tagged
+   `assert_routine` (`assert` in its entry, `role` in the index). A live test
+   (`GhidraHostLibraryTests`, `GHIDRA_LIBRARY_MODULES`) runs a module pair
+   that shares routines — AmdSocFp6CznPei and AmdSocFp6RnPei.
 3. **Show.** `library_entry` in the artifact (exporter v9), `code_query`, the
    panel's hover and link; help in every language.
 4. **Similar.** BSim candidates.

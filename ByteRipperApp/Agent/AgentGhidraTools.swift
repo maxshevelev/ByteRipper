@@ -94,6 +94,9 @@ struct CurrentGhidraBackend: GhidraBackend {
     func releaseModule(_ module: SHA256Digest, by: String) async throws -> Data {
         try await resolve().releaseModule(module, by: by)
     }
+    func library(_ module: SHA256Digest, _ request: GhidraHost.LibraryRequest) async throws -> Data {
+        try await resolve().library(module, request)
+    }
 }
 
 /// The Ghidra host running inside the app when the analyses are on this Mac:

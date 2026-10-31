@@ -110,7 +110,7 @@ public actor GhidraHost {
     }
 
     public let configuration: Configuration
-    private let writer: AnalysisWriter
+    let writer: AnalysisWriter
     private var install: GhidraInstall?
     private var leases: [SHA256Digest: String] = [:]
     private var starting: [SHA256Digest: Task<OwnerRecord, Error>] = [:]
@@ -289,7 +289,10 @@ public actor GhidraHost {
             }
             let canonical = try JSONSerialization.data(withJSONObject: entry, options: [.sortedKeys])
             proposals.append(LibraryProposal(body: LibraryBody(size: size, full: full, specific: specific),
-                                             name: name, kind: kind, address: address, entry: canonical))
+                                             name: name, kind: kind, address: address, entry: canonical,
+                                             variantOf: item["variant_of"] as? String,
+                                             codes: item["codes"] as? [String],
+                                             role: entry["assert"] as? Bool == true ? "assert" : nil))
         }
         let below = try JSONSerialization.data(withJSONObject: answer["below_bar"] ?? [])
         let shortfalls = try JSONDecoder().decode([LibraryShortfall].self, from: below)

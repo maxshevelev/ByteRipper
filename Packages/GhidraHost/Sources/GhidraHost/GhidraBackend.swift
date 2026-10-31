@@ -21,6 +21,9 @@ public protocol GhidraBackend: Sendable {
     /// archive; nothing is written either way.
     func publishPreview(_ module: SHA256Digest, takeTypeConflicts: Bool) async throws -> Data
     func releaseModule(_ module: SHA256Digest, by: String) async throws -> Data
+    /// The module against the library registry: its matches, the entries
+    /// applied, a candidate taken or declined, one entry read.
+    func library(_ module: SHA256Digest, _ request: GhidraHost.LibraryRequest) async throws -> Data
 }
 
 public extension GhidraBackend {
@@ -162,6 +165,11 @@ public struct GhidraRemote: GhidraBackend {
 
     public func releaseModule(_ module: SHA256Digest, by: String) async throws -> Data {
         try await call("POST", "modules/\(module.hex)/release", query: ["by": by], timeout: 3600)
+    }
+
+    public func library(_ module: SHA256Digest, _ request: GhidraHost.LibraryRequest) async throws -> Data {
+        try await call("POST", "modules/\(module.hex)/library", body: try JSONEncoder().encode(request),
+                       timeout: 1800)
     }
 
     private func call(_ method: String, _ path: String, query: [String: String] = [:], body: Data? = nil,

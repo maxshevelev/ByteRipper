@@ -130,6 +130,10 @@ public protocol AnalysisWriter: Sendable {
                        reading: AnalysisReading?, replace: Bool) async throws -> AnalysisManifest
     func writeLibraryEntries(module: SHA256Digest, rev: Int?, by: String?, proposals: [LibraryProposal],
                              take: Bool, reason: String?) async throws -> LibraryWriteResult
+    /// The registry as the store holds it, for matching a module against it.
+    func readLibraryIndex() async throws -> LibraryIndex
+    func readLibraryHistory(id: String) async throws -> LibraryHistory?
+    func readObject(_ digest: SHA256Digest) async throws -> Data
 }
 
 extension ContentStore: AnalysisWriter {
@@ -156,6 +160,10 @@ extension ContentStore: AnalysisWriter {
                                     take: Bool, reason: String?) async throws -> LibraryWriteResult {
         try putLibraryEntries(module: module, rev: rev, by: by, proposals: proposals, take: take, reason: reason)
     }
+
+    public func readLibraryIndex() async throws -> LibraryIndex { try libraryIndex() }
+    public func readLibraryHistory(id: String) async throws -> LibraryHistory? { try libraryHistory(id: id) }
+    public func readObject(_ digest: SHA256Digest) async throws -> Data { try object(digest) }
 }
 
 extension RemoteStore: AnalysisWriter {
@@ -183,4 +191,8 @@ extension RemoteStore: AnalysisWriter {
         try await putLibraryEntries(module: module, rev: rev, by: by, proposals: proposals, take: take,
                                     reason: reason)
     }
+
+    public func readLibraryIndex() async throws -> LibraryIndex { try await libraryIndex() }
+    public func readLibraryHistory(id: String) async throws -> LibraryHistory? { try await libraryHistory(id: id) }
+    public func readObject(_ digest: SHA256Digest) async throws -> Data { try await object(digest) }
 }

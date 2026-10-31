@@ -109,6 +109,20 @@ enum GhidraRoutes {
             return .json(PublishAnswer(publication))
         }
 
+        // The module against the library registry: read, applied under the
+        // host's lease like any write, an entry declined or read.
+        router.add("POST", "\(prefix)/modules/:module/library", access: .rights([.ghidraUse])) { request in
+            let module = try digest(request.parameters["module"])
+            let asked: GhidraHost.LibraryRequest
+            do {
+                asked = try JSONDecoder().decode(GhidraHost.LibraryRequest.self, from: request.body)
+            } catch {
+                throw HTTPError(.badRequest, "the body is {\"action\": \"status\" | \"apply\" | \"decline\" | \"entry\", …}")
+            }
+            let data = try await answer { try await host.library(module, asked) }
+            return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
+        }
+
         router.add("POST", "\(prefix)/modules/:module/stop", access: .rights([.ghidraUse])) { request in
             let module = try digest(request.parameters["module"])
             return .json(["stopped": await host.stop(module)])

@@ -55,14 +55,19 @@ public struct LibrarySource: Codable, Equatable, Sendable {
 }
 
 /// One body an entry covers. An entry starts with one; bodies that differ
-/// from it only in assert codes are added as variants (phase 2).
+/// from it only in assert codes are added as variants, each with the codes
+/// it carries.
 public struct LibraryVariant: Codable, Equatable, Sendable {
     public var body: LibraryBody
     public var module: SHA256Digest
+    /// The assert codes this body holds where the entry's first body holds
+    /// others; nil for the first body.
+    public var codes: [String]?
 
-    public init(body: LibraryBody, module: SHA256Digest) {
+    public init(body: LibraryBody, module: SHA256Digest, codes: [String]? = nil) {
         self.body = body
         self.module = module
+        self.codes = codes
     }
 }
 
@@ -75,6 +80,20 @@ public struct LibraryIndexEntry: Codable, Equatable, Sendable {
     public var kind: String
     public var source: LibrarySource
     public var variants: [LibraryVariant]
+    /// `assert` for an assert routine: the codes it is called with make
+    /// variants of its callers' entries. Nil for any other function.
+    public var role: String?
+
+    public init(version: Int, entry: SHA256Digest, name: String, kind: String, source: LibrarySource,
+                variants: [LibraryVariant], role: String? = nil) {
+        self.version = version
+        self.entry = entry
+        self.name = name
+        self.kind = kind
+        self.source = source
+        self.variants = variants
+        self.role = role
+    }
 }
 
 /// `library/index.json`: every entry by its id, and every body of every entry
@@ -124,13 +143,23 @@ public struct LibraryProposal: Codable, Equatable, Sendable {
     public var address: String
     /// The entry object's bytes: sorted keys, nothing of the module in it.
     public var entry: Data
+    /// The entry this body was applied from as a variant, and the assert
+    /// codes that made it one.
+    public var variantOf: String?
+    public var codes: [String]?
+    /// `assert` for an assert routine.
+    public var role: String?
 
-    public init(body: LibraryBody, name: String, kind: String, address: String, entry: Data) {
+    public init(body: LibraryBody, name: String, kind: String, address: String, entry: Data,
+                variantOf: String? = nil, codes: [String]? = nil, role: String? = nil) {
         self.body = body
         self.name = name
         self.kind = kind
         self.address = address
         self.entry = entry
+        self.variantOf = variantOf
+        self.codes = codes
+        self.role = role
     }
 }
 
@@ -162,8 +191,31 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
     public var updated: [Change] = []
     public var unchanged: [Change] = []
     public var conflicts: [Conflict] = []
+    /// Bodies added to an entry as variants; nil from a store that has none.
+    public var variants: [Change]?
 
     public init() {}
+}
+
+extension LibraryProposal {
+    /// Whether two entry objects are the same review: equal but for the body
+    /// they were read from and its constants — what the variants of one
+    /// entry share.
+    public static func sameReview(_ left: Data, _ right: Data) -> Bool {
+        func review(_ data: Data) -> NSDictionary? {
+            guard var object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
+            object["body"] = nil
+            object["constants"] = nil
+            return object as NSDictionary
+        }
+        guard let left = review(left), let right = review(right) else { return false }
+        return left.isEqual(right)
+    }
+
+    /// Whether the entry object records the body's constants.
+    static func hasConstants(_ data: Data) -> Bool {
+        ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])?["constants"] != nil
+    }
 }
 
 extension ContentStore {
@@ -228,14 +280,33 @@ extension ContentStore {
             var index = try libraryIndex()
             var result = LibraryWriteResult()
             var histories: [String: LibraryHistory] = [:]
+            var changedIndex = false
             let now = Timestamps.now()
             for (proposal, digest) in zip(proposals, stored).sorted(by: { $0.0.body < $1.0.body }) {
                 let source = LibrarySource(module: module, address: proposal.address, rev: rev, by: by)
+                // A body applied as a variant joins its entry when the review
+                // is the entry's: one review, another body.
+                if index.entry(for: proposal.body) == nil, let id = proposal.variantOf,
+                   var held = index.entries[id] {
+                    if LibraryProposal.sameReview(try object(held.entry), proposal.entry) {
+                        held.variants.append(LibraryVariant(body: proposal.body, module: module,
+                                                            codes: proposal.codes))
+                        index.entries[id] = held
+                        index.bodies[proposal.body.key] = id
+                        result.variants = (result.variants ?? []) + [.init(id: id, name: held.name,
+                                                                          version: held.version)]
+                        changedIndex = true
+                    } else {
+                        result.conflicts.append(.init(id: id, name: held.name, proposedName: proposal.name,
+                                                      heldBy: held.source, version: held.version))
+                    }
+                    continue
+                }
                 guard let (id, held) = index.entry(for: proposal.body) else {
                     let id = proposal.body.key
                     index.entries[id] = LibraryIndexEntry(
                         version: 1, entry: digest, name: proposal.name, kind: proposal.kind, source: source,
-                        variants: [LibraryVariant(body: proposal.body, module: module)])
+                        variants: [LibraryVariant(body: proposal.body, module: module)], role: proposal.role)
                     index.bodies[proposal.body.key] = id
                     histories[id] = LibraryHistory(id: id, versions: [
                         LibraryVersion(version: 1, entry: digest, source: source, reason: nil, recordedAt: now)
@@ -247,7 +318,17 @@ extension ContentStore {
                     result.unchanged.append(.init(id: id, name: held.name, version: held.version))
                     continue
                 }
-                let own = held.source.module == module
+                // The same review from another body of the entry — a variant
+                // — is no change; so is it from the entry's own body, unless
+                // it records the constants the held object lacks.
+                let heldObject = try object(held.entry)
+                let completes = !LibraryProposal.hasConstants(heldObject) && LibraryProposal.hasConstants(proposal.entry)
+                    && proposal.body == held.variants.first?.body
+                if LibraryProposal.sameReview(heldObject, proposal.entry), !completes {
+                    result.unchanged.append(.init(id: id, name: held.name, version: held.version))
+                    continue
+                }
+                let own = held.source.module == module || completes
                 guard own || take else {
                     result.conflicts.append(.init(id: id, name: held.name, proposedName: proposal.name,
                                                   heldBy: held.source, version: held.version))
@@ -258,15 +339,17 @@ extension ContentStore {
                 next.entry = digest
                 next.name = proposal.name
                 next.kind = proposal.kind
+                next.role = proposal.role
                 next.source = source
                 index.entries[id] = next
                 var history = try histories[id] ?? libraryHistory(id: id) ?? LibraryHistory(id: id, versions: [])
+                let why = completes && held.source.module != module ? "the body's constants recorded" : reason
                 history.versions.append(LibraryVersion(version: next.version, entry: digest, source: source,
-                                                       reason: own ? nil : reason, recordedAt: now))
+                                                       reason: own && !completes ? nil : why, recordedAt: now))
                 histories[id] = history
                 result.updated.append(.init(id: id, name: proposal.name, version: next.version))
             }
-            guard !histories.isEmpty else { return result }
+            guard !histories.isEmpty || changedIndex else { return result }
             for (id, history) in histories.sorted(by: { $0.key < $1.key }) {
                 try atomicWrite(try encoder.encode(history), to: libraryHistoryURL(id))
             }

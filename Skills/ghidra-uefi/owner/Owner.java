@@ -261,6 +261,10 @@ public class Owner {
             } else if (method.equals("POST")) {
                 if (path.equals("/v1/publish")) { publish(exchange); return; }
                 if (path.equals("/v1/lease")) { lease(exchange, body(exchange)); return; }
+                // The registry's reads take a body (the keys) and write nothing.
+                if (path.equals("/v1/library/match")) { json(exchange, 200, libraryMatch(body(exchange))); return; }
+                if (path.equals("/v1/library/compare")) { json(exchange, 200, libraryCompare(body(exchange))); return; }
+                if (path.equals("/v1/library/apply")) { json(exchange, 200, libraryApply(exchange)); return; }
                 JsonObject write = switch (path) {
                     case "/v1/rename/function" -> write(exchange, this::renameFunction);
                     case "/v1/rename/label" -> write(exchange, this::renameLabel);
@@ -275,6 +279,7 @@ public class Owner {
                     case "/v1/set/code-mode" -> write(exchange, this::setCodeMode);
                     case "/v1/set/equate" -> write(exchange, this::setEquate);
                     case "/v1/tag/function" -> write(exchange, this::tagFunction);
+                    case "/v1/library/decline" -> write(exchange, this::libraryDecline);
                     case "/v1/type" -> write(exchange, this::addType);
                     case "/v1/save" -> write(exchange, body -> {
                         if (program.isChanged()) program.save("save", TaskMonitor.DUMMY);
@@ -1155,6 +1160,13 @@ public class Owner {
             item.addProperty("kind", kind);
             item.add("body", body);
             item.add("entry", libraryEntry(function, kind, body));
+            // A body applied as a variant of another entry says which, and
+            // the assert codes that made it one.
+            JsonObject mark = libraryMark(function);
+            if (mark != null && !mark.get("id").getAsString().equals(bodyKey(hash))) {
+                item.addProperty("variant_of", mark.get("id").getAsString());
+                if (mark.has("codes")) item.add("codes", mark.get("codes"));
+            }
             entries.add(item);
         }
         JsonObject answer = identity();
@@ -1220,6 +1232,549 @@ public class Owner {
             }
         }
         answer.add("comments", comments);
+        answer.add("constants", constants(function));
+        // An assert routine: the codes it is called with make variants of
+        // the entries that call it, not functions of their own.
+        if (hasTag(function, ASSERT_TAG)) answer.addProperty("assert", true);
+        return answer;
+    }
+
+    // MARK: - The library registry: matching and applying (LIBRARY_REGISTRY_PLAN.md §4)
+
+    /** Where a function applied from the registry keeps its entry: id, version, the digest of what was applied, codes. */
+    static final String LIBRARY_MARK = "ByteRipper.libraryEntry";
+    /** The entries a review declined for a function, by id, comma-separated. */
+    static final String LIBRARY_DECLINED = "ByteRipper.libraryDeclined";
+    /** The tag of an assert routine: the codes it is called with make variants, not functions. */
+    static final String ASSERT_TAG = "assert_routine";
+    private static final Gson COMPACT = new GsonBuilder().disableHtmlEscaping().create();
+
+    private static boolean hasTag(Function function, String name) {
+        for (ghidra.program.model.listing.FunctionTag tag : function.getTags()) {
+            if (tag != null && tag.getName().equalsIgnoreCase(name)) return true;
+        }
+        return false;
+    }
+
+    /** `<size>-<full>-<specific>`, as the store keys a body (`LibraryBody.key`). */
+    private static String bodyKey(ghidra.feature.fid.hash.FidHashQuad hash) {
+        return Integer.toHexString(hash.getCodeUnitSize()) + "-" + String.format("%016x", hash.getFullHash())
+            + "-" + String.format("%016x", hash.getSpecificHash());
+    }
+
+    private static String shapeKey(ghidra.feature.fid.hash.FidHashQuad hash) {
+        return Integer.toHexString(hash.getCodeUnitSize()) + "-" + String.format("%016x", hash.getFullHash());
+    }
+
+    private static JsonObject bodyObject(ghidra.feature.fid.hash.FidHashQuad hash) {
+        JsonObject body = new JsonObject();
+        body.addProperty("size", hash.getCodeUnitSize());
+        body.addProperty("full", String.format("%016x", hash.getFullHash()));
+        body.addProperty("specific", String.format("%016x", hash.getSpecificHash()));
+        return body;
+    }
+
+    /**
+     * The values the body's instructions hold that are not addresses, in
+     * order: what Function ID's specific hash keeps and its full hash masks.
+     * Two bodies of one shape differ only here.
+     */
+    private JsonArray constants(Function function) {
+        JsonArray list = new JsonArray();
+        Address entry = function.getEntryPoint();
+        InstructionIterator code = program.getListing().getInstructions(function.getBody(), true);
+        while (code.hasNext()) {
+            Instruction instruction = code.next();
+            for (int operand = 0; operand < instruction.getNumOperands(); operand++) {
+                if (instruction.getOperandReferences(operand).length > 0) continue;
+                for (Object part : instruction.getOpObjects(operand)) {
+                    if (!(part instanceof ghidra.program.model.scalar.Scalar scalar)) continue;
+                    JsonObject item = new JsonObject();
+                    item.addProperty("offset", String.format("0x%X", instruction.getAddress().subtract(entry)));
+                    item.addProperty("operand", operand);
+                    item.addProperty("value", String.format("0x%X", scalar.getUnsignedValue()));
+                    list.add(item);
+                }
+            }
+        }
+        return list;
+    }
+
+    /** The registry mark of a function, or null: `{id, version, digest, codes?}`. */
+    private JsonObject libraryMark(Function function) {
+        StringPropertyMap marks = program.getUsrPropertyManager().getStringPropertyMap(LIBRARY_MARK);
+        String text = marks == null ? null : marks.getString(function.getEntryPoint());
+        if (text == null || text.isBlank()) return null;
+        try {
+            return JsonParser.parseString(text).getAsJsonObject();
+        } catch (Exception error) {
+            return null;
+        }
+    }
+
+    private java.util.List<String> declined(Function function) {
+        StringPropertyMap map = program.getUsrPropertyManager().getStringPropertyMap(LIBRARY_DECLINED);
+        String text = map == null ? null : map.getString(function.getEntryPoint());
+        java.util.List<String> ids = new java.util.ArrayList<>();
+        if (text != null) for (String id : text.split(",")) if (!id.isBlank()) ids.add(id.trim());
+        return ids;
+    }
+
+    /**
+     * What the function's review is now, as one digest: the entry it would
+     * offer the registry. The mark keeps the digest of what was applied, so
+     * a function edited since is told from one that is not.
+     */
+    private String reviewDigest(Function function, ghidra.feature.fid.hash.FidHashQuad hash) throws Exception {
+        String kind = ExportCode.libraryKind(function);
+        JsonObject entry = libraryEntry(function, kind == null ? "" : kind, bodyObject(hash));
+        byte[] bytes = COMPACT.toJson(entry).getBytes(StandardCharsets.UTF_8);
+        return hexBytes(java.security.MessageDigest.getInstance("SHA-256").digest(bytes)).replace(" ", "");
+    }
+
+    /**
+     * `POST /v1/library/match`: every function hashed once, against the
+     * registry's bodies (`{"bodies": {key: id}}`) and shapes (`{"shapes":
+     * {size-full: [id]}}`). Answers the functions with an exact body, a body
+     * of a known shape, or a registry mark — each with its name and whether a
+     * review named it, the mark and whether the function was edited since,
+     * and the entries a review declined for it. Nothing is written.
+     */
+    private JsonObject libraryMatch(JsonObject body) throws Exception {
+        JsonObject bodies = body.has("bodies") ? body.getAsJsonObject("bodies") : new JsonObject();
+        JsonObject shapes = body.has("shapes") ? body.getAsJsonObject("shapes") : new JsonObject();
+        ghidra.feature.fid.service.FidService fid = new ghidra.feature.fid.service.FidService();
+        JsonArray matches = new JsonArray();
+        int hashed = 0;
+        for (Function function : program.getFunctionManager().getFunctions(true)) {
+            if (function.isThunk() || function.isExternal()) continue;
+            ghidra.feature.fid.hash.FidHashQuad hash = fid.hashFunction(function);
+            if (hash == null) continue;
+            hashed++;
+            String key = bodyKey(hash);
+            JsonObject mark = libraryMark(function);
+            JsonElement exact = bodies.get(key);
+            JsonElement near = exact == null ? shapes.get(shapeKey(hash)) : null;
+            if (exact == null && near == null && mark == null) continue;
+            JsonObject item = new JsonObject();
+            item.addProperty("address", hex(function.getEntryPoint()));
+            item.addProperty("name", function.getName());
+            item.addProperty("named", function.getSymbol().getSource() == SourceType.USER_DEFINED);
+            item.addProperty("key", key);
+            String kind = ExportCode.libraryKind(function);
+            if (kind != null) item.addProperty("kind", kind);
+            if (exact != null) item.add("exact", exact);
+            if (near != null) item.add("near", near);
+            if (mark != null) {
+                JsonObject held = mark.deepCopy();
+                held.addProperty("edited", !reviewDigest(function, hash).equals(string(mark, "digest", "")));
+                held.remove("digest");
+                item.add("mark", held);
+            }
+            JsonArray refused = new JsonArray();
+            declined(function).forEach(refused::add);
+            if (refused.size() > 0) item.add("declined", refused);
+            matches.add(item);
+        }
+        JsonObject answer = identity();
+        answer.addProperty("hashed", hashed);
+        answer.add("matches", matches);
+        return answer;
+    }
+
+    /**
+     * `POST /v1/library/compare`: the function at `address` against an
+     * entry of its shape, constant by constant. Each value that differs is
+     * listed with the entry's, and called an assert code when the
+     * instruction hands it to an assert routine — a `PUSH` or a `MOV` into a
+     * register, followed within a few instructions, with no branch between,
+     * by a call to a function whose body is one of `assert_keys` or whose
+     * mark is one of `assert_ids`. Nothing is written.
+     */
+    private JsonObject libraryCompare(JsonObject body) throws Exception {
+        Function function = functionAt(required(body, "address"));
+        JsonObject entry = body.getAsJsonObject("entry");
+        java.util.Set<String> assertKeys = new java.util.HashSet<>();
+        java.util.Set<String> assertIds = new java.util.HashSet<>();
+        if (body.has("assert_keys")) body.getAsJsonArray("assert_keys").forEach(e -> assertKeys.add(e.getAsString()));
+        if (body.has("assert_ids")) body.getAsJsonArray("assert_ids").forEach(e -> assertIds.add(e.getAsString()));
+        JsonObject answer = identity();
+        answer.addProperty("address", hex(function.getEntryPoint()));
+        JsonArray theirs = entry == null || !entry.has("constants") ? null : entry.getAsJsonArray("constants");
+        JsonArray ours = constants(function);
+        if (theirs == null || theirs.size() != ours.size()) {
+            answer.addProperty("comparable", false);
+            answer.addProperty("why", theirs == null ? "the entry holds no constants: publish its module again"
+                                                     : "the bodies hold different numbers of constants");
+            return answer;
+        }
+        ghidra.feature.fid.service.FidService fid = new ghidra.feature.fid.service.FidService();
+        JsonArray differences = new JsonArray();
+        boolean allAssert = true;
+        for (int index = 0; index < ours.size(); index++) {
+            JsonObject own = ours.get(index).getAsJsonObject(), other = theirs.get(index).getAsJsonObject();
+            if (!own.get("offset").equals(other.get("offset")) || !own.get("operand").equals(other.get("operand"))) {
+                answer.addProperty("comparable", false);
+                answer.addProperty("why", "the constants sit at other places");
+                return answer;
+            }
+            if (own.get("value").equals(other.get("value"))) continue;
+            Address at = function.getEntryPoint().add(Long.decode(own.get("offset").getAsString()));
+            boolean code = assertArgument(program.getListing().getInstructionAt(at), assertKeys, assertIds, fid);
+            allAssert &= code;
+            JsonObject item = own.deepCopy();
+            item.addProperty("entry_value", other.get("value").getAsString());
+            item.addProperty("assert", code);
+            differences.add(item);
+        }
+        answer.addProperty("comparable", true);
+        answer.add("differences", differences);
+        answer.addProperty("assert_codes_only", differences.size() > 0 && allAssert);
+        return answer;
+    }
+
+    private boolean assertArgument(Instruction instruction, java.util.Set<String> keys, java.util.Set<String> ids,
+                                   ghidra.feature.fid.service.FidService fid) throws Exception {
+        if (instruction == null) return false;
+        String mnemonic = instruction.getMnemonicString().toUpperCase(java.util.Locale.ROOT);
+        boolean argument = mnemonic.equals("PUSH")
+            || (mnemonic.equals("MOV") && instruction.getRegister(0) != null);
+        if (!argument) return false;
+        Instruction next = instruction.getNext();
+        for (int step = 0; step < 6 && next != null; step++, next = next.getNext()) {
+            ghidra.program.model.symbol.FlowType flow = next.getFlowType();
+            if (flow.isCall()) {
+                Address[] targets = next.getFlows();
+                if (targets.length != 1) return false;
+                Function callee = program.getFunctionManager().getFunctionAt(targets[0]);
+                if (callee == null) return false;
+                JsonObject mark = libraryMark(callee);
+                if (mark != null && ids.contains(mark.get("id").getAsString())) return true;
+                ghidra.feature.fid.hash.FidHashQuad hash = fid.hashFunction(callee);
+                return hash != null && keys.contains(bodyKey(hash));
+            }
+            if (flow.isJump() || flow.isTerminal()) return false;
+        }
+        return false;
+    }
+
+    /**
+     * `POST /v1/library/apply`: registry entries applied, `{"items": [{address,
+     * id, version, entry, mode, reason?, codes?}]}`, each in a transaction of
+     * its own. `mode` is `whole` — the entry's name, signature, variables,
+     * plate, comments and tag replace the function's: a function no review
+     * named, one applied before and not edited since, or one the agent asked
+     * to replace — or `fill`: a function a review named takes the entry's
+     * name, the old one kept in the reason, and only what its review left
+     * empty; where the review says otherwise, the item lists the difference
+     * and keeps the review's. A function left equal to the entry carries
+     * the mark (`ByteRipper.libraryEntry`). A name another item's function
+     * still holds is tried again once that one is renamed — two modules that
+     * named a pair of routines the other way round converge.
+     */
+    private JsonObject libraryApply(HttpExchange exchange) throws Exception {
+        requireLease(exchange);
+        JsonObject body = body(exchange);
+        JsonArray items = body.has("items") ? body.getAsJsonArray("items") : new JsonArray();
+        java.util.List<JsonObject> pending = new java.util.ArrayList<>();
+        items.forEach(e -> pending.add(e.getAsJsonObject()));
+        java.util.Map<JsonObject, JsonObject> answers = new java.util.IdentityHashMap<>();
+        boolean progress = true;
+        while (!pending.isEmpty() && progress) {
+            progress = false;
+            for (Iterator<JsonObject> it = pending.iterator(); it.hasNext();) {
+                JsonObject item = it.next();
+                int transaction = program.startTransaction("library apply");
+                boolean done = false;
+                JsonObject answer;
+                try {
+                    answer = applyEntry(item);
+                    answer.addProperty("ok", true);
+                    done = true;
+                } catch (Failure failure) {
+                    answer = new JsonObject();
+                    answer.addProperty("address", string(item, "address", ""));
+                    answer.addProperty("id", string(item, "id", ""));
+                    answer.addProperty("ok", false);
+                    answer.addProperty("error", failure.getMessage());
+                    answer.addProperty("name_taken", failure.status == 409);
+                } catch (Exception error) {
+                    answer = new JsonObject();
+                    answer.addProperty("address", string(item, "address", ""));
+                    answer.addProperty("id", string(item, "id", ""));
+                    answer.addProperty("ok", false);
+                    answer.addProperty("error", error.toString());
+                } finally {
+                    program.endTransaction(transaction, done);
+                }
+                answers.put(item, answer);
+                if (done) { it.remove(); progress = true; }
+                else if (!(answer.has("name_taken") && answer.get("name_taken").getAsBoolean())) it.remove();
+            }
+        }
+        JsonArray list = new JsonArray();
+        for (JsonElement element : items) list.add(answers.get(element.getAsJsonObject()));
+        System.out.println("OWNER LIBRARY APPLY " + leaseHolder + " " + list.size());
+        JsonObject answer = identity();
+        answer.add("items", list);
+        return answer;
+    }
+
+    private JsonObject applyEntry(JsonObject item) throws Exception {
+        Function function = program.getFunctionManager().getFunctionAt(address(required(item, "address")));
+        if (function == null) throw new Failure(404, "no function starts at " + required(item, "address"));
+        String id = required(item, "id");
+        int version = integer(item, "version", 1);
+        JsonObject entry = item.getAsJsonObject("entry");
+        if (entry == null) throw new Failure(400, "the item holds no entry");
+        String mode = string(item, "mode", "fill");
+        String reason = "library registry entry " + id + " v" + version;
+        if (item.has("reason") && !item.get("reason").isJsonNull()) reason += ": " + item.get("reason").getAsString();
+        JsonArray filled = new JsonArray(), differences = new JsonArray(), unplaced = new JsonArray();
+        JsonObject answer = new JsonObject();
+        answer.addProperty("address", hex(function.getEntryPoint()));
+        answer.addProperty("id", id);
+        answer.addProperty("version", version);
+        answer.addProperty("mode", mode);
+        String oldName = function.getName();
+        String name = required(entry, "name");
+        if (!oldName.equals(name)) {
+            for (Symbol other : program.getSymbolTable().getGlobalSymbols(name)) {
+                if (!other.getAddress().equals(function.getEntryPoint())) {
+                    throw new Failure(409, name + " already names " + hex(other.getAddress()));
+                }
+            }
+            function.setName(name, SourceType.USER_DEFINED);
+            JsonObject renamed = new JsonObject();
+            renamed.addProperty("from", oldName);
+            renamed.addProperty("to", name);
+            answer.add("renamed", renamed);
+        }
+        JsonObject why = new JsonObject();
+        why.addProperty("reason", oldName.equals(name) ? reason : reason + " (was " + oldName + ")");
+        why.addProperty("by", "agent");
+        boolean whole = mode.equals("whole") || mode.equals("variant");
+        boolean reviewedParameters = false;
+        for (Parameter parameter : function.getParameters()) {
+            if (!placeholder(parameter.getName())) reviewedParameters = true;
+        }
+        if (whole || !reviewedParameters) {
+            applySignature(function, entry, why);
+            filled.add("signature");
+        } else {
+            fillParameters(function, entry, filled, differences);
+        }
+        why(function.getEntryPoint(), why);
+        applyLocals(function, entry, whole, filled, differences, unplaced);
+        String plate = string(entry, "plate", "");
+        String ownPlate = function.getComment();
+        if (whole || ownPlate == null || ownPlate.isBlank()) {
+            function.setComment(plate.isEmpty() ? null : plate);
+            filled.add("plate");
+        } else if (!ownPlate.equals(plate)) {
+            differences.add("plate");
+        }
+        applyComments(function, entry, whole, filled, differences, unplaced);
+        String kind = string(entry, "kind", null);
+        String ownKind = ExportCode.libraryKind(function);
+        if (kind != null && (whole || ownKind == null || ExportCode.libraryTag(function) == null)) {
+            removeLibraryTags(function);
+            function.addTag("library." + kind);
+        } else if (kind != null && !kind.equals(ownKind)) {
+            differences.add("kind: " + ownKind + ", entry " + kind);
+        }
+        if (entry.has("assert") && entry.get("assert").getAsBoolean() && !hasTag(function, ASSERT_TAG)) {
+            function.addTag(ASSERT_TAG);
+        }
+        decompiled.remove(function.getEntryPoint());
+        // Equal to the entry, apart from the body it is: the function is
+        // the entry's, and carries the mark.
+        ghidra.feature.fid.hash.FidHashQuad hash = new ghidra.feature.fid.service.FidService().hashFunction(function);
+        JsonObject now = hash == null ? null : libraryEntry(function, kind == null ? "" : kind, bodyObject(hash));
+        boolean equal = now != null && review(now).equals(review(entry));
+        if (equal) {
+            JsonObject mark = new JsonObject();
+            mark.addProperty("id", id);
+            mark.addProperty("version", version);
+            mark.addProperty("digest", reviewDigest(function, hash));
+            if (item.has("codes")) mark.add("codes", item.get("codes"));
+            propertyMap(LIBRARY_MARK).add(function.getEntryPoint(), COMPACT.toJson(mark));
+        } else {
+            StringPropertyMap marks = program.getUsrPropertyManager().getStringPropertyMap(LIBRARY_MARK);
+            if (marks != null) marks.remove(function.getEntryPoint());
+            if (differences.size() == 0) differences.add("the review keeps more than the entry");
+        }
+        answer.addProperty("marked", equal);
+        if (filled.size() > 0) answer.add("filled", filled);
+        if (differences.size() > 0) answer.add("differences", differences);
+        if (unplaced.size() > 0) answer.add("unplaced", unplaced);
+        return answer;
+    }
+
+    /** An entry's review without its body: what two variants share. */
+    private static JsonObject review(JsonObject entry) {
+        JsonObject copy = entry.deepCopy();
+        copy.remove("body");
+        copy.remove("constants");
+        return copy;
+    }
+
+    private void applySignature(Function function, JsonObject entry, JsonObject why) throws Exception {
+        JsonObject request = why.deepCopy();
+        request.addProperty("address", hex(function.getEntryPoint()));
+        request.addProperty("signature", required(entry, "signature"));
+        setSignature(request);
+        String convention = string(entry, "calling_convention", null);
+        if (convention != null && !convention.equals(function.getCallingConventionName())) {
+            function.setCallingConvention(convention);
+        }
+        JsonArray params = entry.has("params") ? entry.getAsJsonArray("params") : new JsonArray();
+        Parameter[] current = function.getParameters();
+        if (params.size() != current.length) {
+            throw new Failure(400, "the signature gave " + current.length + " parameters, the entry lists "
+                              + params.size());
+        }
+        boolean moved = false;
+        JsonArray storage = new JsonArray();
+        for (int index = 0; index < current.length; index++) {
+            String place = params.get(index).getAsJsonObject().get("storage").getAsString();
+            storage.add(place);
+            if (!current[index].getVariableStorage().toString().equals(place)) moved = true;
+        }
+        if (moved) {
+            JsonObject places = new JsonObject();
+            places.add("storage", storage);
+            applyStorage(function, places);
+        }
+    }
+
+    private void fillParameters(Function function, JsonObject entry, JsonArray filled, JsonArray differences)
+            throws Exception {
+        JsonArray params = entry.has("params") ? entry.getAsJsonArray("params") : new JsonArray();
+        Parameter[] current = function.getParameters();
+        if (params.size() != current.length) {
+            differences.add("signature: " + current.length + " parameters, entry " + params.size());
+            return;
+        }
+        for (int index = 0; index < current.length; index++) {
+            JsonObject theirs = params.get(index).getAsJsonObject();
+            Parameter parameter = current[index];
+            String name = theirs.get("name").getAsString(), type = theirs.get("type").getAsString();
+            if (placeholder(parameter.getName())) {
+                parameter.setName(name, SourceType.USER_DEFINED);
+                filled.add("param " + index + " name");
+            } else if (!parameter.getName().equals(name)) {
+                differences.add("param " + index + " name: " + parameter.getName() + ", entry " + name);
+            }
+            if (undefined(parameter.getDataType())) {
+                parameter.setDataType(type(type), SourceType.USER_DEFINED);
+                filled.add("param " + index + " type");
+            } else if (!parameter.getDataType().getDisplayName().equals(type)) {
+                differences.add("param " + index + " type: " + parameter.getDataType().getDisplayName()
+                                + ", entry " + type);
+            }
+        }
+        String returned = string(entry, "return_type", null);
+        if (returned != null && undefined(function.getReturnType())) {
+            function.setReturnType(type(returned), SourceType.USER_DEFINED);
+            filled.add("return type");
+        } else if (returned != null && !function.getReturnType().getDisplayName().equals(returned)) {
+            differences.add("return type: " + function.getReturnType().getDisplayName() + ", entry " + returned);
+        }
+    }
+
+    private void applyLocals(Function function, JsonObject entry, boolean whole, JsonArray filled,
+                             JsonArray differences, JsonArray unplaced) throws Exception {
+        JsonArray locals = entry.has("locals") ? entry.getAsJsonArray("locals") : new JsonArray();
+        for (JsonElement element : locals) {
+            JsonObject theirs = element.getAsJsonObject();
+            String place = theirs.get("storage").getAsString(), name = theirs.get("name").getAsString();
+            int firstUse = Long.decode(theirs.get("first_use").getAsString()).intValue();
+            DataType type;
+            try {
+                type = type(theirs.get("type").getAsString());
+            } catch (Failure failure) {
+                unplaced.add("local " + name + ": " + failure.getMessage());
+                continue;
+            }
+            ghidra.program.model.listing.Variable held = null;
+            for (ghidra.program.model.listing.Variable local : function.getLocalVariables()) {
+                if (local.getVariableStorage().toString().equals(place) && local.getFirstUseOffset() == firstUse) {
+                    held = local;
+                }
+            }
+            try {
+                if (held == null) {
+                    function.addLocalVariable(new ghidra.program.model.listing.LocalVariableImpl(
+                        name, firstUse, type, storage(place, type.getLength()), program), SourceType.USER_DEFINED);
+                    filled.add("local " + name);
+                    continue;
+                }
+                boolean ownName = !placeholder(held.getName()), ownType = !undefined(held.getDataType());
+                if (whole || !ownName) held.setName(name, SourceType.USER_DEFINED);
+                else if (!held.getName().equals(name)) differences.add("local " + held.getName() + ": entry " + name);
+                if (whole || !ownType) held.setDataType(type, SourceType.USER_DEFINED);
+                else if (!held.getDataType().getDisplayName().equals(type.getDisplayName())) {
+                    differences.add("local " + held.getName() + " type: entry " + type.getDisplayName());
+                }
+                if (whole || !ownName || !ownType) filled.add("local " + name);
+            } catch (Failure failure) {
+                unplaced.add("local " + name + " at " + place + ": " + failure.getMessage());
+            } catch (Exception error) {
+                unplaced.add("local " + name + " at " + place + ": " + error.getMessage());
+            }
+        }
+    }
+
+    private void applyComments(Function function, JsonObject entry, boolean whole, JsonArray filled,
+                               JsonArray differences, JsonArray unplaced) throws Exception {
+        Address start = function.getEntryPoint();
+        if (whole) {
+            // A version's comments replace the last one's: none is left behind.
+            InstructionIterator code = program.getListing().getInstructions(function.getBody(), true);
+            while (code.hasNext()) {
+                Instruction instruction = code.next();
+                for (CommentType type : new CommentType[] { CommentType.PRE, CommentType.EOL, CommentType.POST }) {
+                    instruction.setComment(type, null);
+                }
+            }
+        }
+        JsonArray comments = entry.has("comments") ? entry.getAsJsonArray("comments") : new JsonArray();
+        int set = 0, differ = 0;
+        for (JsonElement element : comments) {
+            JsonObject theirs = element.getAsJsonObject();
+            Address at = start.add(Long.decode(theirs.get("offset").getAsString()));
+            Instruction instruction = program.getListing().getInstructionAt(at);
+            if (instruction == null || !function.getBody().contains(at)) {
+                unplaced.add("comment at " + theirs.get("offset").getAsString());
+                continue;
+            }
+            CommentType type = CommentType.valueOf(theirs.get("kind").getAsString().toUpperCase(java.util.Locale.ROOT));
+            String text = theirs.get("text").getAsString(), own = instruction.getComment(type);
+            if (own == null || own.isBlank()) {
+                instruction.setComment(type, text);
+                set++;
+            } else if (!own.equals(text)) {
+                differ++;
+            }
+        }
+        if (set > 0) filled.add(set + " comments");
+        if (differ > 0) differences.add(differ + " comments");
+    }
+
+    /** `POST /v1/library/decline`: the entry `id` is not offered for the function at `address` again. */
+    private JsonObject libraryDecline(JsonObject body) throws Exception {
+        Function function = functionAt(required(body, "address"));
+        String id = required(body, "id");
+        if (!id.matches("[0-9a-f-]{1,80}")) throw new Failure(400, id + " is not an entry id");
+        java.util.List<String> ids = declined(function);
+        if (!ids.contains(id)) ids.add(id);
+        propertyMap(LIBRARY_DECLINED).add(function.getEntryPoint(), String.join(",", ids));
+        JsonObject answer = identity();
+        answer.addProperty("address", hex(function.getEntryPoint()));
+        JsonArray list = new JsonArray();
+        ids.forEach(list::add);
+        answer.add("declined", list);
         return answer;
     }
 

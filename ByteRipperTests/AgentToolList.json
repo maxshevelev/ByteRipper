@@ -1874,6 +1874,78 @@
   {
     "annotations" : {
       "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The module's functions against the shared registry of reviewed library functions, matched by body (Ghidra's Function ID: the code with relocated addresses masked, and its constants). `applied`: functions carrying the current version of their entry. `to_apply`: matches that apply by themselves — `ghidra_open` applies them, and `ghidra_library_apply` without `address` does: an unnamed function takes the whole entry (`whole`); one a review named takes the entry's name, its old name kept in the reason, and only what its review left empty (`fill`); a newer version replaces one applied and not edited since; a body that differs from an entry only in the codes an assert routine is called with is a `variant` of it. `edited`: applied, then edited — the review's now. `candidates`: bodies of an entry's shape with other constants, each difference listed (`value`, `entry_value`, `assert`): other functions unless a review says why the values make no difference. `declined`: entries a review refused for the function. With `id`: one entry — its index row, its review and its history.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "id" : {
+          "description" : "An entry's id, as `library_registry` or a match lists it: read that entry.",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_library",
+    "title" : "Match a module against the library registry"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Applies the registry's entries to the module, each in a transaction of its own, and answers each in `results`: `renamed` (from, to), `filled`, `differences` the function's review keeps, `unplaced` (a variable or comment the function has no place for), `marked` when the function is now the entry's. Without `address`: every match `ghidra_library` lists in `to_apply`. With `address`: that function — a candidate only with `reason` (why its other constants make no difference: it becomes a variant of the entry at the next publish); `replace: true` puts the entry's review in place of a review that differs or was edited since. `decline: true` refuses the entry for the function (`id`, or the one matched), and it is not offered again. A difference a review keeps is settled by keeping it, or by publishing it as the entry's next version (`ghidra_publish` with `take_library_conflicts` and a reason).",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "address" : {
+          "description" : "The function's entry. Leave out to apply every match that applies by itself.",
+          "type" : "string"
+        },
+        "decline" : {
+          "description" : "Refuse the entry for the function at `address`.",
+          "type" : "boolean"
+        },
+        "id" : {
+          "description" : "The entry, where several match the function.",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "reason" : {
+          "description" : "Why a candidate's other constants make no difference, or why an entry is declined.",
+          "type" : "string"
+        },
+        "replace" : {
+          "description" : "Put the entry's review in place of the function's.",
+          "type" : "boolean"
+        }
+      },
+      "required" : [
+        "module"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_library_apply",
+    "title" : "Apply or decline a library registry entry"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
       "idempotentHint" : false,
       "openWorldHint" : false,
       "readOnlyHint" : false

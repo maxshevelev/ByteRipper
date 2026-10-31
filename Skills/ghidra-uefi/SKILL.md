@@ -350,6 +350,35 @@ answers what happened:
 `library_registry` reads the registry: its entries by name and kind, and one
 entry's review and history.
 
+**Applying the registry.** `ghidra_open` applies the registry to the module it
+opens and says what it did in `library`; `ghidra_library` lists the matches at
+any time, and `ghidra_library_apply` without `address` applies them again. A
+match is by body: the same code, with the addresses a relocation moves masked.
+
+- A function no review named takes the whole entry — name, signature with its
+  storage, variables, plate, step comments, the library tag — and carries the
+  entry's mark (`results[].marked`). A newer version of the entry replaces it
+  at the next open while the function is not edited.
+- A function a review named takes the entry's name (the old one is kept in
+  the name's reason) and only what its review left empty. `results[].renamed`
+  says what was renamed; `differences` what the review says otherwise — keep
+  the module's version, or take the entry's with `ghidra_library_apply`,
+  `address` and `replace: true`, or make the module's the entry's next version
+  at the publish (`take_library_conflicts` with a reason). Never leave two
+  names for one body: the registry's name is the one every module shows.
+- `edited`: a function applied and edited since. It is the review's now; a
+  newer version of the entry is offered, not applied.
+- `candidates`: a body of an entry's shape with other constants, each one
+  listed with the entry's. Another constant is another function — an MSR, a
+  port, a mask or a size changes what the code does — so review it as a
+  function of its own. The exception is the code an assert routine is called
+  with (AGESA's `file id << 16 | line`): a body that differs only there is a
+  `variant` of the entry and is applied as one by itself. Tag the assert
+  routine itself `assert_routine` beside its library tag, so the registry
+  knows it. Take a candidate with `ghidra_library_apply`, `address` and a
+  `reason` only when the values are shown to make no difference, or refuse it
+  with `decline: true`.
+
 ### On an analysis server
 
 `byteripper-server` (`Design/SERVER_PLAN.md`, `Design/SERVER_HEADLESS_PLAN.md`)

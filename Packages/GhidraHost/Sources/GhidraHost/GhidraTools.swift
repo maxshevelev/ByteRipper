@@ -16,6 +16,7 @@ public enum GhidraTools {
         var tools = [modulesTool(backend), openTool(backend, byImage: includeOpenByImage)]
         tools += readTools(backend)
         tools += writeTools(backend)
+        tools += libraryTools(backend)
         tools += [publishTool(backend), doneTool(backend)]
         return tools
     }
@@ -34,7 +35,9 @@ public enum GhidraTools {
         `ghidra_function_tag`. `ghidra_function_tag` marks library code the module statically links in, and \
         whose: `library.edk2`, `library.amd` (AGESA) or `library.intel` (FSP/RC), by the criteria in the \
         skill's "Library functions"; the artifact records it at the library review level with that kind, \
-        and it needs no further review. `ghidra_publish` makes the review visible to the app — every \
+        and it needs no further review. The shared registry of reviewed library functions is applied to a \
+        module as it opens — `library` in `ghidra_open`'s answer; `ghidra_library` lists the matches and \
+        `ghidra_library_apply` applies, replaces or declines one. `ghidra_publish` makes the review visible to the app — every \
         ByteRipper that reads this store — as a new revision; publish at coherent checkpoints, not after \
         every rename. `ghidra_done` publishes and ends the session.
 
@@ -128,11 +131,118 @@ public enum GhidraTools {
                     throw AgentToolError("`image_base64` is not base64.")
                 }
                 let name = try arguments.optionalString("name") ?? "module"
-                return try await answer { try await backend.openImage(image, name: name, document: nil, node: nil) }
+                return try await answer {
+                    await opened(try await backend.openImage(image, name: name, document: nil, node: nil),
+                                 module: SHA256Digest(data: image), backend: backend)
+                }
             }
             let module = try module(arguments)
-            return try await answer { try await backend.openModule(module) }
+            return try await answer {
+                await opened(try await backend.openModule(module), module: module, backend: backend)
+            }
         }
+    }
+
+    /// `ghidra_open`'s answer: the owner's `hello`, and what the library
+    /// registry applied to the module as it opened (`library`) — or why it
+    /// could not (`library_error`): the open stands either way.
+    public static func opened(_ hello: Data, module: SHA256Digest, backend: GhidraBackend) async -> Data {
+        guard var object = (try? JSONSerialization.jsonObject(with: hello)) as? [String: Any] else { return hello }
+        do {
+            let data = try await backend.library(module, GhidraHost.LibraryRequest(action: .apply))
+            if let plan = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+               (plan["entries"] as? Int ?? 0) > 0 {
+                object["library"] = openSummary(plan)
+            }
+        } catch {
+            object["library_error"] = "\(error)"
+        }
+        return (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])) ?? hello
+    }
+
+    /// The registry's part of an open's answer: what was applied in full,
+    /// what changed and what was left, without the functions already current.
+    static func openSummary(_ plan: [String: Any]) -> [String: Any] {
+        var summary: [String: Any] = ["entries": plan["entries"] ?? 0,
+                                      "already_applied": (plan["applied"] as? [Any])?.count ?? 0]
+        for key in ["results", "edited", "candidates"] {
+            if let list = plan[key] as? [Any], !list.isEmpty { summary[key] = list }
+        }
+        if let declined = plan["declined"] as? [Any], !declined.isEmpty { summary["declined"] = declined.count }
+        return summary
+    }
+
+    static func libraryTools(_ backend: GhidraBackend) -> [AgentTool] {
+        [
+            AgentTool(
+                name: "ghidra_library",
+                title: "Match a module against the library registry",
+                description: """
+                    The module's functions against the shared registry of reviewed library functions, \
+                    matched by body (Ghidra's Function ID: the code with relocated addresses masked, and \
+                    its constants). `applied`: functions carrying the current version of their entry. \
+                    `to_apply`: matches that apply by themselves — `ghidra_open` applies them, and \
+                    `ghidra_library_apply` without `address` does: an unnamed function takes the whole \
+                    entry (`whole`); one a review named takes the entry's name, its old name kept in the \
+                    reason, and only what its review left empty (`fill`); a newer version replaces one \
+                    applied and not edited since; a body that differs from an entry only in the codes an \
+                    assert routine is called with is a `variant` of it. `edited`: applied, then edited — \
+                    the review's now. `candidates`: bodies of an entry's shape with other constants, \
+                    each difference listed (`value`, `entry_value`, `assert`): other functions unless a \
+                    review says why the values make no difference. `declined`: entries a review refused \
+                    for the function. With `id`: one entry — its index row, its review and its history.
+                    """,
+                inputSchema: AgentSchema.object([
+                    "module": moduleProperty,
+                    "id": AgentSchema.string("An entry's id, as `library_registry` or a match lists it: read that entry.")
+                ], required: ["module"])
+            ) { call in
+                let module = try module(call.arguments)
+                if let id = try call.arguments.optionalString("id") {
+                    return try await answer { try await backend.library(module, .init(action: .entry, id: id)) }
+                }
+                return try await answer { try await backend.library(module, .init(action: .status)) }
+            },
+            AgentTool(
+                name: "ghidra_library_apply",
+                title: "Apply or decline a library registry entry",
+                description: """
+                    Applies the registry's entries to the module, each in a transaction of its own, and \
+                    answers each in `results`: `renamed` (from, to), `filled`, `differences` the \
+                    function's review keeps, `unplaced` (a variable or comment the function has no place \
+                    for), `marked` when the function is now the entry's. Without `address`: every match \
+                    `ghidra_library` lists in `to_apply`. With `address`: that function — a candidate \
+                    only with `reason` (why its other constants make no difference: it becomes a variant \
+                    of the entry at the next publish); `replace: true` puts the entry's review in place \
+                    of a review that differs or was edited since. `decline: true` refuses the entry for \
+                    the function (`id`, or the one matched), and it is not offered again. A difference a \
+                    review keeps is settled by keeping it, or by publishing it as the entry's next \
+                    version (`ghidra_publish` with `take_library_conflicts` and a reason).
+                    """,
+                inputSchema: AgentSchema.object([
+                    "module": moduleProperty,
+                    "address": AgentSchema.string("The function's entry. Leave out to apply every match that applies by itself."),
+                    "id": AgentSchema.string("The entry, where several match the function."),
+                    "reason": AgentSchema.string("Why a candidate's other constants make no difference, or why an entry is declined."),
+                    "replace": AgentSchema.boolean("Put the entry's review in place of the function's."),
+                    "decline": AgentSchema.boolean("Refuse the entry for the function at `address`.")
+                ], required: ["module"]),
+                annotations: .edit
+            ) { call in
+                let arguments = call.arguments
+                let module = try module(arguments)
+                let address = try arguments.optionalString("address")
+                let request = GhidraHost.LibraryRequest(
+                    action: try arguments.bool("decline", default: false) ? .decline : .apply,
+                    address: address, id: try arguments.optionalString("id"),
+                    reason: try arguments.optionalString("reason"),
+                    replace: try arguments.bool("replace", default: false))
+                if request.action == .decline, address == nil {
+                    throw AgentToolError("`decline` names the function by `address`.")
+                }
+                return try await answer { try await backend.library(module, request) }
+            }
+        ]
     }
 
     static func readTools(_ backend: GhidraBackend) -> [AgentTool] {

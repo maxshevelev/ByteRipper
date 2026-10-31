@@ -83,6 +83,64 @@ final class LibraryRegistryTests: XCTestCase {
                        "the review of the Renoir module is the better one")
     }
 
+    private func review(_ name: String, body: LibraryBody, constants: [String]?, variantOf: String? = nil,
+                        codes: [String]? = nil) -> LibraryProposal {
+        var entry: [String: Any] = ["schema": 1, "name": name, "kind": "amd", "plate": "AGESA IdsLib",
+                                    "body": ["size": body.size, "full": body.full, "specific": body.specific]]
+        entry["constants"] = constants
+        let data = try! JSONSerialization.data(withJSONObject: entry, options: .sortedKeys)
+        return LibraryProposal(body: body, name: name, kind: "amd", address: "0x9A90000", entry: data,
+                               variantOf: variantOf, codes: codes)
+    }
+
+    /// A body applied as a variant joins its entry at the publish: one
+    /// review, two bodies, the second with its assert codes — and the same
+    /// review offered again from the variant's body is no change.
+    func testAVariantJoinsItsEntry() throws {
+        let other = LibraryBody(size: 0x15, full: body.full, specific: "fedcba9876543210")
+        try store.putLibraryEntries(module: first, rev: 1, by: "agent",
+                                    proposals: [review("ReadSmn", body: body, constants: ["0x10196"])])
+        let joined = try store.putLibraryEntries(module: second, rev: 1, by: "agent", proposals: [
+            review("ReadSmn", body: other, constants: ["0x10199"], variantOf: body.key, codes: ["0x10199"])])
+        XCTAssertEqual(joined.variants?.map(\.id), [body.key])
+        let index = try store.libraryIndex()
+        XCTAssertEqual(index.entries.count, 1)
+        XCTAssertEqual(index.entry(for: other)?.id, body.key)
+        XCTAssertEqual(index.entries[body.key]?.variants.last?.codes, ["0x10199"])
+        XCTAssertEqual(index.entries[body.key]?.version, 1, "a variant is not a new version")
+
+        let again = try store.putLibraryEntries(module: second, rev: 2, by: "agent", proposals: [
+            review("ReadSmn", body: other, constants: ["0x10199"], variantOf: body.key, codes: ["0x10199"])])
+        XCTAssertEqual(again.unchanged.map(\.id), [body.key])
+        XCTAssertTrue(again.conflicts.isEmpty)
+    }
+
+    /// A variant whose review is not the entry's is a conflict, not a variant.
+    func testAVariantWithAnotherReviewIsAConflict() throws {
+        let other = LibraryBody(size: 0x15, full: body.full, specific: "fedcba9876543210")
+        try store.putLibraryEntries(module: first, rev: 1, by: "agent",
+                                    proposals: [review("ReadSmn", body: body, constants: ["0x10196"])])
+        let refused = try store.putLibraryEntries(module: second, rev: 1, by: "agent", proposals: [
+            review("ReadSmnOther", body: other, constants: ["0x10199"], variantOf: body.key)])
+        XCTAssertEqual(refused.conflicts.map(\.proposedName), ["ReadSmnOther"])
+        XCTAssertNil(try store.libraryIndex().entry(for: other))
+    }
+
+    /// An entry written before entries held their constants takes them from
+    /// whichever module offers the same review of its body — the holder's
+    /// change in all but name, with a reason the history keeps.
+    func testTheConstantsCompleteAnEntryFromAnyModule() throws {
+        try store.putLibraryEntries(module: first, rev: 1, by: "agent",
+                                    proposals: [review("ReadSmn", body: body, constants: nil)])
+        let completed = try store.putLibraryEntries(module: second, rev: 1, by: "agent",
+                                                    proposals: [review("ReadSmn", body: body, constants: ["0x1"])])
+        XCTAssertEqual(completed.updated.map(\.version), [2])
+        XCTAssertEqual(try store.libraryHistory(id: body.key)?.versions.last?.reason, "the body's constants recorded")
+        let same = try store.putLibraryEntries(module: first, rev: 2, by: "agent",
+                                               proposals: [review("ReadSmn", body: body, constants: ["0x1"])])
+        XCTAssertEqual(same.unchanged.count, 1)
+    }
+
     func testABadBodyOrKindIsRefused() {
         let bad = LibraryBody(size: 0x15, full: "not-a-hash", specific: "0123456789abcdef")
         XCTAssertThrowsError(try store.putLibraryEntries(module: first, rev: 1, by: nil,

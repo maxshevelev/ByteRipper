@@ -1,4 +1,5 @@
 import AgentKit
+import CodeAnalysis
 import Foundation
 import GhidraHost
 import UEFITool
@@ -46,10 +47,12 @@ public enum GhidraNodeOpen {
                                                  in: documents)
                 let chosen = try arguments.optionalString("name") ?? found.name
                 let answer = try await GhidraTools.answer {
-                    try await backend.openImage(found.image, name: chosen,
-                                                document: found.document.label.isEmpty
-                                                    ? found.document.id : found.document.label,
-                                                node: node)
+                    await GhidraTools.opened(
+                        try await backend.openImage(found.image, name: chosen,
+                                                    document: found.document.label.isEmpty
+                                                        ? found.document.id : found.document.label,
+                                                    node: node),
+                        module: SHA256Digest(data: found.image), backend: backend)
                 }
                 // The answer says which document it read and carries its disk
                 // mark, as a query's does: an agent calls `documents` once and
@@ -58,8 +61,9 @@ public enum GhidraNodeOpen {
                 // (`Design/SERVER_HEADLESS_PLAN.md` decision 9).
                 return ToolQueryTools.stamped(answer, with: found.document)
             }
+            let module = try GhidraTools.module(arguments)
             return try await GhidraTools.answer {
-                try await backend.openModule(try GhidraTools.module(arguments))
+                await GhidraTools.opened(try await backend.openModule(module), module: module, backend: backend)
             }
         }
     }
