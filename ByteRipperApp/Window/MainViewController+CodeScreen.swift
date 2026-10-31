@@ -153,16 +153,22 @@ extension MainViewController {
         }
         guard !shown.isEmpty else { return }
         let root = CodeAnalysisStore.root
-        let keys = shown.compactMap(\.manifest.key)
+        let manifests = shown.map(\.manifest)
         Task { @MainActor [weak self] in
             let stored = await Task.detached(priority: .utility) {
                 () -> [AnalysisKey: (manifest: AnalysisManifest, recipes: [AnalysisManifest])] in
                 guard let store = try? ContentStore(root: root, create: false) else { return [:] }
                 let index = CodeAnalysisIndex(manifests: store.usableAnalyses())
                 var found: [AnalysisKey: (AnalysisManifest, [AnalysisManifest])] = [:]
-                for key in keys {
-                    guard let manifest = try? store.analysis(module: key.module, recipe: key.recipe),
-                          store.canRead(manifest.artifact.sha256) else { continue }
+                for shown in manifests {
+                    guard let key = shown.key else { continue }
+                    // The reading is followed, not the recipe: a publish
+                    // through a newer exporter puts the next revision under
+                    // another recipe and leaves this one where it was.
+                    let current = (try? store.analysis(module: key.module, recipe: key.recipe))
+                        .flatMap { store.canRead($0.artifact.sha256) ? $0 : nil } ?? shown
+                    let manifest = index.latestReading(of: current)
+                    guard manifest != shown else { continue }
                     found[key] = (manifest, index.manifests(for: key.module))
                 }
                 return found

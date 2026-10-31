@@ -108,4 +108,43 @@ final class CodeAnalysisIndexTests: XCTestCase {
         XCTAssertEqual(index.newest(for: module.sha256)?.recipe.id,
                        "code-v3-ghidra-12.2")
     }
+
+    // MARK: - Readings
+
+    private func reading(_ id: String, project: String?, rev: Int,
+                         _ time: String = "2026-10-31T10:00:00+00:00") -> AnalysisManifest {
+        AnalysisManifest(
+            module: module("one"), recipe: recipe(id),
+            artifact: AnalysisArtifact(sha256: SHA256Digest(data: Data(id.utf8)),
+                                       size: 1, mediaType: "application/json"),
+            analyzedAt: time, stats: AnalysisStats(),
+            reading: project.map { AnalysisReading(project: $0, rev: rev) })
+    }
+
+    func testAReadingPublishedUnderANewerRecipeIsFollowed() {
+        let old = reading("code-v6-ghidra-12.1.2", project: "p", rev: 30)
+        let new = reading("code-v7-ghidra-12.1.2", project: "p", rev: 32)
+        let index = CodeAnalysisIndex(manifests: [old, new])
+
+        XCTAssertEqual(index.latestReading(of: old), new)
+        XCTAssertEqual(index.latestReading(of: new), new)
+    }
+
+    func testAnotherProjectsReadingOrAMechanicalOneIsNotFollowed() {
+        let shown = reading("code-v6-ghidra-12.1.2", project: "p", rev: 30)
+        let other = reading("code-v7-ghidra-12.1.2", project: "q", rev: 40)
+        let mechanical = reading("code-v2-ghidra-12.1.2", project: nil, rev: 0)
+        let index = CodeAnalysisIndex(manifests: [shown, other, mechanical])
+
+        XCTAssertEqual(index.latestReading(of: shown), shown)
+        XCTAssertEqual(index.latestReading(of: mechanical), mechanical)
+    }
+
+    func testAnEarlierRevisionUnderAnotherRecipeIsNotFollowed() {
+        let shown = reading("code-v7-ghidra-12.1.2", project: "p", rev: 32)
+        let older = reading("code-v6-ghidra-12.1.2", project: "p", rev: 30)
+        let index = CodeAnalysisIndex(manifests: [shown, older])
+
+        XCTAssertEqual(index.latestReading(of: shown), shown)
+    }
 }

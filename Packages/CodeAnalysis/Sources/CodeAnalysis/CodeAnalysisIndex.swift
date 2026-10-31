@@ -78,4 +78,23 @@ public struct CodeAnalysisIndex: Equatable, Sendable {
             return left.analyzedAt < right.analyzedAt
         }
     }
+
+    /// The analysis that carries a manifest's reading now: itself, or the
+    /// same project's later revision under another recipe of the module. A
+    /// publish through a newer exporter stores the next revision beside the
+    /// old recipe, which keeps the revision it had; a screen that followed
+    /// only its recipe would stay there.
+    public func latestReading(of manifest: AnalysisManifest) -> AnalysisManifest {
+        guard let reading = manifest.reading else { return manifest }
+        let later = manifests(for: manifest.module.sha256).filter {
+            guard let other = $0.reading else { return false }
+            return other.project == reading.project && other.rev > reading.rev
+        }
+        return later.max { left, right in
+            if left.reading!.rev == right.reading!.rev {
+                return ContentStore.olderThan(left, right)
+            }
+            return left.reading!.rev < right.reading!.rev
+        } ?? manifest
+    }
 }

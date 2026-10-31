@@ -153,10 +153,15 @@ extension MainViewController {
                     break
                 }
             }
-            guard let (manifest, artifact) = found else { return nil }
-            let recipes = CodeAnalysisIndex(manifests: store.usableAnalyses())
-                .manifests(for: manifest.module.sha256)
-            return (manifest, artifact, recipes)
+            guard var (manifest, artifact) = found else { return nil }
+            let index = CodeAnalysisIndex(manifests: store.usableAnalyses())
+            // A later revision published through a newer exporter sits under
+            // another recipe; the screen follows its reading there.
+            let latest = index.latestReading(of: manifest)
+            if latest != manifest, let later = try? store.artifact(for: latest) {
+                (manifest, artifact) = (latest, later)
+            }
+            return (manifest, artifact, index.manifests(for: manifest.module.sha256))
         }.value
         guard let loaded else { return nil }
         return CodeScreen(manifest: loaded.manifest, artifact: loaded.artifact, bytes: Data(bytes),
