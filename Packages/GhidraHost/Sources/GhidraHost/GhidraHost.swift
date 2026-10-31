@@ -48,14 +48,56 @@ public actor GhidraHost {
         /// The shared types this publish replaced with its own.
         public var typeConflictsTaken: [String]
         public var typeConflictOrigins: [String: String]
+        /// What the library registry made of this module's library functions
+        /// reviewed to the bar; nil when the publish offered it nothing.
+        public var library: LibraryWriteResult?
+        /// The tagged library functions short of the registry's bar, with
+        /// what keeps each from it.
+        public var libraryBelowBar: [LibraryShortfall]
+        /// Why the registry could not be offered the functions, when it could
+        /// not: the publish itself is stored either way.
+        public var libraryError: String?
 
         public init(manifest: AnalysisManifest, typeConflicts: [String], typeConflictsTaken: [String] = [],
-                    typeConflictOrigins: [String: String] = [:]) {
+                    typeConflictOrigins: [String: String] = [:], library: LibraryWriteResult? = nil,
+                    libraryBelowBar: [LibraryShortfall] = [], libraryError: String? = nil) {
             self.manifest = manifest
             self.typeConflicts = typeConflicts
             self.typeConflictsTaken = typeConflictsTaken
             self.typeConflictOrigins = typeConflictOrigins
+            self.library = library
+            self.libraryBelowBar = libraryBelowBar
+            self.libraryError = libraryError
         }
+    }
+
+    /// What a publish may decide beyond storing the review.
+    public struct PublishOptions: Equatable, Sendable {
+        /// Replace the shared copy of each conflicting type with this module's.
+        public var takeTypeConflicts: Bool
+        /// Make this module's review of each conflicting library body the
+        /// registry entry's next version.
+        public var takeLibraryConflicts: Bool
+        /// Why — which taking library conflicts requires and the entry's
+        /// history keeps.
+        public var libraryReason: String?
+
+        public init(takeTypeConflicts: Bool = false, takeLibraryConflicts: Bool = false,
+                    libraryReason: String? = nil) {
+            self.takeTypeConflicts = takeTypeConflicts
+            self.takeLibraryConflicts = takeLibraryConflicts
+            self.libraryReason = libraryReason
+        }
+    }
+
+    /// A tagged library function the registry did not take, and why.
+    public struct LibraryShortfall: Codable, Equatable, Sendable {
+        public var address: String
+        public var name: String
+        public var kind: String
+        /// `name`, `plate`, `comments`, `params`, `locals`, or `too_short` —
+        /// a body Function ID does not hash.
+        public var gaps: [String]
     }
 
     public struct Summary: Codable, Equatable, Sendable {
@@ -157,11 +199,11 @@ public actor GhidraHost {
     /// first, then recorded in the module's history with `by`. The recipe takes the exporter and the Ghidra from the
     /// artifact, the types and passes from what made the project (§5.2).
     public func publish(_ module: SHA256Digest, by: String?,
-                        takeTypeConflicts: Bool = false) async throws -> Publication {
+                        options: PublishOptions = PublishOptions()) async throws -> Publication {
         let project = self.project(module)
         let record = try await owner(of: module)
         var state = try project.state()
-        let path = takeTypeConflicts ? "/v1/publish?take_type_conflicts=1" : "/v1/publish"
+        let path = options.takeTypeConflicts ? "/v1/publish?take_type_conflicts=1" : "/v1/publish"
         let (raw, headers) = try await Self.call(record.port, "POST", path, timeout: 3600)
         let document = try await Self.call(record.port, "GET", "/v1/review").data
         let description = try await Self.call(record.port, "GET", "/v1/review/description").data
@@ -187,6 +229,25 @@ public actor GhidraHost {
             reading = current
             try await writer.writeRevision(module: module, reading: current, by: by)
         }
+        // The library registry is offered the module's library functions
+        // reviewed to its bar. A failure here is reported, not thrown: the
+        // review is already stored.
+        var library: LibraryWriteResult?
+        var shortfalls: [LibraryShortfall] = []
+        var libraryError: String?
+        if reviewed {
+            do {
+                let offer = try Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data)
+                shortfalls = offer.shortfalls
+                if !offer.proposals.isEmpty {
+                    library = try await writer.writeLibraryEntries(
+                        module: module, rev: reading?.rev, by: by, proposals: offer.proposals,
+                        take: options.takeLibraryConflicts, reason: options.libraryReason)
+                }
+            } catch {
+                libraryError = "\(error)"
+            }
+        }
         let recipe = Self.recipe(for: artifact, types: state.madeWith.types, passes: state.madeWith.passes)
         let program = artifact["program"] as? [String: Any] ?? [:]
         let identity = ModuleIdentity(sha256: module, size: state.module.size, name: state.module.name,
@@ -207,7 +268,32 @@ public actor GhidraHost {
         state.reviewed = reviewed
         try project.write(state)
         return Publication(manifest: manifest, typeConflicts: conflicts, typeConflictsTaken: taken,
-                           typeConflictOrigins: origins)
+                           typeConflictOrigins: origins, library: library, libraryBelowBar: shortfalls,
+                           libraryError: libraryError)
+    }
+
+    /// The owner's `GET /v1/library`, as the registry takes it: each entry's
+    /// object made canonical — sorted keys — so the same review stores the
+    /// same object whichever owner wrote it.
+    static func libraryOffer(_ data: Data) throws -> (proposals: [LibraryProposal], shortfalls: [LibraryShortfall]) {
+        guard let answer = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw GhidraHostError(.owner, "the owner's library answer is not a JSON object")
+        }
+        var proposals: [LibraryProposal] = []
+        for item in answer["entries"] as? [[String: Any]] ?? [] {
+            guard let body = item["body"] as? [String: Any], let size = body["size"] as? Int,
+                  let full = body["full"] as? String, let specific = body["specific"] as? String,
+                  let name = item["name"] as? String, let kind = item["kind"] as? String,
+                  let address = item["address"] as? String, let entry = item["entry"] as? [String: Any] else {
+                throw GhidraHostError(.owner, "the owner's library entry is not complete")
+            }
+            let canonical = try JSONSerialization.data(withJSONObject: entry, options: [.sortedKeys])
+            proposals.append(LibraryProposal(body: LibraryBody(size: size, full: full, specific: specific),
+                                             name: name, kind: kind, address: address, entry: canonical))
+        }
+        let below = try JSONSerialization.data(withJSONObject: answer["below_bar"] ?? [])
+        let shortfalls = try JSONDecoder().decode([LibraryShortfall].self, from: below)
+        return (proposals, shortfalls)
     }
 
     /// `NAME=module,…`, the owner's header: which module wrote the shared

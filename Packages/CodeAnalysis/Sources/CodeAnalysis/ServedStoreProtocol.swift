@@ -77,6 +77,26 @@ public enum ServedStoreProtocol {
         }
     }
 
+    /// A publish's offer to the library registry: `ContentStore.putLibraryEntries`.
+    public struct PutLibrary: Codable, Equatable, Sendable {
+        public var module: SHA256Digest
+        public var rev: Int?
+        public var by: String?
+        public var proposals: [LibraryProposal]
+        public var take: Bool?
+        public var reason: String?
+
+        public init(module: SHA256Digest, rev: Int?, by: String?, proposals: [LibraryProposal],
+                    take: Bool? = nil, reason: String? = nil) {
+            self.module = module
+            self.rev = rev
+            self.by = by
+            self.proposals = proposals
+            self.take = take
+            self.reason = reason
+        }
+    }
+
     public struct SetRef: Codable, Equatable, Sendable {
         public var analyses: [AnalysisKey]
 
@@ -110,13 +130,18 @@ public enum ServedStoreProtocol {
         public var seq: Int
         public var modules: [SHA256Digest]
         public var resync: Bool
+        /// The library registry changed: a mirror reads its index again. Nil
+        /// from a server that predates the registry.
+        public var library: Bool?
 
-        public init(store: String, epoch: String, seq: Int, modules: [SHA256Digest], resync: Bool) {
+        public init(store: String, epoch: String, seq: Int, modules: [SHA256Digest], resync: Bool,
+                    library: Bool? = nil) {
             self.store = store
             self.epoch = epoch
             self.seq = seq
             self.modules = modules
             self.resync = resync
+            self.library = library
         }
     }
 

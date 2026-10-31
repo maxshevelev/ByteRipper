@@ -547,6 +547,76 @@ public class ExportCode extends GhidraScript {
         return null;
     }
 
+    /**
+     * How far a review has got with a function by the bar `full` sets, whatever
+     * its level: the gaps that keep it from full — `name`, `plate`, `comments`,
+     * `params`, `locals` — and whether any review work is there at all. The
+     * export asks it of every function with a body; the owner asks it of a
+     * library function too, which the library registry takes only at the bar.
+     */
+    static final class Assessment {
+        final List<String> gaps = new ArrayList<>();
+        boolean reviewWork;
+    }
+
+    static Assessment assess(Function function, DecompileResults decompiled, int steps) {
+        Assessment result = new Assessment();
+        boolean placeholderName = function.getSymbol().getSource() == SourceType.DEFAULT;
+        boolean noPlate = function.getComment() == null || function.getComment().isBlank();
+        // What the review itself did: a plate, a step comment, or a name
+        // a person gave the function or one of its variables. A name the
+        // UEFI pass read or the image carried is not review work.
+        boolean reviewWork = function.getSymbol().getSource() == SourceType.USER_DEFINED
+            || !noPlate || steps > 0;
+        boolean badParameter = false;
+        for (Parameter parameter : function.getParameters()) {
+            if (parameter.getSymbol().getSource() == SourceType.USER_DEFINED) reviewWork = true;
+            if (placeholder(parameter.getName()) || undefined(parameter.getDataType())) {
+                badParameter = true;
+            }
+        }
+        boolean badLocal = false;
+        HighFunction high = decompiled == null ? null : decompiled.getHighFunction();
+        if (high != null) {
+            Iterator<HighSymbol> symbols = high.getLocalSymbolMap().getSymbols();
+            while (symbols.hasNext()) {
+                HighSymbol symbol = symbols.next();
+                if (symbol.isParameter()) continue;
+                if (symbol instanceof ghidra.program.model.pcode.EquateSymbol) continue;
+                Symbol held = symbol.getSymbol();
+                if (held != null && held.getSource() == SourceType.USER_DEFINED) reviewWork = true;
+                // A register or `unique:` piece is the decompiler's split
+                // of a value, not a stored variable: it is not a name the
+                // review missed.
+                if (fragment(symbol.getStorage())) continue;
+                if (placeholder(symbol.getName()) || undefined(symbol.getDataType())) {
+                    badLocal = true;
+                }
+            }
+        }
+        if (placeholderName) result.gaps.add("name");
+        if (noPlate) result.gaps.add("plate");
+        if (steps == 0) result.gaps.add("comments");
+        if (badParameter) result.gaps.add("params");
+        if (badLocal) result.gaps.add("locals");
+        result.reviewWork = reviewWork;
+        return result;
+    }
+
+    /** The step comments a review wrote in a function: pre, end-of-line and post. */
+    static int stepComments(Function function) {
+        int steps = 0;
+        InstructionIterator code = function.getProgram().getListing().getInstructions(function.getBody(), true);
+        while (code.hasNext()) {
+            Instruction instruction = code.next();
+            for (CommentType kind : new CommentType[] { CommentType.PRE, CommentType.EOL, CommentType.POST }) {
+                String said = instruction.getComment(kind);
+                if (said != null && !said.isBlank()) steps++;
+            }
+        }
+        return steps;
+    }
+
     // How far a review has got with a function, and the gaps that keep it
     // from `full`. A library routine is complete as it is, and a function
     // whose body the exporter does not write has nothing to review. Written
@@ -561,46 +631,10 @@ public class ExportCode extends GhidraScript {
         } else if (function.isExternal() || function.isThunk()) {
             level = "no_body";
         } else {
-            boolean placeholderName = function.getSymbol().getSource() == SourceType.DEFAULT;
-            boolean noPlate = function.getComment() == null || function.getComment().isBlank();
-            // What the review itself did: a plate, a step comment, or a name
-            // a person gave the function or one of its variables. A name the
-            // UEFI pass read or the image carried is not review work.
-            boolean reviewWork = function.getSymbol().getSource() == SourceType.USER_DEFINED
-                || !noPlate || steps > 0;
-            boolean badParameter = false;
-            for (Parameter parameter : function.getParameters()) {
-                if (parameter.getSymbol().getSource() == SourceType.USER_DEFINED) reviewWork = true;
-                if (placeholder(parameter.getName()) || undefined(parameter.getDataType())) {
-                    badParameter = true;
-                }
-            }
-            boolean badLocal = false;
-            HighFunction high = decompiled == null ? null : decompiled.getHighFunction();
-            if (high != null) {
-                Iterator<HighSymbol> symbols = high.getLocalSymbolMap().getSymbols();
-                while (symbols.hasNext()) {
-                    HighSymbol symbol = symbols.next();
-                    if (symbol.isParameter()) continue;
-                    if (symbol instanceof ghidra.program.model.pcode.EquateSymbol) continue;
-                    Symbol held = symbol.getSymbol();
-                    if (held != null && held.getSource() == SourceType.USER_DEFINED) reviewWork = true;
-                    // A register or `unique:` piece is the decompiler's split
-                    // of a value, not a stored variable: it is not a name the
-                    // review missed.
-                    if (fragment(symbol.getStorage())) continue;
-                    if (placeholder(symbol.getName()) || undefined(symbol.getDataType())) {
-                        badLocal = true;
-                    }
-                }
-            }
-            if (placeholderName) gaps.add("name");
-            if (noPlate) gaps.add("plate");
-            if (steps == 0) gaps.add("comments");
-            if (badParameter) gaps.add("params");
-            if (badLocal) gaps.add("locals");
+            Assessment assessment = assess(function, decompiled, steps);
+            gaps.addAll(assessment.gaps);
             if (gaps.isEmpty()) level = "full";
-            else if (!reviewWork) level = "decompiled";
+            else if (!assessment.reviewWork) level = "decompiled";
             else level = "partial";
         }
         json.append("      \"review_level\": ").append(quote(level)).append(",\n");

@@ -82,6 +82,29 @@ public struct CASService: Sendable {
             return .json(history)
         }
 
+        // The library registry (`Design/LIBRARY_REGISTRY_PLAN.md`): its index,
+        // one entry's history, and a publish's offer.
+        router.add("GET", "\(prefix)/library", access: .rights([.casRead])) { _ in
+            .json(try Self.answer { try store.libraryIndex() })
+        }
+        router.add("GET", "\(prefix)/library/history/:id", access: .rights([.casRead])) { request in
+            let id = request.parameters["id"] ?? ""
+            guard let history = try Self.answer({ try store.libraryHistory(id: id) }) else {
+                throw HTTPError(.notFound, "no library entry \(id)")
+            }
+            return .json(history)
+        }
+        router.add("POST", "\(prefix)/library", access: .rights([.casWrite])) { request in
+            let put = try request.json(ServedStoreProtocol.PutLibrary.self)
+            let result = try Self.answer {
+                try store.putLibraryEntries(module: put.module, rev: put.rev, by: put.by,
+                                            proposals: put.proposals, take: put.take ?? false,
+                                            reason: put.reason)
+            }
+            await feed.rescan()
+            return .json(result)
+        }
+
         router.add("GET", "\(prefix)/conflicts", access: .rights([.casRead])) { _ in .json(store.conflicts()) }
 
         router.add("GET", "\(prefix)/refs", access: .rights([.casRead])) { _ in .json(store.refs()) }

@@ -843,6 +843,46 @@
       "destructiveHint" : false,
       "idempotentHint" : true,
       "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The shared registry of library functions: one entry per function body (its Function ID hashes), holding the review of an EDK2, AGESA (`amd`) or Intel FSP/RC (`intel`) library routine as one module published it, for every module whose function has the same body. Without `id`: the entries — `id`, `name`, `kind`, `version`, where the current version came from (`source`: module, address, revision) and how many bodies it covers (`variants`) — narrowed by `search` (a part of the name) and `kind`, sorted by name. With `id`: that entry, its `review` (signature, parameters and locals by storage, plate, step comments by offset from the entry) and its `history` of versions, each with the module that published it and, for a version taken over another module's, the reason. A publish offers the registry every function tagged `library.<kind>` whose review meets the bar of a finished function.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "id" : {
+          "description" : "An entry's id, as the list gives it, for the entry itself.",
+          "type" : "string"
+        },
+        "kind" : {
+          "description" : "Only entries of this kind.",
+          "enum" : [
+            "edk2",
+            "amd",
+            "intel"
+          ],
+          "type" : "string"
+        },
+        "limit" : {
+          "description" : "The most items one page holds — a ceiling: a page stops sooner when the answer would pass the size bound, and says so with `truncated: \"size\"`. Default 200, at most 1000.",
+          "maximum" : 1000,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "search" : {
+          "description" : "Only entries whose name holds this text, any case.",
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "library_registry",
+    "title" : "Read the library function registry"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
       "readOnlyHint" : false
     },
     "description" : "Opens the Code panel of a module — its functions, ASM and C beside its bytes — over the dump, at a `function` or an instruction `address` when given, and brings it forward: what the person's Open with Code does. Give the dump `document` and the image `node` (`code_modules`), or a Code panel as `document` to move it to another place. `view` chooses the side the reader lands on: `c` for the decompiled listing, `asm` for the assembly. A panel of the same module already open is raised rather than opened twice. Answers the panel's `document` id, which `code_query` reads.",
@@ -1838,7 +1878,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "Saves the module's program and stores its artifact and review document as the next revision: every ByteRipper reading this store shows the new names. Publishing an unchanged program is the same revision. `type_conflicts` names types another review defines differently, which stay in this module only: `ghidra_type_definition` shows both, and `type_conflict_origins` names the module that wrote the shared copy. `take_type_conflicts: true` replaces the shared copy of each conflicting type with this module's — the answer to a layout that was published wrong, and never an enum, whose clashing member means one of the two reviews is wrong. The types replaced come back as `type_conflicts_taken`, a typedef and the structure it names each named, since the archive holds them separately; a dry run with both flags says what would be taken. `dry_run: true` answers the same without storing: the artifact's counts, the revision it would become, the description's size and the type conflicts — the export is done, so it costs what a publish costs. Publishing is the point another host sees the work; the owner also writes the program out when it idles out, is stopped or gets a signal — not after every change — so only an owner killed outright or crashed loses what came after the last publish.",
+    "description" : "Saves the module's program and stores its artifact and review document as the next revision: every ByteRipper reading this store shows the new names. Publishing an unchanged program is the same revision. `type_conflicts` names types another review defines differently, which stay in this module only: `ghidra_type_definition` shows both, and `type_conflict_origins` names the module that wrote the shared copy. `take_type_conflicts: true` replaces the shared copy of each conflicting type with this module's — the answer to a layout that was published wrong, and never an enum, whose clashing member means one of the two reviews is wrong. The types replaced come back as `type_conflicts_taken`, a typedef and the structure it names each named, since the archive holds them separately; a dry run with both flags says what would be taken. The library registry is offered every function tagged `library.<kind>` whose review meets the bar of a finished function: `library` says which bodies became entries (`added`), new versions (`updated`), were the same (`unchanged`) or are held by another module with another review (`conflicts`: the entry's name and holder, and the name this module proposes); `library_below_bar` lists the tagged functions short of the bar with their gaps. `take_library_conflicts: true` with `library_reason` makes this module's review of each conflicting body the entry's next version — the reason is required and kept. `dry_run: true` answers the same without storing: the artifact's counts, the revision it would become, the description's size and the type conflicts — the export is done, so it costs what a publish costs. Publishing is the point another host sees the work; the owner also writes the program out when it idles out, is stopped or gets a signal — not after every change — so only an owner killed outright or crashed loses what came after the last publish.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -1846,9 +1886,17 @@
           "description" : "Answer what a publish would store — counts, the revision, the conflicts — and store nothing.",
           "type" : "boolean"
         },
+        "library_reason" : {
+          "description" : "Why this module's review is the better one; required with take_library_conflicts.",
+          "type" : "string"
+        },
         "module" : {
           "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
           "type" : "string"
+        },
+        "take_library_conflicts" : {
+          "description" : "Make this module's review of each conflicting library body the registry entry's next version.",
+          "type" : "boolean"
         },
         "take_type_conflicts" : {
           "description" : "Replace the shared copy of each conflicting type with this module's. An enum is never taken.",

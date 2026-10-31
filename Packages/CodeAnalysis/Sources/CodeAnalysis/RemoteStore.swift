@@ -132,6 +132,29 @@ public struct RemoteStore: Sendable {
         }
     }
 
+    /// The library registry's index on the server.
+    public func libraryIndex() async throws -> LibraryIndex {
+        try await json("GET", "library")
+    }
+
+    public func libraryHistory(id: String) async throws -> LibraryHistory? {
+        do {
+            let history: LibraryHistory = try await json("GET", "library/history/\(id)")
+            return history
+        } catch Failure.refused(status: 404, _, _) {
+            return nil
+        }
+    }
+
+    /// `ContentStore.putLibraryEntries` on the server.
+    @discardableResult
+    public func putLibraryEntries(module: SHA256Digest, rev: Int?, by: String?, proposals: [LibraryProposal],
+                                  take: Bool = false, reason: String? = nil) async throws -> LibraryWriteResult {
+        let body = try encoder.encode(ServedStoreProtocol.PutLibrary(
+            module: module, rev: rev, by: by, proposals: proposals, take: take ? true : nil, reason: reason))
+        return try await json("POST", "library", body: body)
+    }
+
     public func conflicts() async throws -> [AnalysisManifest] {
         try await json("GET", "conflicts")
     }

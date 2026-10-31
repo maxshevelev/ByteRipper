@@ -83,8 +83,8 @@ public final class CodeReadings {
         self.screen = screen
     }
 
-    /// `code_query`, then `code_modules`.
-    public nonisolated func tools() -> [AgentTool] { [queryTool, modulesTool] }
+    /// `code_query`, `code_modules`, then `library_registry`.
+    public nonisolated func tools() -> [AgentTool] { [queryTool, modulesTool, libraryTool] }
 
     nonisolated static let lists = ["functions", "instructions", "c", "uses", "strings", "symbols", "references",
                                 "post_codes"]
@@ -125,6 +125,93 @@ public final class CodeReadings {
         ) { call in
             try await self.modules(call.arguments)
         }
+    }
+
+    /// The shared registry of library functions (`Design/LIBRARY_REGISTRY_PLAN.md`):
+    /// its entries, or one entry with its review and its versions.
+    public nonisolated var libraryTool: AgentTool {
+        AgentTool(
+            name: "library_registry",
+            title: "Read the library function registry",
+            description: """
+                The shared registry of library functions: one entry per function body (its Function ID \
+                hashes), holding the review of an EDK2, AGESA (`amd`) or Intel FSP/RC (`intel`) library \
+                routine as one module published it, for every module whose function has the same body. \
+                Without `id`: the entries — `id`, `name`, `kind`, `version`, where the current version came \
+                from (`source`: module, address, revision) and how many bodies it covers (`variants`) — \
+                narrowed by `search` (a part of the name) and `kind`, sorted by name. With `id`: that entry, \
+                its `review` (signature, parameters and locals by storage, plate, step comments by offset \
+                from the entry) and its `history` of versions, each with the module that published it and, \
+                for a version taken over another module's, the reason. A publish offers the registry every \
+                function tagged `library.<kind>` whose review meets the bar of a finished function.
+                """,
+            inputSchema: AgentSchema.object([
+                "id": AgentSchema.string("An entry's id, as the list gives it, for the entry itself."),
+                "search": AgentSchema.string("Only entries whose name holds this text, any case."),
+                "kind": AgentSchema.choice(["edk2", "amd", "intel"], "Only entries of this kind."),
+                "limit": AgentSchema.limit(default: 200, maximum: 1000)
+            ])
+        ) { call in
+            .json(try await self.library(call.arguments))
+        }
+    }
+
+    private func library(_ arguments: AgentArguments) async throws -> JSONValue {
+        let root = store()
+        let id = try arguments.optionalString("id")
+        let search = try arguments.optionalString("search")?.lowercased()
+        let kind = try arguments.optionalString("kind")
+        let limit = try arguments.limit(default: 200, maximum: 1000)
+        return try await Task.detached(priority: .userInitiated) { () throws -> JSONValue in
+            guard let store = try? ContentStore(root: root, create: false) else {
+                return .object(["entries": .array([]), "total": .int(0)])
+            }
+            let index = try store.libraryIndex()
+            func source(_ source: LibrarySource) -> JSONValue {
+                .object(["module": .string(source.module.hex), "address": .string(source.address),
+                         "rev": source.rev.map { JSONValue.int(Int64($0)) } ?? .null,
+                         "by": source.by.map(JSONValue.string) ?? .null])
+            }
+            if let id {
+                guard let entry = index.entries[id] else {
+                    throw AgentToolError("The registry has no entry \(id): `library_registry` without `id` lists them.")
+                }
+                var answer: [String: JSONValue] = [:]
+                answer["id"] = .string(id)
+                answer["name"] = .string(entry.name)
+                answer["kind"] = .string(entry.kind)
+                answer["version"] = .int(Int64(entry.version))
+                answer["source"] = source(entry.source)
+                answer["variants"] = .array(entry.variants.map {
+                    .object(["body": .string($0.body.key), "module": .string($0.module.hex)])
+                })
+                if let data = try? store.object(entry.entry),
+                   let review = try? JSONDecoder().decode(JSONValue.self, from: data) {
+                    answer["review"] = review
+                }
+                // A mirror copies the index only: the history is the server's.
+                if let history = try store.libraryHistory(id: id) {
+                    answer["history"] = .array(history.versions.map { version in
+                        .object(["version": .int(Int64(version.version)), "source": source(version.source),
+                                 "reason": version.reason.map(JSONValue.string) ?? .null,
+                                 "recorded_at": .string(version.recordedAt)])
+                    })
+                }
+                return .object(answer)
+            }
+            let matching = index.entries
+                .filter { kind == nil || $0.value.kind == kind }
+                .filter { search == nil || $0.value.name.lowercased().contains(search!) }
+                .sorted { ($0.value.name, $0.key) < ($1.value.name, $1.key) }
+            return .object([
+                "total": .int(Int64(matching.count)),
+                "entries": .array(matching.prefix(limit).map { id, entry in
+                    .object(["id": .string(id), "name": .string(entry.name), "kind": .string(entry.kind),
+                             "version": .int(Int64(entry.version)), "source": source(entry.source),
+                             "variants": .int(Int64(entry.variants.count))])
+                })
+            ])
+        }.value
     }
 
     // MARK: - Which analysis

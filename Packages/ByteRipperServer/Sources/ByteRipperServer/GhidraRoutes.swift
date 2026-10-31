@@ -87,25 +87,26 @@ enum GhidraRoutes {
             }
             // `take_type_conflicts`: this publish's version of a conflicting
             // type replaces the shared one — a layout that was published wrong.
-            let take = request.query["take_type_conflicts"] == "1"
+            // `take_library_conflicts` with `library_reason`: this review of a
+            // library body becomes the registry entry's next version.
+            let options = GhidraHost.PublishOptions(
+                takeTypeConflicts: request.query["take_type_conflicts"] == "1",
+                takeLibraryConflicts: request.query["take_library_conflicts"] == "1",
+                libraryReason: request.query["library_reason"])
             let publication = try await answer {
-                try await host.publish(module, by: by(request), takeTypeConflicts: take)
+                try await host.publish(module, by: by(request), options: options)
             }
             await published()
-            return .json(Published(manifest: publication.manifest, typeConflicts: publication.typeConflicts,
-                                   typeConflictsTaken: publication.typeConflictsTaken,
-                                   typeConflictOrigins: publication.typeConflictOrigins))
+            return .json(PublishAnswer(publication))
         }
 
         router.add("POST", "\(prefix)/modules/:module/release", access: .rights([.ghidraUse, .casWrite])) { request in
             let module = try digest(request.parameters["module"])
             guard let publication = try await answer({ try await host.release(module, by: by(request)) }) else {
-                return .json(Published(manifest: nil, typeConflicts: [], typeConflictsTaken: [], typeConflictOrigins: [:]))
+                return .json(PublishAnswer(nil))
             }
             await published()
-            return .json(Published(manifest: publication.manifest, typeConflicts: publication.typeConflicts,
-                                   typeConflictsTaken: publication.typeConflictsTaken,
-                                   typeConflictOrigins: publication.typeConflictOrigins))
+            return .json(PublishAnswer(publication))
         }
 
         router.add("POST", "\(prefix)/modules/:module/stop", access: .rights([.ghidraUse])) { request in
@@ -122,22 +123,6 @@ enum GhidraRoutes {
         var phase: String?
         var reviewed: Bool
         var published: ProjectState.Published?
-    }
-
-    struct Published: Codable {
-        var manifest: AnalysisManifest?
-        var typeConflicts: [String]
-        /// The shared types this publish replaced with its own.
-        var typeConflictsTaken: [String]
-        /// The module that wrote the shared copy of each conflict, when known.
-        var typeConflictOrigins: [String: String]
-
-        private enum CodingKeys: String, CodingKey {
-            case manifest
-            case typeConflicts = "type_conflicts"
-            case typeConflictsTaken = "type_conflicts_taken"
-            case typeConflictOrigins = "type_conflict_origins"
-        }
     }
 
     nonisolated(unsafe) static var projectsRoot = GhidraHost.defaultProjectsRoot

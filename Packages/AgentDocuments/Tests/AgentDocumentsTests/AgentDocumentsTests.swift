@@ -158,6 +158,41 @@ final class CodeReadingsTests: XCTestCase {
         }
     }
 
+    /// The library registry: its entries narrowed by kind and name, and one
+    /// entry with its review and its history.
+    func testTheLibraryRegistryListsEntriesAndOpensOne() async throws {
+        let store = try ContentStore(root: directory)
+        func proposal(_ name: String, _ kind: String, _ specific: String) throws -> LibraryProposal {
+            let entry = try JSONSerialization.data(withJSONObject: ["name": name, "plate": "evidence"],
+                                                   options: .sortedKeys)
+            return LibraryProposal(body: LibraryBody(size: 0x20, full: "00112233445566aa", specific: specific),
+                                   name: name, kind: kind, address: "0x1000", entry: entry)
+        }
+        try store.putLibraryEntries(module: module.sha256, rev: 3, by: "agent", proposals: [
+            try proposal("SetMem", "edk2", "0000000000000001"),
+            try proposal("LibAmdIoWrite", "amd", "0000000000000002")
+        ])
+        let tool = try XCTUnwrap(readings().tools().first { $0.name == "library_registry" })
+
+        let amd = try await tool.run(AgentCall(tool: tool.name, arguments: AgentArguments(["kind": "amd"])))
+        guard case .json(.object(let list)) = amd else { return XCTFail("not an object: \(amd)") }
+        XCTAssertEqual(list["total"], .int(1))
+        let first = try XCTUnwrap(list["entries"]?.arrayValue?.first)
+        XCTAssertEqual(first["name"]?.stringValue, "LibAmdIoWrite")
+        XCTAssertEqual(first["source"]?["module"]?.stringValue, module.sha256.hex)
+
+        let id = try XCTUnwrap(first["id"]?.stringValue)
+        let one = try await tool.run(AgentCall(tool: tool.name, arguments: AgentArguments(["id": .string(id)])))
+        guard case .json(.object(let entry)) = one else { return XCTFail("not an object: \(one)") }
+        XCTAssertEqual(entry["review"]?["plate"]?.stringValue, "evidence")
+        XCTAssertEqual(entry["history"]?.arrayValue?.count, 1)
+
+        do {
+            _ = try await tool.run(AgentCall(tool: tool.name, arguments: AgentArguments(["id": "nothing"])))
+            XCTFail("opened an entry the registry has not got")
+        } catch is AgentToolError {}
+    }
+
     /// A document that is not a module's code and has no `node` given is
     /// refused in the host's words — the app's name its Code panel, the
     /// server's name nothing.
@@ -212,7 +247,7 @@ private struct NoGhidra: GhidraBackend {
     func openModule(_ module: SHA256Digest) async throws -> Data { Data() }
     func readCall(_ module: SHA256Digest, _ call: String, query: [String: String]) async throws -> Data { Data() }
     func writeCall(_ module: SHA256Digest, _ call: String, body: Data) async throws -> Data { Data() }
-    func publishModule(_ module: SHA256Digest, by: String, takeTypeConflicts: Bool) async throws -> Data { Data() }
+    func publishModule(_ module: SHA256Digest, by: String, options: GhidraHost.PublishOptions) async throws -> Data { Data() }
     func publishPreview(_ module: SHA256Digest, takeTypeConflicts: Bool) async throws -> Data { Data() }
     func releaseModule(_ module: SHA256Digest, by: String) async throws -> Data { Data() }
 }

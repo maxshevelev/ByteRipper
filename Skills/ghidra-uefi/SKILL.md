@@ -325,6 +325,31 @@ point 2 is not enough: such a function is not tagged, and the review reads it.
 The bare `library` tag of an earlier review names no kind; the panel shows it
 as a library of no recorded kind until the review tags it again.
 
+**The library registry.** A tagged function is offered at every publish to the
+registry shared by every module (`Design/LIBRARY_REGISTRY_PLAN.md`), keyed by
+its body as Function ID hashes it — and taken only at the highest bar: the bar
+of "What a finished function looks like" (a real name, every parameter and local
+named and typed, the plate with its evidence, step comments). A library
+function is complete for its own module without that; for the registry, which
+copies it into every module with the same body, it is not. `ghidra_publish`
+answers what happened:
+
+- `library.added`, `library.updated`, `library.unchanged`: the entries this
+  publish made, moved to their next version, or matched;
+- `library_below_bar`: the tagged functions the registry did not take, with
+  their gaps — bring them to the bar and publish again;
+- `library.conflicts`: bodies another module holds with another review — its
+  name, the holding module, the name this module proposes. One body is one
+  function: there are never two entries for it. Read both reviews
+  (`library_registry` with the entry's `id` gives the held one), decide which
+  is right or merge the better parts into this module's, and publish with
+  `take_library_conflicts: true` and a `library_reason` that says why. Leave it
+  when the held review is the better one: this module's function keeps its own
+  review until the registry is applied to it.
+
+`library_registry` reads the registry: its entries by name and kind, and one
+entry's review and history.
+
 ### On an analysis server
 
 `byteripper-server` (`Design/SERVER_PLAN.md`, `Design/SERVER_HEADLESS_PLAN.md`)

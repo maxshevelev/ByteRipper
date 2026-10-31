@@ -43,6 +43,8 @@ refused, never dropped.
   conflicts/<module-sha>/<recipe>/<artifact-sha>.json
                                               # another project's reading, kept aside
   reviews/<module-sha>/manifest.json          # every revision of the module's readings
+  library/index.json                          # the library registry: entries, and every body's entry
+  library/history/<id>.json                   # every version of one registry entry
   tmp/                                        # staging; cleaned by gc
   .lock                                       # flock for writers
 ```
@@ -121,6 +123,28 @@ description (`put-object`), the revision (`record-revision`, which refuses an
 object the store does not hold), and the analysis naming it (`put-analysis`). A publish
 that stops after the revision leaves an entry ahead of its analysis, which
 `verify` reports and the next publish of the same revision overwrites.
+
+### The library registry
+
+`library/` is the shared registry of library functions
+(`Design/LIBRARY_REGISTRY_PLAN.md`): one entry per function body — its
+Function ID code units, full hash and specific hash, written
+`<size>-<full>-<specific>` in hex — holding the review one module published.
+`index.json` maps every entry's id to its current version (an object, as a
+review document is), name, kind (`edk2`, `amd`, `intel`), source (module,
+address, revision, who) and bodies, and every body to its entry.
+`history/<id>.json` keeps every version, with the reason when an agent took
+another module's review over the one held.
+
+A publish offers the registry its module's functions tagged `library.<kind>`
+whose review meets the bar of a finished function. A body the registry lacks
+is a new entry; the same review is no change; the holding module's new review
+is the next version; another module's different review is a conflict, and the
+entry stays unless the publish takes it with a reason. A served store takes the
+offer at `POST /cas/v1/library` and serves `GET /cas/v1/library` and
+`GET /cas/v1/library/history/<id>`; its change feed says `library: true` when
+the index changed, and a mirror copies the index (not the histories). `gc`
+keeps every object the index and the histories name.
 
 ### References and collection
 

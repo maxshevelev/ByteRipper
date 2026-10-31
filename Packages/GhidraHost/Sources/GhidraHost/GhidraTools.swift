@@ -692,6 +692,13 @@ public enum GhidraTools {
                 clashing member means one of the two reviews is wrong. The types replaced come back as \
                 `type_conflicts_taken`, a typedef and the structure it names each named, since the archive \
                 holds them separately; a dry run with both flags says what would be taken. \
+                The library registry is offered every function tagged `library.<kind>` whose review \
+                meets the bar of a finished function: `library` says which bodies became entries \
+                (`added`), new versions (`updated`), were the same (`unchanged`) or are held by another \
+                module with another review (`conflicts`: the entry's name and holder, and the name this \
+                module proposes); `library_below_bar` lists the tagged functions short of the bar with \
+                their gaps. `take_library_conflicts: true` with `library_reason` makes this module's review \
+                of each conflicting body the entry's next version — the reason is required and kept. \
                 `dry_run: true` answers the same without storing: the artifact's counts, the revision \
                 it would become, the description's size and the type conflicts — the export is done, so \
                 it costs what a publish costs. Publishing is the point another host sees the work; the \
@@ -704,7 +711,11 @@ public enum GhidraTools {
                 "dry_run": AgentSchema.boolean(
                     "Answer what a publish would store — counts, the revision, the conflicts — and store nothing."),
                 "take_type_conflicts": AgentSchema.boolean(
-                    "Replace the shared copy of each conflicting type with this module's. An enum is never taken.")
+                    "Replace the shared copy of each conflicting type with this module's. An enum is never taken."),
+                "take_library_conflicts": AgentSchema.boolean(
+                    "Make this module's review of each conflicting library body the registry entry's next version."),
+                "library_reason": AgentSchema.string(
+                    "Why this module's review is the better one; required with take_library_conflicts.")
             ], required: ["module"]),
             annotations: .edit
         ) { call in
@@ -715,7 +726,11 @@ public enum GhidraTools {
                     try await backend.publishPreview(module, takeTypeConflicts: take)
                 }
             }
-            return try await answer { try await backend.publishModule(module, by: "agent", takeTypeConflicts: take) }
+            let options = GhidraHost.PublishOptions(
+                takeTypeConflicts: take,
+                takeLibraryConflicts: try call.arguments.bool("take_library_conflicts", default: false),
+                libraryReason: try call.arguments.optionalString("library_reason"))
+            return try await answer { try await backend.publishModule(module, by: "agent", options: options) }
         }
     }
 

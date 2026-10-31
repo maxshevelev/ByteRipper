@@ -70,6 +70,9 @@ public actor StoreMirror {
         for module in changes.modules {
             try store.mirror(try await remote.module(module))
         }
+        if changes.library == true {
+            try store.mirrorLibrary(try await remote.libraryIndex())
+        }
         seq = changes.seq
         return changes.modules
     }
@@ -120,6 +123,11 @@ public actor StoreMirror {
         }
         for module in store.modules() where !names.contains(module) {
             try store.mirror(ServedModule(module: module, manifests: [], history: nil))
+        }
+        // A server from before the registry has no route for it: its mirror
+        // simply has no registry.
+        if let index = try? await remote.libraryIndex() {
+            try store.mirrorLibrary(index)
         }
     }
 }

@@ -128,6 +128,8 @@ public protocol AnalysisWriter: Sendable {
     func storedAnalysis(module: SHA256Digest, recipe: String) async throws -> AnalysisManifest?
     func writeAnalysis(module: ModuleIdentity, recipe: AnalysisRecipe, artifact: Data, source: SourceIdentity,
                        reading: AnalysisReading?, replace: Bool) async throws -> AnalysisManifest
+    func writeLibraryEntries(module: SHA256Digest, rev: Int?, by: String?, proposals: [LibraryProposal],
+                             take: Bool, reason: String?) async throws -> LibraryWriteResult
 }
 
 extension ContentStore: AnalysisWriter {
@@ -149,6 +151,11 @@ extension ContentStore: AnalysisWriter {
         try putAnalysis(module: module, recipe: recipe, artifact: artifact, source: source,
                         reading: reading, replace: replace)
     }
+
+    public func writeLibraryEntries(module: SHA256Digest, rev: Int?, by: String?, proposals: [LibraryProposal],
+                                    take: Bool, reason: String?) async throws -> LibraryWriteResult {
+        try putLibraryEntries(module: module, rev: rev, by: by, proposals: proposals, take: take, reason: reason)
+    }
 }
 
 extension RemoteStore: AnalysisWriter {
@@ -169,5 +176,11 @@ extension RemoteStore: AnalysisWriter {
                               replace: Bool) async throws -> AnalysisManifest {
         try await putAnalysis(module: module, recipe: recipe, artifact: artifact, source: source,
                               reading: reading, replace: replace)
+    }
+
+    public func writeLibraryEntries(module: SHA256Digest, rev: Int?, by: String?, proposals: [LibraryProposal],
+                                    take: Bool, reason: String?) async throws -> LibraryWriteResult {
+        try await putLibraryEntries(module: module, rev: rev, by: by, proposals: proposals, take: take,
+                                    reason: reason)
     }
 }

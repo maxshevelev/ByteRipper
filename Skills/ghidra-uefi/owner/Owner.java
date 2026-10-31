@@ -250,6 +250,7 @@ public class Owner {
                 if (path.equals("/v1/data")) { json(exchange, 200, data(query, false)); return; }
                 if (path.equals("/v1/strings")) { json(exchange, 200, data(query, true)); return; }
                 if (path.equals("/v1/review")) { review(exchange); return; }
+                if (path.equals("/v1/library")) { json(exchange, 200, library()); return; }
                 if (path.equals("/v1/review/description")) { publishedDescription(exchange); return; }
                 if (path.equals("/v1/description")) { json(exchange, 200, description()); return; }
                 if (path.equals("/v1/type")) { json(exchange, 200, readType(query)); return; }
@@ -1107,6 +1108,119 @@ public class Owner {
         }
         copy.setDescription(null);
         return copy;
+    }
+
+    /**
+     * What this program offers the library registry
+     * (`Design/LIBRARY_REGISTRY_PLAN.md`): every function a review tagged
+     * `library.<kind>`, keyed by its body as Function ID hashes it — the code
+     * units, the full hash (address operands masked) and the specific hash
+     * (constants kept). A function whose review meets the bar `full` sets —
+     * a real name, every parameter and local named and typed, a plate, step
+     * comments — is an `entries` item with the review the registry keeps; one
+     * short of it, or too short for Function ID to hash, is a `below_bar` item
+     * with its gaps. Read whenever asked; the host asks after a publish.
+     */
+    private JsonObject library() throws Exception {
+        ghidra.feature.fid.service.FidService fid = new ghidra.feature.fid.service.FidService();
+        JsonArray entries = new JsonArray();
+        JsonArray below = new JsonArray();
+        for (Function function : program.getFunctionManager().getFunctions(true)) {
+            String tag = ExportCode.libraryTag(function);
+            if (tag == null || !tag.startsWith("library.")) continue;
+            String kind = tag.substring("library.".length());
+            ghidra.feature.fid.hash.FidHashQuad hash = fid.hashFunction(function);
+            ExportCode.Assessment assessment = ExportCode.assess(
+                function, decompile(function), ExportCode.stepComments(function));
+            java.util.List<String> gaps = new java.util.ArrayList<>(assessment.gaps);
+            if (hash == null) gaps.add("too_short");
+            if (!gaps.isEmpty()) {
+                JsonObject item = new JsonObject();
+                item.addProperty("address", hex(function.getEntryPoint()));
+                item.addProperty("name", function.getName());
+                item.addProperty("kind", kind);
+                JsonArray list = new JsonArray();
+                gaps.forEach(list::add);
+                item.add("gaps", list);
+                below.add(item);
+                continue;
+            }
+            JsonObject body = new JsonObject();
+            body.addProperty("size", hash.getCodeUnitSize());
+            body.addProperty("full", String.format("%016x", hash.getFullHash()));
+            body.addProperty("specific", String.format("%016x", hash.getSpecificHash()));
+            JsonObject item = new JsonObject();
+            item.addProperty("address", hex(function.getEntryPoint()));
+            item.addProperty("name", function.getName());
+            item.addProperty("kind", kind);
+            item.add("body", body);
+            item.add("entry", libraryEntry(function, kind, body));
+            entries.add(item);
+        }
+        JsonObject answer = identity();
+        answer.add("entries", entries);
+        answer.add("below_bar", below);
+        return answer;
+    }
+
+    /**
+     * One function's review as the registry keeps it: nothing that names this
+     * module — no address, no module — so the same review of the same body in
+     * another module is the same entry. Comments are placed by their offset
+     * from the entry, variables by their storage.
+     */
+    private JsonObject libraryEntry(Function function, String kind, JsonObject body) {
+        Address entry = function.getEntryPoint();
+        JsonObject answer = new JsonObject();
+        answer.addProperty("schema", 1);
+        answer.add("body", body);
+        answer.addProperty("kind", kind);
+        answer.addProperty("name", function.getName());
+        answer.addProperty("signature", function.getPrototypeString(false, false));
+        answer.addProperty("calling_convention", function.getCallingConventionName());
+        answer.addProperty("return_type", function.getReturnType().getDisplayName());
+        JsonArray parameters = new JsonArray();
+        for (Parameter parameter : function.getParameters()) {
+            JsonObject item = new JsonObject();
+            item.addProperty("ordinal", parameter.getOrdinal());
+            item.addProperty("storage", parameter.getVariableStorage().toString());
+            item.addProperty("name", parameter.getName());
+            item.addProperty("type", parameter.getDataType().getDisplayName());
+            parameters.add(item);
+        }
+        answer.add("params", parameters);
+        java.util.TreeMap<String, JsonObject> locals = new java.util.TreeMap<>();
+        for (ghidra.program.model.listing.Variable local : function.getLocalVariables()) {
+            JsonObject item = new JsonObject();
+            String storage = local.getVariableStorage().toString();
+            item.addProperty("storage", storage);
+            item.addProperty("first_use", String.format("0x%X", local.getFirstUseOffset()));
+            item.addProperty("name", local.getName());
+            item.addProperty("type", local.getDataType().getDisplayName());
+            locals.put(storage + "@" + local.getFirstUseOffset(), item);
+        }
+        JsonArray localList = new JsonArray();
+        locals.values().forEach(localList::add);
+        answer.add("locals", localList);
+        String plate = function.getComment();
+        answer.addProperty("plate", plate == null ? "" : plate);
+        JsonArray comments = new JsonArray();
+        ghidra.program.model.listing.InstructionIterator code =
+            program.getListing().getInstructions(function.getBody(), true);
+        while (code.hasNext()) {
+            ghidra.program.model.listing.Instruction instruction = code.next();
+            for (CommentType type : new CommentType[] { CommentType.PRE, CommentType.EOL, CommentType.POST }) {
+                String text = instruction.getComment(type);
+                if (text == null || text.isBlank()) continue;
+                JsonObject item = new JsonObject();
+                item.addProperty("offset", String.format("0x%X", instruction.getAddress().subtract(entry)));
+                item.addProperty("kind", type.name().toLowerCase());
+                item.addProperty("text", text);
+                comments.add(item);
+            }
+        }
+        answer.add("comments", comments);
+        return answer;
     }
 
     /** The review document harvested by the last publish. */

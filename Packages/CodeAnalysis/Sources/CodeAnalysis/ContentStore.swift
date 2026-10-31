@@ -588,6 +588,8 @@ public struct ContentStore: Sendable {
         let keepObjects = Set(named.map(\.artifact.sha256))
             .union(named.flatMap { $0.reading?.objects ?? [] })
             .union(reviewHistories().flatMap { $0.revisions.flatMap(\.objects) })
+            // The library registry's entries, every version its histories keep.
+            .union(libraryObjects())
         let orphanObjects = contents(of: objectsURL).filter {
             guard let digest = SHA256Digest(hex: $0.lastPathComponent) else { return true }
             return !keepObjects.contains(digest)

@@ -163,6 +163,67 @@ final class CASServiceTests: XCTestCase {
         XCTAssertEqual(quiet.modules, [])
     }
 
+    // MARK: - The library registry
+
+    private func libraryProposal(_ name: String) throws -> LibraryProposal {
+        let entry = try JSONSerialization.data(withJSONObject: ["name": name], options: .sortedKeys)
+        return LibraryProposal(body: LibraryBody(size: 0x20, full: "00112233445566aa", specific: "0000000000000001"),
+                               name: name, kind: "edk2", address: "0x1000", entry: entry)
+    }
+
+    /// An offer through the server is the store's own call: an entry, then a
+    /// conflict from another module, taken only with a reason; the history is
+    /// served, and the feed reports a registry change even with no module's.
+    func testTheLibraryRegistryIsServedAndAChangeIsInTheFeed() async throws {
+        let hello = try await remote.hello()
+        let added = try await remote.putLibraryEntries(module: module("czn").sha256, rev: 33, by: "agent",
+                                                       proposals: [try libraryProposal("SetMem")])
+        XCTAssertEqual(added.added.map(\.name), ["SetMem"])
+        let index = try await remote.libraryIndex()
+        XCTAssertEqual(index, try served.libraryIndex())
+        let id = try XCTUnwrap(index.entries.keys.first)
+
+        let conflict = try await remote.putLibraryEntries(module: module("rn").sha256, rev: 2, by: "agent",
+                                                          proposals: [try libraryProposal("FillBytes")])
+        XCTAssertEqual(conflict.conflicts.map(\.proposedName), ["FillBytes"])
+        do {
+            _ = try await remote.putLibraryEntries(module: module("rn").sha256, rev: 2, by: "agent",
+                                                   proposals: [try libraryProposal("FillBytes")], take: true)
+            XCTFail("took a conflict without a reason")
+        } catch RemoteStore.Failure.refused(let status, _, _) {
+            XCTAssertEqual(status, 409)
+        }
+        let changes = try await remote.changes(since: hello.seq, epoch: hello.epoch, wait: 0)
+        XCTAssertEqual(changes.library, true)
+        XCTAssertEqual(changes.modules, [], "the registry changed, no module did")
+
+        try await remote.putLibraryEntries(module: module("rn").sha256, rev: 2, by: "agent",
+                                           proposals: [try libraryProposal("FillBytes")], take: true,
+                                           reason: "the Renoir review names it as EDK2 does")
+        let history = try await remote.libraryHistory(id: id)
+        XCTAssertEqual(history?.versions.map(\.version), [1, 2])
+        XCTAssertEqual(history?.versions.last?.reason, "the Renoir review names it as EDK2 does")
+        let missing = try await remote.libraryHistory(id: "0-0000000000000000-0000000000000000")
+        XCTAssertNil(missing)
+    }
+
+    /// A mirror copies the index when it connects, and again when the feed
+    /// says the registry changed.
+    func testAMirrorFollowsTheLibraryRegistry() async throws {
+        try await remote.putLibraryEntries(module: module("czn").sha256, rev: 33, by: "agent",
+                                           proposals: [try libraryProposal("SetMem")])
+        let mirror = StoreMirror(remote: remote, mirrorsRoot: directory.appendingPathComponent("mirrors"))
+        let store = try await mirror.connect()
+        XCTAssertEqual(try store.libraryIndex(), try served.libraryIndex())
+
+        let following = Task { try await mirror.follow(wait: 20) }
+        try await Task.sleep(nanoseconds: 200_000_000)
+        try await remote.putLibraryEntries(module: module("czn").sha256, rev: 34, by: "agent",
+                                           proposals: [try libraryProposal("SetMemBetter")])
+        _ = try await following.value
+        XCTAssertEqual(try store.libraryIndex().entries.values.first?.name, "SetMemBetter")
+    }
+
     // MARK: - The mirror
 
     func testAMirrorCopiesManifestsAndFetchesObjectsOnRead() async throws {

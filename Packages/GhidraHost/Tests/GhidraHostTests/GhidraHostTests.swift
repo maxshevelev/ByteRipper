@@ -148,4 +148,27 @@ final class GhidraHostOwnerTests: XCTestCase {
         XCTAssertEqual(GhidraInstall.minimumJDK(for: "13.0"), 25)
         XCTAssertEqual(GhidraInstall.minimumJDK(for: "unknown"), 25)
     }
+
+    /// The owner's library answer as the registry takes it: an entry's object
+    /// made canonical — the same review is the same bytes whatever order the
+    /// owner wrote its keys in — and the functions short of the bar with their
+    /// gaps.
+    func testTheOwnersLibraryAnswerBecomesProposalsAndShortfalls() throws {
+        let answer = Data("""
+            {"module": "x", "entries": [{"address": "0x9A91116", "name": "SetMem", "kind": "edk2",
+              "body": {"size": 22, "full": "00112233445566AA", "specific": "0123456789abcdef"},
+              "entry": {"plate": "EDK2 BaseMemoryLib SetMem", "name": "SetMem", "schema": 1}}],
+             "below_bar": [{"address": "0x9A910A9", "name": "LibAmdIoWrite", "kind": "amd",
+              "gaps": ["params", "comments"]}]}
+            """.utf8)
+        let offer = try GhidraHost.libraryOffer(answer)
+        XCTAssertEqual(offer.proposals.count, 1)
+        let proposal = try XCTUnwrap(offer.proposals.first)
+        XCTAssertEqual(proposal.body.key, "16-00112233445566aa-0123456789abcdef")
+        XCTAssertEqual(String(decoding: proposal.entry, as: UTF8.self),
+                       #"{"name":"SetMem","plate":"EDK2 BaseMemoryLib SetMem","schema":1}"#)
+        XCTAssertEqual(offer.shortfalls, [GhidraHost.LibraryShortfall(
+            address: "0x9A910A9", name: "LibAmdIoWrite", kind: "amd", gaps: ["params", "comments"])])
+        XCTAssertThrowsError(try GhidraHost.libraryOffer(Data(#"{"entries": [{"name": "X"}]}"#.utf8)))
+    }
 }
