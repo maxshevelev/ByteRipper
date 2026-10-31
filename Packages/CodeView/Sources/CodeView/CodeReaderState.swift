@@ -9,6 +9,58 @@ import Foundation
 /// brought back before it is selected, an instruction selects its function —
 /// live here, where a test reaches them without a window.
 public struct CodeReaderState: Sendable {
+    /// How the Functions list is laid out: as the artifact lists the functions
+    /// (by entry address), as a tree of calls under the module's entry, or in
+    /// groups by how far the review has got with each function.
+    public enum FunctionOrder: Int, CaseIterable, Sendable {
+        case address, calls, review
+    }
+
+    /// What a heading in the Functions list stands for: how far the review
+    /// has got with the functions under it. The words are the view's; the
+    /// state names the group, so a test is not tied to a language.
+    ///
+    /// The declaration order is the order the grouped list shows them in.
+    public enum FunctionGroup: Int, CaseIterable, Sendable {
+        /// Nothing keeps it from full.
+        case full
+        /// Some review work is done, but a gap remains.
+        case partial
+        /// Nothing of the review: a placeholder name, no comments, no names.
+        case decompiled
+        /// A library routine the module links in, or one tagged `library`.
+        case library
+        /// An external function or a thunk: the exporter writes no C for it.
+        case noBody
+        /// An artifact from before the level was recorded, or one whose level
+        /// this reader does not know.
+        case unknown
+    }
+
+    /// One row of the Functions list: a heading, or a function and how deep in
+    /// the call tree it sits.
+    public enum FunctionRow: Equatable, Sendable {
+        case group(FunctionGroup)
+        case function(Int, level: Int)
+
+        /// The function's place in the artifact, nil for a heading.
+        public var function: Int? {
+            if case let .function(index, _) = self { return index }
+            return nil
+        }
+
+        /// The heading's group, nil for a function.
+        public var group: FunctionGroup? {
+            if case let .group(group) = self { return group }
+            return nil
+        }
+
+        /// How far the row is set in: a heading, or a function of the tree.
+        public var level: Int {
+            if case let .function(_, level) = self { return level }
+            return 0
+        }
+    }
     /// What the left navigator lists. One at a time, so every function stays
     /// visible when Functions is chosen; the other lists are a click away.
     public enum List: Int, CaseIterable, Sendable {
@@ -31,6 +83,22 @@ public struct CodeReaderState: Sendable {
     public private(set) var listedPostCodes: [Int] = []
     public private(set) var listedStatusCodes: [Int] = []
 
+    /// How the Functions list is laid out, and its rows in that order: the
+    /// search narrows them in every order.
+    public private(set) var functionOrder: FunctionOrder = .address
+    public private(set) var functionRows: [FunctionRow] = []
+    /// A function's row, in the order in front.
+    private var functionRowByIndex: [Int: Int] = [:]
+    /// The call tree's shape, built with the rows: which functions it gives
+    /// calls to, whose calls are hidden, and each function's caller in it.
+    private var callChildren: Set<Int> = []
+    private var collapsedFunctions: Set<Int> = []
+    private var callParent: [Int: Int] = [:]
+    /// The review groups whose functions are hidden, and how many functions
+    /// each group holds whether it is open or closed.
+    private var collapsedGroups: Set<FunctionGroup> = []
+    private var groupCounts: [FunctionGroup: Int] = [:]
+
     public init(model: CodeModel) {
         self.model = model
         refilter()
@@ -44,7 +112,7 @@ public struct CodeReaderState: Sendable {
     /// The number of rows the list in front has.
     public var rowCount: Int {
         switch list {
-        case .functions: listedFunctions.count
+        case .functions: functionRows.count
         case .strings: listedStrings.count
         case .postCodes: listedPostCodes.count
         case .statusCodes: listedStatusCodes.count
@@ -56,6 +124,16 @@ public struct CodeReaderState: Sendable {
     public mutating func show(_ list: List) -> Bool {
         guard self.list != list else { return false }
         self.list = list
+        return true
+    }
+
+    /// Lays the Functions list out in `order`. Returns whether anything
+    /// changed.
+    @discardableResult
+    public mutating func show(_ order: FunctionOrder) -> Bool {
+        guard functionOrder != order else { return false }
+        functionOrder = order
+        refilter()
         return true
     }
 
@@ -71,7 +149,7 @@ public struct CodeReaderState: Sendable {
         func matches(_ fields: String...) -> Bool {
             needle.isEmpty || fields.contains { $0.lowercased().contains(needle) }
         }
-        listedFunctions = model.functions(matching: needle)
+        layOutFunctions(model.functions(matching: needle), searching: !needle.isEmpty)
         listedStrings = artifact.strings.indices.filter { index in
             let entry = artifact.strings[index]
             return matches(entry.value, entry.type, entry.address.description)
@@ -102,25 +180,256 @@ public struct CodeReaderState: Sendable {
 
     /// The navigator row of a function, when Functions lists it.
     public func row(ofFunction index: Int) -> Int? {
-        // The listed indices ascend, so the row is found by halves.
-        var low = 0
-        var high = listedFunctions.count
-        while low < high {
-            let middle = (low + high) / 2
-            if listedFunctions[middle] < index { low = middle + 1 } else { high = middle }
-        }
-        return low < listedFunctions.count && listedFunctions[low] == index ? low : nil
+        functionRowByIndex[index]
     }
 
-    /// Makes Functions the list in front, with the search cleared when it hides
-    /// `index`. Returns whether the navigator changed.
+    /// The row at `row`, when the navigator has one.
+    public func functionRow(at row: Int) -> FunctionRow? {
+        functionRows.indices.contains(row) ? functionRows[row] : nil
+    }
+
+    /// The function at `row`, nil for a heading and for a row out of reach.
+    public func function(atRow row: Int) -> Int? {
+        functionRow(at: row)?.function
+    }
+
+    // MARK: - Laying the Functions list out
+
+    /// Builds `functionRows` from the functions `matching` the search, in the
+    /// order in front, and the indices the view looks rows up by.
+    private mutating func layOutFunctions(_ matching: [Int], searching: Bool) {
+        groupCounts = [:]
+        switch functionOrder {
+        case .address:
+            functionRows = matching.map { .function($0, level: 0) }
+        case .calls:
+            functionRows = callRows(matching, searching: searching)
+        case .review:
+            functionRows = reviewRows(matching)
+        }
+        listedFunctions = functionRows.compactMap(\.function)
+        functionRowByIndex = [:]
+        for (row, item) in functionRows.enumerated() {
+            if let function = item.function { functionRowByIndex[function] = row }
+        }
+    }
+
+    /// The functions in their review levels, each level's functions in
+    /// alphabetical order: a group is a node of its own, and its functions
+    /// hang under it while it is open. An empty level is not shown.
+    private mutating func reviewRows(_ matching: [Int]) -> [FunctionRow] {
+        var rows: [FunctionRow] = []
+        for group in FunctionGroup.allCases {
+            let members = matching.filter { self.group(of: $0) == group }.sorted(by: byName)
+            guard !members.isEmpty else { continue }
+            groupCounts[group] = members.count
+            rows.append(.group(group))
+            guard !collapsedGroups.contains(group) else { continue }
+            rows.append(contentsOf: members.map { FunctionRow.function($0, level: 1) })
+        }
+        return rows
+    }
+
+    /// Whether the review group shows its functions. True for a group whose
+    /// rows are hidden: a group is open until the reader closes it.
+    public func isGroupExpanded(_ group: FunctionGroup) -> Bool {
+        !collapsedGroups.contains(group)
+    }
+
+    /// Opens or closes a review group's functions.
+    public mutating func toggleGroupExpanded(_ group: FunctionGroup) {
+        if collapsedGroups.contains(group) {
+            collapsedGroups.remove(group)
+        } else {
+            collapsedGroups.insert(group)
+        }
+        refilter()
+    }
+
+    /// The navigator's alphabetical order: by name, case aside; two functions
+    /// with one name keep the artifact's order.
+    private func byName(_ left: Int, _ right: Int) -> Bool {
+        let order = model.functions[left].name.caseInsensitiveCompare(model.functions[right].name)
+        return order == .orderedSame ? left < right : order == .orderedAscending
+    }
+
+    /// The review level the artifact records for a function; nil — an
+    /// artifact from before v7 — is shown as unrecorded rather than guessed.
+    private func group(of index: Int) -> FunctionGroup {
+        switch model.functions[index].reviewLevel {
+        case .full: .full
+        case .partial: .partial
+        case .decompiled: .decompiled
+        case .library: .library
+        case .noBody: .noBody
+        case nil: .unknown
+        }
+    }
+
+    /// How many functions the heading at `row` covers, open or closed; nil
+    /// when the row is not a heading.
+    public func groupCount(at row: Int) -> Int? {
+        guard let group = functionRow(at: row)?.group else { return nil }
+        return groupCounts[group]
+    }
+
+    /// One function in the call tree and the calls it makes.
+    private struct CallNode {
+        let index: Int
+        var children: [CallNode]
+    }
+
+    /// The functions as a forest of calls, as rows: a function nothing in the
+    /// module calls — the image's entry, a notify callback, a slot of a
+    /// services table — starts a tree, and what it calls hangs under it, as
+    /// deep as the calls go. Each function is shown once, at the first place
+    /// that reaches it.
+    ///
+    /// A row whose calls are closed shows alone; the rest of its tree is a
+    /// click away. Most functions reach a module through such a root; a
+    /// function that a call from outside the module reaches — a protocol's
+    /// implementation — is one too. A function called only from inside a
+    /// circle of calls has no root, so the first of the circle starts its own
+    /// tree.
+    ///
+    /// A search shows what it matches as one alphabetical list, whatever the
+    /// trees hold: a find is not a walk down the calls, and a matching
+    /// function whose callers do not match would otherwise sit under a row
+    /// that is not there.
+    private mutating func callRows(_ matching: [Int], searching: Bool) -> [FunctionRow] {
+        guard !model.functions.isEmpty else { return [] }
+        let tree = callTree()
+        var rows: [FunctionRow] = []
+        if searching {
+            return matching.sorted(by: byName).map { FunctionRow.function($0, level: 0) }
+        }
+        func walk(_ nodes: [CallNode], _ level: Int) {
+            for node in nodes {
+                rows.append(.function(node.index, level: level))
+                if !collapsedFunctions.contains(node.index) {
+                    walk(node.children, level + 1)
+                }
+            }
+        }
+        walk(tree, 0)
+        return rows
+    }
+
+    /// The whole forest, with the shape the view asks about — which functions
+    /// have calls, and who calls whom. A function's calls read alphabetically,
+    /// and so does each set of trees, the image's entry first. Built the same
+    /// way on every look, so closing one row never moves another.
+    private mutating func callTree() -> [CallNode] {
+        var roots = model.functions.indices.filter { model.functions[$0].callers.isEmpty }
+        roots.sort(by: byName)
+        // The image's entry first, where the headers or the name place it.
+        if let entry = entryFunction() {
+            roots.removeAll { $0 == entry }
+            roots.insert(entry, at: 0)
+        }
+        var visited: Set<Int> = []
+        var parents: [Int: Int] = [:]
+        var withChildren: Set<Int> = []
+        func visit(_ index: Int, _ parent: Int?) -> CallNode {
+            visited.insert(index)
+            if let parent { parents[index] = parent }
+            var children: [CallNode] = []
+            for callee in model.functions[index].callees {
+                guard let target = model.function(at: callee), !visited.contains(target) else { continue }
+                children.append(visit(target, index))
+            }
+            children.sort { byName($0.index, $1.index) }
+            if !children.isEmpty { withChildren.insert(index) }
+            return CallNode(index: index, children: children)
+        }
+        var forest: [CallNode] = []
+        for root in roots where !visited.contains(root) { forest.append(visit(root, nil)) }
+        // What is left calls around a circle: walk each circle from its first
+        // unvisited function.
+        for index in model.functions.indices.sorted(by: byName) where !visited.contains(index) {
+            forest.append(visit(index, nil))
+        }
+        callParent = parents
+        callChildren = withChildren
+        return forest
+    }
+
+    /// Whether the tree gives this function calls to open.
+    public func hasCalls(_ function: Int) -> Bool {
+        callChildren.contains(function)
+    }
+
+    /// Whether the tree shows this function's calls. True for a row folded
+    /// away: a function whose calls are hidden still carries the answer of
+    /// its own row.
+    public func isExpanded(_ function: Int) -> Bool {
+        !collapsedFunctions.contains(function)
+    }
+
+    /// Opens or closes a function's calls in the tree. A function the tree
+    /// gives no calls to has nothing to open.
+    public mutating func toggleExpanded(_ function: Int) {
+        guard callChildren.contains(function) else { return }
+        if collapsedFunctions.contains(function) {
+            collapsedFunctions.remove(function)
+        } else {
+            collapsedFunctions.insert(function)
+        }
+        refilter()
+    }
+
+    /// Opens the calls above `index`, so its row shows. Returns whether any
+    /// row was closed.
+    private mutating func expandAncestors(of index: Int) -> Bool {
+        var changed = false
+        var parent = callParent[index]
+        while let above = parent {
+            if collapsedFunctions.remove(above) != nil { changed = true }
+            parent = callParent[above]
+        }
+        return changed
+    }
+
+    /// The module's entry: the function at the image's entry point when the
+    /// module's headers are known, or else the one Ghidra named `entry`.
+    /// A review renames the entry, so the name alone is not enough.
+    private func entryFunction() -> Int? {
+        if let layout = model.layout {
+            let base = artifact.program?.imageBase?.value ?? layout.imageBase
+            var candidates = [base &+ layout.entryPoint]
+            // A TE image's entry point is counted from the image base the
+            // loader takes the stripped header off.
+            if layout.format == .te { candidates.append(base &+ layout.entryPoint &- 40) }
+            for address in candidates {
+                if let index = model.function(at: CodeAddress(address)) { return index }
+            }
+        }
+        return model.functions.firstIndex {
+            $0.name.caseInsensitiveCompare("entry") == .orderedSame
+        }
+    }
+
+    /// Makes Functions the list in front, with the search cleared and the
+    /// calls above it opened when either hides `index`. Returns whether the
+    /// navigator changed.
     @discardableResult
     public mutating func reveal(function index: Int) -> Bool {
         guard model.functions.indices.contains(index) else { return false }
         var changed = show(.functions)
-        if row(ofFunction: index) == nil, !searchText.isEmpty {
-            search("")
-            changed = true
+        if row(ofFunction: index) == nil {
+            if !searchText.isEmpty {
+                search("")
+                changed = true
+            }
+            if functionOrder == .calls, expandAncestors(of: index) {
+                refilter()
+                changed = true
+            }
+            if functionOrder == .review, collapsedGroups.contains(group(of: index)) {
+                collapsedGroups.remove(group(of: index))
+                refilter()
+                changed = true
+            }
         }
         return changed
     }

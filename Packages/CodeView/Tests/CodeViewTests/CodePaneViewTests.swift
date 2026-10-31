@@ -62,7 +62,7 @@ final class CodePaneViewTests: XCTestCase {
         window.contentView = view
         view.layoutSubtreeIfNeeded()
         XCTAssertNil(view.copyableFunctionName, "the list does not have the keyboard")
-        let list = try XCTUnwrap(all(NSTableView.self, in: view).first { $0.numberOfRows == view.listedFunctionCount && $0.tableColumns.first?.identifier.rawValue == "function" })
+        let list = try XCTUnwrap(all(NSTableView.self, in: view).first { $0.numberOfRows == view.listedFunctionCount && $0.tableColumns.contains { $0.identifier.rawValue == "function" } })
         window.makeFirstResponder(list)
         view.selectFunction(at: 1)
         XCTAssertEqual(view.copyableFunctionName, "entry")
@@ -126,7 +126,7 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(view.decompiledText, "return 0;")
         XCTAssertEqual(view.selectedFunction?.name, "entry", "the reader stays in the same function")
         XCTAssertGreaterThan(ToolPanelFont.rowHeight, smallRow)
-        let functions = try XCTUnwrap(tables.first { $0.tableColumns.first?.identifier.rawValue == "function" })
+        let functions = try XCTUnwrap(tables.first { $0.tableColumns.contains { $0.identifier.rawValue == "function" } })
         for table in tables {
             XCTAssertEqual(table.rowHeight,
                            table === functions ? CodePaneView.navigatorRowHeight : CodePaneView.codeLineHeight,
@@ -408,7 +408,7 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(heading.alignment, .left, "the heading reads from the left")
         let list = try XCTUnwrap(
             first(NSTableView.self, in: view) {
-                $0.tableColumns.first?.identifier.rawValue == "function"
+                $0.tableColumns.contains { $0.identifier.rawValue == "function" }
             })
         let cell = try XCTUnwrap(list.view(atColumn: 0, row: 0, makeIfNecessary: true)
                                     as? NSTableCellView)
@@ -417,7 +417,9 @@ final class CodePaneViewTests: XCTestCase {
                                        from: heading).minX
         let rowTextLeft = view.convert(field.alignmentRect(forFrame: field.bounds),
                                        from: field).minX
-        XCTAssertEqual(headingLeft, rowTextLeft, accuracy: 0.5,
+        // The by-address table sets its first cell half an intercell gap in
+        // from the pane's edge; the heading keeps to the pane's.
+        XCTAssertEqual(headingLeft, rowTextLeft, accuracy: 3.5,
                        "and starts where the row text does")
 
         let codeTitle = try XCTUnwrap(first(NSTextField.self, in: view) {
@@ -521,7 +523,7 @@ final class CodePaneViewTests: XCTestCase {
 
         let functions = try XCTUnwrap(
             first(NSTableView.self, in: view) {
-                $0.tableColumns.first?.identifier.rawValue == "function"
+                $0.tableColumns.contains { $0.identifier.rawValue == "function" }
             })
         let instructions = try XCTUnwrap(
             first(NSTableView.self, in: view) {
@@ -625,7 +627,8 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(view.postCell(1, .address), "0x69", "as the panel shows addresses: the byte in the module")
         XCTAssertEqual(view.postCell(2, .code), "Value unknown")
         view.selectList(.functions)
-        XCTAssertEqual(view.navigatorColumnTitles, [], "the other lists stay one column")
+        XCTAssertEqual(view.navigatorColumnTitles, ["Address", "Function"],
+                       "the by-address list is a table of the address and the name")
     }
 
     /// Strings are a table like POST: the address and the text under
@@ -727,6 +730,279 @@ final class CodePaneViewTests: XCTestCase {
 
         split.setDividerPosition(990)
         XCTAssertLessThanOrEqual(split.panes[0].frame.width, 1000 - 320, "the code keeps room")
+    }
+
+    /// The switch under the list lays the functions out in the chosen order,
+    /// keeps the choice for the next panel, and a group heading is a row of
+    /// its own that is not selectable.
+    func testTheFunctionOrderSwitchGroupsTheList() throws {
+        let suiteName = "CodePaneViewTests.navigatorOrder"
+        let suite = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        suite.removePersistentDomain(forName: suiteName)
+        CodePaneView.defaults = suite
+        defer {
+            suite.removePersistentDomain(forName: suiteName)
+            CodePaneView.defaults = .standard
+        }
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 480, height: 400)
+        view.layoutSubtreeIfNeeded()
+        let list = try XCTUnwrap(all(NSTableView.self, in: view).first {
+            $0.tableColumns.contains { $0.identifier.rawValue == "function" }
+        })
+        XCTAssertEqual(view.functionOrder, .address)
+        XCTAssertEqual(list.numberOfRows, view.listedFunctionCount)
+
+        view.setFunctionOrder(.review)
+        XCTAssertEqual(view.functionOrder, .review)
+        XCTAssertEqual(suite.integer(forKey: CodePaneView.navigatorOrderKey),
+                       CodeReaderState.FunctionOrder.review.rawValue, "the choice is kept")
+        XCTAssertEqual(list.numberOfRows, view.listedFunctionCount + 1,
+                       "the one heading takes a row of its own")
+        XCTAssertFalse(view.tableView(list, shouldSelectRow: 0), "a group's node is not selected")
+        XCTAssertTrue(view.tableView(list, shouldSelectRow: 1))
+
+        // The group is a tree node: its triangle closes and opens its rows.
+        let headingCell = try XCTUnwrap(list.view(atColumn: 0, row: 0, makeIfNecessary: true))
+        let triangle = try XCTUnwrap(all(NSButton.self, in: headingCell).first)
+        XCTAssertFalse(triangle.isHidden)
+        triangle.performClick(nil)
+        XCTAssertEqual(list.numberOfRows, 1, "a closed group keeps only its own row")
+        XCTAssertEqual((list.view(atColumn: 0, row: 0, makeIfNecessary: true)
+            as? NSTableCellView)?.textField?.stringValue,
+                       "Review level not recorded (2)", "and still says how many it holds")
+        let reopened = try XCTUnwrap(all(NSButton.self, in: try XCTUnwrap(
+            list.view(atColumn: 0, row: 0, makeIfNecessary: true) as? NSView)).first)
+        reopened.performClick(nil)
+        XCTAssertEqual(list.numberOfRows, 3)
+        let heading = try XCTUnwrap(list.view(atColumn: 0, row: 0, makeIfNecessary: true) as? NSTableCellView)
+        XCTAssertEqual(heading.textField?.stringValue, "Review level not recorded (2)",
+                       "a heading says how many functions it holds")
+        XCTAssertEqual(CodePaneView.title(of: .full), "Fully reviewed")
+        XCTAssertEqual(CodePaneView.title(of: .partial), "Partly reviewed")
+        XCTAssertEqual(CodePaneView.title(of: .decompiled), "Decompiler only")
+        XCTAssertEqual(CodePaneView.title(of: .library), "Library functions")
+        XCTAssertEqual(CodePaneView.title(of: .noBody), "No body")
+        XCTAssertEqual(CodePaneView.title(of: .unknown), "Review level not recorded")
+
+        let next = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: moduleBytes, hexView: NSView())
+        XCTAssertEqual(next.functionOrder, .review, "the next panel opens in it")
+    }
+
+    /// In the grouped order a function's hover says where its review stands:
+    /// the level, and what still keeps it from full.
+    func testTheGroupedRowsSayWhereTheReviewStands() throws {
+        let suiteName = "CodePaneViewTests.reviewDetail"
+        let suite = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        suite.removePersistentDomain(forName: suiteName)
+        CodePaneView.defaults = suite
+        defer {
+            suite.removePersistentDomain(forName: suiteName)
+            CodePaneView.defaults = .standard
+        }
+        let art = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        {"script_version":7,"program":{"image_base":"0x0"},
+         "functions":[
+          {"entry":"0x100","name":"Partly","review_level":"partial",
+           "review_gaps":["plate","locals"],"instructions":[]},
+          {"entry":"0x200","name":"CopyMem","review_level":"library","instructions":[]}]}
+        """.utf8))
+        let view = CodePaneView(manifest: manifest(), artifact: art,
+                                moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 480, height: 400)
+        view.setFunctionOrder(.review)
+        view.layoutSubtreeIfNeeded()
+        let list = try XCTUnwrap(all(NSTableView.self, in: view).first {
+            $0.tableColumns.contains { $0.identifier.rawValue == "function" }
+        })
+        func tooltip(_ row: Int) throws -> String? {
+            try XCTUnwrap(list.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView).toolTip
+        }
+        // The partial group reads before the library one.
+        XCTAssertEqual(try tooltip(1), "Review: partly reviewed — missing plate comment, unnamed locals")
+        XCTAssertEqual(try tooltip(3), "Review: library function")
+    }
+
+    /// A function's name carries the code mark; in the call tree a function
+    /// shown because something calls it carries a turn-down arrow instead.
+    func testFunctionNamesCarryTheCodeMarkAndCalledOnesTheArrow() throws {
+        let suiteName = "CodePaneViewTests.navigatorIcons"
+        let suite = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        suite.removePersistentDomain(forName: suiteName)
+        CodePaneView.defaults = suite
+        defer {
+            suite.removePersistentDomain(forName: suiteName)
+            CodePaneView.defaults = .standard
+        }
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        {"script_version":4,"program":{"image_base":"0x0"},
+         "functions":[
+          {"entry":"0x100","name":"Leaf","callers":["0x200"],"callees":[],
+           "instructions":[{"address":"0x100","bytes":"C3","text":"RET"}]},
+          {"entry":"0x200","name":"Root","callers":[],"callees":["0x100"],
+           "instructions":[{"address":"0x200","bytes":"C3","text":"RET"}]},
+          {"entry":"0x300","name":"ZOther","callers":[],"callees":[],
+           "instructions":[{"address":"0x300","bytes":"C3","text":"RET"}]}]}
+        """.utf8))
+        let view = CodePaneView(manifest: manifest(), artifact: artifact,
+                                moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 480, height: 400)
+        view.layoutSubtreeIfNeeded()
+        let list = try XCTUnwrap(all(NSTableView.self, in: view).first {
+            $0.tableColumns.contains { $0.identifier.rawValue == "function" }
+        })
+        func cell(_ table: NSTableView, _ column: Int, _ row: Int) throws -> CodeNavigatorCell {
+            try XCTUnwrap(table.view(atColumn: column, row: row, makeIfNecessary: true)
+                as? CodeNavigatorCell)
+        }
+        let code = "ellipsis.curlybraces"
+        let arrow = "arrow.turn.down.right"
+
+        // By address: the name column carries the code mark, the address none.
+        let nameColumn = try XCTUnwrap(list.tableColumns.firstIndex {
+            $0.identifier.rawValue == "function"
+        })
+        XCTAssertEqual(try cell(list, nameColumn, 0).iconName, code)
+        XCTAssertNil(try cell(list, 0, 0).iconName, "an address is not a function")
+
+        // Call tree: the root reads as a function, its call as a call.
+        view.setFunctionOrder(.calls)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(try cell(list, 0, 0).textField?.stringValue, "Root")
+        XCTAssertEqual(try cell(list, 0, 0).iconName, code)
+        XCTAssertEqual(try cell(list, 0, 1).textField?.stringValue, "Leaf")
+        XCTAssertEqual(try cell(list, 0, 1).iconName, arrow)
+
+        // A search result is not a call of anything on screen.
+        view.filter(by: "Leaf")
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(list.numberOfRows, 1)
+        XCTAssertEqual(try cell(list, 0, 0).iconName, code)
+
+        // The grouped order indents its members but they are not calls.
+        view.filter(by: "")
+        view.setFunctionOrder(.review)
+        view.layoutSubtreeIfNeeded()
+        let member = try cell(list, 0, 1)
+        XCTAssertEqual(member.iconName, code, "a group's member is a function, not a call")
+    }
+
+    /// A revision the panel receives marks the functions it changed: they read
+    /// bold with a New badge until the reader opens one.
+    func testARevisionMarksChangedFunctionsUntilTheyAreOpened() throws {
+        let suiteName = "CodePaneViewTests.revisionMarks"
+        let suite = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        suite.removePersistentDomain(forName: suiteName)
+        CodePaneView.defaults = suite
+        defer {
+            suite.removePersistentDomain(forName: suiteName)
+            CodePaneView.defaults = .standard
+        }
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 480, height: 400)
+        view.layoutSubtreeIfNeeded()
+        let list = try XCTUnwrap(all(NSTableView.self, in: view).first {
+            $0.tableColumns.contains { $0.identifier.rawValue == "function" }
+        })
+        let nameColumn = try XCTUnwrap(list.tableColumns.firstIndex {
+            $0.identifier.rawValue == "function"
+        })
+        func cell(_ row: Int) throws -> NSTableCellView {
+            try XCTUnwrap(list.view(atColumn: nameColumn, row: row, makeIfNecessary: true) as? NSTableCellView)
+        }
+        func isBold(_ cell: NSTableCellView) -> Bool {
+            guard let font = cell.textField?.font else { return false }
+            return NSFontManager.shared.traits(of: font).contains(.boldFontMask)
+        }
+        func badge(_ cell: NSTableCellView) -> PartBadgeView? {
+            all(PartBadgeView.self, in: cell).first
+        }
+
+        XCTAssertFalse(isBold(try cell(1)), "nothing changed yet")
+        XCTAssertTrue(badge(try cell(1))?.isHidden ?? true)
+
+        let previous = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        {"script_version":2,"ghidra":"12.1.2","program":{"image_base":"0x0"},
+         "strings":[{"address":"0x220","type":"string","value":"ABC"}],
+         "post_codes":[{"address":"0x221","function":"0x220","port":"0x80","text":"OUT 0x80, AL"}],
+         "status_code_calls":[{"address":"0x222","function":"0x220","text":"call [ebx+0x10]","context":["ReportStatusCode"]}],
+         "functions":[
+          {"entry":"0x220","name":"FUN_00000220","callers":["0x355"],"callees":["0x355"],"instructions":[
+            {"address":"0x220","bytes":"56","mnemonic":"PUSH","text":"PUSH ESI"},
+            {"address":"0x221","bytes":"57","mnemonic":"PUSH","text":"PUSH EDI"}]},
+          {"entry":"0x355","name":"entry","c":"return 1;","instructions":[
+            {"address":"0x355","bytes":"8B 54 24 08","mnemonic":"MOV","text":"MOV EDX,dword ptr [ESP + 0x8]"}]}
+         ]}
+        """.utf8))
+        view.markRevisionChange(from: previous)
+
+        let changed = try cell(1)
+        XCTAssertTrue(isBold(changed), "a changed function reads bold")
+        XCTAssertEqual(badge(changed)?.text, "New")
+        XCTAssertFalse(badge(changed)?.isHidden ?? true, "and carries the New badge")
+        XCTAssertFalse(isBold(try cell(0)), "a function the revision left alone does not")
+
+        view.selectFunction(at: 1)
+        let opened = try cell(1)
+        XCTAssertFalse(isBold(opened), "opening it takes the mark")
+        XCTAssertTrue(badge(opened)?.isHidden ?? true)
+    }
+
+    /// The call tree's rows open and close with the triangle in front of them.
+    func testTheTreeOpensAndClosesItsCalls() throws {
+        let suiteName = "CodePaneViewTests.treeFolds"
+        let suite = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        suite.removePersistentDomain(forName: suiteName)
+        CodePaneView.defaults = suite
+        defer {
+            suite.removePersistentDomain(forName: suiteName)
+            CodePaneView.defaults = .standard
+        }
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        {"script_version":4,"program":{"image_base":"0x0"},
+         "functions":[
+          {"entry":"0x100","name":"Leaf","callers":["0x200"],"callees":[],
+           "instructions":[{"address":"0x100","bytes":"C3","text":"RET"}]},
+          {"entry":"0x200","name":"Root","callers":[],"callees":["0x100"],
+           "instructions":[{"address":"0x200","bytes":"C3","text":"RET"}]},
+          {"entry":"0x300","name":"ZOther","callers":[],"callees":[],
+           "instructions":[{"address":"0x300","bytes":"C3","text":"RET"}]}]}
+        """.utf8))
+        let view = CodePaneView(manifest: manifest(), artifact: artifact,
+                                moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 480, height: 400)
+        view.layoutSubtreeIfNeeded()
+        view.setFunctionOrder(.calls)
+        view.layoutSubtreeIfNeeded()
+        let list = try XCTUnwrap(all(NSTableView.self, in: view).first {
+            $0.tableColumns.contains { $0.identifier.rawValue == "function" }
+        })
+        func cell(_ row: Int) throws -> NSTableCellView {
+            try XCTUnwrap(list.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView)
+        }
+        XCTAssertEqual(list.numberOfRows, 3, "Root, its call, and the other root")
+        XCTAssertEqual(try cell(0).textField?.stringValue, "Root", "the roots read alphabetically")
+
+        let triangle = try XCTUnwrap(all(NSButton.self, in: try cell(0)).first)
+        triangle.performClick(nil)
+        XCTAssertEqual(list.numberOfRows, 2, "a closed row keeps its place and hides what it calls")
+        XCTAssertEqual(try cell(0).textField?.stringValue, "Root")
+
+        let reopened = try XCTUnwrap(all(NSButton.self, in: try cell(0)).first)
+        reopened.performClick(nil)
+        XCTAssertEqual(list.numberOfRows, 3)
+
+        // A search result is one alphabetical row, not a tree to open.
+        view.filter(by: "Leaf")
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(list.numberOfRows, 1)
+        let found = try cell(0)
+        XCTAssertEqual(found.textField?.stringValue, "Leaf")
+        XCTAssertTrue(all(NSButton.self, in: found).first?.isHidden ?? true,
+                      "no triangle on a search result")
     }
 
     /// Search narrows functions by their instructions as well as their names,
@@ -1218,7 +1494,7 @@ final class CodePaneViewTests: XCTestCase {
         view.setModuleDescription(sampleDescription)
         view.showDescription(true)
         let list = try XCTUnwrap(first(NSTableView.self, in: view) {
-            $0.tableColumns.first?.identifier.rawValue == "function"
+            $0.tableColumns.contains { $0.identifier.rawValue == "function" }
         })
         list.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
         XCTAssertFalse(view.showsDescription)
@@ -1273,7 +1549,7 @@ final class CodePaneViewTests: XCTestCase {
         // offers nothing rather than a place that is not there.
         view.onAnnotate = { _, _ in }
         let functions = try XCTUnwrap(first(NSTableView.self, in: view) {
-            $0.tableColumns.first?.identifier.rawValue == "function"
+            $0.tableColumns.contains { $0.identifier.rawValue == "function" }
         })
         let menu = try XCTUnwrap(functions.menu)
         XCTAssertNil(view.clickedPlace(in: functions))
@@ -2224,7 +2500,7 @@ final class CodePaneViewTests: XCTestCase {
         let help = try XCTUnwrap(all(HelpButton.self, in: view).first)
         XCTAssertEqual(help.opens, .topic(.codePanel))
         let mode = try XCTUnwrap(all(NSSegmentedControl.self, in: view)
-            .first { $0.segmentCount == 3 })
+            .first { $0.segmentCount == 3 && $0.label(forSegment: 1) == "C" })
         let helpRect = view.convert(help.bounds, from: help)
         let modeRect = view.convert(mode.bounds, from: mode)
         XCTAssertLessThan(helpRect.maxX, modeRect.minX, "the help button stands before the switch")
@@ -2279,3 +2555,11 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertNil(CodeExplanationPopover.memberRange(in: c, name: "EFI_NOT_HERE"))
     }
 }
+
+
+
+
+
+
+
+

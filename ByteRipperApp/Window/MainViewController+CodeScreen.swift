@@ -92,8 +92,19 @@ extension MainViewController {
                                   place: screen.place,
                                   showsC: screen.showsC,
                                   recipes: recipes ?? screen.recipes)
+            // A later revision of the same reading: the pane drawn next marks
+            // the functions it changed. Another recipe is a different
+            // reading, not a revision, and marks nothing.
+            if screen.manifest.recipe.id == manifest.recipe.id,
+               let before = screen.manifest.reading?.rev,
+               let now = manifest.reading?.rev, now > before {
+                self.pendingCodeRevisionChange = self.codeScreenView?.artifact
+            } else {
+                self.pendingCodeRevisionChange = nil
+            }
             self.codeScreen = (pane, pane.document, next)
             self.apply(mode: .singleFile)
+            self.pendingCodeRevisionChange = nil
             self.codeScreenView?.setHexDumpVisible(dumpVisible, animated: false)
             if let history { self.codeScreenView?.adoptHistory(history) }
         }
@@ -289,6 +300,12 @@ extension MainViewController {
             guard let paneModel else { return }
             self?.filePaneView(for: paneModel)?
                 .revealOffsetCentered(range.lowerBound)
+        }
+        // Before the place is restored: a function on screen is open, and
+        // its New mark goes with the selection the restore makes.
+        if let previous = pendingCodeRevisionChange {
+            codePane.markRevisionChange(from: previous)
+            pendingCodeRevisionChange = nil
         }
         applyCodeNotes()
         codePane.restore(at: screen.place, function: screen.selectedFunction,

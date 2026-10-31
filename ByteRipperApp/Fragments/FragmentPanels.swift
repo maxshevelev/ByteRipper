@@ -480,6 +480,8 @@ import ToolModuleKit
     private func replaceCodeScreen(_ id: FragmentDock.PanelID, with screen: CodeScreen) {
         guard let entry = entries[id], entry.codePane != nil else { return }
         let dumpVisible = entry.codePane?.isHexDumpVisible ?? true
+        let previous = entry.codePane?.artifact
+        let shown = entry.screen
         let pane = entry.pane
         let view = entry.paneView
         let codePane = CodePaneView(manifest: screen.manifest, artifact: screen.artifact,
@@ -497,6 +499,14 @@ import ToolModuleKit
         entry.surface.setContent(codePane)
         entry.codePane = codePane
         entry.screen = .code(screen)
+        // A later revision of the same reading: the functions it changed wear
+        // New until opened. Another recipe is a different reading.
+        if case .code(let before) = shown, let previous,
+           before.manifest.recipe.id == screen.manifest.recipe.id,
+           let was = before.manifest.reading?.rev,
+           let now = screen.manifest.reading?.rev, now > was {
+            codePane.markRevisionChange(from: previous)
+        }
         codePane.restore(at: screen.place, function: screen.selectedFunction,
                          instruction: screen.selectedInstruction,
                          showsC: screen.showsC)
