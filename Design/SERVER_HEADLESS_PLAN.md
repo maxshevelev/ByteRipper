@@ -342,8 +342,9 @@ imports AppKit in several files: the server stays macOS-only in v1.
   is `AgentService.connect(connection:send:onFirstMessage:)`, an app method;
   the server writes its own few lines rather than moving it, since the app's
   is bound to its log and activity view.
-- Tools: `documents`, `read`, `find_bytes` (stored bytes only in v1) — the
-  server's own (§4.1); through `ToolQueryTools`:
+- Tools: `documents`, `read`, `find_bytes` (the stored bytes, and with `node`
+  what the UEFI tree holds there decompressed) — the server's own (§4.1);
+  through `ToolQueryTools`:
   `UEFIAgentQueries.all(catalogue:)`, `UEFIAgentChecksums`, `UEFIAgentDMI`,
   `UEFIAgentVariables.queries`, `UEFIAgentNodeData` — `UEFIAgentRegions` is
   not served: `region_scan` follows with ME and FIT (decision 15);
@@ -615,8 +616,10 @@ Every phase ends with its packages' tests green and the server starting.
   streaming the body to disk is the follow-up.
 - **Snapshot memory**: open documents are resident copies, bounded by
   `--max-open-bytes`.
-- **`find_bytes`** searches the stored bytes only; a search inside decompressed
-  content arrives with `region_scan`.
+- **`find_bytes`** searches the stored bytes; with `node` it runs the app's
+  `UEFIContentSearch` over the server's tree, so a module inside a compressed
+  section is found in what it decompresses to. `region_scan`, with ME and FIT,
+  is still to come.
 - **No GUID names** on the server in v1: `uefi_node` gives GUIDs where the app
   gives the catalogue's names. Follow-up: bundle the catalogue, or read the
   app's copy.

@@ -3,6 +3,8 @@ import AgentKit
 import BytePattern
 import DumpHost
 import Foundation
+import ToolModuleKit
+import UEFITool
 
 /// The tools the server answers itself (`Design/SERVER_HEADLESS_PLAN.md`
 /// §4.1): what it holds, the bytes, and a search of them. The app's tools are
@@ -124,15 +126,29 @@ public enum ServerDocuments {
             name: "find_bytes",
             title: "Find bytes or text",
             description: """
-                Every place a text or a byte pattern occurs in a document's snapshot — the bytes as they \
-                were read, which is what every other tool answers from. `text` is looked for as ASCII, as \
-                UTF-16LE, or both (`encoding`, default both), any case with `ignore_case`; `hex` is bytes, \
-                with `??` for a byte that may be anything ("24 ?? 4D 49"). `offset`/`end` limit the range. \
-                Each match: `start`, `end` (half-open addresses) and the `encoding` that matched. Matches \
-                do not overlap unless `overlapping`: "AA" in "AAAA" is two, or three with it. `total` \
-                counts every match in the range. Pages: `limit` is a ceiling — a page also stops before \
-                the answer passes the size bound and then says `truncated: "size"`; pass `next` back as \
-                `after` until it is null.
+                Every place a text or a byte pattern occurs, in one of two scopes. Without `node`: in a \
+                document's snapshot, in address order — the bytes as they were read, which is what every \
+                other tool answers from — with `offset`/`end` limiting the range. A module stored inside a \
+                compressed section is not among those bytes: read it with `uefi_node_data`, or search for \
+                it with `node`. With `node` (an id from `uefi_tree`, `uefi_find` or `uefi_at`, or "root" \
+                for the whole image): what the UEFI tree holds at and under that node — every container \
+                opened, every compressed section searched in what it decompresses to (nested ones too), a \
+                BIOS Guard update in its assembled region, a LENV block stored XOR-encoded decoded — and \
+                only so: a compressed stream or an encoded block as stored is not searched, nor is an ME \
+                region. Opening everything takes a few seconds on a large image the first time; the same \
+                search of unchanged bytes again — a next page — is answered from the last one. `text` is \
+                looked for as ASCII, as UTF-16LE, or both (`encoding`, default both), any case with \
+                `ignore_case`; `hex` is bytes, with `??` for a byte that may be anything ("24 ?? 4D 49"). \
+                Each match: the `encoding` that matched; without `node`, `start` and `end`, half-open file \
+                addresses; with `node`, in tree order, the `node` that holds it whole with `node_offset`, \
+                its `volume` and `volume_offset`, and `start`/`end` in the file — or, inside a compressed \
+                section, `in_compressed: true`, the `section`, and `buffer_start`/`buffer_end` in what it \
+                decompresses to, which `uefi_node_data` reads — and `decoded` ("XOR 77") in a LENV block \
+                decoded. `total` counts every match; with `node`, `unread` lists the compressed sections \
+                that would not decompress. Matches do not overlap unless `overlapping`: "AA" in "AAAA" is \
+                two, or three with it. Pages: `limit` is a ceiling — a page also stops before the answer \
+                passes the size bound and then says `truncated: "size"`; pass `next` back as `after` \
+                until it is null.
                 """,
             inputSchema: AgentSchema.object([
                 "document": AgentSchema.string(documentHelp),
@@ -142,8 +158,10 @@ public enum ServerDocuments {
                                                "How `text` is stored. Default \"both\"."),
                 "ignore_case": AgentSchema.boolean("Letters in either case — ASCII letters of `text`. Default false."),
                 "overlapping": AgentSchema.boolean("Count matches that overlap one another. Default false."),
-                "offset": AgentSchema.offset("Where the search starts. Default 0x0."),
-                "end": AgentSchema.offset("The first byte after the searched range. Default: the end."),
+                "offset": AgentSchema.offset("Where the search of the document starts. Default 0x0. Not with `node`."),
+                "end": AgentSchema.offset("The first byte after the searched range. Default: the end. Not with `node`."),
+                "node": AgentSchema.string("Search what the UEFI tree holds at and under this node, decompressed "
+                                           + "and decoded; \"root\" for the whole image."),
                 "limit": AgentSchema.limit(default: 100, maximum: 1000),
                 "after": AgentSchema.after
             ])
@@ -164,6 +182,13 @@ public enum ServerDocuments {
     static func find(_ arguments: AgentArguments, _ documents: DocumentRegistry) async throws -> AgentAnswer {
         let document = try documents.resolve(arguments.optionalString("document"))
         let host = document.readHost()
+        let wanted = try patterns(arguments)
+        let overlapping = try arguments.bool("overlapping", default: false)
+        let limit = try arguments.limit(default: 100, maximum: 1000)
+        if let node = try arguments.optionalString("node") {
+            return try await findInTree(arguments, document: document, host: host, wanted: wanted,
+                                        node: node, overlapping: overlapping, limit: limit)
+        }
         let reader = try host.snapshot()
         let size = reader.size
         let from = try arguments.optionalOffset("offset") ?? 0
@@ -172,9 +197,6 @@ public enum ServerDocuments {
             throw AgentToolError("The range \(hexText(from))–\(hexText(to)) is not inside \(document.named), "
                 + "which is \(hexText(size)) bytes long.")
         }
-        let wanted = try patterns(arguments)
-        let overlapping = try arguments.bool("overlapping", default: false)
-        let limit = try arguments.limit(default: 100, maximum: 1000)
         let paging = try AgentPage(arguments, fingerprint: AgentPage.fingerprint(
             [document.id, host.contentVersion,
              JSONValue.object(arguments.values.filter { $0.key != "after" && $0.key != "limit" }).jsonText]))
@@ -200,6 +222,56 @@ public enum ServerDocuments {
             ])
         }
         let answer = try paging.answer(["total": .count(total)], key: "matches", items: items, total: total,
+                                       bound: arguments.answerBound)
+        return ToolQueryTools.stamped(.json(answer), with: document)
+    }
+
+    /// `find_bytes` with `node`: what the UEFI tree holds at and under it, with
+    /// every compressed section searched in what it decompresses to. The app's
+    /// own tree search (`UEFIContentSearch`), read off the server's tree.
+    static func findInTree(_ arguments: AgentArguments, document: any AgentDocument,
+                           host: any ToolReadHost, wanted: [Wanted], node text: String,
+                           overlapping: Bool, limit: Int) async throws -> AgentAnswer {
+        guard !arguments.has("offset"), !arguments.has("end") else {
+            throw AgentToolError("`offset` and `end` are the document's: with `node` the search covers what the "
+                + "tree holds under it, decompressed and decoded, which is no one range of addresses. Leave them "
+                + "out, or search the document without `node`.")
+        }
+        let tree = try await UEFIAgentQueries.readyTree(host)
+        let start = try UEFIAgentQueries.nodeID(text)
+        let paging = try AgentPage(arguments, fingerprint: AgentPage.fingerprint(
+            [document.id, host.contentVersion, start.description,
+             JSONValue.object(arguments.values.filter { $0.key != "after" && $0.key != "limit" }).jsonText]))
+        let result: UEFIContentSearch.Result
+        do {
+            result = try await UEFIContentSearch.run(wanted.map(\.pattern), from: start, in: tree,
+                                                     overlapping: overlapping, keep: paging.first + limit)
+        } catch UEFIContentSearchError.unknownNode(let id) {
+            throw AgentToolError("No node \(id.description) in \(document.named). Ids come from `uefi_tree`, "
+                + "`uefi_find` or `uefi_at` on the same document.")
+        }
+        var envelope: [String: JSONValue] = [
+            "document": .string(document.id),
+            "total": .count(result.total),
+            "searched": hex(result.searchedBytes),
+            "buffers": .count(result.buffers)
+        ]
+        if start == .root {
+            envelope["node"] = "root"
+        } else if let node = tree.node(start) {
+            envelope["node"] = UEFIAgentQueries.summary(of: node, in: tree)
+        }
+        if !result.unreadSections.isEmpty {
+            envelope["unread"] = .array(result.unreadSections.map { .string($0.description) })
+        }
+        if result.matches.count < min(result.total, paging.first + limit) {
+            envelope["note"] = .string("Too many matches to place them all in tree order; these are the first "
+                + "\(result.matches.count). Search from a deeper `node` to narrow it.")
+        }
+        let items: [JSONValue] = result.matches.dropFirst(paging.first).prefix(limit).map { match in
+            UEFIAgentContentSearch.entry(for: match, encoding: wanted[match.pattern].encoding, in: tree)
+        }
+        let answer = try paging.answer(envelope, key: "matches", items: items, total: result.total,
                                        bound: arguments.answerBound)
         return ToolQueryTools.stamped(.json(answer), with: document)
     }

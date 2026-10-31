@@ -150,6 +150,45 @@ final class ServerMCPTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(anyMembers["total"]?.int64Value ?? 0, 1, "\(any)")
     }
 
+    /// With `node`, the search covers what the UEFI tree holds at and under
+    /// it, and each match says where in the tree it is; without it, the
+    /// file's own addresses only. What a compressed section decompresses to is
+    /// `UEFIContentSearch`'s own tests; this is the wiring over a document.
+    func testFindBytesWithANodeSearchesTheTree() async throws {
+        let tools = self.tools()
+        let find = try tool("find_bytes", tools)
+        let answer = try await find.run(AgentCall(
+            tool: "find_bytes", arguments: AgentArguments(["document": "d1", "node": "root",
+                                                           "text": "MZ", "encoding": "ascii"])))
+        guard case .json(.object(let members)) = answer else { return XCTFail("\(answer)") }
+        XCTAssertEqual(members["total"], .count(1))
+        XCTAssertEqual(members["node"], "root")
+        XCTAssertEqual(members["document"]?.stringValue, "d1")
+        XCTAssertEqual(members["searched"]?.stringValue, "0x1000")
+        XCTAssertEqual(members["buffers"], .count(0), "nothing compressed in the stub image")
+        XCTAssertNil(members["unread"])
+        let match = try XCTUnwrap(members["matches"]?.arrayValue?.first)
+        XCTAssertEqual(match["start"]?.stringValue, "0x64")
+        XCTAssertEqual(match["encoding"]?.stringValue, "ascii")
+        XCTAssertEqual(match["node_offset"]?.stringValue, "0x4", "the PE32 section's body, past its header")
+        XCTAssertNotNil(match["node"], "the node that holds it whole: \(match)")
+
+        let plain = try await find.run(AgentCall(tool: "find_bytes", arguments: AgentArguments([
+            "document": "d1", "text": "MZ", "encoding": "ascii"])))
+        guard case .json(.object(let plainMembers)) = plain else { return XCTFail("\(plain)") }
+        XCTAssertEqual(plainMembers["total"], .count(1))
+        XCTAssertNil(plainMembers["matches"]?.arrayValue?.first?["node"], "no tree in the file's own addresses")
+
+        // The document's offsets are no one range of what the tree holds.
+        do {
+            _ = try await find.run(AgentCall(tool: "find_bytes", arguments: AgentArguments([
+                "document": "d1", "node": "root", "text": "MZ", "offset": "0x0"])))
+            XCTFail("offset with node is refused")
+        } catch let error as AgentToolError {
+            XCTAssertTrue(error.message.contains("`node`"), "\(error.message)")
+        }
+    }
+
     /// Paging loses nothing: a match a page stopped before is the next
     /// page's first, and the ASCII and UTF-16LE matches at one address are
     /// two matches, both listed.

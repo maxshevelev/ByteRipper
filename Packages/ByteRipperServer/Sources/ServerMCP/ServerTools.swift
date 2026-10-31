@@ -91,7 +91,8 @@ public enum ServerTools {
             them. There is no screen and no focus: when more than one is open, name the `document` a call \
             is about. Addresses and sizes are hex strings ("0x7F3000") both ways; ranges are half-open. \
             A list comes in pages: pass `next` back as `after` until it is null. `read` reads bytes of a \
-            document's snapshot, `find_bytes` searches them, the `uefi_` tools read a firmware image's \
+            document's snapshot, `find_bytes` searches them — with `node`, what the UEFI tree holds there \
+            and under it, compressed sections decompressed — the `uefi_` tools read a firmware image's \
             structure, `code_query` and `code_modules` read the code store. A node id belongs to the \
             document it was listed on. To the person, name a file by its `name` and a node by its \
             `label`, never by an id (d1, 0.2.5). Nothing here edits a dump or shows anything on a screen; a tool refuses an \
