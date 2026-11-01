@@ -1197,6 +1197,48 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertTrue(view.showsRevisionDiff, "the change of this function, without a pick")
     }
 
+    /// Another function's diff is read from its top. A short function opened
+    /// where a long one was left arrived scrolled past its end — the pane
+    /// looked empty until the reader scrolled, and then showed the function
+    /// from above.
+    func testTheDiffOfAnotherFunctionStartsAtItsTop() throws {
+        func artifact(_ long: String, _ short: String) throws -> CodeArtifact {
+            let json: [String: Any] = [
+                "script_version": 2, "program": ["image_base": "0x0"],
+                "functions": [
+                    ["entry": "0x100", "name": "Long", "c": long,
+                     "instructions": [["address": "0x100", "bytes": "C3", "mnemonic": "RET", "text": "RET"]]],
+                    ["entry": "0x200", "name": "Short", "c": short,
+                     "instructions": [["address": "0x200", "bytes": "C3", "mnemonic": "RET", "text": "RET"]]]
+                ]
+            ]
+            return try JSONDecoder().decode(CodeArtifact.self,
+                                            from: JSONSerialization.data(withJSONObject: json))
+        }
+        let longBody = (1...60).map { "  Step\($0)();\n" }.joined()
+        let current = try artifact("void Long(void)\n{\n" + longBody + "}\n",
+                                   "void Short(void)\n{\n  A();\n}\n")
+        let baseline = try artifact("void Long(void)\n{\n" + longBody + "  Old();\n}\n",
+                                    "void Short(void)\n{\n  B();\n}\n")
+        let view = CodePaneView(manifest: manifest(), artifact: current,
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 300)
+        view.layoutSubtreeIfNeeded()
+        view.setComparisonRevision(54, artifact: baseline, pinned: true)
+
+        view.selectFunction(at: 0)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertTrue(view.showsRevisionDiff)
+        view.diffScrollOrigin = NSPoint(x: 0, y: 400)
+        XCTAssertEqual(view.diffScrollOrigin.y, 400, "the long function's diff is scrolled down")
+
+        view.selectFunction(at: 1)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertTrue(view.showsRevisionDiff, "the short function differs too")
+        XCTAssertEqual(view.diffScrollOrigin, .zero, "another function's diff is read from its top")
+        XCTAssertTrue(view.diffText.contains("void Short(void)"), view.diffText)
+    }
+
     /// The dump bar's picker lists the module's revisions the app read, says
     /// which one the code is compared against, and Reset clears it — as
     /// Xcode's bar does for a file's history.

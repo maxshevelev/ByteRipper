@@ -205,7 +205,12 @@ struct CodeDiffToken {
             layout.ensureLayout(for: container)
             text.sizeToFit()
         }
-        scroll.contentView.scroll(to: origin)
+        // A diff shorter than the one before must not be left scrolled past
+        // its end: the clip view keeps an origin it was given, and a short
+        // function would read as an empty pane until the reader scrolls.
+        let visible = scroll.contentView.bounds.size
+        scroll.contentView.scroll(to: NSPoint(x: min(origin.x, max(0, text.frame.width - visible.width)),
+                                              y: min(origin.y, max(0, text.frame.height - visible.height))))
         scroll.reflectScrolledClipView(scroll.contentView)
     }
 

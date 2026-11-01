@@ -533,6 +533,12 @@ import ToolModuleKit
     }
     /// The ranges the diff has highlighted, for a test.
     var diffHighlightedRanges: [NSRange] { diffView.highlightedRanges }
+    /// Where the diff is scrolled, for a test: another function's diff is
+    /// read from its top, never from where a longer one was left.
+    var diffScrollOrigin: NSPoint {
+        get { diffView.scrollOrigin }
+        set { diffView.scroll(to: newValue) }
+    }
 
     /// The description, as drawn, for tests.
     var descriptionText: String { descriptionView.shownText }
@@ -2972,6 +2978,11 @@ import ToolModuleKit
         let currentC = function.c ?? ""
         let diff = LineDiff.between(baselineC, currentC)
         revisionHasChanges = diff.added > 0 || diff.removed > 0
+        // Whether this is the function whose diff is already on screen — read
+        // before `drawnDiff` is told about this one. Its own redrawing keeps
+        // the reader's place; another function's is read from the top, or a
+        // short function arrives scrolled past its end and looks empty.
+        let stays = drawnDiff?.function == index
         drawnDiff = (index, revisionCount)
         guard revisionHasChanges else { return false }
         // Each side's tokens, by the line of its C they sit on.
@@ -2999,7 +3010,6 @@ import ToolModuleKit
                                     lineStart: baselineLines[old - 1], currentSide: false)
             }
         }
-        let stays = drawnDiff?.function == index
         diffView.show(diff, lines: lines, font: Self.codeFont(), lineHeight: Self.codeLineHeight,
                       padding: Self.codeLinePadding)
         diffView.onClick = { [weak self] character, event in
