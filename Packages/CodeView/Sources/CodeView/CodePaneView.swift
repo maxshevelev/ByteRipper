@@ -192,9 +192,11 @@ import ToolModuleKit
     /// one cramped block.
     private static let navigatorSpacing: CGFloat = 10
     /// The bar under the list, as Xcode's navigator has it: the filter, and
-    /// the switch that lays the Functions list out. Then how far a call
-    /// tree's row is set in per level.
-    private static let navigatorBarHeight: CGFloat = 30
+    /// the switch that lays the Functions list out. It is as tall as the
+    /// filter at the standard size and this room around it, since the standard
+    /// size is the system's to change from one macOS to the next. Then how far
+    /// a call tree's row is set in per level.
+    private static let navigatorBarRoom: CGFloat = 6
     /// A function-view button: the square each symbol sits in, and the room
     /// between two of them — enough that three read as three buttons.
     private static let orderButtonWidth: CGFloat = 24
@@ -211,7 +213,7 @@ import ToolModuleKit
     private let navigatorBar = CodeNavigatorBar()
     /// The three function-view buttons, kept apart rather than joined into one
     /// segmented control: each is a flat symbol, and the one whose layout is
-    /// in front carries a plate behind it.
+    /// in front wears the accent colour.
     private let orderButtons = NSStackView()
     /// Takes every New mark at once. It stands in the bar beside the layouts,
     /// so it goes with the Functions list, and stays in its place dimmed while
@@ -961,8 +963,8 @@ import ToolModuleKit
         setFunctionOrder(order)
     }
 
-    /// Puts the plate behind the button whose layout is in front and takes it
-    /// from the others.
+    /// Gives the button whose layout is in front the accent colour and takes
+    /// it from the others.
     private func markChosenOrder(_ order: FunctionOrder) {
         for (index, button) in orderButtonViews.enumerated() {
             button.isChosen = index == order.rawValue
@@ -2253,8 +2255,6 @@ import ToolModuleKit
         searchField.target = self
         searchField.action = #selector(searchChanged)
         searchField.sendsSearchStringImmediately = true
-        searchField.controlSize = .small
-        searchField.font = .systemFont(ofSize: 11)
         searchField.translatesAutoresizingMaskIntoConstraints = false
 
         configure(functionTable, identifier: "function")
@@ -2307,7 +2307,7 @@ import ToolModuleKit
             button.isBordered = false
             button.bezelStyle = .inline
             // A choice, not an action: the state is what a screen reader
-            // reads as selected, and what draws the plate.
+            // reads as selected, and what colours the symbol.
             button.setButtonType(.pushOnPushOff)
             button.contentTintColor = .secondaryLabelColor
             button.tag = index
@@ -2370,7 +2370,8 @@ import ToolModuleKit
             navigatorBar.leadingAnchor.constraint(equalTo: functionPane.leadingAnchor),
             navigatorBar.trailingAnchor.constraint(equalTo: functionPane.trailingAnchor),
             navigatorBar.bottomAnchor.constraint(equalTo: functionPane.bottomAnchor),
-            navigatorBar.heightAnchor.constraint(equalToConstant: Self.navigatorBarHeight),
+            navigatorBar.heightAnchor.constraint(equalTo: searchField.heightAnchor,
+                                                 constant: 2 * Self.navigatorBarRoom),
             searchField.centerYAnchor.constraint(equalTo: navigatorBar.centerYAnchor, constant: 0.5),
             searchToOrder,
             orderButtons.centerYAnchor.constraint(equalTo: navigatorBar.centerYAnchor, constant: 0.5),
@@ -4638,14 +4639,12 @@ final class CodeNavigatorCell: NSTableCellView {
 
 /// The bar under the navigator's list: the panel's background and a hairline
 /// over it, where the list scrolls under — Xcode's filter bar.
-/// One of the navigator's function-view buttons: a flat symbol, with a plate
-/// behind the one whose layout is in front.
+/// One of the navigator's function-view buttons: a flat symbol and nothing
+/// around it, in the accent colour for the one whose layout is in front.
 ///
 /// The three layouts are three buttons, not the segments of one control: the
 /// bar reads as a row of separate buttons, and a segmented control would draw
 /// them as a single joined frame with dividers — chrome the bar does not have.
-/// The plate is drawn rather than left to the bezel, because a bordered button
-/// would box every symbol whether or not it is the one in front.
 final class CodeOrderButton: NSButton {
     /// Whether this button's layout is the one shown. The button's own state
     /// follows it, which is what a screen reader reads as selected.
@@ -4656,15 +4655,6 @@ final class CodeOrderButton: NSButton {
             contentTintColor = isChosen ? .controlAccentColor : .secondaryLabelColor
             needsDisplay = true
         }
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        if isChosen {
-            NSColor.controlAccentColor.withAlphaComponent(0.18).setFill()
-            NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5),
-                         xRadius: 5, yRadius: 5).fill()
-        }
-        super.draw(dirtyRect)
     }
 
     override func viewDidChangeEffectiveAppearance() {

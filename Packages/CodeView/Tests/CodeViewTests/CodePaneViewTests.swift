@@ -822,7 +822,11 @@ final class CodePaneViewTests: XCTestCase {
 
         buttons[2].performClick(nil)
         XCTAssertEqual(view.functionOrder, .review)
-        XCTAssertEqual(buttons.map(\.isChosen), [false, false, true], "the plate moves")
+        XCTAssertEqual(buttons.map(\.isChosen), [false, false, true], "the colour moves")
+        XCTAssertEqual(buttons.map(\.contentTintColor),
+                       [.secondaryLabelColor, .secondaryLabelColor, .controlAccentColor],
+                       "the chosen one differs by its symbol's colour")
+        XCTAssertTrue(buttons.allSatisfy { !$0.isBordered }, "flat: a symbol and nothing around it")
         XCTAssertEqual(buttons.map(\.state), [.off, .off, .on])
     }
 
