@@ -644,10 +644,12 @@ public enum GhidraTools {
                     Never by Ghidra's own name for it (`iVar4`): those renumber. Two locals that share \
                     a storage and a first use cannot be told apart — a function holds one variable per \
                     storage — and naming either is refused; say what each is in the plate comment, and \
-                    name the slot itself with `shared`: the whole storage takes one name, and the plate \
-                    says which meaning each use carries. Use a neutral name there (`PcieSizeTooSmall`), \
-                    never one of the meanings. A slot whose storage a parameter also holds is refused: \
-                    name the parameter by ordinal. \
+                    name the slot itself with `shared`: the whole storage takes one name, every use of \
+                    it reads by that name, and the plate says which meaning each use carries. Use a \
+                    neutral name there (`PcieSizeTooSmall`), never one of the meanings. A slot whose \
+                    storage a parameter also holds is refused: name the parameter by ordinal. A slot \
+                    that cannot be named whole — one use stays under another name — is refused too, \
+                    and nothing is changed, rather than answered as applied. \
                     `type` alone types it and keeps the name. After any call, read the function again: a local's `storage` \
                     can change, and a type alone gives it a `HASH:` storage. `items` does several in \
                     one call, each in a transaction of its own: the answer lists what applied and why \

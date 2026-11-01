@@ -1081,8 +1081,14 @@ public class Owner {
                 ghidra.program.model.data.DataTypeManager manager = structure.getDataTypeManager();
                 DataType copied = definition.copy(manager);
                 copied.setName(wanted);
-                String said = definition.getDescription();
-                if (said != null && !said.isEmpty()) copied.setDescription(said);
+                try {
+                    String said = definition.getDescription();
+                    if (said != null && !said.isEmpty()) copied.setDescription(said);
+                } catch (Exception refused) {
+                    // A function definition refuses a description on its
+                    // in-memory copy; what a reader sees is the field's own
+                    // comment, and that stays with the component.
+                }
                 DataType resolved = manager.resolve(copied, DataTypeConflictHandler.KEEP_HANDLER);
                 DataType replacement = pointer ? manager.getPointer(resolved) : resolved;
                 structure.replaceAtOffset(component.getOffset(), replacement, component.getLength(),
@@ -1115,6 +1121,22 @@ public class Owner {
             if (!left.equals(right)) return true;
         }
         return false;
+    }
+
+    /**
+     * The same type under its two names. `isEquivalent` of a function
+     * definition compares the description as well, and a copy the archive made
+     * can carry one the twin does not; the signature is what says the two are
+     * one type.
+     */
+    private static boolean sameShapeIgnoringComments(DataType twin, DataType copy) {
+        if (twin instanceof ghidra.program.model.data.FunctionDefinition a
+            && copy instanceof ghidra.program.model.data.FunctionDefinition b) {
+            String left = a.getPrototypeString(false).replace(a.getName(), "#");
+            String right = b.getPrototypeString(false).replace(b.getName(), "#");
+            return left.equals(right);
+        }
+        return twin.isEquivalent(copy);
     }
 
     /** The types a structure is made of that this review also defines. */
@@ -1164,7 +1186,9 @@ public class Owner {
             java.util.List<DataType> copy = new java.util.ArrayList<>();
             shared.findDataTypes(canonical, twin);
             shared.findDataTypes(name, copy);
-            if (twin.isEmpty() || copy.isEmpty() || !twin.get(0).isEquivalent(copy.get(0))) continue;
+            if (twin.isEmpty() || copy.isEmpty() || !sameShapeIgnoringComments(twin.get(0), copy.get(0))) {
+                continue;
+            }
             try {
                 shared.replaceDataType(copy.get(0), twin.get(0), true);
                 changed = true;
@@ -3231,12 +3255,6 @@ public class Owner {
                 group.add(symbol);
             }
             if (group.isEmpty()) throw new Failure(404, "no such variable in " + function.getName());
-            String applied = name != null ? name : group.get(0).getName();
-            try {
-                HighFunctionDBUtil.updateDBVariable(group.get(0), applied, type, SourceType.USER_DEFINED);
-            } catch (Exception error) {
-                throw new Failure(400, error.getMessage() + holderOf(applied, function));
-            }
             JsonArray reported = new JsonArray();
             for (HighSymbol symbol : group) {
                 JsonObject item = new JsonObject();
@@ -3245,17 +3263,70 @@ public class Owner {
                 item.addProperty("name", symbol.getName());
                 reported.add(item);
             }
-            decompiled.remove(function.getEntryPoint());
-            String nowStorage = storage;
+            String applied = name != null ? name : group.get(0).getName();
+            // Ghidra holds one variable per storage, and the decompiler can show
+            // several symbols on one. Named one at a time, each rename can move
+            // the slot to a hash of its own, and the uses left on the old one are
+            // read again and named in the next round. If a round cannot name
+            // one, the call is refused and the transaction rolls back: the
+            // storage is named whole, or nothing changes.
+            String where = storage;
+            for (int round = 0; round < 6; round++) {
+                HighFunction current = decompile(function).getHighFunction();
+                HighSymbol goal = null;
+                if (current != null) {
+                    Iterator<HighSymbol> scan = current.getLocalSymbolMap().getSymbols();
+                    while (scan.hasNext()) {
+                        HighSymbol symbol = scan.next();
+                        if (symbol.isParameter()) continue;
+                        if (symbol instanceof ghidra.program.model.pcode.EquateSymbol) continue;
+                        String at = symbol.getStorage().toString();
+                        if (!at.equals(where) && !at.equals(storage)) continue;
+                        if (symbol.getName().equals(applied)) continue;
+                        goal = symbol;
+                        break;
+                    }
+                }
+                if (goal == null) break;
+                try {
+                    HighFunctionDBUtil.updateDBVariable(goal, applied, type, SourceType.USER_DEFINED);
+                } catch (Exception error) {
+                    throw new Failure(409, "the storage cannot be named as one: " + error.getMessage()
+                        + " — nothing was changed");
+                }
+                decompiled.remove(function.getEntryPoint());
+                HighFunction after = decompile(function).getHighFunction();
+                if (after != null) {
+                    Iterator<HighSymbol> now = after.getLocalSymbolMap().getSymbols();
+                    while (now.hasNext()) {
+                        HighSymbol symbol = now.next();
+                        if (symbol.isParameter() || !symbol.getName().equals(applied)) continue;
+                        where = symbol.getStorage().toString();
+                        break;
+                    }
+                }
+            }
+            // Every use has to read by the name now. One left unnamed on the
+            // slot means the storage was split, not named, and the call is
+            // refused rather than answered as applied.
             HighFunction after = decompile(function).getHighFunction();
+            java.util.List<String> left = new java.util.ArrayList<>();
+            String nowStorage = storage;
             if (after != null) {
                 Iterator<HighSymbol> now = after.getLocalSymbolMap().getSymbols();
                 while (now.hasNext()) {
                     HighSymbol symbol = now.next();
-                    if (symbol.isParameter() || !symbol.getName().equals(applied)) continue;
-                    nowStorage = symbol.getStorage().toString();
-                    break;
+                    if (symbol.isParameter()) continue;
+                    if (symbol instanceof ghidra.program.model.pcode.EquateSymbol) continue;
+                    String at = symbol.getStorage().toString();
+                    if (at.equals(where)) nowStorage = at;
+                    if (!at.equals(storage) && !at.equals(where)) continue;
+                    if (!symbol.getName().equals(applied)) left.add(symbol.getName());
                 }
+            }
+            if (!left.isEmpty()) {
+                throw new Failure(409, "the storage " + storage + " is still read by "
+                    + String.join(", ", left) + " under other names; nothing was changed");
             }
             JsonObject answer = identity();
             answer.addProperty("function", hex(function.getEntryPoint()));
