@@ -248,7 +248,10 @@ struct CodeDiffToken {
         }.map(\.range)
     }
 
-    /// The rect a range of the diff occupies, for a popover.
+    /// The rect a range of the diff occupies, for a popover — in this view's
+    /// coordinates, not the text's: the text is the scroll view's document, and
+    /// a rect in those coordinates puts the popover at the document's top, not
+    /// beside the word clicked.
     func rect(of range: NSRange) -> NSRect? {
         guard let layout = text.layoutManager, let container = text.textContainer,
               range.location + range.length <= (text.string as NSString).length else { return nil }
@@ -256,7 +259,7 @@ struct CodeDiffToken {
         var box = layout.boundingRect(forGlyphRange: glyphs, in: container)
         box.origin.x += text.textContainerOrigin.x
         box.origin.y += text.textContainerOrigin.y
-        return box
+        return convert(box, from: text)
     }
 
     func highlight(_ ranges: [NSRange]) { text.highlight(ranges) }

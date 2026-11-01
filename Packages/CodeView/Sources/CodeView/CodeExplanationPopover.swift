@@ -36,7 +36,12 @@ import Localization
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    /// The rect the popover was asked to sit beside, in the view's
+    /// coordinates — for a test that a caller converted them.
+    private(set) var shownRect: NSRect?
+
     func show(relativeTo rect: NSRect, of view: NSView) {
+        shownRect = rect
         popover.contentViewController = self
         popover.behavior = .transient
         popover.animates = false

@@ -3534,6 +3534,13 @@ import ToolModuleKit
         return explanationPopover.explanationShown
     }
 
+    /// Where the popover was put, in the coordinates of the view it was
+    /// shown against — for a test.
+    var shownExplanationRect: NSRect? { explanationPopover?.shownRect }
+
+    /// The diff's visible area, for a test of where a popover is put.
+    var diffBounds: NSRect { diffView.bounds }
+
     func shownExplanationClose() {
         explanationPopover?.close()
         explanationPopover = nil

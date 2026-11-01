@@ -1508,6 +1508,54 @@ final class CodePaneViewTests: XCTestCase {
         view.shownExplanationClose()
     }
 
+    /// A name on a line the revisions share explains itself as one on a
+    /// changed line does, and the popover sits beside the word — not at the
+    /// top of the text's document, which is where a rect in the document's
+    /// coordinates put it.
+    func testAClickInAnUnchangedDiffLineExplainsItsName() throws {
+        func artifact(_ call: String) throws -> CodeArtifact {
+            // The name sits on a line both revisions share, near the top of a
+            // document tall enough that the document's coordinates are not the
+            // view's.
+            var body = ["  Port = mPort + 1;"]
+            body += (1...40).map { "  Step\($0)();" }
+            body.append("  Helper(\(call));")
+            let c = "void F(void)\n{\n" + body.joined(separator: "\n") + "\n}\n"
+            let at = (c as NSString).range(of: "mPort")
+            let json: [String: Any] = [
+                "script_version": 5, "program": ["image_base": "0x0"],
+                "functions": [["entry": "0x220", "name": "F", "c": c,
+                               "c_spans": [[at.location, at.length, "global", "0x230"]],
+                               "instructions": [["address": "0x220", "bytes": "C3",
+                                                 "mnemonic": "RET", "text": "RET"]]]],
+                "symbols": [["address": "0x230", "name": "mPort", "type": "UINT16",
+                             "source": "USER_DEFINED", "comment": "The port the board's EC answers on."]]
+            ]
+            return try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        }
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact("0x10"),
+                                moduleBytes: teModule(), hexView: NSView())
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 480),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        view.layoutSubtreeIfNeeded()
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil) }
+        view.setComparisonRevision(54, artifact: try artifact("0x20"))
+        XCTAssertTrue(view.showsRevisionDiff)
+
+        let shown = view.diffText as NSString
+        let at = shown.range(of: "mPort").location + 1
+        XCTAssertFalse(view.clickDiff(at: at, event: try click(count: 1)))
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        XCTAssertEqual(view.shownExplanation?.subject, .global(CodeAddress(0x230)),
+                       "the name on a line both revisions share")
+        let rect = try XCTUnwrap(view.shownExplanationRect)
+        XCTAssertTrue(view.diffBounds.contains(rect),
+                      "the popover sits beside the word: \(rect) in the diff's \(view.diffBounds)")
+        view.shownExplanationClose()
+    }
+
     /// The call tree's rows open and close with the triangle in front of them.
     func testTheTreeOpensAndClosesItsCalls() throws {
         let suiteName = "CodePaneViewTests.treeFolds"
