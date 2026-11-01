@@ -425,7 +425,10 @@ match is by body: the same code, with the addresses a relocation moves masked.
   read before it is made.
 - `leftovers` in a result is the gaps the function still keeps after the
   apply: a local the fill left unnamed, a return type still the decompiler's —
-  name them before publishing, or `filter: unfinished` will say so later.
+  name them before publishing, or `filter: unfinished` will say so later. They
+  come with an apply that names `address`; a bulk apply — and the one an open
+  makes — leaves them out, since the reading decompiles every function it
+  answers.
 - `candidates`: a body of an entry's shape with other constants, each one
   listed with the entry's. Another constant is another function — an MSR, a
   port, a mask or a size changes what the code does — so review it as a

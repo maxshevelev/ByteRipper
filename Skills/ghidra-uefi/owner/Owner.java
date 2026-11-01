@@ -1715,14 +1715,17 @@ public class Owner {
         decompiled.remove(function.getEntryPoint());
         // What the review still lacks after this, by the bar's own reading —
         // the decompiler's local map, not the listing's, which holds stack
-        // slots the C never mentions. A fill that leaves a local unnamed says
-        // so now, not at the next code read that fails the review filter.
-        ExportCode.Assessment after = ExportCode.assess(
-            function, decompile(function), ExportCode.stepComments(function));
-        if (!after.gaps.isEmpty()) {
-            JsonArray left = new JsonArray();
-            after.gaps.forEach(left::add);
-            answer.add("leftovers", left);
+        // slots the C never mentions. Read only when the item asks: the
+        // reading decompiles, and an apply of every match — what an open does
+        // — would pay it once per function.
+        if (item.has("leftovers") && item.get("leftovers").getAsBoolean()) {
+            ExportCode.Assessment after = ExportCode.assess(
+                function, decompile(function), ExportCode.stepComments(function));
+            if (!after.gaps.isEmpty()) {
+                JsonArray left = new JsonArray();
+                after.gaps.forEach(left::add);
+                answer.add("leftovers", left);
+            }
         }
         // Equal to the entry, apart from the body it is: the function is
         // the entry's, and carries the mark.

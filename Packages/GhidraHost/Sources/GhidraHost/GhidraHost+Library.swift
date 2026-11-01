@@ -298,7 +298,12 @@ extension GhidraHost {
                     "mode": step.mode ?? "fill"
                 ]
                 item["codes"] = step.codes
-                if request.address != nil { item["reason"] = request.reason }
+                if request.address != nil {
+                    item["reason"] = request.reason
+                    // One decompile, for the one function a reader asked about;
+                    // applying every match — an open does — pays nothing.
+                    item["leftovers"] = true
+                }
                 if let fields = request.fields, !fields.isEmpty { item["fields"] = fields }
                 items.append(item)
             }

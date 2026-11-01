@@ -219,7 +219,9 @@ public enum GhidraTools {
                     Without `address`: every match `ghidra_library` lists in `to_apply`. With `address`: that function — a candidate \
                     only with `reason` (why its other constants make no difference: it becomes a variant \
                     of the entry at the next publish); `replace: true` puts the entry's review in place \
-                    of a review that differs or was edited since; `fields` takes only the parts named — \
+                    of a review that differs or was edited since; `leftovers` accompany an apply that \
+                    names `address`, and a bulk apply leaves them out (the reading decompiles each \
+                    function it answers); `fields` takes only the parts named — \
                     signature (return type, convention, parameter types), names (the function's and its \
                     parameters'), locals, plate, comments — and keeps the rest of the function's. \
                     `dry_run: true` answers the same and writes nothing: each entry is applied in its \
