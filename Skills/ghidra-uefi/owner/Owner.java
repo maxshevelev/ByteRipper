@@ -780,6 +780,17 @@ public class Owner {
         // `dry_run` it answers what would be taken, and nothing is written.
         boolean take = "1".equals(parameters.get("take_type_conflicts"));
         if (!dryRun) writeLibraryStates();
+        if (!dryRun) {
+            // Before the export: the artifact's types and the C read the named
+            // members, and the merge below finds them in the same publish.
+            int transaction = program.startTransaction("type member names");
+            boolean named = false;
+            try {
+                named = nameFunctionPointerMembers();
+            } finally {
+                program.endTransaction(transaction, named);
+            }
+        }
         if (!dryRun && program.isChanged()) program.save("publish", TaskMonitor.DUMMY);
         {
             byte[] artifact = exportArtifact();
@@ -951,60 +962,213 @@ public class Owner {
         for (java.util.Map.Entry<String, DataType> entry : ours.entrySet()) {
             String name = entry.getKey();
             DataType here = entry.getValue();
-            java.util.List<DataType> there = new java.util.ArrayList<>();
-            shared.findDataTypes(name, there);
-            if (there.isEmpty()) {
-                if (!apply) continue;
-                shared.resolve(here, DataTypeConflictHandler.KEEP_HANDLER);
-                changed = true;
+            // The types this one is made of are merged first: a structure
+            // that differs because a member does is the member's conflict,
+            // and it is named after the member — not left to be resolved
+            // inside the structure, where Ghidra would rename it
+            // `name.conflict` and no reader would know which type differed.
+            for (DataType member : membersOf(here, ours)) {
+                String memberName = member.getName();
+                if (memberName == null || memberName.isEmpty() || memberName.equals(name)) continue;
+                if (mergeOne(shared, memberName, member, merge, apply, take, origins, module)) changed = true;
+            }
+            if (mergeOne(shared, name, here, merge, apply, take, origins, module)) changed = true;
+        }
+        if (apply && repairConflictNames(shared)) changed = true;
+        return changed;
+    }
+
+    /**
+     * One type into the shared archive — the structure the review wrote or
+     * one it is made of. The questions are asked in the same order and
+     * answered the same way whether the archive is written or only looked
+     * at, so a preview and the publish after it cannot disagree: an enum
+     * conflicts only on a member's value, another type on its shape or, the
+     * shape being the same, on comments that cannot be merged.
+     */
+    private boolean mergeOne(FileDataTypeManager shared, String name, DataType here, Merge merge,
+                             boolean apply, boolean take, JsonObject origins, String module) throws Exception {
+        java.util.List<DataType> there = new java.util.ArrayList<>();
+        shared.findDataTypes(name, there);
+        if (there.isEmpty()) {
+            if (!apply) return false;
+            shared.resolve(here, DataTypeConflictHandler.KEEP_HANDLER);
+            merge.written = true;
+            recordOrigin(origins, name, module);
+            return true;
+        }
+        DataType theirs = there.get(0);
+        if (theirs instanceof ghidra.program.model.data.Enum sharedEnum
+            && here instanceof ghidra.program.model.data.Enum ownEnum) {
+            if (!apply) {
+                if (enumConflict(ownEnum, sharedEnum)) recordConflict(merge, origins, name);
+                return false;
+            }
+            int merged = mergeEnum(ownEnum, sharedEnum);
+            if (merged < 0) { recordConflict(merge, origins, name); return false; }
+            return merged > 0;
+        }
+        // An equivalent structure whose members' types are named differently
+        // is the normalisation the archive has not had yet — `_func_5 *Hook`
+        // against `AMD_SOC_INFO_PPI_RN_Hook *Hook`. It is reported like a
+        // difference so the publish that carries the names can take it, and
+        // the archive then holds the names every module after it reads.
+        if (!theirs.isEquivalent(here) || memberTypesRenamed(here, theirs)) {
+            if (take && replaceable(here, theirs)) {
+                merge.taken.add(name);
+                merge.origins.put(name, originOf(origins, name));
+                if (!apply) return false;
+                replaceShared(shared, theirs, here);
                 merge.written = true;
                 recordOrigin(origins, name, module);
-                continue;
+                return true;
             }
-            if (!apply) {
-                // The same questions the apply below asks, in the same order,
-                // so a preview and the publish after it cannot disagree: an
-                // enum conflicts only on a member's value, another type on
-                // its shape or, the shape being the same, on comments that
-                // cannot be merged. `enumConflict` and `commentsConflict` are
-                // exactly what `mergeEnum` and `mergeComments` refuse.
-                DataType theirs = there.get(0);
-                if (theirs instanceof ghidra.program.model.data.Enum sharedEnum
-                    && here instanceof ghidra.program.model.data.Enum ownEnum) {
-                    if (enumConflict(ownEnum, sharedEnum)) recordConflict(merge, origins, name);
-                } else if (!theirs.isEquivalent(here)) {
-                    if (take && replaceable(here, theirs)) {
-                        merge.taken.add(name);
-                        merge.origins.put(name, originOf(origins, name));
-                    } else {
-                        recordConflict(merge, origins, name);
-                    }
-                } else if (commentsConflict(here, theirs)) {
-                    recordConflict(merge, origins, name);
-                }
-                continue;
+            recordConflict(merge, origins, name);
+            return false;
+        }
+        if (!apply) {
+            if (commentsConflict(here, theirs)) recordConflict(merge, origins, name);
+            return false;
+        }
+        int merged = mergeComments(here, theirs);
+        if (merged < 0) { recordConflict(merge, origins, name); return false; }
+        return merged > 0;
+    }
+
+    /**
+     * The function-pointer members of the review's structures, named after the
+     * structure and the field. The decompiler makes one type per inline member
+     * and names it `_func_N` per program, in the order it parsed them: the same
+     * member is `_func_1` here and `_func_7` in the next module, and two
+     * structures can come to share one name — which is how the shared archive
+     * came to hold `.conflict` copies of a component. A name made from the
+     * structure and the field belongs to one member of one structure and cannot
+     * collide. The field's name and comment stay where they are: only the
+     * component's type changes.
+     *
+     * Run at every publish over the types the review recorded, so a type
+     * defined before this existed is renamed once, and its recorded C with it —
+     * a change of the review document, so the publish after it is a revision.
+     */
+    private boolean nameFunctionPointerMembers() {
+        boolean changed = false;
+        for (String name : new java.util.ArrayList<>(Harvest.reviewTypes(program).keySet())) {
+            DataType type = find(program.getDataTypeManager(), name);
+            if (type == null || type.getDataTypeManager() != program.getDataTypeManager()) continue;
+            if (!nameFunctionPointerMembers(type)) continue;
+            changed = true;
+            Harvest.recordType(program, type.getName(), ExportCode.typeC(type));
+        }
+        return changed;
+    }
+
+    private static boolean nameFunctionPointerMembers(DataType type) {
+        DataType base = type instanceof ghidra.program.model.data.TypeDef def ? def.getBaseDataType() : type;
+        if (!(base instanceof ghidra.program.model.data.Structure structure)) return false;
+        boolean changed = false;
+        for (ghidra.program.model.data.DataTypeComponent component : structure.getDefinedComponents()) {
+            DataType fieldType = component.getDataType();
+            boolean pointer = fieldType instanceof ghidra.program.model.data.Pointer;
+            DataType target = pointer
+                ? ((ghidra.program.model.data.Pointer) fieldType).getDataType() : fieldType;
+            if (!(target instanceof ghidra.program.model.data.FunctionDefinition definition)) continue;
+            String field = component.getFieldName();
+            if (field == null || field.isEmpty()) continue;
+            String wanted = type.getName() + "_" + field;
+            if (wanted.equals(definition.getName())) continue;
+            try {
+                ghidra.program.model.data.DataTypeManager manager = structure.getDataTypeManager();
+                DataType copied = definition.copy(manager);
+                copied.setName(wanted);
+                String said = definition.getDescription();
+                if (said != null && !said.isEmpty()) copied.setDescription(said);
+                DataType resolved = manager.resolve(copied, DataTypeConflictHandler.KEEP_HANDLER);
+                DataType replacement = pointer ? manager.getPointer(resolved) : resolved;
+                structure.replaceAtOffset(component.getOffset(), replacement, component.getLength(),
+                                          component.getFieldName(), component.getComment());
+                changed = true;
+            } catch (Exception error) {
+                System.out.println("OWNER TYPE member " + wanted + ": " + error.getMessage());
             }
-            DataType theirs = there.get(0);
-            if (theirs instanceof ghidra.program.model.data.Enum sharedEnum
-                && here instanceof ghidra.program.model.data.Enum ownEnum) {
-                int merged = mergeEnum(ownEnum, sharedEnum);
-                if (merged < 0) recordConflict(merge, origins, name);
-                else if (merged > 0) changed = true;
-            } else if (!theirs.isEquivalent(here)) {
-                if (take && replaceable(here, theirs)) {
-                    merge.taken.add(name);
-                    merge.origins.put(name, originOf(origins, name));
-                    replaceShared(shared, theirs, here);
-                    changed = true;
-                    merge.written = true;
-                    recordOrigin(origins, name, module);
-                } else {
-                    recordConflict(merge, origins, name);
-                }
-            } else {
-                int merged = mergeComments(here, theirs);
-                if (merged < 0) recordConflict(merge, origins, name);
-                else if (merged > 0) changed = true;
+        }
+        return changed;
+    }
+
+    /**
+     * Whether two equivalent composites name their members' types
+     * differently: the same layout, written when the members were still
+     * `_func_N` and written again after they were named.
+     */
+    private static boolean memberTypesRenamed(DataType here, DataType theirs) {
+        DataType ownBase = here instanceof ghidra.program.model.data.TypeDef def ? def.getBaseDataType() : here;
+        DataType sharedBase = theirs instanceof ghidra.program.model.data.TypeDef def ? def.getBaseDataType() : theirs;
+        if (!(ownBase instanceof ghidra.program.model.data.Composite mine)
+            || !(sharedBase instanceof ghidra.program.model.data.Composite shared)) return false;
+        ghidra.program.model.data.DataTypeComponent[] from = mine.getDefinedComponents();
+        ghidra.program.model.data.DataTypeComponent[] to = shared.getDefinedComponents();
+        if (from.length != to.length) return false;
+        for (int i = 0; i < from.length; i++) {
+            String left = from[i].getDataType().getName();
+            String right = to[i].getDataType().getName();
+            if (left == null || right == null) continue;
+            if (!left.equals(right)) return true;
+        }
+        return false;
+    }
+
+    /** The types a structure is made of that this review also defines. */
+    private static java.util.List<DataType> membersOf(DataType type,
+                                                      java.util.TreeMap<String, DataType> ours) {
+        java.util.List<DataType> found = new java.util.ArrayList<>();
+        DataType base = type instanceof ghidra.program.model.data.TypeDef def ? def.getBaseDataType() : type;
+        if (!(base instanceof ghidra.program.model.data.Composite composite)) return found;
+        for (ghidra.program.model.data.DataTypeComponent component : composite.getDefinedComponents()) {
+            DataType field = component.getDataType();
+            DataType target = field instanceof ghidra.program.model.data.Pointer pointer
+                ? pointer.getDataType() : field;
+            if (target == null) continue;
+            DataType memberBase = target instanceof ghidra.program.model.data.TypeDef def
+                ? def.getBaseDataType() : target;
+            if (memberBase == null) continue;
+            String name = memberBase.getName();
+            if (name == null || name.isEmpty()) continue;
+            // A review type, a type a review's structure is a typedef of, or a
+            // function-pointer member normalised to `<STRUCT>_<field>`: the
+            // three the archive has to be told about before the structure.
+            boolean review = ours.containsKey(name) || name.startsWith(type.getName() + "_");
+            if (!review) continue;
+            if (!found.contains(memberBase)) found.add(memberBase);
+        }
+        return found;
+    }
+
+    /**
+     * The `.conflict` copies an older merge left behind. Ghidra names an
+     * incoming type that way when the archive already holds one of its name,
+     * and a component resolved implicitly could be stored so while its twin
+     * stayed the type in use — the archive then carried a name that says
+     * "conflict" for a type that is not one. A copy that is the same type as
+     * its twin is a duplicate: the twin takes its uses, and it goes.
+     */
+    private static boolean repairConflictNames(FileDataTypeManager shared) {
+        boolean changed = false;
+        java.util.List<String> names = new java.util.ArrayList<>();
+        for (java.util.Iterator<DataType> all = shared.getAllDataTypes(); all.hasNext(); ) {
+            DataType type = all.next();
+            if (type.getName().endsWith(".conflict")) names.add(type.getName());
+        }
+        for (String name : names) {
+            String canonical = name.substring(0, name.length() - ".conflict".length());
+            java.util.List<DataType> twin = new java.util.ArrayList<>();
+            java.util.List<DataType> copy = new java.util.ArrayList<>();
+            shared.findDataTypes(canonical, twin);
+            shared.findDataTypes(name, copy);
+            if (twin.isEmpty() || copy.isEmpty() || !twin.get(0).isEquivalent(copy.get(0))) continue;
+            try {
+                shared.replaceDataType(copy.get(0), twin.get(0), true);
+                changed = true;
+            } catch (Exception error) {
+                System.out.println("OWNER TYPE repair " + name + ": " + error.getMessage());
             }
         }
         return changed;
@@ -3449,6 +3613,7 @@ public class Owner {
         // The canonical C, not the text the caller sent: two equivalent
         // definitions must leave the review document byte-identical, or a
         // redefinition for a check reads as a new revision.
+        nameFunctionPointerMembers(resolved);
         Harvest.recordType(program, resolved.getName(), ExportCode.typeC(resolved));
         answer.addProperty("name", resolved.getName());
         answer.addProperty("path", resolved.getPathName());
