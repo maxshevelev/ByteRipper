@@ -403,7 +403,11 @@ public enum GhidraTools {
                     pieces rather than missing names), and its decompiled C — \
                     fresh after every write, ahead of what the app shows until a publish. \
                     `summary: true` leaves the C and the equates out, for walking a module without \
-                    its text.
+                    its text. A function the decompiler refuses answers `decompile_error` and \
+                    `suspects`: the parameters, locals and referenced data whose applied type is a \
+                    pointer to something that is not a structure — where `PTRSUB off of non \
+                    structured pointer type` comes from — so the offending symbol is named rather \
+                    than bisected for.
                     """,
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,
@@ -619,7 +623,9 @@ public enum GhidraTools {
                   + "decompiles (`decompiles`), with the error when it does not. The candidate for a "
                   + "function the decompiler refuses, such as two symbols assigned to one variable, where "
                   + "names it kept stand in the way. It is not a guarantee, and the review's names go with "
-                  + "the rest: read the function again and name what matters.",
+                  + "the rest: read the function again and name what matters. While the C still fails, the "
+                  + "answer names `suspects` — the parameters, locals and referenced data typed as a pointer "
+                  + "to something that is not a structure, which is where such a failure comes from.",
                   ["address": AgentSchema.string("The function's entry address, or any address inside it.")],
                   required: ["address"]) { arguments in
                 try optional(arguments, ["address"])

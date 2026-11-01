@@ -536,8 +536,62 @@ public class Owner {
         }
         if (results != null && !results.decompileCompleted()) {
             answer.addProperty("decompile_error", results.getErrorMessage());
+            answer.add("suspects", decompileSuspects(function));
         }
         return answer;
+    }
+
+    /**
+     * Where the decompiler may have choked: the parameters and locals, and the
+     * data the body's instructions reference, whose type is a pointer to
+     * something that is not a structure or an array — a `void *`, a scalar, an
+     * enum. `PTRSUB off of non structured pointer type` comes from one of
+     * these: the body computes a field offset on a pointer whose pointee says
+     * it has no fields. The list is short by design; it saves bisecting the
+     * body by hand.
+     */
+    private JsonArray decompileSuspects(Function function) {
+        JsonArray suspects = new JsonArray();
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (Parameter parameter : function.getParameters()) {
+            addSuspect(suspects, seen, "parameter", parameter.getName(), parameter.getDataType());
+        }
+        for (ghidra.program.model.listing.Variable local : function.getLocalVariables()) {
+            addSuspect(suspects, seen, "local", local.getName(), local.getDataType());
+        }
+        InstructionIterator code = program.getListing().getInstructions(function.getBody(), true);
+        while (code.hasNext()) {
+            Instruction instruction = code.next();
+            for (Reference reference : instruction.getReferencesFrom()) {
+                if (!reference.getToAddress().isMemoryAddress()) continue;
+                Data data = program.getListing().getDataAt(reference.getToAddress());
+                if (data == null || data.getDataType() == null) continue;
+                String address = hex(reference.getToAddress());
+                if (!seen.add("data " + address)) continue;
+                addSuspect(suspects, seen, "data " + address,
+                           data.getPrimarySymbol() == null ? null : data.getPrimarySymbol().getName(),
+                           data.getDataType());
+            }
+        }
+        return suspects;
+    }
+
+    private static void addSuspect(JsonArray into, java.util.Set<String> seen, String kind,
+                                   String name, DataType type) {
+        if (!(type instanceof ghidra.program.model.data.Pointer pointer)) return;
+        DataType target = pointer.getDataType();
+        if (target == null) return;
+        DataType base = target instanceof ghidra.program.model.data.TypeDef def ? def.getBaseDataType() : target;
+        if (base instanceof ghidra.program.model.data.Composite) return;
+        if (base instanceof ghidra.program.model.data.Array) return;
+        String key = kind + " " + (name == null ? "" : name);
+        if (!seen.add(key)) return;
+        JsonObject item = new JsonObject();
+        item.addProperty("kind", kind);
+        if (name != null) item.addProperty("name", name);
+        item.addProperty("type", type.getName());
+        item.addProperty("points_to", base.getName());
+        into.add(item);
     }
 
     private static String kind(DataType type) {
@@ -2874,6 +2928,7 @@ public class Owner {
         answer.add("names", names);
         answer.addProperty("decompiles", decompiles);
         if (error != null) answer.addProperty("error", error);
+        if (!decompiles) answer.add("suspects", decompileSuspects(function));
         return answer;
     }
 
