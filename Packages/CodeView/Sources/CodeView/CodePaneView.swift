@@ -888,8 +888,17 @@ import ToolModuleKit
         // front the filter takes its room.
         let showsOrder = state.list == .functions
         orderButtons.isHidden = !showsOrder
-        searchToOrder.isActive = showsOrder
-        searchToEdge.isActive = !showsOrder
+        // One chain, never two: the filter runs to the layout buttons while
+        // the functions are shown and to the bar's edge otherwise, and the
+        // navigator is drawn inside a layout pass — the chain being left is
+        // let go before the other is taken.
+        if showsOrder {
+            searchToEdge.isActive = false
+            searchToOrder.isActive = true
+        } else {
+            searchToOrder.isActive = false
+            searchToEdge.isActive = true
+        }
         markChosenOrder(state.functionOrder)
         layOutNavigatorColumns()
         drawEmptyList()
