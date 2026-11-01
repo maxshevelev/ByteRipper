@@ -288,6 +288,7 @@ public class Owner {
                     case "/v1/set/data" -> write(exchange, this::setData);
                     case "/v1/set/description" -> write(exchange, this::setDescription);
                     case "/v1/set/code-mode" -> write(exchange, this::setCodeMode);
+                    case "/v1/redecode" -> write(exchange, this::redecode);
                     case "/v1/set/equate" -> write(exchange, this::setEquate);
                     case "/v1/tag/function" -> write(exchange, this::tagFunction);
                     case "/v1/library/decline" -> write(exchange, this::libraryDecline);
@@ -479,6 +480,30 @@ public class Owner {
             answer.add("summary", summary);
         }
         return answer;
+    }
+
+    /**
+     * Every comment in the function's body, by address and kind: what a re-read
+     * of the C is checked against, since a stale step comment shows nowhere else.
+     */
+    private JsonArray commentsIn(Function function) {
+        JsonArray comments = new JsonArray();
+        ghidra.program.model.listing.Listing listing = program.getListing();
+        ghidra.program.model.address.AddressIterator addresses =
+            listing.getCommentAddressIterator(function.getBody(), true);
+        while (addresses.hasNext()) {
+            Address at = addresses.next();
+            for (CommentType kind : CommentType.values()) {
+                String text = listing.getComment(kind, at);
+                if (text == null || text.isBlank()) continue;
+                JsonObject item = new JsonObject();
+                item.addProperty("address", hex(at));
+                item.addProperty("kind", kind.name().toLowerCase(java.util.Locale.ROOT));
+                item.addProperty("text", text);
+                comments.add(item);
+            }
+        }
+        return comments;
     }
 
     /**
@@ -685,8 +710,13 @@ public class Owner {
         answer.addProperty("name_source", function.getSymbol().getSource().toString());
         answer.addProperty("signature", function.getPrototypeString(false, false));
         addTags(answer, function);
+        StringPropertyMap signatureReasons =
+            program.getUsrPropertyManager().getStringPropertyMap(Harvest.SIGNATURE_REASON);
+        String signatureReason = signatureReasons == null ? null : signatureReasons.getString(function.getEntryPoint());
+        if (signatureReason != null) answer.addProperty("signature_reason", signatureReason);
         String plate = function.getComment();
         if (plate != null && !plate.isBlank()) answer.addProperty("plate", plate);
+        answer.add("comments", commentsIn(function));
         JsonArray parameters = new JsonArray();
         for (Parameter parameter : function.getParameters()) {
             JsonObject item = new JsonObject();
@@ -1217,6 +1247,8 @@ public class Owner {
         final java.util.List<String> taken = new java.util.ArrayList<>();
         /** For each conflict, the module that wrote the shared version, when the sidecar knows it. */
         final java.util.TreeMap<String, String> origins = new java.util.TreeMap<>();
+        /** The names withdrawn from the shared archive: a publish does not bring them back. */
+        JsonObject withdrawn = new JsonObject();
         /** A shared type was added or replaced: the sidecar has something to record. */
         boolean written;
     }
@@ -1239,6 +1271,7 @@ public class Owner {
         if (!apply) {
             if (!reviewTypes.isFile()) return merge;
             try (FileChannel channel = lockChannel(); FileLock lock = channel.lock()) {
+                merge.withdrawn = readWithdrawn();
                 FileDataTypeManager shared = FileDataTypeManager.openFileArchive(reviewTypes, false);
                 try {
                     mergeInto(shared, mine, merge, false, take, readOrigins());
@@ -1250,6 +1283,7 @@ public class Owner {
         }
         reviewTypes.getParentFile().mkdirs();
         try (FileChannel channel = lockChannel(); FileLock lock = channel.lock()) {
+            merge.withdrawn = readWithdrawn();
             FileDataTypeManager shared = reviewTypes.isFile()
                 ? FileDataTypeManager.openFileArchive(reviewTypes, true)
                 : FileDataTypeManager.createFileArchive(reviewTypes, program.getLanguageID(),
@@ -1323,6 +1357,15 @@ public class Owner {
      */
     private boolean mergeOne(FileDataTypeManager shared, String name, DataType here, Merge merge,
                              boolean apply, boolean take, JsonObject origins, String module) throws Exception {
+        // A withdrawn name stays out, and so does anything that would carry it
+        // in: resolving a structure brings its members along. `take` does not
+        // override this — that choice was made when the name was withdrawn.
+        String carried = withdrawnWithin(here, merge.withdrawn);
+        if (carried != null) {
+            if (!merge.conflicts.contains(name)) merge.conflicts.add(name);
+            merge.origins.put(name, "withdrawn " + carried);
+            return false;
+        }
         java.util.List<DataType> there = new java.util.ArrayList<>();
         shared.findDataTypes(name, there);
         if (there.isEmpty()) {
@@ -1558,6 +1601,170 @@ public class Owner {
             throw new Failure(409, theirs.getName() + " cannot replace the shared " + theirs.getName()
                               + ": " + error.getMessage());
         }
+    }
+
+    /** The types a type is made of, directly: through pointers and arrays to the named one. */
+    private static java.util.List<DataType> madeOf(DataType type) {
+        java.util.List<DataType> parts = new java.util.ArrayList<>();
+        if (type instanceof ghidra.program.model.data.TypeDef def) {
+            parts.add(def.getDataType());
+        } else if (type instanceof ghidra.program.model.data.Composite composite) {
+            for (ghidra.program.model.data.DataTypeComponent component : composite.getDefinedComponents()) {
+                parts.add(component.getDataType());
+            }
+        } else if (type instanceof ghidra.program.model.data.FunctionDefinition function) {
+            parts.add(function.getReturnType());
+            for (ghidra.program.model.data.ParameterDefinition parameter : function.getArguments()) {
+                parts.add(parameter.getDataType());
+            }
+        }
+        java.util.List<DataType> named = new java.util.ArrayList<>();
+        for (DataType part : parts) {
+            DataType at = part;
+            while (at instanceof ghidra.program.model.data.Pointer || at instanceof ghidra.program.model.data.Array) {
+                at = at instanceof ghidra.program.model.data.Pointer pointer
+                    ? pointer.getDataType() : ((ghidra.program.model.data.Array) at).getDataType();
+            }
+            if (at != null) named.add(at);
+        }
+        return named;
+    }
+
+    /** The withdrawn name `type` is or is made of, however deep; null when none. */
+    private static String withdrawnWithin(DataType type, JsonObject withdrawn) {
+        if (withdrawn.size() == 0) return null;
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        java.util.ArrayDeque<DataType> waiting = new java.util.ArrayDeque<>();
+        waiting.add(type);
+        while (!waiting.isEmpty()) {
+            DataType at = waiting.poll();
+            if (!seen.add(at.getPathName())) continue;
+            if (withdrawn.has(at.getName())) return at.getName();
+            waiting.addAll(madeOf(at));
+        }
+        return null;
+    }
+
+    /**
+     * Takes a type out of the shared archive: a name that turned out false. A
+     * typedef and the structure it names are one type and go together; another
+     * archive type using either refuses it, since Ghidra would rewrite that type
+     * around the gap. Who and why go in a sidecar with the type's C, which is
+     * also what keeps a module holding a copy from publishing the name back. A
+     * module's own copy stays: `ghidra_type_uses` lists what still names it.
+     */
+    private JsonObject withdrawShared(JsonObject body) throws Exception {
+        String name = required(body, "name").trim();
+        String reason = string(body, "reason", "").trim();
+        if (reason.isEmpty()) throw new Failure(400, "taking a type out of the shared archive needs a reason");
+        if (reviewTypes == null || !reviewTypes.isFile()) throw new Failure(404, "there is no shared archive here");
+        String alternate = name.startsWith("_") ? name.substring(1) : "_" + name;
+        JsonArray gone = new JsonArray();
+        try (FileChannel channel = lockChannel(); FileLock lock = channel.lock()) {
+            JsonObject withdrawn = readWithdrawn();
+            FileDataTypeManager shared = FileDataTypeManager.openFileArchive(reviewTypes, true);
+            try {
+                DataType found = findAny(shared, name, alternate);
+                if (found == null) {
+                    throw new Failure(404, withdrawn.has(name) || withdrawn.has(alternate)
+                        ? name + " is already withdrawn from the shared archive"
+                        : "no type " + name + " in the shared archive");
+                }
+                java.util.Map<String, DataType> group = new java.util.LinkedHashMap<>();
+                group.put(found.getPathName(), found);
+                if (found instanceof ghidra.program.model.data.TypeDef def
+                    && def.getBaseDataType().getDataTypeManager() == shared
+                    && !(def.getBaseDataType() instanceof ghidra.program.model.data.Pointer)) {
+                    group.put(def.getBaseDataType().getPathName(), def.getBaseDataType());
+                }
+                java.util.List<DataType> all = new java.util.ArrayList<>();
+                shared.getAllDataTypes(all);
+                for (DataType type : all) {
+                    if (type instanceof ghidra.program.model.data.TypeDef def
+                        && group.containsKey(def.getDataType().getPathName())) {
+                        group.put(type.getPathName(), type);
+                    }
+                }
+                java.util.TreeSet<String> users = new java.util.TreeSet<>();
+                for (DataType type : all) {
+                    if (group.containsKey(type.getPathName()) || type instanceof ghidra.program.model.data.Pointer
+                        || type instanceof ghidra.program.model.data.Array) continue;
+                    for (DataType part : madeOf(type)) {
+                        if (group.containsKey(part.getPathName())) users.add(type.getName());
+                    }
+                }
+                if (!users.isEmpty()) {
+                    throw new Failure(409, found.getName() + " is used by other types of the shared archive: "
+                                      + String.join(", ", users) + ". Withdraw or correct those first.");
+                }
+                java.util.List<DataType> order = new java.util.ArrayList<>(group.values());
+                order.sort(java.util.Comparator.comparingInt(type -> type instanceof ghidra.program.model.data.TypeDef ? 0 : 1));
+                JsonObject origins = readOrigins();
+                String at = java.time.Instant.now().toString();
+                int transaction = shared.startTransaction("withdraw " + found.getName());
+                boolean done = false;
+                try {
+                    for (DataType type : order) {
+                        String typeName = type.getName();
+                        JsonObject record = new JsonObject();
+                        record.addProperty("by", leaseHolder);
+                        record.addProperty("reason", reason);
+                        record.addProperty("module", options.get("module"));
+                        record.addProperty("at", at);
+                        record.addProperty("c", ExportCode.typeC(type));
+                        if (!shared.remove(type)) {
+                            throw new Failure(409, typeName + " could not be taken out of the shared archive");
+                        }
+                        withdrawn.add(typeName, record);
+                        origins.remove(typeName);
+                        gone.add(typeName);
+                    }
+                    done = true;
+                } finally {
+                    shared.endTransaction(transaction, done);
+                }
+                shared.save();
+                writeWithdrawn(withdrawn);
+                writeOrigins(origins);
+            } finally {
+                shared.close();
+            }
+            // What this owner reads a shared type from is a copy made at start.
+            if (reviewArchive != null) reviewArchive.close();
+            if (reviewTypesCopy == null) reviewTypesCopy = File.createTempFile("review-types-", ".gdt");
+            Files.copy(reviewTypes.toPath(), reviewTypesCopy.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            reviewArchive = FileDataTypeManager.openFileArchive(reviewTypesCopy, false);
+        }
+        JsonObject answer = identity();
+        answer.add("withdrawn", gone);
+        answer.addProperty("reason", reason);
+        answer.addProperty("kept_in_program", findAny(program.getDataTypeManager(), name, alternate) != null);
+        answer.addProperty("next", "ghidra_type_uses names the functions and modules that still use it");
+        return answer;
+    }
+
+    /** The names withdrawn from the shared archive, in a sidecar beside it. */
+    private File withdrawnFile() {
+        return new File(reviewTypes.getPath() + ".withdrawn.json");
+    }
+
+    private JsonObject readWithdrawn() throws Failure {
+        File file = withdrawnFile();
+        if (!file.isFile()) return new JsonObject();
+        // Unreadable is refused, not read as empty: an empty list would let a
+        // publish bring back every name a review withdrew.
+        try (java.io.Reader reader = new java.io.InputStreamReader(new java.io.FileInputStream(file),
+                                                                   java.nio.charset.StandardCharsets.UTF_8)) {
+            return com.google.gson.JsonParser.parseReader(reader).getAsJsonObject();
+        } catch (Exception error) {
+            throw new Failure(500, file.getName() + " cannot be read: " + error.getMessage());
+        }
+    }
+
+    private void writeWithdrawn(JsonObject withdrawn) throws Exception {
+        File next = new File(withdrawnFile().getPath() + ".next");
+        Files.writeString(next.toPath(), withdrawn.toString(), StandardCharsets.UTF_8);
+        Files.move(next.toPath(), withdrawnFile().toPath(), StandardCopyOption.REPLACE_EXISTING);
     }
 
     /** The module that last wrote each shared type, in a sidecar beside the archive. */
@@ -3318,7 +3525,7 @@ public class Owner {
         int decoded = 0;
         for (Instruction instruction : program.getListing().getInstructions(range, true)) decoded++;
         if (decoded == 0) throw new Failure(400, "no instruction decodes at " + hex(start) + " as " + bits + "-bit code");
-        why(start, body);
+        changeReason(Harvest.CODE_REASON, start, body);
 
         JsonObject answer = identity();
         answer.addProperty("start", hex(start));
@@ -3529,6 +3736,105 @@ public class Owner {
         }
         owner.add(name, member, text == null ? "" : text);
         return member;
+    }
+
+    /**
+     * The instructions in [start, end) decoded again from `start`, in the mode
+     * already there: the correction for a boundary the analysis got wrong, where
+     * it decoded from a byte inside an instruction. An instruction reaching into
+     * the range goes too, and what it lost is decoded again. A function whose
+     * entry now falls inside an instruction was cut at a false boundary: one
+     * Ghidra named is removed, and one a review named is reported, because the
+     * name is the review's to move. Bodies around the range are fixed afterwards,
+     * so a routine that was cut in two reads whole.
+     */
+    private JsonObject redecode(JsonObject body) throws Exception {
+        Address start = address(required(body, "start"));
+        Address end = address(required(body, "end"));
+        if (end.compareTo(start) <= 0) throw new Failure(400, "end is past start: the range is [start, end)");
+        Address last = end.subtract(1);
+        if (!program.getMemory().contains(start, last)) {
+            throw new Failure(400, hex(start) + ".." + hex(end) + " is not all in the program's memory");
+        }
+        ghidra.program.model.address.AddressSet range = new ghidra.program.model.address.AddressSet(start, last);
+        if (program.getListing().getDefinedData(range, true).hasNext()
+            || program.getListing().getDefinedDataContaining(start) != null) {
+            throw new Failure(409, "defined data lies in " + hex(start) + ".." + hex(end) + ": clear it first");
+        }
+        Instruction before = program.getListing().getInstructionContaining(start);
+        Address clearFrom = before != null ? before.getMinAddress() : start;
+        Instruction after = program.getListing().getInstructionContaining(last);
+        Address clearTo = after != null ? after.getMaxAddress() : last;
+
+        java.util.Set<Address> touched = new java.util.TreeSet<>();
+        Instruction previous = program.getListing().getInstructionBefore(clearFrom);
+        if (previous != null) {
+            Function owner = program.getFunctionManager().getFunctionContaining(previous.getMinAddress());
+            if (owner != null) touched.add(owner.getEntryPoint());
+        }
+        ghidra.program.model.address.AddressSet cleared = new ghidra.program.model.address.AddressSet(clearFrom, clearTo);
+        for (Instruction instruction : program.getListing().getInstructions(cleared, true)) {
+            Function owner = program.getFunctionManager().getFunctionContaining(instruction.getMinAddress());
+            if (owner != null) touched.add(owner.getEntryPoint());
+        }
+        program.getListing().clearCodeUnits(clearFrom, clearTo, false);
+        new ghidra.app.cmd.disassemble.DisassembleCommand(new ghidra.program.model.address.AddressSet(start), range, true)
+            .applyTo(program, TaskMonitor.DUMMY);
+        JsonArray decoded = new JsonArray();
+        for (Instruction instruction : program.getListing().getInstructions(range, true)) {
+            JsonObject item = new JsonObject();
+            item.addProperty("address", hex(instruction.getMinAddress()));
+            item.addProperty("text", instruction.toString());
+            decoded.add(item);
+        }
+        // Refused rather than left half done: the transaction rolls the clear back.
+        if (decoded.size() == 0) throw new Failure(400, "no instruction decodes at " + hex(start));
+        if (clearFrom.compareTo(start) < 0) {
+            new ghidra.app.cmd.disassemble.DisassembleCommand(clearFrom, null, true).applyTo(program, TaskMonitor.DUMMY);
+        }
+        if (clearTo.compareTo(last) > 0 && program.getListing().getInstructionContaining(end) == null) {
+            new ghidra.app.cmd.disassemble.DisassembleCommand(end, null, true).applyTo(program, TaskMonitor.DUMMY);
+        }
+
+        JsonArray removed = new JsonArray();
+        JsonArray inside = new JsonArray();
+        for (Address entry : new java.util.ArrayList<>(touched)) {
+            if (entry.compareTo(clearFrom) < 0 || entry.compareTo(clearTo) > 0) continue;
+            if (program.getListing().getInstructionAt(entry) != null
+                || program.getListing().getInstructionContaining(entry) == null) continue;
+            Function function = program.getFunctionManager().getFunctionAt(entry);
+            if (function == null) continue;
+            if (function.getSymbol().getSource() == SourceType.DEFAULT) {
+                program.getFunctionManager().removeFunction(entry);
+                touched.remove(entry);
+                removed.add(hex(entry));
+            } else {
+                inside.add(hex(entry) + " " + function.getName());
+            }
+        }
+        JsonArray functions = new JsonArray();
+        for (Address entry : touched) {
+            Function function = program.getFunctionManager().getFunctionAt(entry);
+            if (function == null) continue;
+            ghidra.app.cmd.function.CreateFunctionCmd.fixupFunctionBody(program, function, TaskMonitor.DUMMY);
+            functions.add(hex(entry));
+        }
+        changeReason(Harvest.CODE_REASON, start, body);
+
+        JsonObject answer = identity();
+        answer.addProperty("start", hex(start));
+        answer.addProperty("end", hex(end));
+        answer.add("instructions", decoded);
+        answer.add("functions", functions);
+        if (removed.size() > 0) answer.add("functions_removed", removed);
+        if (inside.size() > 0) answer.add("entries_inside_instructions", inside);
+        return answer;
+    }
+
+    /** Why a change other than a name was made, kept apart from the name's reason. */
+    private void changeReason(String property, Address address, JsonObject body) throws Exception {
+        String reason = string(body, "reason", null);
+        if (reason != null && !reason.isBlank()) propertyMap(property).add(address, reason);
     }
 
     /** Who made a name and why, beside the reason ApplyUefi gives its own. */
@@ -3774,6 +4080,7 @@ public class Owner {
 
     private JsonObject setSignature(JsonObject body) throws Exception {
         Function function = functionAt(required(body, "address"));
+        String nameBefore = function.getName();
         String text = edk2(required(body, "signature"));
         // Ghidra's signature parser misreads the pointers of the return type
         // when the function's name is already a symbol of the program (`T *`
@@ -3808,8 +4115,15 @@ public class Owner {
             }
         }
         if (body.has("storage") || body.has("return_storage")) applyStorage(function, body);
-        if (!function.getName().equals(signature.getName()) || function.getSymbol().getSource() == SourceType.USER_DEFINED) {
-            why(function.getEntryPoint(), body);
+        // Why the signature is what it is has a place of its own: the name's
+        // reason says where the name came from, and a signature is not that. A
+        // signature that changes the name says so there, and what it replaced.
+        changeReason(Harvest.SIGNATURE_REASON, function.getEntryPoint(), body);
+        if (!function.getName().equals(nameBefore)) {
+            JsonObject renaming = new JsonObject();
+            renaming.addProperty("reason", "named in its signature (was " + nameBefore + ")");
+            if (body.has("by")) renaming.add("by", body.get("by"));
+            why(function.getEntryPoint(), renaming);
         }
         JsonObject answer = identity();
         answer.addProperty("entry", hex(function.getEntryPoint()));
@@ -3980,6 +4294,7 @@ public class Owner {
         // program and from the review's list, so the next publish cannot carry
         // it. Archives are read-only here and are refused by the manager check.
         if (body.has("delete") && body.get("delete").getAsBoolean()) {
+            if (body.has("shared") && body.get("shared").getAsBoolean()) return withdrawShared(body);
             String name = required(body, "name");
             DataType found = find(program.getDataTypeManager(), name.trim());
             if (found == null || found.getDataTypeManager() != program.getDataTypeManager()) {
@@ -4277,6 +4592,9 @@ public class Owner {
             try {
                 try (FileChannel channel = lockChannel(); FileLock lock = channel.lock()) {
                     Files.copy(reviewTypes.toPath(), copy.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    JsonObject withdrawn = readWithdrawn();
+                    String taken = withdrawn.has(name) ? name : withdrawn.has(alternate) ? alternate : null;
+                    if (taken != null) answer.add("withdrawn", withdrawn.get(taken));
                 }
                 FileDataTypeManager shared = FileDataTypeManager.openFileArchive(copy, false);
                 try {

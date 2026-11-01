@@ -249,6 +249,12 @@ public class ExportCode extends GhidraScript {
             if (reason != null) {
                 json.append("      \"name_reason\": ").append(quote(reason)).append(",\n");
             }
+            StringPropertyMap signatureReasons =
+                currentProgram.getUsrPropertyManager().getStringPropertyMap("ByteRipper.signatureReason");
+            String signatureReason = signatureReasons == null ? null : signatureReasons.getString(function.getEntryPoint());
+            if (signatureReason != null) {
+                json.append("      \"signature_reason\": ").append(quote(signatureReason)).append(",\n");
+            }
 
             DecompileResults decompiled = null;
             if (!function.isExternal() && !function.isThunk()) {

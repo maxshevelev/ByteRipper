@@ -144,6 +144,8 @@ public protocol AnalysisWriter: Sendable {
     func readLibraryIndex() async throws -> LibraryIndex
     func readLibraryHistory(id: String) async throws -> LibraryHistory?
     func readObject(_ digest: SHA256Digest) async throws -> Data
+    /// Each module's newest analysis, for a question about all of them.
+    func newestAnalyses() async throws -> [AnalysisManifest]
 }
 
 extension ContentStore: AnalysisWriter {
@@ -188,6 +190,9 @@ extension ContentStore: AnalysisWriter {
     public func readLibraryIndex() async throws -> LibraryIndex { try libraryIndex() }
     public func readLibraryHistory(id: String) async throws -> LibraryHistory? { try libraryHistory(id: id) }
     public func readObject(_ digest: SHA256Digest) async throws -> Data { try object(digest) }
+    public func newestAnalyses() async throws -> [AnalysisManifest] {
+        try Set(analyses().map(\.module.sha256)).compactMap { try analysis(module: $0) }
+    }
 }
 
 extension RemoteStore: AnalysisWriter {
@@ -232,4 +237,7 @@ extension RemoteStore: AnalysisWriter {
     public func readLibraryIndex() async throws -> LibraryIndex { try await libraryIndex() }
     public func readLibraryHistory(id: String) async throws -> LibraryHistory? { try await libraryHistory(id: id) }
     public func readObject(_ digest: SHA256Digest) async throws -> Data { try await object(digest) }
+    public func newestAnalyses() async throws -> [AnalysisManifest] {
+        try await modules().compactMap(\.manifests.first)
+    }
 }

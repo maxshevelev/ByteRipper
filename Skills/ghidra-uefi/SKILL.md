@@ -82,7 +82,7 @@ parameters and the locals with their storage), `ghidra_disassembly`,
 `ghidra_xrefs`, `ghidra_data`,
 `ghidra_strings`, `ghidra_type_definition` (a type as the program, the shared
 review archive and EDK2 hold it — what a `type_conflicts` of a publish is read
-with); `ghidra_rename`, `ghidra_label` (a branch label — `LAB_<address>` in the
+with), `ghidra_type_uses` (where every module's published analysis names a type); `ghidra_rename`, `ghidra_label` (a branch label — `LAB_<address>` in the
 C — named; a function's entry is refused here, that is `ghidra_rename`'s),
 `ghidra_function_create` (a function where only a table points — a services
 table's or a PPI's slot; an address inside another function's body is refused,

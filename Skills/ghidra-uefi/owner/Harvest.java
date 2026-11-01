@@ -43,6 +43,9 @@ import java.util.TreeMap;
 
 final class Harvest {
     static final String REASON = "ByteRipper.nameReason";
+    /** Why a signature is what it is, and why a range was decoded as it is: not where a name came from. */
+    static final String SIGNATURE_REASON = "ByteRipper.signatureReason";
+    static final String CODE_REASON = "ByteRipper.codeReason";
     static final String BY = "ByteRipper.nameBy";
     static final String OPTIONS = "ByteRipper";
     static final String TYPES = "reviewTypes";

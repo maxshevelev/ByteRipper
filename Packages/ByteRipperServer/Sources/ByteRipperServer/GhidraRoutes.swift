@@ -17,7 +17,7 @@ enum GhidraRoutes {
     static let writes: Set<String> = ["rename/function", "rename/label", "create/function", "delete/function",
                                       "merge/functions", "clear/locals", "rename/variable",
                                       "rename/variables", "set/signature", "set/comment", "set/comments",
-                                      "set/data", "set/description", "set/code-mode", "set/equate",
+                                      "set/data", "set/description", "set/code-mode", "redecode", "set/equate",
                                       "tag/function", "type", "save"]
 
     /// `ghidra.use` for every route; publish and release write into the store
@@ -132,6 +132,17 @@ enum GhidraRoutes {
         router.add("POST", "\(prefix)/modules/:module/stop", access: .rights([.ghidraUse])) { request in
             let module = try digest(request.parameters["module"])
             return .json(["stopped": await host.stop(module)])
+        }
+
+        // Where each module's stored analysis names a type: a read of the store
+        // across modules, so it belongs to no one module and needs no owner.
+        router.add("GET", "\(prefix)/type-uses", access: .rights([.ghidraUse])) { request in
+            guard let name = request.query["name"], !name.isEmpty else {
+                throw HTTPError(.badRequest, "name the type: ?name=")
+            }
+            let limit = request.query["limit"].flatMap(Int.init) ?? 200
+            let data = try await answer { try await host.typeUses(name: name, limit: limit) }
+            return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
         }
 
         // The kept project let go: the owner stopped and the folder moved to

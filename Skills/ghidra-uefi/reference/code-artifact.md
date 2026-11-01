@@ -133,6 +133,11 @@ Every function carries `review_level`, how far the review has got with it, and
 - `no_body` — external or thunk; the exporter writes no C for it, so there is
   nothing to review and its gaps are empty.
 
+`full` and an empty `review_gaps` say that nothing the review can name is left,
+not that the C holds no placeholder: a decompiler temporary (`sVar1`, `pCVar3`)
+on a register piece or in the `unique:` space has no storage to name. Such
+pieces are `leftovers.fragments` in `ghidra_function`, and are read there.
+
 `review_gaps` is always written, empty when there are none. A v2–v6 artifact
 has neither field, and the panel shows its functions as "Review level not
 recorded".

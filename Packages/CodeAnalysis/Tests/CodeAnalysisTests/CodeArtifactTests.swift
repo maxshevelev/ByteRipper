@@ -289,3 +289,44 @@ final class CodeArtifactTests: XCTestCase {
     }
     """
 }
+
+/// Where an analysis names a type: what a review walks after withdrawing a name.
+final class CodeTypeUsesTests: XCTestCase {
+    private func artifact() throws -> CodeArtifact {
+        try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        {"script_version":4,
+         "functions":[
+          {"entry":"0x100","name":"InSignature","signature":"void InSignature(ROM_COPY *Copy)",
+           "c":"void InSignature(ROM_COPY *Copy)\\n{\\n  Copy->Size = 0;\\n}","instructions":[]},
+          {"entry":"0x200","name":"ByTag","signature":"void ByTag(void)",
+           "c":"void ByTag(void)\\n{\\n  _ROM_COPY Local;\\n}","instructions":[]},
+          {"entry":"0x300","name":"InAComment","signature":"void InAComment(void)",
+           "c":"/* was ROM_COPY */\\nvoid InAComment(void)\\n{\\n}","instructions":[]},
+          {"entry":"0x400","name":"LongerName","signature":"void LongerName(ROM_COPY_EX *A)",
+           "c":"{\\n  MY_ROM_COPY B;\\n}","instructions":[]}],
+         "symbols":[{"address":"0x500","name":"gCopy","type":"ROM_COPY *"},
+                    {"address":"0x508","name":"gOther","type":"UINTN"}],
+         "types":[{"name":"ROM_COPY","kind":"typedef","size":8,"c":"typedef struct _ROM_COPY ROM_COPY;"},
+                  {"name":"HOLDER","kind":"struct","size":8,"c":"struct HOLDER { ROM_COPY *Copy; };"}]}
+        """.utf8))
+    }
+
+    /// Whole identifiers, by the name and the tag; a comment counts, since a
+    /// false name in a plate wants correcting as well.
+    func testItFindsWholeIdentifiersOnly() throws {
+        let uses = try artifact().typeUses(of: ["ROM_COPY", "_ROM_COPY"])
+        XCTAssertEqual(uses.functions.map(\.name), ["InSignature", "ByTag", "InAComment"],
+                       "ROM_COPY_EX and MY_ROM_COPY are other names")
+        XCTAssertTrue(uses.functions[0].inSignature)
+        XCTAssertFalse(uses.functions[1].inSignature)
+        XCTAssertEqual(uses.functions[1].lines.first?.text, "_ROM_COPY Local;")
+        XCTAssertEqual(uses.functions[1].lines.first?.line, 3)
+        XCTAssertEqual(uses.data.map(\.name), ["gCopy"])
+        XCTAssertEqual(uses.types, ["HOLDER"])
+        XCTAssertTrue(uses.holdsTheType)
+    }
+
+    func testANameNothingUsesIsEmpty() throws {
+        XCTAssertTrue(try artifact().typeUses(of: ["NOT_HERE"]).isEmpty)
+    }
+}

@@ -31,8 +31,8 @@ public enum GhidraTools {
         or `ghidra_open`; read with `ghidra_functions`, `ghidra_gaps` (the code between bodies the \
         analysis never cut), `ghidra_function` (decompiled C, parameters and \
         locals with their storage), `ghidra_disassembly`, `ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_type_definition`, \
-        `ghidra_description`; write with `ghidra_rename`, `ghidra_function_create`, `ghidra_function_delete`, `ghidra_function_merge`, \
-        `ghidra_rename_variable`, `ghidra_function_locals_reset`, `ghidra_signature`, \
+        `ghidra_type_uses` (where every module names a type), `ghidra_description`; write with `ghidra_rename`, `ghidra_function_create`, `ghidra_function_delete`, `ghidra_function_merge`, \
+        `ghidra_rename_variable`, `ghidra_function_locals_reset`, `ghidra_redecode`, `ghidra_signature`, \
         `ghidra_type`, `ghidra_set_data`, `ghidra_comment`, `ghidra_describe`, `ghidra_code_mode`, `ghidra_equate`, \
         `ghidra_function_tag`. `ghidra_function_tag` marks library code the module statically links in, and \
         whose: `library.edk2`, `library.amd` (AGESA) or `library.intel` (FSP/RC), by the criteria in the \
@@ -347,6 +347,30 @@ public enum GhidraTools {
         }
         return [
             AgentTool(
+                name: "ghidra_type_uses",
+                title: "Find where the modules name a type",
+                description: """
+                    Where every module's last published analysis names a type, whole identifiers only, by \
+                    its name and its tag together: `modules`, each with `module`, `name`, `revision` and \
+                    `uses` — `functions` (`entry`, `name`, `in_signature`, `line_count` and the first \
+                    `lines` of C, comments included), `data` typed with it or whose comment names it, the \
+                    module's other `types` that name it, and `holds_the_type`. For correcting a name across \
+                    the modules, before or after `ghidra_type` withdraws it. It reads the store: a module \
+                    with no project here is found, and writes not yet published are not seen. `functions` \
+                    counts them all; `limit` bounds how many are listed, and `truncated` says some were \
+                    left out. Slow on a large store: it reads every module.
+                    """,
+                inputSchema: AgentSchema.object([
+                    "name": AgentSchema.string("The type's name or its tag."),
+                    "limit": AgentSchema.limit(default: 200, maximum: 1000)
+                ], required: ["name"])
+            ) { call_ in
+                let arguments = call_.arguments
+                let name = try arguments.string("name")
+                let limit = try arguments.limit(default: 200, maximum: 1000)
+                return try await answer { try await backend.typeUses(name: name, limit: limit) }
+            },
+            AgentTool(
                 name: "ghidra_functions",
                 title: "List a module's functions",
                 description: """
@@ -416,7 +440,9 @@ public enum GhidraTools {
                     name on the EDK2 list, `tag` for a review's library tag — and `library_kind`, whose: \
                     edk2, amd or intel; its parameters and locals with \
                     their `storage` and `first_use` (what `ghidra_rename_variable` names a local by), its \
-                    plate comment, what is left to name or type — a name Ghidra made up, or an \
+                    plate comment, its `comments` — every comment in the body with its `address`, `kind` \
+                    (plate, pre, eol, post, repeatable) and `text`, to check against a re-read of the C — \
+                    what is left to name or type — a name Ghidra made up, or an \
                     `undefined` type — (`leftovers`, whose `fragments` are the decompiler's register \
                     pieces rather than missing names), and its decompiled C — \
                     fresh after every write, ahead of what the app shows until a publish. \
@@ -758,7 +784,7 @@ public enum GhidraTools {
                    "storage": .object(["type": "array", "items": .object(["type": "string"]),
                                        "description": "Where each parameter is, in order: \"EDX:4\", \"Stack[0x4]:4\"."]),
                    "return_storage": AgentSchema.string("Where the result is: \"EAX:4\", \"EDX:4,EAX:4\", \"void\"."),
-                   "reason": AgentSchema.string("Why, in a few words.")],
+                   "reason": AgentSchema.string("Why the signature is this one. Kept as `signature_reason`, apart from the name's reason.")],
                   required: ["address", "signature"]) { arguments in
                 var body = try optional(arguments, ["address", "signature", "return_storage", "reason"])
                 if arguments.has("storage") {
@@ -819,6 +845,22 @@ public enum GhidraTools {
                 let body = try optional(arguments, ["address", "text", "kind"])
                 let payload = JSONValue.object(body).encoded()
                 return try await answer { try await backend.writeCall(module, "set/comment", body: payload) }
+            },
+            write("ghidra_redecode", "redecode", "Decode a range of code again",
+                  "Decodes the instructions in [`start`, `end`) again from `start`, in the mode already "
+                  + "there: the correction for a boundary the analysis got wrong, where it decoded from a "
+                  + "byte inside an instruction. An instruction reaching into the range goes too. The answer "
+                  + "lists the `instructions` now there and the `functions` whose bodies were fixed. A "
+                  + "function whose entry now falls inside an instruction was cut at a false boundary: one "
+                  + "Ghidra named is removed (`functions_removed`), one a review named stays and is reported "
+                  + "(`entries_inside_instructions`) for `ghidra_function_delete` or `ghidra_function_merge`. "
+                  + "Defined data in the range is refused: clear it first. For 16-bit code in a 32-bit module "
+                  + "use `ghidra_code_mode`.",
+                  ["start": AgentSchema.string("The address the true instruction starts at."),
+                   "end": AgentSchema.string("The first address past the range: [start, end)."),
+                   "reason": AgentSchema.string("What shows the boundary was wrong.")],
+                  required: ["start", "end"]) { arguments in
+                try optional(arguments, ["start", "end", "reason"])
             },
             write("ghidra_code_mode", "set/code-mode", "Read a range as 16-bit or 32-bit code",
                   "Reads the code in [`start`, `end`) as 16-bit or as 32-bit x86. A 32-bit module holds "
@@ -921,11 +963,21 @@ public enum GhidraTools {
                   + "unless the C says otherwise: `#pragma pack(1)` … `#pragma pack()` is how a packed record is "
                   + "written, and `size` beside the field offsets is how a wrong layout shows. "
                   + "`delete: true` with `name` removes a type the program holds — a probe or a mistake — so a "
-                  + "publish cannot carry it; a type an archive holds is refused.",
+                  + "publish cannot carry it; a type an archive holds is refused. With `shared: true` and a "
+                  + "`reason` it takes a type out of the shared review archive instead: a name that turned out "
+                  + "false. The typedef and its tag go together, and it is refused while another archive type "
+                  + "uses them, naming those. Who and why are recorded and shown by `ghidra_type_definition` "
+                  + "(`withdrawn`). Modules that took the type keep their copy, but no module opened after it "
+                  + "gets it, and a publish cannot bring it back — it reads as a `type_conflicts` entry whose "
+                  + "origin says `withdrawn`, and `take_type_conflicts` does not override that. Owners already "
+                  + "running hold their copy of the archive until they restart. `ghidra_type_uses` lists what "
+                  + "still names it, to walk and correct.",
                   ["c": AgentSchema.string("The C text."),
                    "name": AgentSchema.string("Without `c`: the type to describe, comment or delete."),
                    "description": AgentSchema.string("What the type is, and its source."),
                    "delete": AgentSchema.boolean("Remove the type `name` from the program. No `c` with it."),
+                   "shared": AgentSchema.boolean("With `delete`: from the shared review archive, not the program."),
+                   "reason": AgentSchema.string("With `shared`: why the name is withdrawn. Required, and recorded."),
                    "comments": ["type": "object", "additionalProperties": ["type": "string"],
                                 "description": "A comment per field or enum member, by its name."]],
                   required: []) { arguments in
@@ -935,6 +987,17 @@ public enum GhidraTools {
                         throw AgentToolError("`delete` takes `name` and no `c`.")
                     }
                     body["delete"] = .bool(true)
+                }
+                if try arguments.bool("shared", default: false) {
+                    guard try arguments.bool("delete", default: false) else {
+                        throw AgentToolError("`shared` goes with `delete`.")
+                    }
+                    guard let reason = try arguments.optionalString("reason"),
+                          !reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                        throw AgentToolError("Taking a type out of the shared archive needs a `reason`.")
+                    }
+                    body["shared"] = .bool(true)
+                    body["reason"] = .string(reason)
                 }
                 guard body["c"] != nil || body["name"] != nil else {
                     throw AgentToolError("Give the type's `c`, or the `name` of one the module holds.")

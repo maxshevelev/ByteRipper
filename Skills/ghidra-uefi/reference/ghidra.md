@@ -21,9 +21,13 @@ CAS, and its project lock keeps the owner off the project.
 | C, parameters, locals and their storage | `ghidra_function` |
 | instructions around an address | `ghidra_disassembly` (a large function in pages: `limit`, then `from` = `next`) |
 | who refers to an address | `ghidra_xrefs` |
+| where every module names a type | `ghidra_type_uses` — reads each module's last published analysis |
+| a shared type whose name turned out false | `ghidra_type` with `delete`, `shared` and a `reason`, then walk `ghidra_type_uses`: modules keep their copy, new ones do not get it, and a publish cannot bring it back |
 | data, strings | `ghidra_data`, `ghidra_strings` |
 | rename a function, a parameter, a local | `ghidra_rename`, `ghidra_rename_variable` |
 | name a branch label (`LAB_<address>` in the C) | `ghidra_label` — `ghidra_rename` would name the function around it |
+| a boundary the analysis got wrong, decoded from inside an instruction | `ghidra_redecode` — from the true start; a false function Ghidra named goes with it |
+| the comments of a body, to check against a re-read of the C | `ghidra_function` — `comments`, with address and kind |
 | a function only a table's slot points at | `ghidra_function_create` — an address inside another function's body is refused |
 | a split the analysis made: two functions that are one | `ghidra_function_merge` (body of `from` into `into`, `from` removed) |
 | a function that is not one, or half of a split | `ghidra_function_delete` |

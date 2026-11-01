@@ -36,6 +36,8 @@ public protocol GhidraBackend: Sendable {
     /// The module's kept project let go: its owner stopped and the folder
     /// moved to the Trash. Nothing of the analysis store is touched.
     func forgetModule(_ module: SHA256Digest) async throws -> Data
+    /// Where each module's last published analysis names a type.
+    func typeUses(name: String, limit: Int) async throws -> Data
 }
 
 public extension GhidraBackend {
@@ -45,6 +47,9 @@ public extension GhidraBackend {
     /// A backend that keeps no projects of its own.
     func forgetModule(_ module: SHA256Digest) async throws -> Data {
         throw GhidraHostError(.install, "this backend keeps no projects to forget")
+    }
+    func typeUses(name: String, limit: Int) async throws -> Data {
+        throw GhidraHostError(.install, "this backend reads no store")
     }
 }
 
@@ -187,6 +192,10 @@ public struct GhidraRemote: GhidraBackend {
 
     public func forgetModule(_ module: SHA256Digest) async throws -> Data {
         try await call("DELETE", "modules/\(module.hex)")
+    }
+
+    public func typeUses(name: String, limit: Int) async throws -> Data {
+        try await call("GET", "type-uses", query: ["name": name, "limit": String(limit)])
     }
 
     public func publishModule(_ module: SHA256Digest, by: String,

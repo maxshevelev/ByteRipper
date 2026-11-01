@@ -140,6 +140,56 @@ public actor GhidraHost {
         return rows
     }
 
+    /// Where each module's last published analysis names a type, by its name
+    /// and its tag — `NAME` and `_NAME` are the one type. It reads the store, so
+    /// it reaches modules with no project here, and an owner's unpublished
+    /// writes are not in it. Outside the actor: it decodes every module's
+    /// artifact, and the reviews going on must not wait for that.
+    public nonisolated func typeUses(name: String, limit: Int) async throws -> Data {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let tag = trimmed.hasPrefix("_") ? String(trimmed.dropFirst()) : "_" + trimmed
+        struct Row: Encodable {
+            let module: String
+            let name: String
+            let revision: Int?
+            let uses: CodeTypeUses
+        }
+        struct Answer: Encodable {
+            let names: [String]
+            let reads: String
+            let modulesRead: Int
+            let functions: Int
+            let truncated: Bool
+            let modules: [Row]
+            enum CodingKeys: String, CodingKey {
+                case names, reads, functions, truncated, modules
+                case modulesRead = "modules_read"
+            }
+        }
+        var rows: [Row] = []
+        var functions = 0
+        var room = limit
+        var truncated = false
+        let manifests = try await writer.newestAnalyses().sorted { $0.module.name < $1.module.name }
+        for manifest in manifests {
+            let data = try await writer.readObject(manifest.artifact.sha256)
+            guard let artifact = try? JSONDecoder().decode(CodeArtifact.self, from: data) else { continue }
+            let uses = artifact.typeUses(of: [trimmed, tag])
+            guard !uses.isEmpty else { continue }
+            functions += uses.functions.count
+            let shown = Array(uses.functions.prefix(room))
+            if shown.count < uses.functions.count { truncated = true }
+            room -= shown.count
+            rows.append(Row(module: manifest.module.sha256.hex, name: manifest.module.name,
+                            revision: manifest.reading?.rev,
+                            uses: CodeTypeUses(functions: shown, data: uses.data, types: uses.types,
+                                               holdsTheType: uses.holdsTheType)))
+        }
+        let answer = Answer(names: [trimmed, tag], reads: "each module's last published analysis",
+                            modulesRead: manifests.count, functions: functions, truncated: truncated, modules: rows)
+        return try JSONEncoder().encode(answer)
+    }
+
     // MARK: - Calls
 
     /// A read call of the bridge (`/v1/hello`, `/v1/function/0x…`), starting
