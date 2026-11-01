@@ -329,6 +329,34 @@ final class ContentStoreTests: XCTestCase {
         XCTAssertEqual(store.verify(), [])
     }
 
+    /// A revision keeps the code it published: the history names the
+    /// artifact, `gc` keeps it although no analysis manifest does, `verify`
+    /// says when it is gone, and a revision naming one the store does not
+    /// hold is refused.
+    func testARevisionKeepsTheCodeItPublished() throws {
+        let document = try store.putObject(Data(#"{"rev":1}"#.utf8))
+        let code = SHA256Digest(data: artifact())
+        try store.putObject(artifact())
+        let reading = AnalysisReading(project: "p", rev: 1, review: document)
+        try store.recordRevision(module: module().sha256, reading: reading, artifact: code, by: "agent")
+        // The analysis names other bytes: the revision's code is kept by the
+        // history alone, which is the point.
+        try store.putAnalysis(module: module(), recipe: recipe(),
+                              artifact: Data("the analysis's own artifact".utf8), reading: reading)
+        XCTAssertEqual(try store.reviewHistory(module: module().sha256)?.revisions.last?.artifact, code)
+        XCTAssertEqual(try store.collectGarbage(dryRun: false).objects, 0, "the history keeps the code")
+        XCTAssertTrue(store.hasObject(code))
+        XCTAssertEqual(store.verify(), [])
+        XCTAssertEqual(try store.object(code), artifact())
+
+        try FileManager.default.removeItem(at: store.objectURL(code))
+        XCTAssertEqual(store.verify().count, 1)
+        XCTAssertTrue(store.verify()[0].contains("artifact"), store.verify()[0])
+        XCTAssertThrowsError(try store.recordRevision(
+            module: module().sha256, reading: AnalysisReading(project: "p", rev: 2, review: document),
+            artifact: SHA256Digest(data: Data("never stored".utf8))))
+    }
+
     func testARevisionNeedsItsDocumentFirst() {
         let missing = SHA256Digest(data: Data("not stored".utf8))
         XCTAssertThrowsError(try store.recordRevision(

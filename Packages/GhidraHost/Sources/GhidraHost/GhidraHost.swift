@@ -228,7 +228,10 @@ public actor GhidraHost {
             let rev = max(1, (last?.rev ?? 0) + (changed ? 1 : 0))
             let current = AnalysisReading(project: state.project, rev: rev, review: stored, description: described)
             reading = current
-            try await writer.writeRevision(module: module, reading: current, by: by)
+            // The code goes into the store before the revision that names it:
+            // a revision without its artifact is one nobody can diff.
+            let code = try await writer.writeObject(raw)
+            try await writer.writeRevision(module: module, reading: current, artifact: code, by: by)
         }
         // The library registry is offered the module's library functions
         // reviewed to its bar. A failure here is reported, not thrown: the
@@ -253,10 +256,12 @@ public actor GhidraHost {
                         let again = try await write(module, "/v1/export", body: Data())
                         if again != raw {
                             raw = again
+                            let code = try await writer.writeObject(raw)
                             if var current = reading, current.rev == last?.rev {
                                 current.rev += 1
                                 reading = current
-                                try await writer.writeRevision(module: module, reading: current, by: by)
+                                try await writer.writeRevision(module: module, reading: current,
+                                                               artifact: code, by: by)
                             }
                         }
                     }

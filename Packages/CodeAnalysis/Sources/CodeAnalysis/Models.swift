@@ -247,24 +247,32 @@ public struct ReviewRevision: Codable, Equatable, Sendable {
     public var review: SHA256Digest
     /// The module's description at this revision, when it had one.
     public var description: SHA256Digest?
+    /// The code this revision published — the artifact the panel reads to
+    /// show it, and diff another revision against. Nil in a history written
+    /// before revisions kept their code.
+    public var artifact: SHA256Digest?
     public var recordedAt: String
     public var by: String?
 
     public init(project: String, rev: Int, review: SHA256Digest, description: SHA256Digest? = nil,
-                recordedAt: String, by: String? = nil) {
+                artifact: SHA256Digest? = nil, recordedAt: String, by: String? = nil) {
         self.project = project
         self.rev = rev
         self.review = review
         self.description = description
+        self.artifact = artifact
         self.recordedAt = recordedAt
         self.by = by
     }
 
-    /// The objects this revision names: its review document and description.
-    public var objects: [SHA256Digest] { [review] + (description.map { [$0] } ?? []) }
+    /// The objects this revision names: its code, its review document and its
+    /// description.
+    public var objects: [SHA256Digest] {
+        [review] + (description.map { [$0] } ?? []) + (artifact.map { [$0] } ?? [])
+    }
 
     private enum CodingKeys: String, CodingKey {
-        case project, rev, review, description, by
+        case project, rev, review, description, artifact, by
         case recordedAt = "recorded_at"
     }
 }

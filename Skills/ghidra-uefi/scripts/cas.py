@@ -247,11 +247,15 @@ class Store:
         """The readings a bundle import kept aside for a person to choose."""
         return self._call("conflicts")
 
-    def record_revision(self, module_sha: str, reading: dict, by: str | None = None) -> dict:
-        """A revision of a reading into the module's history; its document
-        must be stored already. A publish stores the document, then this, then
-        the analysis (`Design/GHIDRA_SHARED_PLAN.md` §5.4)."""
+    def record_revision(self, module_sha: str, reading: dict, artifact: str | None = None,
+                        by: str | None = None) -> dict:
+        """A revision of a reading into the module's history; its document and
+        its code must be stored already. A publish stores the code and the
+        document, then this, then the analysis (`Design/GHIDRA_SHARED_PLAN.md`
+        §5.4)."""
         arguments = ["record-revision", module_sha, "--reading", json.dumps(reading)]
+        if artifact:
+            arguments += ["--artifact", artifact]
         if by:
             arguments += ["--by", by]
         return self._call(*arguments)

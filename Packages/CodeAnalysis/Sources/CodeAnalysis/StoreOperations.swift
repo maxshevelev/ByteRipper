@@ -15,7 +15,8 @@ protocol StoreOperations {
     func recipes(ofModule module: SHA256Digest) throws -> [String]
     func analyses() throws -> [AnalysisManifest]
     func conflicts() throws -> [AnalysisManifest]
-    func recordRevision(module: SHA256Digest, reading: AnalysisReading, by: String?) throws -> ReviewHistory
+    func recordRevision(module: SHA256Digest, reading: AnalysisReading, artifact: SHA256Digest?,
+                        by: String?) throws -> ReviewHistory
     func reviewHistory(module: SHA256Digest) throws -> ReviewHistory?
     func setRef(_ name: String, analyses: [AnalysisKey]) throws -> AnalysisRef
     func refs() throws -> [AnalysisRef]
@@ -53,8 +54,9 @@ struct LocalOperations: StoreOperations {
     func recipes(ofModule module: SHA256Digest) throws -> [String] { try store().recipes(ofModule: module) }
     func analyses() throws -> [AnalysisManifest] { try store().analyses() }
     func conflicts() throws -> [AnalysisManifest] { try store().conflicts() }
-    func recordRevision(module: SHA256Digest, reading: AnalysisReading, by: String?) throws -> ReviewHistory {
-        try store().recordRevision(module: module, reading: reading, by: by)
+    func recordRevision(module: SHA256Digest, reading: AnalysisReading, artifact: SHA256Digest?,
+                        by: String?) throws -> ReviewHistory {
+        try store().recordRevision(module: module, reading: reading, artifact: artifact, by: by)
     }
     func reviewHistory(module: SHA256Digest) throws -> ReviewHistory? { try store().reviewHistory(module: module) }
     func setRef(_ name: String, analyses: [AnalysisKey]) throws -> AnalysisRef {
@@ -129,9 +131,12 @@ struct RemoteOperations: StoreOperations {
         let remote = self.remote
         return try wait { try await remote.conflicts() }
     }
-    func recordRevision(module: SHA256Digest, reading: AnalysisReading, by: String?) throws -> ReviewHistory {
+    func recordRevision(module: SHA256Digest, reading: AnalysisReading, artifact: SHA256Digest?,
+                        by: String?) throws -> ReviewHistory {
         let remote = self.remote
-        return try wait { try await remote.recordRevision(module: module, reading: reading, by: by) }
+        return try wait {
+            try await remote.recordRevision(module: module, reading: reading, artifact: artifact, by: by)
+        }
     }
     func reviewHistory(module: SHA256Digest) throws -> ReviewHistory? {
         let remote = self.remote

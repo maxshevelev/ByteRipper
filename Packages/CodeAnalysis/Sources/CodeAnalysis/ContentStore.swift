@@ -370,6 +370,7 @@ public struct ContentStore: Sendable {
     /// behind is overwritten by the next publish of the same revision.
     @discardableResult
     public func recordRevision(module: SHA256Digest, reading: AnalysisReading,
+                               artifact: SHA256Digest? = nil,
                                by: String? = nil) throws -> ReviewHistory {
         guard let review = reading.review else {
             throw CodeAnalysisError.analysisMismatch("a revision names its review document")
@@ -377,16 +378,21 @@ public struct ContentStore: Sendable {
         for object in reading.objects where !hasObject(object) {
             throw CodeAnalysisError.objectMissing(object.hex)
         }
+        if let artifact, !hasObject(artifact) {
+            throw CodeAnalysisError.objectMissing(artifact.hex)
+        }
         let url = reviewHistoryURL(module)
         return try withLock {
             var history = try reviewHistory(module: module) ?? ReviewHistory(module: module)
             let revision = ReviewRevision(project: reading.project, rev: reading.rev, review: review,
-                                          description: reading.description, recordedAt: Timestamps.now(), by: by)
+                                          description: reading.description, artifact: artifact,
+                                          recordedAt: Timestamps.now(), by: by)
             if let at = history.revisions.firstIndex(where: {
                 $0.project == reading.project && $0.rev == reading.rev
             }) {
                 guard history.revisions[at].review != review
-                        || history.revisions[at].description != reading.description else { return history }
+                        || history.revisions[at].description != reading.description
+                        || history.revisions[at].artifact != artifact else { return history }
                 history.revisions[at] = revision
             } else {
                 history.revisions.append(revision)
@@ -523,6 +529,10 @@ public struct ContentStore: Sendable {
                 if let description = revision.description, !hasObject(description) {
                     problems.append("reviews/\(name): revision \(revision.rev) of \(revision.project): "
                                     + "module description \(description.hex) is missing")
+                }
+                if let artifact = revision.artifact, !hasObject(artifact) {
+                    problems.append("reviews/\(name): revision \(revision.rev) of \(revision.project): "
+                                    + "artifact \(artifact.hex) is missing")
                 }
                 latest[revision.project] = max(latest[revision.project] ?? 0, revision.rev)
             }

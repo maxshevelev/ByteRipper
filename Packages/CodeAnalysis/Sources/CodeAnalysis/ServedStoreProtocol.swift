@@ -69,10 +69,14 @@ public enum ServedStoreProtocol {
 
     public struct RecordRevision: Codable, Equatable, Sendable {
         public var reading: AnalysisReading
+        /// The code this revision published; nil from a client of an older
+        /// server, and in a history written before revisions kept it.
+        public var artifact: SHA256Digest?
         public var by: String?
 
-        public init(reading: AnalysisReading, by: String? = nil) {
+        public init(reading: AnalysisReading, artifact: SHA256Digest? = nil, by: String? = nil) {
             self.reading = reading
+            self.artifact = artifact
             self.by = by
         }
     }

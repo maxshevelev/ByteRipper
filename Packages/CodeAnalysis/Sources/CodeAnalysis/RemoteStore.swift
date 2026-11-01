@@ -118,8 +118,10 @@ public struct RemoteStore: Sendable {
 
     @discardableResult
     public func recordRevision(module: SHA256Digest, reading: AnalysisReading,
+                               artifact: SHA256Digest? = nil,
                                by: String? = nil) async throws -> ReviewHistory {
-        let body = try encoder.encode(ServedStoreProtocol.RecordRevision(reading: reading, by: by))
+        let body = try encoder.encode(ServedStoreProtocol.RecordRevision(reading: reading, artifact: artifact,
+                                                                         by: by))
         return try await json("POST", "reviews/\(module.hex)", body: body)
     }
 

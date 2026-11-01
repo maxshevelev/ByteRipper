@@ -116,13 +116,16 @@ the module description — the review's Markdown, an object of its own
 
 `reviews/<module-sha>/manifest.json` lists every revision a publish recorded,
 oldest first: project, revision, review document, description (when there is
-one), when and by whom. It is an
-index for diffs and pruning; the analysis manifest's `reading` alone says which
-reading is current. A publish stores, in this order, the document and the
-description (`put-object`), the revision (`record-revision`, which refuses an
-object the store does not hold), and the analysis naming it (`put-analysis`). A publish
-that stops after the revision leaves an entry ahead of its analysis, which
-`verify` reports and the next publish of the same revision overwrites.
+one), the artifact — the code as it stood — when and by whom. It is an index
+for diffs and pruning; the analysis manifest's `reading` alone says which
+reading is current. A publish stores, in this order, the code and the document
+and the description (`put-object`), the revision (`record-revision`, which
+refuses an object the store does not hold), and the analysis naming it
+(`put-analysis`). A revision recorded before revisions kept their code names
+none, and `gc` keeps only what a revision names: such a revision cannot be compared
+with, and the panel's picker leaves it out. A publish that stops after the revision leaves an
+entry ahead of its analysis, which `verify` reports and the next publish of the
+same revision overwrites.
 
 ### The library registry
 

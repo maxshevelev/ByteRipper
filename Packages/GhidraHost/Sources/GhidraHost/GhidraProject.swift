@@ -124,7 +124,8 @@ struct OwnerRecord: Codable, Equatable, Sendable {
 /// revision, then the analysis naming both.
 public protocol AnalysisWriter: Sendable {
     func writeObject(_ data: Data) async throws -> SHA256Digest
-    func writeRevision(module: SHA256Digest, reading: AnalysisReading, by: String?) async throws
+    func writeRevision(module: SHA256Digest, reading: AnalysisReading, artifact: SHA256Digest,
+                       by: String?) async throws
     func storedAnalysis(module: SHA256Digest, recipe: String) async throws -> AnalysisManifest?
     func writeAnalysis(module: ModuleIdentity, recipe: AnalysisRecipe, artifact: Data, source: SourceIdentity,
                        reading: AnalysisReading?, replace: Bool) async throws -> AnalysisManifest
@@ -141,8 +142,9 @@ extension ContentStore: AnalysisWriter {
         try putObject(data)
     }
 
-    public func writeRevision(module: SHA256Digest, reading: AnalysisReading, by: String?) async throws {
-        try recordRevision(module: module, reading: reading, by: by)
+    public func writeRevision(module: SHA256Digest, reading: AnalysisReading, artifact: SHA256Digest,
+                              by: String?) async throws {
+        try recordRevision(module: module, reading: reading, artifact: artifact, by: by)
     }
 
     public func storedAnalysis(module: SHA256Digest, recipe: String) async throws -> AnalysisManifest? {
@@ -171,8 +173,9 @@ extension RemoteStore: AnalysisWriter {
         try await putObject(data)
     }
 
-    public func writeRevision(module: SHA256Digest, reading: AnalysisReading, by: String?) async throws {
-        try await recordRevision(module: module, reading: reading, by: by)
+    public func writeRevision(module: SHA256Digest, reading: AnalysisReading, artifact: SHA256Digest,
+                              by: String?) async throws {
+        try await recordRevision(module: module, reading: reading, artifact: artifact, by: by)
     }
 
     public func storedAnalysis(module: SHA256Digest, recipe: String) async throws -> AnalysisManifest? {

@@ -76,7 +76,8 @@ public struct CASService: Sendable {
             let module = try Self.digest(request.parameters["module"])
             let record = try request.json(ServedStoreProtocol.RecordRevision.self)
             let history = try Self.answer {
-                try store.recordRevision(module: module, reading: record.reading, by: record.by)
+                try store.recordRevision(module: module, reading: record.reading,
+                                         artifact: record.artifact, by: record.by)
             }
             await feed.rescan()
             return .json(history)

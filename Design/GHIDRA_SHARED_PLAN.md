@@ -313,13 +313,16 @@ save  →  export the artifact  →  harvest the review document  →  return bo
 - **One record of a reading is the authority.** The analysis manifest's
   `reading` — project, revision, document SHA — says which reading is current.
   `reviews/<module-sha>/manifest.json` is the history beside it, an index for
-  diffs and pruning. The client stores in this order: (1) the document object,
-  (2) the history entry for the new revision, (3) the artifact and the analysis
-  manifest naming that revision and document. A publish has succeeded only when
-  (3) is stored. A failure after (1) leaves an object nothing names yet; after
-  (2), a revision in the history that no manifest names, which the next publish
-  overwrites with the same revision. `verify` reports a manifest whose document
-  is missing, and a history entry ahead of its manifest.
+  diffs and pruning — and each of its revisions names the artifact it
+  published, so the panel can compare the code against any revision the store
+  still holds. The client stores in this order: (1) the artifact and the
+  document objects, (2) the history entry for the new revision, naming them,
+  (3) the analysis manifest naming that revision and document. A publish has
+  succeeded only when (3) is stored. A failure after (1) leaves objects
+  nothing names yet; after (2), a revision in the history that no manifest
+  names, which the next publish overwrites with the same revision. `verify`
+  reports a manifest whose document is missing, a revision whose code or
+  document is gone, and a history entry ahead of its manifest.
 - **Replacement is the publish path's, not a flag.** `putAnalysis` replaces
   when the incoming reading is newer than the stored one (same project, higher
   revision, or a reading over none). Anything else is refused as today, and

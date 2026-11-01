@@ -45,7 +45,7 @@ public enum CASCommand {
           recipes <module-sha>
           list
           conflicts
-          record-revision <module-sha> --reading <json> [--by <who>]
+          record-revision <module-sha> --reading <json> [--artifact <sha>] [--by <who>]
           review-history <module-sha>
           set-ref <name> <module-sha>/<recipe>...
           refs
@@ -192,9 +192,14 @@ public enum CASCommand {
             let module = try digestArgument(&parser)
             let reading: AnalysisReading = try decode(
                 parser.option("--reading"), "--reading", keys: ["project", "rev", "review", "description"])
+            let artifact = try parser.option("--artifact").map { text -> SHA256Digest in
+                guard let digest = SHA256Digest(hex: text) else { throw CodeAnalysisError.invalidDigest(text) }
+                return digest
+            }
             let by = parser.option("--by")
             try parser.end()
-            output.stdout = try encode(try store.recordRevision(module: module, reading: reading, by: by))
+            output.stdout = try encode(try store.recordRevision(module: module, reading: reading,
+                                                                artifact: artifact, by: by))
         case "review-history":
             let module = try digestArgument(&parser)
             try parser.end()
