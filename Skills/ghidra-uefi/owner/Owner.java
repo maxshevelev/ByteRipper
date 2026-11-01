@@ -482,6 +482,7 @@ public class Owner {
      */
     private JsonObject function(String text, Map<String, String> query) throws Failure {
         boolean summary = "1".equals(query.get("summary")) || "true".equals(query.get("summary"));
+        boolean explain = "1".equals(query.get("explain")) || "true".equals(query.get("explain"));
         Function function = functionAt(text);
         JsonObject answer = identity();
         answer.addProperty("entry", hex(function.getEntryPoint()));
@@ -537,8 +538,92 @@ public class Owner {
         if (results != null && !results.decompileCompleted()) {
             answer.addProperty("decompile_error", results.getErrorMessage());
             answer.add("suspects", decompileSuspects(function));
+            if (explain) answer.add("explained", explainDecompileFailure(function));
         }
         return answer;
+    }
+
+    /**
+     * The referenced data whose applied type stands between this body and its
+     * C. Each datum is let go in turn and the function decompiled again inside
+     * a transaction that is rolled back; the ones after which the C comes out
+     * are named. A `PTRSUB off of non structured pointer type` is the printer
+     * building a cast around one of them — a correctly typed global included —
+     * and naming it turns a hand bisect of a long body into one call.
+     *
+     * Nothing is kept: every change is rolled back, and each answer says
+     * whether the datum was found as it was afterwards; a rollback that did not
+     * take stops the walk rather than report a program it did not leave.
+     */
+    private JsonArray explainDecompileFailure(Function function) {
+        JsonArray unblocked = new JsonArray();
+        java.util.LinkedHashMap<Address, Data> targets = new java.util.LinkedHashMap<>();
+        InstructionIterator code = program.getListing().getInstructions(function.getBody(), true);
+        while (code.hasNext()) {
+            Instruction instruction = code.next();
+            for (Reference reference : instruction.getReferencesFrom()) {
+                Address to = reference.getToAddress();
+                if (!to.isMemoryAddress()) continue;
+                Data data = program.getListing().getDataAt(to);
+                if (data == null || data.getDataType() == null) continue;
+                targets.putIfAbsent(to, data);
+            }
+        }
+        int tried = 0;
+        for (java.util.Map.Entry<Address, Data> entry : targets.entrySet()) {
+            if (tried++ >= 120) break;
+            Address target = entry.getKey();
+            Data data = entry.getValue();
+            DataType original = data.getDataType();
+            int length = Math.max(data.getLength(), 1);
+            int transaction = program.startTransaction("explain " + hex(target));
+            boolean completed = false;
+            try {
+                program.getListing().clearCodeUnits(target, target.add(length - 1), false);
+                completed = decompilesWithC(function);
+            } catch (Exception error) {
+                completed = false;
+            } finally {
+                program.endTransaction(transaction, false);
+            }
+            Data restored = program.getListing().getDataAt(target);
+            boolean intact = restored != null && restored.getDataType() != null
+                && restored.getDataType().getPathName().equals(original.getPathName());
+            if (completed) {
+                JsonObject item = new JsonObject();
+                item.addProperty("address", hex(target));
+                item.addProperty("type", original.getPathName());
+                if (data.getPrimarySymbol() != null) item.addProperty("name", data.getPrimarySymbol().getName());
+                item.addProperty("restored", intact);
+                unblocked.add(item);
+            }
+            if (!intact) {
+                JsonObject item = new JsonObject();
+                item.addProperty("address", hex(target));
+                item.addProperty("restored", false);
+                item.addProperty("stopped", true);
+                unblocked.add(item);
+                break;
+            }
+        }
+        return unblocked;
+    }
+
+    /** Whether the function decompiles with its C, on a decompiler of its own. */
+    private boolean decompilesWithC(Function function) {
+        ghidra.app.decompiler.DecompInterface probe = new ghidra.app.decompiler.DecompInterface();
+        try {
+            probe.toggleCCode(true);
+            probe.toggleSyntaxTree(true);
+            probe.openProgram(program);
+            ghidra.app.decompiler.DecompileResults results =
+                probe.decompileFunction(function, 120, TaskMonitor.DUMMY);
+            return results != null && results.decompileCompleted();
+        } catch (Exception error) {
+            return false;
+        } finally {
+            probe.dispose();
+        }
     }
 
     /**

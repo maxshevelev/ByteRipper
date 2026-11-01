@@ -414,13 +414,19 @@ public enum GhidraTools {
                     "address": AgentSchema.string("The function's entry address, e.g. \"0x68A\"."),
                     "summary": AgentSchema.boolean(
                         "Leave out the decompiled C and the equates: signature, parameters, locals, "
-                        + "plate, leftovers.")
+                        + "plate, leftovers."),
+                    "explain": AgentSchema.boolean(
+                        "When the C does not come out, bisect the data the body references: each "
+                        + "datum is let go in turn inside a transaction that is rolled back, and the "
+                        + "ones after which the C decompiles are named under `explained`. Nothing is "
+                        + "kept; a rollback that did not take says so and stops.")
                 ], required: ["module", "address"])
             ) { call in
                 let module = try module(call.arguments)
                 let address = try call.arguments.string("address")
                 var query: [String: String] = [:]
                 if try call.arguments.bool("summary", default: false) { query["summary"] = "1" }
+                if try call.arguments.bool("explain", default: false) { query["explain"] = "1" }
                 return try await answer { try await backend.readCall(module, "function/\(address)", query: query) }
             },
             AgentTool(
