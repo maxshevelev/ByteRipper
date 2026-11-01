@@ -848,6 +848,10 @@ final class MainViewController: NSViewController {
     var pendingCodeRevisionChange: CodeArtifact?
     /// The revision number the change came from, for the dump bar's picker.
     var pendingCodeRevision: Int?
+    /// The New marks the pane held before this redraw: a change the reader has
+    /// not looked at yet keeps its mark, and the revision it is new against,
+    /// across the revisions that come after it.
+    var pendingCodeNewMarks: [CodePaneView.NewMark] = []
     /// Follows the analysis store once this tab has shown code, so a code
     /// screen or panel redraws when its analysis is published again
     /// (`MainViewController+CodeScreen.swift`, "Following the store").

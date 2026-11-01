@@ -482,6 +482,7 @@ import ToolModuleKit
         let dumpVisible = entry.codePane?.isHexDumpVisible ?? true
         let previous = entry.codePane?.artifact
         let shown = entry.screen
+        let carriedMarks = entry.codePane?.newMarks ?? []
         let pane = entry.pane
         let view = entry.paneView
         let codePane = CodePaneView(manifest: screen.manifest, artifact: screen.artifact,
@@ -507,6 +508,7 @@ import ToolModuleKit
            let was = before.manifest.reading?.rev,
            let now = screen.manifest.reading?.rev, now > was {
             codePane.markRevisionChange(from: previous, revision: was)
+            codePane.setNewMarks(carriedMarks)
             previousRevision = (was, previous)
         }
         wireCodeRevisions(codePane, previous: previousRevision)

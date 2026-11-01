@@ -100,9 +100,11 @@ extension MainViewController {
                let now = manifest.reading?.rev, now > before {
                 self.pendingCodeRevisionChange = self.codeScreenView?.artifact
                 self.pendingCodeRevision = before
+                self.pendingCodeNewMarks = self.codeScreenView?.newMarks ?? []
             } else {
                 self.pendingCodeRevisionChange = nil
                 self.pendingCodeRevision = nil
+                self.pendingCodeNewMarks = []
             }
             self.codeScreen = (pane, pane.document, next)
             self.apply(mode: .singleFile)
@@ -313,9 +315,11 @@ extension MainViewController {
         var previousRevision: (revision: Int, artifact: CodeArtifact)?
         if let previous = pendingCodeRevisionChange {
             codePane.markRevisionChange(from: previous, revision: pendingCodeRevision)
+            codePane.setNewMarks(pendingCodeNewMarks)
             previousRevision = pendingCodeRevision.map { ($0, previous) }
             pendingCodeRevisionChange = nil
             pendingCodeRevision = nil
+            pendingCodeNewMarks = []
         }
         wireCodeRevisions(codePane, previous: previousRevision)
         applyCodeNotes()

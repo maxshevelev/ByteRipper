@@ -396,8 +396,20 @@ import ToolModuleKit
     }
 
     /// The revision the Diff compares against, its code loaded by the app;
-    /// nil clears the comparison. The segment follows whether there is one.
-    public func setComparisonRevision(_ revision: Int?, artifact: CodeArtifact?) {
+    /// nil clears the comparison. `automatic` is the app's own pick — the
+    /// revision the panel compares against as soon as a later one arrives —
+    /// and it yields to a function on screen that is marked New: while the
+    /// reader stays on that function its mark keeps the revision it was new
+    /// against, and the comparison with it, whatever has been published since.
+    public func setComparisonRevision(_ revision: Int?, artifact: CodeArtifact?,
+                                      automatic: Bool = false) {
+        var revision = revision
+        var artifact = artifact
+        if automatic, let index = state.function, let mark = unopenedChanges[index],
+           mark.revision != nil {
+            revision = mark.revision
+            artifact = mark.artifact
+        }
         comparisonRevision = artifact == nil ? nil : revision
         revisionBaseline = artifact
         revisionCount += 1
@@ -631,16 +643,21 @@ import ToolModuleKit
         // Arriving at a function a revision changed does not take its New
         // mark: the reader sees which function changed while reading it, and
         // the mark goes when they move on to another one.
-        if let previous, previous != index, unopenedChanges.remove(previous) != nil {
+        if let previous, previous != index, unopenedChanges.removeValue(forKey: previous) != nil {
             syncingSelection = true
             functionTable.reloadData()
             syncingSelection = false
         }
-        // A function the revision changed is the one its change is about:
-        // opening it puts the comparison with the revision before on, unless
-        // the reader already compares against something.
-        if comparisonRevision == nil, unopenedChanges.contains(index),
-           let previousRevision, previousRevision.artifact.functions.contains(where: { $0.entry == model.functions[index].entry }) {
+        // The function's mark says which revision it is new against: opening
+        // it compares with that revision, so the reader sees the change the
+        // mark is about even after further revisions have arrived.
+        if let mark = unopenedChanges[index], let revision = mark.revision,
+           revision != comparisonRevision,
+           mark.artifact.functions.contains(where: { $0.entry == model.functions[index].entry }) {
+            setComparisonRevision(revision, artifact: mark.artifact)
+        } else if comparisonRevision == nil, unopenedChanges[index] != nil,
+                  let previousRevision,
+                  previousRevision.artifact.functions.contains(where: { $0.entry == model.functions[index].entry }) {
             setComparisonRevision(previousRevision.revision, artifact: previousRevision.artifact)
         }
         drawSelection()
@@ -938,7 +955,9 @@ import ToolModuleKit
                 changed.insert(index)
             }
         }
-        unopenedChanges = changed
+        for index in changed where unopenedChanges[index] == nil {
+            unopenedChanges[index] = NewMark.Baseline(revision: revision, artifact: previous)
+        }
         // The rows changed, not the reader's place: reloading the table must
         // not be taken for a click on a row, which would open one.
         syncingSelection = true
@@ -1004,10 +1023,77 @@ import ToolModuleKit
         ControlHelp.describe(cell.disclosure, phrase)
     }
 
+    /// A function a revision changed and the reader has not looked at yet:
+    /// its entry, and the revision it was new against with that revision's
+    /// code — nil revision when the app could not name one.
+    public struct NewMark {
+        public struct Baseline {
+            public let revision: Int?
+            public let artifact: CodeArtifact
+
+            public init(revision: Int?, artifact: CodeArtifact) {
+                self.revision = revision
+                self.artifact = artifact
+            }
+        }
+
+        public let entry: CodeAddress
+        public let baseline: Baseline
+
+        public init(entry: CodeAddress, baseline: Baseline) {
+            self.entry = entry
+            self.baseline = baseline
+        }
+    }
+
+    /// The marks the reader has not taken yet, by the functions they name:
+    /// what the app carries into the pane drawn after the next revision, so a
+    /// change the reader has not looked at is not lost to the one after it.
+    public var newMarks: [NewMark] {
+        unopenedChanges.compactMap { index, baseline in
+            guard model.functions.indices.contains(index) else { return nil }
+            return NewMark(entry: model.functions[index].entry, baseline: baseline)
+        }
+    }
+
+    /// Takes the marks of the pane before this one. A function still here
+    /// keeps the earliest revision it is new against, whichever pane marked
+    /// it: a change the reader has not looked at since then is the change the
+    /// mark is about, even when the revisions after it changed the function
+    /// again.
+    public func setNewMarks(_ marks: [NewMark]) {
+        var byEntry: [CodeAddress: Int] = [:]
+        for (index, function) in model.functions.enumerated() where byEntry[function.entry] == nil {
+            byEntry[function.entry] = index
+        }
+        for mark in marks {
+            guard let index = byEntry[mark.entry] else { continue }
+            if let existing = unopenedChanges[index] {
+                switch (mark.baseline.revision, existing.revision) {
+                case let (carried?, current?) where carried >= current:
+                    continue
+                case (nil, _?):
+                    continue
+                default:
+                    break
+                }
+            }
+            unopenedChanges[index] = mark.baseline
+        }
+        syncingSelection = true
+        functionTable.reloadData()
+        syncingSelection = false
+        drawSelection()
+    }
+
     /// The functions a revision the panel received changed that the reader has
     /// not yet left: they read bold, with a **New** badge, while they are open
-    /// and until the reader moves to another function.
-    private var unopenedChanges: Set<Int> = []
+    /// and until the reader moves to another function. Each keeps the revision
+    /// it was new against and that revision's code, so opening it compares
+    /// with the change the mark is about, not with whatever came after; a later
+    /// revision adds marks and never takes one, so changes the reader has not
+    /// looked at yet do not go unnoticed.
+    private var unopenedChanges: [Int: NewMark.Baseline] = [:]
     /// The function's row, its listing, the selected instruction, its C and
     /// its callers and callees. The listing is reloaded only when the function
     /// changed; a new instruction in the same function only moves the row.
@@ -3361,7 +3447,7 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
                 cell.showsIcon(Self.functionMark(state.group(of: index),
                                                  library: state.librarySection(of: index),
                                                  registry: state.registryMark(of: index)))
-                if unopenedChanges.contains(index) {
+                if unopenedChanges[index] != nil {
                     cell.textField?.font = Self.navigatorBoldFont()
                     cell.badge.text = L("New")
                     cell.showsBadge(true)

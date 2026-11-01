@@ -99,7 +99,7 @@ func wireCodeRevisions(_ codePane: CodePaneView,
         }
         codePane.setRevisionChoices(choices, current: manifest.reading?.rev, knowsRevisions: loaded.hasHistory)
         if let previous {
-            codePane.setComparisonRevision(previous.revision, artifact: previous.artifact)
+            codePane.setComparisonRevision(previous.revision, artifact: previous.artifact, automatic: true)
         }
     }
 }

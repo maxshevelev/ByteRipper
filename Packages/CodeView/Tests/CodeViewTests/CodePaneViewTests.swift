@@ -1234,6 +1234,60 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertFalse(popup.showsPlate)
     }
 
+    /// A New mark outlives the revisions that follow it: it keeps the revision
+    /// it was new against, opening the function compares with that one rather
+    /// than with whatever came after, and the mark travels into the pane drawn
+    /// after the next revision.
+    func testANewMarkKeepsTheRevisionItWasNewAgainst() throws {
+        func artifact(_ c: String) throws -> CodeArtifact {
+            let json: [String: Any] = [
+                "script_version": 2, "program": ["image_base": "0x0"],
+                "functions": [["entry": "0x220", "name": "F", "c": c,
+                               "instructions": [["address": "0x220", "bytes": "C3",
+                                                 "mnemonic": "RET", "text": "RET"]]]]
+            ]
+            return try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        }
+        let a = try artifact("void F(void)\n{\n  A();\n}\n")
+        let b = try artifact("void F(void)\n{\n  B();\n}\n")
+        let c = try artifact("void F(void)\n{\n  C();\n}\n")
+        let view = CodePaneView(manifest: manifest(), artifact: c, moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.layoutSubtreeIfNeeded()
+        view.markRevisionChange(from: b, revision: 54)
+        view.markRevisionChange(from: a, revision: 53)
+        XCTAssertEqual(view.newMarks.count, 1)
+        XCTAssertEqual(view.newMarks.first?.baseline.revision, 54,
+                       "the earliest revision it was new against stays the mark's")
+
+        view.selectFunction(at: 0)
+        XCTAssertEqual(view.comparisonRevision, 54, "opening it compares with that revision")
+        XCTAssertTrue(view.showsRevisionDiff)
+
+        // The next revision changes nothing here: the fresh pane marks no
+        // function, and the mark carried from the last pane is what shows.
+        let next = CodePaneView(manifest: manifest(), artifact: c, moduleBytes: teModule(), hexView: NSView())
+        next.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        next.layoutSubtreeIfNeeded()
+        next.markRevisionChange(from: b, revision: 55)
+        XCTAssertEqual(next.newMarks.first?.baseline.revision, 55, "the fresh pane marks the change at 55")
+        next.setNewMarks(view.newMarks)
+        XCTAssertEqual(next.newMarks.first?.baseline.revision, 54,
+                       "and the mark carried from before keeps the earlier revision it was new against")
+
+        // The reader stays on the function: the app's own pick for the new
+        // revision yields to the mark, so the diff does not jump to a later
+        // revision under them.
+        next.selectFunction(at: 0)
+        XCTAssertEqual(next.comparisonRevision, 54)
+        next.setComparisonRevision(55, artifact: b, automatic: true)
+        XCTAssertEqual(next.comparisonRevision, 54, "an open New function keeps its revision")
+        XCTAssertTrue(next.showsRevisionDiff)
+        // A revision the reader picks is still the reader's.
+        next.setComparisonRevision(55, artifact: b)
+        XCTAssertEqual(next.comparisonRevision, 55)
+    }
+
     /// The call tree's rows open and close with the triangle in front of them.
     func testTheTreeOpensAndClosesItsCalls() throws {
         let suiteName = "CodePaneViewTests.treeFolds"
