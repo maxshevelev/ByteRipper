@@ -218,7 +218,13 @@ public final class ALSplitView: NSView {
         guard paneLayouts.indices.contains(index) else { return }
         paneLayouts[index] = newLayout
         needsLayout = true
-        layoutSubtreeIfNeeded()
+        // A split that has no length yet cannot size its panes: forcing a
+        // layout now gives every pane a no-width frame, and a pane's content —
+        // a text field between its margins, a scroll view — asks for a
+        // negative width, which the solver satisfies by breaking a required
+        // constraint somewhere in the pane. The window's own layout pass lays
+        // the panes out once the split has a size.
+        if axisAvailable() > 0 { layoutSubtreeIfNeeded() }
     }
 
     // MARK: - Divider position

@@ -90,6 +90,13 @@ struct CodeDiffToken {
 
         addSubview(scroll)
         addSubview(placeholder)
+        // The placeholder's margins yield in a pane laid out at no width.
+        let insetLeading = placeholder.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor,
+                                                              constant: 20)
+        let insetTrailing = placeholder.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor,
+                                                                 constant: -20)
+        insetLeading.priority = NSLayoutConstraint.Priority(999)
+        insetTrailing.priority = NSLayoutConstraint.Priority(999)
         NSLayoutConstraint.activate([
             scroll.topAnchor.constraint(equalTo: topAnchor),
             scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
@@ -98,8 +105,8 @@ struct CodeDiffToken {
             placeholder.centerXAnchor.constraint(equalTo: centerXAnchor),
             placeholder.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -20),
             placeholder.widthAnchor.constraint(lessThanOrEqualToConstant: 420),
-            placeholder.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 20),
-            placeholder.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -20)
+            insetLeading,
+            insetTrailing
         ])
     }
 
