@@ -28,6 +28,12 @@ server_pid() {
     local candidate line
     for candidate in $(pgrep -f -- "$server" 2>/dev/null); do
         line="$(ps -p "$candidate" -o command= 2>/dev/null || true)"
+        # An agent session's relay is this binary too: `byteripper-server relay
+        # --mcp-socket ...` is a client of the server, not the server, and
+        # stopping it leaves the server running while this reports it gone.
+        case " $line " in
+            *" relay "*) continue ;;
+        esac
         if matches_this_copy "$line"; then printf '%s\n' "$candidate"; return 0; fi
     done
     return 1
