@@ -75,18 +75,14 @@ public actor GhidraHost {
     public struct PublishOptions: Equatable, Sendable {
         /// Replace the shared copy of each conflicting type with this module's.
         public var takeTypeConflicts: Bool
-        /// Make this module's review of each conflicting library body the
-        /// registry entry's next version.
-        public var takeLibraryConflicts: Bool
-        /// Why — which taking library conflicts requires and the entry's
-        /// history keeps.
-        public var libraryReason: String?
+        /// Which conflicting library entries this module's review makes the
+        /// entry's next version — all of them with one reason, or those it
+        /// names, each with its own.
+        public var takeLibrary: LibraryTake
 
-        public init(takeTypeConflicts: Bool = false, takeLibraryConflicts: Bool = false,
-                    libraryReason: String? = nil) {
+        public init(takeTypeConflicts: Bool = false, takeLibrary: LibraryTake = .none) {
             self.takeTypeConflicts = takeTypeConflicts
-            self.takeLibraryConflicts = takeLibraryConflicts
-            self.libraryReason = libraryReason
+            self.takeLibrary = takeLibrary
         }
     }
 
@@ -246,8 +242,17 @@ public actor GhidraHost {
                 if !offer.proposals.isEmpty {
                     let written = try await writer.writeLibraryEntries(
                         module: module, rev: reading?.rev, by: by, proposals: offer.proposals,
-                        take: options.takeLibraryConflicts, reason: options.libraryReason)
+                        take: options.takeLibrary)
                     library = written
+                    // A store older than take_ids ignores them and answers with
+                    // the conflict: say which entries were not taken, rather
+                    // than let the publish read as if it had taken them.
+                    let missed = options.takeLibrary.ids.intersection(Set(written.conflicts.map(\.id)))
+                    if !missed.isEmpty {
+                        libraryError = "the store did not take "
+                            + missed.sorted().joined(separator: ", ")
+                            + ": its server predates take_ids"
+                    }
                     // The marks may change what the artifact says of the
                     // registry — a function that became the entry's next
                     // version, one left in conflict: then it is exported
@@ -285,8 +290,16 @@ public actor GhidraHost {
                                     node: state.source?.node)
         let manifest = try await writer.writeAnalysis(module: identity, recipe: recipe, artifact: raw,
                                                       source: source, reading: reading, replace: ours)
+        // The number the program stood at when this publish stored it: a later
+        // one is a write the store has not got. Read after the marks, which
+        // save the program themselves.
+        let modification = try? await Self.call(record.port, "GET", "/v1/hello", timeout: 10).data
+        let number = modification
+            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+            .flatMap { $0["modification"] as? Int }
         state.published = .init(artifact: manifest.artifact.sha256.hex, recipe: recipe.id, review: review?.hex,
-                                description: described?.hex, rev: reading?.rev, at: Self.now())
+                                description: described?.hex, rev: reading?.rev, at: Self.now(),
+                                modification: number)
         state.reviewed = reviewed
         try project.write(state)
         return Publication(manifest: manifest, typeConflicts: conflicts, typeConflictsTaken: taken,
@@ -375,7 +388,8 @@ public actor GhidraHost {
     /// merging into the shared archive, and the counts, the revision it would
     /// become and those conflicts come back. The export is the cost a publish
     /// already pays; this one pays it to look first.
-    func preview(_ module: SHA256Digest, takeTypeConflicts: Bool = false) async throws -> Data {
+    func preview(_ module: SHA256Digest, takeTypeConflicts: Bool = false,
+                 takeLibrary: LibraryTake = .none) async throws -> Data {
         let project = self.project(module)
         let record = try await owner(of: module)
         let state = try project.state()
@@ -416,8 +430,29 @@ public actor GhidraHost {
         if let descriptionDigest {
             preview["description"] = ["sha256": descriptionDigest, "size": description.count]
         }
+        var revision: Int?
         if reviewed {
-            preview["revision"] = max(1, (last?.rev ?? 0) + (changed ? 1 : 0))
+            let would = max(1, (last?.rev ?? 0) + (changed ? 1 : 0))
+            revision = would
+            preview["revision"] = would
+        }
+        // What the publish would do to the library registry, without doing
+        // it: the offer is the owner's, the decision the reader's, and the
+        // store answers the would-be result — refusals included — and writes
+        // nothing.
+        if reviewed {
+            do {
+                let offer = try Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data)
+                preview["library_below_bar"] = try Self.plain(offer.shortfalls)
+                if !offer.proposals.isEmpty {
+                    let would = try await writer.previewLibraryEntries(
+                        module: module, rev: revision, by: nil, proposals: offer.proposals,
+                        take: takeLibrary)
+                    preview["library"] = try Self.plain(would)
+                }
+            } catch {
+                preview["library_error"] = "\(error)"
+            }
         }
         return try JSONSerialization.data(withJSONObject: preview, options: [.sortedKeys])
     }

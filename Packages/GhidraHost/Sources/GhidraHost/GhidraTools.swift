@@ -190,7 +190,10 @@ public enum GhidraTools {
                     the review's now. `candidates`: bodies of an entry's shape with other constants, \
                     each difference listed (`value`, `entry_value`, `assert`): other functions unless a \
                     review says why the values make no difference. `declined`: entries a review refused \
-                    for the function. With `id`: one entry — its index row, its review and its history.
+                    for the function. With `id`: one entry — its index row, its review, its history and \
+                    `gaps`, what its review lacks, read from the review itself. A match's `gaps` are the \
+                    function's own missing parts, and `entry_gaps` the entry's, so a decision to apply, \
+                    replace or take can be made without opening either.
                     """,
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,
@@ -210,14 +213,22 @@ public enum GhidraTools {
                     Applies the registry's entries to the module, each in a transaction of its own, and \
                     answers each in `results`: `renamed` (from, to), `filled`, `differences` the \
                     function's review keeps, `unplaced` (a variable or comment the function has no place \
-                    for), `marked` when the function is now the entry's. Without `address`: every match \
-                    `ghidra_library` lists in `to_apply`. With `address`: that function — a candidate \
+                    for), `leftovers` — the gaps the function still keeps after the apply, so a local it \
+                    left unnamed says so at once — and `marked` when the function is now the entry's. \
+                    Without `address`: every match `ghidra_library` lists in `to_apply`. With `address`: that function — a candidate \
                     only with `reason` (why its other constants make no difference: it becomes a variant \
                     of the entry at the next publish); `replace: true` puts the entry's review in place \
-                    of a review that differs or was edited since. `decline: true` refuses the entry for \
-                    the function (`id`, or the one matched), and it is not offered again. A difference a \
-                    review keeps is settled by keeping it, or by publishing it as the entry's next \
-                    version (`ghidra_publish` with `take_library_conflicts` and a reason).
+                    of a review that differs or was edited since; `fields` takes only the parts named — \
+                    signature (return type, convention, parameter types), names (the function's and its \
+                    parameters'), locals, plate, comments — and keeps the rest of the function's. \
+                    `dry_run: true` answers the same and writes nothing: each entry is applied in its \
+                    transaction and rolled back, so a `replace` can be read before it is made. \
+                    `decline: true` refuses the entry for the function (`id`, or the one matched), and it \
+                    is not offered again. A difference a review keeps is settled by keeping it, or by \
+                    publishing it as the entry's next version (`ghidra_publish` with \
+                    `take_library_conflicts` and a reason). A match's `gaps` are the function's own missing \
+                    parts and `entry_gaps` the entry's, so the two reviews can be compared before either \
+                    is changed.
                     """,
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,
@@ -225,7 +236,15 @@ public enum GhidraTools {
                     "id": AgentSchema.string("The entry, where several match the function."),
                     "reason": AgentSchema.string("Why a candidate's other constants make no difference, or why an entry is declined."),
                     "replace": AgentSchema.boolean("Put the entry's review in place of the function's."),
-                    "decline": AgentSchema.boolean("Refuse the entry for the function at `address`.")
+                    "fields": AgentSchema.strings(
+                        "Take parts of the entry's review and keep the rest of the function's: signature, "
+                            + "names, locals, plate, comments."),
+                    "dry_run": AgentSchema.boolean(
+                        "Answer what the apply would do — filled, differences, unplaced, leftovers — and "
+                            + "write nothing."),
+                    "decline": AgentSchema.boolean("Refuse the entry for the function at `address`."),
+                    "full": AgentSchema.boolean(
+                        "Answer with the functions already carrying their entry; by default only a count.")
                 ], required: ["module"]),
                 annotations: .edit
             ) { call in
@@ -236,13 +255,71 @@ public enum GhidraTools {
                     action: try arguments.bool("decline", default: false) ? .decline : .apply,
                     address: address, id: try arguments.optionalString("id"),
                     reason: try arguments.optionalString("reason"),
-                    replace: try arguments.bool("replace", default: false))
+                    replace: try arguments.bool("replace", default: false),
+                    fields: try arguments.strings("fields"),
+                    dryRun: try arguments.bool("dry_run", default: false))
                 if request.action == .decline, address == nil {
                     throw AgentToolError("`decline` names the function by `address`.")
                 }
-                return try await answer { try await backend.library(module, request) }
+                let full = try arguments.bool("full", default: false)
+                let reply = try await answer { try await backend.library(module, request) }
+                return full ? reply : Self.compactPlan(reply)
             }
         ]
+    }
+
+    /// A registry answer without the list of what was already current: the
+    /// entries applied from before are noise beside what this call did.
+    /// `full: true` asks for the list too.
+    static func compactPlan(_ answer: AgentAnswer) -> AgentAnswer {
+        guard case .json(let value) = answer, case .object(var plan) = value else { return answer }
+        if let applied = plan.removeValue(forKey: "applied")?.arrayValue {
+            plan["applied_count"] = .count(applied.count)
+        }
+        return .json(.object(plan))
+    }
+
+    /// A publish's registry part without its unchanged list, which on a
+    /// reviewed module is every entry the publish did not touch. `full: true`
+    /// asks for it.
+    static func compactPublish(_ answer: AgentAnswer) -> AgentAnswer {
+        guard case .json(let value) = answer, case .object(var publication) = value,
+              case .object(let library)? = publication["library"] else { return answer }
+        var compact = library
+        if let unchanged = compact.removeValue(forKey: "unchanged")?.arrayValue {
+            compact["unchanged_count"] = .count(unchanged.count)
+        }
+        publication["library"] = .object(compact)
+        return .json(.object(publication))
+    }
+
+    /// `take_library_conflicts` as the tool takes it: `true` — every conflict,
+    /// with the one `library_reason` — or a list of entry ids, each with its
+    /// reason from `library_reason` given as an object of id to text.
+    static func libraryTake(_ arguments: AgentArguments) throws -> LibraryTake {
+        guard let value = arguments["take_library_conflicts"] else { return .none }
+        if let all = value.boolValue {
+            guard all else { return .none }
+            return .all(try arguments.optionalString("library_reason") ?? "")
+        }
+        guard let items = value.arrayValue, items.allSatisfy({ $0.stringValue != nil }) else {
+            throw AgentToolError("Argument `take_library_conflicts`: expected true or false, "
+                + "or a list of entry ids.")
+        }
+        let ids = items.compactMap(\.stringValue)
+        var reasons: [String: String] = [:]
+        if let map = arguments["library_reason"]?.objectValue {
+            for (id, text) in map {
+                guard let reason = text.stringValue else {
+                    throw AgentToolError("Argument `library_reason`: an object of entry id to reason.")
+                }
+                reasons[id] = reason
+            }
+        } else if let text = try arguments.optionalString("library_reason") {
+            for id in ids { reasons[id] = text }
+        }
+        for id in ids where reasons[id] == nil { reasons[id] = "" }
+        return .these(reasons)
     }
 
     static func readTools(_ backend: GhidraBackend) -> [AgentTool] {
@@ -813,10 +890,17 @@ public enum GhidraTools {
                 version, the version this review was made on as `base`, who published the current one, \
                 and the name this module proposes); `library_below_bar` lists the tagged functions short of the bar with \
                 their gaps. `take_library_conflicts: true` with `library_reason` makes this module's review \
-                of each conflicting body the entry's next version — the reason is required and kept. \
+                of every conflicting body the entry's next version; a list of entry ids takes those alone, \
+                each with its own reason in `library_reason` given as an object — a reason is required for \
+                each and kept in the entry's history. The conflicts not taken come back in `conflicts`, \
+                with the version this review was based on as `base`. By default the answer carries only \
+                what the publish changed; `full: true` adds the list of entries it left as they were. \
                 `dry_run: true` answers the same without storing: the artifact's counts, the revision \
-                it would become, the description's size and the type conflicts — the export is done, so \
-                it costs what a publish costs. Publishing is the point another host sees the work; the \
+                it would become, the description's size, the type conflicts, and — with the library \
+                decision given as it would be to the publish — `library`, what the registry offer would \
+                do: the entries it would add or move to their next version, the conflicts it would leave, \
+                and the same refusal a take of an entry that is not in conflict gets, in `library_error`. \
+                The export is done, so it costs what a publish costs. Publishing is the point another host sees the work; the \
                 owner also writes the program out when it idles out, is stopped or gets a signal — not \
                 after every change — so only an owner killed outright or crashed loses what came after \
                 the last publish.
@@ -827,25 +911,39 @@ public enum GhidraTools {
                     "Answer what a publish would store — counts, the revision, the conflicts — and store nothing."),
                 "take_type_conflicts": AgentSchema.boolean(
                     "Replace the shared copy of each conflicting type with this module's. An enum is never taken."),
-                "take_library_conflicts": AgentSchema.boolean(
-                    "Make this module's review of each conflicting library body the registry entry's next version."),
-                "library_reason": AgentSchema.string(
-                    "Why this module's review is the better one; required with take_library_conflicts.")
+                "take_library_conflicts": .object([
+                    "type": .array([.string("boolean"), .string("array")]),
+                    "items": ["type": "string"],
+                    "description": .string("Take the conflicts this module's review wins: true for every "
+                        + "one, or a list of entry ids for those alone.")
+                ]),
+                "library_reason": .object([
+                    "type": .array([.string("string"), .string("object")]),
+                    "additionalProperties": ["type": "string"],
+                    "description": .string("Why this module's review is the better one: one text for "
+                        + "take_library_conflicts: true, or an object of entry id to reason for a list.")
+                ]),
+                "full": AgentSchema.boolean(
+                    "Answer with every entry the publish left as it was; by default only what changed.")
             ], required: ["module"]),
             annotations: .edit
         ) { call in
             let module = try module(call.arguments)
             let take = try call.arguments.bool("take_type_conflicts", default: false)
+            let libraryTake = try Self.libraryTake(call.arguments)
+            let full = try call.arguments.bool("full", default: false)
             if try call.arguments.bool("dry_run", default: false) {
-                return try await answer {
-                    try await backend.publishPreview(module, takeTypeConflicts: take)
+                let reply = try await answer {
+                    try await backend.publishPreview(module, takeTypeConflicts: take,
+                                                     takeLibrary: libraryTake)
                 }
+                return full ? reply : Self.compactPublish(reply)
             }
             let options = GhidraHost.PublishOptions(
                 takeTypeConflicts: take,
-                takeLibraryConflicts: try call.arguments.bool("take_library_conflicts", default: false),
-                libraryReason: try call.arguments.optionalString("library_reason"))
-            return try await answer { try await backend.publishModule(module, by: "agent", options: options) }
+                takeLibrary: libraryTake)
+            let reply = try await answer { try await backend.publishModule(module, by: "agent", options: options) }
+            return full ? reply : Self.compactPublish(reply)
         }
     }
 

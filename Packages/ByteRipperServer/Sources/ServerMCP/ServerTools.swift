@@ -23,8 +23,22 @@ public enum ServerTools {
             ToolQueryTools.tool(for: ServerToolText.query(query), documents: documents,
                                 document: ServerDocuments.documentHelp)
         }
-        tools += CodeReadings(documents: documents, wording: wording, store: { store },
-                              catalogue: { .empty }).tools()
+        let readings = CodeReadings(documents: documents, wording: wording, store: { store },
+                                    catalogue: { .empty })
+        if let ghidra {
+            // `below_bar.too_short` is Function ID's: only the owner that
+            // holds the program knows it, so the summary asks one that runs.
+            readings.tooShortCount = { module in
+                guard let shortfalls = try? await ghidra.libraryShortfalls(module) else { return nil }
+                return shortfalls.filter { $0.gaps.contains("too_short") }.count
+            }
+            // The one fact the store cannot hold: a program modified after
+            // the last publish. Nil when the module has no owner open.
+            readings.liveState = { module in
+                try? await ghidra.ownerHasUnpublishedWrites(module)
+            }
+        }
+        tools += readings.tools()
         if let ghidra {
             tools += GhidraNodeOpen.tools(backend: ghidra, documents: documents,
                                           description: ServerToolText.ghidraOpen,
@@ -63,7 +77,14 @@ public enum ServerTools {
             function's `library_kind` whose library it is — edk2, amd (AGESA) or intel (FSP/RC) — and \
             `library_entry`, the library registry entry it was matched with: `id`, `version`, and `state` — \
             entry (the function is it), edited (changed on it since), differs (its review keeps \
-            `differences`) or conflict (its review was made on version `base`, not the current one). Addresses come twice: `entry`/`address` is \
+            `differences`) or conflict (its review was made on version `base`, not the current one). The answer to `what: "functions"` also carries `library`: the module's tagged library functions by \
+            kind (`edk2`, `amd`, `intel`), how many carry a registry entry (`with_entry`) and in which `state`, \
+            how many entries hold this module's current version (`installed`), how many moved on after it \
+            (`updated_since`), and `below_bar` — the tagged functions short of the bar, counted by the gap each \
+            keeps (name, plate, comments, params, locals, return) — with `too_short`, bodies Function ID cannot \
+            hash, known only while the module's owner runs. `live` says whether an owner has this module's program open — the `ghidra_*` tools read that program, \
+            `code_query` reads the stored analysis — and, while it does, `unpublished_writes` whether the program \
+            holds writes the store has not got: publish to bring them across. Addresses come twice: `entry`/`address` is \
             Ghidra's virtual address, `offset` the same byte's offset in the module, the number the hex \
             view shows (none when read by `module` alone). These are stored observations, not a live \
             disassembly; the C is Ghidra's reading of the instructions, not the source.

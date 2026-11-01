@@ -78,21 +78,26 @@ enum GhidraRoutes {
             // nothing is written, so the store's right is not needed for it.
             if let dryRun = request.query["dry_run"], dryRun != "0", !dryRun.isEmpty {
                 // With `take_type_conflicts` the preview also names what the
-                // publish would replace in the shared archive.
+                // publish would replace in the shared archive; with the
+                // library decision it says which entries it would take and
+                // which conflicts would remain.
                 let take = request.query["take_type_conflicts"] == "1"
                 let data = try await answer {
-                    try await host.publishPreview(module, takeTypeConflicts: take)
+                    try await host.publishPreview(module, takeTypeConflicts: take,
+                                                  takeLibrary: Self.libraryTake(request))
                 }
                 return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
             }
             // `take_type_conflicts`: this publish's version of a conflicting
             // type replaces the shared one — a layout that was published wrong.
-            // `take_library_conflicts` with `library_reason`: this review of a
-            // library body becomes the registry entry's next version.
+            // `take_library_conflicts`: this review of a library body becomes
+            // the registry entry's next version — `=1` with `library_reason`
+            // for every conflict, or a body naming the entries
+            // (`{"take_library_conflicts": ["<id>", …], "library_reasons":
+            // {"<id>": "…"}}`) for those alone, each with its own reason.
             let options = GhidraHost.PublishOptions(
                 takeTypeConflicts: request.query["take_type_conflicts"] == "1",
-                takeLibraryConflicts: request.query["take_library_conflicts"] == "1",
-                libraryReason: request.query["library_reason"])
+                takeLibrary: Self.libraryTake(request))
             let publication = try await answer {
                 try await host.publish(module, by: by(request), options: options)
             }
@@ -128,6 +133,32 @@ enum GhidraRoutes {
             return .json(["stopped": await host.stop(module)])
         }
         return router
+    }
+
+    /// The library decision a publish carries: the query form —
+    /// `take_library_conflicts=1` with `library_reason` — takes every
+    /// conflict, the body names the entries with their reasons.
+    static func libraryTake(_ request: HTTPRequest) -> LibraryTake {
+        if request.query["take_library_conflicts"] == "1" {
+            return .all(request.query["library_reason"] ?? "")
+        }
+        guard !request.body.isEmpty,
+              let asked = try? JSONDecoder().decode(PublishLibraryTake.self, from: request.body),
+              let ids = asked.takeLibraryConflicts, !ids.isEmpty else { return .none }
+        return .these(asked.libraryReasons ?? [:])
+    }
+
+    /// A publish's body: the library entries this review takes, each with the
+    /// reason the registry's history keeps. The query form — `take_library_
+    /// conflicts=1` with `library_reason` — stays for a take of every one.
+    struct PublishLibraryTake: Decodable {
+        var takeLibraryConflicts: [String]?
+        var libraryReasons: [String: String]?
+
+        private enum CodingKeys: String, CodingKey {
+            case takeLibraryConflicts = "take_library_conflicts"
+            case libraryReasons = "library_reasons"
+        }
     }
 
     struct Opened: Codable {

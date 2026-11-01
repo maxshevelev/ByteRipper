@@ -28,14 +28,23 @@ extension GhidraHost {
         /// With `address`: the entry's review replaces the function's, where
         /// the function's review differs or was edited since.
         public var replace: Bool?
+        /// With `address`: the parts of the entry's review to take, the rest
+        /// of the function's kept — `signature`, `names`, `locals`, `plate`,
+        /// `comments`. Nil takes the whole review, as `replace` does.
+        public var fields: [String]?
+        /// Answer what the apply would do and write nothing: each entry is
+        /// applied in its transaction and rolled back.
+        public var dryRun: Bool?
 
         public init(action: Action, address: String? = nil, id: String? = nil, reason: String? = nil,
-                    replace: Bool? = nil) {
+                    replace: Bool? = nil, fields: [String]? = nil, dryRun: Bool? = nil) {
             self.action = action
             self.address = address
             self.id = id
             self.reason = reason
             self.replace = replace
+            self.fields = fields
+            self.dryRun = dryRun
         }
     }
 
@@ -57,6 +66,9 @@ extension GhidraHost {
         var near: [String]?
         var mark: Mark?
         var declined: [String]?
+        /// What the function's review still lacks, read in the owner without
+        /// the decompiler.
+        var gaps: [String]?
     }
 
     /// A constant where the function and an entry of its shape differ.
@@ -104,10 +116,17 @@ extension GhidraHost {
         public var codes: [String]?
         public var differences: [LibraryConstant]?
         public var why: String?
+        /// What the function's own review lacks — the live program's, read by
+        /// the owner.
+        public var gaps: [String]?
+        /// What the entry's review lacks, filled by the host from the entry
+        /// object for the steps a decision is made about.
+        public var entryGaps: [String]?
 
         private enum CodingKeys: String, CodingKey {
-            case address, name, id, version, mode, state, codes, differences, why
+            case address, name, id, version, mode, state, codes, differences, why, gaps
             case entryName = "entry_name"
+            case entryGaps = "entry_gaps"
         }
     }
 
@@ -174,7 +193,7 @@ extension GhidraHost {
                       codes: [String]? = nil, differences: [LibraryConstant]? = nil, why: String? = nil) -> LibraryStep {
                 LibraryStep(address: match.address, name: match.name, entryName: held.name, id: id,
                             version: held.version, mode: mode, state: state, codes: codes,
-                            differences: differences, why: why)
+                            differences: differences, why: why, gaps: match.gaps)
             }
             // A function carrying an entry's mark: current, behind, or the
             // review's since it was edited.
@@ -240,8 +259,10 @@ extension GhidraHost {
             guard let held = index.entries[id] else {
                 throw GhidraHostError(.refused, "the registry holds no entry \(id)", status: 404)
             }
-            let review = try JSONSerialization.jsonObject(with: try await writer.readObject(held.entry))
-            var answer: [String: Any] = ["id": id, "index": try Self.plain(held), "review": review]
+            let object = try await writer.readObject(held.entry)
+            let review = try JSONSerialization.jsonObject(with: object)
+            var answer: [String: Any] = ["id": id, "index": try Self.plain(held), "review": review,
+                                         "gaps": LibraryEntryReview.gaps(of: object)]
             if let history = try await writer.readLibraryHistory(id: id) { answer["history"] = try Self.plain(history) }
             return try JSONSerialization.data(withJSONObject: answer, options: [.sortedKeys])
         case .status:
@@ -264,7 +285,7 @@ extension GhidraHost {
             var steps = plan.toApply
             if let address = request.address {
                 steps = try Self.chosen(plan, address: address, id: request.id, reason: request.reason,
-                                        replace: request.replace ?? false)
+                                        replace: request.replace ?? false, fields: request.fields)
             }
             var answer = try Self.plain(plan) as? [String: Any] ?? [:]
             guard !steps.isEmpty else {
@@ -281,10 +302,12 @@ extension GhidraHost {
                 ]
                 item["codes"] = step.codes
                 if request.address != nil { item["reason"] = request.reason }
+                if let fields = request.fields, !fields.isEmpty { item["fields"] = fields }
                 items.append(item)
             }
             let body = try JSONSerialization.data(withJSONObject: ["items": items])
-            let applied = try JSONSerialization.jsonObject(with: try await write(module, "/v1/library/apply", body: body))
+            let path = request.dryRun == true ? "/v1/library/apply?dry_run=1" : "/v1/library/apply"
+            let applied = try JSONSerialization.jsonObject(with: try await write(module, path, body: body))
             answer["results"] = (applied as? [String: Any])?["items"] ?? []
             return try JSONSerialization.data(withJSONObject: answer, options: [.sortedKeys])
         }
@@ -294,7 +317,7 @@ extension GhidraHost {
     /// applies by itself; a candidate, taken as a variant with a reason; or
     /// with `replace`, a function whose review differs or was edited since.
     static func chosen(_ plan: LibraryPlan, address: String, id: String?, reason: String?,
-                       replace: Bool) throws -> [LibraryStep] {
+                       replace: Bool, fields: [String]? = nil) throws -> [LibraryStep] {
         func at(_ steps: [LibraryStep]) -> LibraryStep? {
             steps.first { $0.address.caseInsensitiveCompare(address) == .orderedSame && (id == nil || $0.id == id) }
         }
@@ -313,9 +336,10 @@ extension GhidraHost {
             return [step]
         }
         if var step = at(plan.edited) ?? at(plan.applied) ?? at(plan.declined) {
-            guard replace else {
+            guard replace || !(fields ?? []).isEmpty else {
                 throw GhidraHostError(.refused, "the function at \(address) is \(step.state): `replace: true` "
-                    + "puts the entry's review in place of the function's", status: 409)
+                    + "puts the entry's review in place of the function's, and `fields` takes parts of it",
+                    status: 409)
             }
             step.mode = step.codes == nil ? "whole" : "variant"
             return [step]
@@ -323,9 +347,36 @@ extension GhidraHost {
         throw GhidraHostError(.refused, "no registry entry matches the function at \(address)", status: 404)
     }
 
+    /// Whether the module's running owner holds a program the store has not
+    /// got — modified after the last publish — and nil when no owner runs for
+    /// it. The modification number a publish recorded is the mark; a project
+    /// written before it falls back to the owner's unsaved-changes flag.
+    public func ownerHasUnpublishedWrites(_ module: SHA256Digest) async throws -> Bool? {
+        let project = self.project(module)
+        guard project.exists, let record = await runningOwner(project) else { return nil }
+        let data = try await Self.call(record.port, "GET", "/v1/hello", timeout: 10).data
+        guard let hello = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        if let published = (try? project.state())?.published?.modification,
+           let modification = hello["modification"] as? Int {
+            return modification > published
+        }
+        return hello["changed"] as? Bool
+    }
+
+    /// The owner's offer of its tagged library functions, read without a
+    /// publish: the ones short of the bar and their gaps, `too_short` among
+    /// them. nil when the module has no running owner — nothing is started
+    /// for a question about a module nobody has open, and the analysis the
+    /// caller reads cannot say what Function ID could not hash.
+    public func libraryShortfalls(_ module: SHA256Digest) async throws -> [LibraryShortfall]? {
+        let project = self.project(module)
+        guard project.exists, let record = await runningOwner(project) else { return nil }
+        let data = try await Self.call(record.port, "GET", "/v1/library", timeout: 600).data
+        return try? Self.libraryOffer(data).shortfalls
+    }
+
     /// The module's matches and what each calls for, with the index they were made against.
-    func libraryPlan(_ module: SHA256Digest) async throws -> (LibraryPlan, LibraryIndex) {
-        let index = try await writer.readLibraryIndex()
+    func libraryPlan(_ module: SHA256Digest) async throws -> (LibraryPlan, LibraryIndex) {        let index = try await writer.readLibraryIndex()
         guard !index.entries.isEmpty else { return (LibraryPlan(entries: 0, hashed: 0), index) }
         let record = try await owner(of: module)
         let keys = Self.libraryKeys(index)
@@ -346,7 +397,27 @@ extension GhidraHost {
             let compared = try await Self.call(record.port, "POST", "/v1/library/compare", body: body).data
             comparisons["\(address) \(id)"] = try JSONDecoder().decode(LibraryComparison.self, from: compared)
         }
-        return (Self.libraryPlan(answer.matches, index: index, hashed: answer.hashed, comparisons: comparisons), index)
+        var plan = Self.libraryPlan(answer.matches, index: index, hashed: answer.hashed,
+                                    comparisons: comparisons)
+        // The entries' own gaps, beside the functions': the comparison a
+        // decision is made on. Read once per entry the plan asks about, not
+        // for the functions already carrying their entry.
+        var entryGaps: [String: [String]] = [:]
+        for id in Set((plan.toApply + plan.edited + plan.candidates).map(\.id)) {
+            guard let held = index.entries[id], let data = try? await writer.readObject(held.entry) else { continue }
+            entryGaps[id] = LibraryEntryReview.gaps(of: data)
+        }
+        func withEntryGaps(_ steps: [LibraryStep]) -> [LibraryStep] {
+            steps.map { step in
+                var step = step
+                step.entryGaps = entryGaps[step.id]
+                return step
+            }
+        }
+        plan.toApply = withEntryGaps(plan.toApply)
+        plan.edited = withEntryGaps(plan.edited)
+        plan.candidates = withEntryGaps(plan.candidates)
+        return (plan, index)
     }
 
     /// A Codable value as plain JSON objects, to put beside the owner's own.

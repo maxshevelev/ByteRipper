@@ -136,6 +136,45 @@ public struct LibraryHistory: Codable, Equatable, Sendable {
     public var versions: [LibraryVersion]
 }
 
+/// Which conflicts a publish takes — none, every one, or those it names, each
+/// with the reason the history keeps. A review made on the entry's current
+/// version needs no decision; this decides the others.
+public struct LibraryTake: Equatable, Sendable {
+    /// Take every conflicting entry, with one reason.
+    public var all: Bool
+    /// The entries to take by id, each with a reason of its own.
+    public var reasons: [String: String]
+    /// The reason a take of every conflict keeps.
+    public var reason: String?
+
+    public static let none = LibraryTake()
+
+    public static func all(_ reason: String) -> LibraryTake {
+        LibraryTake(all: true, reason: reason, reasons: [:])
+    }
+
+    /// Take the entries named, in the order of their reasons — each needs one.
+    public static func these(_ reasons: [String: String]) -> LibraryTake {
+        LibraryTake(all: false, reason: nil, reasons: reasons)
+    }
+
+    private init(all: Bool = false, reason: String? = nil, reasons: [String: String] = [:]) {
+        self.all = all
+        self.reason = reason
+        self.reasons = reasons
+    }
+
+    /// The ids this decision names.
+    public var ids: Set<String> { Set(reasons.keys) }
+
+    public var isEmpty: Bool { !all && reasons.isEmpty }
+
+    /// The reason for an entry this decision takes, nil when it does not take it.
+    public func reason(for id: String) -> String? {
+        all ? reason : reasons[id]
+    }
+}
+
 /// What a publish offers the registry: one tagged function reviewed to the
 /// bar, its body, and its review as the canonical JSON object the entry is.
 public struct LibraryProposal: Codable, Equatable, Sendable {
@@ -271,16 +310,24 @@ extension ContentStore {
     /// key. A body it holds: the same review is no change; another review made
     /// on the entry's current version — the function carried it — is the
     /// next version, whichever module publishes it; any other review is a
-    /// conflict, and the entry stays — unless `take` is set, when it becomes
-    /// the next version, with `reason`, which the history keeps and which
-    /// taking requires. No module holds an entry more than another.
+    /// conflict, and the entry stays — unless `take` names it, when it becomes
+    /// the next version with the reason `take` carries, which the history
+    /// keeps and which every entry taken requires. No module holds an entry
+    /// more than another.
+    /// `dryRun` answers what the offer would do — the same result, the same
+    /// refusals — and writes nothing: not the objects, not the index, not a
+    /// history. A publish's preview is read with it.
     @discardableResult
     public func putLibraryEntries(module: SHA256Digest, rev: Int?, by: String?,
-                                  proposals: [LibraryProposal], take: Bool = false,
-                                  reason: String? = nil) throws -> LibraryWriteResult {
-        let reason = reason?.trimmingCharacters(in: .whitespacesAndNewlines)
-        if take, reason?.isEmpty ?? true {
+                                  proposals: [LibraryProposal], take: LibraryTake = .none,
+                                  dryRun: Bool = false) throws -> LibraryWriteResult {
+        let allReason = take.reason?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if take.all, allReason?.isEmpty ?? true {
             throw CodeAnalysisError.analysisMismatch("taking a library conflict needs a reason")
+        }
+        let reasons = take.reasons.mapValues { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        for (id, reason) in reasons where reason.isEmpty {
+            throw CodeAnalysisError.analysisMismatch("taking the library entry \(id) needs a reason")
         }
         for proposal in proposals {
             guard proposal.body.isValid else {
@@ -291,13 +338,28 @@ extension ContentStore {
             }
         }
         // The objects first, as a publish stores its document before the
-        // revision that names it.
-        let stored = try proposals.map { try putObject($0.entry) }
+        // revision that names it — a preview names them without storing them.
+        let stored = dryRun
+            ? proposals.map { SHA256Digest(data: $0.entry) }
+            : try proposals.map { try putObject($0.entry) }
         return try withLock {
             var index = try libraryIndex()
+            // A decision that names an entry this publish does not offer is a
+            // typo, not a take: refused before anything is written.
+            if let unknown = take.ids.subtracting(Self.offeredIds(proposals, index)).sorted().first {
+                throw CodeAnalysisError.analysisMismatch(
+                    "no proposal in this publish carries the library entry \(unknown)")
+            }
             var result = LibraryWriteResult()
             var histories: [String: LibraryHistory] = [:]
             var changedIndex = false
+            // What the decision named actually came up a conflict: an entry
+            // already settled is not taken silently, and a variant's conflict
+            // cannot be the entry's next version.
+            var conflicting: Set<String> = []
+            var variantConflicts: Set<String> = []
+            var variantOf: [String: LibraryProposal] = [:]
+            var settled: [String: String] = [:]
             let now = Timestamps.now()
             for (proposal, digest) in zip(proposals, stored).sorted(by: { $0.0.body < $1.0.body }) {
                 let source = LibrarySource(module: module, address: proposal.address, rev: rev, by: by)
@@ -312,8 +374,12 @@ extension ContentStore {
                         index.bodies[proposal.body.key] = id
                         result.variants = (result.variants ?? []) + [.init(id: id, name: held.name,
                                                                           version: held.version)]
+                        settled[id] = "this publish joins it as a variant of version \(held.version)"
                         changedIndex = true
                     } else {
+                        conflicting.insert(id)
+                        variantConflicts.insert(id)
+                        variantOf[id] = proposal
                         result.conflicts.append(.init(id: id, name: held.name, proposedName: proposal.name,
                                                       heldBy: held.source, version: held.version,
                                                       base: proposal.basedOn == id ? proposal.base : nil))
@@ -330,10 +396,12 @@ extension ContentStore {
                         LibraryVersion(version: 1, entry: digest, source: source, reason: nil, recordedAt: now)
                     ])
                     result.added.append(.init(id: id, name: proposal.name, version: 1))
+                    settled[id] = "this publish adds it as a new entry, version 1"
                     continue
                 }
                 if held.entry == digest {
                     result.unchanged.append(.init(id: id, name: held.name, version: held.version))
+                    settled[id] = "its review is the entry's own, at version \(held.version)"
                     continue
                 }
                 // The same review from another body of the entry — a variant
@@ -344,11 +412,16 @@ extension ContentStore {
                     && proposal.body == held.variants.first?.body
                 if LibraryProposal.sameReview(heldObject, proposal.entry), !completes {
                     result.unchanged.append(.init(id: id, name: held.name, version: held.version))
+                    settled[id] = "its review is the entry's own, at version \(held.version)"
                     continue
                 }
                 let base = proposal.basedOn == id ? proposal.base : nil
                 let current = base == held.version
-                guard current || completes || take else {
+                // A review that differs reaches here: it is the entry's next
+                // version, or a conflict the decision takes — or leaves.
+                conflicting.insert(id)
+                let taken = take.all ? allReason : reasons[id]
+                guard current || completes || taken != nil else {
                     result.conflicts.append(.init(id: id, name: held.name, proposedName: proposal.name,
                                                   heldBy: held.source, version: held.version, base: base))
                     continue
@@ -362,19 +435,53 @@ extension ContentStore {
                 next.source = source
                 index.entries[id] = next
                 var history = try histories[id] ?? libraryHistory(id: id) ?? LibraryHistory(id: id, versions: [])
-                let why = current ? nil : completes ? "the body's constants recorded" : reason
+                let why = current ? nil : completes ? "the body's constants recorded" : taken
                 history.versions.append(LibraryVersion(version: next.version, entry: digest, source: source,
                                                        reason: why, recordedAt: now))
                 histories[id] = history
                 result.updated.append(.init(id: id, name: proposal.name, version: next.version))
             }
-            guard !histories.isEmpty || changedIndex else { return result }
+            // A decision that names an entry already settled — the same review,
+            // the current version — would read as taken and be nothing: say so,
+            // as the unknown id above is said, rather than pass in silence.
+            if let id = take.ids.subtracting(conflicting).sorted().first {
+                var text = "the entry \(id) is not in conflict in this publish"
+                if let held = index.entries[id] {
+                    text += ": \(held.name) is at version \(held.version), and "
+                } else {
+                    text += ": "
+                }
+                text += settled[id] ?? "this publish does not take it"
+                throw CodeAnalysisError.analysisMismatch(text)
+            }
+            if let id = take.ids.intersection(variantConflicts).sorted().first {
+                let proposal = variantOf[id]
+                let function = proposal.map { "\($0.name) at \($0.address)" } ?? "this module's function"
+                throw CodeAnalysisError.analysisMismatch(
+                    "the entry \(id) is the entry of another body, and \(function) reads differently: "
+                        + "a variant's review cannot become the entry's — adopt the entry with replace, "
+                        + "or review the function on its own")
+            }
+            guard !dryRun, !histories.isEmpty || changedIndex else { return result }
             for (id, history) in histories.sorted(by: { $0.key < $1.key }) {
                 try atomicWrite(try encoder.encode(history), to: libraryHistoryURL(id))
             }
             try atomicWrite(try encoder.encode(index), to: libraryIndexURL)
             return result
         }
+    }
+
+    /// The entry ids a publish's proposals may conflict with: the entry their
+    /// body belongs to, the id of a body the registry does not hold yet, and
+    /// the entry a variant was applied from.
+    private static func offeredIds(_ proposals: [LibraryProposal], _ index: LibraryIndex) -> Set<String> {
+        var ids: Set<String> = []
+        for proposal in proposals {
+            ids.insert(proposal.body.key)
+            if let held = index.bodies[proposal.body.key] { ids.insert(held) }
+            if let variantOf = proposal.variantOf { ids.insert(variantOf) }
+        }
+        return ids
     }
 
     /// Make the registry's index what a served store holds: a mirror's copy.

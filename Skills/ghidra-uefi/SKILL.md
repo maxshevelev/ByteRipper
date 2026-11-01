@@ -334,8 +334,9 @@ function is complete for its own module without that; for the registry, which
 copies it into every module with the same body, it is not. `ghidra_publish`
 answers what happened:
 
-- `library.added`, `library.updated`, `library.unchanged`: the entries this
-  publish made, moved to their next version, or matched;
+- `library.added`, `library.updated`: the entries this publish made or moved
+  to their next version; the ones it matched are a count
+  (`library.unchanged_count`) unless `full: true` is given;
 - `library_below_bar`: the tagged functions the registry did not take, with
   their gaps — bring them to the bar and publish again;
 - `library.conflicts`: bodies whose entry holds another review than this
@@ -347,9 +348,28 @@ answers what happened:
   with no conflict. One body is one function: there are never two entries for
   it. Read both reviews (`library_registry` with the entry's `id` gives the
   current one), decide which is right or merge the better parts into this
-  module's, and publish with `take_library_conflicts: true` and a
-  `library_reason` that says why. Leave it when the entry's review is the
-  better one, and take it with `ghidra_library_apply` and `replace: true`.
+  module's, and publish with `take_library_conflicts` naming the entries this
+  module wins — or `true` for every one — and a `library_reason` that says
+  why, one text or an object of entry id to reason. Leave it when the entry's
+  review is the better one, and take it with `ghidra_library_apply` and
+  `replace: true`. A publish takes what it names and leaves the rest
+  conflicts: `library.conflicts` in the answer is what remains, each with the
+  version it was based on.
+
+A dry publish (`dry_run: true`) with the same `take_library_conflicts` and
+`library_reason` answers what the registry offer would do and writes nothing:
+`library` with the entries it would add or move, the conflicts it would leave,
+and `library_error` when a named entry is not a conflict — read it before the
+publish when the decision is large.
+
+`ghidra_library` lists each match with two readings of the same review: `gaps`
+— what the function's own review still lacks, read in the owner without the
+decompiler — and `entry_gaps` — what the entry's review lacks, read from the
+entry object. Compare them before changing anything: a function with gaps and
+an entry without is the entry's; the other way round is this module's. The
+names-and-types reading says what it can: a value the entry split into two
+variables (a 64-bit register as two dwords) is a reading of the C, not a gap,
+and stays one.
 
 **Resolving a conflict.** `library.conflicts` means the registry holds another
 review of the same body than this module's, and neither side is right by
@@ -365,9 +385,10 @@ module's and decide in so many words:
   where. The registry is usually surer of provenance — it names the EDK2 file
   the body came from, and whether a public wrapper exists; this module's review
   is often surer of the local types, names and step comments;
-- never take an entry because it is another module's or newer, and settle every
-  conflict at once: `take_library_conflicts` takes them all in one publish, so
-  none is left half-decided.
+- never take an entry because it is another module's or newer, and decide every
+  conflict in the one publish: `take_library_conflicts` names the entries this
+  module wins and leaves the rest as conflicts, so none is left half-decided
+  and no second apply is needed.
 
 `library_registry` reads the registry: its entries by name and kind, and one
 entry's review and history.
@@ -389,7 +410,19 @@ match is by body: the same code, with the addresses a relocation moves masked.
   at the publish (`take_library_conflicts` with a reason). Never leave two
   names for one body: the registry's name is the one every module shows.
 - `edited`: a function applied and edited since. It is the review's now; a
-  newer version of the entry is offered, not applied.
+  newer version of the entry is offered, not applied. `replace: true` puts the
+  entry's review in place of it; `fields` takes only the parts named —
+  `signature` (return type, convention, parameter types and arity), `names`
+  (the function's and its parameters' names), `locals`, `plate`, `comments` —
+  and keeps the rest of the function's. A merge that keeps this module's plate
+  and takes the entry's signature is `fields: ["signature"]`.
+- `dry_run: true` on an apply answers the same `results` — `filled`,
+  `differences`, `unplaced`, `leftovers` — and writes nothing: each entry is
+  applied in its transaction and rolled back, so a `replace` or a merge can be
+  read before it is made.
+- `leftovers` in a result is the gaps the function still keeps after the
+  apply: a local the fill left unnamed, a return type still the decompiler's —
+  name them before publishing, or `filter: unfinished` will say so later.
 - `candidates`: a body of an entry's shape with other constants, each one
   listed with the entry's. Another constant is another function — an MSR, a
   port, a mask or a size changes what the code does — so review it as a

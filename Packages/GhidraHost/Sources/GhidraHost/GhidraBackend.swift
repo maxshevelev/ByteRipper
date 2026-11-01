@@ -18,12 +18,27 @@ public protocol GhidraBackend: Sendable {
     func publishModule(_ module: SHA256Digest, by: String, options: GhidraHost.PublishOptions) async throws -> Data
     /// What a publish would store, exported, and nothing written anywhere.
     /// `takeTypeConflicts` answers what a publish would replace in the shared
-    /// archive; nothing is written either way.
-    func publishPreview(_ module: SHA256Digest, takeTypeConflicts: Bool) async throws -> Data
+    /// archive, `takeLibrary` which registry entries it would take and which
+    /// conflicts it would leave; nothing is written either way.
+    func publishPreview(_ module: SHA256Digest, takeTypeConflicts: Bool,
+                        takeLibrary: LibraryTake) async throws -> Data
     func releaseModule(_ module: SHA256Digest, by: String) async throws -> Data
     /// The module against the library registry: its matches, the entries
     /// applied, a candidate taken or declined, one entry read.
     func library(_ module: SHA256Digest, _ request: GhidraHost.LibraryRequest) async throws -> Data
+    /// The tagged library functions short of the bar, as the owner offers
+    /// them; nil when no owner runs for the module — a body too short for
+    /// Function ID to hash is a fact only Ghidra has.
+    func libraryShortfalls(_ module: SHA256Digest) async throws -> [GhidraHost.LibraryShortfall]?
+    /// Whether the module's owner runs and holds a program the store has not
+    /// got; nil when no owner runs for it.
+    func ownerHasUnpublishedWrites(_ module: SHA256Digest) async throws -> Bool?
+}
+
+public extension GhidraBackend {
+    /// A backend with no owner of its own to ask.
+    func libraryShortfalls(_ module: SHA256Digest) async throws -> [GhidraHost.LibraryShortfall]? { nil }
+    func ownerHasUnpublishedWrites(_ module: SHA256Digest) async throws -> Bool? { nil }
 }
 
 public extension GhidraBackend {
@@ -34,7 +49,17 @@ public extension GhidraBackend {
 
     /// A backend with no shared archive of its own to ask.
     func publishPreview(_ module: SHA256Digest) async throws -> Data {
-        try await publishPreview(module, takeTypeConflicts: false)
+        try await publishPreview(module, takeTypeConflicts: false, takeLibrary: .none)
+    }
+
+    func publishPreview(_ module: SHA256Digest, takeTypeConflicts: Bool) async throws -> Data {
+        try await publishPreview(module, takeTypeConflicts: takeTypeConflicts, takeLibrary: .none)
+    }
+
+    /// A backend that knows no library decisions answers the preview it can.
+    func publishPreview(_ module: SHA256Digest, takeTypeConflicts: Bool,
+                        takeLibrary: LibraryTake) async throws -> Data {
+        try await publishPreview(module, takeTypeConflicts: takeTypeConflicts)
     }
 }
 
@@ -107,8 +132,9 @@ extension GhidraHost: GhidraBackend {
         try Self.encode(PublishAnswer(try await publish(module, by: by, options: options)))
     }
 
-    public func publishPreview(_ module: SHA256Digest, takeTypeConflicts: Bool) async throws -> Data {
-        try await preview(module, takeTypeConflicts: takeTypeConflicts)
+    public func publishPreview(_ module: SHA256Digest, takeTypeConflicts: Bool,
+                               takeLibrary: LibraryTake) async throws -> Data {
+        try await preview(module, takeTypeConflicts: takeTypeConflicts, takeLibrary: takeLibrary)
     }
 
     public func releaseModule(_ module: SHA256Digest, by: String) async throws -> Data {
@@ -152,15 +178,38 @@ public struct GhidraRemote: GhidraBackend {
                               options: GhidraHost.PublishOptions) async throws -> Data {
         var query = ["by": by]
         if options.takeTypeConflicts { query["take_type_conflicts"] = "1" }
-        if options.takeLibraryConflicts { query["take_library_conflicts"] = "1" }
-        query["library_reason"] = options.libraryReason
-        return try await call("POST", "modules/\(module.hex)/publish", query: query, timeout: 3600)
+        // A take of every conflict is the query the route has always read; a
+        // take of some entries carries the ids and their reasons in the body.
+        var body = Data()
+        if options.takeLibrary.all {
+            query["take_library_conflicts"] = "1"
+            query["library_reason"] = options.takeLibrary.reason
+        } else if !options.takeLibrary.ids.isEmpty {
+            body = try JSONSerialization.data(withJSONObject: [
+                "take_library_conflicts": options.takeLibrary.ids.sorted(),
+                "library_reasons": options.takeLibrary.reasons
+            ], options: [.sortedKeys])
+        }
+        return try await call("POST", "modules/\(module.hex)/publish", query: query, body: body,
+                              timeout: 3600)
     }
 
-    public func publishPreview(_ module: SHA256Digest, takeTypeConflicts: Bool) async throws -> Data {
+    public func publishPreview(_ module: SHA256Digest, takeTypeConflicts: Bool,
+                               takeLibrary: LibraryTake) async throws -> Data {
         var query = ["dry_run": "1"]
         if takeTypeConflicts { query["take_type_conflicts"] = "1" }
-        return try await call("POST", "modules/\(module.hex)/publish", query: query, timeout: 3600)
+        var body = Data()
+        if takeLibrary.all {
+            query["take_library_conflicts"] = "1"
+            query["library_reason"] = takeLibrary.reason
+        } else if !takeLibrary.ids.isEmpty {
+            body = try JSONSerialization.data(withJSONObject: [
+                "take_library_conflicts": takeLibrary.ids.sorted(),
+                "library_reasons": takeLibrary.reasons
+            ], options: [.sortedKeys])
+        }
+        return try await call("POST", "modules/\(module.hex)/publish", query: query, body: body,
+                              timeout: 3600)
     }
 
     public func releaseModule(_ module: SHA256Digest, by: String) async throws -> Data {

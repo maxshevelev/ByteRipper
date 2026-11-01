@@ -84,16 +84,123 @@ final class LibraryRegistryTests: XCTestCase {
         XCTAssertEqual(try store.libraryIndex().entries.count, 1, "one body, one entry")
 
         XCTAssertThrowsError(try store.putLibraryEntries(module: second, rev: 4, by: "agent",
-                                                         proposals: [proposal("FillBytes")], take: true))
+                                                         proposals: [proposal("FillBytes")], take: .all("")))
         let taken = try store.putLibraryEntries(module: second, rev: 4, by: "agent",
-                                                proposals: [proposal("FillBytes")], take: true,
-                                                reason: "the review of the Renoir module is the better one")
+                                                proposals: [proposal("FillBytes")],
+                                                take: .all("the review of the Renoir module is the better one"))
         XCTAssertEqual(taken.updated.map(\.name), ["FillBytes"])
         let entry = try XCTUnwrap(try store.libraryIndex().entry(for: body)?.entry)
         XCTAssertEqual(entry.name, "FillBytes")
         XCTAssertEqual(entry.source.module, second)
         XCTAssertEqual(try store.libraryHistory(id: body.key)?.versions.last?.reason,
                        "the review of the Renoir module is the better one")
+    }
+
+    /// A publish decides entry by entry: those it names are taken, each with
+    /// its own reason in the history, and the rest stay conflicts — one write,
+    /// no second apply.
+    func testAConflictIsTakenByNameAndTheRestStayConflicts() throws {
+        let other = LibraryBody(size: 0x15, full: "aaaabbbbccccdddd", specific: "0123456789abcdef")
+        try store.putLibraryEntries(module: first, rev: 1, by: "agent", proposals: [
+            proposal("SetMem"), proposal("CopyMem", body: other)
+        ])
+        let taken = try store.putLibraryEntries(module: second, rev: 5, by: "agent", proposals: [
+            proposal("SetMemRenoir", plate: "ours"), proposal("CopyMemRenoir", plate: "ours", body: other)
+        ], take: .these([
+            body.key: "the Renoir review types the descriptor",
+            other.key: "the Renoir review names both locals"
+        ]))
+        XCTAssertEqual(Set(taken.updated.map(\.id)), [body.key, other.key])
+        XCTAssertTrue(taken.conflicts.isEmpty)
+        XCTAssertEqual(try store.libraryHistory(id: body.key)?.versions.last?.reason,
+                       "the Renoir review types the descriptor")
+        XCTAssertEqual(try store.libraryHistory(id: other.key)?.versions.last?.reason,
+                       "the Renoir review names both locals")
+
+        // A third module's review: one entry named, the other left as it was.
+        let third = SHA256Digest(data: Data("PcdPeim".utf8))
+        let partial = try store.putLibraryEntries(module: third, rev: 2, by: "agent", proposals: [
+            proposal("SetMemThird", plate: "third"), proposal("CopyMemThird", plate: "third", body: other)
+        ], take: .these([body.key: "the third module's review is the typed one"]))
+        XCTAssertEqual(partial.updated.map(\.id), [body.key])
+        XCTAssertEqual(partial.conflicts.map(\.id), [other.key], "the entry not named keeps its own version")
+        XCTAssertEqual(partial.conflicts.first?.heldBy.module, second)
+        XCTAssertEqual(partial.conflicts.first?.version, 2)
+    }
+
+    /// A decision that names an entry this publish leaves alone — the same
+    /// review, one already settled — is refused, not passed in silence; and a
+    /// variant's conflict cannot be made the entry's review.
+    func testATakeOfAnEntryThatIsNotInConflictIsRefused() throws {
+        let other = LibraryBody(size: 0x15, full: "aaaabbbbccccdddd", specific: "0123456789abcdef")
+        try store.putLibraryEntries(module: first, rev: 1, by: "agent", proposals: [proposal("SetMem")])
+        // The same review: unchanged, and naming it takes nothing.
+        XCTAssertThrowsError(try store.putLibraryEntries(module: second, rev: 1, by: "agent",
+                                                         proposals: [proposal("SetMem")],
+                                                         take: .these([body.key: "taken anyway"]))) {
+            XCTAssertEqual("\($0)", "the entry \(self.body.key) is not in conflict in this publish: "
+                + "SetMem is at version 1, and its review is the entry's own, at version 1")
+        }
+
+        // A variant's review is the entry's only when it is the same review:
+        // a differing one cannot be made the entry's next version.
+        try store.putLibraryEntries(module: first, rev: 1, by: "agent",
+                                    proposals: [review("ReadSmn", body: body, constants: ["0x10196"])])
+        let variantConflict = try store.putLibraryEntries(module: second, rev: 1, by: "agent", proposals: [
+            review("ReadSmnOther", body: other, constants: ["0x10199"], variantOf: body.key)])
+        XCTAssertEqual(variantConflict.conflicts.map(\.id), [body.key])
+        XCTAssertThrowsError(try store.putLibraryEntries(module: second, rev: 2, by: "agent", proposals: [
+            review("ReadSmnOther", body: other, constants: ["0x10199"], variantOf: body.key)],
+            take: .these([body.key: "the newer review wins"]))) {
+            XCTAssertTrue("\($0)".contains("is the entry of another body"), "\($0)")
+            XCTAssertTrue("\($0)".contains("ReadSmnOther at 0x9A90000"), "names the function: \($0)")
+        }
+    }
+
+    /// A dry run answers what the write would do and writes nothing — no
+    /// object, no index, no history — so a preview can be read before the
+    /// publish decides.
+    func testADryRunAnswersWhatTheWriteWouldAndWritesNothing() throws {
+        try store.putLibraryEntries(module: first, rev: 1, by: "agent", proposals: [proposal("SetMem")])
+        let indexBefore = try store.libraryIndex()
+        let historyBefore = try store.libraryHistory(id: body.key)
+        let copy = LibraryBody(size: 0x10, full: "aaaabbbbccccdddd", specific: "0123456789abcdef")
+        func offer() -> [LibraryProposal] {
+            [proposal("SetMemRenoir", plate: "ours"),
+             proposal("CopyMem", plate: "ours", body: copy),
+             proposal("SetMemTyped", plate: "ours", body: LibraryBody(size: 0x30, full: "9999999999999999",
+                                                                     specific: "aaaaaaaaaaaaaaaa"))]
+        }
+        let decision = LibraryTake.these([body.key: "the Renoir review types the length"])
+        let dry = try store.putLibraryEntries(module: second, rev: 2, by: "agent", proposals: offer(),
+                                              take: decision, dryRun: true)
+        XCTAssertEqual(dry.updated.map(\.id), [body.key])
+        XCTAssertEqual(dry.added.count, 2)
+        XCTAssertEqual(try store.libraryIndex(), indexBefore, "nothing was written")
+        XCTAssertEqual(try store.libraryHistory(id: body.key), historyBefore)
+        let untaken = try JSONSerialization.data(withJSONObject: ["name": "SetMemTyped", "kind": "edk2",
+                                                                  "plate": "ours"], options: .sortedKeys)
+        XCTAssertFalse(store.hasObject(SHA256Digest(data: untaken)), "a dry run stores no entry object")
+
+        let wet = try store.putLibraryEntries(module: second, rev: 2, by: "agent", proposals: offer(),
+                                              take: decision)
+        XCTAssertEqual(dry, wet, "the same answer, written or not")
+        XCTAssertNotEqual(try store.libraryIndex(), indexBefore)
+        XCTAssertEqual(try store.libraryHistory(id: body.key)?.versions.last?.reason,
+                       "the Renoir review types the length")
+    }
+
+    /// A take names entries this publish offers: a typo, or an entry no body
+    /// of this publish reaches, is refused rather than silently not taken —
+    /// and so is an id with no reason.
+    func testATakeOfAnEntryThePublishDoesNotOfferIsRefused() throws {
+        try store.putLibraryEntries(module: first, rev: 1, by: "agent", proposals: [proposal("SetMem")])
+        XCTAssertThrowsError(try store.putLibraryEntries(module: second, rev: 1, by: "agent",
+                                                         proposals: [proposal("CopyMem")],
+                                                         take: .these(["not-an-entry": "because"])))
+        XCTAssertThrowsError(try store.putLibraryEntries(module: second, rev: 1, by: "agent",
+                                                         proposals: [proposal("CopyMem")],
+                                                         take: .these([body.key: "  "])))
     }
 
     private func review(_ name: String, body: LibraryBody, constants: [String]?, variantOf: String? = nil,
@@ -154,6 +261,48 @@ final class LibraryRegistryTests: XCTestCase {
         XCTAssertEqual(same.unchanged.count, 1)
     }
 
+
+    /// An entry's review is read for what it lacks by the same words a
+    /// function's gaps use — so the two can be compared before either is
+    /// changed, without Ghidra.
+    func testAnEntryReviewsGapsAreReadFromItsObject() throws {
+        func entry(_ object: [String: Any]) throws -> Data {
+            try JSONSerialization.data(withJSONObject: object, options: .sortedKeys)
+        }
+        let complete = try entry([
+            "name": "SetMem", "plate": "EDK2 BaseMemoryLib",
+            "return_type": "void", "comments": [["offset": "0x0", "kind": "eol", "text": "why"]],
+            "params": [["ordinal": 0, "name": "Buffer", "type": "void *"]],
+            "locals": [["storage": "Stack[0x4]:4", "first_use": "-0x1", "name": "Index", "type": "UINTN"]]
+        ])
+        XCTAssertEqual(LibraryEntryReview.gaps(of: complete), [])
+
+        let thin = try entry([
+            "name": "FUN_00001000", "plate": "",
+            "return_type": "undefined8", "comments": [],
+            "params": [["ordinal": 0, "name": "param_1", "type": "undefined4"],
+                       ["ordinal": 1, "name": "Count", "type": "UINTN"]],
+            "locals": [["storage": "Stack[0x8]:4", "first_use": "-0x1", "name": "local_8",
+                        "type": "undefined4"]]
+        ])
+        XCTAssertEqual(LibraryEntryReview.gaps(of: thin), ["name", "plate", "comments", "params", "locals", "return"])
+
+        let typed = try entry([
+            "name": "ReadSmn", "plate": "AGESA", "return_type": "UINT32", "comments": [["offset": "0x0"]],
+            "params": [["name": "Address", "type": "UINT32"]],
+            "locals": [["name": "UVar1", "type": "UINT32"]]
+        ])
+        XCTAssertEqual(LibraryEntryReview.gaps(of: typed), ["locals"],
+                       "a decompiler's temporary is a local a review did not name")
+
+        let placeholder = try entry([
+            "name": "LibAmdIoWrite", "plate": "AGESA", "return_type": "void", "comments": [["offset": "0x0"]],
+            "params": [["name": "Port", "type": "undefined4"], ["name": "Value", "type": "UINT8"]], "locals": []
+        ])
+        XCTAssertEqual(LibraryEntryReview.gaps(of: placeholder), ["params"],
+                       "a parameter the review never typed")
+        XCTAssertEqual(LibraryEntryReview.gaps(of: Data("not json".utf8)), [])
+    }
     func testABadBodyOrKindIsRefused() {
         let bad = LibraryBody(size: 0x15, full: "not-a-hash", specific: "0123456789abcdef")
         XCTAssertThrowsError(try store.putLibraryEntries(module: first, rev: 1, by: nil,

@@ -151,9 +151,14 @@ public struct RemoteStore: Sendable {
     /// `ContentStore.putLibraryEntries` on the server.
     @discardableResult
     public func putLibraryEntries(module: SHA256Digest, rev: Int?, by: String?, proposals: [LibraryProposal],
-                                  take: Bool = false, reason: String? = nil) async throws -> LibraryWriteResult {
+                                  take: LibraryTake = .none, dryRun: Bool = false)
+        async throws -> LibraryWriteResult {
         let body = try encoder.encode(ServedStoreProtocol.PutLibrary(
-            module: module, rev: rev, by: by, proposals: proposals, take: take ? true : nil, reason: reason))
+            module: module, rev: rev, by: by, proposals: proposals,
+            take: take.all ? true : nil, reason: take.all ? take.reason : nil,
+            takeIDs: take.all ? nil : (take.ids.isEmpty ? nil : take.ids.sorted()),
+            reasons: take.all || take.ids.isEmpty ? nil : take.reasons,
+            dryRun: dryRun ? true : nil))
         return try await json("POST", "library", body: body)
     }
 

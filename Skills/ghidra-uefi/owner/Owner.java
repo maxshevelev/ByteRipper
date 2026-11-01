@@ -1434,6 +1434,12 @@ public class Owner {
             item.addProperty("key", key);
             String kind = ExportCode.libraryKind(function);
             if (kind != null) item.addProperty("kind", kind);
+            // What the function's own review still lacks, for the comparison
+            // with the entry's: read without the decompiler, so a status call
+            // stays a read.
+            JsonArray gaps = new JsonArray();
+            ExportCode.reviewGaps(function).forEach(gaps::add);
+            item.add("gaps", gaps);
             if (exact != null) item.add("exact", exact);
             if (near != null) item.add("near", near);
             if (mark != null) {
@@ -1546,6 +1552,12 @@ public class Owner {
     private JsonObject libraryApply(HttpExchange exchange) throws Exception {
         requireLease(exchange);
         JsonObject body = body(exchange);
+        // `dry_run`: each entry applied in its transaction and rolled back —
+        // the answer is what the apply would do, and the program keeps what it
+        // had. A preview of a large review costs one transaction per entry.
+        java.util.Map<String, String> parameters = query(exchange.getRequestURI().getRawQuery());
+        boolean dryRun = "1".equals(parameters.get("dry_run"))
+            || (body.has("dry_run") && !body.get("dry_run").isJsonNull() && body.get("dry_run").getAsBoolean());
         JsonArray items = body.has("items") ? body.getAsJsonArray("items") : new JsonArray();
         java.util.List<JsonObject> pending = new java.util.ArrayList<>();
         items.forEach(e -> pending.add(e.getAsJsonObject()));
@@ -1576,7 +1588,7 @@ public class Owner {
                     answer.addProperty("ok", false);
                     answer.addProperty("error", error.toString());
                 } finally {
-                    program.endTransaction(transaction, done);
+                    program.endTransaction(transaction, done && !dryRun);
                 }
                 answers.put(item, answer);
                 if (done) { it.remove(); progress = true; }
@@ -1587,6 +1599,7 @@ public class Owner {
         for (JsonElement element : items) list.add(answers.get(element.getAsJsonObject()));
         System.out.println("OWNER LIBRARY APPLY " + leaseHolder + " " + list.size());
         JsonObject answer = identity();
+        answer.addProperty("dry_run", dryRun);
         answer.add("items", list);
         return answer;
     }
@@ -1601,12 +1614,30 @@ public class Owner {
         String mode = string(item, "mode", "fill");
         String reason = "library registry entry " + id + " v" + version;
         if (item.has("reason") && !item.get("reason").isJsonNull()) reason += ": " + item.get("reason").getAsString();
+        // `fields`: take these parts of the entry and keep the review's for
+        // the rest — a merge, not a replacement. None means the mode decides.
+        JsonArray fields = item.has("fields") && !item.get("fields").isJsonNull()
+            ? item.getAsJsonArray("fields") : null;
+        boolean masked = fields != null;
+        java.util.Set<String> wanted = new java.util.HashSet<>();
+        if (masked) {
+            for (JsonElement field : fields) {
+                String word = field.getAsString();
+                if (!java.util.List.of("signature", "names", "locals", "plate", "comments").contains(word)) {
+                    throw new Failure(400, "replace takes signature, names, locals, plate or comments, not "
+                                      + word);
+                }
+                wanted.add(word);
+            }
+        }
+        java.util.function.Predicate<String> takes = field -> !masked || wanted.contains(field);
         JsonArray filled = new JsonArray(), differences = new JsonArray(), unplaced = new JsonArray();
         JsonObject answer = new JsonObject();
         answer.addProperty("address", hex(function.getEntryPoint()));
         answer.addProperty("id", id);
         answer.addProperty("version", version);
-        answer.addProperty("mode", mode);
+        answer.addProperty("mode", masked ? "fields" : mode);
+        if (masked) answer.add("fields", fields.deepCopy());
         String oldName = function.getName();
         String name = required(entry, "name");
         // The review's own reason for a name it keeps stays: only a rename
@@ -1617,7 +1648,8 @@ public class Owner {
         String keptReason = reasons == null ? null : reasons.getString(at);
         String keptBy = bys == null ? null : bys.getString(at);
         boolean wasNamed = function.getSymbol().getSource() == SourceType.USER_DEFINED;
-        if (!oldName.equals(name)) {
+        boolean didRename = false;
+        if (takes.test("names") && !oldName.equals(name)) {
             for (Symbol other : program.getSymbolTable().getGlobalSymbols(name)) {
                 if (!other.getAddress().equals(function.getEntryPoint())) {
                     throw new Failure(409, name + " already names " + hex(other.getAddress()));
@@ -1628,6 +1660,7 @@ public class Owner {
             renamed.addProperty("from", oldName);
             renamed.addProperty("to", name);
             answer.add("renamed", renamed);
+            didRename = true;
         }
         JsonObject why = new JsonObject();
         why.addProperty("reason", oldName.equals(name) ? reason : reason + " (was " + oldName + ")");
@@ -1637,7 +1670,10 @@ public class Owner {
         for (Parameter parameter : function.getParameters()) {
             if (!placeholder(parameter.getName())) reviewedParameters = true;
         }
-        if (sameSignature(function, entry)) {
+        if (masked) {
+            if (takes.test("signature")) applySignatureShape(function, entry, filled, differences);
+            if (takes.test("names")) applyParameterNames(function, entry, filled, differences);
+        } else if (sameSignature(function, entry)) {
             // Nothing to write: the function already has the entry's.
         } else if (whole || !reviewedParameters) {
             applySignature(function, entry, why);
@@ -1645,23 +1681,32 @@ public class Owner {
         } else {
             fillParameters(function, entry, filled, differences);
         }
-        if (!oldName.equals(name) || !wasNamed) {
+        if (didRename || !wasNamed) {
             why(at, why);
         } else {
             StringPropertyMap reasonMap = propertyMap(Harvest.REASON), byMap = propertyMap(Harvest.BY);
             if (keptReason != null) reasonMap.add(at, keptReason); else reasonMap.remove(at);
             if (keptBy != null) byMap.add(at, keptBy); else byMap.remove(at);
         }
-        applyLocals(function, entry, whole, filled, differences, unplaced);
+        if (!masked || takes.test("locals")) {
+            applyLocals(function, entry, masked || whole, filled, differences, unplaced);
+        }
         String plate = string(entry, "plate", "");
         String ownPlate = function.getComment();
-        if (whole || ownPlate == null || ownPlate.isBlank()) {
+        if (masked) {
+            if (takes.test("plate")) {
+                function.setComment(plate.isEmpty() ? null : plate);
+                filled.add("plate");
+            }
+        } else if (whole || ownPlate == null || ownPlate.isBlank()) {
             function.setComment(plate.isEmpty() ? null : plate);
             filled.add("plate");
         } else if (!ownPlate.equals(plate)) {
             differences.add("plate");
         }
-        applyComments(function, entry, whole, filled, differences, unplaced);
+        if (!masked || takes.test("comments")) {
+            applyComments(function, entry, masked || whole, filled, differences, unplaced);
+        }
         String kind = string(entry, "kind", null);
         String ownKind = ExportCode.libraryKind(function);
         if (kind != null && (whole || ownKind == null || ExportCode.libraryTag(function) == null)) {
@@ -1674,6 +1719,15 @@ public class Owner {
             function.addTag(ASSERT_TAG);
         }
         decompiled.remove(function.getEntryPoint());
+        // What the review still lacks after this, read without the decompiler:
+        // a fill that leaves a local unnamed says so now, not at the next code
+        // read that fails the review filter.
+        java.util.List<String> leftovers = ExportCode.reviewGaps(function);
+        if (!leftovers.isEmpty()) {
+            JsonArray left = new JsonArray();
+            leftovers.forEach(left::add);
+            answer.add("leftovers", left);
+        }
         // Equal to the entry, apart from the body it is: the function is
         // the entry's, and carries the mark.
         ghidra.feature.fid.hash.FidHashQuad hash = new ghidra.feature.fid.service.FidService().hashFunction(function);
@@ -1754,6 +1808,52 @@ public class Owner {
             JsonObject places = new JsonObject();
             places.add("storage", storage);
             applyStorage(function, places);
+        }
+    }
+
+    /** The entry's return type, convention and parameter types, and the function's own parameter names. */
+    private void applySignatureShape(Function function, JsonObject entry, JsonArray filled, JsonArray differences)
+            throws Exception {
+        String returned = string(entry, "return_type", null);
+        if (returned != null && !function.getReturnType().getDisplayName().equals(returned)) {
+            function.setReturnType(type(returned), SourceType.USER_DEFINED);
+            filled.add("return type");
+        }
+        String convention = string(entry, "calling_convention", null);
+        if (convention != null && !convention.equals(function.getCallingConventionName())) {
+            function.setCallingConvention(convention);
+            filled.add("calling convention");
+        }
+        JsonArray params = entry.has("params") ? entry.getAsJsonArray("params") : new JsonArray();
+        Parameter[] current = function.getParameters();
+        if (params.size() != current.length) {
+            differences.add("signature: " + current.length + " parameters, entry " + params.size());
+            return;
+        }
+        for (int index = 0; index < current.length; index++) {
+            Parameter parameter = current[index];
+            String theirs = params.get(index).getAsJsonObject().get("type").getAsString();
+            if (parameter.getDataType().getDisplayName().equals(theirs)) continue;
+            parameter.setDataType(type(theirs), SourceType.USER_DEFINED);
+            filled.add("param " + index + " type");
+        }
+    }
+
+    /** The entry's parameter names by ordinal, where the arity fits. */
+    private void applyParameterNames(Function function, JsonObject entry, JsonArray filled, JsonArray differences)
+            throws Exception {
+        JsonArray params = entry.has("params") ? entry.getAsJsonArray("params") : new JsonArray();
+        Parameter[] current = function.getParameters();
+        if (params.size() != current.length) {
+            differences.add("names: " + current.length + " parameters, entry " + params.size());
+            return;
+        }
+        for (int index = 0; index < current.length; index++) {
+            Parameter parameter = current[index];
+            String name = params.get(index).getAsJsonObject().get("name").getAsString();
+            if (parameter.getName().equals(name)) continue;
+            parameter.setName(name, SourceType.USER_DEFINED);
+            filled.add("param " + index + " name");
         }
     }
 

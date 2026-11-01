@@ -628,6 +628,33 @@ public class ExportCode extends GhidraScript {
         return result;
     }
 
+    /**
+     * The gaps a review keeps, read without the decompiler: the name, the
+     * plate, the step comments, parameter and local names and types, and the
+     * return type. {@link #assess} is this plus the decompiler's local map and
+     * the review-work test; this one answers for a function a status call
+     * only looks at, where decompiling every match would cost minutes.
+     */
+    static java.util.List<String> reviewGaps(Function function) {
+        java.util.List<String> gaps = new java.util.ArrayList<>();
+        if (function.getSymbol().getSource() == SourceType.DEFAULT) gaps.add("name");
+        if (function.getComment() == null || function.getComment().isBlank()) gaps.add("plate");
+        if (stepComments(function) == 0) gaps.add("comments");
+        boolean badParameter = false;
+        for (Parameter parameter : function.getParameters()) {
+            if (placeholder(parameter.getName()) || undefined(parameter.getDataType())) badParameter = true;
+        }
+        if (badParameter) gaps.add("params");
+        boolean badLocal = false;
+        for (ghidra.program.model.listing.Variable local : function.getLocalVariables()) {
+            if (fragment(local.getVariableStorage())) continue;
+            if (placeholder(local.getName()) || undefined(local.getDataType())) badLocal = true;
+        }
+        if (badLocal) gaps.add("locals");
+        if (undefined(function.getReturnType())) gaps.add("return");
+        return gaps;
+    }
+
     /** The step comments a review wrote in a function: pre, end-of-line and post. */
     static int stepComments(Function function) {
         int steps = 0;

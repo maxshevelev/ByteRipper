@@ -455,8 +455,108 @@ public final class CodeReadings {
             body["callers"] = .array(function.callers.map(reference))
             body["callees"] = .array(function.callees.map(reference))
         }
+        // The registry's numbers for this module, counted from the analysis
+        // and the store's index — a Review status written from one call,
+        // rather than from the answer of a publish.
+        if what == "functions" {
+            body["library"] = await libraryBlock(for: source)
+        }
+        // The stored analysis is not the live program: say when an owner has
+        // one open, and whether it holds writes this answer has not got.
+        if let liveState {
+            if let unpublished = await liveState(source.manifest.module.sha256) {
+                body["live"] = .bool(true)
+                body["unpublished_writes"] = .bool(unpublished)
+            } else {
+                body["live"] = .bool(false)
+            }
+        }
         return .json(.object(body))
     }
+
+    /// What the module's library functions and the registry say now: the
+    /// kinds, how many functions carry an entry and in which state, how many
+    /// entries hold this module's version, how many moved on after it, and the
+    /// tagged functions short of the bar by what they lack. Everything but
+    /// `too_short` is in the stored analysis and the registry's index;
+    /// `too_short` is a fact of Function ID, which only a running owner has.
+    private func libraryBlock(for source: Source) async -> JSONValue {
+        let root = store()
+        let index = await Task.detached(priority: .userInitiated) {
+            (try? ContentStore(root: root, create: false).libraryIndex()) ?? LibraryIndex()
+        }.value
+        let module = source.manifest.module.sha256
+        var kinds: [String: Int] = [:]
+        var states: [String: Int] = [:]
+        var withEntry = 0
+        var updated = 0
+        var below: [String: Int] = [:]
+        for function in source.artifact.functions {
+            if let kind = function.libraryKind { kinds[kind.rawValue, default: 0] += 1 }
+            if let mark = function.libraryEntry {
+                withEntry += 1
+                states[mark.state?.rawValue ?? "unrecorded", default: 0] += 1
+                if let held = index.entries[mark.id], held.version > mark.version { updated += 1 }
+            }
+            guard function.libraryKind != nil else { continue }
+            for gap in function.reviewGaps { below[gap, default: 0] += 1 }
+            if Self.hasPlaceholderReturn(function.signature) { below["return", default: 0] += 1 }
+        }
+        var block: [String: JSONValue] = [
+            "edk2": .count(kinds["edk2"] ?? 0),
+            "amd": .count(kinds["amd"] ?? 0),
+            "intel": .count(kinds["intel"] ?? 0),
+            "with_entry": .count(withEntry),
+            "entry": .count(states["entry"] ?? 0),
+            "edited": .count(states["edited"] ?? 0),
+            "differs": .count(states["differs"] ?? 0),
+            "conflict": .count(states["conflict"] ?? 0),
+            "installed": .count(index.entries.values.filter { $0.source.module == module }.count),
+            "updated_since": .count(updated)
+        ]
+        if let unrecorded = states["unrecorded"], unrecorded > 0 {
+            block["unrecorded"] = .count(unrecorded)
+        }
+        var shortfall: [String: JSONValue] = [
+            "name": .count(below["name"] ?? 0),
+            "plate": .count(below["plate"] ?? 0),
+            "comments": .count(below["comments"] ?? 0),
+            "params": .count(below["params"] ?? 0),
+            "locals": .count(below["locals"] ?? 0),
+            "return": .count(below["return"] ?? 0)
+        ]
+        if let probe = tooShortCount {
+            if let count = await probe(module) {
+                shortfall["too_short"] = .count(count)
+            } else {
+                shortfall["too_short"] = .string("unknown")
+            }
+        } else {
+            shortfall["too_short"] = .string("unknown")
+        }
+        block["below_bar"] = .object(shortfall)
+        return .object(block)
+    }
+
+    /// Whether a prototype's return type is Ghidra's placeholder — `undefined`
+    /// or `undefined8` — which no review filled in. The analysis keeps the
+    /// whole prototype, so its first word is the return type.
+    static func hasPlaceholderReturn(_ signature: String?) -> Bool {
+        guard let signature else { return false }
+        let returnType = signature.split(separator: " ", maxSplits: 1).first.map(String.init) ?? ""
+        return returnType.hasPrefix("undefined")
+    }
+
+    /// How many of a module's tagged functions are too short for Function ID
+    /// to hash, asked of an owner that is running — the analysis cannot say.
+    /// nil, or a module with no owner, leaves `below_bar.too_short` unknown.
+    public var tooShortCount: (@Sendable (SHA256Digest) async -> Int?)?
+
+    /// Whether the module has an owner open, and whether that program holds
+    /// writes the store has not got — what `code_query` answers as `live` and
+    /// `unpublished_writes`. Nil leaves both out; a host with no Ghidra of
+    /// its own has nothing to ask.
+    public var liveState: (@Sendable (SHA256Digest) async -> Bool?)?
 
     // MARK: - code_modules
 

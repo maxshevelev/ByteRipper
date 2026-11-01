@@ -97,12 +97,13 @@ public struct CASService: Sendable {
         }
         router.add("POST", "\(prefix)/library", access: .rights([.casWrite])) { request in
             let put = try request.json(ServedStoreProtocol.PutLibrary.self)
+            let dryRun = put.dryRun == true
             let result = try Self.answer {
                 try store.putLibraryEntries(module: put.module, rev: put.rev, by: put.by,
-                                            proposals: put.proposals, take: put.take ?? false,
-                                            reason: put.reason)
+                                            proposals: put.proposals, take: put.decision,
+                                            dryRun: dryRun)
             }
-            await feed.rescan()
+            if !dryRun { await feed.rescan() }
             return .json(result)
         }
 

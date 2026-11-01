@@ -146,6 +146,113 @@ final class CodeReadingsTests: XCTestCase {
         XCTAssertNil(members["disk"])
     }
 
+    /// `code_query`'s library block: the numbers a Review status is written
+    /// from — kinds, entries by state, the entries this module installed, the
+    /// ones that moved on after it, and the tagged functions short of the
+    /// bar — counted from the stored analysis and the registry, with
+    /// `too_short` from an owner that runs.
+    func testTheLibrarySummaryCountsTheRegistry() async throws {
+        let store = try ContentStore(root: directory)
+        let body1 = LibraryBody(size: 0x10, full: "1111111111111111", specific: "aaaaaaaaaaaaaaaa")
+        let body2 = LibraryBody(size: 0x20, full: "2222222222222222", specific: "bbbbbbbbbbbbbbbb")
+        func proposal(_ name: String, _ body: LibraryBody, _ kind: String, _ plate: String,
+                      base: Int? = nil) throws -> LibraryProposal {
+            let entry = try JSONSerialization.data(withJSONObject: ["name": name, "kind": kind, "plate": plate],
+                                                   options: .sortedKeys)
+            return LibraryProposal(body: body, name: name, kind: kind, address: "0x1000", entry: entry,
+                                   basedOn: base == nil ? nil : body.key, base: base)
+        }
+        try store.putLibraryEntries(module: module.sha256, rev: 1, by: "agent", proposals: [
+            try proposal("SetMem", body1, "edk2", "v1"),
+            try proposal("LibAmdIoWrite", body2, "amd", "v1")
+        ])
+        // The second entry moves on: the module's mark is a version behind.
+        try store.putLibraryEntries(module: module.sha256, rev: 2, by: "agent", proposals: [
+            try proposal("LibAmdIoWrite", body2, "amd", "v2", base: 1)
+        ])
+        let artifact = """
+            {"script_version": 9, "ghidra": "12.1.2", "functions": [
+              {"entry": "0x1000", "name": "SetMem", "signature": "void SetMem(void)",
+               "library_kind": "edk2", "review_level": "full",
+               "library_entry": {"id": "\(body1.key)", "version": 1, "state": "entry"},
+               "instructions": [{"address": "0x1000", "text": "RET"}]},
+              {"entry": "0x1020", "name": "LibAmdIoWrite", "signature": "undefined8 LibAmdIoWrite(void)",
+               "library_kind": "amd", "review_level": "partial", "review_gaps": ["plate", "locals"],
+               "library_entry": {"id": "\(body2.key)", "version": 1, "state": "conflict", "base": 1},
+               "instructions": [{"address": "0x1020", "text": "RET"}]},
+              {"entry": "0x1040", "name": "AsmWriteTr", "library_kind": "amd",
+               "instructions": [{"address": "0x1040", "text": "RET"}]}
+            ]}
+            """
+        try store.putAnalysis(module: module, recipe: recipe, artifact: Data(artifact.utf8))
+
+        let tool = try query(readings())
+        let answer = try await tool.run(AgentCall(tool: "code_query", arguments: AgentArguments([
+            "module": .string(module.sha256.hex), "what": .string("functions")])))
+        guard case .json(.object(let body)) = answer,
+              let library = body["library"]?.objectValue else { return XCTFail("no library block: \(answer)") }
+        XCTAssertEqual(library["edk2"], .int(1))
+        XCTAssertEqual(library["amd"], .int(2))
+        XCTAssertEqual(library["intel"], .int(0))
+        XCTAssertEqual(library["with_entry"], .int(2))
+        XCTAssertEqual(library["entry"], .int(1))
+        XCTAssertEqual(library["conflict"], .int(1))
+        XCTAssertEqual(library["edited"], .int(0))
+        XCTAssertEqual(library["differs"], .int(0))
+        XCTAssertEqual(library["installed"], .int(2), "both entries carry this module's current version")
+        XCTAssertEqual(library["updated_since"], .int(1), "the second entry moved on after the mark")
+        let below = try XCTUnwrap(library["below_bar"]?.objectValue)
+        XCTAssertEqual(below["plate"], .int(1))
+        XCTAssertEqual(below["locals"], .int(1))
+        XCTAssertEqual(below["return"], .int(1), "the prototype's return type is Ghidra's placeholder")
+        XCTAssertEqual(below["too_short"], .string("unknown"), "no owner was asked")
+        XCTAssertEqual(below["name"], .int(0))
+
+        // An owner that runs answers what Function ID could not hash.
+        let running = readings()
+        running.tooShortCount = { _ in 3 }
+        let asked = try await query(running).run(AgentCall(tool: "code_query", arguments: AgentArguments([
+            "module": .string(module.sha256.hex), "what": .string("functions")])))
+        guard case .json(.object(let second)) = asked,
+              let shortfall = second["library"]?["below_bar"]?.objectValue else {
+            return XCTFail("no library block: \(asked)")
+        }
+        XCTAssertEqual(shortfall["too_short"], .int(3))
+    }
+
+    /// `live` and `unpublished_writes`: the stored analysis is not the live
+    /// program, and the answer says when an owner holds writes it has not
+    /// got — the trap of reading a publish-old C after an apply.
+    func testTheQuerySaysWhenTheStoredAnalysisIsBehindTheLiveProgram() async throws {
+        try ContentStore(root: directory).putAnalysis(module: module, recipe: recipe,
+                                                      artifact: Data(Self.artifact.utf8))
+        let open = readings()
+        open.liveState = { _ in true }
+        let behind = try await query(open).run(AgentCall(tool: "code_query", arguments: AgentArguments([
+            "module": .string(module.sha256.hex), "what": .string("c"),
+            "function": .string("entry")])))
+        guard case .json(.object(let body)) = behind else { return XCTFail("not an object: \(behind)") }
+        XCTAssertEqual(body["live"], .bool(true))
+        XCTAssertEqual(body["unpublished_writes"], .bool(true))
+
+        let current = readings()
+        current.liveState = { _ in false }
+        let saved = try await query(current).run(AgentCall(tool: "code_query", arguments: AgentArguments([
+            "module": .string(module.sha256.hex)])))
+        guard case .json(.object(let savedBody)) = saved else { return XCTFail("not an object: \(saved)") }
+        XCTAssertEqual(savedBody["live"], .bool(true))
+        XCTAssertEqual(savedBody["unpublished_writes"], .bool(false))
+        XCTAssertNotNil(savedBody["library"], "the registry block is still there")
+
+        let closed = readings()
+        closed.liveState = { _ in nil }
+        let noOwner = try await query(closed).run(AgentCall(tool: "code_query", arguments: AgentArguments([
+            "module": .string(module.sha256.hex)])))
+        guard case .json(.object(let closedBody)) = noOwner else { return XCTFail("not an object: \(noOwner)") }
+        XCTAssertEqual(closedBody["live"], .bool(false))
+        XCTAssertNil(closedBody["unpublished_writes"], "nothing is open, nothing is behind")
+    }
+
     func testAModuleTheStoreHasNothingForIsRefusedByName() async throws {
         _ = try ContentStore(root: directory)
         let other = SHA256Digest(data: Data("other".utf8)).hex

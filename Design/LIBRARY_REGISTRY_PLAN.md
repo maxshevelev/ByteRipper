@@ -98,10 +98,12 @@ review documents.
   marked by the publish that offered it. A change to such a function,
   published, is the entry's next version, whichever module publishes it. A
   review made on an older version, or by a function that never carried the
-  entry, is a conflict, reported with the version it was made on, and
-  `take_library_conflicts: true` with a reason makes it the next version. The
-  agent that reviews and publishes resolves a conflict: it reads both reviews,
-  keeps the better one or merges them, and gives the reason the history keeps.
+  entry, is a conflict, reported with the version it was made on; one publish
+  takes the conflicts it names (`take_library_conflicts: ["<id>", …]`, or
+  `true` for all), each with the reason the history keeps, and leaves the rest
+  as conflicts. The agent that reviews and publishes resolves a conflict: it
+  reads both reviews, keeps the better one or merges them, and gives the
+  reason the history keeps.
   The next version reaches every other module at its next open, where its
   function was not edited since.
 - **Readers see that a function is the registry's**: the artifact records

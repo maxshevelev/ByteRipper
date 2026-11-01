@@ -1,4 +1,5 @@
 import CodeAnalysis
+import AgentKit
 import Foundation
 import XCTest
 @testable import GhidraHost
@@ -195,9 +196,21 @@ final class GhidraHostLibraryPlanTests: XCTestCase {
     }
 
     private func match(_ address: String, named: Bool = true, exact: String? = nil, near: [String]? = nil,
-                       mark: GhidraHost.LibraryMatch.Mark? = nil, declined: [String]? = nil) -> GhidraHost.LibraryMatch {
+                       mark: GhidraHost.LibraryMatch.Mark? = nil, declined: [String]? = nil,
+                       gaps: [String]? = nil) -> GhidraHost.LibraryMatch {
         GhidraHost.LibraryMatch(address: address, name: "F\(address.suffix(4))", named: named, key: "k",
-                                kind: nil, exact: exact, near: near, mark: mark, declined: declined)
+                                kind: nil, exact: exact, near: near, mark: mark, declined: declined,
+                                gaps: gaps)
+    }
+
+    /// A match's `gaps` are the function's own; they reach the step, where
+    /// the entry's `entry_gaps` are put beside them for the comparison a
+    /// decision is made on.
+    func testAMatchCarriesTheFunctionsGapsToTheStep() {
+        let plan = GhidraHost.libraryPlan([match("0x2000", exact: setMem.key, gaps: ["plate", "locals"])],
+                                          index: index, hashed: 1, comparisons: [:])
+        XCTAssertEqual(plan.toApply.first?.gaps, ["plate", "locals"])
+        XCTAssertNil(plan.toApply.first?.entryGaps, "the host reads the entry's from its object")
     }
 
     func testTheKeysAreEveryBodyAndEveryShape() {
@@ -259,6 +272,9 @@ final class GhidraHostLibraryPlanTests: XCTestCase {
         XCTAssertThrowsError(try GhidraHost.chosen(plan, address: "0x5000", id: nil, reason: nil, replace: false))
         XCTAssertEqual(try GhidraHost.chosen(plan, address: "0x5000", id: nil, reason: nil, replace: true).first?.mode,
                        "whole")
+        // A mask takes parts of the review without a whole replacement.
+        XCTAssertEqual(try GhidraHost.chosen(plan, address: "0x5000", id: nil, reason: nil, replace: false,
+                                             fields: ["signature"]).first?.state, "edited")
         XCTAssertThrowsError(try GhidraHost.chosen(plan, address: "0x8000", id: nil, reason: " ", replace: false))
         let taken = try GhidraHost.chosen(plan, address: "0x8000", id: nil, reason: "a debug level, not logic",
                                           replace: false)
@@ -283,5 +299,68 @@ final class GhidraHostLibraryPlanTests: XCTestCase {
         XCTAssertEqual(offer.proposals.first?.codes, ["0x10199"])
         XCTAssertNil(offer.proposals.first?.role)
         XCTAssertEqual(offer.proposals.last?.role, "assert")
+    }
+
+    /// A publish takes the library conflicts it names, each with its own
+    /// reason, or every one with a single reason; nothing when it names none.
+    func testAPublishTakesLibraryEntriesByNameOrAllAtOnce() throws {
+        let all = try GhidraTools.libraryTake(AgentArguments([
+            "take_library_conflicts": true, "library_reason": .string("ours is typed")]))
+        XCTAssertEqual(all, .all("ours is typed"))
+
+        let named = try GhidraTools.libraryTake(AgentArguments([
+            "take_library_conflicts": ["a", "b"],
+            "library_reason": ["a": "first", "b": "second"]]))
+        XCTAssertEqual(named, .these(["a": "first", "b": "second"]))
+        XCTAssertEqual(named.reason(for: "a"), "first")
+        XCTAssertNil(named.reason(for: "c"))
+        XCTAssertEqual(named.ids, ["a", "b"])
+
+        XCTAssertEqual(try GhidraTools.libraryTake(AgentArguments([:])), .none)
+        XCTAssertEqual(try GhidraTools.libraryTake(AgentArguments(["take_library_conflicts": false])), .none)
+        // An id with no reason is taken with an empty one, which the store
+        // refuses by naming the entry.
+        let untyped = try GhidraTools.libraryTake(AgentArguments(["take_library_conflicts": ["a"]]))
+        XCTAssertEqual(untyped.reason(for: "a"), "")
+    }
+
+    /// A publish answers what it changed: the entries it left as they were
+    /// are a count, not a list of sixty-five.
+    func testAPublishAnswerLeavesOutTheEntriesItDidNotChange() throws {
+        let answer = AgentAnswer.json([
+            "library": [
+                "added": [],
+                "updated": [["id": "a"]],
+                "unchanged": [["id": "b"], ["id": "c"]],
+                "conflicts": [["id": "d"]]
+            ],
+            "type_conflicts": []
+        ])
+        guard case .json(.object(let compact)) = GhidraTools.compactPublish(answer),
+              let library = compact["library"]?.objectValue else { return XCTFail("no library part") }
+        XCTAssertNil(library["unchanged"])
+        XCTAssertEqual(library["unchanged_count"], .int(2))
+        XCTAssertEqual(library["updated"]?.arrayValue?.count, 1)
+        XCTAssertEqual(library["conflicts"]?.arrayValue?.count, 1)
+        XCTAssertEqual(compact["type_conflicts"]?.arrayValue?.count, 0)
+    }
+
+    /// An apply answers what it did: the functions already carrying their
+    /// entry are a count, and the rest of the plan is kept.
+    func testAnApplyAnswerCountsWhatWasAlreadyApplied() throws {
+        let answer = AgentAnswer.json([
+            "entries": 69, "hashed": 88,
+            "applied": [["address": "0x1"], ["address": "0x2"], ["address": "0x3"]],
+            "to_apply": [["address": "0x4"]],
+            "results": [["address": "0x4", "ok": true]]
+        ])
+        guard case .json(.object(let compact)) = GhidraTools.compactPlan(answer) else {
+            return XCTFail("not an object")
+        }
+        XCTAssertNil(compact["applied"])
+        XCTAssertEqual(compact["applied_count"], .int(3))
+        XCTAssertEqual(compact["to_apply"]?.arrayValue?.count, 1)
+        XCTAssertEqual(compact["results"]?.arrayValue?.count, 1)
+        XCTAssertEqual(compact["entries"], .int(69))
     }
 }

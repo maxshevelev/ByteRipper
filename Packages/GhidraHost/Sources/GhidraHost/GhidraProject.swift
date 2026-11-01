@@ -39,6 +39,9 @@ public struct ProjectState: Codable, Equatable, Sendable {
         public var description: String?
         public var rev: Int?
         public var at: String
+        /// The program's modification number when this publish stored it: a
+        /// later number is work the store has not got, saved or not.
+        public var modification: Int?
     }
 
     public var schema: Int
@@ -130,7 +133,10 @@ public protocol AnalysisWriter: Sendable {
     func writeAnalysis(module: ModuleIdentity, recipe: AnalysisRecipe, artifact: Data, source: SourceIdentity,
                        reading: AnalysisReading?, replace: Bool) async throws -> AnalysisManifest
     func writeLibraryEntries(module: SHA256Digest, rev: Int?, by: String?, proposals: [LibraryProposal],
-                             take: Bool, reason: String?) async throws -> LibraryWriteResult
+                             take: LibraryTake) async throws -> LibraryWriteResult
+    /// What `writeLibraryEntries` would do, writing nothing.
+    func previewLibraryEntries(module: SHA256Digest, rev: Int?, by: String?, proposals: [LibraryProposal],
+                               take: LibraryTake) async throws -> LibraryWriteResult
     /// The registry as the store holds it, for matching a module against it.
     func readLibraryIndex() async throws -> LibraryIndex
     func readLibraryHistory(id: String) async throws -> LibraryHistory?
@@ -159,8 +165,14 @@ extension ContentStore: AnalysisWriter {
     }
 
     public func writeLibraryEntries(module: SHA256Digest, rev: Int?, by: String?, proposals: [LibraryProposal],
-                                    take: Bool, reason: String?) async throws -> LibraryWriteResult {
-        try putLibraryEntries(module: module, rev: rev, by: by, proposals: proposals, take: take, reason: reason)
+                                    take: LibraryTake) async throws -> LibraryWriteResult {
+        try putLibraryEntries(module: module, rev: rev, by: by, proposals: proposals, take: take)
+    }
+
+    public func previewLibraryEntries(module: SHA256Digest, rev: Int?, by: String?,
+                                      proposals: [LibraryProposal],
+                                      take: LibraryTake) async throws -> LibraryWriteResult {
+        try putLibraryEntries(module: module, rev: rev, by: by, proposals: proposals, take: take, dryRun: true)
     }
 
     public func readLibraryIndex() async throws -> LibraryIndex { try libraryIndex() }
@@ -190,9 +202,15 @@ extension RemoteStore: AnalysisWriter {
     }
 
     public func writeLibraryEntries(module: SHA256Digest, rev: Int?, by: String?, proposals: [LibraryProposal],
-                                    take: Bool, reason: String?) async throws -> LibraryWriteResult {
+                                    take: LibraryTake) async throws -> LibraryWriteResult {
+        try await putLibraryEntries(module: module, rev: rev, by: by, proposals: proposals, take: take)
+    }
+
+    public func previewLibraryEntries(module: SHA256Digest, rev: Int?, by: String?,
+                                      proposals: [LibraryProposal],
+                                      take: LibraryTake) async throws -> LibraryWriteResult {
         try await putLibraryEntries(module: module, rev: rev, by: by, proposals: proposals, take: take,
-                                    reason: reason)
+                                    dryRun: true)
     }
 
     public func readLibraryIndex() async throws -> LibraryIndex { try await libraryIndex() }

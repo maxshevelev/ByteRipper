@@ -87,17 +87,46 @@ public enum ServedStoreProtocol {
         public var rev: Int?
         public var by: String?
         public var proposals: [LibraryProposal]
+        /// Take every conflict, with `reason`; a client of the first form
+        /// sends this and nothing else.
         public var take: Bool?
         public var reason: String?
+        /// Take the entries named, each with its own reason — the second form,
+        /// which a server that predates it ignores. Nil for a take of all.
+        public var takeIDs: [String]?
+        public var reasons: [String: String]?
+        /// Answer what the offer would do and write nothing.
+        public var dryRun: Bool?
 
         public init(module: SHA256Digest, rev: Int?, by: String?, proposals: [LibraryProposal],
-                    take: Bool? = nil, reason: String? = nil) {
+                    take: Bool? = nil, reason: String? = nil,
+                    takeIDs: [String]? = nil, reasons: [String: String]? = nil,
+                    dryRun: Bool? = nil) {
             self.module = module
             self.rev = rev
             self.by = by
             self.proposals = proposals
             self.take = take
             self.reason = reason
+            self.takeIDs = takeIDs
+            self.reasons = reasons
+            self.dryRun = dryRun
+        }
+
+        /// The decision this offer carries, as the store takes it.
+        public var decision: LibraryTake {
+            if let ids = takeIDs {
+                var reasons = reasons ?? [:]
+                for id in ids { reasons[id] = reasons[id] ?? "" }
+                return .these(reasons)
+            }
+            return take == true ? .all(reason ?? "") : .none
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case module, rev, by, proposals, take, reason, reasons
+            case takeIDs = "take_ids"
+            case dryRun = "dry_run"
         }
     }
 
