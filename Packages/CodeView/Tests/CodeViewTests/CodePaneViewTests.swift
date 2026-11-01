@@ -982,19 +982,128 @@ final class CodePaneViewTests: XCTestCase {
 
     /// A function's mark says how far its review has got: the filled `f` for
     /// full and for a level without a mark of its own, the framed `f` for
-    /// partial, the badge of whose library it is for a library routine.
+    /// partial in orange and for decompiler only in red, the badge of whose
+    /// library it is for a library routine.
     func testAFunctionsMarkFollowsItsReviewLevel() {
         XCTAssertEqual(CodePaneView.functionMark(.full), "function")
         XCTAssertEqual(CodePaneView.functionMark(.partial), "function.partial")
+        XCTAssertEqual(CodePaneView.functionMark(.decompiled), "function.decompiled")
         XCTAssertEqual(CodePaneView.functionMark(.library, library: .edk2), "library.edk2")
         XCTAssertEqual(CodePaneView.functionMark(.library, library: .amd), "library.amd")
         XCTAssertEqual(CodePaneView.functionMark(.library, library: .intel), "library.intel")
         XCTAssertEqual(CodePaneView.functionMark(.library), "library.unrecorded")
         XCTAssertEqual(CodePaneView.functionMark(.library, library: .amd, registry: .entry), "library.amd.entry")
         XCTAssertEqual(CodePaneView.functionMark(.library, library: .amd, registry: .matched), "library.amd.matched")
-        for group in [CodeReaderState.FunctionGroup.decompiled, .noBody, .unknown] {
+        for group in [CodeReaderState.FunctionGroup.noBody, .unknown] {
             XCTAssertEqual(CodePaneView.functionMark(group), "function")
         }
+
+        // The two framed marks read apart by their colour alone: an `f` in a
+        // frame either way, orange for a review under way, red for one that
+        // has not gone past the decompiler.
+        XCTAssertEqual(CodeNavigatorIcon.partialFunction.glyph, .framedLetter("f"))
+        XCTAssertEqual(CodeNavigatorIcon.decompiledFunction.glyph, .framedLetter("f"))
+        XCTAssertEqual(CodeNavigatorIcon.partialFunction.color, .systemOrange)
+        XCTAssertEqual(CodeNavigatorIcon.decompiledFunction.color, .systemRed)
+    }
+
+    /// The library heading's sign is a building with columns — the classical
+    /// form where SF Symbols has it, the plain columned building where it does
+    /// not, and a name the running macOS resolves either way.
+    func testTheLibraryHeadingDrawsAColumnedBuilding() {
+        XCTAssertNotNil(NSImage(systemSymbolName: CodeNavigatorIcon.libraryGroupSymbol,
+                                accessibilityDescription: nil))
+        let mark = CodeNavigatorIcon.group(.library)
+        XCTAssertEqual(mark.glyph, .symbol(CodeNavigatorIcon.libraryGroupSymbol))
+        XCTAssertEqual(mark.color, .systemBlue)
+    }
+
+    /// Every open group's chevron in the panel's list points down, whichever
+    /// group it is and however the row was configured.
+    func testEveryOpenGroupsChevronPointsTheSameWay() throws {
+        let suiteName = "CodePaneViewTests.groupChevrons"
+        let suite = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        suite.removePersistentDomain(forName: suiteName)
+        CodePaneView.defaults = suite
+        defer {
+            suite.removePersistentDomain(forName: suiteName)
+            CodePaneView.defaults = .standard
+        }
+        let art = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        {"script_version":8,"program":{"image_base":"0x0"},
+         "functions":[
+          {"entry":"0x100","name":"Done","review_level":"full","instructions":[]},
+          {"entry":"0x200","name":"Partly","review_level":"partial",
+           "review_gaps":["plate"],"instructions":[]},
+          {"entry":"0x300","name":"FUN_00000300","review_level":"decompiled","instructions":[]}]}
+        """.utf8))
+        let view = CodePaneView(manifest: manifest(), artifact: art,
+                                moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 480, height: 600)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 600),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        window.orderFrontRegardless()
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
+        view.setFunctionOrder(.review)
+        view.layoutSubtreeIfNeeded()
+        let list = try XCTUnwrap(all(NSTableView.self, in: view).first {
+            $0.tableColumns.contains { $0.identifier.rawValue == "function" }
+        })
+        var turns: [(String, CGAffineTransform, CGFloat)] = []
+        for row in 0..<list.numberOfRows {
+            // A row on demand, as scrolling asks for one: the rows that came
+            // out of configuration turned one way and the row asked for later
+            // the other, which is what the reader saw as groups open upward.
+            guard let cell = list.view(atColumn: 0, row: row, makeIfNecessary: true)
+                    as? CodeNavigatorCell,
+                  let name = cell.iconName, name.hasPrefix("group."),
+                  cell.window != nil else { continue }
+            let button = cell.disclosure
+            let zero = button.convert(CGPoint(x: 0, y: 0), to: nil)
+            let one = button.convert(CGPoint(x: 0, y: 1), to: nil)
+            let expected: CGFloat = one.y < zero.y ? 1 : -1   // sin of the quarter turn
+            turns.append((name, button.chevronTurn, expected))
+        }
+        XCTAssertEqual(turns.count, 3, "three groups are open")
+        for (name, turn, expected) in turns {
+            XCTAssertFalse(turn.isIdentity, "\(name) is open and turned")
+            XCTAssertEqual(turn, turns[0].1, "\(name) turns the way the first group does")
+            XCTAssertEqual(turn.b, expected, accuracy: 0.0001,
+                           "\(name) turns the way its row is drawn, so its point is down")
+        }
+    }
+
+    /// An open row's chevron points down, and a row configured while it is
+    /// out of the table turns it the same way: a layer out of a window
+    /// answers `contentsAreFlipped` with yes whatever its table would say,
+    /// and a reused row is configured out of the table.
+    func testAChevronTurnsTheSameOutOfTheTableAsInIt() {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 200),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        let document = FlippedTestView(frame: NSRect(x: 0, y: 0, width: 200, height: 200))
+        window.contentView = document
+        // The layer answers about its flip only in a window that is on screen,
+        // which is where the panel draws its rows.
+        window.orderFrontRegardless()
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.05))
+
+        let button = CodeDisclosureButton(frame: NSRect(x: 10, y: 10, width: 16, height: 16))
+        document.addSubview(button)
+        button.needsLayout = true
+        button.layoutSubtreeIfNeeded()
+        button.setOpen(true, animated: false)
+        let inTheTable = button.chevronTurn
+        XCTAssertFalse(inTheTable.isIdentity, "an open chevron is turned from the `>` it is drawn as")
+
+        button.removeFromSuperview()
+        button.setOpen(true, animated: false)
+        button.needsLayout = true
+        button.layoutSubtreeIfNeeded()
+        XCTAssertEqual(button.chevronTurn, inTheTable, "a row out of the table turns it the same way")
+
+        button.setOpen(false, animated: false)
+        XCTAssertTrue(button.chevronTurn.isIdentity, "a closed chevron points right")
     }
 
     /// A library function the registry holds says so on its badge — filled
@@ -3701,4 +3810,10 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual((c as NSString).substring(with: range), "    EFI_LOAD_ERROR = 0x80000001,")
         XCTAssertNil(CodeExplanationPopover.memberRange(in: c, name: "EFI_NOT_HERE"))
     }
+}
+
+/// A view that lays its subviews out top-down, as a table's document view
+/// does — the hierarchy a row's chevron is drawn in.
+private final class FlippedTestView: NSView {
+    override var isFlipped: Bool { true }
 }

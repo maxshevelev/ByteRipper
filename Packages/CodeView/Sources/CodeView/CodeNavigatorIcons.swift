@@ -39,6 +39,11 @@ enum CodeNavigatorIcon {
     /// A partly reviewed function: the same `f`, not yet filled in, in the
     /// partial heading's orange.
     static let partialFunction = (glyph: Glyph.framedLetter("f"), color: NSColor.systemOrange)
+    /// A function only the decompiler has spoken for: the same framed `f` as
+    /// a partial one, in the red of the level that has nothing done for it
+    /// yet — the frame says the review has started on its name and signature,
+    /// the red says it has not gone further.
+    static let decompiledFunction = (glyph: Glyph.framedLetter("f"), color: NSColor.systemRed)
     /// A library routine: the badge of whose library it is, in the library
     /// heading's blue.
     static func library(_ name: String, style: BadgeStyle = .outlined) -> (glyph: Glyph, color: NSColor) {
@@ -78,10 +83,22 @@ enum CodeNavigatorIcon {
         case .full: (.symbol("checkmark"), CodeColors.function)
         case .partial: (.symbol("circle.lefthalf.filled"), .systemOrange)
         case .decompiled: (.symbol("gearshape"), .systemRed)
-        case .library: (.symbol("books.vertical"), .systemBlue)
+        case .library: (.symbol(libraryGroupSymbol), .systemBlue)
         case .noBody: (.symbol("minus"), .systemGray)
         case .unknown: (.symbol("questionmark"), .systemGray)
         }
+    }
+
+    /// The library heading's sign: a building with columns, the library the
+    /// module links in. The classical form stands in on a macOS whose SF
+    /// Symbols does not have it — the app runs on 14 — and a plain columned
+    /// building says the same thing there.
+    static let libraryGroupSymbol = symbolName(
+        "building.classical.columns.fill", or: "building.columns.fill")
+
+    private static func symbolName(_ preferred: String, or fallback: String) -> String {
+        NSImage(systemSymbolName: preferred, accessibilityDescription: nil) != nil
+            ? preferred : fallback
     }
 
     /// The side of the square for a list read at `fontSize`: a little taller
@@ -270,17 +287,45 @@ final class CodeDisclosureButton: NSButton {
         path.addLine(to: CGPoint(x: side * 0.72, y: side * 0.5))
         path.addLine(to: CGPoint(x: side * 0.3, y: side * 0.92))
         chevron.path = path
+        refreshUpsideDown()
         chevron.setAffineTransform(turn(state == .on))
         CATransaction.commit()
+    }
+
+    /// Whether this row draws upside down — its y axis running down the
+    /// screen — which decides the quarter turn that brings the chevron's point
+    /// down. The view's own geometry answers it, and answers it the same for
+    /// every row; the layer's `contentsAreFlipped` did not: it read one way
+    /// while a row was being configured and another once the row was in the
+    /// table, so the groups opened by one pass pointed up and the next ones
+    /// down. The answer is kept from the last time the row was in a window,
+    /// because a reused row is configured out of the table and must turn the
+    /// way the table will draw it.
+    private var drawnUpsideDown = false
+
+    private func refreshUpsideDown() {
+        guard window != nil else { return }
+        let zero = convert(CGPoint(x: 0, y: 0), to: nil)
+        let up = convert(CGPoint(x: 0, y: 1), to: nil)
+        drawnUpsideDown = up.y < zero.y
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        refreshUpsideDown()
+        chevron.setAffineTransform(turn(state == .on))
     }
 
     /// Down when open: a quarter turn the way that brings the point down in
     /// the layer's own geometry.
     private func turn(_ open: Bool) -> CGAffineTransform {
         guard open else { return .identity }
-        let down: CGFloat = chevron.contentsAreFlipped() ? .pi / 2 : -.pi / 2
+        let down: CGFloat = drawnUpsideDown ? .pi / 2 : -.pi / 2
         return CGAffineTransform(rotationAngle: down)
     }
+
+    /// The chevron's turn, for a test.
+    var chevronTurn: CGAffineTransform { chevron.affineTransform() }
 
     /// Sets the chevron to `open`, turning it when `animated`.
     func setOpen(_ open: Bool, animated: Bool) {

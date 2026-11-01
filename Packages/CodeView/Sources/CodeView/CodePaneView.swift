@@ -952,14 +952,16 @@ import ToolModuleKit
     }
 
     /// A function's mark by its review: full, and every level without a
-    /// mark of its own, the filled `f`; partial, the `f` in a frame; a library
-    /// routine, the badge of whose library it is — filled when the function
-    /// is the library registry's entry, with a dot when the registry matched
-    /// it otherwise.
+    /// mark of its own, the filled `f`; partial, the `f` in a frame;
+    /// decompiler only, the same framed `f` in red — the review has not gone
+    /// past the decompiler; a library routine, the badge of whose library it
+    /// is — filled when the function is the library registry's entry, with a
+    /// dot when the registry matched it otherwise.
     static func functionMark(_ group: FunctionGroup, library: LibrarySection? = nil,
                              registry: CodeReaderState.RegistryMark? = nil) -> String {
         switch group {
         case .partial: "function.partial"
+        case .decompiled: "function.decompiled"
         case .library:
             switch registry {
             case .entry?: "library.\(library ?? .unrecorded).entry"
@@ -4472,6 +4474,7 @@ final class CodeNavigatorCell: NSTableCellView {
         let mark: (glyph: CodeNavigatorIcon.Glyph, color: NSColor)? = switch name {
         case "function"?: CodeNavigatorIcon.function
         case "function.partial"?: CodeNavigatorIcon.partialFunction
+        case "function.decompiled"?: CodeNavigatorIcon.decompiledFunction
         case let name? where name.hasPrefix("library."):
             CodeReaderState.LibrarySection.allCases.lazy.compactMap { section -> (glyph: CodeNavigatorIcon.Glyph, color: NSColor)? in
                 let badge = CodePaneView.badge(of: section)
