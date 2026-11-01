@@ -3242,6 +3242,15 @@ public class Owner {
         if (shared) {
             if (ordinal != null) throw new Failure(400, "`shared` names a storage; a parameter is named by ordinal");
             if (storage == null) throw new Failure(400, "`shared` needs a storage");
+            // A hash or `unique:` storage is the decompiler's own temporary —
+            // `HASH:00000000:1` — made afresh by each decompile and shared by
+            // whatever values it could not place. Naming one moves it and
+            // leaves the other uses behind; it is not a slot the module holds.
+            if (storage.startsWith("HASH:") || storage.startsWith("unique:")) {
+                throw new Failure(409, storage + " is the decompiler's own temporary, not a slot the module holds:"
+                    + " it is made afresh by each decompile and cannot be named as one — name the stack variable"
+                    + " it is a split of, or say in the plate what the value is");
+            }
             java.util.List<HighSymbol> group = new java.util.ArrayList<>();
             Iterator<HighSymbol> symbols = high.getLocalSymbolMap().getSymbols();
             while (symbols.hasNext()) {

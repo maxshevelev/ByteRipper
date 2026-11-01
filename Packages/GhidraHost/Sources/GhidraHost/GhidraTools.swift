@@ -649,7 +649,9 @@ public enum GhidraTools {
                     neutral name there (`PcieSizeTooSmall`), never one of the meanings. A slot whose \
                     storage a parameter also holds is refused: name the parameter by ordinal. A slot \
                     that cannot be named whole — one use stays under another name — is refused too, \
-                    and nothing is changed, rather than answered as applied. \
+                    and nothing is changed, rather than answered as applied. A `HASH:…` or `unique:…` \
+                    storage is the decompiler's own temporary, made afresh by each decompile, and is \
+                    refused: it is not a slot the module holds. \
                     `type` alone types it and keeps the name. After any call, read the function again: a local's `storage` \
                     can change, and a type alone gives it a `HASH:` storage. `items` does several in \
                     one call, each in a transaction of its own: the answer lists what applied and why \
