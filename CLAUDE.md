@@ -128,6 +128,13 @@ Running the tests:
 - Never run two `xcodebuild test` invocations at once: they share one UI
   session, and the tests that wait on a window, an animation or a panel then
   fail for reasons that are not bugs.
+- A test run shows none of its windows: every window a test creates is
+  transparent (`alphaValue` 0, no order-in animation) while staying ordered in
+  and `isVisible`. The app suite does it with the test bundle's principal class
+  (`ByteRipperTests/HostedWindowHider.swift`); a package's test bundle has no
+  Info.plist to name one, so its tests link `Packages/TestWindowHiding`, whose
+  constructor installs the same swizzle. A test that needs a window to be
+  drawn does not belong here.
 
 Workspace and project format (`Design/WORKSPACE_PLAN.md`, "Versions"):
 - A build opens the session and projects every earlier build wrote, from

@@ -19,7 +19,10 @@ let package = Package(
         .package(path: "../HelpBook"),
         .package(path: "../HelpUI"),
         .package(path: "../Localization"),
-        .package(path: "../ToolModuleKit")
+        .package(path: "../ToolModuleKit"),
+        // Only the tests below: they put windows on the screen, and this makes
+        // them invisible while keeping them windows.
+        .package(path: "../TestWindowHiding")
     ],
     targets: [
         .target(name: "CodeView", dependencies: [
@@ -36,7 +39,8 @@ let package = Package(
             .product(name: "ALSplitView", package: "ALSplitView"),
             .product(name: "CodeAnalysis", package: "CodeAnalysis"),
             .product(name: "HelpBook", package: "HelpBook"),
-            .product(name: "HelpUI", package: "HelpUI")
+            .product(name: "HelpUI", package: "HelpUI"),
+            .product(name: "TestWindowHiding", package: "TestWindowHiding")
         ])
     ]
 )

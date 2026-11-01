@@ -15,11 +15,19 @@ let package = Package(
     products: [
         .library(name: "ALSplitView", targets: ["ALSplitView"])
     ],
+    // Only the tests below: they put windows on the screen, and this makes
+    // them invisible while keeping them windows.
+    dependencies: [
+        .package(path: "../TestWindowHiding")
+    ],
     targets: [
         .target(name: "ALSplitView"),
         .testTarget(
             name: "ALSplitViewTests",
-            dependencies: ["ALSplitView"]
+            dependencies: [
+                "ALSplitView",
+                .product(name: "TestWindowHiding", package: "TestWindowHiding")
+            ]
         )
     ]
 )

@@ -144,6 +144,11 @@ packages:
   # into the tree with it; the app's tests build and check blocks with it.
   LenovoDMI:
     path: Packages/LenovoDMI
+  # Test-window hiding: the windows a package's test target creates are
+  # transparent, ordered in all the same. Only test targets link it; it is
+  # listed here because every package is, and so Xcode can see it.
+  TestWindowHiding:
+    path: Packages/TestWindowHiding
 
 targets:
   ByteRipper:
@@ -460,6 +465,10 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.maxik.ByteRipperTests
         GENERATE_INFOPLIST_FILE: YES
+        # XCTest instantiates it at bundle load; it makes every hosted window
+        # transparent, the app's own included, so a test run shows nothing on
+        # the screen.
+        INFOPLIST_KEY_NSPrincipalClass: HostedWindowHider
         SWIFT_VERSION: "5.9"
         MACOSX_DEPLOYMENT_TARGET: "14.0"
         # Signed the same way as the host, from the same file: the host app's

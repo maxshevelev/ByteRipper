@@ -55,7 +55,10 @@ let package = Package(
         .package(path: "../BytePattern"),
         // The stored analysis a tool-module hands the host to open beside a
         // module's bytes (`CodePartOpening`).
-        .package(path: "../CodeAnalysis")
+        .package(path: "../CodeAnalysis"),
+        // Only the tests below: they put windows on the screen, and this makes
+        // them invisible while keeping them windows.
+        .package(path: "../TestWindowHiding")
     ],
     targets: [
         .target(name: "ToolModuleKit",
@@ -85,7 +88,8 @@ let package = Package(
                 .product(name: "AgentKit", package: "AgentKit"),
                 .product(name: "PartCodec", package: "PartCodec"),
                 .product(name: "BytePattern", package: "BytePattern"),
-                .product(name: "CodeAnalysis", package: "CodeAnalysis")
+                .product(name: "CodeAnalysis", package: "CodeAnalysis"),
+                .product(name: "TestWindowHiding", package: "TestWindowHiding")
             ]
         )
     ]
