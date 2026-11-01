@@ -359,6 +359,63 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertTrue(pane.showsRevisionDiff, "the badge's change is shown as a comparison")
     }
 
+    /// A function renamed while its code reads the same says so in a plate
+    /// over the code: the comparison has nothing to show, and the plate is
+    /// what explains the New badge.
+    func testAPlateSaysWhyAFunctionIsNewWhenTheCodeDidNotChange() async throws {
+        let codeBytes = [UInt8](repeating: 0x93, count: 0x100)
+        let parentURL = try dump(0x1000, 0x77)
+        let body = "void F(void)\n\n{\n  A();\n}\n"
+        func artifactData(_ name: String, _ signature: String) throws -> Data {
+            try JSONSerialization.data(withJSONObject: [
+                "script_version": 2, "ghidra": "12.1.2",
+                "functions": [["entry": "0x100", "name": name, "signature": signature, "c": body,
+                               "instructions": [["address": "0x100", "bytes": "90", "mnemonic": "NOP", "text": "NOP"]]]]
+            ])
+        }
+        let storeRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CodePlateStore-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: storeRoot, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: storeRoot) }
+        let store = try ContentStore(root: storeRoot)
+        let module = ModuleIdentity(sha256: SHA256Digest(data: Data(codeBytes)),
+                                    size: codeBytes.count, name: "SecCore", kind: "PE32",
+                                    language: "x86:LE:32:default", imageBase: "0x0")
+        let recipe = AnalysisRecipe(id: "code-v2-ghidra-12.1.2", exporter: 2,
+                                    ghidra: "12.1.2", script: "ExportCode.java")
+        let old = try artifactData("FUN_0012AB40", "void FUN_0012AB40(void)")
+        let new = try artifactData("PspSmmFatalError", "void PspSmmFatalError(UINT32 ErrorCode)")
+        let manifest = try store.putAnalysis(module: module, recipe: recipe, artifact: old,
+                                             reading: AnalysisReading(project: "p", rev: 1))
+        let previousRoot = UEFIToolModule.codeAnalysisRoot
+        UEFIToolModule.codeAnalysisRoot = storeRoot
+        addTeardownBlock { UEFIToolModule.codeAnalysisRoot = previousRoot }
+
+        let controller = shownWindow().mainViewController
+        controller.openFiles([parentURL])
+        controller.openCode(
+            named: "SecCore ▸ PE32", from: controller.windowModel.pane1,
+            source: 0x100..<0x200, manifest: manifest,
+            artifact: try JSONDecoder().decode(CodeArtifact.self, from: old),
+            codec: ReadOnlyPartCodec(codeBytes, title: L("This cannot be put back"),
+                                     reason: L("A code analysis is a snapshot; edit the dump and analyze the module again.")),
+            at: CodeLocation(function: CodeAddress(0x100)))
+        let id = try XCTUnwrap(controller.fragments.expanded)
+
+        try store.putAnalysis(module: module, recipe: recipe, artifact: new,
+                              reading: AnalysisReading(project: "p", rev: 2))
+        controller.codeStoreChanged()
+        for _ in 0..<100 where controller.fragments.codePane(id)?.manifest.reading?.rev != 2 {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        let pane = try XCTUnwrap(controller.fragments.codePane(id))
+        for _ in 0..<100 where !pane.newBannerIsShown {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertTrue(pane.newBannerIsShown, "the plate says what the mark is about")
+        XCTAssertFalse(pane.showsRevisionDiff, "the comparison has nothing to show")
+    }
+
     /// A code panel torn off into a tab of its own still follows its
     /// analysis: published again, the tab draws the new reading.
     func testACodeTabFollowsARepublishedReading() async throws {

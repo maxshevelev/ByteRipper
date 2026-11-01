@@ -401,6 +401,14 @@
 "This revision" = "Эта ревизия";
 "No decompiled C for this function in either revision." = "Ни в этой, ни в предыдущей ревизии у функции нет декомпилированного C.";
 "No earlier revision of this reading is open to compare with." = "Предыдущая ревизия этого разбора не открыта — сравнивать не с чем.";
+"New against %1$@" = "Новая по сравнению с %1$@";
+"New against the revision before" = "Новая по сравнению с предыдущей ревизией";
+"Renamed: %1$@ → %2$@" = "Переименована: %1$@ → %2$@";
+"Signature: %1$@ → %2$@" = "Сигнатура: %1$@ → %2$@";
+"no signature" = "нет сигнатуры";
+"The function is not in %1$@: this revision added it." = "Функции нет в %1$@: её добавила эта ревизия.";
+"The code reads the same in both revisions, so the comparison has nothing to show." = "Код в обеих ревизиях читается одинаково — сравнению нечего показать.";
+"Neither revision has decompiled code for this function." = "Ни в одной из ревизий нет декомпилированного кода этой функции.";
 "Directories and packages are not supported." = "Папки и пакеты не поддерживаются.";
 "Discard Changes" = "Отменить изменения";
 "Do not ask again" = "Больше не спрашивать";

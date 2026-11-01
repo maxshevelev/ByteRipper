@@ -1322,6 +1322,96 @@ final class CodePaneViewTests: XCTestCase {
                        "the comparison opens at line 30 of the code")
     }
 
+    private func oneFunction(name: String, signature: String, c: String?,
+                             entry: String = "0x220") throws -> CodeArtifact {
+        var function: [String: Any] = [
+            "entry": entry, "name": name, "signature": signature,
+            "instructions": [["address": entry, "bytes": "C3", "mnemonic": "RET", "text": "RET"]]
+        ]
+        if let c { function["c"] = c }
+        return try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: [
+            "script_version": 2, "program": ["image_base": "0x0"], "functions": [function]
+        ]))
+    }
+
+    /// The plate over the code says what the mark is about besides the code:
+    /// another name and signature, while the code itself reads the same — the
+    /// case the comparison has nothing to show.
+    func testThePlateSaysWhatChangedBesidesTheCode() throws {
+        let before = try oneFunction(name: "FUN_0012AB40", signature: "void FUN_0012AB40(void)",
+                                     c: "{\n  A();\n}")
+        let after = try oneFunction(name: "PspSmmFatalError",
+                                    signature: "void PspSmmFatalError(UINT32 ErrorCode)",
+                                    c: "{\n  A();\n}")
+        let view = CodePaneView(manifest: manifest(), artifact: after,
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.layoutSubtreeIfNeeded()
+        view.markRevisionChange(from: before, revision: 23)
+        view.selectFunction(at: 0)
+
+        XCTAssertTrue(view.newBannerIsShown)
+        XCTAssertEqual(view.newBannerTitle, "New against r23")
+        XCTAssertEqual(view.newBannerBullets, [
+            "Renamed: FUN_0012AB40 → PspSmmFatalError",
+            "Signature: void FUN_0012AB40(void) → void PspSmmFatalError(UINT32 ErrorCode)",
+            "The code reads the same in both revisions, so the comparison has nothing to show."
+        ])
+        XCTAssertFalse(view.showsRevisionDiff, "the comparison has nothing to draw")
+        XCTAssertTrue(view.newBannerWordsAreSelectable, "the notice can be selected and copied")
+        XCTAssertEqual(view.newBannerWordFontPoints, [12, 12],
+                       "the field editor keeps the words at their size when one is selected")
+    }
+
+    /// A function whose only difference is its code needs no plate: the
+    /// comparison is the explanation.
+    func testACodeOnlyChangeNeedsNoPlate() throws {
+        let before = try oneFunction(name: "F", signature: "void F(void)", c: "{\n  A();\n}")
+        let after = try oneFunction(name: "F", signature: "void F(void)", c: "{\n  B();\n}")
+        let view = CodePaneView(manifest: manifest(), artifact: after,
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.layoutSubtreeIfNeeded()
+        view.markRevisionChange(from: before, revision: 23)
+        view.selectFunction(at: 0)
+        XCTAssertFalse(view.newMarks.isEmpty, "the code changed, so the function is New")
+        XCTAssertTrue(view.showsRevisionDiff)
+        XCTAssertFalse(view.newBannerIsShown, "the diff says it, the plate would repeat it")
+    }
+
+    /// A function the revision added says so, in one line.
+    func testThePlateSaysAFunctionWasAdded() throws {
+        let before = try oneFunction(name: "G", signature: "void G(void)", c: "{\n}", entry: "0x260")
+        let after = try oneFunction(name: "F", signature: "void F(void)", c: "{\n}", entry: "0x220")
+        let view = CodePaneView(manifest: manifest(), artifact: after,
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.layoutSubtreeIfNeeded()
+        view.markRevisionChange(from: before, revision: 23)
+        view.selectFunction(at: 0)
+        XCTAssertEqual(view.newBannerBullets, ["The function is not in r23: this revision added it."])
+    }
+
+    /// A record made against another copy of the revision leaves the same
+    /// code, the same name and the same signature on both sides: nothing
+    /// changed, so nothing is marked, and the reader is taken to be as far
+    /// along as the code is.
+    func testARecordMadeAgainstAnotherCopyMarksNothing() throws {
+        let current = try oneFunction(name: "F", signature: "void F(void)", c: "{\n  A();\n}")
+        let view = CodePaneView(manifest: manifest(revision: 54), artifact: current,
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.layoutSubtreeIfNeeded()
+        view.selectFunction(at: 0)
+        view.restoreSeen(["0x220": SeenRecord(revision: 53, fingerprint: "another copy")],
+                         baselines: [53: current])
+
+        XCTAssertTrue(view.newMarks.isEmpty, "nothing changed, so nothing is new")
+        XCTAssertEqual(view.seenRecords["0x220"]?.revision, 54,
+                       "the record moves on with the code")
+        XCTAssertFalse(view.newBannerIsShown)
+    }
+
     /// The dump bar's picker lists the module's revisions the app read, says
     /// which one the code is compared against, and Reset clears it — as
     /// Xcode's bar does for a file's history.

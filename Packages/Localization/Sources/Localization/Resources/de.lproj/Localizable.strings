@@ -401,6 +401,14 @@
 "This revision" = "Diese Revision";
 "No decompiled C for this function in either revision." = "In keiner der beiden Revisionen hat die Funktion dekompilierten C.";
 "No earlier revision of this reading is open to compare with." = "Die vorige Revision dieser Analyse ist nicht geöffnet — nichts zum Vergleichen.";
+"New against %1$@" = "Neu gegenüber %1$@";
+"New against the revision before" = "Neu gegenüber der vorigen Revision";
+"Renamed: %1$@ → %2$@" = "Umbenannt: %1$@ → %2$@";
+"Signature: %1$@ → %2$@" = "Signatur: %1$@ → %2$@";
+"no signature" = "keine Signatur";
+"The function is not in %1$@: this revision added it." = "Die Funktion fehlt in %1$@: diese Revision hat sie hinzugefügt.";
+"The code reads the same in both revisions, so the comparison has nothing to show." = "Der Code liest sich in beiden Revisionen gleich — der Vergleich hat nichts zu zeigen.";
+"Neither revision has decompiled code for this function." = "Keine der beiden Revisionen hat dekompilierten Code für diese Funktion.";
 "Directories and packages are not supported." = "Ordner und Pakete werden nicht unterstützt.";
 "Discard Changes" = "Änderungen verwerfen";
 "Do not ask again" = "Nicht mehr fragen";

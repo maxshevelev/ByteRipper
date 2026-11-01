@@ -213,6 +213,14 @@ import ToolModuleKit
     private var searchToOrder: NSLayoutConstraint!
     private var searchToEdge: NSLayoutConstraint!
     private let staleLabel = NSTextField(labelWithString: "")
+    /// Over the code, when the function on screen wears New: what the mark is
+    /// about besides the code (`updateNewMarkBanner`).
+    private let newMarkBanner = CodeNewMarkBanner()
+    /// How the pages start: at the code area's top, or under the plate.
+    private var pageTops: [NSLayoutConstraint] = []
+    private var belowBannerTops: [NSLayoutConstraint] = []
+    /// Whether the pages are under the plate now.
+    private var bannerIsUp = false
     /// The header's first line — the module, its revision, the function —
     /// kept to follow the zoom. The versions line under it follows with
     /// `recipeLine`.
@@ -1250,6 +1258,15 @@ import ToolModuleKit
             }
             if record.fingerprint == fingerprint {
                 seen[key] = SeenRecord(revision: revision, fingerprint: fingerprint)
+            } else if let baseline = baselines[record.revision],
+                      let old = baseline.functions.first(where: { $0.entry == function.entry }),
+                      old.name == function.name, old.signature == function.signature,
+                      old.c == function.c {
+                // The record was made against another copy of that revision:
+                // the store's code for it is the code on screen. Nothing
+                // changed, so a mark would be about the bookkeeping and not
+                // about the function; the reader is as far along as the code.
+                seen[key] = SeenRecord(revision: revision, fingerprint: fingerprint)
             } else if let baseline = baselines[record.revision] {
                 // The record stays where it is: the change is not seen until
                 // the reader opens the function.
@@ -1312,8 +1329,77 @@ import ToolModuleKit
         syncingSelection = false
         updateC()
         if wantsRevisionDiff { refreshDiffVisibility() }
+        updateNewMarkBanner()
         updateReferences()
     }
+
+    // help: panel.code.new
+    /// Says why the function on screen wears New, in the plate over the code:
+    /// what changed besides the code — another name, another signature, a
+    /// function this revision added — and, the code reading the same in both
+    /// revisions, what the mark is about then, since the comparison has
+    /// nothing to draw. A function whose only difference is its code needs no
+    /// plate: the comparison is the explanation.
+    private func updateNewMarkBanner() {
+        guard modeControl.selectedSegment != Self.descriptionSegment,
+              let index = state.function, model.functions.indices.contains(index),
+              let mark = unopenedChanges[index] else {
+            newMarkBanner.hide()
+            layOutBanner(false)
+            return
+        }
+        let function = model.functions[index]
+        let before = mark.revision.map { "r\($0)" }
+        let old = mark.artifact.functions.first { $0.entry == function.entry }
+        var bullets: [String] = []
+        if let old {
+            if old.name != function.name {
+                bullets.append(L("Renamed: %1$@ → %2$@", old.name, function.name))
+            }
+            if old.signature != function.signature {
+                bullets.append(L("Signature: %1$@ → %2$@",
+                                 old.signature ?? L("no signature"),
+                                 function.signature ?? L("no signature")))
+            }
+            if old.c == nil && function.c == nil {
+                bullets.append(L("Neither revision has decompiled code for this function."))
+            } else if old.c == function.c, !bullets.isEmpty {
+                bullets.append(L("The code reads the same in both revisions, so the comparison has nothing to show."))
+            }
+        } else if let before {
+            bullets.append(L("The function is not in %1$@: this revision added it.", before))
+        }
+        guard !bullets.isEmpty else {
+            newMarkBanner.hide()
+            layOutBanner(false)
+            return
+        }
+        layOutBanner(true)
+        newMarkBanner.show(title: mark.revision.map { L("New against %1$@", "r\($0)") }
+                                ?? L("New against the revision before"),
+                           lines: bullets)
+    }
+
+    /// Whether the plate over the code is up: why the selected function
+    /// wears New, when the comparison cannot say it.
+    public var newBannerIsShown: Bool { !newMarkBanner.isHidden }
+
+    /// Puts the plate up, with the pages under it, or takes it away and gives
+    /// them the whole area — the plate is not a hidden view in the stack, so
+    /// nothing is left of it when it is down.
+    private func layOutBanner(_ shows: Bool) {
+        guard shows != bannerIsUp else { return }
+        bannerIsUp = shows
+        NSLayoutConstraint.deactivate(shows ? pageTops : belowBannerTops)
+        NSLayoutConstraint.activate(shows ? belowBannerTops : pageTops)
+        newMarkBanner.isHidden = !shows
+    }
+
+    /// The plate's words, for a test.
+    var newBannerTitle: String { newMarkBanner.titleShown }
+    var newBannerBullets: [String] { newMarkBanner.bulletsShown }
+    var newBannerWordsAreSelectable: Bool { newMarkBanner.wordsAreSelectable }
+    var newBannerWordFontPoints: [CGFloat] { newMarkBanner.wordFontPoints }
 
     // help: panel.code.lists
     /// Says why a list has no rows: the search, or what the analysis looks
@@ -2330,9 +2416,26 @@ import ToolModuleKit
         diffView.translatesAutoresizingMaskIntoConstraints = false
         diffView.isHidden = true
         content.addSubview(diffView)
+        // The plate is the code area's own: over the pages when there is
+        // something to say about the function, and out of the way — and out of
+        // the layout — when there is not.
+        content.addSubview(newMarkBanner)
+        NSLayoutConstraint.activate([
+            newMarkBanner.topAnchor.constraint(equalTo: content.topAnchor),
+            newMarkBanner.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            newMarkBanner.trailingAnchor.constraint(equalTo: content.trailingAnchor)
+        ])
+        // A page sits at the top of the area, or under the plate that is up:
+        // one of the two constraints is active at a time (`layOutBanner`).
+        pageTops = []
+        belowBannerTops = []
         for scroll in [tableScroll, cScroll, descriptionView, diffView] {
+            let top = scroll.topAnchor.constraint(equalTo: content.topAnchor)
+            let below = scroll.topAnchor.constraint(equalTo: newMarkBanner.bottomAnchor, constant: 8)
+            pageTops.append(top)
+            belowBannerTops.append(below)
             NSLayoutConstraint.activate([
-                scroll.topAnchor.constraint(equalTo: content.topAnchor),
+                top,
                 scroll.bottomAnchor.constraint(equalTo: content.bottomAnchor),
                 scroll.leadingAnchor.constraint(equalTo: content.leadingAnchor),
                 scroll.trailingAnchor.constraint(equalTo: content.trailingAnchor)
@@ -2362,6 +2465,10 @@ import ToolModuleKit
         stackTop.priority = NSLayoutConstraint.Priority(999)
         NSLayoutConstraint.activate([stackLeading, stackTrailing, stackTop])
         header.widthAnchor.constraint(equalTo: codeStack.widthAnchor).isActive = true
+        // The code area takes the pane's width too: the plate inside it gives
+        // it a fitting width of its own, and the stack would otherwise lay it
+        // out at that width, at the trailing edge.
+        content.widthAnchor.constraint(equalTo: codeStack.widthAnchor).isActive = true
         titleRow.widthAnchor.constraint(equalTo: header.widthAnchor).isActive = true
         staleLabel.widthAnchor.constraint(equalTo: header.widthAnchor).isActive = true
 
@@ -2951,6 +3058,7 @@ import ToolModuleKit
         descriptionView.isHidden = segment != Self.descriptionSegment
         refreshDiffVisibility()
         if segment == 1, !showsRevisionDiff { updateC() }
+        updateNewMarkBanner()
         currentOccurrence = nil
         drawOccurrenceBar()
     }

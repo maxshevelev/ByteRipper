@@ -124,6 +124,11 @@ enum CodeColors {
     }
     static let symbolHighlightRadius: CGFloat = 3
 
+    /// The plate over a function marked New — a yellow notice as macOS draws
+    /// one: a pale amber ground, a hairline of a deeper amber, an amber sign.
+    static let newMarkBannerBackground = themed(light: 0xFFF8DE, dark: 0x3A331A)
+    static let newMarkBannerBorder = themed(light: 0xE9D6A1, dark: 0x5E5226)
+
     /// Behind code in the module's description: a block and a span.
     static let descriptionCodeBackground = themed(light: 0xF2F3F5, dark: 0x2C2D31)
     /// Behind the header row of a table in the description.
