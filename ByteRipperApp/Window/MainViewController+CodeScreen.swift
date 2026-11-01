@@ -106,7 +106,9 @@ extension MainViewController {
             } else {
                 self.pendingCodeRevisionChange = nil
                 self.pendingCodeRevision = nil
-                self.pendingCodeNewMarks = []
+                // A reading of the same revision drawn again: the marks the
+                // reader has not opened yet go with it.
+                self.pendingCodeNewMarks = self.codeScreenView?.newMarks ?? []
             }
             self.codeScreen = (pane, pane.document, next)
             self.apply(mode: .singleFile)

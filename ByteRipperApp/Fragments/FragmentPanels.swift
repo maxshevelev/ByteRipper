@@ -505,9 +505,12 @@ import ToolModuleKit
            let was = before.manifest.reading?.rev,
            let now = screen.manifest.reading?.rev, now > was {
             codePane.markRevisionChange(from: previous, revision: was)
-            codePane.setNewMarks(carriedMarks)
             previousRevision = (was, previous)
         }
+        // The marks the reader has not opened yet travel with the panel: a
+        // redraw of a reading that did not move — the store telling the same
+        // revision twice — must not take them.
+        codePane.setNewMarks(carriedMarks)
         wireCodeScreen(codePane, to: pane, owner: host,
                        previous: previousRevision) { [weak pane, weak host] range in
             guard let pane else { return }
