@@ -33,6 +33,7 @@ extension MainViewController {
         code.screen.selectedInstruction = view.selectedInstructionIndex
         code.screen.place = view.selectedLocation
         code.screen.showsC = view.showsDecompiledC
+        code.screen.topLines = view.topLinePositions
         codeScreen = code
     }
 
@@ -91,6 +92,7 @@ extension MainViewController {
                                   selectedInstruction: screen.selectedInstruction,
                                   place: screen.place,
                                   showsC: screen.showsC,
+                                  topLines: screen.topLines,
                                   recipes: recipes ?? screen.recipes)
             // A later revision of the same reading: the pane drawn next marks
             // the functions it changed. Another recipe is a different
@@ -323,6 +325,9 @@ extension MainViewController {
                 .revealOffsetCentered(range.lowerBound)
         }
         applyCodeNotes()
+        // Before the place: the function the screen opens on is read from the
+        // line it was left at.
+        codePane.restoreTopLines(screen.topLines)
         codePane.restore(at: screen.place, function: screen.selectedFunction,
                          instruction: screen.selectedInstruction,
                          showsC: screen.showsC)

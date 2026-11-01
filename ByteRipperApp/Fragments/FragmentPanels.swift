@@ -175,6 +175,7 @@ import ToolModuleKit
                                               selectedInstruction: code.selectedInstruction,
                                               place: code.place,
                                               showsC: code.showsC,
+                                              topLines: code.topLines,
                                               recipes: code.recipes)),
                      animated: animated)
     }
@@ -269,6 +270,7 @@ import ToolModuleKit
                 host?.filePaneView(for: pane)?.revealOffsetCentered(range.lowerBound)
             }
             if case .code(let code) = screen {
+                codePane.restoreTopLines(code.topLines)
                 codePane.restore(at: code.place, function: code.selectedFunction,
                                  instruction: code.selectedInstruction,
                                  showsC: code.showsC)
@@ -456,6 +458,7 @@ import ToolModuleKit
         screen.selectedInstruction = view.selectedInstructionIndex
         screen.place = view.selectedLocation
         screen.showsC = view.showsDecompiledC
+        screen.topLines = view.topLinePositions
         Task { @MainActor [weak self] in
             guard let self else { return }
             guard let artifact = await CodeAnalysisStore.artifact(for: manifest) else {
@@ -469,6 +472,7 @@ import ToolModuleKit
                                   selectedInstruction: screen.selectedInstruction,
                                   place: screen.place,
                                   showsC: screen.showsC,
+                                  topLines: screen.topLines,
                                   recipes: recipes ?? screen.recipes)
             self.replaceCodeScreen(id, with: next)
             self.entries[id]?.codePane?.adoptHistory(history)
@@ -512,6 +516,7 @@ import ToolModuleKit
         entry.surface.setContent(codePane)
         entry.codePane = codePane
         entry.screen = .code(screen)
+        codePane.restoreTopLines(screen.topLines)
         codePane.restore(at: screen.place, function: screen.selectedFunction,
                          instruction: screen.selectedInstruction,
                          showsC: screen.showsC)
@@ -529,6 +534,7 @@ import ToolModuleKit
         code.selectedInstruction = entry.codePane?.selectedInstructionIndex
         code.place = entry.codePane?.selectedLocation
         code.showsC = entry.codePane?.showsDecompiledC ?? false
+        code.topLines = entry.codePane?.topLinePositions ?? code.topLines
         return .code(code)
     }
 

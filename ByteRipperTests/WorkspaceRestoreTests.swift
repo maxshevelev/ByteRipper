@@ -387,6 +387,60 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertEqual(restored.selectedFunction?.name, "SecStartup")
     }
 
+    /// Where each function was left in its code is part of the screen: the
+    /// workspace keeps it per function, and the panel opens at that line,
+    /// not at the function's top.
+    func testAWorkspaceKeepsWhereEachFunctionWasLeft() async throws {
+        let codeBytes = [UInt8](repeating: 0x90, count: 0x100)
+        let parentURL = try dump(0x1000, 0x77)
+        let body = (1...60).map { "  Step\($0)();\n" }.joined()
+        let artifactData = try JSONSerialization.data(withJSONObject: [
+            "script_version": 2, "ghidra": "12.1.2",
+            "functions": [["entry": "0x100", "name": "Long", "c": "void Long(void)\n{\n" + body + "}\n",
+                           "instructions": [["address": "0x100", "bytes": "90", "mnemonic": "NOP", "text": "NOP"]]]]
+        ])
+        let storeRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CodeLineStore-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: storeRoot, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: storeRoot) }
+        let store = try ContentStore(root: storeRoot)
+        let module = ModuleIdentity(sha256: SHA256Digest(data: Data(codeBytes)),
+                                    size: codeBytes.count, name: "SecCore", kind: "PE32",
+                                    language: "x86:LE:32:default", imageBase: "0x0")
+        let recipe = AnalysisRecipe(id: "code-v2-ghidra-12.1.2", exporter: 2,
+                                    ghidra: "12.1.2", script: "ExportCode.java")
+        let manifest = try store.putAnalysis(module: module, recipe: recipe, artifact: artifactData,
+                                             reading: AnalysisReading(project: "p", rev: 24))
+        let previousRoot = UEFIToolModule.codeAnalysisRoot
+        UEFIToolModule.codeAnalysisRoot = storeRoot
+        addTeardownBlock { UEFIToolModule.codeAnalysisRoot = previousRoot }
+
+        let source = shownWindow().mainViewController
+        source.openFiles([parentURL])
+        source.openCode(
+            named: "SecCore ▸ PE32", from: source.windowModel.pane1,
+            source: 0x100..<0x200, manifest: manifest,
+            artifact: try JSONDecoder().decode(CodeArtifact.self, from: artifactData),
+            codec: ReadOnlyPartCodec(codeBytes, title: L("This cannot be put back"),
+                                     reason: L("A code analysis is a snapshot; edit the dump and analyze the module again.")),
+            at: CodeLocation(function: CodeAddress(0x100)))
+        let id = try XCTUnwrap(source.fragments.expanded)
+        source.view.window?.layoutIfNeeded()
+        let pane = try XCTUnwrap(source.fragments.codePane(id))
+        pane.restoreTopLines(["0x100": 20])
+        XCTAssertEqual(pane.topLinePositions["0x100"], 20, "the pane reads the function from line 20")
+
+        let tab = source.workspaceTab()
+        let target = shownWindow().mainViewController
+        let issues = await restore([(tab, target)])
+        XCTAssertEqual(issues, [])
+        let restoredID = try XCTUnwrap(target.fragments.expanded)
+        let restored = try XCTUnwrap(target.fragments.codePane(restoredID))
+        target.view.window?.layoutIfNeeded()
+        XCTAssertEqual(restored.topLinePositions["0x100"], 20,
+                       "the workspace kept the line the function was left at")
+    }
+
     /// The comparison is the pane's, not the container's: a code panel opened
     /// in the dock offers the revisions the store holds, exactly as a code
     /// screen in a tab does. The store's half of the wiring used to be called

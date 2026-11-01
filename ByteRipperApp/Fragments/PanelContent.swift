@@ -47,6 +47,10 @@ struct CodeScreen {
     var place: CodeLocation?
     /// A module opens on its decompiled C; the listing is one click away.
     var showsC: Bool = true
+    /// The line each function was left at in the code, by the function's
+    /// entry as text — what `CodePaneView.topLinePositions` hands over, so a
+    /// long function is read from where it was left after any move.
+    var topLines: [String: Int] = [:]
     /// Every readable analysis of this module, the chosen one included. Nil
     /// or one entry means there is nothing to choose; the panel still has the
     /// chosen manifest.

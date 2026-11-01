@@ -328,14 +328,22 @@ public struct CodeScreenState: Codable, Equatable, Sendable {
     public var selectedInstruction: Int?
     public var place: Place?
     public var showsC: Bool
+    /// Where each function was left in the code, by the function's entry as
+    /// hex text — the number of the line at the top of the code area, counted
+    /// from zero. By address for the same reason `place` is: the screen may
+    /// come back with another artifact, and a function is the same function
+    /// in it. Nil in a screen written before the lines were kept.
+    public var topLines: [String: Int]?
 
     public init(manifest: String, selectedFunction: Int? = nil,
-                selectedInstruction: Int? = nil, place: Place? = nil, showsC: Bool = false) {
+                selectedInstruction: Int? = nil, place: Place? = nil, showsC: Bool = false,
+                topLines: [String: Int]? = nil) {
         self.manifest = manifest
         self.selectedFunction = selectedFunction
         self.selectedInstruction = selectedInstruction
         self.place = place
         self.showsC = showsC
+        self.topLines = topLines
     }
 }
 

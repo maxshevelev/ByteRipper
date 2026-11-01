@@ -258,11 +258,13 @@ extension WorkspaceTests {
 
         let now = CodeScreenState(manifest: "{}", selectedFunction: 3, selectedInstruction: 40,
                                   place: .init(function: "0x1F00", instruction: "0x1F2C"),
-                                  showsC: true)
+                                  showsC: true, topLines: ["0x1F00": 12])
         let data = try JSONEncoder().encode(now)
         XCTAssertEqual(try JSONDecoder().decode(CodeScreenState.self, from: data), now)
         let fields = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
         XCTAssertEqual(fields["selectedFunction"] as? Int, 3)
         XCTAssertEqual(fields["selectedInstruction"] as? Int, 40)
+        XCTAssertEqual(fields["topLines"] as? [String: Int], ["0x1F00": 12])
+        XCTAssertNil(old.topLines, "a screen written before the lines were kept has none")
     }
 }

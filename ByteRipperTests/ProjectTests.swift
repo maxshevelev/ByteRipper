@@ -180,6 +180,57 @@ final class ProjectTests: XCTestCase {
             L("A different stored analysis is shown instead: %1$@", "1")])
     }
 
+    /// A project keeps where each function was left in its code, as the
+    /// session does: the panel opens the function at that line again.
+    func testAProjectKeepsWhereEachFunctionWasLeft() async throws {
+        let (_, dump, project) = try jobFolder()
+        let codeBytes = [UInt8](repeating: 0x90, count: 0x100)
+        let body = (1...60).map { "  Step\($0)();\n" }.joined()
+        let artifactData = try JSONSerialization.data(withJSONObject: [
+            "script_version": 2, "ghidra": "12.1.2",
+            "functions": [["entry": "0x100", "name": "Long", "c": "void Long(void)\n{\n" + body + "}\n",
+                           "instructions": [["address": "0x100", "bytes": "90", "mnemonic": "NOP", "text": "NOP"]]]]
+        ])
+        let storeRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ProjectLines-\(UUID().uuidString)")
+        addTeardownBlock { try? FileManager.default.removeItem(at: storeRoot) }
+        let store = try ContentStore(root: storeRoot)
+        let manifest = try store.putAnalysis(
+            module: ModuleIdentity(sha256: SHA256Digest(data: Data(codeBytes)),
+                                   size: codeBytes.count, name: "CpuPei", kind: "TE",
+                                   language: "x86:LE:32:default", imageBase: "0x0"),
+            recipe: AnalysisRecipe(id: "code-v2-ghidra-12.1.2", exporter: 2,
+                                   ghidra: "12.1.2", script: "ExportCode.java"),
+            artifact: artifactData)
+        let previousRoot = UEFIToolModule.codeAnalysisRoot
+        UEFIToolModule.codeAnalysisRoot = storeRoot
+        addTeardownBlock { UEFIToolModule.codeAnalysisRoot = previousRoot }
+
+        let window = shownWindow()
+        let controller = window.mainViewController
+        controller.openFiles([dump])
+        controller.openCode(
+            named: "CpuPei body", from: controller.windowModel.pane1,
+            source: 0x100..<0x200, manifest: manifest,
+            artifact: try JSONDecoder().decode(CodeArtifact.self, from: artifactData),
+            codec: ReadOnlyPartCodec(codeBytes, title: L("This cannot be put back"),
+                                     reason: L("A code analysis is a snapshot; edit the dump and analyze the module again.")),
+            at: CodeLocation(function: CodeAddress(0x100)))
+        controller.view.window?.layoutIfNeeded()
+        let id = try XCTUnwrap(controller.fragments.expanded)
+        let pane = try XCTUnwrap(controller.fragments.codePane(id))
+        pane.restoreTopLines(["0x100": 20])
+        XCTAssertEqual(pane.topLinePositions["0x100"], 20, "the pane reads the function from line 20")
+
+        _ = await record([window], into: project)
+        let (target, issues) = await reopen(project)
+        XCTAssertEqual(issues, [])
+        let restored = try XCTUnwrap(target.fragments.expanded.flatMap { target.fragments.codePane($0) })
+        target.view.window?.layoutIfNeeded()
+        XCTAssertEqual(restored.topLinePositions["0x100"], 20,
+                       "the project kept the line the function was left at")
+    }
+
     /// A reading published again under the same key is written into the
     /// project's bundle too, not only a change of which analyses it shows.
     func testARepublishedReadingIsBundledAgain() async throws {

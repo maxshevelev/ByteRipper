@@ -38,6 +38,9 @@ struct CodeDiffToken {
 
     /// What the view shows now, for a test; nil while it shows a message.
     private(set) var shownDiff: LineDiff?
+    /// Where each row of the shown text begins, as a UTF-16 offset: what a
+    /// line saved for the function is found by.
+    private var rowStarts: [Int] = []
     private(set) var shownTokens: [CodeDiffToken] = []
     private(set) var shownLinks: [CodeLink] = []
     /// How many lines the new text adds and the old one loses, for a test.
@@ -120,6 +123,7 @@ struct CodeDiffToken {
         shownDiff = diff
         placeholder.isHidden = true
         scroll.isHidden = false
+        rowStarts = []
         let origin = scroll.contentView.bounds.origin
         let shown = NSMutableAttributedString()
         var tints: [(range: NSRange, color: NSColor)] = []
@@ -135,6 +139,7 @@ struct CodeDiffToken {
         }
         for line in lines {
             let start = shown.length
+            rowStarts.append(start)
             let lineText = text(of: line.row)
             // The gutter and the mark first, in the panel's grey; the code
             // follows with its tokens coloured, as in the C.
@@ -225,6 +230,7 @@ struct CodeDiffToken {
         shownDiff = nil
         shownTokens = []
         shownLinks = []
+        rowStarts = []
         text.rowTints = []
         text.textStorage?.setAttributedString(NSAttributedString(string: ""))
         placeholder.stringValue = message
@@ -307,6 +313,70 @@ struct CodeDiffToken {
     var scrollOrigin: NSPoint { scroll.contentView.bounds.origin }
     func scroll(to origin: NSPoint) {
         scroll.contentView.scroll(to: origin)
+        scroll.reflectScrolledClipView(scroll.contentView)
+    }
+
+    // MARK: - Lines
+
+    /// The new revision's line at the top of the view, counted from zero —
+    /// the line the C would call its own, so a place kept in the code is the
+    /// same place in the comparison. Nil while the view shows no diff, and
+    /// while the rows there belong to the old side alone: there is no line of
+    /// the function under them.
+    var topNewLine: Int? {
+        guard let diff = shownDiff, let character = topCharacter() else { return nil }
+        let row = rowStarts.lastIndex { $0 <= character } ?? 0
+        for row in row..<diff.rows.count {
+            if let line = newNumber(diff.rows[row]) { return line - 1 }
+        }
+        return nil
+    }
+
+    /// Reads the diff from the row that shows `line` of the new revision. A
+    /// line the diff no longer has — a function that came back shorter —
+    /// shows its last part instead of an empty view below the text.
+    func scroll(toNewLine line: Int) {
+        guard let diff = shownDiff else { return }
+        guard line > 0 else { scroll(to: .zero); return }
+        if let row = diff.rows.firstIndex(where: { newNumber($0).map { $0 >= line + 1 } ?? false }) {
+            scroll(toRow: row)
+        } else {
+            scrollToBottom()
+        }
+    }
+
+    /// The character at the top of the visible text.
+    private func topCharacter() -> Int? {
+        guard let layout = text.layoutManager, let container = text.textContainer else { return nil }
+        let top = scroll.contentView.bounds.minY - text.textContainerOrigin.y
+        let glyph = layout.glyphIndex(for: NSPoint(x: 0, y: max(0, top)), in: container)
+        return layout.characterIndexForGlyph(at: glyph)
+    }
+
+    private func scroll(toRow row: Int) {
+        guard rowStarts.indices.contains(row),
+              let layout = text.layoutManager, let container = text.textContainer else {
+            scrollToBottom()
+            return
+        }
+        layout.ensureLayout(for: container)
+        let glyph = layout.glyphIndexForCharacter(at: rowStarts[row])
+        let line = layout.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+        scroll(insideTheTextTo: NSPoint(x: 0, y: text.textContainerOrigin.y + line.minY))
+    }
+
+    private func scrollToBottom() {
+        scroll(insideTheTextTo: NSPoint(x: 0, y: CGFloat.greatestFiniteMagnitude))
+    }
+
+    /// Moves the clip view, kept inside the text it has: a clip view holds
+    /// whatever origin it is given, even one past its document, and a short
+    /// diff would then read as an empty view.
+    private func scroll(insideTheTextTo origin: NSPoint) {
+        let visible = scroll.contentView.bounds.size
+        scroll.contentView.scroll(to: NSPoint(
+            x: max(0, min(origin.x, max(0, text.frame.width - visible.width))),
+            y: max(0, min(origin.y, max(0, text.frame.height - visible.height)))))
         scroll.reflectScrolledClipView(scroll.contentView)
     }
 }

@@ -1239,6 +1239,89 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertTrue(view.diffText.contains("void Short(void)"), view.diffText)
     }
 
+    private func artifactForLines(_ long: String, _ short: String) throws -> CodeArtifact {
+        let json: [String: Any] = [
+            "script_version": 2, "program": ["image_base": "0x0"],
+            "functions": [
+                ["entry": "0x100", "name": "Long", "c": long,
+                 "instructions": [["address": "0x100", "bytes": "C3", "mnemonic": "RET", "text": "RET"]]],
+                ["entry": "0x200", "name": "Short", "c": short,
+                 "instructions": [["address": "0x200", "bytes": "C3", "mnemonic": "RET", "text": "RET"]]]
+            ]
+        ]
+        return try JSONDecoder().decode(CodeArtifact.self,
+                                        from: JSONSerialization.data(withJSONObject: json))
+    }
+
+    /// Each function keeps the line it was left at and is read again from it,
+    /// whichever function came in between.
+    func testAFunctionIsReadFromTheLineItWasLeftAt() throws {
+        let longBody = (1...60).map { "  Step\($0)();\n" }.joined()
+        let shortBody = (1...30).map { "  Small\($0)();\n" }.joined()
+        let current = try artifactForLines("void Long(void)\n{\n" + longBody + "}\n",
+                                           "void Short(void)\n{\n" + shortBody + "}\n")
+        let view = CodePaneView(manifest: manifest(), artifact: current,
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 300)
+        view.layoutSubtreeIfNeeded()
+
+        view.selectFunction(at: 0)
+        view.layoutSubtreeIfNeeded()
+        view.scrollCForTest(toLine: 20)
+        XCTAssertEqual(view.topLinePositions["0x100"], 20, "the C is read from line 20")
+
+        view.selectFunction(at: 1)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(view.topLinePositions["0x100"], 20, "kept while another function is read")
+        XCTAssertEqual(view.topLinePositions["0x200"], 0, "a function never read opens at its top")
+
+        view.selectFunction(at: 0)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(view.topLinePositions["0x100"], 20, "read again from the line it was left at")
+    }
+
+    /// A line the function no longer has — it came back shorter — shows its
+    /// last part instead of an empty view below the text.
+    func testALinePastAShorterFunctionsEndShowsItsLastPart() throws {
+        let longBody = (1...60).map { "  Step\($0)();\n" }.joined()
+        let shortBody = (1...30).map { "  Small\($0)();\n" }.joined()
+        let current = try artifactForLines("void Long(void)\n{\n" + longBody + "}\n",
+                                           "void Short(void)\n{\n" + shortBody + "}\n")
+        let view = CodePaneView(manifest: manifest(), artifact: current,
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 300)
+        view.layoutSubtreeIfNeeded()
+
+        view.restoreTopLines(["0x200": 500])
+        view.selectFunction(at: 1)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertGreaterThan(view.cMaxScroll, 0, "the function is taller than the view")
+        XCTAssertEqual(view.cScrollOrigin.y, view.cMaxScroll, accuracy: 0.5,
+                       "the bottom of the function is shown")
+    }
+
+    /// The line kept is the new revision's line, so a comparison opens the
+    /// function at the line the C would call its own.
+    func testAComparisonOpensAtTheLineTheCodeWasLeftAt() throws {
+        let longBody = (1...60).map { "  Step\($0)();\n" }.joined()
+        let current = try artifactForLines("void Long(void)\n{\n" + longBody + "}\n",
+                                           "void Short(void)\n{\n  A();\n}\n")
+        let baseline = try artifactForLines("void Long(void)\n{\n" + longBody + "  Old();\n}\n",
+                                            "void Short(void)\n{\n  B();\n}\n")
+        let view = CodePaneView(manifest: manifest(), artifact: current,
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 300)
+        view.layoutSubtreeIfNeeded()
+        view.setComparisonRevision(54, artifact: baseline, pinned: true)
+
+        view.restoreTopLines(["0x100": 30])
+        view.selectFunction(at: 0)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertTrue(view.showsRevisionDiff)
+        XCTAssertEqual(view.topLinePositions["0x100"], 30,
+                       "the comparison opens at line 30 of the code")
+    }
+
     /// The dump bar's picker lists the module's revisions the app read, says
     /// which one the code is compared against, and Reset clears it — as
     /// Xcode's bar does for a file's history.

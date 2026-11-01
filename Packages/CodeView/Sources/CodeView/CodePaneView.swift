@@ -88,6 +88,9 @@ import ToolModuleKit
     /// How far the function's own C starts into the text shown: the
     /// annotations' comments head it.
     private var cShift = 0
+    /// The line each function was left at, by its entry's address as text —
+    /// see `topLinePositions`.
+    private var topLines: [String: Int] = [:]
     /// The explanation open over the code, if one is.
     private var explanationPopover: CodeExplanationPopover?
     private var callersPopover: CodeCallersPopover?
@@ -105,6 +108,11 @@ import ToolModuleKit
     /// What the diff on screen was drawn from, so a redraw is made only when
     /// the function or the revision changed.
     private var drawnDiff: (function: Int, revision: Int)?
+    /// The function whose diff the view holds. Kept when `drawnDiff` is
+    /// dropped for a new revision or another comparison: the same function
+    /// redrawn keeps the reader's place, another function's is read from the
+    /// line that function was left at.
+    private var diffFunction: Int?
     /// Raised with every revision the pane is given.
     private var revisionCount = 0
     /// The revision's model, for the tokens and explanations of removed lines.
@@ -348,6 +356,32 @@ import ToolModuleKit
         return location.isEmpty ? nil : location
     }
 
+    /// Where each function was left in the code, by the function's entry —
+    /// the line at the top of the code area, counted from zero. The screen
+    /// carries it into the workspace and the project, so a long function is
+    /// picked up where it was read. The function on screen is included as it
+    /// stands; one the code is not showing, because the listing or the
+    /// description is, keeps the line it had.
+    public var topLinePositions: [String: Int] {
+        var lines = topLines
+        if let index = state.function, model.functions.indices.contains(index),
+           let line = currentTopLine() {
+            lines[model.functions[index].entry.description] = line
+        }
+        return lines
+    }
+
+    /// Puts back the lines the screen kept. Called before `restore`, so the
+    /// function it opens on is read from its own line; the pane may already
+    /// have drawn one of its own by then, and that one is put back at once.
+    public func restoreTopLines(_ lines: [String: Int]) {
+        topLines = lines
+        guard modeControl.selectedSegment == 1, let index = state.function,
+              model.functions.indices.contains(index),
+              let line = lines[model.functions[index].entry.description] else { return }
+        if showsRevisionDiff { diffView.scroll(toNewLine: line) } else { scrollC(toLine: line) }
+    }
+
     public var selectedString: CodeArtifact.StringEntry? {
         navigatorEntry(in: .strings, state.listedStrings).map { artifact.strings[$0] }
     }
@@ -539,6 +573,12 @@ import ToolModuleKit
         get { diffView.scrollOrigin }
         set { diffView.scroll(to: newValue) }
     }
+    /// The C's scroll position and the furthest it goes, for a test: a
+    /// function is picked up at the line it was left at, and one that came
+    /// back shorter shows its last part.
+    var cScrollOrigin: NSPoint { cScroll.contentView.bounds.origin }
+    var cMaxScroll: CGFloat { max(0, cTextView.frame.height - cScroll.contentView.bounds.height) }
+    func scrollCForTest(toLine line: Int) { scrollC(toLine: line) }
 
     /// The description, as drawn, for tests.
     var descriptionText: String { descriptionView.shownText }
@@ -673,6 +713,12 @@ import ToolModuleKit
     public func selectFunction(at index: Int, notify: Bool = true) {
         guard model.functions.indices.contains(index) else { return }
         let previous = state.function
+        // The function being left keeps the line it was read at; the one
+        // arrived at is read from its own, in `updateC` and `updateDiff`.
+        if let previous, previous != index, model.functions.indices.contains(previous),
+           let line = currentTopLine() {
+            topLines[model.functions[previous].entry.description] = line
+        }
         // A caller can point at a function the current search or list hides:
         // show Functions, with the filter cleared, before selecting it.
         revealInNavigator(index)
@@ -1796,6 +1842,63 @@ import ToolModuleKit
         let line = layout.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
         scroll(cScroll, to: NSPoint(x: cScroll.contentView.bounds.minX,
                                     y: cTextView.textContainerOrigin.y + line.minY + place.into * line.height))
+    }
+
+    /// Puts `line` of the function's own C at the top — the notes header
+    /// above it is not one of its lines. A line the function no longer has,
+    /// because it came back shorter, shows its last part rather than an empty
+    /// view below the text.
+    private func scrollC(toLine line: Int) {
+        // The first line's top is the view's own top: the text's inset is not
+        // a place to scroll past.
+        guard line > 0 else { scroll(cScroll, to: .zero); return }
+        guard let layout = cTextView.layoutManager, let container = cTextView.textContainer else { return }
+        layout.ensureLayout(for: container)
+        cTextView.sizeToFit()
+        let text = cTextView.string as NSString
+        guard let character = cLineStart(line, in: text) else {
+            scroll(cScroll, to: NSPoint(x: cScroll.contentView.bounds.minX,
+                                        y: CGFloat.greatestFiniteMagnitude))
+            return
+        }
+        let glyph = layout.glyphIndexForCharacter(at: character)
+        let fragment = layout.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+        scroll(cScroll, to: NSPoint(x: cScroll.contentView.bounds.minX,
+                                    y: cTextView.textContainerOrigin.y + fragment.minY))
+    }
+
+    /// Where `line` of the C begins in the drawn text, the header excluded;
+    /// nil for a line past the text's end.
+    private func cLineStart(_ line: Int, in text: NSString) -> Int? {
+        guard line >= 0 else { return nil }
+        var index = min(max(cShift, 0), text.length)
+        guard index < text.length else { return nil }
+        var at = 0
+        while at < line {
+            let next = text.range(of: "\n", options: [],
+                                  range: NSRange(location: index, length: text.length - index))
+            guard next.location != NSNotFound else { return nil }
+            index = NSMaxRange(next)
+            guard index < text.length else { return nil }
+            at += 1
+        }
+        return index
+    }
+
+    /// The line at the top of the code area as it stands, in the space the
+    /// screen keeps: the C's own lines, or the new revision's line at the top
+    /// of a comparison. Nil while neither is on screen — the listing or the
+    /// description is — so a position read there does not overwrite the one
+    /// the code had.
+    private func currentTopLine() -> Int? {
+        guard modeControl.selectedSegment == 1 else { return nil }
+        if showsRevisionDiff { return diffView.topNewLine }
+        guard let place = topOfC() else { return nil }
+        let text = cTextView.string as NSString
+        let start = min(max(cShift, 0), text.length)
+        let end = min(max(place.character, start), text.length)
+        return text.substring(with: NSRange(location: start, length: end - start))
+            .reduce(0) { $1 == "\n" ? $0 + 1 : $0 }
     }
 
     private func scroll(_ scrollView: NSScrollView, to origin: NSPoint) {
@@ -2922,10 +3025,13 @@ import ToolModuleKit
             if NSMaxRange(selection) <= spaced.length { cTextView.setSelectedRange(selection) }
             scrollC(toTop: place)
         } else {
-            // Another function's C is read from its top; Back puts a place
-            // left further down back where it was.
+            // Another function's C is read from the line it was left at —
+            // or, a function that has grown shorter, from its last part;
+            // Back puts a place left there back where it was.
             cTextView.setSelectedRange(NSRange(location: 0, length: 0))
-            cTextView.scroll(.zero)
+            scrollC(toLine: state.function.flatMap { index in
+                topLines[model.functions[index].entry.description]
+            } ?? 0)
         }
         shownCTokens = tokensShown
         shownCSymbols = nil
@@ -2950,17 +3056,20 @@ import ToolModuleKit
     private func updateDiff() -> Bool {
         guard wantsRevisionDiff else {
             drawnDiff = nil
+            diffFunction = nil
             revisionHasChanges = false
             return false
         }
         guard let baseline = revisionBaseline else {
             diffView.showMessage(L("No earlier revision of this reading is open to compare with."))
             drawnDiff = nil
+            diffFunction = nil
             return false
         }
         guard let index = state.function else {
             diffView.showMessage(L("The analysis holds no functions."))
             drawnDiff = nil
+            diffFunction = nil
             return false
         }
         if let drawnDiff, drawnDiff.function == index, drawnDiff.revision == revisionCount {
@@ -2971,6 +3080,7 @@ import ToolModuleKit
         guard old != nil || function.c != nil else {
             diffView.showMessage(L("No decompiled C for this function in either revision."))
             drawnDiff = (index, revisionCount)
+            diffFunction = index
             revisionHasChanges = false
             return false
         }
@@ -2978,12 +3088,13 @@ import ToolModuleKit
         let currentC = function.c ?? ""
         let diff = LineDiff.between(baselineC, currentC)
         revisionHasChanges = diff.added > 0 || diff.removed > 0
-        // Whether this is the function whose diff is already on screen — read
-        // before `drawnDiff` is told about this one. Its own redrawing keeps
-        // the reader's place; another function's is read from the top, or a
-        // short function arrives scrolled past its end and looks empty.
-        let stays = drawnDiff?.function == index
+        // Whether this is the function whose diff is already on screen. Its
+        // own redrawing keeps the reader's place; another function's is read
+        // from the line it was left at, or — a short function — from its last
+        // part, never scrolled past its end into an empty view.
+        let stays = diffFunction == index
         drawnDiff = (index, revisionCount)
+        diffFunction = index
         guard revisionHasChanges else { return false }
         // Each side's tokens, by the line of its C they sit on.
         let baselineModel = CodeModel(artifact: baseline, layout: nil)
@@ -3019,9 +3130,11 @@ import ToolModuleKit
         diffView.explainable = diffView.shownTokens.filter { token in
             Self.explainedInC.contains(token.token.kind) && explanation(of: token) != nil
         }.map(\.range)
-        // Another function's diff is read from its top; the same function's,
-        // redrawn at a new size, stays where the reader was.
-        if !stays { diffView.scroll(to: .zero) }
+        // Another function's diff is read from the line it was left at; the
+        // same function's, redrawn at a new size, stays where the reader was.
+        if !stays {
+            diffView.scroll(toNewLine: topLines[function.entry.description] ?? 0)
+        }
         return true
     }
 

@@ -116,7 +116,8 @@ extension MainViewController {
                                selectedFunction: code.selectedFunction,
                                selectedInstruction: code.selectedInstruction,
                                place: place,
-                               showsC: code.showsC)
+                               showsC: code.showsC,
+                               topLines: code.topLines)
     }
 
     /// The analysis a code screen was drawn from, read back from the store
@@ -172,6 +173,7 @@ extension MainViewController {
                                            address: $0.instruction.flatMap(CodeAddress.init(hex:)))
                           },
                           showsC: state.showsC,
+                          topLines: state.topLines ?? [:],
                           recipes: loaded.recipes)
     }
 
