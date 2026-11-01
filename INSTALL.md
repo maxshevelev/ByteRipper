@@ -13,11 +13,12 @@ own data.
 ## What you need
 
 - macOS 14 or later, on the Mac that runs the analyses;
-- **Ghidra**, unzipped anywhere. 12.1.2 is what the analyses here were made
-  with; the version is part of an analysis's key, so another version reads the
-  old analyses and writes new ones beside them;
-- **a JDK 21 or newer** — the one `/usr/libexec/java_home -v 21+` answers, or
-  `JAVA_HOME`. It runs Ghidra and compiles the owner;
+- **Ghidra 12.2 or newer**, unzipped anywhere. 12.2 is the oldest this build
+  runs on and is refused by name below it; the version is part of an
+  analysis's key, so another version reads the old analyses and writes new
+  ones beside them;
+- **a JDK 25 or newer** — the one `/usr/libexec/java_home -v 25+` answers, or
+  `JAVA_HOME`. Ghidra 12.2 runs on no older one, and it compiles the owner;
 - **network access once**: on the first module opened, EDK2's headers (about
   10 MB) and the GUID catalogue are fetched into
   `~/Library/Application Support/ByteRipper/Ghidra`, and the type archives are
@@ -150,7 +151,7 @@ none.) Each key is a flag without its `--`:
   "store": "~/ByteRipperAnalysis/byteripper-analysis-<version>/var/store",
   "projects": "~/ByteRipperAnalysis/byteripper-analysis-<version>/var/projects",
   "dumpRoots": ["/Volumes/HDD 10Tb/Dump Samples"],
-  "ghidraHome": "~/Projects/ghidra/ghidra_12.1.2_PUBLIC",
+  "ghidraHome": "~/Projects/ghidra/ghidra_12.2_PUBLIC",
   "listen": ["127.0.0.1:8765"],
   "idle": 1800,
   "maxOpenBytes": "1 GiB"
@@ -219,9 +220,9 @@ not to do is run two servers on the same `var/`.
 
 ## When something is wrong
 
-- **`no Ghidra found`** — name it: `--ghidra-home /path/ghidra_12.1.2_PUBLIC`,
+- **`no Ghidra found`** — name it: `--ghidra-home /path/ghidra_12.2_PUBLIC`,
   or set `GHIDRA_HOME`. The folder must hold `support/analyzeHeadless`.
-- **`no JDK 21 or newer`** — install one, or set `JAVA_HOME` to it.
+- **`no JDK 25 or newer`** — install one, or set `JAVA_HOME` to it.
 - **`the owner's source is missing`** — the copy's `ghidra/owner/` is not
   where the server looked; the line above it in `var/log/server.log` says
   which folder it read. `doctor.sh` compares that with the copy's own.

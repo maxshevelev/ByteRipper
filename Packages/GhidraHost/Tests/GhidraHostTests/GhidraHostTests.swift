@@ -141,13 +141,18 @@ final class GhidraHostOwnerTests: XCTestCase {
         XCTAssertEqual(summaries.first?.running, false)
     }
 
-    /// Ghidra 12.2 runs on JDK 25; the releases before it on 21.
-    func testTheJDKAGhidraNeedsFollowsItsVersion() {
-        XCTAssertEqual(GhidraInstall.minimumJDK(for: "12.1.2"), 21)
-        XCTAssertEqual(GhidraInstall.minimumJDK(for: "12.2"), 25)
-        XCTAssertEqual(GhidraInstall.minimumJDK(for: "12.2.1"), 25)
-        XCTAssertEqual(GhidraInstall.minimumJDK(for: "13.0"), 25)
-        XCTAssertEqual(GhidraInstall.minimumJDK(for: "unknown"), 25)
+    /// Ghidra 12.2 is the oldest this build runs on, and its JDK is 25. A
+    /// version read as older is refused by name; one that cannot be read is
+    /// not guessed at.
+    func testAnOlderGhidraIsRefusedAndTheJDKIs25() {
+        XCTAssertEqual(GhidraInstall.oldestVersion, "12.2")
+        XCTAssertEqual(GhidraInstall.jdkFloor, 25)
+        XCTAssertTrue(GhidraInstall.isTooOld("12.1.2"))
+        XCTAssertTrue(GhidraInstall.isTooOld("11.4"))
+        XCTAssertFalse(GhidraInstall.isTooOld("12.2"))
+        XCTAssertFalse(GhidraInstall.isTooOld("12.2.1"))
+        XCTAssertFalse(GhidraInstall.isTooOld("13.0"))
+        XCTAssertFalse(GhidraInstall.isTooOld("unknown"), "a version that cannot be read is not refused")
     }
 
     /// The owner's library answer as the registry takes it: an entry's object

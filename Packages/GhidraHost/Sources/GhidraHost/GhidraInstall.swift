@@ -48,22 +48,34 @@ public struct GhidraInstall: Equatable, Sendable {
     }
     public var java: URL { jdk.appendingPathComponent("bin/java") }
 
+    /// The oldest Ghidra this build runs on, and the JDK it needs: 12.2 runs
+    /// on no JDK older than 25. The releases before it are not supported —
+    /// the owner compiles against the install's own jars, and a build nobody
+    /// tests is worse than a refusal that says which install to name.
+    public static let oldestVersion = "12.2"
+    public static let jdkFloor = 25
+
     /// The install named, else `GHIDRA_HOME`, else the newest `ghidra_*` in
-    /// the usual places; and the JDK that Ghidra needs (`minimumJDK`).
+    /// the usual places; and the JDK that runs it.
     public static func find(home explicit: URL? = nil,
                             environment: [String: String] = ProcessInfo.processInfo.environment) throws -> GhidraInstall {
         let home = try findHome(explicit, environment: environment)
         let version = version(of: home)
-        return GhidraInstall(home: home, version: version,
-                             jdk: try findJDK(environment: environment, minimum: minimumJDK(for: version)))
+        if isTooOld(version) {
+            throw GhidraHostError(.install, "Ghidra \(version) at \(home.path): this build runs on "
+                                  + "\(oldestVersion) or newer — name a newer install, or set GHIDRA_HOME")
+        }
+        return GhidraInstall(home: home, version: version, jdk: try findJDK(environment: environment))
     }
 
-    /// The oldest JDK a Ghidra runs on: 25 from 12.2, 21 before it. A
-    /// version this reader cannot parse asks for the newer.
-    static func minimumJDK(for version: String) -> Int {
+    /// Whether a version is before `oldestVersion`. A version that cannot be
+    /// read — an install whose properties are missing — is not refused: the
+    /// refusal is for a Ghidra known to be older, not for one not understood.
+    static func isTooOld(_ version: String) -> Bool {
         let parts = version.split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
-        guard parts.count >= 2 else { return 25 }
-        return [parts[0], parts[1]].lexicographicallyPrecedes([12, 2]) ? 21 : 25
+        guard parts.count >= 2 else { return false }
+        let wanted = oldestVersion.split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
+        return [parts[0], parts[1]].lexicographicallyPrecedes(wanted)
     }
 
     static func isGhidra(_ url: URL) -> Bool {
@@ -110,26 +122,26 @@ public struct GhidraInstall: Equatable, Sendable {
         return "unknown"
     }
 
-    static func findJDK(environment: [String: String], minimum: Int) throws -> URL {
+    static func findJDK(environment: [String: String]) throws -> URL {
         if let named = environment["JAVA_HOME"], !named.isEmpty {
             return URL(fileURLWithPath: named)
         }
         let finder = Process()
         finder.executableURL = URL(fileURLWithPath: "/usr/libexec/java_home")
-        finder.arguments = ["-v", "\(minimum)+"]
+        finder.arguments = ["-v", "\(jdkFloor)+"]
         let output = Pipe()
         finder.standardOutput = output
         finder.standardError = FileHandle.nullDevice
         do {
             try finder.run()
         } catch {
-            throw GhidraHostError(.install, "no JDK \(minimum) or newer: install one, or set JAVA_HOME")
+            throw GhidraHostError(.install, "no JDK \(jdkFloor) or newer: install one, or set JAVA_HOME")
         }
         let data = output.fileHandleForReading.readDataToEndOfFile()
         finder.waitUntilExit()
         let path = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
         guard finder.terminationStatus == 0, !path.isEmpty else {
-            throw GhidraHostError(.install, "no JDK \(minimum) or newer: install one, or set JAVA_HOME")
+            throw GhidraHostError(.install, "no JDK \(jdkFloor) or newer: install one, or set JAVA_HOME")
         }
         return URL(fileURLWithPath: path)
     }
