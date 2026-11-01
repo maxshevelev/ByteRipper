@@ -1526,6 +1526,126 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertFalse(view.newBannerIsShown)
     }
 
+    /// A function with no record of its own was never opened — the review
+    /// made it after the records were begun. It is New against the newest
+    /// kept revision that does not read as it does now, and the plate says
+    /// why: the newest of them all is usually the one on screen, and New
+    /// against itself is a mark with no comparison and nothing to say.
+    func testAFunctionWithNoRecordIsNewAgainstARevisionThatDiffers() throws {
+        let current = try oneFunction(name: "F", signature: "void F(void)", c: "{\n  A();\n}")
+        let older = try oneFunction(name: "G", signature: "void G(void)", c: "{\n}", entry: "0x260")
+        let view = CodePaneView(manifest: manifest(revision: 113), artifact: current,
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.layoutSubtreeIfNeeded()
+        view.selectFunction(at: 0)
+        view.restoreSeen(["0x260": SeenRecord(revision: 108, fingerprint: "the other function")],
+                         baselines: [113: current, 108: older])
+
+        XCTAssertEqual(view.newMarks.map(\.baseline.revision), [108], "not against itself")
+        XCTAssertTrue(view.newBannerIsShown)
+        XCTAssertEqual(view.newBannerBullets, ["The function is not in r108: this revision added it."])
+    }
+
+    /// A function with no record that reads the same in every kept revision
+    /// has changed against nothing the panel can show: no mark, and the record
+    /// starts where the code is.
+    func testAFunctionWithNoRecordReadingTheSameEverywhereIsNotNew() throws {
+        let current = try oneFunction(name: "F", signature: "void F(void)", c: "{\n  A();\n}")
+        let view = CodePaneView(manifest: manifest(revision: 113), artifact: current,
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.layoutSubtreeIfNeeded()
+        view.selectFunction(at: 0)
+        view.restoreSeen(["0x260": SeenRecord(revision: 113, fingerprint: "the other function")],
+                         baselines: [113: current])
+
+        XCTAssertTrue(view.newMarks.isEmpty, "New against itself says nothing")
+        XCTAssertEqual(view.seenRecords["0x220"]?.revision, 113)
+        XCTAssertFalse(view.newBannerIsShown)
+    }
+
+    /// A mark carried from the pane before whose revision reads as the code
+    /// does now — changed and changed back — has nothing to compare, and does
+    /// not take the place of one that has.
+    func testACarriedMarkWhoseRevisionReadsTheSameIsDropped() throws {
+        let current = try oneFunction(name: "F", signature: "void F(void)", c: "{\n  A();\n}")
+        let between = try oneFunction(name: "F", signature: "void F(void)", c: "{\n  B();\n}")
+        let view = CodePaneView(manifest: manifest(revision: 3), artifact: current,
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.layoutSubtreeIfNeeded()
+        view.setNewMarks([.init(entry: current.functions[0].entry,
+                                baseline: .init(revision: 1, artifact: current))])
+        XCTAssertTrue(view.newMarks.isEmpty, "the code is back where the mark began")
+
+        view.markRevisionChange(from: between, revision: 2)
+        view.setNewMarks([.init(entry: current.functions[0].entry,
+                                baseline: .init(revision: 1, artifact: current))])
+        XCTAssertEqual(view.newMarks.map(\.baseline.revision), [2], "the real change stays")
+    }
+
+    /// The button in the bar takes every mark at once, as leaving each function
+    /// would: the rows, the comparison a mark put up and the plate go, and the
+    /// next launch does not put them up again. With nothing to clear it is dim.
+    func testTheBarsButtonClearsEveryNewMark() throws {
+        let before = try oneFunction(name: "F", signature: "void F(void)", c: "{\n  A();\n}")
+        let after = try oneFunction(name: "F2", signature: "void F2(void)", c: "{\n  B();\n}")
+        let view = CodePaneView(manifest: manifest(revision: 54), artifact: after,
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertFalse(view.clearNewMarksButton.isEnabled, "nothing wears the mark yet")
+        var kept: [String: SeenRecord] = [:]
+        view.onSeenChanged = { kept = $0 }
+        view.restoreSeen(["0x220": SeenRecord(revision: 53, fingerprint: "the code as it read")],
+                         baselines: [53: before])
+        view.selectFunction(at: 0)
+        XCTAssertFalse(view.newMarks.isEmpty)
+        XCTAssertTrue(view.clearNewMarksButton.isEnabled)
+        XCTAssertEqual(view.comparisonRevision, 53)
+        XCTAssertTrue(view.newBannerIsShown)
+
+        view.clearNewMarksButton.performClick(nil)
+
+        XCTAssertTrue(view.newMarks.isEmpty)
+        XCTAssertFalse(view.clearNewMarksButton.isEnabled)
+        XCTAssertNil(view.comparisonRevision, "the mark's comparison goes with it")
+        XCTAssertFalse(view.newBannerIsShown)
+        XCTAssertEqual(kept["0x220"]?.revision, 54)
+
+        let next = CodePaneView(manifest: manifest(revision: 54), artifact: after,
+                                moduleBytes: teModule(), hexView: NSView())
+        next.restoreSeen(kept, baselines: [54: after])
+        XCTAssertTrue(next.newMarks.isEmpty, "the next launch does not put them up again")
+    }
+
+    /// Marks cleared while the last launch's records are still on their way
+    /// stay cleared when the records come.
+    func testClearingBeforeTheRecordsArriveHolds() throws {
+        let before = try oneFunction(name: "F", signature: "void F(void)", c: "{\n  A();\n}")
+        let after = try oneFunction(name: "F", signature: "void F(void)", c: "{\n  B();\n}")
+        let view = CodePaneView(manifest: manifest(revision: 54), artifact: after,
+                                moduleBytes: teModule(), hexView: NSView())
+        view.markRevisionChange(from: before, revision: 53)
+        view.clearNewMarks()
+        view.restoreSeen(["0x220": SeenRecord(revision: 53, fingerprint: "the code as it read")],
+                         baselines: [53: before])
+        XCTAssertTrue(view.newMarks.isEmpty)
+        XCTAssertEqual(view.seenRecords["0x220"]?.revision, 54)
+    }
+
+    /// The button goes with the Functions list, as the layouts beside it do.
+    func testTheClearButtonGoesWithTheFunctionsList() throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertFalse(view.clearNewMarksButton.isHidden)
+        view.selectList(.strings)
+        XCTAssertTrue(view.clearNewMarksButton.isHidden)
+    }
+
     /// A comparison put up before the store's list arrives — a New mark's —
     /// keeps its place in the bar when the list comes, and is named even when
     /// the list does not hold it; a list that does hold it keeps the choice.

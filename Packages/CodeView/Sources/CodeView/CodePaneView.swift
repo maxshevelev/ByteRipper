@@ -213,6 +213,11 @@ import ToolModuleKit
     /// segmented control: each is a flat symbol, and the one whose layout is
     /// in front carries a plate behind it.
     private let orderButtons = NSStackView()
+    /// Takes every New mark at once. It stands in the bar beside the layouts,
+    /// so it goes with the Functions list, and stays in its place dimmed while
+    /// nothing wears the mark: a button that came and went would move the
+    /// filter's edge whenever a revision arrived.
+    let clearNewMarksButton = NSButton()
     private var orderButtonViews: [CodeOrderButton] = []
     /// The filter runs to the bar's edge where the buttons are not there.
     private var searchToOrder: NSLayoutConstraint!
@@ -770,7 +775,7 @@ import ToolModuleKit
                 syncingSelection = true
                 functionTable.reloadData()
                 syncingSelection = false
-                onNewMarksChanged?(newMarks)
+                marksChanged()
             }
         }
         // The function's mark says which revision it is new against: opening
@@ -893,6 +898,7 @@ import ToolModuleKit
         // front the filter takes its room.
         let showsOrder = state.list == .functions
         orderButtons.isHidden = !showsOrder
+        clearNewMarksButton.isHidden = !showsOrder
         // One chain, never two: the filter runs to the layout buttons while
         // the functions are shown and to the bar's edge otherwise, and the
         // navigator is drawn inside a layout pass — the chain being left is
@@ -1119,7 +1125,7 @@ import ToolModuleKit
         for index in changed where unopenedChanges[index] == nil {
             unopenedChanges[index] = NewMark.Baseline(revision: revision, artifact: previous)
         }
-        onNewMarksChanged?(newMarks)
+        marksChanged()
         // The rows changed, not the reader's place: reloading the table must
         // not be taken for a click on a row, which would open one.
         syncingSelection = true
@@ -1234,6 +1240,9 @@ import ToolModuleKit
         }
         for mark in marks {
             guard let index = byEntry[mark.entry] else { continue }
+            // Changed and changed back: the revision the mark began at reads
+            // as the code does now, and there is nothing to show against it.
+            if Self.holdsTheSame(artifact.functions[index], in: mark.baseline.artifact) { continue }
             if let existing = unopenedChanges[index] {
                 switch (mark.baseline.revision, existing.revision) {
                 case let (carried?, current?) where carried >= current:
@@ -1250,8 +1259,42 @@ import ToolModuleKit
         functionTable.reloadData()
         syncingSelection = false
         drawSelection()
+        marksChanged()
+    }
+
+    /// The marks changed: the button that takes them follows, and the app keeps
+    /// them for the next launch.
+    private func marksChanged() {
+        clearNewMarksButton.isEnabled = !unopenedChanges.isEmpty
         onNewMarksChanged?(newMarks)
     }
+
+    @objc private func clearNewMarksChosen() { clearNewMarks() }
+
+    /// Takes the New mark off every function, as leaving each of them would:
+    /// what they changed counts as read, so the next launch does not put it up
+    /// again. A comparison a mark put up goes with it; one the reader picked
+    /// in the bar stays. Whatever the revision picker holds stays comparable.
+    public func clearNewMarks() {
+        guard !unopenedChanges.isEmpty else { return }
+        unopenedChanges.removeAll()
+        if let revision = manifest.reading?.rev {
+            seen = Self.seenRecords(of: artifact, revision: revision)
+            // The last launch's records may still be on their way: they must
+            // not put the marks up again when they come.
+            marksWereCleared = true
+            if seenLoaded { onSeenChanged?(seen) }
+        }
+        syncingSelection = true
+        functionTable.reloadData()
+        syncingSelection = false
+        if let index = state.function { applyOpenComparison(for: index) }
+        drawSelection()
+        marksChanged()
+    }
+
+    /// Whether the reader has cleared the marks in this pane.
+    private var marksWereCleared = false
 
     /// The functions a revision the panel received changed that the reader has
     /// not yet left: they read bold, with a **New** badge, while they are open
@@ -1285,39 +1328,44 @@ import ToolModuleKit
     /// than it did when the reader last saw it goes up as New against the
     /// revision it was seen at, with that revision's code for the comparison.
     /// A function still reading the same is that much further seen; one the
-    /// records never had is new since the newest revision anything was seen
-    /// at, and is shown against that one. A module the records know nothing
-    /// of is seeded as seen now — a first open has nothing to be new against.
+    /// records never had is new against the newest kept revision that does not
+    /// read as it does now, and one that reads the same in all of them is not
+    /// new at all. A module the records know nothing of is seeded as seen now
+    /// — a first open has nothing to be new against.
     public func restoreSeen(_ records: [String: SeenRecord],
                             baselines: [Int: CodeArtifact]) {
         guard let revision = manifest.reading?.rev else { return }
         seenLoaded = true
-        guard !records.isEmpty else {
+        guard !records.isEmpty, !marksWereCleared else {
             seen = Self.seenRecords(of: artifact, revision: revision)
             onSeenChanged?(seen)
             return
         }
         seen = records
-        let newest = baselines.keys.max()
         var marks: [NewMark] = []
         for function in artifact.functions {
             let key = function.entry.description
             let fingerprint = Self.fingerprint(of: function)
             guard let record = records[key] else {
-                // Never seen: new since the newest revision anything was seen
-                // at, so that is the one it is shown against.
-                if let newest, let baseline = baselines[newest] {
+                // Never opened: the review made it after the records began. The
+                // newest revision anything was seen at is usually the one on
+                // screen, and a mark against itself has no comparison to draw
+                // and nothing for the plate to say; so it is shown against the
+                // newest one that differs.
+                if let newest = baselines.keys.sorted(by: >).first(where: { revision in
+                    baselines[revision].map { !Self.holdsTheSame(function, in: $0) } ?? false
+                }), let baseline = baselines[newest] {
                     marks.append(NewMark(entry: function.entry,
                                          baseline: .init(revision: newest, artifact: baseline)))
+                } else if !baselines.isEmpty {
+                    seen[key] = SeenRecord(revision: revision, fingerprint: fingerprint)
                 }
                 continue
             }
             if record.fingerprint == fingerprint {
                 seen[key] = SeenRecord(revision: revision, fingerprint: fingerprint)
             } else if let baseline = baselines[record.revision],
-                      let old = baseline.functions.first(where: { $0.entry == function.entry }),
-                      old.name == function.name, old.signature == function.signature,
-                      old.c == function.c {
+                      Self.holdsTheSame(function, in: baseline) {
                 // The record was made against another copy of that revision:
                 // the store's code for it is the code on screen. Nothing
                 // changed, so a mark would be about the bookkeeping and not
@@ -1336,6 +1384,14 @@ import ToolModuleKit
         // puts its comparison up, as opening it would.
         if let index = state.function { applyOpenComparison(for: index) }
         onSeenChanged?(seen)
+    }
+
+    /// Whether `revision` holds `function` as it reads now: the name, the
+    /// signature and the C the New mark is about. A mark against such a revision
+    /// would have nothing to compare and nothing to explain.
+    private static func holdsTheSame(_ function: CodeArtifact.Function, in revision: CodeArtifact) -> Bool {
+        guard let old = revision.functions.first(where: { $0.entry == function.entry }) else { return false }
+        return old.name == function.name && old.signature == function.signature && old.c == function.c
     }
 
     private static func seenRecords(of artifact: CodeArtifact, revision: Int) -> [String: SeenRecord] {
@@ -2272,7 +2328,22 @@ import ToolModuleKit
         navigatorBar.addSubview(searchField)
         navigatorBar.addSubview(orderButtons)
         functionPane.addSubview(navigatorBar)
-        searchToOrder = searchField.trailingAnchor.constraint(equalTo: orderButtons.leadingAnchor, constant: -6)
+        // help: panel.code.new-clear
+        clearNewMarksButton.image = NSImage(systemSymbolName: "eye", accessibilityDescription: nil)
+        clearNewMarksButton.imagePosition = .imageOnly
+        clearNewMarksButton.isBordered = false
+        clearNewMarksButton.bezelStyle = .inline
+        clearNewMarksButton.contentTintColor = .secondaryLabelColor
+        clearNewMarksButton.target = self
+        clearNewMarksButton.action = #selector(clearNewMarksChosen)
+        clearNewMarksButton.isEnabled = false
+        clearNewMarksButton.translatesAutoresizingMaskIntoConstraints = false
+        clearNewMarksButton.setContentHuggingPriority(.required, for: .horizontal)
+        clearNewMarksButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+        ControlHelp.describe(clearNewMarksButton, name: L("Clear New marks"),
+                             tooltip: L("Take the New mark off every function: what they changed counts as read"))
+        navigatorBar.addSubview(clearNewMarksButton)
+        searchToOrder = searchField.trailingAnchor.constraint(equalTo: clearNewMarksButton.leadingAnchor, constant: -6)
         searchToEdge = searchField.trailingAnchor.constraint(equalTo: navigatorBar.trailingAnchor, constant: -8)
         // Horizontal margins inside the navigator yield to a pane laid out at
         // no width: two required margins ask for a negative width there, and
@@ -2302,7 +2373,11 @@ import ToolModuleKit
             navigatorBar.heightAnchor.constraint(equalToConstant: Self.navigatorBarHeight),
             searchField.centerYAnchor.constraint(equalTo: navigatorBar.centerYAnchor, constant: 0.5),
             searchToOrder,
-            orderButtons.centerYAnchor.constraint(equalTo: navigatorBar.centerYAnchor, constant: 0.5)
+            orderButtons.centerYAnchor.constraint(equalTo: navigatorBar.centerYAnchor, constant: 0.5),
+            clearNewMarksButton.widthAnchor.constraint(equalToConstant: Self.orderButtonWidth),
+            clearNewMarksButton.heightAnchor.constraint(equalToConstant: Self.orderButtonHeight),
+            clearNewMarksButton.centerYAnchor.constraint(equalTo: orderButtons.centerYAnchor),
+            clearNewMarksButton.trailingAnchor.constraint(equalTo: orderButtons.leadingAnchor, constant: -6)
         ]
         constraints += margin(emptyListLabel.leadingAnchor, functionPane.leadingAnchor, 16)
         constraints += margin(emptyListLabel.trailingAnchor, functionPane.trailingAnchor, -16)

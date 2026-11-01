@@ -404,6 +404,8 @@
 "No earlier revision of this reading is open to compare with." = "Die vorige Revision dieser Analyse ist nicht geöffnet — nichts zum Vergleichen.";
 "New against %1$@" = "Neu gegenüber %1$@";
 "New against the revision before" = "Neu gegenüber der vorigen Revision";
+"Clear New marks" = "Markierungen „Neu“ entfernen";
+"Take the New mark off every function: what they changed counts as read" = "Die Markierung „Neu“ von allen Funktionen entfernen: ihre Änderungen gelten als gelesen";
 "Renamed: %1$@ → %2$@" = "Umbenannt: %1$@ → %2$@";
 "Signature: %1$@ → %2$@" = "Signatur: %1$@ → %2$@";
 "no signature" = "keine Signatur";

@@ -404,6 +404,8 @@
 "No earlier revision of this reading is open to compare with." = "Предыдущая ревизия этого разбора не открыта — сравнивать не с чем.";
 "New against %1$@" = "Новая по сравнению с %1$@";
 "New against the revision before" = "Новая по сравнению с предыдущей ревизией";
+"Clear New marks" = "Снять метки «Новая»";
+"Take the New mark off every function: what they changed counts as read" = "Снять метку «Новая» со всех функций: их изменения считаются просмотренными";
 "Renamed: %1$@ → %2$@" = "Переименована: %1$@ → %2$@";
 "Signature: %1$@ → %2$@" = "Сигнатура: %1$@ → %2$@";
 "no signature" = "нет сигнатуры";
