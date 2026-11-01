@@ -403,8 +403,13 @@ match is by body: the same code, with the addresses a relocation moves masked.
 
 - A function no review named takes the whole entry — name, signature with its
   storage, variables, plate, step comments, the library tag — and carries the
-  entry's mark (`results[].marked`). A newer version of the entry replaces it
-  at the next open while the function is not edited.
+  entry's mark (`results[].marked`). A whole apply replaces the review, names
+  below included: a local the entry does not name is removed, not left beside
+  the entry's (a fill only adds and retypes). A newer version of the entry
+  replaces it at the next open while the function is not edited. An entry
+  published before its module read the decompiled C — its locals then came
+  from the listing — carries the listing's leftovers: republish the function
+  first, then apply, or a whole apply brings that dirt along.
 - A function a review named takes the entry's name (the old one is kept in
   the name's reason) and only what its review left empty. `results[].renamed`
   says what was renamed; `differences` what the review says otherwise — keep
@@ -412,6 +417,11 @@ match is by body: the same code, with the addresses a relocation moves masked.
   `address` and `replace: true`, or make the module's the entry's next version
   at the publish (`take_library_conflicts` with a reason). Never leave two
   names for one body: the registry's name is the one every module shows.
+- What an entry carries is the review the decompiled C shows: locals with the
+  decompiler's names and types, and none for a stack slot the C never reads.
+  A publish whose offer differs from the entry's object is its next version
+  when the function carries that version — so republishing a module whose
+  entries were made from the listing writes the clean review over them.
 - `edited`: a function applied and edited since. It is the review's now; a
   newer version of the entry is offered, not applied. `replace: true` puts the
   entry's review in place of it; `fields` takes only the parts named —

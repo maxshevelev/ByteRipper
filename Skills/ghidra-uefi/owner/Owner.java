@@ -1241,6 +1241,27 @@ public class Owner {
      * from the entry, variables by their storage.
      */
     private JsonObject libraryEntry(Function function, String kind, JsonObject body) {
+        return libraryEntry(function, kind, body, true);
+    }
+
+    /**
+     * What the listing alone says of a review, for the digest a mark keeps:
+     * does the function read otherwise than when the mark was written? Cheap
+     * on purpose — a status call asks it for every match, and the listing's
+     * names and types are the ones a review writes.
+     */
+    private JsonObject libraryEntryListing(Function function, String kind, JsonObject body) {
+        return libraryEntry(function, kind, body, false);
+    }
+
+    /**
+     * One function's review as the registry keeps it. The locals are the
+     * decompiled C's, not the listing's: the listing holds stack slots the C
+     * never mentions, and a local's type in the listing may be `undefined4`
+     * where the decompiler reads it as `UINT32`. Between them the two would
+     * put a review in the registry that no module shows.
+     */
+    private JsonObject libraryEntry(Function function, String kind, JsonObject body, boolean decompiler) {
         Address entry = function.getEntryPoint();
         JsonObject answer = new JsonObject();
         answer.addProperty("schema", 1);
@@ -1260,6 +1281,26 @@ public class Owner {
             parameters.add(item);
         }
         answer.add("params", parameters);
+        // The locals the C shows, by the place the program stores them: the
+        // decompiler's name and type for a stored variable, and nothing for a
+        // slot the C never reads.
+        java.util.Map<String, HighSymbol> shown = new java.util.HashMap<>();
+        if (decompiler) {
+            DecompileResults results = decompile(function);
+            HighFunction high = results == null ? null : results.getHighFunction();
+            if (high != null) {
+                Iterator<HighSymbol> symbols = high.getLocalSymbolMap().getSymbols();
+                while (symbols.hasNext()) {
+                    HighSymbol symbol = symbols.next();
+                    if (symbol.isParameter()) continue;
+                    if (symbol instanceof ghidra.program.model.pcode.EquateSymbol) continue;
+                    if (unshared(symbol.getStorage())) continue;
+                    Address pc = symbol.getPCAddress();
+                    long firstUse = pc == null ? -1 : pc.subtract(entry);
+                    shown.put(symbol.getStorage().toString() + "@" + firstUse, symbol);
+                }
+            }
+        }
         java.util.TreeMap<String, JsonObject> locals = new java.util.TreeMap<>();
         for (ghidra.program.model.listing.Variable local : function.getLocalVariables()) {
             // A decompiler temporary (`HASH:…`, `unique:…`) is named by a hash
@@ -1267,13 +1308,16 @@ public class Owner {
             // so it is the module's, not the entry's.
             ghidra.program.model.listing.VariableStorage held = local.getVariableStorage();
             if (held.isHashStorage() || held.isUniqueStorage()) continue;
+            String key = held.toString() + "@" + local.getFirstUseOffset();
+            HighSymbol symbol = decompiler ? shown.get(key) : null;
+            if (decompiler && symbol == null) continue;
             JsonObject item = new JsonObject();
-            String storage = local.getVariableStorage().toString();
-            item.addProperty("storage", storage);
+            item.addProperty("storage", held.toString());
             item.addProperty("first_use", String.format("0x%X", local.getFirstUseOffset()));
-            item.addProperty("name", local.getName());
-            item.addProperty("type", local.getDataType().getDisplayName());
-            locals.put(storage + "@" + local.getFirstUseOffset(), item);
+            item.addProperty("name", symbol == null ? local.getName() : symbol.getName());
+            DataType type = symbol == null ? local.getDataType() : symbol.getDataType();
+            item.addProperty("type", type == null ? "undefined" : type.getDisplayName());
+            locals.put(key, item);
         }
         JsonArray localList = new JsonArray();
         locals.values().forEach(localList::add);
@@ -1398,7 +1442,7 @@ public class Owner {
      */
     private String reviewDigest(Function function, ghidra.feature.fid.hash.FidHashQuad hash) throws Exception {
         String kind = ExportCode.libraryKind(function);
-        JsonObject entry = libraryEntry(function, kind == null ? "" : kind, bodyObject(hash));
+        JsonObject entry = libraryEntryListing(function, kind == null ? "" : kind, bodyObject(hash));
         byte[] bytes = COMPACT.toJson(entry).getBytes(StandardCharsets.UTF_8);
         return hexBytes(java.security.MessageDigest.getInstance("SHA-256").digest(bytes)).replace(" ", "");
     }
@@ -1767,6 +1811,17 @@ public class Owner {
         return copy;
     }
 
+    /** A storage in the decompiler's own space — a hash or unique address — is not a module's. */
+    private static boolean unshared(ghidra.program.model.listing.VariableStorage storage) {
+        if (storage == null) return false;
+        if (storage.isHashStorage() || storage.isUniqueStorage()) return true;
+        for (ghidra.program.model.pcode.Varnode piece : storage.getVarnodes()) {
+            if (piece.getAddress().getAddressSpace().getType()
+                    == ghidra.program.model.address.AddressSpace.TYPE_UNIQUE) return true;
+        }
+        return false;
+    }
+
     /** The function's signature, convention and parameter storage are the entry's already. */
     private static boolean sameSignature(Function function, JsonObject entry) {
         if (!function.getPrototypeString(false, false).equals(string(entry, "signature", null))) return false;
@@ -1900,6 +1955,23 @@ public class Owner {
     private void applyLocals(Function function, JsonObject entry, boolean whole, JsonArray filled,
                              JsonArray differences, JsonArray unplaced) throws Exception {
         JsonArray locals = entry.has("locals") ? entry.getAsJsonArray("locals") : new JsonArray();
+        if (whole) {
+            // The entry's review is the function's: a local it does not name
+            // is the old review's, and stays nowhere.
+            java.util.Set<String> kept = new java.util.HashSet<>();
+            for (JsonElement element : locals) {
+                JsonObject theirs = element.getAsJsonObject();
+                kept.add(theirs.get("storage").getAsString() + "@"
+                         + Long.decode(theirs.get("first_use").getAsString()));
+            }
+            for (ghidra.program.model.listing.Variable local : function.getLocalVariables()) {
+                ghidra.program.model.listing.VariableStorage held = local.getVariableStorage();
+                if (held.isHashStorage() || held.isUniqueStorage()) continue;
+                if (kept.contains(held.toString() + "@" + local.getFirstUseOffset())) continue;
+                filled.add("removed local " + local.getName());
+                function.removeVariable(local);
+            }
+        }
         for (JsonElement element : locals) {
             JsonObject theirs = element.getAsJsonObject();
             String place = theirs.get("storage").getAsString(), name = theirs.get("name").getAsString();
