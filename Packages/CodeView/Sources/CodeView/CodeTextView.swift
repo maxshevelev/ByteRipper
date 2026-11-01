@@ -189,8 +189,22 @@ final class CodeTextView: NSTextView {
         guard !highlighted.isEmpty else { return }
         for range in highlighted {
             boxes(range, inset: highlightInset, radius: CodeColors.symbolHighlightRadius,
-                  fill: CodeColors.symbolHighlight)
+                  fill: highlightFill(for: range))
         }
+    }
+
+    /// How much of the highlight's colour shows over a diff row's tint: the
+    /// tint stays visible through the box, so the reader sees both that the
+    /// name is highlighted and which side of the comparison the line is on.
+    static let highlightOverTint: CGFloat = 0.6
+
+    /// The fill of a highlight box: the panel's blue-grey as it is over plain
+    /// code, and thinned over a tinted row — a replacement there would punch
+    /// the row's colour out of the box.
+    func highlightFill(for range: NSRange) -> NSColor {
+        let tinted = rowTints.contains { NSIntersectionRange($0.range, range).length > 0 }
+        return tinted ? CodeColors.symbolHighlight.withAlphaComponent(Self.highlightOverTint)
+                      : CodeColors.symbolHighlight
     }
 
     /// What is highlighted now, for tests.

@@ -1612,6 +1612,20 @@ final class CodePaneViewTests: XCTestCase {
                        })
     }
 
+    /// The highlight over a diff row's tint lets the tint through — the box
+    /// adds its colour instead of replacing the row's — and stays as it is on
+    /// an unchanged line.
+    func testADiffHighlightBlendsWithTheRowsTint() {
+        let text = CodeTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 100))
+        text.rowTints = [(range: NSRange(location: 0, length: 10), color: .systemRed)]
+        XCTAssertLessThan(text.highlightFill(for: NSRange(location: 2, length: 3)).alphaComponent, 1,
+                          "the tint shows through the box")
+        XCTAssertEqual(text.highlightFill(for: NSRange(location: 2, length: 3)).alphaComponent,
+                       CodeTextView.highlightOverTint, accuracy: 0.001)
+        XCTAssertEqual(text.highlightFill(for: NSRange(location: 20, length: 3)).alphaComponent, 1,
+                       "plain code keeps the panel's own box")
+    }
+
     /// A name on a line the revisions share explains itself as one on a
     /// changed line does, and the popover sits beside the word — not at the
     /// top of the text's document, which is where a rect in the document's
