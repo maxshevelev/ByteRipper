@@ -287,13 +287,24 @@ final class LibraryRegistryTests: XCTestCase {
         ])
         XCTAssertEqual(LibraryEntryReview.gaps(of: thin), ["name", "plate", "comments", "params", "locals", "return"])
 
-        let typed = try entry([
+        // A register or a value split over registers is the decompiler's
+        // piece, as `assess` reads it: not a gap a review left.
+        let fragments = try entry([
             "name": "ReadSmn", "plate": "AGESA", "return_type": "UINT32", "comments": [["offset": "0x0"]],
             "params": [["name": "Address", "type": "UINT32"]],
-            "locals": [["name": "UVar1", "type": "UINT32"]]
+            "locals": [["storage": "ECX:4", "first_use": "0x4", "name": "extraout_EDX", "type": "UINT32"],
+                       ["storage": "EDX:4,EAX:4", "first_use": "0x8", "name": "uVar1", "type": "undefined8"],
+                       ["storage": "HASH:5f75a4dce4:1", "first_use": "0x6", "name": "in_EAX", "type": "UINT32"]]
         ])
-        XCTAssertEqual(LibraryEntryReview.gaps(of: typed), ["locals"],
-                       "a decompiler's temporary is a local a review did not name")
+        XCTAssertEqual(LibraryEntryReview.gaps(of: fragments), [])
+
+        let stack = try entry([
+            "name": "ReadSmn", "plate": "AGESA", "return_type": "UINT32", "comments": [["offset": "0x0"]],
+            "params": [["name": "Address", "type": "UINT32"]],
+            "locals": [["storage": "Stack[-0x4]:4", "first_use": "-0x1", "name": "uVar1", "type": "UINT32"]]
+        ])
+        XCTAssertEqual(LibraryEntryReview.gaps(of: stack), ["locals"],
+                       "a stack local the review never named is a gap")
 
         let placeholder = try entry([
             "name": "LibAmdIoWrite", "plate": "AGESA", "return_type": "void", "comments": [["offset": "0x0"]],

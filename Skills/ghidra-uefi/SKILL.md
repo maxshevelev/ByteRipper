@@ -418,7 +418,9 @@ match is by body: the same code, with the addresses a relocation moves masked.
   at the publish (`take_library_conflicts` with a reason). Never leave two
   names for one body: the registry's name is the one every module shows.
 - What an entry carries is the review the decompiled C shows: locals with the
-  decompiler's names and types, and none for a stack slot the C never reads.
+  decompiler's names and types, none for a stack slot the C never reads, and
+  none for a register or a value split over registers — those are the
+  decompiler's pieces, as the bar reads them, and never a gap.
   A publish whose offer differs from the entry's object is its next version
   when the function carries that version — so republishing a module whose
   entries were made from the listing writes the clean review over them.

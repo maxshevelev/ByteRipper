@@ -30,7 +30,12 @@ public enum LibraryEntryReview {
             gaps.append("params")
         }
         let locals = object["locals"] as? [[String: Any]] ?? []
-        if locals.contains(where: { isPlaceholder($0["name"] as? String) || isUndefined($0["type"] as? String) }) {
+        if locals.contains(where: { local in
+            // A register or a value split over registers is the decompiler's
+            // piece, as `assess` reads it; a stack slot is the review's.
+            guard (local["storage"] as? String ?? "").hasPrefix("Stack") else { return false }
+            return isPlaceholder(local["name"] as? String) || isUndefined(local["type"] as? String)
+        }) {
             gaps.append("locals")
         }
         if isUndefined(object["return_type"] as? String) { gaps.append("return") }

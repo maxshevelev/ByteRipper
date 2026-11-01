@@ -1774,7 +1774,11 @@ public class Owner {
         // Equal to the entry, apart from the body it is: the function is
         // the entry's, and carries the mark.
         ghidra.feature.fid.hash.FidHashQuad hash = new ghidra.feature.fid.service.FidService().hashFunction(function);
-        JsonObject now = hash == null ? null : libraryEntry(function, kind == null ? "" : kind, bodyObject(hash));
+        // The listing's reading, not the decompiler's: it is what a review
+        // writes, it costs no decompilation, and when it equals the entry's
+        // the entry's review is the function's.
+        JsonObject now = hash == null ? null
+            : libraryEntryListing(function, kind == null ? "" : kind, bodyObject(hash));
         boolean equal = now != null && review(now).equals(review(entry));
         StringPropertyMap issues = program.getUsrPropertyManager().getStringPropertyMap(LIBRARY_ISSUE);
         if (issues != null) issues.remove(function.getEntryPoint());
