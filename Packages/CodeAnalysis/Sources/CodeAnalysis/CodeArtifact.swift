@@ -733,3 +733,20 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         }
     }
 }
+
+extension CodeArtifact {
+    /// Each function's review gaps by its entry, in the analysis's words:
+    /// what `review_gaps` recorded at the publish, and `return` when the
+    /// prototype's return type is still the decompiler's. The reading a
+    /// registry decision is made on — the listing's local variables are not,
+    /// since they include stack slots the decompiled C never mentions.
+    public func reviewGapsByEntry() -> [String: [String]] {
+        var gaps: [String: [String]] = [:]
+        for function in functions {
+            var words = function.reviewGaps
+            if LibraryEntryReview.hasPlaceholderReturn(function.signature) { words.append("return") }
+            gaps[function.entry.description.lowercased()] = words
+        }
+        return gaps
+    }
+}

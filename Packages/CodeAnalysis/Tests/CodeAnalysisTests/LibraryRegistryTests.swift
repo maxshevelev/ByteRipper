@@ -303,6 +303,24 @@ final class LibraryRegistryTests: XCTestCase {
                        "a parameter the review never typed")
         XCTAssertEqual(LibraryEntryReview.gaps(of: Data("not json".utf8)), [])
     }
+    /// A published analysis' gaps by entry: what the review recorded, plus a
+    /// placeholder return type, so a registry decision reads the same words
+    /// the panel shows — and never the listing's unused stack slots.
+    func testAnAnalysissGapsAreReadByEntry() throws {
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+            {"script_version": 9, "ghidra": "12.1.2", "functions": [
+              {"entry": "0x1000", "name": "SetMem", "signature": "void SetMem(void)",
+               "review_gaps": ["plate"], "instructions": [{"address": "0x1000", "text": "RET"}]},
+              {"entry": "0x2000", "name": "RShiftU64", "signature": "undefined8 RShiftU64(UINT64 A)",
+               "instructions": [{"address": "0x2000", "text": "RET"}]}
+            ]}
+            """.utf8))
+        let gaps = artifact.reviewGapsByEntry()
+        XCTAssertEqual(gaps["0x1000"], ["plate"])
+        XCTAssertEqual(gaps["0x2000"], ["return"], "an undefined return type is the decompiler's")
+        XCTAssertNil(gaps["0x3000"])
+    }
+
     func testABadBodyOrKindIsRefused() {
         let bad = LibraryBody(size: 0x15, full: "not-a-hash", specific: "0123456789abcdef")
         XCTAssertThrowsError(try store.putLibraryEntries(module: first, rev: 1, by: nil,

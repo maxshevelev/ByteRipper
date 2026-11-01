@@ -66,9 +66,6 @@ extension GhidraHost {
         var near: [String]?
         var mark: Mark?
         var declined: [String]?
-        /// What the function's review still lacks, read in the owner without
-        /// the decompiler.
-        var gaps: [String]?
     }
 
     /// A constant where the function and an entry of its shape differ.
@@ -193,7 +190,7 @@ extension GhidraHost {
                       codes: [String]? = nil, differences: [LibraryConstant]? = nil, why: String? = nil) -> LibraryStep {
                 LibraryStep(address: match.address, name: match.name, entryName: held.name, id: id,
                             version: held.version, mode: mode, state: state, codes: codes,
-                            differences: differences, why: why, gaps: match.gaps)
+                            differences: differences, why: why)
             }
             // A function carrying an entry's mark: current, behind, or the
             // review's since it was edited.
@@ -399,24 +396,29 @@ extension GhidraHost {
         }
         var plan = Self.libraryPlan(answer.matches, index: index, hashed: answer.hashed,
                                     comparisons: comparisons)
-        // The entries' own gaps, beside the functions': the comparison a
-        // decision is made on. Read once per entry the plan asks about, not
-        // for the functions already carrying their entry.
+        // Both reviews' gaps, for the comparison a decision is made on. The
+        // function's are the last published analysis's, not the listing's:
+        // the listing's locals include stack slots the decompiled C never
+        // mentions, and reading them would call a finished function unfinished.
+        let stored = try? await writer.reviewGaps(module: module)
         var entryGaps: [String: [String]] = [:]
-        for id in Set((plan.toApply + plan.edited + plan.candidates).map(\.id)) {
+        for id in Set((plan.applied + plan.toApply + plan.edited + plan.candidates + plan.declined).map(\.id)) {
             guard let held = index.entries[id], let data = try? await writer.readObject(held.entry) else { continue }
             entryGaps[id] = LibraryEntryReview.gaps(of: data)
         }
-        func withEntryGaps(_ steps: [LibraryStep]) -> [LibraryStep] {
+        func attached(_ steps: [LibraryStep]) -> [LibraryStep] {
             steps.map { step in
                 var step = step
                 step.entryGaps = entryGaps[step.id]
+                if let stored { step.gaps = stored[step.address.lowercased()] }
                 return step
             }
         }
-        plan.toApply = withEntryGaps(plan.toApply)
-        plan.edited = withEntryGaps(plan.edited)
-        plan.candidates = withEntryGaps(plan.candidates)
+        plan.applied = attached(plan.applied)
+        plan.toApply = attached(plan.toApply)
+        plan.edited = attached(plan.edited)
+        plan.candidates = attached(plan.candidates)
+        plan.declined = attached(plan.declined)
         return (plan, index)
     }
 

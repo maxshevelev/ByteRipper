@@ -1434,12 +1434,6 @@ public class Owner {
             item.addProperty("key", key);
             String kind = ExportCode.libraryKind(function);
             if (kind != null) item.addProperty("kind", kind);
-            // What the function's own review still lacks, for the comparison
-            // with the entry's: read without the decompiler, so a status call
-            // stays a read.
-            JsonArray gaps = new JsonArray();
-            ExportCode.reviewGaps(function).forEach(gaps::add);
-            item.add("gaps", gaps);
             if (exact != null) item.add("exact", exact);
             if (near != null) item.add("near", near);
             if (mark != null) {
@@ -1719,13 +1713,15 @@ public class Owner {
             function.addTag(ASSERT_TAG);
         }
         decompiled.remove(function.getEntryPoint());
-        // What the review still lacks after this, read without the decompiler:
-        // a fill that leaves a local unnamed says so now, not at the next code
-        // read that fails the review filter.
-        java.util.List<String> leftovers = ExportCode.reviewGaps(function);
-        if (!leftovers.isEmpty()) {
+        // What the review still lacks after this, by the bar's own reading —
+        // the decompiler's local map, not the listing's, which holds stack
+        // slots the C never mentions. A fill that leaves a local unnamed says
+        // so now, not at the next code read that fails the review filter.
+        ExportCode.Assessment after = ExportCode.assess(
+            function, decompile(function), ExportCode.stepComments(function));
+        if (!after.gaps.isEmpty()) {
             JsonArray left = new JsonArray();
-            leftovers.forEach(left::add);
+            after.gaps.forEach(left::add);
             answer.add("leftovers", left);
         }
         // Equal to the entry, apart from the body it is: the function is

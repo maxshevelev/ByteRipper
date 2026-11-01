@@ -196,21 +196,10 @@ final class GhidraHostLibraryPlanTests: XCTestCase {
     }
 
     private func match(_ address: String, named: Bool = true, exact: String? = nil, near: [String]? = nil,
-                       mark: GhidraHost.LibraryMatch.Mark? = nil, declined: [String]? = nil,
-                       gaps: [String]? = nil) -> GhidraHost.LibraryMatch {
+                       mark: GhidraHost.LibraryMatch.Mark? = nil,
+                       declined: [String]? = nil) -> GhidraHost.LibraryMatch {
         GhidraHost.LibraryMatch(address: address, name: "F\(address.suffix(4))", named: named, key: "k",
-                                kind: nil, exact: exact, near: near, mark: mark, declined: declined,
-                                gaps: gaps)
-    }
-
-    /// A match's `gaps` are the function's own; they reach the step, where
-    /// the entry's `entry_gaps` are put beside them for the comparison a
-    /// decision is made on.
-    func testAMatchCarriesTheFunctionsGapsToTheStep() {
-        let plan = GhidraHost.libraryPlan([match("0x2000", exact: setMem.key, gaps: ["plate", "locals"])],
-                                          index: index, hashed: 1, comparisons: [:])
-        XCTAssertEqual(plan.toApply.first?.gaps, ["plate", "locals"])
-        XCTAssertNil(plan.toApply.first?.entryGaps, "the host reads the entry's from its object")
+                                kind: nil, exact: exact, near: near, mark: mark, declined: declined)
     }
 
     func testTheKeysAreEveryBodyAndEveryShape() {

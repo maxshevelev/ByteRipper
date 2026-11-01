@@ -137,6 +137,9 @@ public protocol AnalysisWriter: Sendable {
     /// What `writeLibraryEntries` would do, writing nothing.
     func previewLibraryEntries(module: SHA256Digest, rev: Int?, by: String?, proposals: [LibraryProposal],
                                take: LibraryTake) async throws -> LibraryWriteResult
+    /// The last published analysis' review gaps by function entry; nil when
+    /// the module has no stored analysis.
+    func reviewGaps(module: SHA256Digest) async throws -> [String: [String]]?
     /// The registry as the store holds it, for matching a module against it.
     func readLibraryIndex() async throws -> LibraryIndex
     func readLibraryHistory(id: String) async throws -> LibraryHistory?
@@ -175,6 +178,13 @@ extension ContentStore: AnalysisWriter {
         try putLibraryEntries(module: module, rev: rev, by: by, proposals: proposals, take: take, dryRun: true)
     }
 
+    public func reviewGaps(module: SHA256Digest) async throws -> [String: [String]]? {
+        guard let manifest = try analysis(module: module), let artifact = try? artifact(for: manifest) else {
+            return nil
+        }
+        return artifact.reviewGapsByEntry()
+    }
+
     public func readLibraryIndex() async throws -> LibraryIndex { try libraryIndex() }
     public func readLibraryHistory(id: String) async throws -> LibraryHistory? { try libraryHistory(id: id) }
     public func readObject(_ digest: SHA256Digest) async throws -> Data { try object(digest) }
@@ -211,6 +221,12 @@ extension RemoteStore: AnalysisWriter {
                                       take: LibraryTake) async throws -> LibraryWriteResult {
         try await putLibraryEntries(module: module, rev: rev, by: by, proposals: proposals, take: take,
                                     dryRun: true)
+    }
+
+    public func reviewGaps(module: SHA256Digest) async throws -> [String: [String]]? {
+        guard let manifest = try await self.module(module).manifests.first else { return nil }
+        let data = try await object(manifest.artifact.sha256)
+        return (try? JSONDecoder().decode(CodeArtifact.self, from: data))?.reviewGapsByEntry()
     }
 
     public func readLibraryIndex() async throws -> LibraryIndex { try await libraryIndex() }

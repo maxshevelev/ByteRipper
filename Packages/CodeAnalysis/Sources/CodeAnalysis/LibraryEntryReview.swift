@@ -54,6 +54,15 @@ public enum LibraryEntryReview {
         return type.hasPrefix("undefined")
     }
 
+    /// Whether a prototype's return type is Ghidra's placeholder — `undefined`
+    /// or `undefined8` — which no review filled in. A prototype keeps its
+    /// return type first, so its first word is that.
+    public static func hasPlaceholderReturn(_ signature: String?) -> Bool {
+        guard let signature else { return false }
+        let returnType = signature.split(separator: " ", maxSplits: 1).first.map(String.init) ?? ""
+        return returnType.hasPrefix("undefined")
+    }
+
     private static let placeholder: NSRegularExpression? = try? NSRegularExpression(
         pattern: "^(param_\\d+|local_[0-9a-fA-F]+|FUN_[0-9a-fA-F]+|[A-Za-z_][A-Za-z0-9_]*Var\\d+"
             + "|extraout_[A-Z0-9]+|in_[A-Z0-9]+|unaff_[A-Z0-9]+|undefined.*)$")

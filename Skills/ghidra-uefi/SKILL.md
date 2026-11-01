@@ -363,13 +363,16 @@ and `library_error` when a named entry is not a conflict — read it before the
 publish when the decision is large.
 
 `ghidra_library` lists each match with two readings of the same review: `gaps`
-— what the function's own review still lacks, read in the owner without the
-decompiler — and `entry_gaps` — what the entry's review lacks, read from the
-entry object. Compare them before changing anything: a function with gaps and
-an entry without is the entry's; the other way round is this module's. The
-names-and-types reading says what it can: a value the entry split into two
-variables (a 64-bit register as two dwords) is a reading of the C, not a gap,
-and stays one.
+— what the function's review still lacks, as the last published analysis
+recorded it (the bar's own reading, not the listing's, whose locals include
+stack slots the decompiled C never mentions) — and `entry_gaps` — what the
+entry's review lacks, read from the entry object. Compare them before
+changing anything: a function with gaps and an entry without is the entry's;
+the other way round is this module's. If the program has changed since that
+publish, `code_query` says so with `unpublished_writes`, and the gaps are the
+published ones. The names-and-types reading says what it can: a value the
+entry split into two variables (a 64-bit register as two dwords) is a reading
+of the C, not a gap, and stays one.
 
 **Resolving a conflict.** `library.conflicts` means the registry holds another
 review of the same body than this module's, and neither side is right by

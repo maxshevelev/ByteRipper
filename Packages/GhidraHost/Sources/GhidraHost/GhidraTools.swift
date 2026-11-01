@@ -192,8 +192,9 @@ public enum GhidraTools {
                     review says why the values make no difference. `declined`: entries a review refused \
                     for the function. With `id`: one entry — its index row, its review, its history and \
                     `gaps`, what its review lacks, read from the review itself. A match's `gaps` are the \
-                    function's own missing parts, and `entry_gaps` the entry's, so a decision to apply, \
-                    replace or take can be made without opening either.
+                    function's own missing parts as the last published analysis recorded them, and \
+                    `entry_gaps` the entry's, so a decision to apply, replace or take can be made without \
+                    opening either — and the two are read in the same words.
                     """,
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,
