@@ -2258,31 +2258,35 @@ import ToolModuleKit
             constraint.priority = NSLayoutConstraint.Priority(999)
             return [constraint]
         }
-        NSLayoutConstraint.activate([
-            emptyListLabel.topAnchor.constraint(equalTo: listControl.bottomAnchor, constant: 16)
-        ] + margin(emptyListLabel.leadingAnchor, functionPane.leadingAnchor, 16)
-          + margin(emptyListLabel.trailingAnchor, functionPane.trailingAnchor, -16)
-          + [navigatorLabel.topAnchor.constraint(equalTo: functionPane.topAnchor, constant: 12),
-             listControl.topAnchor.constraint(equalTo: navigatorLabel.bottomAnchor,
-                                              constant: Self.navigatorSpacing),
-             functionScroll.topAnchor.constraint(equalTo: listControl.bottomAnchor,
+        // Built a part at a time: one expression of this many arrays takes
+        // the type checker of Xcode 26.3 past its time limit.
+        var constraints: [NSLayoutConstraint] = [
+            emptyListLabel.topAnchor.constraint(equalTo: listControl.bottomAnchor, constant: 16),
+            navigatorLabel.topAnchor.constraint(equalTo: functionPane.topAnchor, constant: 12),
+            listControl.topAnchor.constraint(equalTo: navigatorLabel.bottomAnchor,
+                                             constant: Self.navigatorSpacing),
+            functionScroll.topAnchor.constraint(equalTo: listControl.bottomAnchor,
                                                 constant: Self.navigatorSpacing),
-             functionScroll.bottomAnchor.constraint(equalTo: navigatorBar.topAnchor),
-             navigatorBar.leadingAnchor.constraint(equalTo: functionPane.leadingAnchor),
-             navigatorBar.trailingAnchor.constraint(equalTo: functionPane.trailingAnchor),
-             navigatorBar.bottomAnchor.constraint(equalTo: functionPane.bottomAnchor),
-             navigatorBar.heightAnchor.constraint(equalToConstant: Self.navigatorBarHeight),
-             searchField.centerYAnchor.constraint(equalTo: navigatorBar.centerYAnchor, constant: 0.5),
-             searchToOrder,
-             orderButtons.centerYAnchor.constraint(equalTo: navigatorBar.centerYAnchor, constant: 0.5)]
-          + margin(navigatorLabel.leadingAnchor, functionPane.leadingAnchor, 12)
-          + margin(navigatorLabel.trailingAnchor, functionPane.trailingAnchor, -8)
-          + margin(listControl.leadingAnchor, functionPane.leadingAnchor, 8)
-          + margin(listControl.trailingAnchor, functionPane.trailingAnchor, -8)
-          + margin(functionScroll.leadingAnchor, functionPane.leadingAnchor, 8)
-          + margin(functionScroll.trailingAnchor, functionPane.trailingAnchor, -8)
-          + margin(searchField.leadingAnchor, navigatorBar.leadingAnchor, 8)
-          + margin(orderButtons.trailingAnchor, navigatorBar.trailingAnchor, -6))
+            functionScroll.bottomAnchor.constraint(equalTo: navigatorBar.topAnchor),
+            navigatorBar.leadingAnchor.constraint(equalTo: functionPane.leadingAnchor),
+            navigatorBar.trailingAnchor.constraint(equalTo: functionPane.trailingAnchor),
+            navigatorBar.bottomAnchor.constraint(equalTo: functionPane.bottomAnchor),
+            navigatorBar.heightAnchor.constraint(equalToConstant: Self.navigatorBarHeight),
+            searchField.centerYAnchor.constraint(equalTo: navigatorBar.centerYAnchor, constant: 0.5),
+            searchToOrder,
+            orderButtons.centerYAnchor.constraint(equalTo: navigatorBar.centerYAnchor, constant: 0.5)
+        ]
+        constraints += margin(emptyListLabel.leadingAnchor, functionPane.leadingAnchor, 16)
+        constraints += margin(emptyListLabel.trailingAnchor, functionPane.trailingAnchor, -16)
+        constraints += margin(navigatorLabel.leadingAnchor, functionPane.leadingAnchor, 12)
+        constraints += margin(navigatorLabel.trailingAnchor, functionPane.trailingAnchor, -8)
+        constraints += margin(listControl.leadingAnchor, functionPane.leadingAnchor, 8)
+        constraints += margin(listControl.trailingAnchor, functionPane.trailingAnchor, -8)
+        constraints += margin(functionScroll.leadingAnchor, functionPane.leadingAnchor, 8)
+        constraints += margin(functionScroll.trailingAnchor, functionPane.trailingAnchor, -8)
+        constraints += margin(searchField.leadingAnchor, navigatorBar.leadingAnchor, 8)
+        constraints += margin(orderButtons.trailingAnchor, navigatorBar.trailingAnchor, -6)
+        NSLayoutConstraint.activate(constraints)
         searchToOrder.priority = NSLayoutConstraint.Priority(999)
         searchToEdge.priority = NSLayoutConstraint.Priority(999)
 
