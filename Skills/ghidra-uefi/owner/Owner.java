@@ -1297,7 +1297,7 @@ public class Owner {
                     if (unshared(symbol.getStorage())) continue;
                     Address pc = symbol.getPCAddress();
                     long firstUse = pc == null ? -1 : pc.subtract(entry);
-                    shown.put(symbol.getStorage().toString() + "@" + firstUse, symbol);
+                    shown.put(place(symbol.getStorage(), firstUse), symbol);
                 }
             }
         }
@@ -1308,7 +1308,7 @@ public class Owner {
             // so it is the module's, not the entry's.
             ghidra.program.model.listing.VariableStorage held = local.getVariableStorage();
             if (held.isHashStorage() || held.isUniqueStorage()) continue;
-            String key = held.toString() + "@" + local.getFirstUseOffset();
+            String key = place(held, local.getFirstUseOffset());
             HighSymbol symbol = decompiler ? shown.get(key) : null;
             if (decompiler && symbol == null) continue;
             JsonObject item = new JsonObject();
@@ -1813,6 +1813,18 @@ public class Owner {
         copy.remove("body");
         copy.remove("constants");
         return copy;
+    }
+
+    /**
+     * Where a local lives, as the two readings spell it: a stack slot is one
+     * variable and has no first use of its own — the program writes -1 and the
+     * decompiler gives the address of the first use — so the slot alone names
+     * it; a register may hold several in a function, and the first use tells
+     * them apart.
+     */
+    private static String place(ghidra.program.model.listing.VariableStorage storage, long firstUse) {
+        String place = storage.toString();
+        return place.startsWith("Stack") ? place : place + "@" + firstUse;
     }
 
     /** A storage in the decompiler's own space — a hash or unique address — is not a module's. */
