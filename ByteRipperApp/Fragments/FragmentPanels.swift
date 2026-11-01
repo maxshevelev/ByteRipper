@@ -501,12 +501,15 @@ import ToolModuleKit
         entry.screen = .code(screen)
         // A later revision of the same reading: the functions it changed wear
         // New until opened. Another recipe is a different reading.
+        var previousRevision: (revision: Int, artifact: CodeArtifact)?
         if case .code(let before) = shown, let previous,
            before.manifest.recipe.id == screen.manifest.recipe.id,
            let was = before.manifest.reading?.rev,
            let now = screen.manifest.reading?.rev, now > was {
-            codePane.markRevisionChange(from: previous)
+            codePane.markRevisionChange(from: previous, revision: was)
+            previousRevision = (was, previous)
         }
+        wireCodeRevisions(codePane, previous: previousRevision)
         codePane.restore(at: screen.place, function: screen.selectedFunction,
                          instruction: screen.selectedInstruction,
                          showsC: screen.showsC)

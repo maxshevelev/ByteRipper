@@ -121,6 +121,27 @@ import ToolModuleKit
     private let rightSplit = ALSplitView()
     private let hexDumpBar = CodeDumpBar()
     private let hexDumpButton = NSButton()
+    /// The dump bar's revision comparison, as Xcode puts one there: the
+    /// current revision, the two arrows, the revision the code is compared
+    /// against and Reset.
+    private let compareLabel = NSTextField(labelWithString: "")
+    private let compareArrows = NSImageView()
+    private let revisionPopup = CodeRevisionPopup()
+    private let resetComparisonButton = NSButton()
+    /// What the popup offers; empty until the app has read the module's
+    /// history, and the bar stays out of sight while it is.
+    private var revisionChoices: [RevisionChoice] = []
+    /// Whether the module has a history at all, so the bar holds its place
+    /// while nothing in it is comparable yet.
+    private var hasRevisionHistory = false
+    /// The revision the Diff compares against; nil for none.
+    public private(set) var comparisonRevision: Int?
+    /// The revision before the one on screen, and its code: what opening a
+    /// function the revision changed compares against by itself.
+    private var previousRevision: (revision: Int, artifact: CodeArtifact)?
+    /// The app asks for a revision when the reader picks one — the artifact
+    /// is loaded off the pane's hands — and for none when Reset is pressed.
+    public var onChooseRevision: ((Int?) -> Void)?
     private let moduleHexView: NSView
     private var hexDumpVisible = true
     private static let hexDumpHeight: CGFloat = 220
@@ -239,23 +260,10 @@ import ToolModuleKit
                     ? $0.recipe.id < $1.recipe.id
                     : $0.analyzedAt > $1.analyzedAt
             }
-        // ASM and C are names of formats, not words to translate. Diff is the
-        // two arrows of a comparison rather than a word, and Description
-        // closes the switch.
+        // ASM and C are names of formats, not words to translate.
         modeControl = NSSegmentedControl(
-            labels: ["ASM", "C", "", L("Description")], trackingMode: .selectOne,
+            labels: ["ASM", "C", L("Description")], trackingMode: .selectOne,
             target: nil, action: nil)
-        if let arrows = NSImage(systemSymbolName: "arrow.left.arrow.right",
-                                accessibilityDescription: L("Diff")) {
-            let sized = arrows.withSymbolConfiguration(
-                NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)) ?? arrows
-            modeControl.setImage(sized, forSegment: Self.diffSegment)
-            modeControl.setWidth(34, forSegment: Self.diffSegment)
-            modeControl.setToolTip(L("Diff"), forSegment: Self.diffSegment)
-        }
-        // Diff waits for a revision: without one there is nothing to compare
-        // the code with, and the segment is not offered.
-        modeControl.setEnabled(false, forSegment: Self.diffSegment)
         listControl = NSSegmentedControl(
             labels: [L("Functions"), L("Strings"), L("POST"), L("Status")],
             trackingMode: .selectOne, target: nil, action: nil)
@@ -351,28 +359,128 @@ import ToolModuleKit
     public var showsDecompiledC: Bool {
         modeControl.selectedSegment > 1 ? codeShowsC : modeControl.selectedSegment == 1
     }
-    /// The C against the revision before this one.
-    public var showsRevisionDiff: Bool { modeControl.selectedSegment == Self.diffSegment }
-    private static let diffSegment = 2
+    /// The C against a revision, while one is compared against and the C side
+    /// is the one on screen: the comparison shows there and nowhere else.
+    public var showsRevisionDiff: Bool { comparisonRevision != nil && modeControl.selectedSegment == 1 }
     /// The module's description is on screen in place of the code.
     public var showsDescription: Bool { modeControl.selectedSegment == Self.descriptionSegment }
-    private static let descriptionSegment = 3
+    private static let descriptionSegment = 2
 
     /// Whether the pane has a revision to compare the code against.
     public var canShowRevisionDiff: Bool { revisionBaseline != nil }
 
-    /// Shows the C against the earlier revision, or the code again — as the
-    /// segment does. Nothing happens without a revision to compare with.
-    public func showRevisionDiff(_ shows: Bool) {
-        guard shows else {
-            guard showsRevisionDiff else { return }
-            modeControl.selectedSegment = codeShowsC ? 1 : 0
-            applyMode()
-            return
+    /// A revision the dump bar's picker offers: what it is called, and
+    /// whether the store holds the code to compare against.
+    public struct RevisionChoice: Equatable, Sendable {
+        public let revision: Int
+        public let title: String
+        public let hasCode: Bool
+
+        public init(revision: Int, title: String, hasCode: Bool) {
+            self.revision = revision
+            self.title = title
+            self.hasCode = hasCode
         }
-        guard canShowRevisionDiff else { return }
-        modeControl.selectedSegment = Self.diffSegment
+    }
+
+    /// What the dump bar's picker offers and which revision is on screen:
+    /// the app reads the module's history and says so here. With nothing to
+    /// offer the whole comparison stays out of the bar.
+    public func setRevisionChoices(_ choices: [RevisionChoice], current: Int?,
+                                   knowsRevisions: Bool = false) {
+        revisionChoices = choices
+        hasRevisionHistory = knowsRevisions || !choices.isEmpty
+        compareLabel.stringValue = current.map { L("This revision (r%1$@)", String($0)) } ?? L("This revision")
+        rebuildRevisionMenu()
+        layOutComparison()
+    }
+
+    /// The revision the Diff compares against, its code loaded by the app;
+    /// nil clears the comparison. The segment follows whether there is one.
+    public func setComparisonRevision(_ revision: Int?, artifact: CodeArtifact?) {
+        comparisonRevision = artifact == nil ? nil : revision
+        revisionBaseline = artifact
+        revisionCount += 1
+        drawnDiff = nil
+        selectRevisionItem(comparisonRevision)
+        layOutComparison()
         applyMode()
+    }
+
+    /// For a test: what the picker offers, by title.
+    var revisionChoiceTitles: [String] {
+        (revisionPopup.menu?.items ?? []).filter { !$0.isSeparatorItem }.map(\.title)
+    }
+    var comparisonIsHidden: Bool { compareLabel.isHidden }
+    var comparisonResetIsHidden: Bool { resetComparisonButton.isHidden }
+    var comparisonResetIsEnabled: Bool { resetComparisonButton.isEnabled }
+    var comparisonResetTint: NSColor? { resetComparisonButton.contentTintColor }
+    var revisionPickerIsBordered: Bool { revisionPopup.isBordered }
+    /// Whether the picker offers a revision, for a test: a revision the store
+    /// has no code for is listed greyed and cannot be chosen.
+    func revisionChoiceIsEnabled(_ revision: Int) -> Bool? {
+        revisionPopup.menu?.items.first { $0.tag == revision }?.isEnabled
+    }
+    /// Picks a revision in the bar as the reader would.
+    func chooseRevisionMenuTag(_ tag: Int) { chooseRevision(tag) }
+
+    @objc private func resetComparison() { onChooseRevision?(nil) }
+
+    @objc private func revisionChosen(_ sender: NSMenuItem) { chooseRevision(sender.tag) }
+
+    private func chooseRevision(_ tag: Int) {
+        onChooseRevision?(tag < 0 ? nil : tag)
+    }
+
+    private func rebuildRevisionMenu() {
+        let menu = NSMenu()
+        // A menu enables every item whose target can take its action, which
+        // would offer a revision the store has no code for: the enabled flags
+        // below are the ones meant.
+        menu.autoenablesItems = false
+        let none = NSMenuItem(title: L("No comparison"), action: #selector(revisionChosen(_:)), keyEquivalent: "")
+        none.tag = -1
+        none.target = self
+        menu.addItem(none)
+        if !revisionChoices.isEmpty { menu.addItem(.separator()) }
+        for choice in revisionChoices {
+            let item = NSMenuItem(title: choice.title, action: #selector(revisionChosen(_:)),
+                                  keyEquivalent: "")
+            item.tag = choice.revision
+            item.target = self
+            item.isEnabled = choice.hasCode
+            menu.addItem(item)
+        }
+        revisionPopup.menu = menu
+    }
+
+    private func selectRevisionItem(_ revision: Int?) {
+        let tag = revision ?? -1
+        if let item = revisionPopup.menu?.items.first(where: { $0.tag == tag }) {
+            revisionPopup.select(item)
+        } else {
+            revisionPopup.selectItem(at: 0)
+        }
+    }
+
+    /// The comparison shows only when the app found revisions to offer. Reset
+    /// stays beside the picker always, disabled while there is nothing to
+    /// reset — a control that comes and goes moves the picker under the
+    /// pointer.
+    private func layOutComparison() {
+        let shows = hasRevisionHistory
+        for view in [compareLabel, compareArrows, revisionPopup, resetComparisonButton] as [NSView] {
+            view.isHidden = !shows
+        }
+        updateResetButton()
+    }
+
+    /// Reset is blue while it can act and grey while it cannot: a borderless
+    /// button keeps its tint through a disabled state unless it is told.
+    private func updateResetButton() {
+        let enabled = comparisonRevision != nil
+        resetComparisonButton.isEnabled = enabled
+        resetComparisonButton.contentTintColor = enabled ? .controlAccentColor : .secondaryLabelColor
     }
 
     /// The diff as drawn, for tests.
@@ -527,6 +635,13 @@ import ToolModuleKit
             syncingSelection = true
             functionTable.reloadData()
             syncingSelection = false
+        }
+        // A function the revision changed is the one its change is about:
+        // opening it puts the comparison with the revision before on, unless
+        // the reader already compares against something.
+        if comparisonRevision == nil, unopenedChanges.contains(index),
+           let previousRevision, previousRevision.artifact.functions.contains(where: { $0.entry == model.functions[index].entry }) {
+            setComparisonRevision(previousRevision.revision, artifact: previousRevision.artifact)
         }
         drawSelection()
         if notify, let range = model.moduleRange(ofFunction: index) {
@@ -803,11 +918,11 @@ import ToolModuleKit
     /// renamed, re-signed or decompiled differently read bold, with a **New**
     /// badge, until the reader has opened one and moved off it; the artifact
     /// itself is kept, because it is what Diff shows the code against.
-    public func markRevisionChange(from previous: CodeArtifact) {
+    public func markRevisionChange(from previous: CodeArtifact, revision: Int? = nil) {
         revisionBaseline = previous
         revisionCount += 1
         drawnDiff = nil
-        modeControl.setEnabled(true, forSegment: Self.diffSegment)
+        previousRevision = revision.map { ($0, previous) }
         var before: [CodeAddress: CodeArtifact.Function] = [:]
         for function in previous.functions where before[function.entry] == nil {
             before[function.entry] = function
@@ -1903,6 +2018,34 @@ import ToolModuleKit
         hexDumpButton.action = #selector(toggleHexDump)
         hexDumpButton.translatesAutoresizingMaskIntoConstraints = false
         hexDumpBar.addSubview(hexDumpButton)
+        // The comparison, on the bar's right as Xcode keeps one: the review
+        // shown, the arrows, the revision to compare it against and Reset.
+        compareLabel.font = .systemFont(ofSize: 11)
+        compareLabel.textColor = .secondaryLabelColor
+        compareLabel.lineBreakMode = .byTruncatingTail
+        compareLabel.translatesAutoresizingMaskIntoConstraints = false
+        compareArrows.image = NSImage(systemSymbolName: "arrow.left.arrow.right",
+                                      accessibilityDescription: L("Compare with a revision"))?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 10, weight: .regular))
+        compareArrows.contentTintColor = .tertiaryLabelColor
+        compareArrows.translatesAutoresizingMaskIntoConstraints = false
+        revisionPopup.isBordered = false
+        revisionPopup.controlSize = .small
+        revisionPopup.font = .systemFont(ofSize: 11)
+        revisionPopup.toolTip = L("Compare the code with a revision")
+        revisionPopup.translatesAutoresizingMaskIntoConstraints = false
+        resetComparisonButton.title = L("Reset")
+        resetComparisonButton.isBordered = false
+        resetComparisonButton.bezelStyle = .inline
+        resetComparisonButton.controlSize = .small
+        resetComparisonButton.font = .systemFont(ofSize: 11)
+        resetComparisonButton.contentTintColor = .controlAccentColor
+        resetComparisonButton.target = self
+        resetComparisonButton.action = #selector(resetComparison)
+        resetComparisonButton.translatesAutoresizingMaskIntoConstraints = false
+        for view in [compareLabel, compareArrows, revisionPopup, resetComparisonButton] {
+            hexDumpBar.addSubview(view)
+        }
         codeContent.addSubview(hexDumpBar)
         NSLayoutConstraint.activate([
             hexDumpBar.leadingAnchor.constraint(equalTo: codeContent.leadingAnchor),
@@ -1911,9 +2054,21 @@ import ToolModuleKit
             hexDumpBar.heightAnchor.constraint(equalToConstant: Self.dumpBarHeight),
             codeStack.bottomAnchor.constraint(equalTo: hexDumpBar.topAnchor, constant: -8),
             hexDumpButton.trailingAnchor.constraint(equalTo: hexDumpBar.trailingAnchor, constant: -8),
-            hexDumpButton.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor)
+            hexDumpButton.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor),
+            resetComparisonButton.trailingAnchor.constraint(equalTo: hexDumpButton.leadingAnchor, constant: -10),
+            resetComparisonButton.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor),
+            revisionPopup.trailingAnchor.constraint(equalTo: resetComparisonButton.leadingAnchor, constant: -6),
+            revisionPopup.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor),
+            revisionPopup.widthAnchor.constraint(lessThanOrEqualToConstant: 260),
+            revisionPopup.heightAnchor.constraint(equalToConstant: 22),
+            compareArrows.trailingAnchor.constraint(equalTo: revisionPopup.leadingAnchor, constant: -6),
+            compareArrows.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor),
+            compareLabel.trailingAnchor.constraint(equalTo: compareArrows.leadingAnchor, constant: -6),
+            compareLabel.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor),
+            compareLabel.leadingAnchor.constraint(greaterThanOrEqualTo: hexDumpBar.leadingAnchor, constant: 8)
         ])
         updateHexDumpButton()
+        layOutComparison()
 
         rightSplit.isVertical = false
         rightSplit.dividerThickness = 1
@@ -2427,12 +2582,13 @@ import ToolModuleKit
     private func applyMode() {
         let segment = modeControl.selectedSegment
         if segment <= 1 { codeShowsC = segment == 1 }
+        let diff = showsRevisionDiff
         tableScroll.isHidden = segment != 0
-        cScroll.isHidden = segment != 1
+        cScroll.isHidden = segment != 1 || diff
         descriptionView.isHidden = segment != Self.descriptionSegment
-        diffView.isHidden = segment != Self.diffSegment
-        if segment == 1 { updateC() }
-        if segment == Self.diffSegment { updateDiff() }
+        diffView.isHidden = !diff
+        if segment == 1, !diff { updateC() }
+        if diff { updateDiff() }
         currentOccurrence = nil
         drawOccurrenceBar()
     }
@@ -3545,9 +3701,19 @@ final class CodeNavigatorCell: NSTableCellView {
     private var mark: (glyph: CodeNavigatorIcon.Glyph, color: NSColor)?
 
     /// A selected row draws its mark inverted: on the selection's colour the
-    /// mark's own colour would not read.
+    /// mark's own colour would not read. The New badge does the same, in the
+    /// dock pill's manner: its word and capsule turn to the selection's white.
     override var backgroundStyle: NSView.BackgroundStyle {
-        didSet { if backgroundStyle != oldValue { drawMark() } }
+        didSet {
+            guard backgroundStyle != oldValue else { return }
+            drawMark()
+            drawBadge()
+        }
+    }
+
+    private func drawBadge() {
+        badge.ink = backgroundStyle == .emphasized
+            ? .alternateSelectedControlTextColor : .controlAccentColor
     }
 
     private func drawMark() {
@@ -3612,6 +3778,7 @@ final class CodeNavigatorCell: NSTableCellView {
         badge.isHidden = !shows
         fieldToBadge.isActive = shows
         fieldToEdge.isActive = !shows
+        if shows { drawBadge() }
     }
 
     /// The click has already flipped the button's state: the chevron turns

@@ -393,9 +393,14 @@
 "Deleted here" = "Hier gelöscht";
 "Deleted on another Mac" = "Auf einem anderen Mac gelöscht";
 "Description" = "Beschreibung";
+"Compare with a revision" = "Vergleich mit einer Revision";
+"Compare the code with a revision" = "Den Code mit einer Revision vergleichen";
+"Reset" = "Zurücksetzen";
+"No comparison" = "Kein Vergleich";
+"This revision (r%1$@)" = "Diese Revision (r%1$@)";
+"This revision" = "Diese Revision";
 "No decompiled C for this function in either revision." = "In keiner der beiden Revisionen hat die Funktion dekompilierten C.";
 "No earlier revision of this reading is open to compare with." = "Die vorige Revision dieser Analyse ist nicht geöffnet — nichts zum Vergleichen.";
-"Diff" = "Diff";
 "Directories and packages are not supported." = "Ordner und Pakete werden nicht unterstützt.";
 "Discard Changes" = "Änderungen verwerfen";
 "Do not ask again" = "Nicht mehr fragen";

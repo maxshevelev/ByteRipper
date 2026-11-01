@@ -1,4 +1,4 @@
-@source-sha 68b108ac26fff9950b6a7678c0021e23269e4e6f9a289758fcc7cfaa2477df6d
+@source-sha 797271be7986192e0fa155b53d91bcc02f090a703861677bf3b22e1cbdb37d7d
 # Code-Bereich
 
 > Ein Modul als Code gelesen: seine Funktionen, das ASM-Listing, der dekompilierte C und die Bytes, auf die eine Instruktion zeigt.
@@ -27,7 +27,7 @@ Der Kopf nennt das Modul, in Klammern die Revision seiner veröffentlichten Anal
 
 ## Diff
 
-**Diff** — die zwei Pfeile zwischen **C** und **Beschreibung** — erscheint, sobald der Bereich eine spätere Revision derselben Analyse empfangen hat: Er zeigt den C der Funktion auf dem Bildschirm neben derselben Funktion in der Revision davor, Zeile für Zeile — die alte und die neue Zeilennummer jeder Zeile, das Entfernte rot, das Hinzugekommene grün, die gemeinsamen Zeilen unverändert. Eine Funktion, die die frühere Revision nicht hatte, liest sich als ganz hinzugefügt. Der Code ändert sich dadurch nicht: **C** und **ASM** zeigen diese Revision, und die Marke **Neu** kennzeichnet die geänderten Funktionen. Ein neu geöffneter Bereich hat keine frühere Revision zum Vergleichen, und die Wahl wird nicht angeboten.
+Die Leiste unter dem Code trägt den Vergleich, wie in Xcode: diese Revision, die zwei Pfeile, eine Auswahl der Revisionen des Moduls und **Zurücksetzen**. Die Auswahl nennt die Revisionen, deren Code der Speicher hält, die neueste zuerst; eine gewählte Revision macht die C-Seite zum Vergleich der Funktion auf dem Bildschirm mit derselben Funktion in der gewählten Revision, Zeile für Zeile — die alte und die neue Zeilennummer jeder Zeile, das Entfernte rot, das Hinzugekommene grün, die gemeinsamen Zeilen unverändert. Eine Funktion, die die frühere Revision nicht hatte, liest sich als ganz hinzugefügt. Listing und Beschreibung bleiben die dieser Revision: der Vergleich gehört allein der C-Seite. **Zurücksetzen** oder **Kein Vergleich** in der Auswahl bringt den Code zurück. Empfängt der Bereich eine spätere Revision, vergleicht er sofort mit der vorigen, und das Öffnen einer von ihr geänderten Funktion schaltet diesen Vergleich von selbst ein. Eine Revision, deren Code der Speicher nicht hält — eine Aufzeichnung aus der Zeit, bevor Revisionen ihren Code behielten —, erscheint in der Auswahl nicht.
 
 ## Einen Namen kopieren
 

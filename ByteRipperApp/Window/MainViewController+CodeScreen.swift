@@ -99,12 +99,13 @@ extension MainViewController {
                let before = screen.manifest.reading?.rev,
                let now = manifest.reading?.rev, now > before {
                 self.pendingCodeRevisionChange = self.codeScreenView?.artifact
+                self.pendingCodeRevision = before
             } else {
                 self.pendingCodeRevisionChange = nil
+                self.pendingCodeRevision = nil
             }
             self.codeScreen = (pane, pane.document, next)
             self.apply(mode: .singleFile)
-            self.pendingCodeRevisionChange = nil
             self.codeScreenView?.setHexDumpVisible(dumpVisible, animated: false)
             if let history { self.codeScreenView?.adoptHistory(history) }
         }
@@ -309,10 +310,14 @@ extension MainViewController {
         }
         // Before the place is restored: a function on screen is open, and
         // its New mark goes with the selection the restore makes.
+        var previousRevision: (revision: Int, artifact: CodeArtifact)?
         if let previous = pendingCodeRevisionChange {
-            codePane.markRevisionChange(from: previous)
+            codePane.markRevisionChange(from: previous, revision: pendingCodeRevision)
+            previousRevision = pendingCodeRevision.map { ($0, previous) }
             pendingCodeRevisionChange = nil
+            pendingCodeRevision = nil
         }
+        wireCodeRevisions(codePane, previous: previousRevision)
         applyCodeNotes()
         codePane.restore(at: screen.place, function: screen.selectedFunction,
                          instruction: screen.selectedInstruction,

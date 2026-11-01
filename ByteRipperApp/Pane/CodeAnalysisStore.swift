@@ -21,6 +21,72 @@ enum CodeAnalysisStore {
         }.value
     }
 
+    /// A revision of a module, as the code panel's picker offers it: the row
+    /// to show, and the code to load when it is chosen — nil when the store
+    /// holds no code for it, a history written before revisions kept theirs.
+    struct RevisionOption {
+        let choice: CodePaneView.RevisionChoice
+        let artifact: SHA256Digest
+    }
+
+    /// The module's revisions the store holds the code of, newest first and
+    /// without the one on screen, and whether the module has any history at
+    /// all — so the bar can stand where the reader expects it while nothing
+    /// is comparable yet. A revision recorded before revisions kept their
+    /// code names none and is left out, not listed greyed.
+    static func revisions(for manifest: AnalysisManifest, root: URL? = nil)
+        async -> (options: [RevisionOption], hasHistory: Bool) {
+        let root = root ?? self.root
+        let module = manifest.module.sha256
+        let current = manifest.reading?.rev
+        let project = manifest.reading?.project
+        return await Task.detached(priority: .userInitiated) { () -> (options: [RevisionOption], hasHistory: Bool) in
+            guard let store = try? ContentStore(root: root, create: false),
+                  let history = try? store.reviewHistory(module: module) else { return ([], false) }
+            let options = Self.revisionOptions(history, current: current, project: project)
+            return (options, !history.revisions.isEmpty)
+        }.value
+    }
+
+    private nonisolated static func revisionOptions(_ history: ReviewHistory, current: Int?,
+                                                    project: String?) -> [RevisionOption] {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .none
+        let iso = ISO8601DateFormatter()
+        let ordered = history.revisions.sorted { left, right in
+            left.rev == right.rev ? left.recordedAt > right.recordedAt : left.rev > right.rev
+        }
+        var options: [RevisionOption] = []
+        for revision in ordered {
+            guard revision.rev != current, let artifact = revision.artifact else { continue }
+            var title = "r\(revision.rev)"
+            if let date = iso.date(from: revision.recordedAt) {
+                title += " — " + formatter.string(from: date)
+            }
+            if let by = revision.by, !by.isEmpty {
+                title += ", " + by
+            } else if revision.project != project {
+                title += ", " + revision.project
+            }
+            options.append(RevisionOption(
+                choice: CodePaneView.RevisionChoice(revision: revision.rev, title: title, hasCode: true),
+                artifact: artifact))
+        }
+        return options
+    }
+
+    /// A revision's code, read off the main actor; nil when the store cannot
+    /// give it.
+    static func artifact(forRevision digest: SHA256Digest, root: URL? = nil) async -> CodeArtifact? {
+        let root = root ?? self.root
+        return await Task.detached(priority: .userInitiated) { () -> CodeArtifact? in
+            guard let store = try? ContentStore(root: root, create: false),
+                  let data = try? store.object(digest) else { return nil }
+            return try? JSONDecoder().decode(CodeArtifact.self, from: data)
+        }.value
+    }
+
     /// The module description a manifest's reading names, read off the main
     /// actor; nil when it has none or the store cannot give it.
     static func moduleDescription(for manifest: AnalysisManifest, root: URL? = nil) async -> String? {

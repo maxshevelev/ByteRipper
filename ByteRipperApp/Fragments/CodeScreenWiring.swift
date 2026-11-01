@@ -1,3 +1,4 @@
+import CodeAnalysis
 import CodeView
 import Foundation
 
@@ -50,4 +51,55 @@ func wireCodeScreen(_ codePane: CodePaneView, to pane: PaneViewModel, owner: Mai
     let selection = pane.hexSelection()
     codePane.setStale(pane.origin.map { $0.state != .intact } ?? false)
     codePane.selectModuleRange(selection.start..<selection.end)
+}
+
+/// The dump bar's revision picker: the module's history read from the store,
+/// and the code of the revision chosen in it. `previous` is the revision this
+/// pane replaced when a later one arrived — it is compared against as soon as
+/// the list is read, as the New marks go up with it.
+@MainActor
+func wireCodeRevisions(_ codePane: CodePaneView,
+                       previous: (revision: Int, artifact: CodeArtifact)? = nil) {
+    let manifest = codePane.manifest
+    var digests: [Int: SHA256Digest] = [:]
+    codePane.onChooseRevision = { [weak codePane] revision in
+        guard let codePane else { return }
+        guard let revision else {
+            codePane.setComparisonRevision(nil, artifact: nil)
+            return
+        }
+        if let previous, previous.revision == revision {
+            codePane.setComparisonRevision(revision, artifact: previous.artifact)
+            return
+        }
+        guard let digest = digests[revision] else {
+            codePane.setComparisonRevision(nil, artifact: nil)
+            return
+        }
+        Task { @MainActor in
+            let artifact = await CodeAnalysisStore.artifact(forRevision: digest)
+            codePane.setComparisonRevision(revision, artifact: artifact)
+        }
+    }
+    Task { @MainActor in
+        let loaded = await CodeAnalysisStore.revisions(for: manifest)
+        let options = loaded.options
+        digests = Dictionary(options.map { ($0.choice.revision, $0.artifact) },
+                             uniquingKeysWith: { first, _ in first })
+        var choices = options.map(\.choice)
+        if let previous {
+            if let at = choices.firstIndex(where: { $0.revision == previous.revision }) {
+                choices[at] = CodePaneView.RevisionChoice(revision: choices[at].revision,
+                                                          title: choices[at].title, hasCode: true)
+            } else {
+                choices.insert(CodePaneView.RevisionChoice(revision: previous.revision,
+                                                           title: "r\(previous.revision)", hasCode: true),
+                               at: 0)
+            }
+        }
+        codePane.setRevisionChoices(choices, current: manifest.reading?.rev, knowsRevisions: loaded.hasHistory)
+        if let previous {
+            codePane.setComparisonRevision(previous.revision, artifact: previous.artifact)
+        }
+    }
 }

@@ -273,18 +273,15 @@ final class CodePaneViewTests: XCTestCase {
         reviewed.reading = AnalysisReading(project: "p", rev: 14)
         let view = CodePaneView(manifest: reviewed, artifact: try artifact(),
                                 moduleBytes: moduleBytes, hexView: NSView())
-        // The code side 560 points wide, beside the navigator: enough for
-        // the name and the four-segment switch together.
-        view.frame = NSRect(x: 0, y: 0, width: 560 + CodePaneView.defaultNavigatorWidth, height: 360)
+        // The code side 500 points wide, beside the navigator.
+        view.frame = NSRect(x: 0, y: 0, width: 500 + CodePaneView.defaultNavigatorWidth, height: 360)
         view.layoutSubtreeIfNeeded()
 
         let mode = try XCTUnwrap(first(NSSegmentedControl.self, in: view) {
             $0.label(forSegment: 0) == "ASM"
         })
         XCTAssertEqual((0..<mode.segmentCount).map { mode.label(forSegment: $0) ?? "" },
-                       ["ASM", "C", "", "Description"])
-        XCTAssertNotNil(mode.image(forSegment: 2), "Diff is the two arrows, not a word")
-        XCTAssertEqual(mode.toolTip(forSegment: 2), "Diff", "and it says what it is")
+                       ["ASM", "C", "Description"])
         let modeRect = view.convert(mode.bounds, from: mode)
         XCTAssertGreaterThan(modeRect.minX, view.bounds.midX,
                              "the switch is on the code side")
@@ -1075,6 +1072,13 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertFalse(badge(changed)?.isHidden ?? true, "and carries the New badge")
         XCTAssertFalse(isBold(try cell(0)), "a function the revision left alone does not")
 
+        // On a selected row the badge keeps its word white, as a dock pill's
+        // does: the accent on the selection's own colour does not read.
+        changed.backgroundStyle = .emphasized
+        XCTAssertEqual(badge(changed)?.ink, .alternateSelectedControlTextColor)
+        changed.backgroundStyle = .normal
+        XCTAssertEqual(badge(changed)?.ink, .controlAccentColor)
+
         view.selectFunction(at: 1)
         let arrived = try cell(1)
         XCTAssertTrue(isBold(arrived), "arriving at it does not take the mark")
@@ -1113,13 +1117,12 @@ final class CodePaneViewTests: XCTestCase {
         view.layoutSubtreeIfNeeded()
 
         XCTAssertFalse(view.canShowRevisionDiff, "nothing to compare with yet")
-        view.showRevisionDiff(true)
-        XCTAssertFalse(view.showsRevisionDiff, "the choice is not offered without a revision")
+        XCTAssertFalse(view.showsRevisionDiff)
 
-        view.markRevisionChange(from: previous)
+        view.markRevisionChange(from: previous, revision: 66)
         XCTAssertTrue(view.canShowRevisionDiff)
-        view.showRevisionDiff(true)
-        XCTAssertTrue(view.showsRevisionDiff)
+        view.setComparisonRevision(66, artifact: previous)
+        XCTAssertTrue(view.showsRevisionDiff, "the C side shows the comparison at once")
         XCTAssertEqual(view.diffCounts?.added, 1)
         XCTAssertEqual(view.diffCounts?.removed, 1)
         let shown = view.diffText
@@ -1135,9 +1138,100 @@ final class CodePaneViewTests: XCTestCase {
                        components(CodeColors.diffAdded))
         XCTAssertNil(view.diffBackground(ofLineContaining: "void F(void)"), "an unchanged line is not tinted")
 
-        view.showRevisionDiff(false)
+        // The comparison is the C side's alone: the listing is this revision's.
+        view.showDecompiledC(false)
+        XCTAssertFalse(view.showsRevisionDiff, "no comparison in the listing")
+        view.showDecompiledC(true)
+        XCTAssertTrue(view.showsRevisionDiff, "and it is back with the C")
+
+        view.setComparisonRevision(nil, artifact: nil)
         XCTAssertFalse(view.showsRevisionDiff)
         XCTAssertTrue(view.showsDecompiledC, "back to the code this revision's")
+
+        // A function the revision changed is the one its change is about:
+        // opening it puts the comparison with the revision before back on.
+        view.selectFunction(at: 0)
+        XCTAssertEqual(view.comparisonRevision, 66)
+        XCTAssertTrue(view.showsRevisionDiff, "the change of this function, without a pick")
+    }
+
+    /// The dump bar's picker lists the module's revisions the app read, says
+    /// which one the code is compared against, and Reset clears it — as
+    /// Xcode's bar does for a file's history.
+    func testTheDumpBarComparesWithARevisionChosen() throws {
+        func artifact(_ c: String) throws -> CodeArtifact {
+            let json: [String: Any] = [
+                "script_version": 2, "program": ["image_base": "0x0"],
+                "functions": [["entry": "0x220", "name": "F", "c": c,
+                               "instructions": [["address": "0x220", "bytes": "C3",
+                                                 "mnemonic": "RET", "text": "RET"]]]]
+            ]
+            return try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        }
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact("void F(void)\n{\n  B();\n}\n"),
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 900, height: 400)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertTrue(view.comparisonIsHidden, "nothing read yet, nothing to compare with")
+        XCTAssertFalse(view.canShowRevisionDiff)
+
+        view.setRevisionChoices([
+            .init(revision: 54, title: "r54 — 31.10.2026, agent", hasCode: true),
+            .init(revision: 53, title: "r53 — 30.10.2026, agent", hasCode: false)
+        ], current: 55)
+        XCTAssertFalse(view.comparisonIsHidden)
+        XCTAssertEqual(view.revisionChoiceTitles,
+                       ["No comparison", "r54 — 31.10.2026, agent", "r53 — 30.10.2026, agent"])
+        // A menu would enable every item with a target of its own; a revision
+        // with no code in the store is listed greyed and cannot be picked.
+        XCTAssertEqual(view.revisionChoiceIsEnabled(54), true)
+        XCTAssertEqual(view.revisionChoiceIsEnabled(53), false, "the store holds no code for it")
+        XCTAssertFalse(view.revisionPickerIsBordered, "the picker sits on the bar, as Xcode's does")
+        // Reset stays where it is, enabled only while there is something to
+        // reset: a control that comes and goes moves the picker under the
+        // pointer.
+        XCTAssertFalse(view.comparisonResetIsHidden)
+        XCTAssertFalse(view.comparisonResetIsEnabled)
+        XCTAssertEqual(view.comparisonResetTint, .secondaryLabelColor, "grey while it cannot act")
+
+        var chosen: [Int?] = []
+        view.onChooseRevision = { chosen.append($0) }
+        view.chooseRevisionMenuTag(54)
+        XCTAssertEqual(chosen, [54], "the app is asked for that revision's code")
+        view.chooseRevisionMenuTag(-1)
+        XCTAssertEqual(chosen, [54, nil], "and for none when Reset is picked")
+
+        view.setComparisonRevision(54, artifact: try artifact("void F(void)\n{\n  A();\n}\n"))
+        XCTAssertTrue(view.canShowRevisionDiff)
+        XCTAssertTrue(view.comparisonResetIsEnabled, "something to reset now")
+        XCTAssertEqual(view.comparisonResetTint, .controlAccentColor, "and blue while it can")
+        XCTAssertTrue(view.showsRevisionDiff, "the comparison is on as soon as it is chosen")
+        XCTAssertTrue(view.diffText.contains("-   A();"), view.diffText)
+
+        view.setComparisonRevision(nil, artifact: nil)
+        XCTAssertFalse(view.canShowRevisionDiff, "Reset leaves nothing to compare with")
+        XCTAssertFalse(view.comparisonResetIsEnabled, "and nothing to reset again")
+        XCTAssertFalse(view.comparisonResetIsHidden, "the button itself stays")
+        XCTAssertEqual(view.comparisonResetTint, .secondaryLabelColor)
+
+        // A module whose history holds no comparable revision keeps the bar
+        // where the reader expects it, with nothing to pick yet.
+        view.setRevisionChoices([], current: 55, knowsRevisions: true)
+        XCTAssertFalse(view.comparisonIsHidden, "the history is there, so the bar is")
+        XCTAssertEqual(view.revisionChoiceTitles, ["No comparison"])
+        XCTAssertFalse(view.comparisonResetIsEnabled)
+        XCTAssertFalse(view.showsRevisionDiff, "and the code comes back")
+    }
+
+    /// The revision picker is borderless and draws a rounded plate under the
+    /// pointer, as Xcode's bar does.
+    func testTheRevisionPickerLightsUnderThePointer() {
+        let popup = CodeRevisionPopup(frame: .zero, pullsDown: false)
+        XCTAssertFalse(popup.showsPlate)
+        popup.setPointerOnIt(true)
+        XCTAssertTrue(popup.showsPlate)
+        popup.setPointerOnIt(false)
+        XCTAssertFalse(popup.showsPlate)
     }
 
     /// The call tree's rows open and close with the triangle in front of them.
@@ -2821,7 +2915,7 @@ final class CodePaneViewTests: XCTestCase {
         let help = try XCTUnwrap(all(HelpButton.self, in: view).first)
         XCTAssertEqual(help.opens, .topic(.codePanel))
         let mode = try XCTUnwrap(all(NSSegmentedControl.self, in: view)
-            .first { $0.segmentCount == 4 && $0.label(forSegment: 1) == "C" })
+            .first { $0.segmentCount == 3 && $0.label(forSegment: 1) == "C" })
         let helpRect = view.convert(help.bounds, from: help)
         let modeRect = view.convert(mode.bounds, from: mode)
         XCTAssertLessThan(helpRect.maxX, modeRect.minX, "the help button stands before the switch")
