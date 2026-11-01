@@ -12,6 +12,7 @@
 @covers panel.code.function-view
 @covers panel.code.copy-name
 @covers panel.code.description
+@covers panel.code.diff
 @covers panel.code.analysis
 @covers panel.code.registry
 
@@ -36,6 +37,10 @@ The header names the module, the revision of its published review in brackets �
 ## Description
 
 **Description**, the third choice beside **ASM** and **C**, shows the module's description in place of the code: what the module is for, how it works and how it is built — its interfaces, the order its entry point runs in, its functions by role, the hardware it touches, the codes it reports, what the review found and what is still unknown. The review writes it together with the names and comments, and it is published with them as part of the same revision, so it always describes the code shown. A function named in it — as a link, or written as code — is a link: a click opens that function in the code, and **View ▸ Back** returns to the description where it was left. A click on a function in the list on the left also returns to the code. A module whose review has not yet written a description says so. What a description states is the reviewer's reading of the code: where it is not proven, it says so.
+
+## Diff
+
+**Diff** — the two arrows between **C** and **Description** — appears once the panel has received a later revision of the same analysis: it shows the C of the function on screen against the same function in the revision before, line by line — the old and the new line number of each line, what the revision removed on red, what it added on green, and the lines both keep as they were. A function the earlier revision did not have reads as all added. The code is not changed by it: **C** and **ASM** show this revision, and the **New** badge marks the functions it changed. A panel opened again has no earlier revision to compare with, and the choice is not offered.
 
 ## Copying a name
 

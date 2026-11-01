@@ -393,6 +393,9 @@
 "Deleted here" = "Удалено здесь";
 "Deleted on another Mac" = "Удалено на другом Mac";
 "Description" = "Описание";
+"No decompiled C for this function in either revision." = "Ни в этой, ни в предыдущей ревизии у функции нет декомпилированного C.";
+"No earlier revision of this reading is open to compare with." = "Предыдущая ревизия этого разбора не открыта — сравнивать не с чем.";
+"Diff" = "Дифф";
 "Directories and packages are not supported." = "Папки и пакеты не поддерживаются.";
 "Discard Changes" = "Отменить изменения";
 "Do not ask again" = "Больше не спрашивать";

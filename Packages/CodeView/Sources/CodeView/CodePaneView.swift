@@ -97,6 +97,16 @@ import ToolModuleKit
     private let cScroll = NSScrollView()
     private let modeControl: NSSegmentedControl
     private let descriptionView = CodeDescriptionView()
+    private let diffView = CodeDiffView()
+    /// The artifact this pane showed before a later revision of its reading
+    /// replaced it: what Diff compares the code against, nil while the pane
+    /// has seen no revision — beside another recipe, say, or after a restart.
+    private var revisionBaseline: CodeArtifact?
+    /// What the diff on screen was drawn from, so a redraw is made only when
+    /// the function or the revision changed.
+    private var drawnDiff: (function: Int, revision: Int)?
+    /// Raised with every revision the pane is given.
+    private var revisionCount = 0
     /// The code side the description returns to: the C, or the listing.
     private var codeShowsC = true
     /// Where the description is to be scrolled once its text arrives: a
@@ -229,10 +239,23 @@ import ToolModuleKit
                     ? $0.recipe.id < $1.recipe.id
                     : $0.analyzedAt > $1.analyzedAt
             }
-        // ASM and C are names of formats, not words to translate.
+        // ASM and C are names of formats, not words to translate. Diff is the
+        // two arrows of a comparison rather than a word, and Description
+        // closes the switch.
         modeControl = NSSegmentedControl(
-            labels: ["ASM", "C", L("Description")], trackingMode: .selectOne,
+            labels: ["ASM", "C", "", L("Description")], trackingMode: .selectOne,
             target: nil, action: nil)
+        if let arrows = NSImage(systemSymbolName: "arrow.left.arrow.right",
+                                accessibilityDescription: L("Diff")) {
+            let sized = arrows.withSymbolConfiguration(
+                NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)) ?? arrows
+            modeControl.setImage(sized, forSegment: Self.diffSegment)
+            modeControl.setWidth(34, forSegment: Self.diffSegment)
+            modeControl.setToolTip(L("Diff"), forSegment: Self.diffSegment)
+        }
+        // Diff waits for a revision: without one there is nothing to compare
+        // the code with, and the segment is not offered.
+        modeControl.setEnabled(false, forSegment: Self.diffSegment)
         listControl = NSSegmentedControl(
             labels: [L("Functions"), L("Strings"), L("POST"), L("Status")],
             trackingMode: .selectOne, target: nil, action: nil)
@@ -323,11 +346,42 @@ import ToolModuleKit
     }
 
     /// The C rather than the listing: what is on screen, or — while the
-    /// description is — what the code shows when the reader goes back to it.
-    public var showsDecompiledC: Bool { showsDescription ? codeShowsC : modeControl.selectedSegment == 1 }
+    /// description or the diff is — what the code shows when the reader goes
+    /// back to it.
+    public var showsDecompiledC: Bool {
+        modeControl.selectedSegment > 1 ? codeShowsC : modeControl.selectedSegment == 1
+    }
+    /// The C against the revision before this one.
+    public var showsRevisionDiff: Bool { modeControl.selectedSegment == Self.diffSegment }
+    private static let diffSegment = 2
     /// The module's description is on screen in place of the code.
     public var showsDescription: Bool { modeControl.selectedSegment == Self.descriptionSegment }
-    private static let descriptionSegment = 2
+    private static let descriptionSegment = 3
+
+    /// Whether the pane has a revision to compare the code against.
+    public var canShowRevisionDiff: Bool { revisionBaseline != nil }
+
+    /// Shows the C against the earlier revision, or the code again — as the
+    /// segment does. Nothing happens without a revision to compare with.
+    public func showRevisionDiff(_ shows: Bool) {
+        guard shows else {
+            guard showsRevisionDiff else { return }
+            modeControl.selectedSegment = codeShowsC ? 1 : 0
+            applyMode()
+            return
+        }
+        guard canShowRevisionDiff else { return }
+        modeControl.selectedSegment = Self.diffSegment
+        applyMode()
+    }
+
+    /// The diff as drawn, for tests.
+    var diffText: String { diffView.shownText }
+    var diffCounts: (added: Int, removed: Int)? { diffView.counts }
+    var diffPlaceholder: String? { diffView.placeholderText }
+    func diffBackground(ofLineContaining line: String) -> NSColor? {
+        diffView.background(ofLineContaining: line)
+    }
 
     /// The description, as drawn, for tests.
     var descriptionText: String { descriptionView.shownText }
@@ -747,8 +801,13 @@ import ToolModuleKit
     /// Takes the panel from `previous` — the artifact it showed before a new
     /// revision of the same reading arrived. The functions that revision added,
     /// renamed, re-signed or decompiled differently read bold, with a **New**
-    /// badge, until the reader has opened one and moved off it.
+    /// badge, until the reader has opened one and moved off it; the artifact
+    /// itself is kept, because it is what Diff shows the code against.
     public func markRevisionChange(from previous: CodeArtifact) {
+        revisionBaseline = previous
+        revisionCount += 1
+        drawnDiff = nil
+        modeControl.setEnabled(true, forSegment: Self.diffSegment)
         var before: [CodeAddress: CodeArtifact.Function] = [:]
         for function in previous.functions where before[function.entry] == nil {
             before[function.entry] = function
@@ -856,6 +915,7 @@ import ToolModuleKit
         }
         syncingSelection = false
         updateC()
+        updateDiff()
         updateReferences()
     }
 
@@ -1252,6 +1312,10 @@ import ToolModuleKit
     private func takeKeyboard() {
         guard let window else { return }
         if let responder = window.firstResponder as? NSView, responder.isDescendant(of: self) { return }
+        if showsRevisionDiff {
+            diffView.focus()
+            return
+        }
         window.makeFirstResponder(showsDecompiledC ? cTextView : table)
     }
 
@@ -1798,7 +1862,10 @@ import ToolModuleKit
         content.addSubview(tableScroll)
         content.addSubview(cScroll)
         content.addSubview(descriptionView)
-        for scroll in [tableScroll, cScroll, descriptionView] {
+        diffView.translatesAutoresizingMaskIntoConstraints = false
+        diffView.isHidden = true
+        content.addSubview(diffView)
+        for scroll in [tableScroll, cScroll, descriptionView, diffView] {
             NSLayoutConstraint.activate([
                 scroll.topAnchor.constraint(equalTo: content.topAnchor),
                 scroll.bottomAnchor.constraint(equalTo: content.bottomAnchor),
@@ -1933,7 +2000,9 @@ import ToolModuleKit
         }
         syncingSelection = false
         drawnC = nil
+        drawnDiff = nil
         updateC(keepingPlace: true)
+        updateDiff()
         descriptionView.redraw()
     }
 
@@ -2357,12 +2426,13 @@ import ToolModuleKit
     // help: panel.code.description
     private func applyMode() {
         let segment = modeControl.selectedSegment
-        if segment != Self.descriptionSegment { codeShowsC = segment == 1 }
-        let c = segment == 1
+        if segment <= 1 { codeShowsC = segment == 1 }
         tableScroll.isHidden = segment != 0
-        cScroll.isHidden = !c
+        cScroll.isHidden = segment != 1
         descriptionView.isHidden = segment != Self.descriptionSegment
-        if c { updateC() }
+        diffView.isHidden = segment != Self.diffSegment
+        if segment == 1 { updateC() }
+        if segment == Self.diffSegment { updateDiff() }
         currentOccurrence = nil
         drawOccurrenceBar()
     }
@@ -2460,6 +2530,42 @@ import ToolModuleKit
         cTextView.highlight(highlightedRangesInC())
         currentOccurrence = nil
         drawOccurrenceBar()
+    }
+
+    // help: panel.code.diff
+    /// The C of the function on screen against the same function in the
+    /// revision the pane replaced: what the revision took and what it brought,
+    /// line by line, as an editor shows a change. A function the earlier
+    /// revision did not have reads as all added, and one it had and this
+    /// revision lost its C for, as all removed.
+    private func updateDiff() {
+        guard showsRevisionDiff else { return }
+        guard let baseline = revisionBaseline else {
+            diffView.showMessage(L("No earlier revision of this reading is open to compare with."))
+            drawnDiff = nil
+            return
+        }
+        guard let index = state.function else {
+            diffView.showMessage(L("The analysis holds no functions."))
+            drawnDiff = nil
+            return
+        }
+        if let drawnDiff, drawnDiff.function == index, drawnDiff.revision == revisionCount { return }
+        let function = model.functions[index]
+        let old = baseline.functions.first { $0.entry == function.entry }?.c
+        guard old != nil || function.c != nil else {
+            diffView.showMessage(L("No decompiled C for this function in either revision."))
+            drawnDiff = (index, revisionCount)
+            return
+        }
+        let stays = drawnDiff?.function == index
+        let diff = LineDiff.between(old ?? "", function.c ?? "")
+        diffView.show(diff, font: Self.codeFont(), lineHeight: Self.codeLineHeight,
+                      padding: Self.codeLinePadding)
+        // Another function's diff is read from its top; the same function's,
+        // redrawn at a new size, stays where the reader was.
+        if !stays { diffView.scroll(to: .zero) }
+        drawnDiff = (index, revisionCount)
     }
 
     // MARK: - Highlighting a symbol

@@ -1,4 +1,4 @@
-@source-sha 807a9702d71ae546211da869108553f41da6affd184234888e7f7291c23aa871
+@source-sha 68b108ac26fff9950b6a7678c0021e23269e4e6f9a289758fcc7cfaa2477df6d
 # Code-Bereich
 
 > Ein Modul als Code gelesen: seine Funktionen, das ASM-Listing, der dekompilierte C und die Bytes, auf die eine Instruktion zeigt.
@@ -24,6 +24,10 @@ Der Kopf nennt das Modul, in Klammern die Revision seiner veröffentlichten Anal
 ## Beschreibung
 
 **Beschreibung**, die dritte Wahl neben **ASM** und **C**, zeigt anstelle des Codes die Beschreibung des Moduls: wozu das Modul dient, wie es arbeitet und wie es aufgebaut ist — seine Schnittstellen, der Ablauf ab dem Einstiegspunkt, die Funktionen nach ihrer Aufgabe, die angesprochene Hardware, die gemeldeten Codes, die Befunde der Analyse und was noch unbekannt ist. Die Beschreibung entsteht bei der Analyse zusammen mit den Namen und Kommentaren und wird mit ihnen in derselben Revision veröffentlicht; sie beschreibt also stets den gezeigten Code. Eine darin genannte Funktion — als Link oder als Code geschrieben — ist ein Link: Ein Klick öffnet die Funktion im Code, und **Darstellung ▸ Zurück** führt an die Stelle der Beschreibung zurück, an der sie verlassen wurde. Auch ein Klick auf eine Funktion in der Liste links führt zum Code zurück. Hat die Analyse noch keine Beschreibung verfasst, sagt die Ansicht dies. Was eine Beschreibung feststellt, ist die Lesart des Codes durch die Analyse; Unbewiesenes ist als solches gekennzeichnet.
+
+## Diff
+
+**Diff** — die zwei Pfeile zwischen **C** und **Beschreibung** — erscheint, sobald der Bereich eine spätere Revision derselben Analyse empfangen hat: Er zeigt den C der Funktion auf dem Bildschirm neben derselben Funktion in der Revision davor, Zeile für Zeile — die alte und die neue Zeilennummer jeder Zeile, das Entfernte rot, das Hinzugekommene grün, die gemeinsamen Zeilen unverändert. Eine Funktion, die die frühere Revision nicht hatte, liest sich als ganz hinzugefügt. Der Code ändert sich dadurch nicht: **C** und **ASM** zeigen diese Revision, und die Marke **Neu** kennzeichnet die geänderten Funktionen. Ein neu geöffneter Bereich hat keine frühere Revision zum Vergleichen, und die Wahl wird nicht angeboten.
 
 ## Einen Namen kopieren
 

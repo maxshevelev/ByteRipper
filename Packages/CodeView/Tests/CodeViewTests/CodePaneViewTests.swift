@@ -273,15 +273,18 @@ final class CodePaneViewTests: XCTestCase {
         reviewed.reading = AnalysisReading(project: "p", rev: 14)
         let view = CodePaneView(manifest: reviewed, artifact: try artifact(),
                                 moduleBytes: moduleBytes, hexView: NSView())
-        // The code side 500 points wide, beside the navigator.
-        view.frame = NSRect(x: 0, y: 0, width: 500 + CodePaneView.defaultNavigatorWidth, height: 360)
+        // The code side 560 points wide, beside the navigator: enough for
+        // the name and the four-segment switch together.
+        view.frame = NSRect(x: 0, y: 0, width: 560 + CodePaneView.defaultNavigatorWidth, height: 360)
         view.layoutSubtreeIfNeeded()
 
         let mode = try XCTUnwrap(first(NSSegmentedControl.self, in: view) {
             $0.label(forSegment: 0) == "ASM"
         })
         XCTAssertEqual((0..<mode.segmentCount).map { mode.label(forSegment: $0) ?? "" },
-                       ["ASM", "C", "Description"])
+                       ["ASM", "C", "", "Description"])
+        XCTAssertNotNil(mode.image(forSegment: 2), "Diff is the two arrows, not a word")
+        XCTAssertEqual(mode.toolTip(forSegment: 2), "Diff", "and it says what it is")
         let modeRect = view.convert(mode.bounds, from: mode)
         XCTAssertGreaterThan(modeRect.minX, view.bounds.midX,
                              "the switch is on the code side")
@@ -1081,6 +1084,60 @@ final class CodePaneViewTests: XCTestCase {
         let left = try cell(1)
         XCTAssertFalse(isBold(left), "moving off it takes the mark")
         XCTAssertTrue(badge(left)?.isHidden ?? true)
+    }
+
+    /// Diff shows the C of the function on screen against the earlier
+    /// revision's: what the revision removed on red, what it added on green,
+    /// and the lines both keep as they were — with the two line numbers.
+    func testTheDiffShowsWhatTheRevisionChanged() throws {
+        let suiteName = "CodePaneViewTests.diff"
+        let suite = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        suite.removePersistentDomain(forName: suiteName)
+        CodePaneView.defaults = suite
+        defer {
+            suite.removePersistentDomain(forName: suiteName)
+            CodePaneView.defaults = .standard
+        }
+        func artifact(_ c: String) throws -> CodeArtifact {
+            try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+            {"script_version":2,"program":{"image_base":"0x0"},
+             "functions":[{"entry":"0x220","name":"F","c":\(String(data: try JSONSerialization.data(withJSONObject: c, options: .fragmentsAllowed), encoding: .utf8)!) ,
+                           "instructions":[{"address":"0x220","bytes":"C3","mnemonic":"RET","text":"RET"}]}]}
+            """.utf8))
+        }
+        let previous = try artifact("void F(void)\n{\n  A();\n}\n")
+        let current = try artifact("void F(void)\n{\n  B();\n}\n")
+        let view = CodePaneView(manifest: manifest(), artifact: current,
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.layoutSubtreeIfNeeded()
+
+        XCTAssertFalse(view.canShowRevisionDiff, "nothing to compare with yet")
+        view.showRevisionDiff(true)
+        XCTAssertFalse(view.showsRevisionDiff, "the choice is not offered without a revision")
+
+        view.markRevisionChange(from: previous)
+        XCTAssertTrue(view.canShowRevisionDiff)
+        view.showRevisionDiff(true)
+        XCTAssertTrue(view.showsRevisionDiff)
+        XCTAssertEqual(view.diffCounts?.added, 1)
+        XCTAssertEqual(view.diffCounts?.removed, 1)
+        let shown = view.diffText
+        XCTAssertTrue(shown.contains("-   A();"), shown)
+        XCTAssertTrue(shown.contains("+   B();"), shown)
+        XCTAssertTrue(shown.contains("void F(void)"), shown)
+        func components(_ color: NSColor?) -> [CGFloat]? {
+            color?.usingColorSpace(.sRGB).map { [$0.redComponent, $0.greenComponent, $0.blueComponent] }
+        }
+        XCTAssertEqual(components(view.diffBackground(ofLineContaining: "-   A();")),
+                       components(CodeColors.diffRemoved))
+        XCTAssertEqual(components(view.diffBackground(ofLineContaining: "+   B();")),
+                       components(CodeColors.diffAdded))
+        XCTAssertNil(view.diffBackground(ofLineContaining: "void F(void)"), "an unchanged line is not tinted")
+
+        view.showRevisionDiff(false)
+        XCTAssertFalse(view.showsRevisionDiff)
+        XCTAssertTrue(view.showsDecompiledC, "back to the code this revision's")
     }
 
     /// The call tree's rows open and close with the triangle in front of them.
@@ -2764,7 +2821,7 @@ final class CodePaneViewTests: XCTestCase {
         let help = try XCTUnwrap(all(HelpButton.self, in: view).first)
         XCTAssertEqual(help.opens, .topic(.codePanel))
         let mode = try XCTUnwrap(all(NSSegmentedControl.self, in: view)
-            .first { $0.segmentCount == 3 && $0.label(forSegment: 1) == "C" })
+            .first { $0.segmentCount == 4 && $0.label(forSegment: 1) == "C" })
         let helpRect = view.convert(help.bounds, from: help)
         let modeRect = view.convert(mode.bounds, from: mode)
         XCTAssertLessThan(helpRect.maxX, modeRect.minX, "the help button stands before the switch")

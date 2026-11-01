@@ -43,6 +43,13 @@ enum CodeColors {
     static let string = themed(light: 0xC41A16, dark: 0xFC6A5D)
     static let comment = themed(light: 0x5D6C79, dark: 0x6C7986)
 
+    // A line a revision removed and one it added, as GitHub tints them: the
+    // same two greens and reds on both appearances, only deeper in the dark.
+    static let diffRemoved = themed(light: 0xFFEBE9, dark: 0x3B191C)
+    static let diffAdded = themed(light: 0xE6FFEC, dark: 0x12311C)
+    static let diffRemovedMark = themed(light: 0xB31D28, dark: 0xE98A93)
+    static let diffAddedMark = themed(light: 0x22863A, dark: 0x6ACC7B)
+
     private static func themed(light: UInt32, dark: UInt32) -> NSColor {
         NSColor(name: nil) { appearance in
             let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
