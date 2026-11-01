@@ -4486,8 +4486,22 @@ final class CodeNavigatorCell: NSTableCellView {
     /// The capsule a revision puts on a function it changed.
     func showsBadge(_ shows: Bool) {
         badge.isHidden = !shows
-        fieldToBadge.isActive = shows
-        fieldToEdge.isActive = !shows
+        // The row carries one horizontal chain, never two. The table lays its
+        // rows out by configuring the cells inside that pass, and an
+        // activation made there is solved while the constraint it replaces is
+        // still live: with the field pinned both to the row's trailing edge
+        // and to the badge's leading edge, the badge is left a negative width
+        // to have, the engine breaks a constraint and the name runs under the
+        // capsule. So the chain the row is leaving is let go before the other
+        // takes hold, and a hidden badge leaves the field at the row's edge
+        // while a shown one keeps its four points before it.
+        if shows {
+            fieldToEdge.isActive = false
+            fieldToBadge.isActive = true
+        } else {
+            fieldToBadge.isActive = false
+            fieldToEdge.isActive = true
+        }
         if shows { drawBadge() }
     }
 
