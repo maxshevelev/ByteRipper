@@ -960,13 +960,25 @@ public class Owner {
                 continue;
             }
             if (!apply) {
-                if (conflictsWith(here, there.get(0))) {
-                    if (take && replaceable(here, there.get(0))) {
+                // The same questions the apply below asks, in the same order,
+                // so a preview and the publish after it cannot disagree: an
+                // enum conflicts only on a member's value, another type on
+                // its shape or, the shape being the same, on comments that
+                // cannot be merged. `enumConflict` and `commentsConflict` are
+                // exactly what `mergeEnum` and `mergeComments` refuse.
+                DataType theirs = there.get(0);
+                if (theirs instanceof ghidra.program.model.data.Enum sharedEnum
+                    && here instanceof ghidra.program.model.data.Enum ownEnum) {
+                    if (enumConflict(ownEnum, sharedEnum)) recordConflict(merge, origins, name);
+                } else if (!theirs.isEquivalent(here)) {
+                    if (take && replaceable(here, theirs)) {
                         merge.taken.add(name);
                         merge.origins.put(name, originOf(origins, name));
                     } else {
                         recordConflict(merge, origins, name);
                     }
+                } else if (commentsConflict(here, theirs)) {
+                    recordConflict(merge, origins, name);
                 }
                 continue;
             }
@@ -1000,15 +1012,6 @@ public class Owner {
     private static boolean replaceable(DataType own, DataType shared) {
         return !(own instanceof ghidra.program.model.data.Enum)
             && !(shared instanceof ghidra.program.model.data.Enum);
-    }
-
-    /** Would a publish report this type? The same tests as the merge, without writing. */
-    private static boolean conflictsWith(DataType own, DataType shared) {
-        if (shared instanceof ghidra.program.model.data.Enum theirs
-            && own instanceof ghidra.program.model.data.Enum mine) {
-            return enumConflict(mine, theirs);
-        }
-        return !shared.isEquivalent(own) && commentsConflict(own, shared);
     }
 
     private static void recordConflict(Merge merge, JsonObject origins, String name) {

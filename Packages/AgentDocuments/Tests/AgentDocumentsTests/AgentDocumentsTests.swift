@@ -220,6 +220,32 @@ final class CodeReadingsTests: XCTestCase {
         XCTAssertEqual(shortfall["too_short"], .int(3))
     }
 
+    /// A library function is graded like any other: its level is the tag's,
+    /// but the gaps the bar reads are written into the artifact, so the
+    /// counters here and the owner's `below_bar` describe the same reading.
+    func testALibraryFunctionShortOfTheBarCountsInTheArtifactToo() async throws {
+        let artifact = """
+            {"script_version": 9, "ghidra": "12.1.2", "functions": [
+              {"entry": "0x1020", "name": "SetJump", "signature": "undefined8 SetJump(void)",
+               "library_kind": "edk2", "review_level": "library", "review_gaps": ["locals"],
+               "instructions": [{"address": "0x1020", "text": "RET"}]}
+            ]}
+            """
+        try ContentStore(root: directory).putAnalysis(module: module, recipe: recipe,
+                                                      artifact: Data(artifact.utf8))
+        let tool = try query(readings())
+        let answer = try await tool.run(AgentCall(tool: "code_query", arguments: AgentArguments([
+            "module": .string(module.sha256.hex), "what": .string("functions")])))
+        guard case .json(.object(let body)) = answer,
+              let library = body["library"]?.objectValue,
+              let below = library["below_bar"]?.objectValue else {
+            return XCTFail("no library block: \(answer)")
+        }
+        XCTAssertEqual(library["edk2"], .int(1), "the tag still says whose library it is")
+        XCTAssertEqual(below["locals"], .int(1), "the gap the owner's bar also reads")
+        XCTAssertEqual(below["plate"], .int(0))
+    }
+
     /// `live` and `unpublished_writes`: the stored analysis is not the live
     /// program, and the answer says when an owner holds writes it has not
     /// got — the trap of reading a publish-old C after an apply.

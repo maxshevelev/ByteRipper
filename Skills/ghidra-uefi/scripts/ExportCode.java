@@ -652,7 +652,14 @@ public class ExportCode extends GhidraScript {
         String level;
         List<String> gaps = new ArrayList<>();
         if (library(function)) {
+            // The level is the tag's, not the bar's: a library function stays
+            // `library` however far its review is from the bar. Its gaps are
+            // still written — the registry's bar reads them, and the artifact
+            // has to say the same thing the owner's `below_bar` does.
             level = "library";
+            if (!function.isExternal() && !function.isThunk()) {
+                gaps.addAll(assess(function, decompiled, steps).gaps);
+            }
         } else if (function.isExternal() || function.isThunk()) {
             level = "no_body";
         } else {

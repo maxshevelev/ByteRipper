@@ -20,10 +20,12 @@ review documents.
   complete by the highest bar the skill sets for a function ("What a finished
   function looks like"): a name that is not a placeholder, every parameter and
   local named and typed, a plate that opens with the evidence for its kind, and
-  step comments. The exporter does not ask this of a library function in its
-  own module; the registry does, because what it holds is copied into every
-  module with the same body. A tagged function short of the bar stays in its
-  module and is listed in the publish answer with its gaps. Nothing else goes
+  step comments. The exporter grades a tagged function as it grades any other,
+  and writes what it lacks into `review_gaps`; its `review_level` stays
+  `library`, because the tag is the level and the gaps are the bar's. The
+  registry takes it only with no gaps at all, because what it holds is copied
+  into every module with the same body. A tagged function short of the bar
+  stays in its module and is listed in the publish answer with its gaps. Nothing else goes
   in: a module's own work is not shared, and a function tagged without a kind
   is not either.
 - **The key is the body, as Ghidra's Function ID hashes it**: the full hash and

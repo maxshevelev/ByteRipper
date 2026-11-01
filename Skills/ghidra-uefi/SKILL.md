@@ -330,8 +330,11 @@ registry shared by every module (`Design/LIBRARY_REGISTRY_PLAN.md`), keyed by
 its body as Function ID hashes it — and taken only at the highest bar: the bar
 of "What a finished function looks like" (a real name, every parameter and local
 named and typed, the plate with its evidence, step comments). A library
-function is complete for its own module without that; for the registry, which
-copies it into every module with the same body, it is not. `ghidra_publish`
+function's level is the tag's, and the exporter leaves it `library` however far
+its review is from the bar — but it writes the gaps the review still has, so
+the artifact, `code_query` and the owner's `below_bar` read one list. The
+registry, which copies the function into every module with the same body,
+takes it only when that list is empty. `ghidra_publish`
 answers what happened:
 
 - `library.added`, `library.updated`: the entries this publish made or moved
