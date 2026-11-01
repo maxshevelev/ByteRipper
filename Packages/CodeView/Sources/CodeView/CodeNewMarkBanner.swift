@@ -10,23 +10,34 @@ import ToolModuleKit
 /// badge the function's row wears, so the notice says what it is about before
 /// its words are read.
 ///
+/// The words are one selectable text view rather than labels: a label that is
+/// selected is drawn by the field editor, which brings its own font and line
+/// pitch, and the plate would change shape under the reader's hand.
+///
 /// The pane fills it and hides it; the plate itself only draws what it is
 /// given, and an empty list is not shown at all.
 final class CodeNewMarkBanner: NSView {
     private let badge = PartBadgeView(text: "")
-    private let heading = NSTextField(labelWithString: "")
-    private let bullets = NSTextField(labelWithString: "")
+    private let words = NSTextView()
+    private var wordsHeight: NSLayoutConstraint!
 
     /// What the plate says now, for a test.
     private(set) var titleShown = ""
     private(set) var bulletsShown: [String] = []
 
     /// Whether the plate's words can be selected and copied, for a test.
-    var wordsAreSelectable: Bool { heading.isSelectable && bullets.isSelectable }
+    var wordsAreSelectable: Bool { words.isSelectable }
 
     /// The points the plate's words are set in, for a test: selecting a word
-    /// must not change its size.
-    var wordFontPoints: [CGFloat] { [heading.font?.pointSize ?? 0, bullets.font?.pointSize ?? 0] }
+    /// must not change its size or its line pitch.
+    var wordFontPoints: [CGFloat] {
+        guard let storage = words.textStorage, storage.length > 0 else { return [] }
+        var points: Set<CGFloat> = []
+        storage.enumerateAttribute(.font, in: NSRange(location: 0, length: storage.length)) { value, _, _ in
+            if let font = value as? NSFont { points.insert(font.pointSize) }
+        }
+        return points.sorted()
+    }
 
     /// The room between the plate's edge and its words.
     private static let inset: CGFloat = 10
@@ -45,40 +56,32 @@ final class CodeNewMarkBanner: NSView {
         badge.ink = .controlAccentColor
         badge.translatesAutoresizingMaskIntoConstraints = false
 
-        heading.translatesAutoresizingMaskIntoConstraints = false
-        // The plate is a notice the reader may want to quote: its words are
-        // selected and copied as the code's are.
-        heading.isSelectable = true
-        heading.font = .systemFont(ofSize: 12, weight: .semibold)
-        heading.textColor = .labelColor
-        heading.lineBreakMode = .byTruncatingTail
-        heading.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-
-        bullets.translatesAutoresizingMaskIntoConstraints = false
-        bullets.isSelectable = true
-        // A selected label is drawn by the field editor, which takes the
-        // field's own font: left at the default, the words would grow as soon
-        // as the reader selects one.
-        bullets.font = .systemFont(ofSize: 12)
-        bullets.lineBreakMode = .byWordWrapping
-        bullets.maximumNumberOfLines = 0
-        bullets.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        words.isEditable = false
+        words.isSelectable = true
+        words.isRichText = true
+        words.drawsBackground = false
+        words.textContainerInset = .zero
+        words.textContainer?.lineFragmentPadding = 0
+        words.textContainer?.widthTracksTextView = false
+        words.textContainer?.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
+        words.isHorizontallyResizable = false
+        words.isVerticallyResizable = false
+        words.translatesAutoresizingMaskIntoConstraints = false
 
         // The words are tied to the plate's own edges rather than left to a
         // stack's alignment: the plate takes the pane's whole width, and a
         // stack laid its views out at the trailing edge once it was wider
         // than they were.
-        for view in [badge, heading, bullets] { addSubview(view) }
+        for view in [badge, words] { addSubview(view) }
+        wordsHeight = words.heightAnchor.constraint(equalToConstant: 1)
         NSLayoutConstraint.activate([
             badge.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.inset),
-            badge.topAnchor.constraint(equalTo: topAnchor, constant: Self.inset),
-            heading.leadingAnchor.constraint(equalTo: badge.trailingAnchor, constant: 8),
-            heading.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -Self.inset),
-            heading.centerYAnchor.constraint(equalTo: badge.centerYAnchor),
-            bullets.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.inset),
-            bullets.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.inset),
-            bullets.topAnchor.constraint(equalTo: badge.bottomAnchor, constant: 6),
-            bullets.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -Self.inset)
+            badge.topAnchor.constraint(equalTo: topAnchor, constant: Self.inset + 1),
+            words.leadingAnchor.constraint(equalTo: badge.trailingAnchor, constant: 8),
+            words.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.inset),
+            words.topAnchor.constraint(equalTo: topAnchor, constant: Self.inset),
+            wordsHeight,
+            words.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -Self.inset)
         ])
     }
 
@@ -95,27 +98,50 @@ final class CodeNewMarkBanner: NSView {
         }
     }
 
-    /// Says what the mark is about. A bullet list, each line hanging under its
-    /// own text as a list is read.
+    /// The text is laid out at the width the plate has, and the plate is as
+    /// tall as the words turn out to be: a list that wraps to three lines
+    /// makes a taller plate.
+    override func layout() {
+        super.layout()
+        guard let container = words.textContainer, let manager = words.layoutManager else { return }
+        let width = max(0, words.frame.width)
+        container.containerSize = NSSize(width: width, height: CGFloat.greatestFiniteMagnitude)
+        manager.ensureLayout(for: container)
+        let height = (manager.usedRect(for: container).height).rounded(.up)
+        if abs(wordsHeight.constant - height) > 0.5 {
+            wordsHeight.constant = max(height, 1)
+        }
+    }
+
+    /// Says what the mark is about: the title, then a bullet list, each line
+    /// hanging under its own text as a list is read.
     func show(title: String, lines: [String]) {
         titleShown = title
         bulletsShown = lines
-        heading.stringValue = title
         setAccessibilityLabel(title)
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.headIndent = 14
-        paragraph.tabStops = [NSTextTab(textAlignment: .left, location: 14)]
-        paragraph.paragraphSpacing = 3
-        let text = NSMutableAttributedString()
+        let titleStyle = NSMutableParagraphStyle()
+        titleStyle.paragraphSpacing = 4
+        let bulletStyle = NSMutableParagraphStyle()
+        bulletStyle.headIndent = 14
+        bulletStyle.tabStops = [NSTextTab(textAlignment: .left, location: 14)]
+        bulletStyle.paragraphSpacing = 3
+
+        let body = NSMutableAttributedString(attributedString: NSAttributedString(
+            string: title + "\n", attributes: [
+                .font: NSFont.systemFont(ofSize: 12, weight: .semibold),
+                .foregroundColor: NSColor.labelColor,
+                .paragraphStyle: titleStyle
+            ]))
         for (index, bullet) in lines.enumerated() {
-            if index > 0 { text.append(NSAttributedString(string: "\n")) }
-            text.append(NSAttributedString(string: "•\t\(bullet)", attributes: [
+            if index > 0 { body.append(NSAttributedString(string: "\n")) }
+            body.append(NSAttributedString(string: "•\t\(bullet)", attributes: [
                 .font: NSFont.systemFont(ofSize: 12),
                 .foregroundColor: NSColor.labelColor,
-                .paragraphStyle: paragraph
+                .paragraphStyle: bulletStyle
             ]))
         }
-        bullets.attributedStringValue = text
+        words.textStorage?.setAttributedString(body)
+        needsLayout = true
         isHidden = false
     }
 

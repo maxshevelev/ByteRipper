@@ -1359,7 +1359,7 @@ final class CodePaneViewTests: XCTestCase {
         ])
         XCTAssertFalse(view.showsRevisionDiff, "the comparison has nothing to draw")
         XCTAssertTrue(view.newBannerWordsAreSelectable, "the notice can be selected and copied")
-        XCTAssertEqual(view.newBannerWordFontPoints, [12, 12],
+        XCTAssertEqual(view.newBannerWordFontPoints, [12],
                        "the field editor keeps the words at their size when one is selected")
     }
 
