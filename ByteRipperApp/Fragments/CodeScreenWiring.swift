@@ -74,6 +74,11 @@ func wireCodeRevisions(_ codePane: CodePaneView,
     let module = manifest.module.sha256
     let recipe = manifest.recipe.id
     var digests: [Int: SHA256Digest] = [:]
+    // The records of the last launch, read before anything can write: the
+    // pane's own `restore` notes the function it opens on, and that note —
+    // taken over a map the pane has not been given yet — would run ahead of
+    // this read and leave nothing to compare with.
+    let kept = CodeRevisionSeen.records(module: module, recipe: recipe)
     // What the reader has had in front of them is kept function by function,
     // so a revision that arrived while the app was closed still puts the
     // functions it changed up as New — against the code they last saw.
@@ -121,7 +126,6 @@ func wireCodeRevisions(_ codePane: CodePaneView,
         // on screen, and the code they read then: each is New against the
         // revision the record names. A record whose revision the store holds
         // no code for cannot be compared, and its function waits unseen.
-        let kept = CodeRevisionSeen.records(module: module, recipe: recipe)
         var baselines: [Int: CodeArtifact] = [:]
         for revision in Set(kept.values.map(\.revision)) {
             if let previous, previous.revision == revision {

@@ -1,5 +1,6 @@
 import ByteRipperCore
 import CodeAnalysis
+import CodeView
 import Localization
 import PartCodec
 import ToolModuleKit
@@ -13,12 +14,23 @@ import XCTest
 /// split and the rows on screen.
 @MainActor
 final class WorkspaceRestoreTests: XCTestCase {
+    /// The revision records a code pane keeps are a store of their own: an
+    /// isolated one per test, so a module opened in one test is not new in
+    /// the next.
+    private var defaultsName: String?
+
     override func setUp() {
         super.setUp()
         WorkspaceSettings.resetToDefaults()
+        let isolated = isolatedDefaults(for: self)
+        defaultsName = isolated.name
+        CodePaneView.defaults = isolated.store
     }
 
     override func tearDown() {
+        if let defaultsName { discardIsolatedDefaults(defaultsName, CodePaneView.defaults) }
+        CodePaneView.defaults = .standard
+        defaultsName = nil
         WorkspaceSettings.resetToDefaults()
         super.tearDown()
     }
@@ -387,6 +399,73 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertEqual(restored.selectedFunction?.name, "SecStartup")
     }
 
+    /// A New mark comes back after a restart: a function whose code reads
+    /// otherwise than it did when the reader last saw it is marked against
+    /// the revision they saw it at, from the records the last launch kept.
+    func testNewMarksComeBackAfterARestart() async throws {
+        let codeBytes = [UInt8](repeating: 0x90, count: 0x100)
+        let parentURL = try dump(0x1000, 0x77)
+        func artifact(_ c: String) throws -> Data {
+            try JSONSerialization.data(withJSONObject: [
+                "script_version": 2, "ghidra": "12.1.2",
+                "functions": [["entry": "0x100", "name": "Long", "c": c,
+                               "instructions": [["address": "0x100", "bytes": "90", "mnemonic": "NOP", "text": "NOP"]]]]
+            ])
+        }
+        let oldCode = "void Long(void)\n{\n  Old();\n}\n"
+        let newCode = "void Long(void)\n{\n  New();\n}\n"
+        let storeRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CodeSeenStore-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: storeRoot, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: storeRoot) }
+        let store = try ContentStore(root: storeRoot)
+        let module = ModuleIdentity(sha256: SHA256Digest(data: Data(codeBytes)),
+                                    size: codeBytes.count, name: "SecCore", kind: "PE32",
+                                    language: "x86:LE:32:default", imageBase: "0x0")
+        let recipe = AnalysisRecipe(id: "code-v2-ghidra-12.1.2", exporter: 2,
+                                    ghidra: "12.1.2", script: "ExportCode.java")
+        // Revision 24 is what the reader last saw; 25 is what the store holds
+        // now, and the function reads otherwise in it.
+        let review = try store.putObject(Data("review".utf8))
+        let before = try store.putObject(try artifact(oldCode))
+        try store.recordRevision(module: module.sha256,
+                                 reading: AnalysisReading(project: "p", rev: 24, review: review),
+                                 artifact: before)
+        let manifest = try store.putAnalysis(module: module, recipe: recipe,
+                                             artifact: try artifact(newCode),
+                                             reading: AnalysisReading(project: "p", rev: 25))
+        let previousRoot = UEFIToolModule.codeAnalysisRoot
+        UEFIToolModule.codeAnalysisRoot = storeRoot
+        addTeardownBlock { UEFIToolModule.codeAnalysisRoot = previousRoot }
+
+        // The records the last launch left: the function was seen at r24, as
+        // it read then.
+        CodeRevisionSeen.save(["0x100": SeenRecord(
+            revision: 24,
+            fingerprint: SeenRecord.fingerprint(name: "Long", signature: nil, c: oldCode))],
+            module: module.sha256, recipe: recipe.id)
+        addTeardownBlock {
+            CodeRevisionSeen.save([:], module: module.sha256, recipe: recipe.id)
+        }
+
+        let controller = shownWindow().mainViewController
+        controller.openFiles([parentURL])
+        controller.openCode(
+            named: "SecCore ▸ PE32", from: controller.windowModel.pane1,
+            source: 0x100..<0x200, manifest: manifest,
+            artifact: try JSONDecoder().decode(CodeArtifact.self, from: artifact(newCode)),
+            codec: ReadOnlyPartCodec(codeBytes, title: L("This cannot be put back"),
+                                     reason: L("A code analysis is a snapshot; edit the dump and analyze the module again.")),
+            at: CodeLocation(function: CodeAddress(0x100)))
+        let id = try XCTUnwrap(controller.fragments.expanded)
+        let pane = try XCTUnwrap(controller.fragments.codePane(id))
+        for _ in 0..<100 where pane.newMarks.isEmpty {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertEqual(pane.newMarks.map(\.entry), [CodeAddress(0x100)],
+                       "the function changed since the reader last saw it")
+    }
+
     /// Where each function was left in its code is part of the screen: the
     /// workspace keeps it per function, and the panel opens at that line,
     /// not at the function's top.
@@ -447,7 +526,9 @@ final class WorkspaceRestoreTests: XCTestCase {
     /// only where a screen was redrawn, so a panel opened fresh showed no
     /// comparison controls at all.
     func testACodePanelInTheDockOffersTheComparisonsATabDoes() async throws {
-        let codeBytes = [UInt8](repeating: 0x90, count: 0x100)
+        // Bytes of its own: the revision records a pane keeps are by the
+        // module's digest, and another test's module must not be new here.
+        let codeBytes = [UInt8](repeating: 0x91, count: 0x100)
         let parentURL = try dump(0x1000, 0x77)
         func artifactData(_ name: String) -> Data {
             Data(#"{"script_version":2,"ghidra":"12.1.2","functions":[{"entry":"0x0","name":"\#(name)","c":"return 0;","instructions":[{"address":"0x0","bytes":"90","mnemonic":"NOP","text":"NOP"}]}]}"#.utf8)

@@ -1208,6 +1208,12 @@ import ToolModuleKit
     /// functions moved on with the revision on screen.
     public var onSeenChanged: (([String: SeenRecord]) -> Void)?
 
+    /// Whether the records the last launch kept have been given to the pane.
+    /// A note taken before that is not written over the store: the pane's
+    /// own opening is noted while the records are still on their way, and
+    /// saving then would erase the launch before it — the New marks with it.
+    private var seenLoaded = false
+
     /// The records as they stand, for a test.
     public var seenRecords: [String: SeenRecord] { seen }
 
@@ -1221,6 +1227,7 @@ import ToolModuleKit
     public func restoreSeen(_ records: [String: SeenRecord],
                             baselines: [Int: CodeArtifact]) {
         guard let revision = manifest.reading?.rev else { return }
+        seenLoaded = true
         guard !records.isEmpty else {
             seen = Self.seenRecords(of: artifact, revision: revision)
             onSeenChanged?(seen)
@@ -1279,6 +1286,7 @@ import ToolModuleKit
         let function = artifact.functions[index]
         seen[function.entry.description] = SeenRecord(
             revision: revision, fingerprint: Self.fingerprint(of: function))
+        guard seenLoaded else { return }
         onSeenChanged?(seen)
     }
     /// The function's row, its listing, the selected instruction, its C and

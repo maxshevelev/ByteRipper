@@ -1,6 +1,7 @@
 import XCTest
 import AgentKit
 import CodeAnalysis
+import CodeView
 import Localization
 import PartCodec
 import UEFIContentSource
@@ -26,6 +27,7 @@ final class LinkedPartTests: XCTestCase {
         defaultsName = isolated.name
         ToolController.defaults = isolated.store
         ToolController.changeDelay = 0
+        CodePaneView.defaults = isolated.store
     }
 
     override func tearDown() {
@@ -37,6 +39,7 @@ final class LinkedPartTests: XCTestCase {
         for file in files { try? FileManager.default.removeItem(at: file) }
         if let defaultsName { discardIsolatedDefaults(defaultsName, ToolController.defaults) }
         ToolController.defaults = .standard
+        CodePaneView.defaults = .standard
         ToolController.changeDelay = 0.15
         controllers = []
         windows = []

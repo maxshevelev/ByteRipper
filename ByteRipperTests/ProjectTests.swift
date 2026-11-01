@@ -1,5 +1,6 @@
 import ByteRipperCore
 import CodeAnalysis
+import CodeView
 import Localization
 import PartCodec
 import UEFIToolUI
@@ -12,6 +13,25 @@ import XCTest
 /// (`Design/WORKSPACE_PLAN.md`, "Projects").
 @MainActor
 final class ProjectTests: XCTestCase {
+    /// The revision records a code pane keeps are a store of their own: an
+    /// isolated one per test, so a module opened in one test is not new in
+    /// the next.
+    private var defaultsName: String?
+
+    override func setUp() {
+        super.setUp()
+        let isolated = isolatedDefaults(for: self)
+        defaultsName = isolated.name
+        CodePaneView.defaults = isolated.store
+    }
+
+    override func tearDown() {
+        if let defaultsName { discardIsolatedDefaults(defaultsName, CodePaneView.defaults) }
+        CodePaneView.defaults = .standard
+        defaultsName = nil
+        super.tearDown()
+    }
+
     private func shownWindow() -> MainWindowController {
         let controller = MainWindowController(frameAutosaveName: nil)
         controller.showWindow(nil)
