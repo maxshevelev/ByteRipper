@@ -75,6 +75,21 @@ final class CodeTextView: NSTextView {
             super.mouseDown(with: event)
             return
         }
+        // A click in text puts the caret where it was clicked, and the C is no
+        // exception: the selection it had goes under any plain click — on a
+        // name that explains itself, on a link, or on plain code alike. The
+        // two branches below leave before the text view would run that, so it
+        // is done here; a drag still selects, and a ⌘-click or a double click
+        // was taken by the pane above.
+        if let character { setSelectedRange(NSRange(location: character, length: 0)) }
+        // A name that explains itself asks about it on a click — the
+        // question-mark pointer's promise. The text view's own handling would
+        // follow the link or select the word under a double click, and the
+        // popover would never open.
+        if let character, explainable.contains(where: { NSLocationInRange(character, $0) }) {
+            window?.makeFirstResponder(self)
+            return
+        }
         if let character, textStorage?.attribute(.link, at: character, effectiveRange: nil) != nil {
             window?.makeFirstResponder(self)
             return
@@ -94,6 +109,23 @@ final class CodeTextView: NSTextView {
 
     override func complete(_ sender: Any?) {
         if let onEscape { onEscape() } else { super.complete(sender) }
+    }
+
+    /// Copy takes the text and nothing else. The C's links are the pane's own
+    /// tokens — a call or a global carries `.link` = `code:4` — and AppKit
+    /// writes a copied link as a URL beside the text: a selection of just the
+    /// name then reached the clipboard as `code:4`, which is no name at all.
+    override func copy(_ sender: Any?) {
+        copySelectedText(to: .general)
+    }
+
+    /// The selection as plain text, for `copy` and for a test's pasteboard.
+    func copySelectedText(to board: NSPasteboard) {
+        let range = selectedRange()
+        guard range.length > 0 else { return }
+        let text = (string as NSString).substring(with: range)
+        board.clearContents()
+        board.setString(text, forType: .string)
     }
 
     /// The character whose glyph is under `point`, in the view's coordinates.

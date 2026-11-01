@@ -461,12 +461,15 @@ import ToolModuleKit
     /// does not take the selection, which belongs to the reader.
     public func selectFunction(at index: Int, notify: Bool = true) {
         guard model.functions.indices.contains(index) else { return }
+        let previous = state.function
         // A caller can point at a function the current search or list hides:
         // show Functions, with the filter cleared, before selecting it.
         revealInNavigator(index)
         state.selectFunction(index)
-        // Opening a function a revision changed is what takes its New mark.
-        if unopenedChanges.remove(index) != nil {
+        // Arriving at a function a revision changed does not take its New
+        // mark: the reader sees which function changed while reading it, and
+        // the mark goes when they move on to another one.
+        if let previous, previous != index, unopenedChanges.remove(previous) != nil {
             syncingSelection = true
             functionTable.reloadData()
             syncingSelection = false
@@ -496,10 +499,18 @@ import ToolModuleKit
     /// Selects the instruction covering `range` of the module without moving
     /// the hex view back: the selection came from there.
     public func selectModuleRange(_ range: Range<UInt64>) {
-        guard state.list == .functions, !syncingSelection,
+        // The selection the pane asked for itself, for a link to data, says
+        // nothing about the code: data is no instruction, and the nearest line
+        // before it — a line of some other function — is not where the reader
+        // is. Only a selection made in the hex view steers the code.
+        guard state.list == .functions, !syncingSelection, !selectingBytes,
               let line = model.line(forModuleRange: range) else { return }
         select(line: line)
     }
+
+    /// Set while the pane selects bytes of its own — a link to a global — so
+    /// the hex view's report of that selection does not move the code.
+    private var selectingBytes = false
 
 
     /// The whole stored range of a function, for the hex view and for tests.
@@ -736,7 +747,7 @@ import ToolModuleKit
     /// Takes the panel from `previous` — the artifact it showed before a new
     /// revision of the same reading arrived. The functions that revision added,
     /// renamed, re-signed or decompiled differently read bold, with a **New**
-    /// badge, until the reader opens one.
+    /// badge, until the reader has opened one and moved off it.
     public func markRevisionChange(from previous: CodeArtifact) {
         var before: [CodeAddress: CodeArtifact.Function] = [:]
         for function in previous.functions where before[function.entry] == nil {
@@ -819,8 +830,9 @@ import ToolModuleKit
         ControlHelp.describe(cell.disclosure, phrase)
     }
 
-    /// The functions a revision the panel received changed, and that the
-    /// reader has not opened since: they read bold, with a **New** badge.
+    /// The functions a revision the panel received changed that the reader has
+    /// not yet left: they read bold, with a **New** badge, while they are open
+    /// and until the reader moves to another function.
     private var unopenedChanges: Set<Int> = []
     /// The function's row, its listing, the selected instruction, its C and
     /// its callers and callees. The listing is reloaded only when the function
@@ -1044,7 +1056,11 @@ import ToolModuleKit
             }
             flashArrival()
         case .bytes(let address):
-            if let range = dataRange(at: address) { onSelectRange?(range) }
+            if let range = dataRange(at: address) {
+                selectingBytes = true
+                onSelectRange?(range)
+                selectingBytes = false
+            }
         case .label(let name):
             // In the same function's C: to the line that defines the label,
             // and to its instruction when the name still spells its address.
@@ -2673,14 +2689,24 @@ import ToolModuleKit
 
     // help: panel.code.highlight
     /// A click in the C: on a name, it highlights the name's every
-    /// occurrence; ⌘-click or a double click on a call or a global goes there,
-    /// and on the function's own name in its signature shows its callers.
+    /// occurrence; ⌘-click or a double click on a call goes there, and on the
+    /// function's own name in its signature shows its callers. A name the
+    /// question-mark pointer marks explains itself: a double click asks it,
+    /// where ⌘-click still goes to its bytes.
     func clickC(at character: Int?, event: NSEvent) -> Bool {
         let token = character.flatMap { index in
             shownCTokens.filter { $0.start <= index && index < $0.start + $0.length }
                 .min { $0.length < $1.length }
         }
-        if let token, let link = token.link, Self.isJump(event) {
+        // A name the pointer marks with a question mark explains itself on any
+        // plain click, a double click included: that is the mark's promise, and
+        // a double click that went to the name's bytes instead left the reader
+        // somewhere they never asked to be. ⌘ is how those bytes are reached.
+        let explained = token.map { token in
+            cTextView.explainable.contains(NSRange(location: token.start, length: token.length))
+        } ?? false
+        let question = explained && event.clickCount >= 2 && !event.modifierFlags.contains(.command)
+        if let token, let link = token.link, Self.isJump(event), !question {
             let range = NSRange(location: token.start, length: token.length)
             if case .function(let index) = link {
                 // ⌘-click on the function's own name in its signature asks
@@ -2691,6 +2717,14 @@ import ToolModuleKit
                 } else {
                     jumpToDefinition(of: index, from: range)
                 }
+                return true
+            }
+            // A link to data selects its bytes in the hex view and moves the
+            // code nowhere: no place is recorded and no mark is left on the
+            // place the reader stays on, so Back and Forward walk the code
+            // alone. The mark belongs to a move the code made.
+            if case .bytes = link {
+                follow(link)
                 return true
             }
             leavingCMark = range
@@ -2717,7 +2751,7 @@ import ToolModuleKit
             }
             return false
         }
-        if !Self.isJump(event), let character { explainC(at: character, token: token) }
+        if let character, question || !Self.isJump(event) { explainC(at: character, token: token) }
         return false
     }
 
@@ -2752,12 +2786,16 @@ import ToolModuleKit
     /// drag to select text is not a question about the name it started on:
     /// the popover then stays shut (it opened at the end of every selection
     /// that started on an explained name). A drag is the pointer let go more
-    /// than a few points from where it went down, or, in the C, a selection.
+    /// than a few points from where it went down, or, in the C, a selection
+    /// this press made — a selection the reader left there before it is not a
+    /// reason to swallow the click.
     private func afterClick(inC: Bool, _ show: @escaping () -> Void) {
         let down = NSApp.currentEvent.flatMap { $0.type == .leftMouseDown ? $0.locationInWindow : nil }
+        let selectedBefore = inC ? cTextView.selectedRange() : NSRange()
         RunLoop.main.perform(inModes: [.default]) { [weak self] in
             guard let self else { return }
-            if inC, self.cTextView.selectedRange().length > 0 { return }
+            let selected = self.cTextView.selectedRange()
+            if inC, selected.length > 0, selected != selectedBefore { return }
             if let down, let up = NSApp.currentEvent, up.type == .leftMouseUp,
                hypot(up.locationInWindow.x - down.x, up.locationInWindow.y - down.y) > Self.clickSlop {
                 return
@@ -3320,7 +3358,7 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
 /// it is — the indent is the row's, so a reused cell takes the next row's —
 /// and one whose calls the tree holds carries the triangle that opens them.
 /// A function that changed in a revision the panel received reads bold, with
-/// **New** in a capsule until the reader opens it.
+/// **New** in a capsule until the reader opens it and moves off it.
 final class CodeNavigatorCell: NSTableCellView {
     let disclosure = CodeDisclosureButton()
     let icon = NSImageView()

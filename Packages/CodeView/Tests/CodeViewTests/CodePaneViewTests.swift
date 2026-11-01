@@ -1016,8 +1016,9 @@ final class CodePaneViewTests: XCTestCase {
     }
 
     /// A revision the panel receives marks the functions it changed: they read
-    /// bold with a New badge until the reader opens one.
-    func testARevisionMarksChangedFunctionsUntilTheyAreOpened() throws {
+    /// bold with a New badge, and the mark is taken by moving off the function,
+    /// not by arriving at it.
+    func testARevisionMarksChangedFunctionsUntilTheReaderMovesOn() throws {
         let suiteName = "CodePaneViewTests.revisionMarks"
         let suite = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         suite.removePersistentDomain(forName: suiteName)
@@ -1072,9 +1073,14 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertFalse(isBold(try cell(0)), "a function the revision left alone does not")
 
         view.selectFunction(at: 1)
-        let opened = try cell(1)
-        XCTAssertFalse(isBold(opened), "opening it takes the mark")
-        XCTAssertTrue(badge(opened)?.isHidden ?? true)
+        let arrived = try cell(1)
+        XCTAssertTrue(isBold(arrived), "arriving at it does not take the mark")
+        XCTAssertEqual(badge(arrived)?.text, "New")
+
+        view.selectFunction(at: 0)
+        let left = try cell(1)
+        XCTAssertFalse(isBold(left), "moving off it takes the mark")
+        XCTAssertTrue(badge(left)?.isHidden ?? true)
     }
 
     /// The call tree's rows open and close with the triangle in front of them.
@@ -2178,6 +2184,13 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(CodeExplanationPopover(explanation: constant, model: CodeModel(artifact: artifact, layout: nil))
                         .factsText(), "0xCF8 = 3320 · enum FCH_IO_PORT")
         XCTAssertEqual(try clickOn("SEC_SERIAL_DEVICE_INFO")?.c?.hasPrefix("struct SEC_SERIAL_DEVICE_INFO"), true)
+        // A double click on a name that explains itself asks it too: it is a
+        // question about the name, not a selection of the word.
+        view.shownExplanationClose()
+        XCTAssertFalse(view.clickC(at: at("SEC_SERIAL_DEVICE_INFO") + 1, event: try click(count: 2)))
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        XCTAssertEqual(view.shownExplanation?.subject, .type("SEC_SERIAL_DEVICE_INFO"))
+        view.shownExplanationClose()
         let field = try XCTUnwrap(try clickOn("BaudRate"))
         XCTAssertEqual(field.name, "SEC_SERIAL_DEVICE_INFO.BaudRate")
         XCTAssertEqual(field.text, "bits per second")
@@ -2303,12 +2316,137 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual((stack.arrangedSubviews.last as? NSTextField)?.stringValue, "Source: the board's schematic.")
         view.shownExplanationClose()
 
-        // A double click selects the global's bytes in the dump: both of a
-        // UINT16, not its first.
+        // A selection the reader left in the C does not swallow the click:
+        // only a selection this click makes does.
+        view.shownExplanationClose()
+        textView.setSelectedRange(NSRange(location: 0, length: 4))
+        XCTAssertFalse(view.clickC(at: shown.range(of: "mPort").location + 1, event: try click(count: 1)))
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        XCTAssertEqual(view.shownExplanation?.subject, .global(CodeAddress(0x230)))
+        textView.setSelectedRange(NSRange(location: 0, length: 0))
+        view.shownExplanationClose()
+
+        // A double click on a name that explains itself asks it, as a click
+        // does — it does not move to the name's bytes.
         var selected: Range<UInt64>?
         view.onSelectRange = { selected = $0 }
-        XCTAssertTrue(view.clickC(at: shown.range(of: "mPort").location + 1, event: try click(count: 2)))
+        XCTAssertFalse(view.clickC(at: shown.range(of: "mPort").location + 1, event: try click(count: 2)))
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        XCTAssertEqual(view.shownExplanation?.subject, .global(CodeAddress(0x230)))
+        XCTAssertNil(selected, "a double click does not go to the bytes")
+
+        // ⌘ is how the global's bytes are asked for: both of a UINT16, not its first.
+        XCTAssertTrue(view.clickC(at: shown.range(of: "mPort").location + 1,
+                                  event: try click(count: 1, flags: .command)))
         XCTAssertEqual(selected, 0x78..<0x7A)
+        // The bytes moved, the code did not: the function on screen is the one
+        // the reader was on, no place was added, and the place the reader stays
+        // on keeps no mark of the global's name — Back and Forward walk the
+        // code as if the selection had not happened.
+        XCTAssertEqual(view.selectedFunction?.name, "F")
+        XCTAssertFalse(view.canGoBack, "a link to data is not a place")
+        XCTAssertNil(view.carriedHistory.views.last?.cMark)
+    }
+
+    /// A ⌘-click on a global selects its bytes in the dump, and the hex
+    /// view's report of that selection must not move the code: data is no
+    /// instruction, and the line nearest before it belongs to whatever
+    /// function ended there. (PeiResetSystem's `gPeiCoreGuid` opened
+    /// InternalMathDivRemU64x32 this way, the last function before the data.)
+    func testTheBytesOfAGlobalDoNotSteerTheCode() throws {
+        let c = "void F(void)\n{\n  Port = g;\n}\n"
+        let at = (c as NSString).range(of: "Port = g")
+        let json: [String: Any] = [
+            "script_version": 5, "program": ["image_base": "0x0"],
+            "functions": [
+                ["entry": "0x220", "name": "F", "c": c,
+                 "c_spans": [[at.location + 7, 1, "global", "0x240"]],
+                 "instructions": [["address": "0x220", "bytes": "8B 00", "mnemonic": "MOV",
+                                   "text": "MOV AX,[0x240]"]]],
+                ["entry": "0x230", "name": "G", "c": "void G(void)\n{\n}\n",
+                 "instructions": [["address": "0x230", "bytes": "C3", "mnemonic": "RET", "text": "RET"]]]
+            ],
+            "symbols": [["address": "0x240", "name": "g", "type": "UINT16", "source": "USER_DEFINED"]]
+        ]
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        let view = CodePaneView(manifest: manifest(), artifact: artifact, moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.restore(function: 0, instruction: nil, showsC: true)
+        view.layoutSubtreeIfNeeded()
+
+        // The app's wiring: the selection made in the dump is reported back to
+        // the code panel, which is what used to move it.
+        var selected: Range<UInt64>?
+        view.onSelectRange = { range in
+            selected = range
+            view.selectModuleRange(range)
+        }
+        XCTAssertTrue(view.clickC(at: at.location + 7, event: try click(count: 1, flags: .command)))
+        XCTAssertEqual(selected, 0x88..<0x8A, "the global's two bytes at module offset 0x88")
+        XCTAssertEqual(view.selectedFunction?.name, "F", "the code stays on the function it was on")
+    }
+
+    /// A click in the C drops the selection it had, whether the name under the
+    /// pointer is a global (a link), a type that explains itself, or plain
+    /// code: one behavior, not two. (A global's click used to keep the
+    /// selection, a type's to drop it.)
+    func testAClickInTheCDropsTheSelectionUnderEveryNameAlike() throws {
+        let view = CodeTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 100))
+        view.isEditable = false
+        view.isSelectable = true
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 100),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil) }
+        view.layoutSubtreeIfNeeded()
+        let text = NSMutableAttributedString(string: "Port = gPeiCoreGuid; struct T x;")
+        let string = text.string as NSString
+        let global = string.range(of: "gPeiCoreGuid")
+        let type = string.range(of: "T x")
+        text.addAttribute(.link, value: "code:4", range: global)
+        view.textStorage?.setAttributedString(text)
+        view.explainable = [global, NSRange(location: type.location, length: 1)]
+        view.onClick = { _, _ in false }
+        let layout = try XCTUnwrap(view.layoutManager)
+        let container = try XCTUnwrap(view.textContainer)
+        layout.ensureLayout(for: container)
+        func down(at range: NSRange) throws -> NSEvent {
+            let glyphs = layout.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+            let box = layout.boundingRect(forGlyphRange: glyphs, in: container)
+            let point = view.convert(NSPoint(x: box.midX + view.textContainerOrigin.x,
+                                             y: box.midY + view.textContainerOrigin.y), to: nil)
+            return try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseDown, location: point,
+                                                   modifierFlags: [], timestamp: 0,
+                                                   windowNumber: window.windowNumber,
+                                                   context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+        }
+
+        for range in [global, NSRange(location: type.location, length: 1)] {
+            view.setSelectedRange(NSRange(location: 0, length: 4))
+            view.mouseDown(with: try down(at: range))
+            XCTAssertEqual(view.selectedRange().length, 0, "the click drops the selection")
+        }
+    }
+
+    /// Copying a linked name puts the name on the clipboard. AppKit writes a
+    /// copied link as a URL beside the text, and that URL is the pane's own
+    /// token — a selection of just `gPeiCoreGuid` reached the clipboard as
+    /// `code:4`, which is no name at all.
+    func testCopyingALinkedNamePutsTheNameItselfOnTheClipboard() throws {
+        let view = CodeTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 100))
+        let text = NSMutableAttributedString(string: "Port = gPeiCoreGuid;")
+        text.addAttribute(.link, value: "code:4", range: NSRange(location: 7, length: 12))
+        view.textStorage?.setAttributedString(text)
+        view.setSelectedRange(NSRange(location: 7, length: 12))
+
+        let board = NSPasteboard(name: .init("CodePaneViewTests.copy"))
+        view.copySelectedText(to: board)
+        XCTAssertEqual(board.string(forType: .string), "gPeiCoreGuid")
+        XCTAssertNil(board.string(forType: .URL), "no URL of the pane's own token")
+        for type in board.types ?? [] where type.rawValue.contains("rtf") || type.rawValue.contains("url") {
+            XCTFail("\(type.rawValue) is on the clipboard beside the text")
+        }
     }
 
     /// What a name stands for reads first; its source is the last paragraph,
