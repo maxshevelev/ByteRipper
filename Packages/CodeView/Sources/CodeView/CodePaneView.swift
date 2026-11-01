@@ -464,7 +464,13 @@ import ToolModuleKit
         revisionChoices = choices
         hasRevisionHistory = knowsRevisions || !choices.isEmpty
         compareLabel.stringValue = current.map { L("This revision (r%1$@)", String($0)) } ?? L("This revision")
+        keepComparisonChoice()
         rebuildRevisionMenu()
+        // A comparison put up before the list arrived — a New mark's, while
+        // the store's history is still being read — keeps its place in the
+        // bar: a rebuilt menu starts at "No comparison", and the bar would
+        // say the code is compared with nothing while the diff shows it is.
+        selectRevisionItem(comparisonRevision)
         layOutComparison()
     }
 
@@ -479,9 +485,23 @@ import ToolModuleKit
         revisionBaseline = artifact
         revisionCount += 1
         drawnDiff = nil
+        if keepComparisonChoice() { rebuildRevisionMenu() }
         selectRevisionItem(comparisonRevision)
         layOutComparison()
         applyMode()
+    }
+
+    /// A comparison the picker does not list — a mark's revision, compared
+    /// with before the store's list came, or one the list leaves out — is
+    /// named in the picker as `rN`: the bar has to say what the code is
+    /// compared with. Answers whether the list had to grow.
+    @discardableResult
+    private func keepComparisonChoice() -> Bool {
+        guard let revision = comparisonRevision,
+              !revisionChoices.contains(where: { $0.revision == revision }) else { return false }
+        revisionChoices.insert(RevisionChoice(revision: revision, title: "r\(revision)", hasCode: true), at: 0)
+        hasRevisionHistory = true
+        return true
     }
 
     /// For a test: what the picker offers, by title.
@@ -498,6 +518,9 @@ import ToolModuleKit
     func revisionChoiceIsEnabled(_ revision: Int) -> Bool? {
         revisionPopup.menu?.items.first { $0.tag == revision }?.isEnabled
     }
+    /// The title the picker shows as chosen, for a test.
+    var selectedRevisionTitle: String? { revisionPopup.titleOfSelectedItem }
+
     /// Picks a revision in the bar as the reader would.
     func chooseRevisionMenuTag(_ tag: Int) { chooseRevision(tag) }
 

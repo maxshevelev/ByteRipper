@@ -1412,6 +1412,41 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertFalse(view.newBannerIsShown)
     }
 
+    /// A comparison put up before the store's list arrives — a New mark's —
+    /// keeps its place in the bar when the list comes, and is named even when
+    /// the list does not hold it; a list that does hold it keeps the choice.
+    func testAComparisonStaysNamedWhenTheRevisionListArrives() throws {
+        func artifact(_ c: String) throws -> CodeArtifact {
+            try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: [
+                "script_version": 2, "program": ["image_base": "0x0"],
+                "functions": [["entry": "0x220", "name": "F", "c": c,
+                               "instructions": [["address": "0x220", "bytes": "C3",
+                                                 "mnemonic": "RET", "text": "RET"]]]]
+            ]))
+        }
+        let current = try artifact("void F(void)\n{\n  B();\n}\n")
+        let previous = try artifact("void F(void)\n{\n  A();\n}\n")
+        let view = CodePaneView(manifest: manifest(), artifact: current,
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.layoutSubtreeIfNeeded()
+
+        // The mark puts the comparison up first; the history arrives after it.
+        view.markRevisionChange(from: previous, revision: 54)
+        view.selectFunction(at: 0)
+        XCTAssertTrue(view.showsRevisionDiff)
+        view.setRevisionChoices([CodePaneView.RevisionChoice(revision: 55, title: "r55", hasCode: true)],
+                                current: 56)
+        XCTAssertEqual(view.selectedRevisionTitle, "r54", "the bar still names what the diff shows")
+        XCTAssertTrue(view.revisionChoiceTitles.contains("r54"), view.revisionChoiceTitles.joined(separator: ", "))
+
+        // A revision the list holds is chosen again when the list is rebuilt.
+        view.setComparisonRevision(55, artifact: previous, pinned: true)
+        view.setRevisionChoices([CodePaneView.RevisionChoice(revision: 55, title: "r55 — the list", hasCode: true)],
+                                current: 56)
+        XCTAssertEqual(view.selectedRevisionTitle, "r55 — the list")
+    }
+
     /// The dump bar's picker lists the module's revisions the app read, says
     /// which one the code is compared against, and Reset clears it — as
     /// Xcode's bar does for a file's history.
