@@ -61,7 +61,15 @@ func wireCodeScreen(_ codePane: CodePaneView, to pane: PaneViewModel, owner: Mai
 func wireCodeRevisions(_ codePane: CodePaneView,
                        previous: (revision: Int, artifact: CodeArtifact)? = nil) {
     let manifest = codePane.manifest
+    let module = manifest.module.sha256
+    let recipe = manifest.recipe.id
     var digests: [Int: SHA256Digest] = [:]
+    // What the reader has had in front of them is kept function by function,
+    // so a revision that arrived while the app was closed still puts the
+    // functions it changed up as New — against the code they last saw.
+    codePane.onSeenChanged = { records in
+        CodeRevisionSeen.save(records, module: module, recipe: recipe)
+    }
     codePane.onChooseRevision = { [weak codePane] revision in
         guard let codePane else { return }
         guard let revision else {
@@ -69,7 +77,7 @@ func wireCodeRevisions(_ codePane: CodePaneView,
             return
         }
         if let previous, previous.revision == revision {
-            codePane.setComparisonRevision(revision, artifact: previous.artifact)
+            codePane.setComparisonRevision(revision, artifact: previous.artifact, pinned: true)
             return
         }
         guard let digest = digests[revision] else {
@@ -78,7 +86,7 @@ func wireCodeRevisions(_ codePane: CodePaneView,
         }
         Task { @MainActor in
             let artifact = await CodeAnalysisStore.artifact(forRevision: digest)
-            codePane.setComparisonRevision(revision, artifact: artifact)
+            codePane.setComparisonRevision(revision, artifact: artifact, pinned: true)
         }
     }
     Task { @MainActor in
@@ -98,8 +106,21 @@ func wireCodeRevisions(_ codePane: CodePaneView,
             }
         }
         codePane.setRevisionChoices(choices, current: manifest.reading?.rev, knowsRevisions: loaded.hasHistory)
-        if let previous {
-            codePane.setComparisonRevision(previous.revision, artifact: previous.artifact, automatic: true)
+
+        // The functions the last launch saw at another revision than the one
+        // on screen, and the code they read then: each is New against the
+        // revision the record names. A record whose revision the store holds
+        // no code for cannot be compared, and its function waits unseen.
+        let kept = CodeRevisionSeen.records(module: module, recipe: recipe)
+        var baselines: [Int: CodeArtifact] = [:]
+        for revision in Set(kept.values.map(\.revision)) {
+            if let previous, previous.revision == revision {
+                baselines[revision] = previous.artifact
+            } else if let digest = digests[revision],
+                      let artifact = await CodeAnalysisStore.artifact(forRevision: digest) {
+                baselines[revision] = artifact
+            }
         }
+        codePane.restoreSeen(kept, baselines: baselines)
     }
 }

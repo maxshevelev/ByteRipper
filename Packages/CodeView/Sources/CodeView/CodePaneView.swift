@@ -107,6 +107,12 @@ import ToolModuleKit
     private var drawnDiff: (function: Int, revision: Int)?
     /// Raised with every revision the pane is given.
     private var revisionCount = 0
+    /// The revision's model, for the tokens and explanations of removed lines.
+    private var diffBaselineModel: CodeModel?
+    private var diffBaselineIndex: Int?
+    /// Whether the two revisions' C differs for the function on screen: the
+    /// diff is shown only when it does.
+    private(set) var revisionHasChanges = false
     /// The code side the description returns to: the C, or the listing.
     private var codeShowsC = true
     /// Where the description is to be scrolled once its text arrives: a
@@ -136,6 +142,11 @@ import ToolModuleKit
     private var hasRevisionHistory = false
     /// The revision the Diff compares against; nil for none.
     public private(set) var comparisonRevision: Int?
+    /// Whether the comparison is the reader's own — picked in the bar — and
+    /// so holds for every function until Reset. A comparison a New mark put
+    /// up is the open function's alone: moving to a function the revision did
+    /// not change takes it away again.
+    private var comparisonIsPinned = false
     /// The revision before the one on screen, and its code: what opening a
     /// function the revision changed compares against by itself.
     private var previousRevision: (revision: Int, artifact: CodeArtifact)?
@@ -359,9 +370,24 @@ import ToolModuleKit
     public var showsDecompiledC: Bool {
         modeControl.selectedSegment > 1 ? codeShowsC : modeControl.selectedSegment == 1
     }
-    /// The C against a revision, while one is compared against and the C side
-    /// is the one on screen: the comparison shows there and nowhere else.
-    public var showsRevisionDiff: Bool { comparisonRevision != nil && modeControl.selectedSegment == 1 }
+    /// Sizes the C side to the comparison: the diff where the revisions
+    /// differ, the code where they do not, and the code whenever the side on
+    /// screen is not the C.
+    private func refreshDiffVisibility() {
+        showsRevisionDiff = updateDiff()
+        diffView.isHidden = !showsRevisionDiff
+        cScroll.isHidden = modeControl.selectedSegment != 1 || showsRevisionDiff
+    }
+
+    /// The C against a revision, while one is compared against, the C side is
+    /// the one on screen and the two revisions' C differs there: a function
+    /// the revision did not change is shown as the code, not as a diff of
+    /// nothing.
+    public private(set) var showsRevisionDiff = false
+    /// What the comparison would show if the function differed.
+    private var wantsRevisionDiff: Bool {
+        comparisonRevision != nil && modeControl.selectedSegment == 1
+    }
     /// The module's description is on screen in place of the code.
     public var showsDescription: Bool { modeControl.selectedSegment == Self.descriptionSegment }
     private static let descriptionSegment = 2
@@ -396,20 +422,12 @@ import ToolModuleKit
     }
 
     /// The revision the Diff compares against, its code loaded by the app;
-    /// nil clears the comparison. `automatic` is the app's own pick — the
-    /// revision the panel compares against as soon as a later one arrives —
-    /// and it yields to a function on screen that is marked New: while the
-    /// reader stays on that function its mark keeps the revision it was new
-    /// against, and the comparison with it, whatever has been published since.
+    /// nil clears the comparison. `pinned` is the reader's pick in the bar,
+    /// which holds for every function until Reset; without it the comparison
+    /// belongs to the marked function that put it up.
     public func setComparisonRevision(_ revision: Int?, artifact: CodeArtifact?,
-                                      automatic: Bool = false) {
-        var revision = revision
-        var artifact = artifact
-        if automatic, let index = state.function, let mark = unopenedChanges[index],
-           mark.revision != nil {
-            revision = mark.revision
-            artifact = mark.artifact
-        }
+                                      pinned: Bool = false) {
+        comparisonIsPinned = pinned && artifact != nil && revision != nil
         comparisonRevision = artifact == nil ? nil : revision
         revisionBaseline = artifact
         revisionCount += 1
@@ -502,6 +520,14 @@ import ToolModuleKit
     func diffBackground(ofLineContaining line: String) -> NSColor? {
         diffView.background(ofLineContaining: line)
     }
+    /// The colour a word of the diff reads in, for a test.
+    func diffInk(ofWord word: String) -> NSColor? {
+        let range = (diffView.shownText as NSString).range(of: word)
+        guard range.location != NSNotFound else { return nil }
+        return diffView.ink(of: range)
+    }
+    /// The ranges the diff has highlighted, for a test.
+    var diffHighlightedRanges: [NSRange] { diffView.highlightedRanges }
 
     /// The description, as drawn, for tests.
     var descriptionText: String { descriptionView.shownText }
@@ -640,29 +666,43 @@ import ToolModuleKit
         // show Functions, with the filter cleared, before selecting it.
         revealInNavigator(index)
         state.selectFunction(index)
+        noteSeen(index)
         // Arriving at a function a revision changed does not take its New
         // mark: the reader sees which function changed while reading it, and
-        // the mark goes when they move on to another one.
-        if let previous, previous != index, unopenedChanges.removeValue(forKey: previous) != nil {
-            syncingSelection = true
-            functionTable.reloadData()
-            syncingSelection = false
+        // the mark goes when they move on to another one. Leaving it is
+        // having seen it, and the next launch is told so.
+        if let previous, previous != index {
+            noteSeen(previous)
+            if unopenedChanges.removeValue(forKey: previous) != nil {
+                syncingSelection = true
+                functionTable.reloadData()
+                syncingSelection = false
+                onNewMarksChanged?(newMarks)
+            }
         }
         // The function's mark says which revision it is new against: opening
         // it compares with that revision, so the reader sees the change the
         // mark is about even after further revisions have arrived.
-        if let mark = unopenedChanges[index], let revision = mark.revision,
-           revision != comparisonRevision,
-           mark.artifact.functions.contains(where: { $0.entry == model.functions[index].entry }) {
-            setComparisonRevision(revision, artifact: mark.artifact)
-        } else if comparisonRevision == nil, unopenedChanges[index] != nil,
-                  let previousRevision,
-                  previousRevision.artifact.functions.contains(where: { $0.entry == model.functions[index].entry }) {
-            setComparisonRevision(previousRevision.revision, artifact: previousRevision.artifact)
-        }
+        applyOpenComparison(for: index)
         drawSelection()
         if notify, let range = model.moduleRange(ofFunction: index) {
             onFocusRange?(range)
+        }
+    }
+
+    /// The comparison an open function stands for: the revision its New mark
+    /// was made against, or none when the revision changed nothing here. A
+    /// function the earlier revision did not have reads as all added, as the
+    /// diff of a function it lacks is. A comparison the reader pinned in the
+    /// bar is theirs and holds for every function until Reset.
+    private func applyOpenComparison(for index: Int) {
+        guard !comparisonIsPinned, model.functions.indices.contains(index) else { return }
+        if let mark = unopenedChanges[index], let revision = mark.revision {
+            if comparisonRevision != revision {
+                setComparisonRevision(revision, artifact: mark.artifact)
+            }
+        } else if comparisonRevision != nil {
+            setComparisonRevision(nil, artifact: nil)
         }
     }
 
@@ -958,6 +998,7 @@ import ToolModuleKit
         for index in changed where unopenedChanges[index] == nil {
             unopenedChanges[index] = NewMark.Baseline(revision: revision, artifact: previous)
         }
+        onNewMarksChanged?(newMarks)
         // The rows changed, not the reader's place: reloading the table must
         // not be taken for a click on a row, which would open one.
         syncingSelection = true
@@ -1046,6 +1087,10 @@ import ToolModuleKit
         }
     }
 
+    /// What the pane calls when its marks change — a revision's, a function
+    /// left, marks carried in — so the app can keep them for the next launch.
+    public var onNewMarksChanged: (([NewMark]) -> Void)?
+
     /// The marks the reader has not taken yet, by the functions they name:
     /// what the app carries into the pane drawn after the next revision, so a
     /// change the reader has not looked at is not lost to the one after it.
@@ -1084,6 +1129,7 @@ import ToolModuleKit
         functionTable.reloadData()
         syncingSelection = false
         drawSelection()
+        onNewMarksChanged?(newMarks)
     }
 
     /// The functions a revision the panel received changed that the reader has
@@ -1094,6 +1140,90 @@ import ToolModuleKit
     /// revision adds marks and never takes one, so changes the reader has not
     /// looked at yet do not go unnoticed.
     private var unopenedChanges: [Int: NewMark.Baseline] = [:]
+
+    /// For every function, the revision the reader last saw it at and the code
+    /// it had then — kept between launches, so a revision that arrived while
+    /// the app was closed still puts the functions it changed up as New.
+    private var seen: [String: SeenRecord] = [:]
+
+    /// What the panel keeps between launches, through the app: the records as
+    /// they change — a function opened, a module first read, unchanged
+    /// functions moved on with the revision on screen.
+    public var onSeenChanged: (([String: SeenRecord]) -> Void)?
+
+    /// The records as they stand, for a test.
+    public var seenRecords: [String: SeenRecord] { seen }
+
+    /// Takes what the last launch left: every function that reads otherwise
+    /// than it did when the reader last saw it goes up as New against the
+    /// revision it was seen at, with that revision's code for the comparison.
+    /// A function still reading the same is that much further seen; one the
+    /// records never had is new since the newest revision anything was seen
+    /// at, and is shown against that one. A module the records know nothing
+    /// of is seeded as seen now — a first open has nothing to be new against.
+    public func restoreSeen(_ records: [String: SeenRecord],
+                            baselines: [Int: CodeArtifact]) {
+        guard let revision = manifest.reading?.rev else { return }
+        guard !records.isEmpty else {
+            seen = Self.seenRecords(of: artifact, revision: revision)
+            onSeenChanged?(seen)
+            return
+        }
+        seen = records
+        let newest = baselines.keys.max()
+        var marks: [NewMark] = []
+        for function in artifact.functions {
+            let key = function.entry.description
+            let fingerprint = Self.fingerprint(of: function)
+            guard let record = records[key] else {
+                // Never seen: new since the newest revision anything was seen
+                // at, so that is the one it is shown against.
+                if let newest, let baseline = baselines[newest] {
+                    marks.append(NewMark(entry: function.entry,
+                                         baseline: .init(revision: newest, artifact: baseline)))
+                }
+                continue
+            }
+            if record.fingerprint == fingerprint {
+                seen[key] = SeenRecord(revision: revision, fingerprint: fingerprint)
+            } else if let baseline = baselines[record.revision] {
+                // The record stays where it is: the change is not seen until
+                // the reader opens the function.
+                marks.append(NewMark(entry: function.entry,
+                                     baseline: .init(revision: record.revision, artifact: baseline)))
+            }
+        }
+        if !marks.isEmpty { setNewMarks(marks) }
+        // The function on screen is not a reader's choice — the pane opens on
+        // one of its own — so nothing is seen yet; a mark it carries still
+        // puts its comparison up, as opening it would.
+        if let index = state.function { applyOpenComparison(for: index) }
+        onSeenChanged?(seen)
+    }
+
+    private static func seenRecords(of artifact: CodeArtifact, revision: Int) -> [String: SeenRecord] {
+        var records: [String: SeenRecord] = [:]
+        for function in artifact.functions {
+            records[function.entry.description] = SeenRecord(
+                revision: revision, fingerprint: fingerprint(of: function))
+        }
+        return records
+    }
+
+    private static func fingerprint(of function: CodeArtifact.Function) -> String {
+        SeenRecord.fingerprint(name: function.name, signature: function.signature, c: function.c)
+    }
+
+    /// Notes that the reader has the function in front of them now: the next
+    /// launch must not put it up as New for what they have just read.
+    private func noteSeen(_ index: Int) {
+        guard artifact.functions.indices.contains(index),
+              let revision = manifest.reading?.rev else { return }
+        let function = artifact.functions[index]
+        seen[function.entry.description] = SeenRecord(
+            revision: revision, fingerprint: Self.fingerprint(of: function))
+        onSeenChanged?(seen)
+    }
     /// The function's row, its listing, the selected instruction, its C and
     /// its callers and callees. The listing is reloaded only when the function
     /// changed; a new instruction in the same function only moves the row.
@@ -1116,7 +1246,7 @@ import ToolModuleKit
         }
         syncingSelection = false
         updateC()
-        updateDiff()
+        if wantsRevisionDiff { refreshDiffVisibility() }
         updateReferences()
     }
 
@@ -2668,13 +2798,10 @@ import ToolModuleKit
     private func applyMode() {
         let segment = modeControl.selectedSegment
         if segment <= 1 { codeShowsC = segment == 1 }
-        let diff = showsRevisionDiff
         tableScroll.isHidden = segment != 0
-        cScroll.isHidden = segment != 1 || diff
         descriptionView.isHidden = segment != Self.descriptionSegment
-        diffView.isHidden = !diff
-        if segment == 1, !diff { updateC() }
-        if diff { updateDiff() }
+        refreshDiffVisibility()
+        if segment == 1, !showsRevisionDiff { updateC() }
         currentOccurrence = nil
         drawOccurrenceBar()
     }
@@ -2776,38 +2903,194 @@ import ToolModuleKit
 
     // help: panel.code.diff
     /// The C of the function on screen against the same function in the
-    /// revision the pane replaced: what the revision took and what it brought,
-    /// line by line, as an editor shows a change. A function the earlier
-    /// revision did not have reads as all added, and one it had and this
-    /// revision lost its C for, as all removed.
-    private func updateDiff() {
-        guard showsRevisionDiff else { return }
+    /// revision the pane compares with: what the revision took and what it
+    /// brought, line by line, as an editor shows a change, with each line's
+    /// code drawn by the tokens of the revision it came from. Answers whether
+    /// there is a change to show at all — a function the two revisions hold
+    /// the same is shown as the code, not as a diff of nothing.
+    @discardableResult
+    private func updateDiff() -> Bool {
+        guard wantsRevisionDiff else {
+            drawnDiff = nil
+            revisionHasChanges = false
+            return false
+        }
         guard let baseline = revisionBaseline else {
             diffView.showMessage(L("No earlier revision of this reading is open to compare with."))
             drawnDiff = nil
-            return
+            return false
         }
         guard let index = state.function else {
             diffView.showMessage(L("The analysis holds no functions."))
             drawnDiff = nil
-            return
+            return false
         }
-        if let drawnDiff, drawnDiff.function == index, drawnDiff.revision == revisionCount { return }
+        if let drawnDiff, drawnDiff.function == index, drawnDiff.revision == revisionCount {
+            return revisionHasChanges
+        }
         let function = model.functions[index]
         let old = baseline.functions.first { $0.entry == function.entry }?.c
         guard old != nil || function.c != nil else {
             diffView.showMessage(L("No decompiled C for this function in either revision."))
             drawnDiff = (index, revisionCount)
-            return
+            revisionHasChanges = false
+            return false
+        }
+        let baselineC = old ?? ""
+        let currentC = function.c ?? ""
+        let diff = LineDiff.between(baselineC, currentC)
+        revisionHasChanges = diff.added > 0 || diff.removed > 0
+        drawnDiff = (index, revisionCount)
+        guard revisionHasChanges else { return false }
+        // Each side's tokens, by the line of its C they sit on.
+        let baselineModel = CodeModel(artifact: baseline, layout: nil)
+        diffBaselineModel = baselineModel
+        diffBaselineIndex = baselineModel.functions.firstIndex { $0.entry == function.entry }
+        let currentLines = Self.lines(of: currentC)
+        let baselineLines = Self.lines(of: baselineC)
+        let currentTokens = Self.tokensByLine(tokens: model.cTokens(ofFunction: index), starts: currentLines,
+                                              text: currentC)
+        let baselineTokens: [[CodeToken]] = diffBaselineIndex.map {
+            Self.tokensByLine(tokens: baselineModel.cTokens(ofFunction: $0), starts: baselineLines,
+                              text: baselineC)
+        } ?? []
+        let lines: [CodeDiffLine] = diff.rows.map { row in
+            switch row {
+            case let .same(old, new, _):
+                return CodeDiffLine(row: row, tokens: currentTokens[new - 1] ?? [],
+                                    lineStart: currentLines[new - 1], currentSide: true)
+            case let .added(new, _):
+                return CodeDiffLine(row: row, tokens: currentTokens[new - 1] ?? [],
+                                    lineStart: currentLines[new - 1], currentSide: true)
+            case let .removed(old, _):
+                return CodeDiffLine(row: row, tokens: baselineTokens[old - 1] ?? [],
+                                    lineStart: baselineLines[old - 1], currentSide: false)
+            }
         }
         let stays = drawnDiff?.function == index
-        let diff = LineDiff.between(old ?? "", function.c ?? "")
-        diffView.show(diff, font: Self.codeFont(), lineHeight: Self.codeLineHeight,
+        diffView.show(diff, lines: lines, font: Self.codeFont(), lineHeight: Self.codeLineHeight,
                       padding: Self.codeLinePadding)
+        diffView.onClick = { [weak self] character, event in
+            self?.clickDiff(at: character, event: event) ?? false
+        }
+        diffView.onEscape = { [weak self] in self?.clearDiffHighlight() }
+        diffView.explainable = diffView.shownTokens.filter { token in
+            Self.explainedInC.contains(token.token.kind) && explanation(of: token) != nil
+        }.map(\.range)
         // Another function's diff is read from its top; the same function's,
         // redrawn at a new size, stays where the reader was.
         if !stays { diffView.scroll(to: .zero) }
-        drawnDiff = (index, revisionCount)
+        return true
+    }
+
+    /// The starts of a text's lines, as UTF-16 offsets.
+    private static func lines(of text: String) -> [Int] {
+        var starts = [0]
+        var offset = 0
+        for unit in text.utf16 {
+            offset += 1
+            if unit == 0x0A { starts.append(offset) }
+        }
+        if text.hasSuffix("\n") { starts.removeLast() }
+        return starts
+    }
+
+    /// The tokens of a function's C, sorted under the line each begins on.
+    private static func tokensByLine(tokens: [CodeToken], starts: [Int], text: String) -> [[CodeToken]] {
+        var byLine: [[CodeToken]] = Array(repeating: [], count: starts.count)
+        for token in tokens {
+            guard let line = starts.lastIndex(where: { $0 <= token.start }) else { continue }
+            byLine[line].append(token)
+        }
+        return byLine
+    }
+
+    /// What a click on a diff token names — by the word, since the two sides
+    /// number their functions and instructions for themselves.
+    private struct DiffSymbol: Equatable {
+        let kind: CodeToken.Kind
+        let word: String
+    }
+
+    private func diffSymbol(_ token: CodeDiffToken) -> DiffSymbol? {
+        let string = diffView.shownText as NSString
+        guard token.range.location + token.range.length <= string.length else { return nil }
+        let word = string.substring(with: token.range)
+        let kind = token.token.kind
+        switch kind {
+        case .keyword, .type, .comment, .mnemonic, .address, .bytes, .note, .personNote:
+            return nil
+        default:
+            return DiffSymbol(kind: kind, word: word)
+        }
+    }
+
+    /// A click in the diff, as in the C: a name highlights its every
+    /// occurrence in the diff, ⌘-click or a double click follows what it
+    /// names, and a click on a name that explains itself opens its popover.
+    func clickDiff(at character: Int?, event: NSEvent) -> Bool {
+        guard let character, let token = diffView.token(at: character) else {
+            clearDiffHighlight()
+            return false
+        }
+        if let symbol = diffSymbol(token) {
+            diffView.highlight(diffView.shownTokens.filter { diffSymbol($0) == symbol }.map(\.range))
+        }
+        if Self.isJump(event), let linkIndex = token.linkIndex,
+           diffView.shownLinks.indices.contains(linkIndex) {
+            followDiff(diffView.shownLinks[linkIndex], side: token)
+            return true
+        }
+        if !Self.isJump(event), let explained = explanation(of: token), let rect = diffView.rect(of: token.range) {
+            afterClick(inC: true) { [weak self] in
+                guard let self else { return }
+                self.showExplanation(explained, relativeTo: rect, of: self.diffView)
+            }
+        }
+        return false
+    }
+
+    private func clearDiffHighlight() { diffView.highlight([]) }
+
+    /// The explanation of a diff token, from the revision whose line it is.
+    private func explanation(of token: CodeDiffToken) -> CodeExplanation? {
+        if token.currentSide {
+            guard let index = state.function else { return nil }
+            return model.explanation(ofC: token.token, inFunction: index)
+        }
+        guard let model = diffBaselineModel, let index = diffBaselineIndex else { return nil }
+        return model.explanation(ofC: token.token, inFunction: index)
+    }
+
+    /// Follows what a link of the diff names. The current revision's links go
+    /// where the C's go; the earlier revision's are looked up here by the
+    /// address they name, since the two revisions number their functions and
+    /// instructions for themselves.
+    private func followDiff(_ link: CodeLink, side token: CodeDiffToken) {
+        guard !token.currentSide else {
+            follow(link)
+            return
+        }
+        switch link {
+        case .function(let index):
+            guard let baseline = revisionBaseline, baseline.functions.indices.contains(index),
+                  let here = model.function(at: baseline.functions[index].entry) else {
+                NSSound.beep()
+                return
+            }
+            follow(.function(here))
+        case .line(let line):
+            guard let baseline = diffBaselineModel, baseline.lines.indices.contains(line),
+                  let here = model.line(at: baseline.lines[line].instruction.address) else {
+                NSSound.beep()
+                return
+            }
+            follow(.line(here))
+        case .bytes(let address):
+            follow(.bytes(address))
+        case .label:
+            NSSound.beep()
+        }
     }
 
     // MARK: - Highlighting a symbol
@@ -3014,7 +3297,7 @@ import ToolModuleKit
     /// reader is at one of them.
     private func drawOccurrenceBar() {
         guard let occurrenceBar else { return }
-        let count = highlightedSymbol == nil || showsDescription ? 0 : occurrences().count
+        let count = highlightedSymbol == nil || showsDescription || showsRevisionDiff ? 0 : occurrences().count
         occurrenceBar.isHidden = count == 0
         guard count > 0 else { return }
         if let current = currentOccurrence, current < count {

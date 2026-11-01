@@ -27,6 +27,14 @@ final class CodePaneViewTests: XCTestCase {
             stats: AnalysisStats(functions: 2, instructions: 3))
     }
 
+    /// The same manifest, published as the given revision of a reading — a
+    /// pane that can tell one revision of its module from another.
+    private func manifest(revision: Int) -> AnalysisManifest {
+        var manifest = manifest()
+        manifest.reading = AnalysisReading(project: "p", rev: revision)
+        return manifest
+    }
+
     private func artifact() throws -> CodeArtifact {
         try JSONDecoder().decode(CodeArtifact.self, from: Data("""
         {"script_version":2,"ghidra":"12.1.2","program":{"image_base":"0x0"},
@@ -1137,6 +1145,9 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(components(view.diffBackground(ofLineContaining: "+   B();")),
                        components(CodeColors.diffAdded))
         XCTAssertNil(view.diffBackground(ofLineContaining: "void F(void)"), "an unchanged line is not tinted")
+        // The code in the diff is the artifact's own, drawn by its tokens.
+        XCTAssertEqual(components(view.diffInk(ofWord: "void")), components(CodeColors.type))
+        XCTAssertEqual(components(view.diffInk(ofWord: "F(void)")), components(CodeColors.function))
 
         // The comparison is the C side's alone: the listing is this revision's.
         view.showDecompiledC(false)
@@ -1275,17 +1286,226 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(next.newMarks.first?.baseline.revision, 54,
                        "and the mark carried from before keeps the earlier revision it was new against")
 
-        // The reader stays on the function: the app's own pick for the new
-        // revision yields to the mark, so the diff does not jump to a later
-        // revision under them.
+        // A revision the reader picks in the bar is theirs: it holds, and an
+        // open mark does not take it away.
         next.selectFunction(at: 0)
         XCTAssertEqual(next.comparisonRevision, 54)
-        next.setComparisonRevision(55, artifact: b, automatic: true)
-        XCTAssertEqual(next.comparisonRevision, 54, "an open New function keeps its revision")
+        next.setComparisonRevision(55, artifact: b, pinned: true)
+        XCTAssertEqual(next.comparisonRevision, 55, "the reader's pick holds")
         XCTAssertTrue(next.showsRevisionDiff)
-        // A revision the reader picks is still the reader's.
-        next.setComparisonRevision(55, artifact: b)
-        XCTAssertEqual(next.comparisonRevision, 55)
+    }
+
+    /// A revision that changed a function while the app was closed still puts
+    /// it up as New: every function keeps the revision it was last seen at,
+    /// and the ones that read otherwise than they did then are marked against
+    /// that revision — with its code for the comparison.
+    func testAFunctionChangedWhileTheAppWasClosedComesUpNew() throws {
+        func artifact(_ f: String, _ g: String) throws -> CodeArtifact {
+            let json: [String: Any] = [
+                "script_version": 2, "program": ["image_base": "0x0"],
+                "functions": [
+                    ["entry": "0x220", "name": "F", "c": f,
+                     "instructions": [["address": "0x220", "bytes": "C3", "mnemonic": "RET", "text": "RET"]]],
+                    ["entry": "0x260", "name": "G", "c": g,
+                     "instructions": [["address": "0x260", "bytes": "C3", "mnemonic": "RET", "text": "RET"]]]
+                ]
+            ]
+            return try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        }
+        let g = "void G(void)\n{\n  Same();\n}\n"
+        let before = try artifact("void F(void)\n{\n  A();\n}\n", g)
+        let after = try artifact("void F(void)\n{\n  B();\n}\n", g)
+        // What the last launch left: both functions seen at revision 53.
+        let records = [
+            "0x220": SeenRecord(revision: 53,
+                                fingerprint: SeenRecord.fingerprint(name: "F", signature: nil,
+                                                                    c: before.functions[0].c)),
+            "0x260": SeenRecord(revision: 53,
+                                fingerprint: SeenRecord.fingerprint(name: "G", signature: nil,
+                                                                    c: before.functions[1].c))
+        ]
+        let view = CodePaneView(manifest: manifest(revision: 54), artifact: after,
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.layoutSubtreeIfNeeded()
+        view.restoreSeen(records, baselines: [53: before])
+
+        XCTAssertEqual(view.newMarks.count, 1, "only the function the revision changed")
+        XCTAssertEqual(view.newMarks.first?.entry, CodeAddress(0x220))
+        XCTAssertEqual(view.newMarks.first?.baseline.revision, 53,
+                       "shown against the revision the reader last saw it at")
+        XCTAssertEqual(view.seenRecords["0x220"]?.revision, 53, "unread: still where it was seen")
+        XCTAssertEqual(view.seenRecords["0x260"]?.revision, 54,
+                       "unchanged: the reader is that much further along with it")
+
+        // Opening it is seeing it — and shows the change the mark is about.
+        var saved: [String: SeenRecord] = [:]
+        view.onSeenChanged = { saved = $0 }
+        view.selectFunction(at: 0)
+        XCTAssertEqual(view.comparisonRevision, 53)
+        XCTAssertTrue(view.showsRevisionDiff)
+        XCTAssertEqual(view.seenRecords["0x220"]?.revision, 54, "read now")
+        XCTAssertEqual(saved["0x220"]?.revision, 54, "and kept for the next launch")
+    }
+
+    /// A function the records never had is new to the reader, and shown
+    /// against the newest revision anything was seen at; the first open of a
+    /// module has nothing behind it, and marks nothing.
+    func testANeverSeenFunctionIsNewAndTheFirstOpenIsSeen() throws {
+        func artifact(_ f: String) throws -> CodeArtifact {
+            let json: [String: Any] = [
+                "script_version": 2, "program": ["image_base": "0x0"],
+                "functions": [
+                    ["entry": "0x220", "name": "F", "c": f,
+                     "instructions": [["address": "0x220", "bytes": "C3", "mnemonic": "RET", "text": "RET"]]],
+                    ["entry": "0x260", "name": "G", "c": "void G(void) {}",
+                     "instructions": [["address": "0x260", "bytes": "C3", "mnemonic": "RET", "text": "RET"]]]
+                ]
+            ]
+            return try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        }
+        let current = try artifact("void F(void) {}")
+        let view = CodePaneView(manifest: manifest(revision: 54), artifact: current,
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.layoutSubtreeIfNeeded()
+
+        var saved: [[String: SeenRecord]] = []
+        view.onSeenChanged = { saved.append($0) }
+        view.restoreSeen([:], baselines: [:])
+        XCTAssertTrue(view.newMarks.isEmpty, "nothing has been seen here, so nothing is new")
+        XCTAssertEqual(view.seenRecords.count, 2, "every function is seen now")
+        XCTAssertEqual(Set(view.seenRecords.values.map(\.revision)), [54])
+        XCTAssertEqual(saved.count, 1, "and what was seen is kept")
+
+        // A later launch that knows only G: F appeared in between, and is
+        // shown against that revision — as all added.
+        let older = try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: [
+            "script_version": 2, "program": ["image_base": "0x0"],
+            "functions": [["entry": "0x260", "name": "G", "c": "void G(void) {}",
+                           "instructions": [["address": "0x260", "bytes": "C3",
+                                             "mnemonic": "RET", "text": "RET"]]]]
+        ]))
+        let g = SeenRecord(revision: 53,
+                           fingerprint: SeenRecord.fingerprint(name: "G", signature: nil,
+                                                               c: current.functions[1].c))
+        let next = CodePaneView(manifest: manifest(revision: 54), artifact: current,
+                                moduleBytes: teModule(), hexView: NSView())
+        next.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        next.layoutSubtreeIfNeeded()
+        next.restoreSeen(["0x260": g], baselines: [53: older])
+        XCTAssertEqual(next.newMarks.map(\.entry), [CodeAddress(0x220)])
+        XCTAssertEqual(next.newMarks.first?.baseline.revision, 53,
+                       "new since the newest revision anything was seen at")
+        next.selectFunction(at: 0)
+        XCTAssertEqual(next.comparisonRevision, 53)
+        XCTAssertTrue(next.showsRevisionDiff)
+        XCTAssertEqual(next.diffCounts?.added, 1, "a function the earlier revision did not have")
+        XCTAssertEqual(next.diffCounts?.removed, 0)
+    }
+
+    /// The records are kept by module and reading, and a reading with none
+    /// left is taken out of the store.
+    func testSeenRecordsAreKeptByModuleAndRecipe() throws {
+        let suiteName = "CodePaneViewTests.seen"
+        let suite = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        suite.removePersistentDomain(forName: suiteName)
+        CodePaneView.defaults = suite
+        defer {
+            suite.removePersistentDomain(forName: suiteName)
+            CodePaneView.defaults = .standard
+        }
+        let module = SHA256Digest(data: Data("module".utf8))
+        let record = SeenRecord(revision: 54, fingerprint: "abc")
+        CodeRevisionSeen.save(["0x220": record], module: module, recipe: "code-v2")
+        XCTAssertEqual(CodeRevisionSeen.records(module: module, recipe: "code-v2"), ["0x220": record])
+        XCTAssertTrue(CodeRevisionSeen.records(module: module, recipe: "code-v3").isEmpty,
+                      "another reading is another set")
+        CodeRevisionSeen.save([:], module: module, recipe: "code-v2")
+        XCTAssertTrue(CodeRevisionSeen.records(module: module, recipe: "code-v2").isEmpty)
+    }
+
+    /// A comparison a New mark puts up belongs to that function: moving to a
+    /// function the revision did not change takes it away, and only a
+    /// revision the reader picks in the bar holds for every function.
+    func testAComparisonFromANewMarkIsThatFunctionsAlone() throws {
+        func artifact(_ first: String, _ second: String) throws -> CodeArtifact {
+            let json: [String: Any] = [
+                "script_version": 2, "program": ["image_base": "0x0"],
+                "functions": [
+                    ["entry": "0x220", "name": "F", "c": first,
+                     "instructions": [["address": "0x220", "bytes": "C3", "mnemonic": "RET", "text": "RET"]]],
+                    ["entry": "0x260", "name": "G", "c": second,
+                     "instructions": [["address": "0x260", "bytes": "C3", "mnemonic": "RET", "text": "RET"]]]
+                ]
+            ]
+            return try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        }
+        let g = "void G(void)\n{\n  Same();\n}\n"
+        let previous = try artifact("void F(void)\n{\n  A();\n}\n", g)
+        let current = try artifact("void F(void)\n{\n  B();\n}\n", g)
+        let view = CodePaneView(manifest: manifest(), artifact: current, moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.layoutSubtreeIfNeeded()
+        view.markRevisionChange(from: previous, revision: 54)
+
+        view.selectFunction(at: 0)
+        XCTAssertEqual(view.comparisonRevision, 54, "the changed function compares with its mark")
+        XCTAssertTrue(view.showsRevisionDiff)
+        view.selectFunction(at: 1)
+        XCTAssertNil(view.comparisonRevision, "an unchanged function is not compared")
+        XCTAssertFalse(view.showsRevisionDiff)
+
+        // The reader's own pick holds across functions until Reset — but a
+        // function the revision did not change is shown as the code, not as a
+        // diff of nothing.
+        view.setComparisonRevision(54, artifact: previous, pinned: true)
+        view.selectFunction(at: 0)
+        XCTAssertTrue(view.showsRevisionDiff)
+        view.selectFunction(at: 1)
+        XCTAssertEqual(view.comparisonRevision, 54, "the pick still holds")
+        XCTAssertFalse(view.showsRevisionDiff, "no change here: the code is shown")
+        let noComparison: (Int?, CodeArtifact?) = (nil, nil)
+        view.setComparisonRevision(noComparison.0, artifact: noComparison.1)
+        XCTAssertFalse(view.showsRevisionDiff)
+    }
+
+    /// A click in the diff works as in the C: a name highlights its every
+    /// occurrence there, and a name that explains itself opens its popover —
+    /// from the revision whose line it is, either side.
+    func testAClickInTheDiffHighlightsAndExplains() throws {
+        func artifact(_ call: String) throws -> CodeArtifact {
+            let c = "void F(void)\n{\n  Port = mPort + \(call);\n}\n"
+            let at = (c as NSString).range(of: "mPort")
+            let json: [String: Any] = [
+                "script_version": 5, "program": ["image_base": "0x0"],
+                "functions": [["entry": "0x220", "name": "F", "c": c,
+                               "c_spans": [[at.location, at.length, "global", "0x230"]],
+                               "instructions": [["address": "0x220", "bytes": "C3",
+                                                 "mnemonic": "RET", "text": "RET"]]]],
+                "symbols": [["address": "0x230", "name": "mPort", "type": "UINT16",
+                             "source": "USER_DEFINED", "comment": "The port the board's EC answers on."]]
+            ]
+            return try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        }
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact("1"),
+                                moduleBytes: teModule(), hexView: NSView())
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 480),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        view.layoutSubtreeIfNeeded()
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil) }
+        view.setComparisonRevision(54, artifact: try artifact("2"))
+        XCTAssertTrue(view.showsRevisionDiff)
+
+        let shown = view.diffText as NSString
+        let at = shown.range(of: "mPort").location + 1
+        XCTAssertFalse(view.clickDiff(at: at, event: try click(count: 1)))
+        XCTAssertEqual(view.diffHighlightedRanges.count, 2, "the name on both sides, highlighted")
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        XCTAssertEqual(view.shownExplanation?.subject, .global(CodeAddress(0x230)))
+        view.shownExplanationClose()
     }
 
     /// The call tree's rows open and close with the triangle in front of them.
