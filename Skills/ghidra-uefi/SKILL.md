@@ -351,6 +351,24 @@ answers what happened:
   `library_reason` that says why. Leave it when the entry's review is the
   better one, and take it with `ghidra_library_apply` and `replace: true`.
 
+**Resolving a conflict.** `library.conflicts` means the registry holds another
+review of the same body than this module's, and neither side is right by
+default. Read the entry's review (`library_registry` with its `id`) beside the
+module's and decide in so many words:
+
+- one review fuller and better than the other: take it — this module's with
+  `take_library_conflicts: true` and a `library_reason`, the entry's with
+  `ghidra_library_apply` and `replace: true`;
+- both reviewed: merge them and take the best of both. Bring what the entry
+  has and this module's review lacks into this one, and publish with
+  `take_library_conflicts` and a `library_reason` that says what came from
+  where. The registry is usually surer of provenance — it names the EDK2 file
+  the body came from, and whether a public wrapper exists; this module's review
+  is often surer of the local types, names and step comments;
+- never take an entry because it is another module's or newer, and settle every
+  conflict at once: `take_library_conflicts` takes them all in one publish, so
+  none is left half-decided.
+
 `library_registry` reads the registry: its entries by name and kind, and one
 entry's review and history.
 
