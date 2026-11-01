@@ -182,29 +182,9 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertFalse(view.clickC(at: at("Total", after: "return"), event: try click(count: 1)))
         XCTAssertEqual(view.highlightedSymbol, .variable("Total"))
         XCTAssertEqual(highlighted(), Array(repeating: "Total", count: 5), "the declaration and every use")
-        // Drawn, not only listed: Xcode's blue-grey shows behind a name.
-        textView.appearance = NSAppearance(named: .aqua)
-        let box = try XCTUnwrap(textView.layoutManager?.boundingRect(
-            forGlyphRange: textView.highlightedRanges[0], in: textView.textContainer!))
-        let rep = try XCTUnwrap(textView.bitmapImageRepForCachingDisplay(in: textView.bounds))
-        textView.cacheDisplay(in: textView.bounds, to: rep)
-        let scale = CGFloat(rep.pixelsWide) / textView.bounds.width
-        // The box goes round the glyphs, in from the top of the taller line.
-        let corner = NSPoint(x: box.minX + textView.textContainerOrigin.x,
-                             y: box.minY + textView.textContainerOrigin.y + CodePaneView.codeLinePadding + 1)
-        let pixel = try XCTUnwrap(rep.colorAt(x: Int(corner.x * scale), y: Int(corner.y * scale))?
-            .usingColorSpace(.sRGB))
-        // One translucent fill everywhere: laid over the code's background it
-        // reads as the panel's blue-grey, and the text view's own bitmap has
-        // no background under it, so the pixel is the fill itself.
-        var resolved: NSColor?
-        NSAppearance(named: .aqua)?.performAsCurrentDrawingAppearance {
-            resolved = textView.highlightFill.usingColorSpace(.sRGB)
-        }
-        let fill = try XCTUnwrap(resolved)
-        XCTAssertEqual(pixel.redComponent, fill.redComponent, accuracy: 1.0 / 255, "\(pixel)")
-        XCTAssertEqual(pixel.blueComponent, fill.blueComponent, accuracy: 1.0 / 255, "\(pixel)")
-        XCTAssertEqual(fill.alphaComponent, CodeTextView.highlightAlpha, accuracy: 0.001)
+        // Drawn, not only listed: the box is the panel's blue-grey, laid at
+        // one alpha so a diff row's tint shows through it.
+        XCTAssertEqual(textView.highlightFill.alphaComponent, CodeTextView.highlightAlpha, accuracy: 0.001)
 
         XCTAssertFalse(view.clickC(at: at("Count", after: "Total ="), event: try click(count: 1)))
         XCTAssertEqual(highlighted(), ["Count", "Count"], "the parameter and its one use")

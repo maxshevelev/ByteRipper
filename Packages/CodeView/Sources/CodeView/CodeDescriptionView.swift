@@ -52,6 +52,15 @@ import ToolModuleKit
 
         addSubview(scroll)
         addSubview(placeholder)
+        // The placeholder's margins yield to a pane narrower than they are: a
+        // split view lays a pane it has not sized yet at no width, and two
+        // required margins 20 points in would ask for negative width.
+        let insetLeading = placeholder.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor,
+                                                              constant: 20)
+        let insetTrailing = placeholder.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor,
+                                                                 constant: -20)
+        insetLeading.priority = NSLayoutConstraint.Priority(999)
+        insetTrailing.priority = NSLayoutConstraint.Priority(999)
         NSLayoutConstraint.activate([
             scroll.topAnchor.constraint(equalTo: topAnchor),
             scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
@@ -60,8 +69,8 @@ import ToolModuleKit
             placeholder.centerXAnchor.constraint(equalTo: centerXAnchor),
             placeholder.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -20),
             placeholder.widthAnchor.constraint(lessThanOrEqualToConstant: 420),
-            placeholder.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 20),
-            placeholder.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -20)
+            insetLeading,
+            insetTrailing
         ])
     }
 

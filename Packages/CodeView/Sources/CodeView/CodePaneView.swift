@@ -2211,9 +2211,19 @@ import ToolModuleKit
         codeStack.spacing = 8
         codeStack.translatesAutoresizingMaskIntoConstraints = false
         codeContent.addSubview(codeStack)
+        // The margins yield to a pane narrower than twice the margin — a split
+        // view lays a pane it has not sized yet at no width, and two required
+        // edges 12 points in would ask for a negative width. The solver then
+        // breaks a required constraint somewhere in the pane instead, which
+        // took a scroll view's edge with it and logged the break.
+        let stackLeading = codeStack.leadingAnchor.constraint(equalTo: codeContent.leadingAnchor, constant: 12)
+        let stackTrailing = codeStack.trailingAnchor.constraint(equalTo: codeContent.trailingAnchor,
+                                                                constant: -12)
+        stackLeading.priority = NSLayoutConstraint.Priority(999)
+        stackTrailing.priority = NSLayoutConstraint.Priority(999)
         NSLayoutConstraint.activate([
-            codeStack.leadingAnchor.constraint(equalTo: codeContent.leadingAnchor, constant: 12),
-            codeStack.trailingAnchor.constraint(equalTo: codeContent.trailingAnchor, constant: -12),
+            stackLeading,
+            stackTrailing,
             codeStack.topAnchor.constraint(equalTo: codeContent.topAnchor, constant: 12)
         ])
         header.widthAnchor.constraint(equalTo: codeStack.widthAnchor).isActive = true
