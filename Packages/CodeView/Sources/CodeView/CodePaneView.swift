@@ -2233,11 +2233,12 @@ import ToolModuleKit
                                                                 constant: -12)
         stackLeading.priority = NSLayoutConstraint.Priority(999)
         stackTrailing.priority = NSLayoutConstraint.Priority(999)
-        NSLayoutConstraint.activate([
-            stackLeading,
-            stackTrailing,
-            codeStack.topAnchor.constraint(equalTo: codeContent.topAnchor, constant: 12)
-        ])
+        // The top margin, the gap above the bar and the bar's own height yield
+        // in a pane laid out with no height, where they would ask for a stack
+        // shorter than nothing.
+        let stackTop = codeStack.topAnchor.constraint(equalTo: codeContent.topAnchor, constant: 12)
+        stackTop.priority = NSLayoutConstraint.Priority(999)
+        NSLayoutConstraint.activate([stackLeading, stackTrailing, stackTop])
         header.widthAnchor.constraint(equalTo: codeStack.widthAnchor).isActive = true
         titleRow.widthAnchor.constraint(equalTo: header.widthAnchor).isActive = true
         staleLabel.widthAnchor.constraint(equalTo: header.widthAnchor).isActive = true
@@ -2285,12 +2286,16 @@ import ToolModuleKit
             hexDumpBar.addSubview(view)
         }
         codeContent.addSubview(hexDumpBar)
+        let barHeight = hexDumpBar.heightAnchor.constraint(equalToConstant: Self.dumpBarHeight)
+        barHeight.priority = NSLayoutConstraint.Priority(999)
+        let stackAboveBar = codeStack.bottomAnchor.constraint(equalTo: hexDumpBar.topAnchor, constant: -8)
+        stackAboveBar.priority = NSLayoutConstraint.Priority(999)
         NSLayoutConstraint.activate([
             hexDumpBar.leadingAnchor.constraint(equalTo: codeContent.leadingAnchor),
             hexDumpBar.trailingAnchor.constraint(equalTo: codeContent.trailingAnchor),
             hexDumpBar.bottomAnchor.constraint(equalTo: codeContent.bottomAnchor),
-            hexDumpBar.heightAnchor.constraint(equalToConstant: Self.dumpBarHeight),
-            codeStack.bottomAnchor.constraint(equalTo: hexDumpBar.topAnchor, constant: -8),
+            barHeight,
+            stackAboveBar,
             hexDumpButton.trailingAnchor.constraint(equalTo: hexDumpBar.trailingAnchor, constant: -8),
             hexDumpButton.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor),
             resetComparisonButton.trailingAnchor.constraint(equalTo: hexDumpButton.leadingAnchor, constant: -10),

@@ -149,6 +149,11 @@ public final class ALSplitView: NSView {
     public func addPane(_ pane: NSView) {
         pane.translatesAutoresizingMaskIntoConstraints = true
         pane.autoresizingMask = []
+        // A pane laid out before the split has a size keeps a plausible frame
+        // rather than a no-sized one: its content's constraints — margins, a
+        // bar of fixed height — cannot meet a frame of zero, and Auto Layout
+        // answers by breaking a required constraint and logging it.
+        if pane.frame.isEmpty { pane.frame = NSRect(x: 0, y: 0, width: 320, height: 480) }
         panes.append(pane)
         paneLayouts.append(.fill)
 
@@ -571,6 +576,10 @@ public final class ALSplitView: NSView {
     override public func layout() {
         let count = panes.count
         guard count > 0 else { return }
+        // A split with no size of its own lays nothing out: the panes keep the
+        // frames they had, and the content inside them is solved against those
+        // frames instead of a no-sized one. The first real layout sizes them.
+        guard bounds.width > 0, bounds.height > 0 else { return }
         // Derive the per-pane sizes from the policies, then place the panes
         // and dividers directly along the axis. Direct frame setting (rather
         // than Auto Layout constraints on the panes) keeps the split
