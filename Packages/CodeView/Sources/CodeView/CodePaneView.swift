@@ -3042,15 +3042,36 @@ import ToolModuleKit
             return true
         }
         if !Self.isJump(event), let explained = explanation(of: token), let rect = diffView.rect(of: token.range) {
+            // A line of the earlier revision explains itself from that
+            // revision's model: its uses name its functions and its lines.
+            let current = token.currentSide
             afterClick(inC: true) { [weak self] in
                 guard let self else { return }
-                self.showExplanation(explained, relativeTo: rect, of: self.diffView)
+                if current {
+                    self.showExplanation(explained, relativeTo: rect, of: self.diffView)
+                } else {
+                    self.showExplanation(explained, relativeTo: rect, of: self.diffView,
+                                         in: self.diffBaselineModel,
+                                         onUse: { [weak self] line in self?.goToDiffUse(line) })
+                }
             }
         }
         return false
     }
 
     private func clearDiffHighlight() { diffView.highlight([]) }
+
+    /// A use the earlier revision's popover names: its line there, followed
+    /// by address into the code on screen — the two revisions number their
+    /// instructions for themselves.
+    private func goToDiffUse(_ line: Int) {
+        guard let baseline = diffBaselineModel, baseline.lines.indices.contains(line),
+              let here = model.line(at: baseline.lines[line].instruction.address) else {
+            NSSound.beep()
+            return
+        }
+        follow(.line(here), even: true)
+    }
 
     /// The explanation of a diff token, from the revision whose line it is.
     private func explanation(of token: CodeDiffToken) -> CodeExplanation? {
@@ -3503,12 +3524,16 @@ import ToolModuleKit
         return negative ? UInt64(bitPattern: -Int64(bitPattern: value)) : value
     }
 
-    private func showExplanation(_ explained: CodeExplanation, relativeTo rect: NSRect, of view: NSView) {
+    /// `in` is the model the explanation was read from — the earlier
+    /// revision's for a line of the diff that revision holds — and `onUse`
+    /// where a use it names is followed there.
+    private func showExplanation(_ explained: CodeExplanation, relativeTo rect: NSRect, of view: NSView,
+                                 in read: CodeModel? = nil, onUse: ((Int) -> Void)? = nil) {
         guard view.window != nil else { return }
         explanationPopover?.close()
         explainedInC = nil
-        let popover = CodeExplanationPopover(explanation: explained, model: model)
-        popover.onUse = { [weak self] line in self?.goToUse(line) }
+        let popover = CodeExplanationPopover(explanation: explained, model: read ?? model)
+        popover.onUse = onUse ?? { [weak self] line in self?.goToUse(line) }
         popover.show(relativeTo: rect, of: view)
         explanationPopover = popover
     }
@@ -3540,6 +3565,20 @@ import ToolModuleKit
 
     /// The diff's visible area, for a test of where a popover is put.
     var diffBounds: NSRect { diffView.bounds }
+
+
+    /// Where a range of the diff is drawn, in this pane's coordinates — for a
+    /// test of what is painted there.
+    func diffRectInPane(of range: NSRange) -> NSRect? {
+        guard let box = diffView.rect(of: range) else { return nil }
+        return convert(box, from: diffView)
+    }
+
+    /// The model the open popover reads, and the two the diff holds — for a
+    /// test of which revision's model a line was explained from.
+    var shownExplanationModel: CodeModel? { explanationPopover?.modelShown }
+    var diffBaselineModelForTest: CodeModel? { diffBaselineModel }
+    var currentModelForTest: CodeModel { model }
 
     func shownExplanationClose() {
         explanationPopover?.close()

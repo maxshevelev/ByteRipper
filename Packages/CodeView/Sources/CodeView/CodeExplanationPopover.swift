@@ -52,6 +52,10 @@ import Localization
 
     var explanationShown: CodeExplanation { explanation }
 
+    /// The model the popover reads its uses from — for a test that a line of
+    /// an earlier revision was explained from that revision's model.
+    var modelShown: CodeModel { model }
+
     func close() { popover.performClose(nil) }
 
     override func loadView() {

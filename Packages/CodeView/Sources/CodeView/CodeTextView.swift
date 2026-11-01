@@ -154,23 +154,42 @@ final class CodeTextView: NSTextView {
         needsDisplay = true
     }
 
+    /// Tints drawn behind the text before any highlight: the diff's rows.
+    /// They are drawn here rather than set as background attributes because
+    /// the text's own background attributes are drawn over this pass — and
+    /// over the highlight a click puts behind a name.
+    var rowTints: [(range: NSRange, color: NSColor)] = [] {
+        didSet { needsDisplay = true }
+    }
+
     /// The highlight is drawn under the text as Xcode draws it: a rounded box
-    /// around each occurrence.
+    /// around each occurrence, over the row tints and under the glyphs.
+    /// How many times the background pass ran, for a test: the row tints and
+    /// the highlight are drawn there.
+    static var backgroundDraws = 0
+
     override func drawBackground(in rect: NSRect) {
+        Self.backgroundDraws += 1
         super.drawBackground(in: rect)
-        guard !highlighted.isEmpty, let layoutManager, let textContainer else { return }
-        CodeColors.symbolHighlight.setFill()
+        guard let layoutManager, let textContainer else { return }
         let origin = textContainerOrigin
-        for range in highlighted {
+        func boxes(_ range: NSRange, inset: CGFloat, radius: CGFloat, fill: NSColor) {
+            guard range.location + range.length <= (string as NSString).length else { return }
             let glyphs = layoutManager.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+            fill.setFill()
             layoutManager.enumerateEnclosingRects(forGlyphRange: glyphs,
                                                   withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0),
                                                   in: textContainer) { box, _ in
-                let shown = box.offsetBy(dx: origin.x, dy: origin.y).insetBy(dx: -2, dy: self.highlightInset)
+                let shown = box.offsetBy(dx: origin.x, dy: origin.y).insetBy(dx: -2, dy: inset)
                 guard shown.intersects(rect) else { return }
-                NSBezierPath(roundedRect: shown, xRadius: CodeColors.symbolHighlightRadius,
-                             yRadius: CodeColors.symbolHighlightRadius).fill()
+                NSBezierPath(roundedRect: shown, xRadius: radius, yRadius: radius).fill()
             }
+        }
+        for tint in rowTints { boxes(tint.range, inset: 0, radius: 0, fill: tint.color) }
+        guard !highlighted.isEmpty else { return }
+        for range in highlighted {
+            boxes(range, inset: highlightInset, radius: CodeColors.symbolHighlightRadius,
+                  fill: CodeColors.symbolHighlight)
         }
     }
 

@@ -115,6 +115,7 @@ struct CodeDiffToken {
         scroll.isHidden = false
         let origin = scroll.contentView.bounds.origin
         let shown = NSMutableAttributedString()
+        var tints: [(range: NSRange, color: NSColor)] = []
         shownTokens = []
         shownLinks = []
         let oldWidth = max(1, String(diff.rows.reduce(0) { max($0, oldNumber($1) ?? 0) }).count)
@@ -175,12 +176,13 @@ struct CodeDiffToken {
             }
             shown.append(NSAttributedString(string: "\n", attributes: [.font: font]))
             let rowRange = NSRange(location: start, length: shown.length - start)
+            // The row's tint is drawn behind the text with the highlight, not
+            // set as a background attribute: an attribute is drawn over the
+            // highlight, and a click's box on a changed line would vanish.
             switch line.row {
             case .same: break
-            case .removed:
-                shown.addAttribute(.backgroundColor, value: CodeColors.diffRemoved, range: rowRange)
-            case .added:
-                shown.addAttribute(.backgroundColor, value: CodeColors.diffAdded, range: rowRange)
+            case .removed: tints.append((rowRange, CodeColors.diffRemoved))
+            case .added: tints.append((rowRange, CodeColors.diffAdded))
             }
         }
         let paragraph = NSMutableParagraphStyle()
@@ -191,6 +193,7 @@ struct CodeDiffToken {
         shown.addAttribute(.baselineOffset, value: padding, range: whole)
         text.highlightInset = padding
         text.textStorage?.setAttributedString(shown)
+        text.rowTints = tints
         if let layout = text.layoutManager, let container = text.textContainer {
             layout.ensureLayout(for: container)
             text.sizeToFit()
@@ -210,6 +213,7 @@ struct CodeDiffToken {
         shownDiff = nil
         shownTokens = []
         shownLinks = []
+        text.rowTints = []
         text.textStorage?.setAttributedString(NSAttributedString(string: ""))
         placeholder.stringValue = message
         placeholder.isHidden = false
@@ -280,12 +284,13 @@ struct CodeDiffToken {
         guard let storage = text.textStorage else { return nil }
         let range = (storage.string as NSString).range(of: line)
         guard range.location != NSNotFound, range.location < storage.length else { return nil }
-        return storage.attribute(.backgroundColor, at: range.location, effectiveRange: nil) as? NSColor
+        return text.rowTints.first { NSLocationInRange(range.location, $0.range) }?.color
     }
     /// The colour a token reads in, for a test.
     func ink(of range: NSRange) -> NSColor? {
         text.textStorage?.attribute(.foregroundColor, at: range.location, effectiveRange: nil) as? NSColor
     }
+
     var placeholderText: String? { placeholder.isHidden ? nil : placeholder.stringValue }
     var scrollOrigin: NSPoint { scroll.contentView.bounds.origin }
     func scroll(to origin: NSPoint) {

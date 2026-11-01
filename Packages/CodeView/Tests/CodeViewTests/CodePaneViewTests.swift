@@ -1505,7 +1505,111 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(view.diffHighlightedRanges.count, 2, "the name on both sides, highlighted")
         RunLoop.main.run(until: Date().addingTimeInterval(0.05))
         XCTAssertEqual(view.shownExplanation?.subject, .global(CodeAddress(0x230)))
+        // The first of the two is on the removed line: the earlier revision's
+        // model explains it, so its uses name that revision's functions.
+        let model = try XCTUnwrap(view.shownExplanationModel)
+        XCTAssertEqual(model.functions.first?.c, view.diffBaselineModelForTest?.functions.first?.c,
+                       "a removed line is explained from the earlier revision's model")
+        XCTAssertNotEqual(model.functions.first?.c, view.currentModelForTest.functions.first?.c)
         view.shownExplanationClose()
+    }
+
+    /// A variable clicked in the diff highlights its every occurrence there,
+    /// as a global's name does.
+    func testAClickOnAVariableInTheDiffHighlightsIt() throws {
+        func artifact(_ call: String) throws -> CodeArtifact {
+            let c = "void F(void)\n{\n  UINT8 value = 0;\n  value = value + 1;\n  Helper(\(call));\n}\n"
+            var spans: [[Any]] = []
+            var search = c.startIndex
+            while let found = c.range(of: "value", range: search..<c.endIndex) {
+                let at = c.utf16.distance(from: c.startIndex, to: found.lowerBound)
+                spans.append([at, 5, "local"])
+                search = found.upperBound
+            }
+            let json: [String: Any] = [
+                "script_version": 5, "program": ["image_base": "0x0"],
+                "functions": [["entry": "0x220", "name": "F", "c": c, "c_spans": spans,
+                               "instructions": [["address": "0x220", "bytes": "C3",
+                                                 "mnemonic": "RET", "text": "RET"]]]]
+            ]
+            return try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        }
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact("0x10"),
+                                moduleBytes: teModule(), hexView: NSView())
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 480),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        view.layoutSubtreeIfNeeded()
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil) }
+        view.setComparisonRevision(54, artifact: try artifact("0x20"))
+        XCTAssertTrue(view.showsRevisionDiff)
+
+        let shown = view.diffText as NSString
+        let at = shown.range(of: "value").location + 1
+        XCTAssertFalse(view.clickDiff(at: at, event: try click(count: 1)))
+        XCTAssertEqual(view.diffHighlightedRanges.count, 3, "the declaration and both uses")
+        view.shownExplanationClose()
+    }
+
+    /// A variable whose occurrences are on lines the revision changed —
+    /// tinted red and green — is still seen where it is highlighted: the
+    /// box is drawn over the row's tint, not under it.
+    func testAVariableOnChangedLinesIsVisiblyHighlighted() throws {
+        func artifact(_ value: String) throws -> CodeArtifact {
+            let c = "void F(void)\n{\n  value = \(value);\n  value = value + 1;\n}\n"
+            var spans: [[Any]] = []
+            var search = c.startIndex
+            while let found = c.range(of: "value", range: search..<c.endIndex) {
+                let at = c.utf16.distance(from: c.startIndex, to: found.lowerBound)
+                spans.append([at, 5, "local"])
+                search = found.upperBound
+            }
+            let json: [String: Any] = [
+                "script_version": 5, "program": ["image_base": "0x0"],
+                "functions": [["entry": "0x220", "name": "F", "c": c, "c_spans": spans,
+                               "instructions": [["address": "0x220", "bytes": "C3",
+                                                 "mnemonic": "RET", "text": "RET"]]]]
+            ]
+            return try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        }
+        // Both lines with `value` differ between the revisions.
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact("0"),
+                                moduleBytes: teModule(), hexView: NSView())
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 480),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        view.layoutSubtreeIfNeeded()
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil) }
+        view.setComparisonRevision(54, artifact: try artifact("1"))
+        XCTAssertTrue(view.showsRevisionDiff)
+
+        let shown = view.diffText as NSString
+        let at = shown.range(of: "value").location + 1
+        XCTAssertFalse(view.clickDiff(at: at, event: try click(count: 1)))
+        XCTAssertEqual(view.diffHighlightedRanges.count, 4, "two sides, two lines")
+        view.shownExplanationClose()
+
+        // The row's tint and the click's box are drawn in one background pass,
+        // the tint first: a tint set as a text attribute would be drawn over
+        // the box and the name would look unhighlighted on a changed line.
+        let before = CodeTextView.backgroundDraws
+        view.displayIfNeeded()
+        let rep = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+        view.cacheDisplay(in: view.bounds, to: rep)
+        XCTAssertGreaterThan(CodeTextView.backgroundDraws, before, "the background pass ran")
+        // The line the earlier revision held is the removed one.
+        let removed = try XCTUnwrap(view.diffBackground(ofLineContaining: "value = 1;"))
+        XCTAssertEqual(removed.usingColorSpace(.sRGB).map { [$0.redComponent, $0.greenComponent, $0.blueComponent] },
+                       CodeColors.diffRemoved.usingColorSpace(.sRGB).map {
+                           [$0.redComponent, $0.greenComponent, $0.blueComponent]
+                       })
+        let added = try XCTUnwrap(view.diffBackground(ofLineContaining: "value = 0;"))
+        XCTAssertEqual(added.usingColorSpace(.sRGB).map { [$0.redComponent, $0.greenComponent, $0.blueComponent] },
+                       CodeColors.diffAdded.usingColorSpace(.sRGB).map {
+                           [$0.redComponent, $0.greenComponent, $0.blueComponent]
+                       })
     }
 
     /// A name on a line the revisions share explains itself as one on a
@@ -3292,11 +3396,3 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertNil(CodeExplanationPopover.memberRange(in: c, name: "EFI_NOT_HERE"))
     }
 }
-
-
-
-
-
-
-
-
