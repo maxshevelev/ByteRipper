@@ -913,6 +913,7 @@ final class CodePaneViewTests: XCTestCase {
         view.layoutSubtreeIfNeeded()
         XCTAssertEqual(try cell(list, 0, 0).textField?.stringValue, "Root")
         XCTAssertEqual(try cell(list, 0, 0).iconName, code)
+        try XCTUnwrap(all(NSButton.self, in: try cell(list, 0, 0)).first).performClick(nil)
         XCTAssertEqual(try cell(list, 0, 1).textField?.stringValue, "Leaf")
         XCTAssertEqual(try cell(list, 0, 1).iconName, code, "a call is a function too")
 
@@ -2236,13 +2237,17 @@ final class CodePaneViewTests: XCTestCase {
         func cell(_ row: Int) throws -> NSTableCellView {
             try XCTUnwrap(list.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView)
         }
-        XCTAssertEqual(list.numberOfRows, 3, "Root, its call, and the other root")
+        XCTAssertEqual(list.numberOfRows, 2, "every place starts closed: the two roots")
         XCTAssertEqual(try cell(0).textField?.stringValue, "Root", "the roots read alphabetically")
 
         let triangle = try XCTUnwrap(all(NSButton.self, in: try cell(0)).first)
         triangle.performClick(nil)
+        XCTAssertEqual(list.numberOfRows, 3, "Root, its call, and the other root")
+        XCTAssertEqual(try cell(1).textField?.stringValue, "Leaf")
+
+        let closing = try XCTUnwrap(all(NSButton.self, in: try cell(0)).first)
+        closing.performClick(nil)
         XCTAssertEqual(list.numberOfRows, 2, "a closed row keeps its place and hides what it calls")
-        XCTAssertEqual(try cell(0).textField?.stringValue, "Root")
 
         let reopened = try XCTUnwrap(all(NSButton.self, in: try cell(0)).first)
         reopened.performClick(nil)

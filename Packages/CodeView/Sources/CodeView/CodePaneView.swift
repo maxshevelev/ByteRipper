@@ -1136,12 +1136,23 @@ import ToolModuleKit
         drawSelection()
     }
 
-    /// Opens or closes a function's calls in the tree.
-    private func toggleCalls(of index: Int) {
-        foldRows { $0.toggleExpanded(index) }
-        if let row = state.row(ofFunction: index) {
-            describeDisclosure(at: row, state.isExpanded(index) ? L("Hide calls") : L("Show calls"))
+    /// Opens or closes one place's calls in the tree.
+    private func toggleCalls(at path: [Int]) {
+        foldRows { $0.toggleExpanded(path: path) }
+        if let row = state.row(ofCallPath: path) {
+            describeDisclosure(at: row, state.isExpanded(path: path) ? L("Hide calls") : L("Show calls"))
         }
+    }
+
+    /// The places open in the call tree, for the pane drawn after this one.
+    public var openCallEntries: [[CodeAddress]] { state.openCallEntries }
+
+    /// Opens what the pane before this one had open: a new revision draws a new
+    /// pane, and the tree must not close under the reader each time.
+    public func openCallPlaces(_ places: [[CodeAddress]]) {
+        guard !places.isEmpty else { return }
+        state.openCallPlaces(places)
+        drawNavigator()
     }
 
     /// Opens or closes rows of the Functions list as `change` has the state
@@ -1150,8 +1161,17 @@ import ToolModuleKit
     /// clicked is turning still. A change the rows cannot follow one by one
     /// draws the list again.
     private func foldRows(_ change: (inout CodeReaderState) -> Void) {
-        func rows() -> [CodeReaderState.FunctionRow] {
-            (0..<state.rowCount).compactMap(state.functionRow(at:))
+        // A function has a row at each of its places, so a row is told from
+        // another by its place: the rows that come and go are those of the
+        // place clicked, not the first that look the same.
+        struct Place: Equatable {
+            let row: CodeReaderState.FunctionRow
+            let path: [Int]?
+        }
+        func rows() -> [Place] {
+            (0..<state.rowCount).compactMap { row in
+                state.functionRow(at: row).map { Place(row: $0, path: state.callPath(atRow: row)) }
+            }
         }
         let before = state.list == .functions ? rows() : []
         change(&state)
@@ -2214,6 +2234,7 @@ import ToolModuleKit
         switch state.list {
         case .functions:
             guard let index = state.function(atRow: row) else { return }
+            state.chooseCallPlace(atRow: row)
             jump { selectFunction(at: index) }
             return
         case .strings:
@@ -4196,14 +4217,15 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
                 }
                 // A search is one alphabetical list of what it found: the
                 // calls it would open say nothing about a find.
-                if state.functionOrder == .calls, state.searchText.isEmpty {
-                    let expandable = state.hasCalls(index)
-                    let expanded = state.isExpanded(index)
+                if state.functionOrder == .calls, state.searchText.isEmpty,
+                   let path = state.callPath(atRow: row) {
+                    let expandable = state.hasCalls(path: path)
+                    let expanded = state.isExpanded(path: path)
                     cell.showsDisclosure(true)
                     cell.showsCalls(expandable: expandable, expanded: expanded)
                     ControlHelp.describe(cell.disclosure,
                                          expanded ? L("Hide calls") : L("Show calls"))
-                    cell.onToggle = { [weak self] in self?.toggleCalls(of: index) }
+                    cell.onToggle = { [weak self] in self?.toggleCalls(at: path) }
                 }
             }
             if state.list == .postCodes {

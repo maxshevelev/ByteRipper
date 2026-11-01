@@ -112,11 +112,17 @@ public struct CodeReaderState: Sendable {
     public private(set) var functionRows: [FunctionRow] = []
     /// A function's row, in the order in front.
     private var functionRowByIndex: [Int: Int] = [:]
-    /// The call tree's shape, built with the rows: which functions it gives
-    /// calls to, whose calls are hidden, and each function's caller in it.
-    private var callChildren: Set<Int> = []
-    private var collapsedFunctions: Set<Int> = []
-    private var callParent: [Int: Int] = [:]
+    /// A row of the call tree is a place, not a function: the function called
+    /// from every caller is a row under each of them, and each opens by itself.
+    /// A place is named by its path, the functions from a root down to it. The
+    /// paths of the rows, in step with them; the row of a path; and the places
+    /// the reader opened — every place starts closed.
+    private var callPaths: [[Int]] = []
+    private var callRowByPath: [[Int]: Int] = [:]
+    private var openCalls: Set<[Int]> = []
+    /// The place the reader chose a function at: the function has other rows,
+    /// and the list must not move the selection off the one that was clicked.
+    private var selectedCallPath: [Int]?
     /// The review groups whose functions are hidden, and how many functions
     /// each group holds whether it is open or closed.
     private var collapsedGroups: Set<FunctionGroup> = []
@@ -208,7 +214,10 @@ public struct CodeReaderState: Sendable {
 
     /// The navigator row of a function, when Functions lists it.
     public func row(ofFunction index: Int) -> Int? {
-        functionRowByIndex[index]
+        if let path = selectedCallPath, path.last == index, let row = callRowByPath[path] {
+            return row
+        }
+        return functionRowByIndex[index]
     }
 
     /// The row at `row`, when the navigator has one.
@@ -229,6 +238,8 @@ public struct CodeReaderState: Sendable {
         groupCounts = [:]
         sectionCounts = [:]
         sectionEntryCounts = [:]
+        callPaths = []
+        callRowByPath = [:]
         switch functionOrder {
         case .address:
             functionRows = matching.map { .function($0, level: 0) }
@@ -240,8 +251,12 @@ public struct CodeReaderState: Sendable {
         listedFunctions = functionRows.compactMap(\.function)
         functionRowByIndex = [:]
         for (row, item) in functionRows.enumerated() {
-            if let function = item.function { functionRowByIndex[function] = row }
+            // The first of a function's places answers for it.
+            if let function = item.function, functionRowByIndex[function] == nil {
+                functionRowByIndex[function] = row
+            }
         }
+        for (row, path) in callPaths.enumerated() { callRowByPath[path] = row }
     }
 
     /// The functions in their review levels, each level's functions in
@@ -370,24 +385,17 @@ public struct CodeReaderState: Sendable {
         }
     }
 
-    /// One function in the call tree and the calls it makes.
-    private struct CallNode {
-        let index: Int
-        var children: [CallNode]
-    }
-
     /// The functions as a forest of calls, as rows: a function nothing in the
     /// module calls — the image's entry, a notify callback, a slot of a
-    /// services table — starts a tree, and what it calls hangs under it, as
-    /// deep as the calls go. Each function is shown once, at the first place
-    /// that reaches it.
+    /// services table — starts a tree, and what it calls hangs under it. Every
+    /// function a function calls is under it, however many others call it too,
+    /// so a row's calls are all of its calls; and every place starts closed, so
+    /// only the rows the reader opened are ever walked.
     ///
-    /// A row whose calls are closed shows alone; the rest of its tree is a
-    /// click away. Most functions reach a module through such a root; a
-    /// function that a call from outside the module reaches — a protocol's
-    /// implementation — is one too. A function called only from inside a
-    /// circle of calls has no root, so the first of the circle starts its own
-    /// tree.
+    /// Most functions reach a module through such a root; a function that a
+    /// call from outside the module reaches — a protocol's implementation — is
+    /// one too. A function called only from inside a circle of calls has no
+    /// root, so the first of the circle starts its own tree.
     ///
     /// A search shows what it matches as one alphabetical list, whatever the
     /// trees hold: a find is not a walk down the calls, and a matching
@@ -395,28 +403,33 @@ public struct CodeReaderState: Sendable {
     /// that is not there.
     private mutating func callRows(_ matching: [Int], searching: Bool) -> [FunctionRow] {
         guard !model.functions.isEmpty else { return [] }
-        let tree = callTree()
-        var rows: [FunctionRow] = []
         if searching {
             return matching.sorted(by: byName).map { FunctionRow.function($0, level: 0) }
         }
-        func walk(_ nodes: [CallNode], _ level: Int) {
-            for node in nodes {
-                rows.append(.function(node.index, level: level))
-                if !collapsedFunctions.contains(node.index) {
-                    walk(node.children, level + 1)
-                }
-            }
+        var rows: [FunctionRow] = []
+        var paths: [[Int]] = []
+        func walk(_ path: [Int]) {
+            guard let index = path.last else { return }
+            rows.append(.function(index, level: path.count - 1))
+            paths.append(path)
+            guard openCalls.contains(path), hasCalls(path: path) else { return }
+            for callee in calls(of: index) { walk(path + [callee]) }
         }
-        walk(tree, 0)
+        for root in callRoots() { walk([root]) }
+        callPaths = paths
         return rows
     }
 
-    /// The whole forest, with the shape the view asks about — which functions
-    /// have calls, and who calls whom. A function's calls read alphabetically,
-    /// and so does each set of trees, the image's entry first. Built the same
-    /// way on every look, so closing one row never moves another.
-    private mutating func callTree() -> [CallNode] {
+    /// The functions a function calls, each once, alphabetically.
+    private func calls(of index: Int) -> [Int] {
+        Array(Set(model.functions[index].callees.compactMap { model.function(at: $0) })).sorted(by: byName)
+    }
+
+    /// The tops of the trees: the image's entry, then the functions nothing
+    /// calls, then the first of each circle no root reaches, each set
+    /// alphabetically. Built the same way on every look, so opening one row
+    /// never moves another.
+    private func callRoots() -> [Int] {
         var roots = model.functions.indices.filter { model.functions[$0].callers.isEmpty }
         roots.sort(by: byName)
         // The image's entry first, where the headers or the name place it.
@@ -424,67 +437,97 @@ public struct CodeReaderState: Sendable {
             roots.removeAll { $0 == entry }
             roots.insert(entry, at: 0)
         }
-        var visited: Set<Int> = []
-        var parents: [Int: Int] = [:]
-        var withChildren: Set<Int> = []
-        func visit(_ index: Int, _ parent: Int?) -> CallNode {
-            visited.insert(index)
-            if let parent { parents[index] = parent }
-            var children: [CallNode] = []
-            for callee in model.functions[index].callees {
-                guard let target = model.function(at: callee), !visited.contains(target) else { continue }
-                children.append(visit(target, index))
+        var reached: Set<Int> = []
+        func reach(_ start: Int) {
+            var waiting = [start]
+            while let index = waiting.popLast() {
+                guard reached.insert(index).inserted else { continue }
+                waiting += model.functions[index].callees.compactMap { model.function(at: $0) }
             }
-            children.sort { byName($0.index, $1.index) }
-            if !children.isEmpty { withChildren.insert(index) }
-            return CallNode(index: index, children: children)
         }
-        var forest: [CallNode] = []
-        for root in roots where !visited.contains(root) { forest.append(visit(root, nil)) }
-        // What is left calls around a circle: walk each circle from its first
-        // unvisited function.
-        for index in model.functions.indices.sorted(by: byName) where !visited.contains(index) {
-            forest.append(visit(index, nil))
+        roots.forEach(reach)
+        for index in model.functions.indices.sorted(by: byName) where !reached.contains(index) {
+            roots.append(index)
+            reach(index)
         }
-        callParent = parents
-        callChildren = withChildren
-        return forest
+        return roots
     }
 
-    /// Whether the tree gives this function calls to open.
-    public func hasCalls(_ function: Int) -> Bool {
-        callChildren.contains(function)
+    /// The place a row of the call tree stands for; nil in any other layout.
+    public func callPath(atRow row: Int) -> [Int]? {
+        callPaths.indices.contains(row) ? callPaths[row] : nil
     }
 
-    /// Whether the tree shows this function's calls. True for a row folded
-    /// away: a function whose calls are hidden still carries the answer of
-    /// its own row.
-    public func isExpanded(_ function: Int) -> Bool {
-        !collapsedFunctions.contains(function)
+    /// The row of a place, when the tree shows it.
+    public func row(ofCallPath path: [Int]) -> Int? {
+        callRowByPath[path]
     }
 
-    /// Opens or closes a function's calls in the tree. A function the tree
-    /// gives no calls to has nothing to open.
-    public mutating func toggleExpanded(_ function: Int) {
-        guard callChildren.contains(function) else { return }
-        if collapsedFunctions.contains(function) {
-            collapsedFunctions.remove(function)
-        } else {
-            collapsedFunctions.insert(function)
+    /// Whether this place gives calls to open. A function already on the way
+    /// down to it is a recursive call: its row says so and goes no deeper, or
+    /// the tree would have no bottom.
+    public func hasCalls(path: [Int]) -> Bool {
+        guard let index = path.last, !path.dropLast().contains(index) else { return false }
+        return !calls(of: index).isEmpty
+    }
+
+    /// Whether the tree shows this place's calls.
+    public func isExpanded(path: [Int]) -> Bool {
+        openCalls.contains(path)
+    }
+
+    /// Opens or closes one place's calls. The same function under another
+    /// caller stays as it is. A place with no calls has nothing to open.
+    public mutating func toggleExpanded(path: [Int]) {
+        guard hasCalls(path: path) else { return }
+        if openCalls.remove(path) == nil { openCalls.insert(path) }
+        refilter()
+    }
+
+    /// The reader chose the function at this row: that is the place its
+    /// selection stays at.
+    public mutating func chooseCallPlace(atRow row: Int) {
+        selectedCallPath = callPath(atRow: row)
+    }
+
+    /// The places open now by the functions' entries, which outlive a revision:
+    /// a function's index does not.
+    public var openCallEntries: [[CodeAddress]] {
+        openCalls.map { $0.map { model.functions[$0].entry } }
+    }
+
+    /// Opens the places a pane before this one had open; a function no longer
+    /// here takes its place with it, and a call no longer made is never walked.
+    public mutating func openCallPlaces(_ places: [[CodeAddress]]) {
+        for place in places {
+            let path = place.compactMap { model.function(at: $0) }
+            if path.count == place.count { openCalls.insert(path) }
         }
         refilter()
     }
 
-    /// Opens the calls above `index`, so its row shows. Returns whether any
-    /// row was closed.
+    /// Opens the shortest way down to `index`, so a row of it shows. Returns
+    /// whether any place was closed.
     private mutating func expandAncestors(of index: Int) -> Bool {
-        var changed = false
-        var parent = callParent[index]
-        while let above = parent {
-            if collapsedFunctions.remove(above) != nil { changed = true }
-            parent = callParent[above]
+        var waiting = callRoots().map { [$0] }
+        var reached = Set(waiting.compactMap(\.last))
+        var next = 0
+        while next < waiting.count {
+            let path = waiting[next]
+            next += 1
+            guard let last = path.last else { continue }
+            if last == index {
+                var changed = false
+                for length in path.indices.dropFirst() where openCalls.insert(Array(path[..<length])).inserted {
+                    changed = true
+                }
+                return changed
+            }
+            for callee in calls(of: last) where reached.insert(callee).inserted {
+                waiting.append(path + [callee])
+            }
         }
-        return changed
+        return false
     }
 
     /// The module's entry: the function at the image's entry point when the

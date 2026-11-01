@@ -110,10 +110,14 @@ extension MainViewController {
                 // reader has not opened yet go with it.
                 self.pendingCodeNewMarks = self.codeScreenView?.newMarks ?? []
             }
+            // The places open in the call tree go with it, by the entries that
+            // outlive a revision.
+            let openCalls = self.codeScreenView?.openCallEntries ?? []
             self.codeScreen = (pane, pane.document, next)
             self.apply(mode: .singleFile)
             self.codeScreenView?.setHexDumpVisible(dumpVisible, animated: false)
             if let history { self.codeScreenView?.adoptHistory(history) }
+            self.codeScreenView?.openCallPlaces(openCalls)
         }
     }
 

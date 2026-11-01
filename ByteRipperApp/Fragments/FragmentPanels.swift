@@ -487,6 +487,7 @@ import ToolModuleKit
         let previous = entry.codePane?.artifact
         let shown = entry.screen
         let carriedMarks = entry.codePane?.newMarks ?? []
+        let carriedCalls = entry.codePane?.openCallEntries ?? []
         let pane = entry.pane
         let view = entry.paneView
         let codePane = CodePaneView(manifest: screen.manifest, artifact: screen.artifact,
@@ -511,6 +512,7 @@ import ToolModuleKit
         // redraw of a reading that did not move — the store telling the same
         // revision twice — must not take them.
         codePane.setNewMarks(carriedMarks)
+        codePane.openCallPlaces(carriedCalls)
         wireCodeScreen(codePane, to: pane, owner: host,
                        previous: previousRevision) { [weak pane, weak host] range in
             guard let pane else { return }
