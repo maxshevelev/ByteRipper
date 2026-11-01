@@ -91,31 +91,29 @@ enum CodeNavigatorIcon {
     }
 
     /// The mark at `side` points. `inverted` is the mark on a selected row:
-    /// what is white there takes the colour and the colour turns white, so
-    /// the mark still reads on the selection's own colour — except a library
-    /// badge, which keeps its colours on a white plate.
+    /// every mark keeps its own colours there, on a light plate — a filled
+    /// one with the plate showing as a frame around its square, as a library
+    /// badge draws. Turning the colours round instead would make the `f`
+    /// read as another kind of mark, not as the same one on a highlight.
     static func image(_ glyph: Glyph, color: NSColor, side: CGFloat, inverted: Bool = false) -> NSImage {
-        let ground = inverted ? NSColor.white : color
-        let ink = inverted ? color : NSColor.white
         let size = NSSize(width: width(of: glyph, side: side), height: side)
         let image = NSImage(size: size, flipped: false) { rect in
             let radius = (side * 0.26).rounded()
             switch glyph {
             case let .letter(letter):
-                ground.setFill()
-                NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
-                drawLetter(letter, color: ink, in: rect)
+                square(rect, radius: radius, color: color, onPlate: inverted)
+                drawLetter(letter, color: .white, in: rect)
             case let .framedLetter(letter):
+                if inverted { plate(rect, radius: radius) }
                 let frame = NSBezierPath(roundedRect: rect.insetBy(dx: 0.75, dy: 0.75),
                                          xRadius: radius - 0.5, yRadius: radius - 0.5)
                 frame.lineWidth = 1.5
-                ground.setStroke()
+                color.setStroke()
                 frame.stroke()
-                drawLetter(letter, color: ground, in: rect)
+                drawLetter(letter, color: color, in: rect)
             case let .symbol(name):
-                ground.setFill()
-                NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
-                drawSymbol(name, color: ink, scale: 0.7, in: rect)
+                square(rect, radius: radius, color: color, onPlate: inverted)
+                drawSymbol(name, color: .white, scale: 0.7, in: rect)
             case let .badge(name, style):
                 // The frame and the name leave the dot its room on the right.
                 let rect = style == .dotted
@@ -158,6 +156,25 @@ enum CodeNavigatorIcon {
         }
         image.isTemplate = false
         return image
+    }
+
+    /// The light ground a selected row's mark sits on, as a library badge's
+    /// plate there.
+    private static func plate(_ rect: NSRect, radius: CGFloat) {
+        NSColor.white.setFill()
+        NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
+    }
+
+    /// A filled mark's square: the colour alone, or — on a selected row —
+    /// the colour inset on a light plate, so the mark keeps its colour and
+    /// gains a frame instead of turning round. The inset is the badge's.
+    private static func square(_ rect: NSRect, radius: CGFloat, color: NSColor, onPlate: Bool) {
+        if onPlate { plate(rect, radius: radius) }
+        let chip = onPlate ? rect.insetBy(dx: 1.5, dy: 1.5) : rect
+        color.setFill()
+        NSBezierPath(roundedRect: chip,
+                     xRadius: max(radius - (onPlate ? 1.5 : 0), 1),
+                     yRadius: max(radius - (onPlate ? 1.5 : 0), 1)).fill()
     }
 
     /// The letter centred by its own ink, not by the font's line: an `f`

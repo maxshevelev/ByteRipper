@@ -929,13 +929,55 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertTrue(heading.iconName?.hasPrefix("group.") == true)
         XCTAssertNotNil(heading.icon.image)
 
-        // A selected row draws its mark again, inverted, and gives it back
-        // when it is let go.
+        // A selected row draws its mark again — on a light plate, keeping its
+        // colour — and gives it back when it is let go.
         let plain = member.icon.image
         member.backgroundStyle = .emphasized
-        XCTAssertFalse(member.icon.image === plain, "the selection inverts the mark")
+        XCTAssertFalse(member.icon.image === plain, "the selection redraws the mark")
         member.backgroundStyle = .normal
         XCTAssertNotNil(member.icon.image)
+    }
+
+    /// On a selected row a mark keeps its own colour on a light plate, as a
+    /// library badge draws there: the `f` no longer turns white on a coloured
+    /// square, which read as another kind of mark on the highlight.
+    func testASelectedRowsMarkKeepsItsColourOnALightPlate() throws {
+        let side = CodeNavigatorIcon.side(forFontSize: 12)
+        let plain = CodeNavigatorIcon.image(.letter("f"), color: .systemTeal, side: side)
+        let selected = CodeNavigatorIcon.image(.letter("f"), color: .systemTeal, side: side, inverted: true)
+        let middle = (side / 2).rounded(.down)
+        // Inside the square, left of the letter's ink.
+        let inside = NSPoint(x: 2.5, y: middle)
+        let plainInside = try colour(of: plain, at: inside)
+        let selectedInside = try colour(of: selected, at: inside)
+        XCTAssertEqual(selectedInside.redComponent, plainInside.redComponent, accuracy: 1.0 / 255)
+        XCTAssertEqual(selectedInside.greenComponent, plainInside.greenComponent, accuracy: 1.0 / 255)
+        XCTAssertEqual(selectedInside.blueComponent, plainInside.blueComponent, accuracy: 1.0 / 255)
+
+        // The plate shows at the edge, as the frame a badge has there.
+        let edge = try colour(of: selected, at: NSPoint(x: 0.5, y: middle))
+        XCTAssertGreaterThan(edge.redComponent, 0.9)
+        XCTAssertGreaterThan(edge.greenComponent, 0.9)
+        XCTAssertGreaterThan(edge.blueComponent, 0.9)
+    }
+
+    /// The colour `image` draws at `point` in its own coordinates, as sRGB.
+    private func colour(of image: NSImage, at point: NSPoint) throws -> NSColor {
+        let rep = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil,
+                                                 pixelsWide: Int(image.size.width),
+                                                 pixelsHigh: Int(image.size.height),
+                                                 bitsPerSample: 8, samplesPerPixel: 4,
+                                                 hasAlpha: true, isPlanar: false,
+                                                 colorSpaceName: .deviceRGB,
+                                                 bytesPerRow: 0, bitsPerPixel: 0))
+        let context = try XCTUnwrap(NSGraphicsContext(bitmapImageRep: rep))
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        image.draw(in: NSRect(origin: .zero, size: image.size))
+        context.flushGraphics()
+        NSGraphicsContext.restoreGraphicsState()
+        return try XCTUnwrap(rep.colorAt(x: Int(point.x), y: Int(point.y)))
+            .usingColorSpace(.sRGB) ?? NSColor.clear
     }
 
     /// A function's mark says how far its review has got: the filled `f` for

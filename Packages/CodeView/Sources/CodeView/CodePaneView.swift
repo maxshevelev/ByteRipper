@@ -4147,9 +4147,10 @@ final class CodeNavigatorCell: NSTableCellView {
     /// let go.
     private var mark: (glyph: CodeNavigatorIcon.Glyph, color: NSColor)?
 
-    /// A selected row draws its mark inverted: on the selection's colour the
-    /// mark's own colour would not read. The New badge does the same, in the
-    /// dock pill's manner: its word and capsule turn to the selection's white.
+    /// A selected row draws its mark again, on a light plate and keeping its
+    /// own colours, as a library badge draws there. The New badge does the
+    /// same, in the dock pill's manner: its word and capsule turn to the
+    /// selection's white.
     override var backgroundStyle: NSView.BackgroundStyle {
         didSet {
             guard backgroundStyle != oldValue else { return }
