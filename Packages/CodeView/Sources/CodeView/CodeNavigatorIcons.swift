@@ -44,6 +44,10 @@ enum CodeNavigatorIcon {
     /// yet — the frame says the review has started on its name and signature,
     /// the red says it has not gone further.
     static let decompiledFunction = (glyph: Glyph.framedLetter("f"), color: NSColor.systemRed)
+    /// A function with no body to review — an external or a thunk: the framed
+    /// `f` in the grey of the level that has nothing to read, as its group's
+    /// heading is drawn.
+    static let bodylessFunction = (glyph: Glyph.framedLetter("f"), color: NSColor.systemGray)
     /// A library routine: the badge of whose library it is, in the library
     /// heading's blue.
     static func library(_ name: String, style: BadgeStyle = .outlined) -> (glyph: Glyph, color: NSColor) {

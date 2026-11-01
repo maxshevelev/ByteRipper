@@ -994,9 +994,8 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(CodePaneView.functionMark(.library), "library.unrecorded")
         XCTAssertEqual(CodePaneView.functionMark(.library, library: .amd, registry: .entry), "library.amd.entry")
         XCTAssertEqual(CodePaneView.functionMark(.library, library: .amd, registry: .matched), "library.amd.matched")
-        for group in [CodeReaderState.FunctionGroup.noBody, .unknown] {
-            XCTAssertEqual(CodePaneView.functionMark(group), "function")
-        }
+        XCTAssertEqual(CodePaneView.functionMark(.noBody), "function.noBody")
+        XCTAssertEqual(CodePaneView.functionMark(.unknown), "function")
 
         // The two framed marks read apart by their colour alone: an `f` in a
         // frame either way, orange for a review under way, red for one that
@@ -1005,6 +1004,12 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(CodeNavigatorIcon.decompiledFunction.glyph, .framedLetter("f"))
         XCTAssertEqual(CodeNavigatorIcon.partialFunction.color, .systemOrange)
         XCTAssertEqual(CodeNavigatorIcon.decompiledFunction.color, .systemRed)
+
+        // A function with no body takes the group heading's grey, in the frame
+        // the other two levels' marks wear.
+        XCTAssertEqual(CodeNavigatorIcon.bodylessFunction.glyph, .framedLetter("f"))
+        XCTAssertEqual(CodeNavigatorIcon.bodylessFunction.color, .systemGray)
+        XCTAssertEqual(CodeNavigatorIcon.group(.noBody).color, .systemGray)
     }
 
     /// The library heading's sign is a building with columns — the classical
@@ -3810,10 +3815,74 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual((c as NSString).substring(with: range), "    EFI_LOAD_ERROR = 0x80000001,")
         XCTAssertNil(CodeExplanationPopover.memberRange(in: c, name: "EFI_NOT_HERE"))
     }
+
+    /// In the panel the strip carries every group the module has functions in,
+    /// in the grouped order's sequence, and it goes away with another list.
+    func testThePanelShowsTheStripForTheFunctionsOnly() throws {
+        let suiteName = "CodeReadinessBarTests.panel"
+        let suite = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        suite.removePersistentDomain(forName: suiteName)
+        CodePaneView.defaults = suite
+        defer {
+            suite.removePersistentDomain(forName: suiteName)
+            CodePaneView.defaults = .standard
+        }
+        let art = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        {"script_version":8,"program":{"image_base":"0x0"},
+         "functions":[
+          {"entry":"0x100","name":"Done","review_level":"full","instructions":[]},
+          {"entry":"0x200","name":"Partly","review_level":"partial","instructions":[]},
+          {"entry":"0x300","name":"FUN_00000300","review_level":"decompiled","instructions":[]},
+          {"entry":"0x400","name":"FUN_00000400","review_level":"decompiled","instructions":[]},
+          {"entry":"0x500","name":"External","review_level":"no_body","instructions":[]}]}
+        """.utf8))
+        let view = CodePaneView(manifest: manifest(), artifact: art,
+                                moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 480, height: 400)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertTrue(view.navigatorReadinessIsShown)
+        XCTAssertEqual(view.navigatorReadiness.map { $0.group }, [.full, .partial, .decompiled, .noBody])
+        XCTAssertEqual(view.navigatorReadiness.map { $0.count }, [1, 1, 2, 1])
+
+        view.selectList(.strings)
+        view.layoutSubtreeIfNeeded()
+        XCTAssertFalse(view.navigatorReadinessIsShown, "the strip speaks about the functions")
+    }
 }
 
 /// A view that lays its subviews out top-down, as a table's document view
 /// does — the hierarchy a row's chevron is drawn in.
 private final class FlippedTestView: NSView {
     override var isFlipped: Bool { true }
+}
+
+/// The readiness strip between the list's switch and the rows: the review's
+/// groups, each as wide as its share of the module's functions.
+@MainActor
+final class CodeReadinessBarTests: XCTestCase {
+    /// Widths follow the counts, and a group too small to see keeps a point
+    /// taken from the widest one.
+    func testTheStripDividesItsWidthByTheCounts() {
+        XCTAssertEqual(CodeReviewReadinessBar.widths([3, 1], in: 40), [30, 10])
+        XCTAssertEqual(CodeReviewReadinessBar.widths([1, 1, 2], in: 40), [10, 10, 20])
+        XCTAssertEqual(CodeReviewReadinessBar.widths([], in: 40), [])
+
+        // 552 functions: two of them would be a tenth of a point; each still
+        // shows, and the strip is still exactly as wide as its room.
+        let widths = CodeReviewReadinessBar.widths([2, 550], in: 100)
+        XCTAssertEqual(widths[0], 1, accuracy: 0.001, "a group of two still shows")
+        XCTAssertEqual(widths.reduce(0, +), 100, accuracy: 0.001)
+        XCTAssertGreaterThan(widths[1], widths[0])
+    }
+
+    /// The strip says what its colours are in words, from the names the group
+    /// headings already have.
+    func testTheStripSaysItsCountsInWords() {
+        let words = CodeReviewReadinessBar.words([
+            (group: .full, count: 3), (group: .decompiled, count: 523)
+        ])
+        XCTAssertEqual(words, "Fully reviewed 3, Decompiler only 523")
+    }
+
+
 }

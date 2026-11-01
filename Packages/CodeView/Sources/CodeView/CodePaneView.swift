@@ -44,6 +44,11 @@ import ToolModuleKit
     private let functionTable = NSTableView()
     private let functionScroll = NSScrollView()
     private let navigatorLabel = NSTextField(labelWithString: "")
+    /// The band under the list's switch: the review's groups as a strip, each
+    /// as wide as its share of the module's functions.
+    private let readinessBar = CodeReviewReadinessBar()
+    /// Its height, which is nothing while another list is in front.
+    private var readinessHeight: NSLayoutConstraint!
     private let listControl: NSSegmentedControl
     private let searchField = NSSearchField()
     /// The header over the POST and Strings columns: one view, put back
@@ -899,6 +904,11 @@ import ToolModuleKit
             searchToOrder.isActive = false
             searchToEdge.isActive = true
         }
+        var counts: [CodeReaderState.FunctionGroup: Int] = [:]
+        for index in model.functions.indices { counts[state.group(of: index), default: 0] += 1 }
+        readinessBar.show(counts)
+        readinessBar.isHidden = !showsOrder
+        readinessHeight.constant = showsOrder ? CodeReviewReadinessBar.height : 0
         markChosenOrder(state.functionOrder)
         layOutNavigatorColumns()
         drawEmptyList()
@@ -920,6 +930,16 @@ import ToolModuleKit
     /// The bar's function-view buttons, in the order they are drawn, for a
     /// test to find them by.
     var navigatorOrderButtons: [NSButton] { orderButtonViews }
+
+    /// The readiness strip's segments — the review's groups and how many
+    /// functions each holds — for a test.
+    var navigatorReadiness: [(group: CodeReaderState.FunctionGroup, count: Int)] {
+        readinessBar.segments
+    }
+
+    /// Whether the readiness strip is showing: it speaks about the functions,
+    /// so another list in front takes it away.
+    var navigatorReadinessIsShown: Bool { !readinessBar.isHidden }
 
     /// Lays the Functions list out in `order`, as the switch in the bar does,
     /// and keeps the choice for the next code panel.
@@ -954,14 +974,16 @@ import ToolModuleKit
     /// A function's mark by its review: full, and every level without a
     /// mark of its own, the filled `f`; partial, the `f` in a frame;
     /// decompiler only, the same framed `f` in red — the review has not gone
-    /// past the decompiler; a library routine, the badge of whose library it
-    /// is — filled when the function is the library registry's entry, with a
-    /// dot when the registry matched it otherwise.
+    /// past the decompiler; no body, the framed `f` in grey; a library
+    /// routine, the badge of whose library it is — filled when the function is
+    /// the library registry's entry, with a dot when the registry matched it
+    /// otherwise.
     static func functionMark(_ group: FunctionGroup, library: LibrarySection? = nil,
                              registry: CodeReaderState.RegistryMark? = nil) -> String {
         switch group {
         case .partial: "function.partial"
         case .decompiled: "function.decompiled"
+        case .noBody: "function.noBody"
         case .library:
             switch registry {
             case .entry?: "library.\(library ?? .unrecorded).entry"
@@ -2191,6 +2213,7 @@ import ToolModuleKit
         functionPane.translatesAutoresizingMaskIntoConstraints = false
         functionPane.addSubview(navigatorLabel)
         functionPane.addSubview(listControl)
+        functionPane.addSubview(readinessBar)
         functionPane.addSubview(functionScroll)
         emptyListLabel.textColor = .secondaryLabelColor
         emptyListLabel.alignment = .center
@@ -2260,6 +2283,8 @@ import ToolModuleKit
             constraint.priority = NSLayoutConstraint.Priority(999)
             return [constraint]
         }
+        readinessHeight = readinessBar.heightAnchor
+            .constraint(equalToConstant: CodeReviewReadinessBar.height)
         // Built a part at a time: one expression of this many arrays takes
         // the type checker of Xcode 26.3 past its time limit.
         var constraints: [NSLayoutConstraint] = [
@@ -2267,8 +2292,9 @@ import ToolModuleKit
             navigatorLabel.topAnchor.constraint(equalTo: functionPane.topAnchor, constant: 12),
             listControl.topAnchor.constraint(equalTo: navigatorLabel.bottomAnchor,
                                              constant: Self.navigatorSpacing),
-            functionScroll.topAnchor.constraint(equalTo: listControl.bottomAnchor,
-                                                constant: Self.navigatorSpacing),
+            readinessBar.topAnchor.constraint(equalTo: listControl.bottomAnchor, constant: 4),
+            readinessHeight,
+            functionScroll.topAnchor.constraint(equalTo: readinessBar.bottomAnchor, constant: 4),
             functionScroll.bottomAnchor.constraint(equalTo: navigatorBar.topAnchor),
             navigatorBar.leadingAnchor.constraint(equalTo: functionPane.leadingAnchor),
             navigatorBar.trailingAnchor.constraint(equalTo: functionPane.trailingAnchor),
@@ -2286,6 +2312,8 @@ import ToolModuleKit
         constraints += margin(listControl.trailingAnchor, functionPane.trailingAnchor, -8)
         constraints += margin(functionScroll.leadingAnchor, functionPane.leadingAnchor, 8)
         constraints += margin(functionScroll.trailingAnchor, functionPane.trailingAnchor, -8)
+        constraints += margin(readinessBar.leadingAnchor, functionPane.leadingAnchor, 8)
+        constraints += margin(readinessBar.trailingAnchor, functionPane.trailingAnchor, -8)
         constraints += margin(searchField.leadingAnchor, navigatorBar.leadingAnchor, 8)
         constraints += margin(orderButtons.trailingAnchor, navigatorBar.trailingAnchor, -6)
         NSLayoutConstraint.activate(constraints)
@@ -4475,6 +4503,7 @@ final class CodeNavigatorCell: NSTableCellView {
         case "function"?: CodeNavigatorIcon.function
         case "function.partial"?: CodeNavigatorIcon.partialFunction
         case "function.decompiled"?: CodeNavigatorIcon.decompiledFunction
+        case "function.noBody"?: CodeNavigatorIcon.bodylessFunction
         case let name? where name.hasPrefix("library."):
             CodeReaderState.LibrarySection.allCases.lazy.compactMap { section -> (glyph: CodeNavigatorIcon.Glyph, color: NSColor)? in
                 let badge = CodePaneView.badge(of: section)
