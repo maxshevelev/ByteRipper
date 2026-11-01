@@ -48,6 +48,10 @@ import ghidra.framework.Application;
 import ghidra.framework.HeadlessGhidraApplicationConfiguration;
 import ghidra.framework.model.DomainFile;
 import ghidra.program.model.address.Address;
+import ghidra.program.model.address.AddressRange;
+import ghidra.program.model.address.AddressRangeImpl;
+import ghidra.program.model.address.AddressSet;
+import ghidra.program.model.address.AddressSetView;
 import ghidra.program.model.data.DataType;
 import ghidra.program.model.data.DataTypeConflictHandler;
 import ghidra.program.model.data.DataUtilities;
@@ -62,6 +66,7 @@ import ghidra.program.model.listing.Instruction;
 import ghidra.program.model.listing.InstructionIterator;
 import ghidra.program.model.listing.Parameter;
 import ghidra.program.model.listing.Program;
+import ghidra.program.model.mem.MemoryBlock;
 import ghidra.program.model.pcode.HighFunction;
 import ghidra.program.model.pcode.HighFunctionDBUtil;
 import ghidra.program.model.pcode.HighSymbol;
@@ -244,6 +249,7 @@ public class Owner {
             if (method.equals("GET")) {
                 if (path.equals("/v1/hello")) { json(exchange, 200, hello()); return; }
                 if (path.equals("/v1/functions")) { json(exchange, 200, functions(query)); return; }
+                if (path.equals("/v1/gaps")) { json(exchange, 200, gaps(query)); return; }
                 if (path.startsWith("/v1/function/")) { json(exchange, 200, function(path.substring(13), query)); return; }
                 if (path.startsWith("/v1/disassembly/")) { json(exchange, 200, disassembly(path.substring(16), query)); return; }
                 if (path.equals("/v1/xrefs")) { json(exchange, 200, xrefs(query)); return; }
@@ -473,6 +479,195 @@ public class Owner {
             answer.add("summary", summary);
         }
         return answer;
+    }
+
+    /**
+     * The gaps: spans of executable memory between neighbouring function
+     * bodies that hold anything but padding. The analysis cuts a function
+     * where a reference points — a call, a jump, an entry point — so a body
+     * registered in a table, or reached by nothing at all, is left unclaimed:
+     * 21 bodies in a 64-bit DXE driver whose analysis cut 535. A review starts
+     * from this list rather than screening the gaps one at a time.
+     *
+     * Each entry says where the span lies, how long it is, where its first
+     * non-padding byte is and what it is, and what refers into the span.
+     * `verdict` carries the two signals a screen cannot do without: `body` —
+     * a data reference lands in the span, so something registered it,
+     * whatever its first bytes look like (`0x4F0C`: `MOV [RSP+8],RDI`, no
+     * push, no frame, no stack subtraction); `tail` — nothing refers to it
+     * and the body before it runs into it over padding, so it is that body's
+     * tail and belongs with it, not in a function of its own.
+     */
+    private JsonObject gaps(Map<String, String> query) throws Failure {
+        int offset = integer(query, "offset", 0), limit = Math.min(integer(query, "limit", 200), 2000);
+        java.util.List<AddressRange> spans = new java.util.ArrayList<>();
+        AddressSet covered = new AddressSet();
+        for (Function function : program.getFunctionManager().getFunctions(true)) {
+            if (function.isExternal()) continue;
+            for (AddressRange range : function.getBody().getAddressRanges()) covered.add(range);
+        }
+        for (MemoryBlock block : program.getMemory().getBlocks()) {
+            if (!block.isExecute() || !block.isInitialized()) continue;
+            AddressSetView inside = covered.intersect(new AddressSet(block.getStart(), block.getEnd()));
+            Address cursor = block.getStart();
+            for (AddressRange range : inside.getAddressRanges()) {
+                if (cursor.compareTo(range.getMinAddress()) < 0) {
+                    spans.add(new AddressRangeImpl(cursor, range.getMinAddress().previous()));
+                }
+                cursor = range.getMaxAddress().next();
+                if (cursor == null) break;
+            }
+            if (cursor != null && cursor.compareTo(block.getEnd()) <= 0) {
+                spans.add(new AddressRangeImpl(cursor, block.getEnd()));
+            }
+        }
+        spans.sort(java.util.Comparator.comparing(AddressRange::getMinAddress));
+
+        // One pass over every reference, indexed by where it points: the
+        // reference iterator is ordered by the address a reference is made
+        // from, so walking it per span would read the wrong end.
+        int[] all = new int[spans.size()], data = new int[spans.size()], code = new int[spans.size()];
+        java.util.List<java.util.List<String>> targets = new java.util.ArrayList<>();
+        for (int index = 0; index < spans.size(); index++) targets.add(new java.util.ArrayList<>());
+        ReferenceIterator references = program.getReferenceManager().getReferenceIterator(program.getMinAddress());
+        while (references.hasNext()) {
+            Reference reference = references.next();
+            int index = indexOf(spans, reference.getToAddress());
+            if (index < 0) continue;
+            // A reference a body makes inside itself says nothing about the
+            // span: only what points in from outside does.
+            if (spans.get(index).contains(reference.getFromAddress())) continue;
+            all[index]++;
+            if (reference.getReferenceType().isData()) {
+                data[index]++;
+                if (targets.get(index).size() < 8) targets.get(index).add(hex(reference.getToAddress()));
+            } else if (reference.getReferenceType().isCall() || reference.getReferenceType().isJump()) {
+                code[index]++;
+            }
+        }
+
+        java.util.List<JsonObject> found = new java.util.ArrayList<>();
+        for (int index = 0; index < spans.size(); index++) {
+            JsonObject gap = gap(spans.get(index), all[index], data[index], code[index], targets.get(index));
+            if (gap != null) found.add(gap);
+        }
+        int total = found.size();
+        int start = Math.min(offset, total), end = Math.min(start + limit, total);
+        JsonArray page = new JsonArray();
+        for (int index = start; index < end; index++) page.add(found.get(index));
+        JsonObject answer = identity();
+        answer.addProperty("count", total);
+        answer.add("gaps", page);
+        if (end < total) answer.addProperty("next", end);
+        return answer;
+    }
+
+    /** The span holding `address`, or -1: the spans are sorted and apart. */
+    private static int indexOf(java.util.List<AddressRange> spans, Address address) {
+        int low = 0, high = spans.size() - 1;
+        while (low <= high) {
+            int middle = (low + high) >>> 1;
+            AddressRange span = spans.get(middle);
+            if (address.compareTo(span.getMinAddress()) < 0) high = middle - 1;
+            else if (address.compareTo(span.getMaxAddress()) > 0) low = middle + 1;
+            else return middle;
+        }
+        return -1;
+    }
+
+    /** One span between bodies, or null when it holds nothing but padding. */
+    private JsonObject gap(AddressRange span, int all, int dataReferences, int codeReferences,
+                           java.util.List<String> targets) {
+        if (span.getLength() <= 0 || isPadding(span)) return null;
+        Address first = span.getMinAddress();
+        while (first.compareTo(span.getMaxAddress()) <= 0 && isPaddingByte(first)) first = first.next();
+        if (first == null || first.compareTo(span.getMaxAddress()) > 0) return null;
+        byte[] head = new byte[(int) Math.min(span.getMaxAddress().subtract(first) + 1, 16)];
+        StringBuilder text = new StringBuilder();
+        try {
+            program.getMemory().getBytes(first, head);
+            for (int index = 0; index < head.length; index++) {
+                if (index > 0) text.append(' ');
+                text.append(String.format("%02X", head[index] & 0xFF));
+            }
+        } catch (Exception error) {
+            return null;
+        }
+        JsonObject gap = new JsonObject();
+        gap.addProperty("start", hex(span.getMinAddress()));
+        gap.addProperty("end", hex(span.getMaxAddress()));
+        gap.addProperty("size", (int) Math.min(span.getLength(), Integer.MAX_VALUE));
+        gap.addProperty("first_non_padding", hex(first));
+        gap.addProperty("first_bytes", text.toString());
+        gap.addProperty("instruction", program.getListing().getInstructionAt(first) != null);
+        gap.addProperty("defined_data", program.getListing().getDataAt(first) != null);
+        JsonObject counts = new JsonObject();
+        counts.addProperty("all", all);
+        counts.addProperty("data", dataReferences);
+        counts.addProperty("code", codeReferences);
+        gap.add("references", counts);
+        if (!targets.isEmpty()) {
+            JsonArray list = new JsonArray();
+            for (String target : targets) list.add(target);
+            gap.add("reference_targets", list);
+            // Where a table points: the address to make a function at when the
+            // gap is a registered body.
+            gap.addProperty("body_at", targets.get(0));
+        }
+        boolean runsInto = runsInto(first);
+        gap.addProperty("preceded_by_body", runsInto);
+        String verdict;
+        if (dataReferences > 0) verdict = "body";
+        else if (all == 0 && runsInto) verdict = "tail";
+        else if (all == 0) verdict = "unclaimed";
+        else verdict = "referenced";
+        gap.addProperty("verdict", verdict);
+        return gap;
+    }
+
+    /**
+     * Whether the body before `address` runs into it: the last instruction
+     * before it, padding set aside, falls through and is the last of a
+     * function.
+     */
+    private boolean runsInto(Address address) {
+        Address cursor = address.previous();
+        while (cursor != null && isPaddingByte(cursor)) cursor = cursor.previous();
+        if (cursor == null) return false;
+        Instruction last = program.getListing().getInstructionContaining(cursor);
+        if (last == null || !last.getMaxAddress().equals(cursor)) return false;
+        if (last.getFlowType().isJump() || last.getFlowType().isTerminal()) return false;
+        return program.getFunctionManager().getFunctionContaining(cursor) != null;
+    }
+
+    /** Whether one byte is padding: zero, 0xFF, int3 or nop. */
+    private boolean isPaddingByte(Address address) {
+        try {
+            byte value = program.getMemory().getByte(address);
+            return value == 0x00 || value == (byte) 0xFF || value == (byte) 0xCC || value == (byte) 0x90;
+        } catch (Exception error) {
+            return false;
+        }
+    }
+
+    /** Whether every byte of the span is padding. */
+    private boolean isPadding(AddressRange span) {
+        long length = span.getLength();
+        // A span too large to read is reported rather than tested: a module's
+        // executable memory is far below this, and a silent skip would hide it.
+        if (length > (16L << 20)) return false;
+        byte[] bytes = new byte[(int) length];
+        try {
+            program.getMemory().getBytes(span.getMinAddress(), bytes);
+        } catch (Exception error) {
+            return false;
+        }
+        for (byte value : bytes) {
+            if (value != 0x00 && value != (byte) 0xFF && value != (byte) 0xCC && value != (byte) 0x90) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

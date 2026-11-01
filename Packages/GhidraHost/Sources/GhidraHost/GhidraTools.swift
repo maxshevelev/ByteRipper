@@ -28,7 +28,8 @@ public enum GhidraTools {
         These tools review one UEFI module (a PEIM or a DXE driver) in Ghidra: the names, signatures, \
         types and comments a review writes are Ghidra's own and are kept in the module's project between \
         sessions. A module is named by the SHA-256 of its bytes (`module`). Start with `ghidra_modules` \
-        or `ghidra_open`; read with `ghidra_functions`, `ghidra_function` (decompiled C, parameters and \
+        or `ghidra_open`; read with `ghidra_functions`, `ghidra_gaps` (the code between bodies the \
+        analysis never cut), `ghidra_function` (decompiled C, parameters and \
         locals with their storage), `ghidra_disassembly`, `ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_type_definition`, \
         `ghidra_description`; write with `ghidra_rename`, `ghidra_function_create`, `ghidra_function_delete`, `ghidra_function_merge`, \
         `ghidra_rename_variable`, `ghidra_function_locals_reset`, `ghidra_signature`, \
@@ -389,6 +390,23 @@ public enum GhidraTools {
                 }
                 return try await answer { try await backend.readCall(module, "functions", query: query) }
             },
+            paged("ghidra_gaps", "gaps", "List the gaps between function bodies", """
+                The spans of executable memory between neighbouring function bodies that hold \
+                anything but padding — the code the analysis never made a function of, because it \
+                cuts a function where a reference points and a body registered in a table, or \
+                reached by nothing at all, has none. Each gap says `start`, `end`, `size` and \
+                `first_bytes` (16); whether its first byte is already an `instruction` or \
+                `defined_data`; the `references` into it from outside — `all`, `data`, `code` — with \
+                up to eight `reference_targets` and, when something points in with data, `body_at`; \
+                whether a body `preceded_by_body` runs into it; \
+                and a `verdict`: `body` — a data reference lands in the gap, so something \
+                registered it (a callback, a table slot) and `ghidra_function_create` at that \
+                target makes it a function, whatever its first bytes look like; `tail` — nothing \
+                refers to it and the body before it runs into it, so it is that body's tail and \
+                belongs with it, not a function of its own; `unclaimed` — nothing refers to it and \
+                no body runs into it; `referenced` — code refers into it, which a function ought to \
+                have taken. `count` is how many gaps the module has; paged by `offset` and `limit`.
+                """),
             AgentTool(
                 name: "ghidra_function",
                 title: "Read one function",

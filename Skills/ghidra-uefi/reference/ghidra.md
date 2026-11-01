@@ -17,6 +17,7 @@ CAS, and its project lock keeps the owner off the project.
 | the modules with a project | `ghidra_modules` |
 | open one, by node, image or SHA-256 | `ghidra_open` |
 | all functions | `ghidra_functions` |
+| the code between bodies the analysis never cut | `ghidra_gaps` — `verdict: body` (a data reference lands in it) to create, `tail` (nothing refers to it, the body before runs into it) to merge |
 | C, parameters, locals and their storage | `ghidra_function` |
 | instructions around an address | `ghidra_disassembly` (a large function in pages: `limit`, then `from` = `next`) |
 | who refers to an address | `ghidra_xrefs` |

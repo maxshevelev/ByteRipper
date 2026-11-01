@@ -76,8 +76,10 @@ Each module has a kept Ghidra project, made once by the same analysis and UEFI
 pass that fills the code store, and every change is published into the store,
 so each ByteRipper reading that store shows it.
 
-Then: `ghidra_functions`, `ghidra_function` (C, the parameters and the locals
-with their storage), `ghidra_disassembly`, `ghidra_xrefs`, `ghidra_data`,
+Then: `ghidra_functions`, `ghidra_gaps` (the spans between bodies the analysis
+never made functions of, with what refers into them), `ghidra_function` (C, the
+parameters and the locals with their storage), `ghidra_disassembly`,
+`ghidra_xrefs`, `ghidra_data`,
 `ghidra_strings`, `ghidra_type_definition` (a type as the program, the shared
 review archive and EDK2 hold it — what a `type_conflicts` of a publish is read
 with); `ghidra_rename`, `ghidra_label` (a branch label — `LAB_<address>` in the

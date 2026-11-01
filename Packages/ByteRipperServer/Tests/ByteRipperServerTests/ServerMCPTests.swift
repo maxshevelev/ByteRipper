@@ -72,6 +72,13 @@ final class ServerMCPTests: XCTestCase {
         let names = tools.map(\.name)
         XCTAssertEqual(names.filter { $0 == "ghidra_open" }.count, 1)
         XCTAssertTrue(names.contains("ghidra_publish"))
+        // The gaps read is a tool of the review and a read of the bridge: a
+        // review starts from it instead of screening the code between bodies by hand.
+        XCTAssertTrue(names.contains("ghidra_gaps"))
+        XCTAssertTrue(GhidraRoutes.reads.contains("gaps"))
+        let gaps = try tool("ghidra_gaps", tools)
+        XCTAssertNotNil(gaps.inputSchema["properties"]?["module"])
+        XCTAssertTrue(gaps.description.contains("verdict"))
         let open = try tool("ghidra_open", tools)
         XCTAssertNil(open.inputSchema["properties"]?["image"])
         XCTAssertNotNil(open.inputSchema["properties"]?["node"])

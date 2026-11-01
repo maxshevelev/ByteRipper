@@ -11,7 +11,7 @@ enum GhidraRoutes {
     static let prefix = "/ghidra/v1"
 
     /// The owner's read calls a client may make (`Design/GHIDRA_SHARED_PLAN.md` §7.1).
-    static let reads: [String] = ["hello", "functions", "function/", "disassembly/", "xrefs", "data", "strings", "review", "type",
+    static let reads: [String] = ["hello", "functions", "gaps", "function/", "disassembly/", "xrefs", "data", "strings", "review", "type",
                                    "types", "description"]
     /// The owner's write calls, each under the host's lease.
     static let writes: Set<String> = ["rename/function", "rename/label", "create/function", "delete/function",
