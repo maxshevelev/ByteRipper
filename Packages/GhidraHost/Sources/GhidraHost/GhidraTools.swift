@@ -17,7 +17,7 @@ public enum GhidraTools {
         tools += readTools(backend)
         tools += writeTools(backend)
         tools += libraryTools(backend)
-        tools += [publishTool(backend), doneTool(backend)]
+        tools += [publishTool(backend), doneTool(backend), forgetTool(backend)]
         return tools
     }
 
@@ -31,7 +31,7 @@ public enum GhidraTools {
         or `ghidra_open`; read with `ghidra_functions`, `ghidra_function` (decompiled C, parameters and \
         locals with their storage), `ghidra_disassembly`, `ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_type_definition`, \
         `ghidra_description`; write with `ghidra_rename`, `ghidra_function_create`, `ghidra_function_delete`, `ghidra_function_merge`, \
-        `ghidra_rename_variable`, `ghidra_signature`, \
+        `ghidra_rename_variable`, `ghidra_function_locals_reset`, `ghidra_signature`, \
         `ghidra_type`, `ghidra_set_data`, `ghidra_comment`, `ghidra_describe`, `ghidra_code_mode`, `ghidra_equate`, \
         `ghidra_function_tag`. `ghidra_function_tag` marks library code the module statically links in, and \
         whose: `library.edk2`, `library.amd` (AGESA) or `library.intel` (FSP/RC), by the criteria in the \
@@ -40,7 +40,9 @@ public enum GhidraTools {
         module as it opens — `library` in `ghidra_open`'s answer; `ghidra_library` lists the matches and \
         `ghidra_library_apply` applies, replaces or declines one. `ghidra_publish` makes the review visible to the app — every \
         ByteRipper that reads this store — as a new revision; publish at coherent checkpoints, not after \
-        every rename. `ghidra_done` publishes and ends the session.
+        every rename. `ghidra_done` publishes and ends the session; `ghidra_forget` lets a kept \
+        project go — its owner stopped and its folder moved to the Trash — for a program that cannot \
+        be put right, and touches nothing of the store.
 
         A review aims at decompiled C that reads like the module's source:
         1. Names, not constants: a value of a set becomes an enum member and the parameter, field or return \
@@ -611,6 +613,17 @@ public enum GhidraTools {
                   required: ["address"]) { arguments in
                 try optional(arguments, ["address"])
             },
+            write("ghidra_function_locals_reset", "clear/locals", "Let a function's locals go",
+                  "Removes every local variable of the function at `address` — the decompiler's and the "
+                  + "review's — and decompiles it again, answering what was cleared and whether the C now "
+                  + "decompiles (`decompiles`), with the error when it does not. The candidate for a "
+                  + "function the decompiler refuses, such as two symbols assigned to one variable, where "
+                  + "names it kept stand in the way. It is not a guarantee, and the review's names go with "
+                  + "the rest: read the function again and name what matters.",
+                  ["address": AgentSchema.string("The function's entry address, or any address inside it.")],
+                  required: ["address"]) { arguments in
+                try optional(arguments, ["address"])
+            },
             write("ghidra_function_merge", "merge/functions", "Make two functions one",
                   "Gives the body of `from` to `into` and removes `from`: the way back from a split the "
                   + "analysis made, where a conditional jump inside a body it took for a function left half "
@@ -994,6 +1007,26 @@ public enum GhidraTools {
         ) { call in
             let module = try module(call.arguments)
             return try await answer { try await backend.releaseModule(module, by: "agent") }
+        }
+    }
+
+    static func forgetTool(_ backend: GhidraBackend) -> AgentTool {
+        AgentTool(
+            name: "ghidra_forget",
+            title: "Let a module's kept project go",
+            description: """
+                Stops the module's owner and moves its kept Ghidra project to the Trash, and answers \
+                where it went. Nothing of the analysis store is touched: the module's revisions, their \
+                artifacts and the shared review types stay, and the module opens again from its bytes \
+                and is analysed afresh. This is for a project whose program cannot be put right — an \
+                analysis gone wrong that a re-run should replace. Publish what is worth keeping first: \
+                the store is the only part that survives.
+                """,
+            inputSchema: AgentSchema.object(["module": moduleProperty], required: ["module"]),
+            annotations: .edit
+        ) { call in
+            let module = try module(call.arguments)
+            return try await answer { try await backend.forgetModule(module) }
         }
     }
 

@@ -26,6 +26,8 @@ CAS, and its project lock keeps the owner off the project.
 | a function only a table's slot points at | `ghidra_function_create` — an address inside another function's body is refused |
 | a split the analysis made: two functions that are one | `ghidra_function_merge` (body of `from` into `into`, `from` removed) |
 | a function that is not one, or half of a split | `ghidra_function_delete` |
+| a function the decompiler refuses (two symbols, one variable) | `ghidra_function_locals_reset` — the locals let go and the C tried again; the review's names go with them |
+| a kept project to start over | `ghidra_forget` — owner stopped, `GhidraProjects/<sha>` to the Trash; the store is untouched |
 | a slot the decompiler shows as two variables, one meaning per use | `ghidra_rename_variable` with `shared` — one neutral name for the storage, the meanings in the plate |
 | a name for an I/O port, an MSR, a PCI config address | `ghidra_equate` |
 | 16-bit code in a 32-bit module (the reset vector) | `ghidra_code_mode` with `bits: 16` |

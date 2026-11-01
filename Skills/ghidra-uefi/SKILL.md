@@ -84,7 +84,9 @@ with); `ghidra_rename`, `ghidra_label` (a branch label — `LAB_<address>` in th
 C — named; a function's entry is refused here, that is `ghidra_rename`'s),
 `ghidra_function_create` (a function where only a table points — a services
 table's or a PPI's slot; an address inside another function's body is refused,
-see `ghidra_function_merge` and `ghidra_function_delete`), `ghidra_rename_variable`
+see `ghidra_function_merge` and `ghidra_function_delete`), `ghidra_function_locals_reset`
+(the function's locals let go and the C decompiled again — the candidate for a function the
+decompiler refuses, not a guarantee), `ghidra_rename_variable`
 (a local by its storage and first use, a parameter by its ordinal; a storage the
 decompiler shows as two variables is named once with `shared`), `ghidra_signature`,
 `ghidra_type`, `ghidra_set_data`, `ghidra_comment`, `ghidra_code_mode` (a range

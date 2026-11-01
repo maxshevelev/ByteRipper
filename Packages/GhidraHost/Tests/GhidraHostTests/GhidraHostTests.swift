@@ -141,6 +141,29 @@ final class GhidraHostOwnerTests: XCTestCase {
         XCTAssertEqual(summaries.first?.running, false)
     }
 
+    /// A kept project is let go by moving its folder to the Trash — the owner
+    /// stopped first — and nothing of the analysis store is touched.
+    func testForgettingAProjectMovesItToTheTrash() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraForget-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: root) }
+        let store = try ContentStore(root: root.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: root.appendingPathComponent("projects"),
+                                                   idle: 120, holder: "test"), writer: store)
+        let module = SHA256Digest(data: Data("module".utf8))
+        let folder = root.appendingPathComponent("projects/\(module.hex)", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: folder.appendingPathComponent("state.json"))
+        try Data("x".utf8).write(to: folder.appendingPathComponent("module.gpr"))
+
+        let trashed = try await host.forget(module)
+        addTeardownBlock { try? FileManager.default.removeItem(at: trashed) }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: folder.path), "the project folder is gone")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: trashed.path), "and it is in the Trash")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: store.root.path), "the store stays")
+    }
+
     /// Ghidra 12.2 is the oldest this build runs on, and its JDK is 25. A
     /// version read as older is refused by name; one that cannot be read is
     /// not guessed at.

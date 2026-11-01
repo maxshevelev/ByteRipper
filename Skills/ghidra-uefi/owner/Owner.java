@@ -272,6 +272,7 @@ public class Owner {
                     case "/v1/rename/label" -> write(exchange, this::renameLabel);
                     case "/v1/create/function" -> write(exchange, this::createFunction);
                     case "/v1/delete/function" -> write(exchange, this::deleteFunction);
+                    case "/v1/clear/locals" -> write(exchange, this::clearLocals);
                     case "/v1/merge/functions" -> write(exchange, this::mergeFunctions);
                     case "/v1/rename/variable" -> write(exchange, this::renameVariable);
                     case "/v1/rename/variables" -> batch(exchange, this::renameVariable);
@@ -2810,6 +2811,45 @@ public class Owner {
         answer.addProperty("size", size);
         answer.addProperty("deleted", true);
         answer.addProperty("matched", at.equals(entry) ? "entry" : "containing");
+        return answer;
+    }
+
+    /**
+     * The function's local variables let go and the function decompiled
+     * again: the candidate for a function the decompiler refuses — two symbols
+     * assigned to one variable — where the names it kept, its own and the
+     * review's, stand in the way. The review's names go with them; the answer
+     * lists what was cleared, and whether the C now decompiles at all.
+     */
+    private JsonObject clearLocals(JsonObject body) throws Exception {
+        Function function = functionAt(required(body, "address"));
+        java.util.List<String> cleared = new java.util.ArrayList<>();
+        for (ghidra.program.model.listing.Variable local : function.getLocalVariables()) {
+            cleared.add(local.getName());
+            function.removeVariable(local);
+        }
+        decompiled.remove(function.getEntryPoint());
+        boolean decompiles = true;
+        String error = null;
+        try {
+            DecompileResults results = decompile(function);
+            decompiles = results != null && results.decompileCompleted() && results.getHighFunction() != null;
+            if (!decompiles && results != null && results.getErrorMessage() != null) {
+                error = results.getErrorMessage();
+            }
+        } catch (Exception failure) {
+            decompiles = false;
+            error = failure.getMessage();
+        }
+        JsonObject answer = identity();
+        answer.addProperty("entry", hex(function.getEntryPoint()));
+        answer.addProperty("name", function.getName());
+        answer.addProperty("cleared", cleared.size());
+        JsonArray names = new JsonArray();
+        for (String name : cleared) names.add(name);
+        answer.add("names", names);
+        answer.addProperty("decompiles", decompiles);
+        if (error != null) answer.addProperty("error", error);
         return answer;
     }
 

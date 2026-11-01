@@ -14,7 +14,8 @@ enum GhidraRoutes {
     static let reads: [String] = ["hello", "functions", "function/", "disassembly/", "xrefs", "data", "strings", "review", "type",
                                    "types", "description"]
     /// The owner's write calls, each under the host's lease.
-    static let writes: Set<String> = ["rename/function", "rename/label", "create/function", "rename/variable",
+    static let writes: Set<String> = ["rename/function", "rename/label", "create/function", "delete/function",
+                                      "merge/functions", "clear/locals", "rename/variable",
                                       "rename/variables", "set/signature", "set/comment", "set/comments",
                                       "set/data", "set/description", "set/code-mode", "set/equate",
                                       "tag/function", "type", "save"]
@@ -131,6 +132,15 @@ enum GhidraRoutes {
         router.add("POST", "\(prefix)/modules/:module/stop", access: .rights([.ghidraUse])) { request in
             let module = try digest(request.parameters["module"])
             return .json(["stopped": await host.stop(module)])
+        }
+
+        // The kept project let go: the owner stopped and the folder moved to
+        // the Trash. Nothing of the store is touched — the revisions, their
+        // artifacts and the shared review types stay.
+        router.add("DELETE", "\(prefix)/modules/:module", access: .rights([.ghidraUse])) { request in
+            let module = try digest(request.parameters["module"])
+            let trashed = try await answer { try await host.forget(module) }
+            return .json(["trashed": trashed.path])
         }
         return router
     }

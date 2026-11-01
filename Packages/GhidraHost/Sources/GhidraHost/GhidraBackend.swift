@@ -33,12 +33,19 @@ public protocol GhidraBackend: Sendable {
     /// Whether the module's owner runs and holds a program the store has not
     /// got; nil when no owner runs for it.
     func ownerHasUnpublishedWrites(_ module: SHA256Digest) async throws -> Bool?
+    /// The module's kept project let go: its owner stopped and the folder
+    /// moved to the Trash. Nothing of the analysis store is touched.
+    func forgetModule(_ module: SHA256Digest) async throws -> Data
 }
 
 public extension GhidraBackend {
     /// A backend with no owner of its own to ask.
     func libraryShortfalls(_ module: SHA256Digest) async throws -> [GhidraHost.LibraryShortfall]? { nil }
     func ownerHasUnpublishedWrites(_ module: SHA256Digest) async throws -> Bool? { nil }
+    /// A backend that keeps no projects of its own.
+    func forgetModule(_ module: SHA256Digest) async throws -> Data {
+        throw GhidraHostError(.install, "this backend keeps no projects to forget")
+    }
 }
 
 public extension GhidraBackend {
@@ -140,6 +147,10 @@ extension GhidraHost: GhidraBackend {
     public func releaseModule(_ module: SHA256Digest, by: String) async throws -> Data {
         try Self.encode(PublishAnswer(try await release(module, by: by)))
     }
+
+    public func forgetModule(_ module: SHA256Digest) async throws -> Data {
+        try Self.encode(["trashed": try await forget(module).path])
+    }
 }
 
 /// A `byteripper-server`'s Ghidra role, over `/ghidra/v1`: what the app's
@@ -172,6 +183,10 @@ public struct GhidraRemote: GhidraBackend {
 
     public func writeCall(_ module: SHA256Digest, _ call: String, body: Data) async throws -> Data {
         try await self.call("POST", "modules/\(module.hex)/write/\(call)", body: body)
+    }
+
+    public func forgetModule(_ module: SHA256Digest) async throws -> Data {
+        try await call("DELETE", "modules/\(module.hex)")
     }
 
     public func publishModule(_ module: SHA256Digest, by: String,

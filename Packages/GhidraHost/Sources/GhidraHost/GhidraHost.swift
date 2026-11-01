@@ -486,6 +486,24 @@ public actor GhidraHost {
         return true
     }
 
+    /// The module's kept project let go: its owner stopped, then the folder
+    /// `GhidraProjects/<sha>` moved to the Trash — recoverable, and nothing of
+    /// the analysis store touched. The revisions, their artifacts and the
+    /// shared review types stay; the module opens again from its bytes and is
+    /// analysed afresh. Answers where the folder went.
+    @discardableResult
+    public func forget(_ module: SHA256Digest) async throws -> URL {
+        let project = self.project(module)
+        guard project.exists else {
+            throw GhidraHostError(.project, "no project for \(module.hex): nothing to forget", status: 404)
+        }
+        _ = await stop(module)
+        leases[module] = nil
+        var trashed: NSURL?
+        try FileManager.default.trashItem(at: project.folder, resultingItemURL: &trashed)
+        return (trashed as URL?) ?? project.folder
+    }
+
     // MARK: - Owners
 
     /// The module's running owner, or a new one.
