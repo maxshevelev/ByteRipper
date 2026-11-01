@@ -30,7 +30,8 @@ public enum GhidraTools {
         sessions. A module is named by the SHA-256 of its bytes (`module`). Start with `ghidra_modules` \
         or `ghidra_open`; read with `ghidra_functions`, `ghidra_function` (decompiled C, parameters and \
         locals with their storage), `ghidra_disassembly`, `ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_type_definition`, \
-        `ghidra_description`; write with `ghidra_rename`, `ghidra_function_create`, `ghidra_rename_variable`, `ghidra_signature`, \
+        `ghidra_description`; write with `ghidra_rename`, `ghidra_function_create`, `ghidra_function_delete`, `ghidra_function_merge`, \
+        `ghidra_rename_variable`, `ghidra_signature`, \
         `ghidra_type`, `ghidra_set_data`, `ghidra_comment`, `ghidra_describe`, `ghidra_code_mode`, `ghidra_equate`, \
         `ghidra_function_tag`. `ghidra_function_tag` marks library code the module statically links in, and \
         whose: `library.edk2`, `library.amd` (AGESA) or `library.intel` (FSP/RC), by the criteria in the \
@@ -588,7 +589,10 @@ public enum GhidraTools {
                   "Makes a function at `address`: code only a table points at — a slot of a services table, "
                   + "a member of a PPI or a protocol — which no call names, so Ghidra left it outside any "
                   + "function and `ghidra_rename` finds nothing there. Disassembles it first if needed. "
-                  + "With `name`, names it as `ghidra_rename` would. A function already there is answered as it is.",
+                  + "With `name`, names it as `ghidra_rename` would. A function already there is answered as it is. "
+                  + "An address inside another function's body is refused, naming that function: a function made "
+                  + "there splits the body it belongs to. Undo a split with `ghidra_function_delete` or "
+                  + "`ghidra_function_merge` first.",
                   ["address": AgentSchema.string("The entry address, e.g. the value in the table's slot."),
                    "name": AgentSchema.string("A name for it, optional."),
                    "reason": AgentSchema.string("Why this name, in a few words.")],
@@ -596,6 +600,27 @@ public enum GhidraTools {
                 var body = try optional(arguments, ["address", "name", "reason"])
                 body["by"] = "agent"
                 return body
+            },
+            write("ghidra_function_delete", "delete/function", "Remove a function",
+                  "Removes the function at `address` — its entry or any address inside it. The bytes stay "
+                  + "disassembled; what the function said about them is gone, and the next publish drops it "
+                  + "from the analysis. This is how a split is undone: `ghidra_function_create` refuses to make "
+                  + "a function inside another function's body, and a body the analysis split on a conditional "
+                  + "jump is removed here and the right one made again.",
+                  ["address": AgentSchema.string("The function's entry, or any address inside it.")],
+                  required: ["address"]) { arguments in
+                try optional(arguments, ["address"])
+            },
+            write("ghidra_function_merge", "merge/functions", "Make two functions one",
+                  "Gives the body of `from` to `into` and removes `from`: the way back from a split the "
+                  + "analysis made, where a conditional jump inside a body it took for a function left half "
+                  + "of it as a function of its own. Both are named by entry or any address inside them, as "
+                  + "`ghidra_function` lists them; the answer gives the survivor's entry, name and size. "
+                  + "Merging a function into itself, or one that is already part of the other, is refused.",
+                  ["into": AgentSchema.string("The function that keeps its entry and name."),
+                   "from": AgentSchema.string("The function that becomes part of it.")],
+                  required: ["into", "from"]) { arguments in
+                try optional(arguments, ["into", "from"])
             },
             AgentTool(
                 name: "ghidra_rename_variable",
@@ -605,7 +630,11 @@ public enum GhidraTools {
                     `first_use` — as `ghidra_function` lists them — or a parameter by its `ordinal`. \
                     Never by Ghidra's own name for it (`iVar4`): those renumber. Two locals that share \
                     a storage and a first use cannot be told apart — a function holds one variable per \
-                    storage — and naming either is refused; say what each is in the plate comment. \
+                    storage — and naming either is refused; say what each is in the plate comment, and \
+                    name the slot itself with `shared`: the whole storage takes one name, and the plate \
+                    says which meaning each use carries. Use a neutral name there (`PcieSizeTooSmall`), \
+                    never one of the meanings. A slot whose storage a parameter also holds is refused: \
+                    name the parameter by ordinal. \
                     `type` alone types it and keeps the name. After any call, read the function again: a local's `storage` \
                     can change, and a type alone gives it a `HASH:` storage. `items` does several in \
                     one call, each in a transaction of its own: the answer lists what applied and why \
@@ -623,6 +652,9 @@ public enum GhidraTools {
                     "first_use": AgentSchema.string("For a register local: the address of its first use."),
                     "ordinal": AgentSchema.integer("Or a parameter by its position, from 0."),
                     "type": AgentSchema.string("A C type for it, e.g. \"EFI_PEI_SERVICES **\"."),
+                    "shared": AgentSchema.boolean(
+                        "Name the whole storage once, for a slot the decompiler shows as several "
+                        + "variables; with this, `storage` alone names it and `first_use` is not given."),
                     "items": ["type": "array",
                               "items": AgentSchema.object([
                                   "name": AgentSchema.string("The new name; leave it out to type only."),
@@ -661,6 +693,7 @@ public enum GhidraTools {
                 }
                 var body = try optional(arguments, ["function", "name", "storage", "first_use", "type"])
                 if arguments.has("ordinal") { body["ordinal"] = .int(try arguments.integer("ordinal")) }
+                if try arguments.bool("shared", default: false) { body["shared"] = .bool(true) }
                 let payload = JSONValue.object(body).encoded()
                 return try await answer { try await backend.writeCall(module, "rename/variable", body: payload) }
             },

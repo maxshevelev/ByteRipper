@@ -23,7 +23,10 @@ CAS, and its project lock keeps the owner off the project.
 | data, strings | `ghidra_data`, `ghidra_strings` |
 | rename a function, a parameter, a local | `ghidra_rename`, `ghidra_rename_variable` |
 | name a branch label (`LAB_<address>` in the C) | `ghidra_label` — `ghidra_rename` would name the function around it |
-| a function only a table's slot points at | `ghidra_function_create` |
+| a function only a table's slot points at | `ghidra_function_create` — an address inside another function's body is refused |
+| a split the analysis made: two functions that are one | `ghidra_function_merge` (body of `from` into `into`, `from` removed) |
+| a function that is not one, or half of a split | `ghidra_function_delete` |
+| a slot the decompiler shows as two variables, one meaning per use | `ghidra_rename_variable` with `shared` — one neutral name for the storage, the meanings in the plate |
 | a name for an I/O port, an MSR, a PCI config address | `ghidra_equate` |
 | 16-bit code in a 32-bit module (the reset vector) | `ghidra_code_mode` with `bits: 16` |
 | a linker's clone with arguments in other registers | `ghidra_signature` with `storage` / `return_storage` |

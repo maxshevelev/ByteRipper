@@ -603,6 +603,11 @@ public class ExportCode extends GhidraScript {
         boolean badLocal = false;
         HighFunction high = decompiled == null ? null : decompiled.getHighFunction();
         if (high != null) {
+            // One variable per storage: the decompiler can show several
+            // symbols on one slot — eight bytes read as two halves, a byte
+            // read twice — and a review names the slot once. The slot is a
+            // gap only while none of its symbols is named and typed.
+            java.util.Map<String, Boolean> slots = new java.util.LinkedHashMap<>();
             Iterator<HighSymbol> symbols = high.getLocalSymbolMap().getSymbols();
             while (symbols.hasNext()) {
                 HighSymbol symbol = symbols.next();
@@ -614,9 +619,13 @@ public class ExportCode extends GhidraScript {
                 // of a value, not a stored variable: it is not a name the
                 // review missed.
                 if (fragment(symbol.getStorage())) continue;
-                if (placeholder(symbol.getName()) || undefined(symbol.getDataType())) {
-                    badLocal = true;
-                }
+                boolean named = !placeholder(symbol.getName()) && !undefined(symbol.getDataType());
+                String storage = symbol.getStorage().toString();
+                Boolean known = slots.get(storage);
+                if (known == null || !known) slots.put(storage, named);
+            }
+            for (Boolean named : slots.values()) {
+                if (!named) { badLocal = true; break; }
             }
         }
         if (placeholderName) result.gaps.add("name");

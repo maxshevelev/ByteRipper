@@ -83,7 +83,10 @@ review archive and EDK2 hold it — what a `type_conflicts` of a publish is read
 with); `ghidra_rename`, `ghidra_label` (a branch label — `LAB_<address>` in the
 C — named; a function's entry is refused here, that is `ghidra_rename`'s),
 `ghidra_function_create` (a function where only a table points — a services
-table's or a PPI's slot), `ghidra_rename_variable`, `ghidra_signature`,
+table's or a PPI's slot; an address inside another function's body is refused,
+see `ghidra_function_merge` and `ghidra_function_delete`), `ghidra_rename_variable`
+(a local by its storage and first use, a parameter by its ordinal; a storage the
+decompiler shows as two variables is named once with `shared`), `ghidra_signature`,
 `ghidra_type`, `ghidra_set_data`, `ghidra_comment`, `ghidra_code_mode` (a range
 read as 16-bit or 32-bit code — the reset vector's real-mode code in a 32-bit
 module), `ghidra_equate` (a name for a constant an instruction holds: an I/O

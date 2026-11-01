@@ -271,6 +271,8 @@ public class Owner {
                     case "/v1/rename/function" -> write(exchange, this::renameFunction);
                     case "/v1/rename/label" -> write(exchange, this::renameLabel);
                     case "/v1/create/function" -> write(exchange, this::createFunction);
+                    case "/v1/delete/function" -> write(exchange, this::deleteFunction);
+                    case "/v1/merge/functions" -> write(exchange, this::mergeFunctions);
                     case "/v1/rename/variable" -> write(exchange, this::renameVariable);
                     case "/v1/rename/variables" -> batch(exchange, this::renameVariable);
                     case "/v1/set/comments" -> batch(exchange, this::setComment);
@@ -2580,6 +2582,19 @@ public class Owner {
         Function function = program.getFunctionManager().getFunctionAt(at);
         boolean created = false;
         if (function == null) {
+            // A function made inside another function's body splits it: the
+            // jump the body already had into the address becomes a call of
+            // nothing, and the second body is a fragment of the first. The
+            // refusal names the function that holds the address; a body that
+            // really is two is put together with merge, or removed with delete,
+            // and then made again.
+            Function holding = program.getFunctionManager().getFunctionContaining(at);
+            if (holding != null) {
+                throw new Failure(409, hex(at) + " is inside " + holding.getName() + " at "
+                    + hex(holding.getEntryPoint())
+                    + "; a function is not made inside another — merge the two with /v1/merge/functions "
+                    + "or remove the split with /v1/delete/function first");
+            }
             if (program.getListing().getInstructionAt(at) == null) {
                 if (program.getListing().getDefinedDataContaining(at) != null) {
                     throw new Failure(409, hex(at) + " is defined data, not code");
@@ -2607,6 +2622,66 @@ public class Owner {
         answer.addProperty("name", function.getName());
         answer.addProperty("created", created);
         answer.addProperty("size", function.getBody().getNumAddresses());
+        return answer;
+    }
+
+    /**
+     * A function removed: the bytes it covered are not this module's code any
+     * more. `create/function` refuses to make one inside another function's
+     * body, because that split it; removing a split — or a body that was never
+     * a function — is this. The instructions stay disassembled.
+     */
+    private JsonObject deleteFunction(JsonObject body) throws Exception {
+        Address at = address(required(body, "address"));
+        Function function = program.getFunctionManager().getFunctionContaining(at);
+        if (function == null) throw new Failure(404, "no function holds " + hex(at));
+        Address entry = function.getEntryPoint();
+        String name = function.getName();
+        long size = function.getBody().getNumAddresses();
+        program.getFunctionManager().removeFunction(entry);
+        decompiled.remove(entry);
+        JsonObject answer = identity();
+        answer.addProperty("entry", hex(entry));
+        answer.addProperty("name", name);
+        answer.addProperty("size", size);
+        answer.addProperty("deleted", true);
+        answer.addProperty("matched", at.equals(entry) ? "entry" : "containing");
+        return answer;
+    }
+
+    /**
+     * Two functions made one: the first's body takes the second's, and the
+     * second is removed. A body a conditional jump split off the function it
+     * belongs to is put back this way — the way back from a split that an
+     * `analyzeHeadless` run made before `create/function` refused them.
+     */
+    private JsonObject mergeFunctions(JsonObject body) throws Exception {
+        Function into = functionAt(required(body, "into"));
+        Function from = functionAt(required(body, "from"));
+        if (into.getEntryPoint().equals(from.getEntryPoint())) {
+            throw new Failure(400, "a function cannot be merged into itself");
+        }
+        if (into.getBody().contains(from.getEntryPoint())
+            || into.getBody().intersects(from.getBody())) {
+            throw new Failure(409, from.getName() + " at " + hex(from.getEntryPoint())
+                + " is already part of " + into.getName() + " at " + hex(into.getEntryPoint()));
+        }
+        ghidra.program.model.address.AddressSet merged =
+            new ghidra.program.model.address.AddressSet(into.getBody());
+        merged.add(from.getBody());
+        try {
+            into.setBody(merged);
+        } catch (Exception error) {
+            throw new Failure(409, "the bodies cannot be merged: " + error.getMessage());
+        }
+        program.getFunctionManager().removeFunction(from.getEntryPoint());
+        decompiled.remove(into.getEntryPoint());
+        decompiled.remove(from.getEntryPoint());
+        JsonObject answer = identity();
+        answer.addProperty("entry", hex(into.getEntryPoint()));
+        answer.addProperty("name", into.getName());
+        answer.addProperty("size", into.getBody().getNumAddresses());
+        answer.addProperty("merged", hex(from.getEntryPoint()));
         return answer;
     }
 
@@ -2920,6 +2995,11 @@ public class Owner {
         String storage = string(body, "storage", null);
         String firstUse = string(body, "first_use", null);
         Integer ordinal = body.has("ordinal") && !body.get("ordinal").isJsonNull() ? body.get("ordinal").getAsInt() : null;
+        // `shared`: the slot is named, not one symbol on it. The decompiler
+        // can show several symbols on one storage — a value read as two
+        // halves — and Ghidra holds one variable per storage, so the name is
+        // the slot's, and every use of it reads by that name.
+        boolean shared = body.has("shared") && body.get("shared").getAsBoolean();
         if (storage == null && ordinal == null) throw new Failure(400, "name the variable by storage (and first_use) or ordinal");
         DataType type = body.has("type") && !body.get("type").isJsonNull() ? type(body.get("type").getAsString()) : null;
         if (name == null && type == null) throw new Failure(400, "give a name, a type, or both");
@@ -2931,6 +3011,57 @@ public class Owner {
         DecompileResults results = decompile(function);
         HighFunction high = results == null ? null : results.getHighFunction();
         if (high == null) throw new Failure(500, "the function does not decompile");
+        if (shared) {
+            if (ordinal != null) throw new Failure(400, "`shared` names a storage; a parameter is named by ordinal");
+            if (storage == null) throw new Failure(400, "`shared` needs a storage");
+            java.util.List<HighSymbol> group = new java.util.ArrayList<>();
+            Iterator<HighSymbol> symbols = high.getLocalSymbolMap().getSymbols();
+            while (symbols.hasNext()) {
+                HighSymbol symbol = symbols.next();
+                if (symbol instanceof ghidra.program.model.pcode.EquateSymbol) continue;
+                if (!symbol.getStorage().toString().equals(storage)) continue;
+                if (symbol.isParameter()) {
+                    throw new Failure(409, storage + " also carries the parameter " + symbol.getName()
+                        + "; name the parameter by ordinal — a register the caller passes is not the slot's");
+                }
+                group.add(symbol);
+            }
+            if (group.isEmpty()) throw new Failure(404, "no such variable in " + function.getName());
+            String applied = name != null ? name : group.get(0).getName();
+            try {
+                HighFunctionDBUtil.updateDBVariable(group.get(0), applied, type, SourceType.USER_DEFINED);
+            } catch (Exception error) {
+                throw new Failure(400, error.getMessage() + holderOf(applied, function));
+            }
+            JsonArray reported = new JsonArray();
+            for (HighSymbol symbol : group) {
+                JsonObject item = new JsonObject();
+                Address first = symbol.getPCAddress();
+                item.addProperty("first_use", first == null ? null : hex(first));
+                item.addProperty("name", symbol.getName());
+                reported.add(item);
+            }
+            decompiled.remove(function.getEntryPoint());
+            String nowStorage = storage;
+            HighFunction after = decompile(function).getHighFunction();
+            if (after != null) {
+                Iterator<HighSymbol> now = after.getLocalSymbolMap().getSymbols();
+                while (now.hasNext()) {
+                    HighSymbol symbol = now.next();
+                    if (symbol.isParameter() || !symbol.getName().equals(applied)) continue;
+                    nowStorage = symbol.getStorage().toString();
+                    break;
+                }
+            }
+            JsonObject answer = identity();
+            answer.addProperty("function", hex(function.getEntryPoint()));
+            answer.addProperty("name", applied);
+            answer.addProperty("storage", nowStorage);
+            answer.addProperty("storage_unchanged", nowStorage.equals(storage));
+            answer.add("symbols", reported);
+            answer.addProperty("applied", true);
+            return answer;
+        }
         HighSymbol match = null;
         Iterator<HighSymbol> symbols = high.getLocalSymbolMap().getSymbols();
         while (symbols.hasNext()) {
