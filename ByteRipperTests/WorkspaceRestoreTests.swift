@@ -302,6 +302,63 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertEqual(pane.manifest.reading?.rev, 1)
     }
 
+    /// A function a republished reading changed wears New, and opening it
+    /// shows the comparison with the reading before — the change the badge
+    /// stands for.
+    func testAFunctionMarkedNewShowsTheComparisonItStandsFor() async throws {
+        let codeBytes = [UInt8](repeating: 0x92, count: 0x100)
+        let parentURL = try dump(0x1000, 0x77)
+        func artifactData(_ c: String) throws -> Data {
+            try JSONSerialization.data(withJSONObject: [
+                "script_version": 2, "ghidra": "12.1.2",
+                "functions": [["entry": "0x100", "name": "F", "c": c,
+                               "instructions": [["address": "0x100", "bytes": "90", "mnemonic": "NOP", "text": "NOP"]]]]
+            ])
+        }
+        let storeRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CodeNewDiffStore-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: storeRoot, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: storeRoot) }
+        let store = try ContentStore(root: storeRoot)
+        let module = ModuleIdentity(sha256: SHA256Digest(data: Data(codeBytes)),
+                                    size: codeBytes.count, name: "SecCore", kind: "PE32",
+                                    language: "x86:LE:32:default", imageBase: "0x0")
+        let recipe = AnalysisRecipe(id: "code-v2-ghidra-12.1.2", exporter: 2,
+                                    ghidra: "12.1.2", script: "ExportCode.java")
+        let old = try artifactData("void F(void)\n{\n  Old();\n}\n")
+        let new = try artifactData("void F(void)\n{\n  New();\n}\n")
+        let manifest = try store.putAnalysis(module: module, recipe: recipe, artifact: old,
+                                             reading: AnalysisReading(project: "p", rev: 1))
+        let previousRoot = UEFIToolModule.codeAnalysisRoot
+        UEFIToolModule.codeAnalysisRoot = storeRoot
+        addTeardownBlock { UEFIToolModule.codeAnalysisRoot = previousRoot }
+
+        let controller = shownWindow().mainViewController
+        controller.openFiles([parentURL])
+        controller.openCode(
+            named: "SecCore ▸ PE32", from: controller.windowModel.pane1,
+            source: 0x100..<0x200, manifest: manifest,
+            artifact: try JSONDecoder().decode(CodeArtifact.self, from: old),
+            codec: ReadOnlyPartCodec(codeBytes, title: L("This cannot be put back"),
+                                     reason: L("A code analysis is a snapshot; edit the dump and analyze the module again.")),
+            at: CodeLocation(function: CodeAddress(0x100)))
+        let id = try XCTUnwrap(controller.fragments.expanded)
+
+        try store.putAnalysis(module: module, recipe: recipe, artifact: new,
+                              reading: AnalysisReading(project: "p", rev: 2))
+        controller.codeStoreChanged()
+        for _ in 0..<100 where controller.fragments.codePane(id)?.manifest.reading?.rev != 2 {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        let pane = try XCTUnwrap(controller.fragments.codePane(id))
+        XCTAssertEqual(pane.manifest.reading?.rev, 2)
+        XCTAssertEqual(pane.newMarks.map(\.entry), [CodeAddress(0x100)], "the function changed")
+        for _ in 0..<100 where !pane.showsRevisionDiff {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertTrue(pane.showsRevisionDiff, "the badge's change is shown as a comparison")
+    }
+
     /// A code panel torn off into a tab of its own still follows its
     /// analysis: published again, the tab draws the new reading.
     func testACodeTabFollowsARepublishedReading() async throws {
@@ -464,6 +521,11 @@ final class WorkspaceRestoreTests: XCTestCase {
         }
         XCTAssertEqual(pane.newMarks.map(\.entry), [CodeAddress(0x100)],
                        "the function changed since the reader last saw it")
+        for _ in 0..<100 where !pane.showsRevisionDiff {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertTrue(pane.showsRevisionDiff,
+                      "the mark shows the change, compared with the revision it was seen at")
     }
 
     /// Where each function was left in its code is part of the screen: the
