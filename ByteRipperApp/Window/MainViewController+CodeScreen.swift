@@ -305,11 +305,6 @@ extension MainViewController {
             guard let self, let paneModel else { return }
             self.chooseCodeRecipe(manifest, for: paneModel)
         }
-        wireCodeScreen(codePane, to: paneModel, owner: self) { [weak self, weak paneModel] range in
-            guard let paneModel else { return }
-            self?.filePaneView(for: paneModel)?
-                .revealOffsetCentered(range.lowerBound)
-        }
         // Before the place is restored: a function on screen is open, and
         // its New mark goes with the selection the restore makes.
         var previousRevision: (revision: Int, artifact: CodeArtifact)?
@@ -321,7 +316,12 @@ extension MainViewController {
             pendingCodeRevision = nil
             pendingCodeNewMarks = []
         }
-        wireCodeRevisions(codePane, previous: previousRevision)
+        wireCodeScreen(codePane, to: paneModel, owner: self,
+                       previous: previousRevision) { [weak self, weak paneModel] range in
+            guard let paneModel else { return }
+            self?.filePaneView(for: paneModel)?
+                .revealOffsetCentered(range.lowerBound)
+        }
         applyCodeNotes()
         codePane.restore(at: screen.place, function: screen.selectedFunction,
                          instruction: screen.selectedInstruction,

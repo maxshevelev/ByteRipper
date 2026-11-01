@@ -4,12 +4,18 @@ import Foundation
 
 /// Joins a code pane to the part it reads: an instruction selects its bytes, a
 /// byte selection shows the instruction that holds it, and the snapshot says
-/// when its module no longer matches.
+/// when its module no longer matches — and to the store, whose revisions fill
+/// the bar's comparison and mark what a later revision changed.
 ///
 /// The same wiring serves a panel in the dock and a code screen in a tab —
 /// the screen changing container must not change how the two halves talk.
+/// It is one call on purpose: a container that wires a pane gets the whole
+/// seam, so a control cannot be missing because a path was written before it
+/// existed. `previous` is the artifact the pane replaced when a later revision
+/// of the same reading arrived — the one the bar compares against at once.
 @MainActor
 func wireCodeScreen(_ codePane: CodePaneView, to pane: PaneViewModel, owner: MainViewController?,
+                    previous: (revision: Int, artifact: CodeArtifact)? = nil,
                     reveal: @escaping (Range<UInt64>) -> Void) {
     // A note on the code is the person's as one on the dump is: the same
     // form, the same window.
@@ -51,6 +57,10 @@ func wireCodeScreen(_ codePane: CodePaneView, to pane: PaneViewModel, owner: Mai
     let selection = pane.hexSelection()
     codePane.setStale(pane.origin.map { $0.state != .intact } ?? false)
     codePane.selectModuleRange(selection.start..<selection.end)
+    // The store's half of the seam: the revisions the bar offers, the New
+    // marks a revision left, and the reader's place kept between launches.
+    // Every container comes through here, so no pane is drawn without it.
+    wireCodeRevisions(codePane, previous: previous)
 }
 
 /// The dump bar's revision picker: the module's history read from the store,

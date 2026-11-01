@@ -395,6 +395,11 @@ import ToolModuleKit
     /// Whether the pane has a revision to compare the code against.
     public var canShowRevisionDiff: Bool { revisionBaseline != nil }
 
+    /// Whether the dump bar shows the comparison — the metalabel, the arrows,
+    /// the picker and Reset. The app reads it of a pane it put in a container
+    /// of its own: what is wired is not a question the container may answer.
+    public var comparisonIsShown: Bool { !compareLabel.isHidden }
+
     /// A revision the dump bar's picker offers: what it is called, and
     /// whether the store holds the code to compare against.
     public struct RevisionChoice: Equatable, Sendable {

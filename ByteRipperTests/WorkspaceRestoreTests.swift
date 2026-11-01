@@ -387,6 +387,59 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertEqual(restored.selectedFunction?.name, "SecStartup")
     }
 
+    /// The comparison is the pane's, not the container's: a code panel opened
+    /// in the dock offers the revisions the store holds, exactly as a code
+    /// screen in a tab does. The store's half of the wiring used to be called
+    /// only where a screen was redrawn, so a panel opened fresh showed no
+    /// comparison controls at all.
+    func testACodePanelInTheDockOffersTheComparisonsATabDoes() async throws {
+        let codeBytes = [UInt8](repeating: 0x90, count: 0x100)
+        let parentURL = try dump(0x1000, 0x77)
+        func artifactData(_ name: String) -> Data {
+            Data(#"{"script_version":2,"ghidra":"12.1.2","functions":[{"entry":"0x0","name":"\#(name)","c":"return 0;","instructions":[{"address":"0x0","bytes":"90","mnemonic":"NOP","text":"NOP"}]}]}"#.utf8)
+        }
+        let storeRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CodePanelRevisionStore-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: storeRoot, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: storeRoot) }
+        let store = try ContentStore(root: storeRoot)
+        let module = ModuleIdentity(sha256: SHA256Digest(data: Data(codeBytes)),
+                                    size: codeBytes.count, name: "SecCore", kind: "PE32",
+                                    language: "x86:LE:32:default", imageBase: "0x0")
+        let recipe = AnalysisRecipe(id: "code-v2-ghidra-12.1.2", exporter: 2,
+                                    ghidra: "12.1.2", script: "ExportCode.java")
+        // Revision 24 published its code; 25 is the one the panel opens on.
+        let review = try store.putObject(Data("review".utf8))
+        let oldCode = try store.putObject(artifactData("entry"))
+        try store.recordRevision(module: module.sha256,
+                                 reading: AnalysisReading(project: "p", rev: 24, review: review),
+                                 artifact: oldCode)
+        let manifest = try store.putAnalysis(module: module, recipe: recipe,
+                                             artifact: artifactData("SecStartup"),
+                                             reading: AnalysisReading(project: "p", rev: 25))
+        let previousRoot = UEFIToolModule.codeAnalysisRoot
+        UEFIToolModule.codeAnalysisRoot = storeRoot
+        addTeardownBlock { UEFIToolModule.codeAnalysisRoot = previousRoot }
+
+        let controller = shownWindow().mainViewController
+        controller.openFiles([parentURL])
+        controller.openCode(
+            named: "SecCore ▸ PE32", from: controller.windowModel.pane1,
+            source: 0x100..<0x200, manifest: manifest,
+            artifact: try JSONDecoder().decode(CodeArtifact.self, from: artifactData("SecStartup")),
+            codec: ReadOnlyPartCodec(codeBytes, title: L("This cannot be put back"),
+                                     reason: L("A code analysis is a snapshot; edit the dump and analyze the module again.")))
+        let id = try XCTUnwrap(controller.fragments.expanded)
+        let pane = try XCTUnwrap(controller.fragments.codePane(id))
+        for _ in 0..<100 where !pane.comparisonIsShown {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertTrue(pane.comparisonIsShown,
+                      "a code panel in the dock offers the revisions the store holds")
+        XCTAssertFalse(pane.canShowRevisionDiff,
+                       "nothing is compared against until the reader picks a revision")
+    }
+
     func testCodePanelComesBackAsCode() async throws {
         let codeBytes = [UInt8](repeating: 0x90, count: 0x100)
         let parentURL = try dump(0x1000, 0x77)

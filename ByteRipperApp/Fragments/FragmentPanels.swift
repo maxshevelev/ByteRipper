@@ -493,13 +493,6 @@ import ToolModuleKit
         }
         codePane.loadModuleDescription()
         host?.applyCodeNotes()
-        wireCodeScreen(codePane, to: pane, owner: host) { [weak pane, weak host] range in
-            guard let pane else { return }
-            host?.filePaneView(for: pane)?.revealOffsetCentered(range.lowerBound)
-        }
-        entry.surface.setContent(codePane)
-        entry.codePane = codePane
-        entry.screen = .code(screen)
         // A later revision of the same reading: the functions it changed wear
         // New until opened. Another recipe is a different reading.
         var previousRevision: (revision: Int, artifact: CodeArtifact)?
@@ -511,7 +504,14 @@ import ToolModuleKit
             codePane.setNewMarks(carriedMarks)
             previousRevision = (was, previous)
         }
-        wireCodeRevisions(codePane, previous: previousRevision)
+        wireCodeScreen(codePane, to: pane, owner: host,
+                       previous: previousRevision) { [weak pane, weak host] range in
+            guard let pane else { return }
+            host?.filePaneView(for: pane)?.revealOffsetCentered(range.lowerBound)
+        }
+        entry.surface.setContent(codePane)
+        entry.codePane = codePane
+        entry.screen = .code(screen)
         codePane.restore(at: screen.place, function: screen.selectedFunction,
                          instruction: screen.selectedInstruction,
                          showsC: screen.showsC)
