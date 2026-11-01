@@ -187,24 +187,25 @@ final class CodeTextView: NSTextView {
         }
         for tint in rowTints { boxes(tint.range, inset: 0, radius: 0, fill: tint.color) }
         guard !highlighted.isEmpty else { return }
+        let fill = highlightFill
         for range in highlighted {
-            boxes(range, inset: highlightInset, radius: CodeColors.symbolHighlightRadius,
-                  fill: highlightFill(for: range))
+            boxes(range, inset: highlightInset, radius: CodeColors.symbolHighlightRadius, fill: fill)
         }
     }
 
-    /// How much of the highlight's colour shows over a diff row's tint: the
-    /// tint stays visible through the box, so the reader sees both that the
-    /// name is highlighted and which side of the comparison the line is on.
-    static let highlightOverTint: CGFloat = 0.6
+    /// How much of the highlight's colour a box lays down — one value over
+    /// plain code and over a diff row's tint, so a highlighted name reads the
+    /// same everywhere, and a tinted row shows through.
+    static let highlightAlpha: CGFloat = 0.6
 
-    /// The fill of a highlight box: the panel's blue-grey as it is over plain
-    /// code, and thinned over a tinted row — a replacement there would punch
-    /// the row's colour out of the box.
-    func highlightFill(for range: NSRange) -> NSColor {
-        let tinted = rowTints.contains { NSIntersectionRange($0.range, range).length > 0 }
-        return tinted ? CodeColors.symbolHighlight.withAlphaComponent(Self.highlightOverTint)
-                      : CodeColors.symbolHighlight
+    /// The fill of a highlight box. The panel's blue-grey, laid at
+    /// `highlightAlpha` over the code's background, reads as the box it
+    /// always was; the same fill over a tinted row adds to the row's colour
+    /// instead of replacing it.
+    var highlightFill: NSColor {
+        CodeColors.laidOver(NSColor.textBackgroundColor, alpha: Self.highlightAlpha,
+                            toReadAs: CodeColors.symbolHighlight)
+            .withAlphaComponent(Self.highlightAlpha)
     }
 
     /// What is highlighted now, for tests.

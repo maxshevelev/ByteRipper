@@ -194,8 +194,17 @@ final class CodePaneViewTests: XCTestCase {
                              y: box.minY + textView.textContainerOrigin.y + CodePaneView.codeLinePadding + 1)
         let pixel = try XCTUnwrap(rep.colorAt(x: Int(corner.x * scale), y: Int(corner.y * scale))?
             .usingColorSpace(.sRGB))
-        XCTAssertEqual(Int((pixel.redComponent * 255).rounded()), 0xEE, "\(pixel)")
-        XCTAssertEqual(Int((pixel.blueComponent * 255).rounded()), 0xF9, "\(pixel)")
+        // One translucent fill everywhere: laid over the code's background it
+        // reads as the panel's blue-grey, and the text view's own bitmap has
+        // no background under it, so the pixel is the fill itself.
+        var resolved: NSColor?
+        NSAppearance(named: .aqua)?.performAsCurrentDrawingAppearance {
+            resolved = textView.highlightFill.usingColorSpace(.sRGB)
+        }
+        let fill = try XCTUnwrap(resolved)
+        XCTAssertEqual(pixel.redComponent, fill.redComponent, accuracy: 1.0 / 255, "\(pixel)")
+        XCTAssertEqual(pixel.blueComponent, fill.blueComponent, accuracy: 1.0 / 255, "\(pixel)")
+        XCTAssertEqual(fill.alphaComponent, CodeTextView.highlightAlpha, accuracy: 0.001)
 
         XCTAssertFalse(view.clickC(at: at("Count", after: "Total ="), event: try click(count: 1)))
         XCTAssertEqual(highlighted(), ["Count", "Count"], "the parameter and its one use")
@@ -1612,18 +1621,29 @@ final class CodePaneViewTests: XCTestCase {
                        })
     }
 
-    /// The highlight over a diff row's tint lets the tint through — the box
-    /// adds its colour instead of replacing the row's — and stays as it is on
-    /// an unchanged line.
-    func testADiffHighlightBlendsWithTheRowsTint() {
+    /// One alpha everywhere: the fill over the code's background reproduces
+    /// the box the panel always drew, and the same fill over a tinted row
+    /// adds its colour to the row's.
+    func testTheHighlightIsOneBlendOverTintAndPlainCode() throws {
         let text = CodeTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 100))
         text.rowTints = [(range: NSRange(location: 0, length: 10), color: .systemRed)]
-        XCTAssertLessThan(text.highlightFill(for: NSRange(location: 2, length: 3)).alphaComponent, 1,
-                          "the tint shows through the box")
-        XCTAssertEqual(text.highlightFill(for: NSRange(location: 2, length: 3)).alphaComponent,
-                       CodeTextView.highlightOverTint, accuracy: 0.001)
-        XCTAssertEqual(text.highlightFill(for: NSRange(location: 20, length: 3)).alphaComponent, 1,
-                       "plain code keeps the panel's own box")
+        let fill = try XCTUnwrap(text.highlightFill.usingColorSpace(.sRGB))
+        XCTAssertEqual(fill.alphaComponent, CodeTextView.highlightAlpha, accuracy: 0.001)
+
+        let back = try XCTUnwrap(NSColor.textBackgroundColor.usingColorSpace(.sRGB))
+        let box = try XCTUnwrap(CodeColors.symbolHighlight.usingColorSpace(.sRGB))
+        func mixed(_ fill: CGFloat, _ back: CGFloat) -> CGFloat {
+            fill * CodeTextView.highlightAlpha + back * (1 - CodeTextView.highlightAlpha)
+        }
+        XCTAssertEqual(mixed(fill.redComponent, back.redComponent), box.redComponent, accuracy: 0.01)
+        XCTAssertEqual(mixed(fill.greenComponent, back.greenComponent), box.greenComponent, accuracy: 0.01)
+        XCTAssertEqual(mixed(fill.blueComponent, back.blueComponent), box.blueComponent, accuracy: 0.01)
+
+        // And over a tint it is a blend of the two, not either alone.
+        let tint = try XCTUnwrap(CodeColors.diffAdded.usingColorSpace(.sRGB))
+        let overTint = mixed(fill.redComponent, tint.redComponent)
+        XCTAssertGreaterThan(overTint, tint.redComponent - 0.2)
+        XCTAssertLessThan(overTint, tint.redComponent + 0.2)
     }
 
     /// A name on a line the revisions share explains itself as one on a

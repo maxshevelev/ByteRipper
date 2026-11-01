@@ -105,6 +105,23 @@ enum CodeColors {
     /// blue-grey (#EEF1F9 in Default (Light)), never the accent a selection
     /// wears, drawn as a rounded box around each name.
     static let symbolHighlight = themed(light: 0xEEF1F9, dark: 0x3A3E4A)
+
+    /// The colour that, laid at `alpha` over `background`, reads as `target`.
+    /// A highlight box is filled with it so that, one alpha everywhere, it
+    /// looks like the panel's own box over plain code and adds its colour to
+    /// a diff row's tint instead of replacing it.
+    static func laidOver(_ background: NSColor, alpha: CGFloat, toReadAs target: NSColor) -> NSColor {
+        guard alpha > 0, alpha < 1,
+              let back = background.usingColorSpace(.sRGB),
+              let want = target.usingColorSpace(.sRGB) else { return target }
+        func solved(_ b: CGFloat, _ t: CGFloat) -> CGFloat {
+            min(1, max(0, (t - (1 - alpha) * b) / alpha))
+        }
+        return NSColor(srgbRed: solved(back.redComponent, want.redComponent),
+                       green: solved(back.greenComponent, want.greenComponent),
+                       blue: solved(back.blueComponent, want.blueComponent),
+                       alpha: 1)
+    }
     static let symbolHighlightRadius: CGFloat = 3
 
     /// Behind code in the module's description: a block and a span.
