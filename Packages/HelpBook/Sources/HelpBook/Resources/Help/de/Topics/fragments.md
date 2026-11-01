@@ -1,4 +1,4 @@
-@source-sha 2c89201b87505b80c967b9b8670e2134350f76a8008f53149d93ef416834fc1c
+@source-sha 5166288c53be33060128be7a335878feec16d9eaf7e63bad41a24f9db5ac1f4c
 # Fragment-Bereiche: ein Stück eines Dumps als eigene Datei
 
 > Einen Teil eines Images entnehmen, als eigene Datei bearbeiten und zurückschreiben.
@@ -57,7 +57,7 @@ Hier ist es nützlich, eine komprimierte Sektion entpackt zu öffnen. Im Bereich
 
 ## Ein Fragment in einem eigenen Tab
 
-**In neuem Tab öffnen** im Menü der Kopfzeile oder im Menü der Pille im Dock, oder das Ziehen des Bereichs an seiner Kopfzeile oder an seiner Pille im Dock auf den Streifen für einen neuen Tab, verschiebt das Fragment in einen eigenen Tab. Die Pille zieht ein eingeklapptes Fragment so, wie die Kopfzeile ein aufgeklapptes zieht. Dort ist es kein Fragment-Bereich mehr, sondern die Datei des Tabs, und daneben lässt sich eine zweite Datei zum Vergleich öffnen, auch ein anderes Fragment: Dessen Bereich wird an der Kopfzeile oder an der Pille auf den Tab gezogen und über **Zum Vergleich öffnen** losgelassen. Der Bereich verlässt das Dock und wird die zweite Datei des Tabs; mit gedrückter ⌥-Taste wird das Fragment kopiert und bleibt im Dock. Die Streifen zum Anfügen nehmen ein Fragment nicht an: Seine Bytes gelangen über **In der Quelle aktualisieren** in die Quelle zurück.
+**In neuem Tab öffnen** im Menü der Kopfzeile oder im Menü der Pille im Dock, die Schaltfläche mit dem Fenster, dessen oberes Drittel gefüllt ist, am rechten Ende der Kopfzeile, oder das Ziehen des Bereichs an seiner Kopfzeile oder an seiner Pille im Dock auf den Streifen für einen neuen Tab, verschiebt das Fragment in einen eigenen Tab. Die Pille zieht ein eingeklapptes Fragment so, wie die Kopfzeile ein aufgeklapptes zieht. Dort ist es kein Fragment-Bereich mehr, sondern die Datei des Tabs, und daneben lässt sich eine zweite Datei zum Vergleich öffnen, auch ein anderes Fragment: Dessen Bereich wird an der Kopfzeile oder an der Pille auf den Tab gezogen und über **Zum Vergleich öffnen** losgelassen. Der Bereich verlässt das Dock und wird die zweite Datei des Tabs; mit gedrückter ⌥-Taste wird das Fragment kopiert und bleibt im Dock. Die Streifen zum Anfügen nehmen ein Fragment nicht an: Seine Bytes gelangen über **In der Quelle aktualisieren** in die Quelle zurück.
 
 ## Lesezeichen zwischen Quelle und Fragmenten
 

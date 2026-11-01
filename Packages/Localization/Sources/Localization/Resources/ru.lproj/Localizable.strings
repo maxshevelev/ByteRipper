@@ -351,6 +351,7 @@
 "Code Partition ($CPD)" = "Кодовый раздел ($CPD)";
 "Collapse into the dock" = "Свернуть в Dock";
 "Collapse panel" = "Свернуть панель";
+"Open this panel in a tab of its own" = "Открыть эту панель в отдельной вкладке";
 "Comparison" = "Сравнение";
 "Component" = "Компонент";
 "Compressed section" = "Сжатая секция";

@@ -522,6 +522,47 @@ final class FragmentPanelTests: XCTestCase {
         XCTAssertEqual(controller.fragments.count, 1, "and still open, in its pill")
     }
 
+    /// The pill's Open in New Tab is a button in the header of the panel that
+    /// is up: a pane of the tab has none, a panel has one, and it sits with
+    /// the fold and the ✕ at the same distance apart.
+    func testThePanelLeavesForATabFromItsHeaderButton() throws {
+        let (controller, window) = makeController()
+        defer { cleanup(controller) }
+        let tab = MainViewController()
+        defer { tab.windowModel.pane1.close(); tab.windowModel.pane2.close() }
+        let registry = OpenDocumentRegistry()
+        registry.register(controller)
+        registry.register(tab)
+        controller.openDocuments = registry
+        tab.openDocuments = registry
+        controller.makeSiblingTab = { tab }
+        let url = try tempFile([0x01, 0x02])
+        defer { try? FileManager.default.removeItem(at: url) }
+        try controller.windowModel.pane1.open(url: url)
+        controller.apply(mode: .singleFile)
+        window.layoutIfNeeded()
+        let tabPane = controller.paneView(for: controller.windowModel.pane1)
+        XCTAssertNil(descendants(of: tabPane, NSButton.self)
+            .first { $0.accessibilityLabel() == "Open in New Tab" && !$0.isHidden },
+            "a pane of the tab is in a tab already")
+
+        let id = try XCTUnwrap(controller.openFragment([0x01, 0x02], named: "part", animated: false))
+        window.layoutIfNeeded()
+        let panel = try XCTUnwrap(controller.fragments.panelView(id))
+        let open = try button("Open in New Tab", in: panel)
+        let fold = try button("Collapse panel", in: panel)
+        let close = try button("Close pane", in: panel)
+        XCTAssertFalse(open.isHidden, "a panel can leave for a tab")
+        let frames = [open, fold, close].map { panel.convert($0.bounds, from: $0) }
+        XCTAssertEqual(frames[1].minX - frames[0].maxX, 10, accuracy: 0.5)
+        XCTAssertEqual(frames[2].minX - frames[1].maxX, 10, accuracy: 0.5)
+
+        open.performClick(nil)
+
+        XCTAssertTrue(controller.fragments.isEmpty, "the dock has let it go")
+        XCTAssertEqual(tab.windowModel.pane1.fileSize, 2, "and the tab has it")
+    }
+
     // MARK: - One header over the whole panel
 
     /// The pane's title bar runs across the panel, above the tool, the dump and

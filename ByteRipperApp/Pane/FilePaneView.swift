@@ -141,6 +141,18 @@ final class FilePaneView: NSView {
     )
     private var collapseWidth: NSLayoutConstraint?
     private var collapseGap: NSLayoutConstraint?
+    // help: window.fragments
+    /// Opens a fragment panel in a tab of its own beside this window — the
+    /// dock pill's Open in New Tab, where the panel is already up. Hidden, and
+    /// taking no width, wherever there is no panel to move or no tab to make.
+    private lazy var tabButton = HeaderButton.make(
+        symbol: "inset.filled.topthird.rectangle", describes: L("Open in New Tab"),
+        tooltip: L("Open this panel in a tab of its own"), target: self, action: #selector(tabTapped)
+    )
+    private var tabWidth: NSLayoutConstraint?
+    private var tabGap: NSLayoutConstraint?
+    /// The room between the buttons at the header's right end.
+    private static let trailingButtonGap: CGFloat = 10
     private let statusBar = NSView()
     private let statusStack = NSStackView()
     /// The field that stands in the title's place while the name is being
@@ -379,7 +391,17 @@ final class FilePaneView: NSView {
     var onCollapse: (() -> Void)? {
         didSet {
             collapseWidth?.isActive = onCollapse == nil
-            collapseGap?.constant = onCollapse == nil ? 0 : -6
+            collapseGap?.constant = onCollapse == nil ? 0 : -Self.trailingButtonGap
+            needsLayout = true
+        }
+    }
+    /// Fired by the header's tab button. Set on a fragment panel's pane that
+    /// can leave for a tab, and nowhere else: setting it is what puts the
+    /// button in the header.
+    var onOpenInTab: (() -> Void)? {
+        didSet {
+            tabWidth?.isActive = onOpenInTab == nil
+            tabGap?.constant = onOpenInTab == nil ? 0 : -Self.trailingButtonGap
             needsLayout = true
         }
     }
@@ -528,6 +550,7 @@ final class FilePaneView: NSView {
         header.addSubview(linkButton)
         header.addSubview(updateButton)
         header.addSubview(lockLabel)
+        header.addSubview(tabButton)
         header.addSubview(collapseButton)
         header.addSubview(closeButton)
         documentIcon.translatesAutoresizingMaskIntoConstraints = false
@@ -603,6 +626,13 @@ final class FilePaneView: NSView {
         self.collapseWidth = collapseWidth
         self.collapseGap = collapseTrailing
         collapseButton.isHidden = true
+        // The tab button the same way, before the fold.
+        let tabTrailing = tabButton.trailingAnchor.constraint(equalTo: collapseButton.leadingAnchor, constant: 0)
+        let tabWidth = tabButton.widthAnchor.constraint(equalToConstant: 0)
+        tabWidth.isActive = true
+        self.tabWidth = tabWidth
+        self.tabGap = tabTrailing
+        tabButton.isHidden = true
         let headerChain: [NSLayoutConstraint] = [
             documentIcon.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 10),
             titleLabel.leadingAnchor.constraint(equalTo: documentIcon.trailingAnchor, constant: 6),
@@ -614,7 +644,8 @@ final class FilePaneView: NSView {
             linkButton.leadingAnchor.constraint(equalTo: codecBadge.trailingAnchor, constant: 6),
             updateButton.leadingAnchor.constraint(equalTo: linkButton.trailingAnchor, constant: 6),
             updateButton.trailingAnchor.constraint(lessThanOrEqualTo: lockLabel.leadingAnchor, constant: -6),
-            lockLabel.trailingAnchor.constraint(equalTo: collapseButton.leadingAnchor, constant: -6),
+            lockLabel.trailingAnchor.constraint(equalTo: tabButton.leadingAnchor, constant: -6),
+            tabTrailing,
             collapseTrailing,
             closeButton.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -6),
         ]
@@ -626,6 +657,7 @@ final class FilePaneView: NSView {
             codecBadge.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             updateButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             lockLabel.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            tabButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             collapseButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             closeButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             header.heightAnchor.constraint(equalToConstant: Self.headerHeight),
@@ -1261,6 +1293,10 @@ final class FilePaneView: NSView {
         onCollapse?()
     }
 
+    @objc private func tabTapped() {
+        onOpenInTab?()
+    }
+
     override func mouseDown(with event: NSEvent) {
         // Chrome clicks (e.g. the header, reached here via the responder chain)
         // activate the pane through the same path as dump clicks: focus the hex
@@ -1285,6 +1321,7 @@ final class FilePaneView: NSView {
         let headerFits = fits || isHeaderHoisted
         closeButton.isHidden = hidesCloseButton || !headerFits
         collapseButton.isHidden = !headerFits || onCollapse == nil
+        tabButton.isHidden = !headerFits || onOpenInTab == nil
         lockLabel.isHidden = !headerFits
         linkButton.isHidden = !headerFits || viewModel.origin == nil
         codecBadge.isHidden = !headerFits
