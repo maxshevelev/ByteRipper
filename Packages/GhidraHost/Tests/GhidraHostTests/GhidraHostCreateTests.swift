@@ -218,6 +218,37 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         XCTAssertTrue(typed)
     }
 
+    func testATakeLeavesNoConflictCopyInTheSharedArchive() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
+            throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostTakeTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraHostTakeTests"),
+                              writer: store)
+        let image = try Data(contentsOf: URL(fileURLWithPath: path))
+        let module = SHA256Digest(data: image)
+        _ = try await host.create(module: image, name: "Module")
+        defer { Task { await host.stop(module) } }
+        func define(_ c: String) async throws {
+            _ = try await host.write(module, "/v1/type", body: try JSONSerialization.data(withJSONObject: ["c": c]))
+        }
+        try await define("typedef struct _TAKE_ITEM { int A; } TAKE_ITEM;")
+        try await define("typedef struct _TAKE_HOLDER { TAKE_ITEM *Item; } TAKE_HOLDER;")
+        _ = try await host.publish(module, by: nil)
+        try await define("typedef struct _TAKE_ITEM { int A; int B; } TAKE_ITEM;")
+        try await define("typedef struct _TAKE_HOLDER { TAKE_ITEM *Item; int Extra; } TAKE_HOLDER;")
+        let taken = try await host.publish(module, by: nil, options: .init(takeTypeConflicts: true))
+        XCTAssertFalse(taken.typeConflictsTaken.isEmpty)
+        let shown = try await host.read(module, "/v1/type?name=TAKE_HOLDER")
+        let text = String(decoding: shown, as: UTF8.self)
+        XCTAssertFalse(text.contains(".conflict"), text)
+        XCTAssertTrue(text.contains("TAKE_ITEM"), text)
+    }
+
     func testALinkToARenamedFunctionIsReported() async throws {
         guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
             throw XCTSkip("GHIDRA_TYPE_MODULE is not set")

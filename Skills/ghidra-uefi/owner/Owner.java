@@ -1488,7 +1488,8 @@ public class Owner {
             recordOrigin(origins, name, module);
             return true;
         }
-        DataType theirs = there.get(0);
+        DataType theirs = exactly(there, name);
+        if (theirs == null) theirs = there.get(0);
         if (theirs instanceof ghidra.program.model.data.Enum sharedEnum
             && here instanceof ghidra.program.model.data.Enum ownEnum) {
             int merged = mergeEnum(ownEnum, sharedEnum);
@@ -1666,28 +1667,37 @@ public class Owner {
      */
     private static boolean repairConflictNames(FileDataTypeManager shared) {
         boolean changed = false;
-        java.util.List<String> names = new java.util.ArrayList<>();
+        // Taken from the listing: `findDataTypes` reads past the suffix, so
+        // asking it for `X.conflict` answers X, which then "replaces" itself.
+        java.util.List<DataType> copies = new java.util.ArrayList<>();
         for (java.util.Iterator<DataType> all = shared.getAllDataTypes(); all.hasNext(); ) {
             DataType type = all.next();
-            if (type.getName().endsWith(".conflict")) names.add(type.getName());
+            if (type.getName().endsWith(".conflict")) copies.add(type);
         }
-        for (String name : names) {
+        for (DataType copy : copies) {
+            if (copy.isDeleted()) continue;
+            String name = copy.getName();
             String canonical = name.substring(0, name.length() - ".conflict".length());
-            java.util.List<DataType> twin = new java.util.ArrayList<>();
-            java.util.List<DataType> copy = new java.util.ArrayList<>();
-            shared.findDataTypes(canonical, twin);
-            shared.findDataTypes(name, copy);
-            if (twin.isEmpty() || copy.isEmpty() || !sameShapeIgnoringComments(twin.get(0), copy.get(0))) {
-                continue;
-            }
+            java.util.List<DataType> found = new java.util.ArrayList<>();
+            shared.findDataTypes(canonical, found);
+            DataType twin = exactly(found, canonical);
+            if (twin == null || !sameShapeIgnoringComments(twin, copy)) continue;
             try {
-                shared.replaceDataType(copy.get(0), twin.get(0), true);
+                shared.replaceDataType(copy, twin, true);
                 changed = true;
             } catch (Exception error) {
                 System.out.println("OWNER TYPE repair " + name + ": " + error.getMessage());
             }
         }
         return changed;
+    }
+
+    /** The type of exactly this name: a lookup also answers its `.conflict` copies. */
+    private static DataType exactly(java.util.List<DataType> found, String name) {
+        for (DataType type : found) {
+            if (name.equals(type.getName())) return type;
+        }
+        return null;
     }
 
     /** A take replaces a structure, a union or a typedef — never an enum. */
@@ -4900,7 +4910,11 @@ public class Owner {
                 try {
                     inShared = findAny(shared, name, alternate);
                     answer.add("shared", TypeText.describe(inShared));
-                    if (here != null && inShared != null) answer.addProperty("same", inShared.isEquivalent(here));
+                    if (here != null && inShared != null) {
+                        // `isEquivalent` reads past `.conflict`, so a member's
+                        // type name is compared as well.
+                        answer.addProperty("same", inShared.isEquivalent(here) && !memberTypesRenamed(here, inShared));
+                    }
                 } finally {
                     shared.close();
                 }
