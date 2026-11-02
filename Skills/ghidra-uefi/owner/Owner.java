@@ -1444,23 +1444,34 @@ public class Owner {
                 }
             }
         }
+        java.util.Set<String> seen = new java.util.HashSet<>();
         for (java.util.Map.Entry<String, DataType> entry : ours.entrySet()) {
             String name = entry.getKey();
             DataType here = entry.getValue();
-            // The types this one is made of are merged first: a structure
-            // that differs because a member does is the member's conflict,
-            // and it is named after the member — not left to be resolved
-            // inside the structure, where Ghidra would rename it
-            // `name.conflict` and no reader would know which type differed.
-            for (DataType member : membersOf(here, ours)) {
-                String memberName = member.getName();
-                if (memberName == null || memberName.isEmpty() || memberName.equals(name)) continue;
-                if (mergeOne(shared, memberName, member, merge, take, origins, module)) changed = true;
-            }
-            if (mergeOne(shared, name, here, merge, take, origins, module)) changed = true;
+            if (mergeDeepestFirst(shared, name, here, ours, merge, take, origins, module, seen)) changed = true;
         }
         if (repairConflictNames(shared)) changed = true;
         return changed;
+    }
+
+    /**
+     * The types a type is made of go first, at every depth: a structure that
+     * differs because a member does is the member's conflict, named after the
+     * member, not left to be resolved inside the structure, where Ghidra would
+     * rename it `name.conflict`. And a comment settled in the deepest type is
+     * no longer a difference of everything that holds it.
+     */
+    private boolean mergeDeepestFirst(FileDataTypeManager shared, String name, DataType here,
+                                      java.util.TreeMap<String, DataType> ours, Merge merge, boolean take,
+                                      JsonObject origins, String module, java.util.Set<String> seen) throws Exception {
+        if (!seen.add(name)) return false;
+        boolean changed = false;
+        for (DataType member : membersOf(here, ours)) {
+            String memberName = member.getName();
+            if (memberName == null || memberName.isEmpty()) continue;
+            if (mergeDeepestFirst(shared, memberName, member, ours, merge, take, origins, module, seen)) changed = true;
+        }
+        return mergeOne(shared, name, here, merge, take, origins, module) || changed;
     }
 
     /**
@@ -1501,7 +1512,8 @@ public class Owner {
         // against `AMD_SOC_INFO_PPI_RN_Hook *Hook`. It is reported like a
         // difference so the publish that carries the names can take it, and
         // the archive then holds the names every module after it reads.
-        if (!theirs.isEquivalent(here) || memberTypesRenamed(here, theirs)) {
+        boolean sameShape = sameShape(here, theirs, new java.util.HashSet<>());
+        if (!sameShape || memberTypesRenamed(here, theirs)) {
             if (take && replaceable(here, theirs)) {
                 if (!merge.taken.contains(name)) merge.taken.add(name);
                 merge.origins.put(name, originOf(origins, name));
@@ -1983,7 +1995,7 @@ public class Owner {
         int changes = 0;
         if (ownBase instanceof ghidra.program.model.data.Composite mine
             && sharedBase instanceof ghidra.program.model.data.Composite theirs) {
-            if (!uncommented(mine).isEquivalent(uncommented(theirs))) return -1;
+            if (!sameShape(mine, theirs, new java.util.HashSet<>())) return -1;
             ghidra.program.model.data.DataTypeComponent[] from = mine.getDefinedComponents();
             ghidra.program.model.data.DataTypeComponent[] to = theirs.getDefinedComponents();
             for (int i = 0; i < from.length && i < to.length; i++) {
@@ -2004,14 +2016,39 @@ public class Owner {
         return changes;
     }
 
-    /** A copy of a structure with no comments and no description: its shape alone. */
-    private static DataType uncommented(ghidra.program.model.data.Composite composite) {
-        ghidra.program.model.data.Composite copy = (ghidra.program.model.data.Composite) composite.copy(null);
-        for (ghidra.program.model.data.DataTypeComponent component : copy.getDefinedComponents()) {
-            component.setComment(null);
+    /**
+     * Two types the same but for comments and descriptions, at every depth:
+     * `isEquivalent` follows pointers and counts a comment, so one comment on a
+     * field would otherwise be a difference of everything that holds the field.
+     */
+    private static boolean sameShape(DataType a, DataType b, java.util.Set<String> seen) {
+        if (a == null || b == null) return a == b;
+        if (!seen.add(a.getPathName() + "|" + b.getPathName())) return true;
+        if (a instanceof ghidra.program.model.data.Pointer p && b instanceof ghidra.program.model.data.Pointer q) {
+            return p.getLength() == q.getLength() && sameShape(p.getDataType(), q.getDataType(), seen);
         }
-        copy.setDescription(null);
-        return copy;
+        if (a instanceof ghidra.program.model.data.Array p && b instanceof ghidra.program.model.data.Array q) {
+            return p.getNumElements() == q.getNumElements() && sameShape(p.getDataType(), q.getDataType(), seen);
+        }
+        if (a instanceof ghidra.program.model.data.TypeDef p && b instanceof ghidra.program.model.data.TypeDef q) {
+            return sameShape(p.getDataType(), q.getDataType(), seen);
+        }
+        if (a instanceof ghidra.program.model.data.Composite p && b instanceof ghidra.program.model.data.Composite q) {
+            ghidra.program.model.data.DataTypeComponent[] left = p.getDefinedComponents();
+            ghidra.program.model.data.DataTypeComponent[] right = q.getDefinedComponents();
+            if (p.getClass() != q.getClass() && (p instanceof ghidra.program.model.data.Union) != (q instanceof ghidra.program.model.data.Union)) return false;
+            if (p.getLength() != q.getLength() || left.length != right.length) return false;
+            for (int i = 0; i < left.length; i++) {
+                if (left[i].getOffset() != right[i].getOffset() || left[i].getLength() != right[i].getLength()
+                    || !java.util.Objects.equals(left[i].getFieldName(), right[i].getFieldName())
+                    || !sameShape(left[i].getDataType(), right[i].getDataType(), seen)) return false;
+            }
+            return true;
+        }
+        if (a instanceof ghidra.program.model.data.FunctionDefinition p && b instanceof ghidra.program.model.data.FunctionDefinition q) {
+            return sameShapeIgnoringComments(p, q);
+        }
+        return a.isEquivalent(b);
     }
 
     /**
@@ -4795,7 +4832,7 @@ public class Owner {
             ? defB.getBaseDataType() : b;
         if (left instanceof ghidra.program.model.data.Composite mine
             && right instanceof ghidra.program.model.data.Composite theirs) {
-            return uncommented(mine).isEquivalent(uncommented(theirs));
+            return sameShape(mine, theirs, new java.util.HashSet<>());
         }
         return left.isEquivalent(right);
     }

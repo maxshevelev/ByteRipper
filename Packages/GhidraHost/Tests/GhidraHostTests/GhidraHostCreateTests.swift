@@ -249,6 +249,39 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         XCTAssertTrue(text.contains("TAKE_ITEM"), text)
     }
 
+    func testACommentDeepInATypeIsNotAConflictOfWhatHoldsIt() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
+            throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostDeepCommentTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraHostDeepCommentTests"),
+                              writer: store)
+        let image = try Data(contentsOf: URL(fileURLWithPath: path))
+        let module = SHA256Digest(data: image)
+        _ = try await host.create(module: image, name: "Module")
+        defer { Task { await host.stop(module) } }
+        func define(_ object: [String: Any]) async throws {
+            _ = try await host.write(module, "/v1/type", body: try JSONSerialization.data(withJSONObject: object))
+        }
+        try await define(["c": "typedef struct _TC_C { int Leaf; } TC_C;"])
+        try await define(["c": "typedef struct _TC_B { TC_C *Inner; } TC_B;"])
+        try await define(["c": "typedef struct _TC_A { TC_B *Middle; } TC_A;"])
+        _ = try await host.publish(module, by: nil)
+        try await define(["c": "typedef struct _TC_C { int Leaf; } TC_C;", "comments": ["Leaf": "Now explained."]])
+        let published = try await host.publish(module, by: nil)
+        XCTAssertEqual(published.typeConflicts, [])
+        let shown = String(decoding: try await host.read(module, "/v1/type?name=TC_C"), as: UTF8.self)
+        XCTAssertTrue(shown.contains("Now explained."), shown)
+        // A layout that differs is still a conflict.
+        try await define(["c": "typedef struct _TC_C { int Leaf; int More; } TC_C;"])
+        let differing = try await host.publish(module, by: nil)
+        XCTAssertTrue(differing.typeConflicts.contains("_TC_C"), "\(differing.typeConflicts)")
+    }
+
     func testALinkToARenamedFunctionIsReported() async throws {
         guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
             throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
