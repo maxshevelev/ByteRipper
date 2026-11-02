@@ -220,3 +220,12 @@ open:
   the behaviour of 0x8804 and never sees the choice between the two. When a
   short function's C is longer than its instructions could produce, read
   `ghidra_disassembly`, and put the real flow in the plate.
+- **An unexplained rename or conflict change is a build change until proven
+  otherwise.** A live-versus-store line names the owner's `build`, the integer
+  `ghidra_open`'s `hello` answers; if one does not, ask for it. `build` is when
+  the owner's jar was built, so it moves when the owner's code does, and it
+  says nothing of what the code is. The server replaces an owner of another
+  build on the next call: the program is saved and the module reopens, and the
+  new code then acts on it. A type member that changes name with no call behind
+  it, or a conflict list that grows between a dry run and its publish, is
+  checked against `build` before it is blamed on a write.
