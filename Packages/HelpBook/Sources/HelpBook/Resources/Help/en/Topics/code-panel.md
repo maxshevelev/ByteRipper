@@ -12,6 +12,7 @@
 @covers panel.code.lists
 @covers panel.code.function-view
 @covers panel.code.copy-name
+@covers panel.code.function-popover
 @covers panel.code.description
 @covers panel.code.diff
 @covers panel.code.new
@@ -30,6 +31,8 @@ While a name is highlighted, **Edit ▸ Find Next** (**⌘G**) and **Edit ▸ Fi
 ## Names that explain themselves
 
 A name the review gave a constant — an I/O port such as `PCI_CONFIG_ADDRESS`, an MSR, a bit of a chipset register — a type such as a structure, and a field of a structure explain themselves: a click on one opens a popover beside it. For a constant it shows the number in hexadecimal and decimal, the group of names it belongs to (for example `FCH_IO_PORT`), what the name stands for and the instructions that use it — a click on one of those goes there — and, last, in smaller type, the source the explanation is taken from. For a type it shows its definition with every field's offset and comment; for a field, the same definition with the field's line marked. A named global — a variable of the module, such as `mPciExpressBaseAddress` — opens the popover too: its type and address, the value the image holds there, the review's comment on it and the instructions that read or write it. **⌘**-click on it selects its bytes in the dump, as many as its type takes; a click and a double click alike open the popover. A number in the ASM listing that the review named opens the same popover. Where the review has not yet explained a name, the popover says so and shows only the facts: the value, the type's definition.
+
+A click on a call of a function opens a popover beside it with the function's signature, how far its review has got, the description the review wrote over it and **Go to Function**. In the comparison the same click does the same. ⌘-click and a double click go to the function at once, without the popover.
 
 When Ghidra's decompiler leaves blocks out of the C because, with the values it knows, no path runs them, the C says so in one line: `/* WARNING: Removing 74 unreachable blocks */`. A click on the line opens the list of the removed blocks' addresses; a click on one goes to its instructions in the listing, where they all still are. Usually such a block is code the firmware build never runs, for example a branch for a setting other than this board's. A block that depends on what the hardware answers can still run on the board: a check that, in Ghidra's model, cannot fail, such as a test that memory holds what was written to it.
 

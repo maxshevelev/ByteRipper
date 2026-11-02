@@ -98,6 +98,11 @@ import ToolModuleKit
     private var topLines: [String: Int] = [:]
     /// The explanation open over the code, if one is.
     private var explanationPopover: CodeExplanationPopover?
+    private(set) var functionPopover: CodeFunctionPopover?
+    /// A plain click's popover, waiting to see that no second click follows:
+    /// a double click goes to the function and shows nothing on the way.
+    private var pendingFunctionPopover: DispatchWorkItem?
+    private var clicksInCode = 0
     private var callersPopover: CodeCallersPopover?
     private let table = NSTableView()
     private let tableScroll = NSScrollView()
@@ -3685,6 +3690,7 @@ import ToolModuleKit
     /// found by its place in the C, and a double click asks about it too:
     /// there is nowhere else for one to go.
     func clickDiff(at character: Int?, event: NSEvent) -> Bool {
+        pendingFunctionPopover?.cancel()
         guard let character else {
             clearDiffHighlight()
             return false
@@ -3703,6 +3709,19 @@ import ToolModuleKit
                 diffView.select(definition)
                 return true
             }
+            if !Self.isJump(event), let linkIndex = token.linkIndex,
+               diffView.shownLinks.indices.contains(linkIndex),
+               case .function(let linked) = diffView.shownLinks[linkIndex],
+               let index = functionHere(linked, currentSide: token.currentSide) {
+                let range = token.range
+                offerFunctionPopover(index) { [weak self] in
+                    guard let self, let rect = self.diffView.rect(of: range) else { return nil }
+                    return (rect, self.diffView)
+                } go: { [weak self] in
+                    self?.follow(.function(index))
+                }
+                return false
+            }
             if !Self.isJump(event), let explained = explanation(of: token) {
                 explainInDiff(explained, range: token.range, currentSide: token.currentSide)
                 return false
@@ -3714,6 +3733,14 @@ import ToolModuleKit
             explainInDiff(field.explained, range: field.range, currentSide: field.currentSide)
         }
         return false
+    }
+
+    /// A function a line of the diff names, in this revision: one the earlier
+    /// revision's line names is found by its entry, if it is still here.
+    private func functionHere(_ index: Int, currentSide: Bool) -> Int? {
+        if currentSide { return index }
+        guard let baseline = revisionBaseline, baseline.functions.indices.contains(index) else { return nil }
+        return model.function(at: baseline.functions[index].entry)
     }
 
     /// The popover over a name of the diff. A line of the earlier revision
@@ -4048,6 +4075,8 @@ import ToolModuleKit
     /// question-mark pointer marks explains itself: a double click asks it,
     /// where ⌘-click still goes to its bytes.
     func clickC(at character: Int?, event: NSEvent) -> Bool {
+        pendingFunctionPopover?.cancel()
+        clicksInCode += 1
         let token = character.flatMap { index in
             shownCTokens.filter { $0.start <= index && index < $0.start + $0.length }
                 .min { $0.length < $1.length }
@@ -4105,9 +4134,47 @@ import ToolModuleKit
             }
             return false
         }
+        if !Self.isJump(event), let token, case .function(let index)? = token.link {
+            let range = NSRange(location: token.start, length: token.length)
+            let thisClick = clicksInCode
+            afterClick(inC: true) { [weak self] in
+                // A later click has already said what this one was half of.
+                guard self?.clicksInCode == thisClick else { return }
+                self?.offerFunctionPopover(index) { [weak self] in
+                    guard let self, let rect = self.cRect(range) else { return nil }
+                    return (rect, self.cTextView)
+                } go: { [weak self] in
+                    self?.jumpToDefinition(of: index, from: range)
+                }
+            }
+            return false
+        }
         if let character, question || !Self.isJump(event) { explainC(at: character, token: token) }
         return false
     }
+
+    // help: panel.code.function-popover
+    /// Opens what a called function is, once the time for a second click has
+    /// passed. The place is asked for then: the code may have moved.
+    private func offerFunctionPopover(_ index: Int, at place: @escaping () -> (NSRect, NSView)?,
+                                      go: @escaping () -> Void) {
+        guard model.functions.indices.contains(index) else { return }
+        pendingFunctionPopover?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, let (rect, view) = place(), view.window != nil else { return }
+            self.explanationPopover?.close()
+            self.callersPopover?.close()
+            self.functionPopover?.close()
+            let popover = CodeFunctionPopover(function: self.artifact.functions[index], onGo: go)
+            popover.show(relativeTo: rect, of: view)
+            self.functionPopover = popover
+        }
+        pendingFunctionPopover = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.functionPopoverDelay, execute: work)
+    }
+
+    /// How long a click waits to be sure it is not half of a double click.
+    static var functionPopoverDelay: TimeInterval { NSEvent.doubleClickInterval }
 
     // MARK: - What a name stands for
 

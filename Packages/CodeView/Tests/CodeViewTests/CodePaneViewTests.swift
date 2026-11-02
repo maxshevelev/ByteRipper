@@ -2163,6 +2163,50 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(short.codeTextWidthForTest, column * CGFloat(CodePaneView.longestCodeLine))
     }
 
+    /// A plain click on a call opens what the function is; a double click goes
+    /// there and opens nothing.
+    func testAClickOnACallOpensTheFunctionsPopover() throws {
+        let json: [String: Any] = [
+            "script_version": 5, "program": ["image_base": "0x0"],
+            "functions": [
+                ["entry": "0x220", "name": "First", "c": "void First(void)\n{\n  Second();\n}\n",
+                 "c_spans": [[5, 5, "function", "0x220"],
+                             [21, 6, "function", "0x230"]],
+                 "instructions": [["address": "0x220", "bytes": "C3", "mnemonic": "RET", "text": "RET"]]],
+                ["entry": "0x230", "name": "Second", "signature": "void Second(void)",
+                 "c": "/* Sets the second thing up.\n   Returns nothing. */\n\n/* WARNING: odd */\nvoid Second(void)\n{\n}\n",
+                 "instructions": [["address": "0x230", "bytes": "C3", "mnemonic": "RET", "text": "RET"]]]
+            ]
+        ]
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        let view = CodePaneView(manifest: manifest(), artifact: artifact, moduleBytes: teModule(), hexView: NSView())
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 480),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 0, instruction: nil, showsC: true)
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil) }
+        func wait() { RunLoop.main.run(until: Date().addingTimeInterval(CodePaneView.functionPopoverDelay + 0.2)) }
+
+        // The second click of a double arrives within the wait, and goes.
+        _ = view.clickC(at: 22, event: try click(count: 1))
+        XCTAssertTrue(view.clickC(at: 22, event: try click(count: 2)))
+        wait()
+        XCTAssertNil(view.functionPopover, "a double click shows nothing on the way")
+        XCTAssertEqual(view.selectedFunctionIndex, 1)
+
+        view.selectFunction(at: 0)
+        XCTAssertFalse(view.clickC(at: 22, event: try click(count: 1)))
+        wait()
+        let popover = try XCTUnwrap(view.functionPopover)
+        XCTAssertTrue(popover.isShown)
+        XCTAssertEqual(popover.function.name, "Second")
+        XCTAssertEqual(popover.descriptionText, "Sets the second thing up.\nReturns nothing.")
+        popover.pressGo()
+        XCTAssertEqual(view.selectedFunctionIndex, 1)
+    }
+
     /// A click in the diff works as in the C: a name highlights its every
     /// occurrence there, and a name that explains itself opens its popover —
     /// from the revision whose line it is, either side.

@@ -1,4 +1,4 @@
-@source-sha 90d5ab5a458b7d4e83b603c0200eb8eeb5bf3441d716a13af906f8f508bb5832
+@source-sha 98e90babf7b021dfeeb5f3a253ceb026a694defd2060e68a9048ceb3c721721c
 # Code-Bereich
 
 > Ein Modul als Code gelesen: seine Funktionen, das ASM-Listing, der dekompilierte C und die Bytes, auf die eine Instruktion zeigt.
@@ -14,6 +14,8 @@ Solange ein Name hervorgehoben ist, führen **Bearbeiten ▸ Nächstes suchen** 
 ## Namen, die sich selbst erklären
 
 Ein Name, den die Analyse einer Konstante gegeben hat — einem I/O-Port wie `PCI_CONFIG_ADDRESS`, einem MSR, einem Bit eines Chipsatz-Registers —, ein Typ wie eine Struktur und ein Feld einer Struktur erklären sich selbst: Ein Klick darauf öffnet daneben ein Popover. Für eine Konstante zeigt es die Zahl hexadezimal und dezimal, die Gruppe von Namen, zu der sie gehört (etwa `FCH_IO_PORT`), wofür der Name steht, und die Instruktionen, die sie verwenden — ein Klick auf eine davon führt dorthin —, sowie ganz am Ende in kleinerer Schrift die Quelle, aus der diese Angabe stammt. Für einen Typ zeigt es seine Definition mit Offset und Kommentar jedes Felds, für ein Feld dieselbe Definition mit hervorgehobener Zeile des Felds. Auch eine benannte globale Variable des Moduls, etwa `mPciExpressBaseAddress`, öffnet das Popover: ihr Typ und ihre Adresse, der Wert, den das Image dort hält, der Kommentar der Analyse dazu und die Instruktionen, die sie lesen oder schreiben. **⌘**-Klick darauf markiert ihre Bytes im Dump, so viele, wie ihr Typ einnimmt; ein Klick und ein Doppelklick öffnen das Popover. Eine Zahl im ASM-Listing, der die Analyse einen Namen gegeben hat, öffnet dasselbe Popover. Hat die Analyse einen Namen noch nicht erklärt, sagt das Popover dies und zeigt nur die Fakten: den Wert und die Definition des Typs.
+
+Ein Klick auf den Aufruf einer Funktion öffnet daneben ein Popover mit der Signatur der Funktion, dem Stand ihrer Analyse, der darüber geschriebenen Beschreibung und **Zur Funktion**. Im Vergleich wirkt derselbe Klick ebenso. **⌘**-Klick und Doppelklick gehen sofort zur Funktion, ohne Popover.
 
 Lässt der Decompiler von Ghidra Blöcke aus dem C weg, weil bei den ihm bekannten Werten kein Pfad sie ausführt, sagt das C dies in einer Zeile: `/* WARNING: Removing 74 unreachable blocks */`. Ein Klick auf die Zeile öffnet die Liste der Adressen der entfernten Blöcke; ein Klick auf eine Adresse führt zu den Instruktionen des Blocks im Listing, wo sie alle erhalten sind. Meist ist ein solcher Block Code, den dieser Firmware-Build nie ausführt, etwa ein Zweig für eine andere Einstellung als die dieser Platine. Ein Block, der von der Antwort der Hardware abhängt, kann auf der Platine dennoch ausgeführt werden: eine Prüfung, die im Modell von Ghidra nicht fehlschlagen kann, etwa der Test, ob der Speicher den hineingeschriebenen Wert hält.
 

@@ -1,0 +1,119 @@
+import AppKit
+import CodeAnalysis
+import Localization
+import HelpUI
+
+/// What a called function is, in a popover off the call: its name, its
+/// signature, how far its review has got, the review's description of it and
+/// a way there. The reader asks this without leaving the function they read;
+/// ⌘-click and a double click still go there at once.
+@MainActor final class CodeFunctionPopover: NSViewController {
+    let function: CodeArtifact.Function
+    private let onGo: () -> Void
+    private let popover = NSPopover()
+
+    private static var size: CGFloat { CodePaneView.codeFont().pointSize }
+    private static var width: CGFloat { (size * 40).rounded() }
+    private static var inset: CGFloat { (size * 1.3).rounded() }
+
+    init(function: CodeArtifact.Function, onGo: @escaping () -> Void) {
+        self.function = function
+        self.onGo = onGo
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    func show(relativeTo rect: NSRect, of view: NSView) {
+        popover.contentViewController = self
+        popover.behavior = .transient
+        popover.animates = false
+        popover.show(relativeTo: rect, of: view, preferredEdge: .maxY)
+    }
+
+    var isShown: Bool { popover.isShown }
+
+    func close() { popover.performClose(nil) }
+
+    /// The words the popover shows under the facts, for a test as well.
+    var descriptionText: String? { Self.plate(ofC: function.c) }
+
+    /// What the review wrote over the function: the comments the C opens with,
+    /// before its signature. A decompiler's warning there is not the review's.
+    static func plate(ofC c: String?) -> String? {
+        guard var rest = c?[...] else { return nil }
+        var blocks: [String] = []
+        while true {
+            rest = rest.drop(while: \.isWhitespace)
+            guard rest.hasPrefix("/*"), let end = rest.range(of: "*/") else { break }
+            let inner = rest[rest.index(rest.startIndex, offsetBy: 2)..<end.lowerBound]
+            rest = rest[end.upperBound...]
+            let text = inner.split(separator: "\n", omittingEmptySubsequences: false)
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .joined(separator: "\n")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty, !text.hasPrefix("WARNING:") { blocks.append(text) }
+        }
+        return blocks.isEmpty ? nil : blocks.joined(separator: "\n\n")
+    }
+
+    override func loadView() {
+        let size = Self.size
+        let inner = Self.width - 2 * Self.inset
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = (size * 0.6).rounded()
+        stack.edgeInsets = NSEdgeInsets(top: Self.inset, left: Self.inset, bottom: Self.inset, right: Self.inset)
+
+        let name = NSTextField(labelWithString: function.name)
+        name.font = .systemFont(ofSize: (size * 1.35).rounded(), weight: .bold)
+        name.isSelectable = true
+        name.lineBreakMode = .byTruncatingMiddle
+        name.widthAnchor.constraint(lessThanOrEqualToConstant: inner).isActive = true
+        stack.addArrangedSubview(name)
+
+        if let signature = function.signature {
+            let line = NSTextField(wrappingLabelWithString: signature)
+            line.font = .monospacedSystemFont(ofSize: size, weight: .regular)
+            line.textColor = .secondaryLabelColor
+            line.preferredMaxLayoutWidth = inner
+            stack.addArrangedSubview(line)
+        }
+
+        let level = NSTextField(wrappingLabelWithString: CodePaneView.reviewDetail(function))
+        level.font = .systemFont(ofSize: size)
+        level.textColor = .secondaryLabelColor
+        level.preferredMaxLayoutWidth = inner
+        stack.addArrangedSubview(level)
+
+        let said = descriptionText
+        let words = NSTextField(wrappingLabelWithString: said ?? L("The review has not described this function yet."))
+        words.font = .systemFont(ofSize: size + 1)
+        words.textColor = said == nil ? .secondaryLabelColor : .labelColor
+        words.isSelectable = true
+        words.preferredMaxLayoutWidth = inner
+        words.translatesAutoresizingMaskIntoConstraints = false
+        // A long plate scrolls inside the popover, which stays on the screen.
+        let height = (size * 22).rounded()
+        stack.addArrangedSubview(words.fittingSize.height > height
+                                 ? CodeExplanationPopover.scrolling(words, width: inner, height: height) : words)
+
+        let go = NSButton(title: L("Go to Function"), target: self, action: #selector(goChosen))
+        go.bezelStyle = .rounded
+        ControlHelp.describe(go, L("Go to Function"))
+        stack.addArrangedSubview(go)
+
+        stack.widthAnchor.constraint(equalToConstant: Self.width).isActive = true
+        view = stack
+    }
+
+    /// Presses the button as the reader would, for a test.
+    func pressGo() { goChosen() }
+
+    @objc private func goChosen() {
+        close()
+        onGo()
+    }
+}
