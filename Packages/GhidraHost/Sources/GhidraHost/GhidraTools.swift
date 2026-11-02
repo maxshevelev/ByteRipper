@@ -83,7 +83,7 @@ public enum GhidraTools {
         decompiler artefacts, revision history or review status — the app and the store hold those. Its \
         sections, in this order, headed exactly so: `# <ModuleName>` and a short summary; `## What it is` \
         (kind of file, whose, stage of start-up, the board and the module's place in the firmware — never \
-        the dump file it was read from); `## What it does`; `## How it works`; `## What it connects to`; \
+        the dump file it was read from); `## What it does`; `## Execution flow` (the main chains as short ordered walks; the events it registers for, when each fires, what it does); `## What it connects to`; \
         `## Inside the module`; `## What a technician sees when it fails` (codes, messages, what the bench \
         sees); `## Known problems` (with their practical effect); `## Terms` (the same terms in full: what each is, where it sits, why it matters here). A section with nothing to say \
         yet is left out. A link `[Name](0xADDRESS)` is optional; a sentence must read without it. Say what \
@@ -955,7 +955,7 @@ public enum GhidraTools {
                   + "the sections and the size, not the text: `ghidra_description` reads it. "
                   + descriptionFormat,
                   ["text": AgentSchema.string("The Markdown: the whole description, or one section's body without its heading."),
-                   "section": AgentSchema.string("The `## ` heading whose body `text` replaces, e.g. \"How it works\"."),
+                   "section": AgentSchema.string("The `## ` heading whose body `text` replaces, e.g. \"Execution flow\"."),
                    "before": AgentSchema.string("The section this `section` goes just before."),
                    "after": AgentSchema.string("The section this `section` goes just after."),
                    "delete": AgentSchema.boolean("Removes the section named, or the whole description. Takes no `text`.")],

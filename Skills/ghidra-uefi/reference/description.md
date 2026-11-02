@@ -71,7 +71,7 @@ are free.
 
 ## What it is
 ## What it does
-## How it works
+## Execution flow
 ## What it connects to
 ## Inside the module
 ## What a technician sees when it fails
@@ -97,11 +97,16 @@ origin is when it is inferred.
 What the module does for the machine, why it is in this image, what depends on
 it and what goes wrong without it.
 
-### `## How it works`
+### `## Execution flow`
 
-The logic of its work, in order, as a story: what happens first, what it decides
-and on what, what happens later and what triggers it. The branches that change
-the outcome — waking from sleep, a missing device — are told as such.
+The main chains of execution and the reactions to events, in plain language.
+
+- The chains, as short ordered walks: start-up, screens, the decision, boot
+  attempts, the fallback order, scans, updates. A branch that changes the outcome
+  — waking from sleep, a missing device — is told as such.
+- A short list of the events the module registers for, when each fires and what
+  the module does on it: ready-to-boot, the exit-boot-services hand-over, virtual
+  address change, protocol notifications, timers, key events.
 
 ### `## What it connects to`
 

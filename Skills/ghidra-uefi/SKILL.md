@@ -223,7 +223,8 @@ Names alone do not get there. Every review applies these rules:
    that tells a service technician who does not program what the
    module is for, how it works, what it works with and how it is built — in the
    structure `reference/description.md` sets: a summary, then `What it is`,
-   `What it does`, `How it works`, `What it connects to`, `Inside the module`,
+   `What it does`, `Execution flow` (the main chains as short ordered walks, and
+   the events it registers for), `What it connects to`, `Inside the module`,
    `What a technician sees when it fails`, `Known problems`, `Terms`. It is not
    the review's record: review state is in the app and the store. Start it on the first pass, change it a
    section at a time with `ghidra_describe` as the review learns, and keep it
