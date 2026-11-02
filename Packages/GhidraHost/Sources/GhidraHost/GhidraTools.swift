@@ -1027,7 +1027,9 @@ public enum GhidraTools {
                 module's — the answer to a layout that was published wrong, and never an enum, whose \
                 clashing member means one of the two reviews is wrong. The types replaced come back as \
                 `type_conflicts_taken`, a typedef and the structure it names each named, since the archive \
-                holds them separately; a dry run with both flags says what would be taken. \
+                holds them separately. A type made of a replaced one follows it and is not named, so a take \
+                can name fewer types than `type_conflicts` listed; a dry run with both flags merges into a \
+                copy of the archive and answers what the publish would. \
                 The library registry is offered every function tagged `library.<kind>` whose review \
                 meets the bar of a finished function: `library` says which bodies became entries \
                 (`added`), new versions (`updated` — a change to a function that was the entry's current \

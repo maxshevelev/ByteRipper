@@ -1289,14 +1289,29 @@ public class Owner {
         if (reviewTypes == null || mine.isEmpty()) return merge;
         if (!apply) {
             if (!reviewTypes.isFile()) return merge;
-            try (FileChannel channel = lockChannel(); FileLock lock = channel.lock()) {
-                merge.withdrawn = readWithdrawn();
-                FileDataTypeManager shared = FileDataTypeManager.openFileArchive(reviewTypes, false);
+            // The merge itself, on a copy: replacing one type can settle the
+            // types made of it, so only doing it says what is left to do.
+            File copy = File.createTempFile("review-types-preview-", ".gdt");
+            try {
+                JsonObject origins;
+                try (FileChannel channel = lockChannel(); FileLock lock = channel.lock()) {
+                    merge.withdrawn = readWithdrawn();
+                    origins = readOrigins();
+                    Files.copy(reviewTypes.toPath(), copy.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                }
+                FileDataTypeManager shared = FileDataTypeManager.openFileArchive(copy, true);
                 try {
-                    mergeInto(shared, mine, merge, false, take, readOrigins());
+                    int transaction = shared.startTransaction("preview of " + options.get("module"));
+                    try {
+                        mergeInto(shared, mine, merge, take, origins);
+                    } finally {
+                        shared.endTransaction(transaction, false);
+                    }
                 } finally {
                     shared.close();
                 }
+            } finally {
+                copy.delete();
             }
             return merge;
         }
@@ -1312,7 +1327,7 @@ public class Owner {
                 boolean changed = false;
                 int transaction = shared.startTransaction("review types of " + options.get("module"));
                 try {
-                    changed = mergeInto(shared, mine, merge, true, take, origins);
+                    changed = mergeInto(shared, mine, merge, take, origins);
                 } finally {
                     shared.endTransaction(transaction, true);
                 }
@@ -1325,13 +1340,9 @@ public class Owner {
         return merge;
     }
 
-    /**
-     * The merge itself, for a preview and for a publish alike. A preview only
-     * reads — the archive is opened read-only there, so an enum is compared on
-     * the side and never grown.
-     */
+    /** The merge itself: into the archive for a publish, into a copy of it for a preview. */
     private boolean mergeInto(FileDataTypeManager shared, java.util.TreeMap<String, String> mine, Merge merge,
-                              boolean apply, boolean take, JsonObject origins) throws Exception {
+                              boolean take, JsonObject origins) throws Exception {
         boolean changed = false;
         String module = options.get("module");
         java.util.TreeMap<String, DataType> ours = new java.util.TreeMap<>();
@@ -1358,24 +1369,22 @@ public class Owner {
             for (DataType member : membersOf(here, ours)) {
                 String memberName = member.getName();
                 if (memberName == null || memberName.isEmpty() || memberName.equals(name)) continue;
-                if (mergeOne(shared, memberName, member, merge, apply, take, origins, module)) changed = true;
+                if (mergeOne(shared, memberName, member, merge, take, origins, module)) changed = true;
             }
-            if (mergeOne(shared, name, here, merge, apply, take, origins, module)) changed = true;
+            if (mergeOne(shared, name, here, merge, take, origins, module)) changed = true;
         }
-        if (apply && repairConflictNames(shared)) changed = true;
+        if (repairConflictNames(shared)) changed = true;
         return changed;
     }
 
     /**
      * One type into the shared archive — the structure the review wrote or
-     * one it is made of. The questions are asked in the same order and
-     * answered the same way whether the archive is written or only looked
-     * at, so a preview and the publish after it cannot disagree: an enum
-     * conflicts only on a member's value, another type on its shape or, the
-     * shape being the same, on comments that cannot be merged.
+     * one it is made of. An enum conflicts only on a member's value, another
+     * type on its shape or, the shape being the same, on comments that cannot
+     * be merged.
      */
     private boolean mergeOne(FileDataTypeManager shared, String name, DataType here, Merge merge,
-                             boolean apply, boolean take, JsonObject origins, String module) throws Exception {
+                             boolean take, JsonObject origins, String module) throws Exception {
         // A withdrawn name stays out, and so does anything that would carry it
         // in: resolving a structure brings its members along. `take` does not
         // override this — that choice was made when the name was withdrawn.
@@ -1388,7 +1397,6 @@ public class Owner {
         java.util.List<DataType> there = new java.util.ArrayList<>();
         shared.findDataTypes(name, there);
         if (there.isEmpty()) {
-            if (!apply) return false;
             shared.resolve(here, DataTypeConflictHandler.KEEP_HANDLER);
             merge.written = true;
             recordOrigin(origins, name, module);
@@ -1397,10 +1405,6 @@ public class Owner {
         DataType theirs = there.get(0);
         if (theirs instanceof ghidra.program.model.data.Enum sharedEnum
             && here instanceof ghidra.program.model.data.Enum ownEnum) {
-            if (!apply) {
-                if (enumConflict(ownEnum, sharedEnum)) recordConflict(merge, origins, name);
-                return false;
-            }
             int merged = mergeEnum(ownEnum, sharedEnum);
             if (merged < 0) { recordConflict(merge, origins, name); return false; }
             return merged > 0;
@@ -1414,17 +1418,12 @@ public class Owner {
             if (take && replaceable(here, theirs)) {
                 if (!merge.taken.contains(name)) merge.taken.add(name);
                 merge.origins.put(name, originOf(origins, name));
-                if (!apply) return false;
                 replaceShared(shared, theirs, here);
                 merge.written = true;
                 recordOrigin(origins, name, module);
                 return true;
             }
             recordConflict(merge, origins, name);
-            return false;
-        }
-        if (!apply) {
-            if (commentsConflict(here, theirs)) recordConflict(merge, origins, name);
             return false;
         }
         int merged = mergeComments(here, theirs);
@@ -1836,25 +1835,6 @@ public class Owner {
         if (!origins.has(name) || !origins.get(name).isJsonObject()) return "";
         JsonObject entry = origins.getAsJsonObject(name);
         return entry.has("module") ? entry.get("module").getAsString() : "";
-    }
-
-    private static boolean enumConflict(ghidra.program.model.data.Enum own,
-                                        ghidra.program.model.data.Enum shared) {
-        for (String name : own.getNames()) {
-            long value = own.getValue(name);
-            if (shared.contains(name) ? shared.getValue(name) != value : shared.contains(value)) return true;
-        }
-        return false;
-    }
-
-    private static boolean commentsConflict(DataType own, DataType shared) {
-        DataType ownBase = own instanceof ghidra.program.model.data.TypeDef def ? def.getBaseDataType() : own;
-        DataType sharedBase = shared instanceof ghidra.program.model.data.TypeDef def ? def.getBaseDataType() : shared;
-        // Asked only of two equivalent types, so what is not a composite — a
-        // function definition, a typedef of a scalar — has nothing left to differ.
-        if (!(ownBase instanceof ghidra.program.model.data.Composite mine)
-            || !(sharedBase instanceof ghidra.program.model.data.Composite theirs)) return false;
-        return !uncommented(mine).isEquivalent(uncommented(theirs));
     }
 
     /**
