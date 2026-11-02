@@ -191,6 +191,13 @@ final class CodeReadingsTests: XCTestCase {
             "module": .string(module.sha256.hex), "what": .string("functions")])))
         guard case .json(.object(let body)) = answer,
               let library = body["library"]?.objectValue else { return XCTFail("no library block: \(answer)") }
+        let levels = try XCTUnwrap(body["review_levels"]?.objectValue)
+        XCTAssertEqual(levels["full"], .int(1))
+        XCTAssertEqual(levels["partial"], .int(1))
+        XCTAssertEqual(levels["decompiled"], .int(0))
+        XCTAssertEqual(levels["library"], .int(0))
+        XCTAssertEqual(levels["no_body"], .int(0))
+        XCTAssertEqual(levels["unrecorded"], .int(1))
         XCTAssertEqual(library["edk2"], .int(1))
         XCTAssertEqual(library["amd"], .int(2))
         XCTAssertEqual(library["intel"], .int(0))

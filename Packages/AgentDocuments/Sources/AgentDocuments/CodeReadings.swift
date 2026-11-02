@@ -342,6 +342,15 @@ public final class CodeReadings {
         case "functions":
             let functions = model.functions(matching: search ?? "").map { model.functions[$0] }
             body["total"] = .int(Int64(functions.count))
+            // Over every match, not the page: the list itself can be too long to read.
+            var levels: [String: Int64] = Dictionary(uniqueKeysWithValues:
+                ReviewLevel.allCases.map { ($0.rawValue, 0) })
+            var unrecorded: Int64 = 0
+            for function in functions {
+                if let level = function.reviewLevel { levels[level.rawValue, default: 0] += 1 } else { unrecorded += 1 }
+            }
+            if unrecorded > 0 { levels["unrecorded"] = unrecorded }
+            body["review_levels"] = .object(levels.mapValues(JSONValue.int))
             body["functions"] = .array(functions.prefix(limit).map { functionItem($0, offsetText) })
 
         case "instructions":
