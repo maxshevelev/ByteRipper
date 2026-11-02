@@ -63,6 +63,22 @@ func wireCodeScreen(_ codePane: CodePaneView, to pane: PaneViewModel, owner: Mai
     wireCodeRevisions(codePane, previous: previous)
 }
 
+/// Puts what a code screen holds on the pane drawn for it. A screen is the
+/// panel's state and a pane only shows it, in a dock or in a tab: every container
+/// comes through here, so none of them can lose part of it. The marks go first:
+/// the function the place opens on is open, and its mark goes with the selection.
+@MainActor
+func presentCodeScreen(_ screen: CodeScreen, on codePane: CodePaneView) {
+    codePane.setNewMarks(screen.newMarks)
+    // Before the place: the function the screen opens on is read from the line
+    // it was left at.
+    codePane.restoreTopLines(screen.topLines)
+    codePane.restore(at: screen.place, function: screen.selectedFunction,
+                     instruction: screen.selectedInstruction,
+                     showsC: screen.showsC)
+    codePane.openCallPlaces(screen.openCalls)
+}
+
 /// The dump bar's revision picker: the module's history read from the store,
 /// and the code of the revision chosen in it. `previous` is the revision this
 /// pane replaced when a later one arrived — it is compared against as soon as

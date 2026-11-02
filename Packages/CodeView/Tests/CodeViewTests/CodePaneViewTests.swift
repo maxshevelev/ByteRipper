@@ -1536,6 +1536,51 @@ final class CodePaneViewTests: XCTestCase {
     /// kept revision that does not read as it does now, and the plate says
     /// why: the newest of them all is usually the one on screen, and New
     /// against itself is a mark with no comparison and nothing to say.
+    /// A second pane of the same reading — the panel opened in a tab of its
+    /// own, or the next launch — knows only what the first pane kept. Keeping
+    /// the other functions at the revision on screen must not take away the
+    /// revision a function with no record of its own is new against.
+    func testAFunctionWithNoRecordStaysNewInTheNextPane() throws {
+        func function(_ entry: String, _ name: String, _ c: String) -> [String: Any] {
+            ["entry": entry, "name": name, "c": c,
+             "instructions": [["address": entry, "bytes": "C3", "mnemonic": "RET", "text": "RET"]]]
+        }
+        func artifact(_ functions: [[String: Any]]) throws -> CodeArtifact {
+            let json: [String: Any] = ["script_version": 5, "program": ["image_base": "0x0"], "functions": functions]
+            return try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        }
+        let kept = function("0x220", "Kept", "void Kept(void) {}\n")
+        let before = try artifact([kept])
+        let after = try artifact([kept, function("0x260", "Added", "void Added(void) {}\n")])
+        func pane() -> CodePaneView {
+            CodePaneView(manifest: manifest(revision: 140), artifact: after, moduleBytes: teModule(), hexView: NSView())
+        }
+        // The revisions the app reads for a pane are the ones the records name.
+        func baselines(_ records: [String: SeenRecord]) -> [Int: CodeArtifact] {
+            var found: [Int: CodeArtifact] = [:]
+            for revision in Set(records.values.map(\.revision)) {
+                found[revision] = revision == 139 ? before : after
+            }
+            return found
+        }
+        let first = pane()
+        let records = ["0x220": SeenRecord(revision: 139, fingerprint: SeenRecord.fingerprint(
+            name: "Kept", signature: nil, c: "void Kept(void) {}\n"))]
+        first.restoreSeen(records, baselines: baselines(records))
+        XCTAssertEqual(first.newMarks.map(\.entry), [CodeAddress(0x260)])
+
+        let second = pane()
+        second.restoreSeen(first.seenRecords, baselines: baselines(first.seenRecords))
+        XCTAssertEqual(second.newMarks.map(\.entry), [CodeAddress(0x260)], "the mark survives the next pane")
+        XCTAssertEqual(second.newMarks.first?.baseline.revision, 139)
+
+        // Taken, it stays taken.
+        second.clearNewMarks()
+        let third = pane()
+        third.restoreSeen(second.seenRecords, baselines: baselines(second.seenRecords))
+        XCTAssertEqual(third.newMarks.count, 0)
+    }
+
     func testAFunctionWithNoRecordIsNewAgainstARevisionThatDiffers() throws {
         let current = try oneFunction(name: "F", signature: "void F(void)", c: "{\n  A();\n}")
         let older = try oneFunction(name: "G", signature: "void G(void)", c: "{\n}", entry: "0x260")

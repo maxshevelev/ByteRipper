@@ -34,6 +34,8 @@ extension MainViewController {
         code.screen.place = view.selectedLocation
         code.screen.showsC = view.showsDecompiledC
         code.screen.topLines = view.topLinePositions
+        code.screen.newMarks = view.newMarks
+        code.screen.openCalls = view.openCallEntries
         codeScreen = code
     }
 
@@ -86,7 +88,7 @@ extension MainViewController {
                 self.reportCodeAnalysisUnreadable()
                 return
             }
-            let next = CodeScreen(manifest: manifest, artifact: artifact,
+            var next = CodeScreen(manifest: manifest, artifact: artifact,
                                   bytes: screen.bytes,
                                   selectedFunction: screen.selectedFunction,
                                   selectedInstruction: screen.selectedInstruction,
@@ -102,22 +104,18 @@ extension MainViewController {
                let now = manifest.reading?.rev, now > before {
                 self.pendingCodeRevisionChange = self.codeScreenView?.artifact
                 self.pendingCodeRevision = before
-                self.pendingCodeNewMarks = self.codeScreenView?.newMarks ?? []
             } else {
                 self.pendingCodeRevisionChange = nil
                 self.pendingCodeRevision = nil
-                // A reading of the same revision drawn again: the marks the
-                // reader has not opened yet go with it.
-                self.pendingCodeNewMarks = self.codeScreenView?.newMarks ?? []
             }
-            // The places open in the call tree go with it, by the entries that
-            // outlive a revision.
-            let openCalls = self.codeScreenView?.openCallEntries ?? []
+            // What the screen holds as it stands now, not as it stood when the
+            // store was asked.
+            next.newMarks = self.codeScreenView?.newMarks ?? screen.newMarks
+            next.openCalls = self.codeScreenView?.openCallEntries ?? screen.openCalls
             self.codeScreen = (pane, pane.document, next)
             self.apply(mode: .singleFile)
             self.codeScreenView?.setHexDumpVisible(dumpVisible, animated: false)
             if let history { self.codeScreenView?.adoptHistory(history) }
-            self.codeScreenView?.openCallPlaces(openCalls)
         }
     }
 
@@ -318,11 +316,9 @@ extension MainViewController {
         var previousRevision: (revision: Int, artifact: CodeArtifact)?
         if let previous = pendingCodeRevisionChange {
             codePane.markRevisionChange(from: previous, revision: pendingCodeRevision)
-            codePane.setNewMarks(pendingCodeNewMarks)
             previousRevision = pendingCodeRevision.map { ($0, previous) }
             pendingCodeRevisionChange = nil
             pendingCodeRevision = nil
-            pendingCodeNewMarks = []
         }
         wireCodeScreen(codePane, to: paneModel, owner: self,
                        previous: previousRevision) { [weak self, weak paneModel] range in
@@ -331,12 +327,7 @@ extension MainViewController {
                 .revealOffsetCentered(range.lowerBound)
         }
         applyCodeNotes()
-        // Before the place: the function the screen opens on is read from the
-        // line it was left at.
-        codePane.restoreTopLines(screen.topLines)
-        codePane.restore(at: screen.place, function: screen.selectedFunction,
-                         instruction: screen.selectedInstruction,
-                         showsC: screen.showsC)
+        presentCodeScreen(screen, on: codePane)
         codePane.focusSelectedFunction()
         // The file name belongs to the whole window, not to the strip
         // over the bytes: take the pane's title bar out and lay it

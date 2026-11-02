@@ -1381,6 +1381,13 @@ import ToolModuleKit
                 }), let baseline = baselines[newest] {
                     marks.append(NewMark(entry: function.entry,
                                          baseline: .init(revision: newest, artifact: baseline)))
+                    // The mark is kept as any other is, by a record of what the
+                    // function read at that revision; nothing if it was not
+                    // there. Without one the next pane — the panel opened in a
+                    // tab, the next launch — would look only at the revisions
+                    // the others' records name, which by then are this one.
+                    let then = baseline.functions.first { $0.entry == function.entry }
+                    seen[key] = SeenRecord(revision: newest, fingerprint: then.map(Self.fingerprint) ?? "")
                 } else if !baselines.isEmpty {
                     seen[key] = SeenRecord(revision: revision, fingerprint: fingerprint)
                 }

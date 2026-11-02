@@ -315,6 +315,78 @@ final class LinkedPartTests: XCTestCase {
 
     /// The agent reads the same typed artifact the panel shows: no second
     /// parse, and the module offset beside Ghidra's address.
+    /// New marks and the open call tree are the panel's: whichever way it is
+    /// shown — moved to a tab, copied to one, back to a dock — it holds them.
+    func testAPanelKeepsItsMarksHoweverItIsShown() throws {
+        let controller = try makeController(opening: [UInt8](repeating: 0xAA, count: 0x400))
+        let parent = controller.windowModel.pane1
+        let bytes = teModule()
+        let manifest = AnalysisManifest(
+            module: ModuleIdentity(sha256: SHA256Digest(data: Data(bytes)),
+                                   size: bytes.count, name: "CpuPei", kind: "TE",
+                                   language: "x86:LE:32:default", imageBase: "0x0"),
+            recipe: AnalysisRecipe(id: "code-v2-ghidra-12.1.2", exporter: 2,
+                                   ghidra: "12.1.2", script: "ExportCode.java"),
+            artifact: AnalysisArtifact(
+                sha256: SHA256Digest(data: Data("artifact".utf8)), size: 8,
+                mediaType: "application/json"),
+            analyzedAt: "2026-10-25T15:00:00+00:00",
+            stats: AnalysisStats())
+        func artifact(_ second: String) throws -> CodeArtifact {
+            try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+            {"script_version":2,"ghidra":"12.1.2","functions":[
+              {"entry":"0x0","name":"entry","instructions":[{"address":"0x0","bytes":"90","text":"NOP"}]},
+              {"entry":"0x10","name":"\(second)","instructions":[{"address":"0x10","bytes":"90","text":"NOP"}]}]}
+            """.utf8))
+        }
+        controller.openCode(
+            named: "CpuPei body", from: parent, source: 0x100..<0x160,
+            manifest: manifest, artifact: try artifact("Now"),
+            codec: ReadOnlyPartCodec(bytes, title: L("This cannot be put back"),
+                                     reason: L("A code analysis is a snapshot; edit the dump and analyze the module again.")))
+        let id = try XCTUnwrap(controller.fragments.expanded)
+        controller.view.window?.layoutIfNeeded()
+        let inDock = try XCTUnwrap(descendants(of: controller.view, CodePaneView.self).first)
+        let mark = CodePaneView.NewMark(entry: CodeAddress(0x10),
+                                        baseline: .init(revision: 7, artifact: try artifact("Then")))
+        inDock.setNewMarks([mark])
+        XCTAssertEqual(inDock.newMarks.map(\.entry), [CodeAddress(0x10)])
+
+        // A copy holds them, and the panel it was copied from still does.
+        let content = try XCTUnwrap(controller.fragments.content(id))
+        let copy = MainViewController()
+        copy.loadViewIfNeeded()
+        defer {
+            copy.windowModel.pane1.close()
+            copy.windowModel.pane2.close()
+        }
+        try copy.adoptCopy(of: content)
+        copy.view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(try XCTUnwrap(copy.codeScreenView).newMarks.map(\.entry), [CodeAddress(0x10)],
+                       "the copy keeps the marks")
+        XCTAssertEqual(try XCTUnwrap(copy.codeScreenView).newMarks.first?.baseline.revision, 7)
+        XCTAssertEqual(inDock.newMarks.count, 1)
+
+        // Moved to a tab of its own.
+        let tab = MainViewController()
+        tab.loadViewIfNeeded()
+        defer {
+            tab.windowModel.pane1.close()
+            tab.windowModel.pane2.close()
+        }
+        controller.makeSiblingTab = { tab }
+        controller.tearOffFragment(id)
+        tab.view.layoutSubtreeIfNeeded()
+        let moved = try XCTUnwrap(tab.codeScreenView)
+        XCTAssertEqual(moved.newMarks.map(\.entry), [CodeAddress(0x10)], "the moved panel keeps the marks")
+        XCTAssertEqual(moved.newMarks.first?.baseline.revision, 7)
+
+        // And what the screen holds follows the pane as it changes.
+        XCTAssertEqual(tab.currentCodeScreen()?.newMarks.map(\.entry), [CodeAddress(0x10)])
+        moved.clearNewMarks()
+        XCTAssertEqual(tab.currentCodeScreen()?.newMarks.count, 0)
+    }
+
     func testTheAgentReadsTheCodeArtifact() async throws {
         let controller = try makeController(opening: [UInt8](repeating: 0xAA, count: 0x300))
         let bytes = [UInt8](repeating: 0x90, count: 0x100)

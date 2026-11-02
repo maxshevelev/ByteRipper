@@ -1,4 +1,5 @@
 import CodeAnalysis
+import CodeView
 import Foundation
 
 /// What a fragment panel is, apart from the surface that draws it.
@@ -55,4 +56,9 @@ struct CodeScreen {
     /// or one entry means there is nothing to choose; the panel still has the
     /// chosen manifest.
     var recipes: [AnalysisManifest] = []
+    /// The functions still marked New, each with what it is compared against.
+    /// They are the panel's, as its place is, and go wherever it is shown.
+    var newMarks: [CodePaneView.NewMark] = []
+    /// The places open in the call tree, by the entries that outlive a revision.
+    var openCalls: [[CodeAddress]] = []
 }

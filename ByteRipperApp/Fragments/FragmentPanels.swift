@@ -176,7 +176,9 @@ import ToolModuleKit
                                               place: code.place,
                                               showsC: code.showsC,
                                               topLines: code.topLines,
-                                              recipes: code.recipes)),
+                                              recipes: code.recipes,
+                                              newMarks: code.newMarks,
+                                              openCalls: code.openCalls)),
                      animated: animated)
     }
 
@@ -269,12 +271,7 @@ import ToolModuleKit
                 guard let pane else { return }
                 host?.filePaneView(for: pane)?.revealOffsetCentered(range.lowerBound)
             }
-            if case .code(let code) = screen {
-                codePane.restoreTopLines(code.topLines)
-                codePane.restore(at: code.place, function: code.selectedFunction,
-                                 instruction: code.selectedInstruction,
-                                 showsC: code.showsC)
-            }
+            if case .code(let code) = screen { presentCodeScreen(code, on: codePane) }
             codePane.onChooseRecipe = { [weak self] manifest in
                 self?.chooseRecipe(opened.id, manifest: manifest)
             }
@@ -481,13 +478,17 @@ import ToolModuleKit
 
     /// Puts a different code reading in the panel's existing surface. The
     /// pane, its bytes, the dock and the panel's place stay where they are.
-    private func replaceCodeScreen(_ id: FragmentDock.PanelID, with screen: CodeScreen) {
+    private func replaceCodeScreen(_ id: FragmentDock.PanelID, with next: CodeScreen) {
         guard let entry = entries[id], entry.codePane != nil else { return }
+        // What the panel holds as it stands now, not as it stood when the store
+        // was asked: the marks the reader has not opened yet stay with it, or a
+        // redraw of a reading that did not move would take them.
+        var screen = next
+        screen.newMarks = entry.codePane?.newMarks ?? next.newMarks
+        screen.openCalls = entry.codePane?.openCallEntries ?? next.openCalls
         let dumpVisible = entry.codePane?.isHexDumpVisible ?? true
         let previous = entry.codePane?.artifact
         let shown = entry.screen
-        let carriedMarks = entry.codePane?.newMarks ?? []
-        let carriedCalls = entry.codePane?.openCallEntries ?? []
         let pane = entry.pane
         let view = entry.paneView
         let codePane = CodePaneView(manifest: screen.manifest, artifact: screen.artifact,
@@ -508,11 +509,6 @@ import ToolModuleKit
             codePane.markRevisionChange(from: previous, revision: was)
             previousRevision = (was, previous)
         }
-        // The marks the reader has not opened yet travel with the panel: a
-        // redraw of a reading that did not move — the store telling the same
-        // revision twice — must not take them.
-        codePane.setNewMarks(carriedMarks)
-        codePane.openCallPlaces(carriedCalls)
         wireCodeScreen(codePane, to: pane, owner: host,
                        previous: previousRevision) { [weak pane, weak host] range in
             guard let pane else { return }
@@ -521,10 +517,7 @@ import ToolModuleKit
         entry.surface.setContent(codePane)
         entry.codePane = codePane
         entry.screen = .code(screen)
-        codePane.restoreTopLines(screen.topLines)
-        codePane.restore(at: screen.place, function: screen.selectedFunction,
-                         instruction: screen.selectedInstruction,
-                         showsC: screen.showsC)
+        presentCodeScreen(screen, on: codePane)
         codePane.setHexDumpVisible(dumpVisible, animated: false)
         codePane.focusSelectedFunction()
         entry.surface.view.layoutSubtreeIfNeeded()
@@ -540,6 +533,8 @@ import ToolModuleKit
         code.place = entry.codePane?.selectedLocation
         code.showsC = entry.codePane?.showsDecompiledC ?? false
         code.topLines = entry.codePane?.topLinePositions ?? code.topLines
+        code.newMarks = entry.codePane?.newMarks ?? code.newMarks
+        code.openCalls = entry.codePane?.openCallEntries ?? code.openCalls
         return .code(code)
     }
 
