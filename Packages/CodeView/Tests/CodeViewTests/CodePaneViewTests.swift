@@ -4501,6 +4501,9 @@ final class CodePaneViewTests: XCTestCase {
         let line = CodeMenuLine(frame: NSRect(x: 0, y: 0, width: 120, height: 14))
         line.setChoices([.init(title: "One", tag: 1)], chosen: 1)
         XCTAssertFalse(line.showsGround, "no ground at rest")
+        XCTAssertEqual(line.alignmentRectInsets.left - line.groundRect.minX, 3, accuracy: 0.5,
+                       "the ground reaches only a little past what the line draws")
+        XCTAssertEqual(line.groundRect.maxX, line.bounds.maxX)
         line.menuOpened()
         XCTAssertTrue(line.showsGround, "the line stays marked while its menu is up")
         line.menuClosed()

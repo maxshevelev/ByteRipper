@@ -195,10 +195,21 @@ final class CodeMenuLine: NSPopUpButton {
 
     var showsGround: Bool { isUnderPointer || isMenuOpen }
 
+    /// The ground: a little past what the line draws on the left, not all the
+    /// way to the frame, where the cell's inset would leave a wide margin.
+    var groundRect: NSRect {
+        var rect = bounds
+        let cut = max(0, alignmentRectInsets.left - Self.groundOverhang)
+        rect.origin.x += cut
+        rect.size.width = max(0, rect.width - cut)
+        return rect
+    }
+    private static let groundOverhang: CGFloat = 3
+
     override func draw(_ dirtyRect: NSRect) {
         if opensMenu, showsGround {
             Self.ground.setFill()
-            NSBezierPath(roundedRect: bounds, xRadius: 5, yRadius: 5).fill()
+            NSBezierPath(roundedRect: groundRect, xRadius: 5, yRadius: 5).fill()
         }
         super.draw(dirtyRect)
     }
