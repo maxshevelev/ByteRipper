@@ -571,6 +571,7 @@ public class Owner {
         for (com.google.gson.JsonElement item : body.getAsJsonArray("functions")) {
             functions.add(functionAt(item.getAsString()));
         }
+        boolean dryRun = body.has("dry_run") && body.get("dry_run").getAsBoolean();
         JsonArray applied = new JsonArray();
         JsonArray skipped = new JsonArray();
         ghidra.program.model.symbol.EquateTable table = program.getEquateTable();
@@ -594,12 +595,17 @@ public class Owner {
                         skipped.add(item);
                         continue;
                     }
+                    JsonObject item = new JsonObject();
+                    item.addProperty("address", hex(at));
+                    item.addProperty("text", instruction.toString());
+                    applied.add(item);
+                    if (dryRun) continue;
                     JsonObject one = body.deepCopy();
                     one.remove("functions");
+                    one.remove("dry_run");
                     one.addProperty("address", hex(at));
                     one.addProperty("operand", index);
                     setEquate(one);
-                    applied.add(hex(at));
                 }
             }
         }
@@ -607,6 +613,7 @@ public class Owner {
         answer.addProperty("name", name);
         answer.addProperty("value", valueText);
         answer.addProperty("functions", functions.size());
+        if (dryRun) answer.addProperty("dry_run", true);
         answer.add("applied", applied);
         answer.add("skipped", skipped);
         return answer;

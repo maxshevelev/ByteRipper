@@ -316,8 +316,14 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
             }
         }
         XCTAssertFalse(entry.isEmpty)
+        let preview = try await post(["functions": [entry], "value": value, "name": "BATCH_NAME", "dry_run": true])
+        let would = preview["applied"] as? [[String: Any]] ?? []
+        XCTAssertNotNil(would.first?["text"] as? String, "\(preview)")
+        let notYet = try await post(["functions": [entry], "value": value, "name": "BATCH_OTHER", "dry_run": true])
+        XCTAssertEqual((notYet["skipped"] as? [Any])?.count, 0, "a preview names nothing: \(notYet)")
         let first = try await post(["functions": [entry], "value": value, "name": "BATCH_NAME"])
-        let applied = first["applied"] as? [String] ?? []
+        let applied = first["applied"] as? [[String: Any]] ?? []
+        XCTAssertEqual(applied.count, would.count)
         XCTAssertFalse(applied.isEmpty, "\(first)")
         // Named otherwise, one operand is left alone by the next call.
         let second = try await post(["functions": [entry], "value": value, "name": "BATCH_OTHER"])
