@@ -21,7 +21,18 @@ struct CodeDiffToken {
     let range: NSRange
     let token: CodeToken
     let currentSide: Bool
+    /// On a line only the current revision has: the earlier revision never
+    /// read it, whatever `currentSide` says of the lines the two share.
+    let added: Bool
     let linkIndex: Int?
+}
+
+/// Where a line's code sits in the view's text, and where that line starts in
+/// its function's C: what a place in one is turned into a place in the other by.
+struct CodeDiffCode {
+    let range: NSRange
+    let lineStart: Int
+    let currentSide: Bool
 }
 
 /// The C of a function against the same function in an earlier revision, as
@@ -29,8 +40,9 @@ struct CodeDiffToken {
 /// the line — what only the old review had on red, what only this one has on
 /// green, the lines both share as they are. The code is drawn with the
 /// artifact's tokens, in the panel's colours, and answers a click as the C
-/// does: a name highlights its occurrences, ⌘-click follows a call, a click on
-/// a name that explains itself opens its popover.
+/// does: a name highlights its occurrences, ⌘-click follows a call or selects
+/// a variable's definition, a click on a name or a field that explains itself
+/// opens its popover.
 @MainActor final class CodeDiffView: NSView {
     private let scroll = NSScrollView()
     private let text = CodeTextView()
@@ -43,6 +55,7 @@ struct CodeDiffToken {
     private var rowStarts: [Int] = []
     private(set) var shownTokens: [CodeDiffToken] = []
     private(set) var shownLinks: [CodeLink] = []
+    private var shownCode: [CodeDiffCode] = []
     /// How many lines the new text adds and the old one loses, for a test.
     var counts: (added: Int, removed: Int)? {
         shownDiff.map { ($0.added, $0.removed) }
@@ -129,6 +142,7 @@ struct CodeDiffToken {
         var tints: [(range: NSRange, color: NSColor)] = []
         shownTokens = []
         shownLinks = []
+        shownCode = []
         let oldWidth = max(1, String(diff.rows.reduce(0) { max($0, oldNumber($1) ?? 0) }).count)
         let newWidth = max(1, String(diff.rows.reduce(0) { max($0, newNumber($1) ?? 0) }).count)
         let blankOld = String(repeating: " ", count: oldWidth)
@@ -179,11 +193,14 @@ struct CodeDiffToken {
             }
             shown.append(CodeColors.attributed(lineText, tokens: shifted, font: font,
                                                links: &shownLinks, asTextLinks: true))
+            shownCode.append(CodeDiffCode(range: NSRange(location: codeStart, length: shown.length - codeStart),
+                                          lineStart: line.lineStart, currentSide: line.currentSide))
+            let added = if case .added = line.row { true } else { false }
             for (index, token) in line.tokens.enumerated() {
                 let range = NSRange(location: codeStart + token.start - line.lineStart, length: token.length)
                 guard range.location >= codeStart, range.location + range.length <= shown.length else { continue }
                 shownTokens.append(CodeDiffToken(range: range, token: token,
-                                                 currentSide: line.currentSide,
+                                                 currentSide: line.currentSide, added: added,
                                                  linkIndex: linkIndices[index]))
             }
             shown.append(NSAttributedString(string: "\n", attributes: [.font: font]))
@@ -256,6 +273,51 @@ struct CodeDiffToken {
     func token(at character: Int) -> CodeDiffToken? {
         shownTokens.first { NSLocationInRange(character, $0.range) }
     }
+
+    /// The place in its function's C of the character `character` is on, and
+    /// which revision's C that is.
+    func placeInC(at character: Int) -> (offset: Int, currentSide: Bool)? {
+        guard let code = shownCode.first(where: { NSLocationInRange(character, $0.range) }) else { return nil }
+        return (code.lineStart + character - code.range.location, code.currentSide)
+    }
+
+    /// Where the diff shows a span of a revision's C, if a row of it does.
+    func range(ofC start: Int, length: Int, currentSide: Bool) -> NSRange? {
+        for code in shownCode where code.currentSide == currentSide {
+            let offset = start - code.lineStart
+            if offset >= 0, offset + length <= code.range.length {
+                return NSRange(location: code.range.location + offset, length: length)
+            }
+        }
+        return nil
+    }
+
+    /// Where the variable `token` names is defined, as its revision reads it:
+    /// its first occurrence there, since Ghidra writes the parameters in the
+    /// signature and declares every local at the top of the body. A line only
+    /// the other revision has is not looked at.
+    func definition(of token: CodeDiffToken) -> NSRange? {
+        let variables: Set<CodeToken.Kind> = [.parameter, .local]
+        let string = text.string as NSString
+        guard variables.contains(token.token.kind),
+              token.range.location + token.range.length <= string.length else { return nil }
+        let word = string.substring(with: token.range)
+        return shownTokens.first { candidate in
+            guard variables.contains(candidate.token.kind),
+                  token.currentSide ? candidate.currentSide : !candidate.added,
+                  candidate.range.location + candidate.range.length <= string.length else { return false }
+            return string.substring(with: candidate.range) == word
+        }?.range
+    }
+
+    /// Selects `range` and brings it into view.
+    func select(_ range: NSRange) {
+        focus()
+        text.setSelectedRange(range)
+        text.scrollRangeToVisible(range)
+    }
+    /// What the diff has selected, for a test.
+    var selectedRange: NSRange { text.selectedRange() }
 
     /// The tokens of the diff that read like `token`: the same word of the
     /// same kind, from either side.

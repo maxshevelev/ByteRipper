@@ -2034,6 +2034,119 @@ final class CodePaneViewTests: XCTestCase {
         view.shownExplanationClose()
     }
 
+    /// A field of a structure has no token of its own in the C: the diff finds
+    /// it by its place, on either side, and marks it as the C does.
+    func testAFieldInTheDiffExplainsItself() throws {
+        func artifact(_ value: String) throws -> CodeArtifact {
+            let c = "void F(GROUP *Group)\n{\n  Use(Group->SequenceCount);\n  Set(\(value),Group->SequenceCount);\n}\n"
+            let text = c as NSString
+            var fields: [[Any]] = []
+            var from = 0
+            while true {
+                let found = text.range(of: "SequenceCount", range: NSRange(location: from, length: text.length - from))
+                guard found.location != NSNotFound else { break }
+                fields.append([found.location, found.length, "GROUP", 4])
+                from = found.location + found.length
+            }
+            let structC = "struct GROUP {\n    /* 0x00 */ UINT32 Base;\n"
+                + "    /* 0x04 */ UINT32 SequenceCount; // how many follow\n} /* size 0x8 */;"
+            let json: [String: Any] = [
+                "script_version": 5, "program": ["image_base": "0x0"],
+                "functions": [["entry": "0x220", "name": "F", "c": c, "c_fields": fields,
+                               "instructions": [["address": "0x220", "bytes": "C3",
+                                                 "mnemonic": "RET", "text": "RET"]]]],
+                "types": [["name": "GROUP", "kind": "struct", "size": 8, "c": structC]]
+            ]
+            return try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        }
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact("1"),
+                                moduleBytes: teModule(), hexView: NSView())
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 480),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        view.layoutSubtreeIfNeeded()
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil) }
+        view.setComparisonRevision(54, artifact: try artifact("2"))
+        XCTAssertTrue(view.showsRevisionDiff)
+
+        let shown = view.diffText as NSString
+        XCTAssertEqual(view.diffExplainableRanges.map { shown.substring(with: $0) },
+                       Array(repeating: "SequenceCount", count: 3),
+                       "the shared line once, and the changed line on each side")
+        func ask(_ range: NSRange, count: Int) throws -> CodeExplanation? {
+            view.shownExplanationClose()
+            XCTAssertFalse(view.clickDiff(at: range.location + 1, event: try click(count: count)))
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+            return view.shownExplanation
+        }
+        let removed = shown.range(of: "Set(2,Group->SequenceCount)")
+        let added = shown.range(of: "Set(1,Group->SequenceCount)")
+        XCTAssertNotEqual(removed.location, NSNotFound)
+        XCTAssertNotEqual(added.location, NSNotFound)
+        let onRemoved = try XCTUnwrap(view.diffExplainableRanges.first { NSIntersectionRange($0, removed).length > 0 })
+        let onAdded = try XCTUnwrap(view.diffExplainableRanges.first { NSIntersectionRange($0, added).length > 0 })
+        XCTAssertNotNil(try ask(onAdded, count: 1), "the current revision's line")
+        XCTAssertEqual(view.shownExplanationModel?.functions.first?.c, view.currentModelForTest.functions.first?.c)
+        XCTAssertNotNil(try ask(onRemoved, count: 1), "the earlier revision's line")
+        XCTAssertEqual(view.shownExplanationModel?.functions.first?.c, view.diffBaselineModelForTest?.functions.first?.c)
+        XCTAssertNotNil(try ask(onAdded, count: 2), "a double click asks too, as in the C")
+        view.shownExplanationClose()
+    }
+
+    /// ⌘-click or a double click on a variable selects where its revision
+    /// defines it: a local declared only on the other side is not its place.
+    func testAJumpOnAVariableInTheDiffSelectsItsDefinition() throws {
+        func artifact(_ declaration: String, _ last: String) throws -> CodeArtifact {
+            let c = "void F(int Count)\n{\n  \(declaration);\n  Use(Count);\n  Use(value);\n  \(last);\n}\n"
+            let text = c as NSString
+            var spans: [[Any]] = []
+            for (word, kind) in [("value", "local"), ("Count", "parameter")] {
+                var from = 0
+                while true {
+                    let found = text.range(of: word, range: NSRange(location: from, length: text.length - from))
+                    guard found.location != NSNotFound else { break }
+                    spans.append([found.location, found.length, kind])
+                    from = found.location + found.length
+                }
+            }
+            let json: [String: Any] = [
+                "script_version": 5, "program": ["image_base": "0x0"],
+                "functions": [["entry": "0x220", "name": "F", "c": c, "c_spans": spans,
+                               "instructions": [["address": "0x220", "bytes": "C3",
+                                                 "mnemonic": "RET", "text": "RET"]]]]
+            ]
+            return try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        }
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact("UINT8 value = 1", "Free(value)"),
+                                moduleBytes: teModule(), hexView: NSView())
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 480),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        view.layoutSubtreeIfNeeded()
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil) }
+        view.setComparisonRevision(54, artifact: try artifact("UINT16 value = 2", "Free(value)"))
+        XCTAssertTrue(view.showsRevisionDiff)
+
+        let shown = view.diffText as NSString
+        let oldDeclaration = NSRange(location: shown.range(of: "UINT16 value").location + 7, length: 5)
+        let newDeclaration = NSRange(location: shown.range(of: "UINT8 value").location + 6, length: 5)
+        XCTAssertLessThan(oldDeclaration.location, newDeclaration.location, "the removed line is drawn first")
+        let use = shown.range(of: "Use(value)").location + 4
+        let parameterUse = shown.range(of: "Use(Count)").location + 4
+
+        XCTAssertTrue(view.clickDiff(at: use + 1, event: try click(count: 1, flags: .command)))
+        XCTAssertEqual(view.diffSelectedRange, newDeclaration,
+                       "a line both revisions share reads the current one: not the removed line above")
+        XCTAssertTrue(view.clickDiff(at: parameterUse + 1, event: try click(count: 2)))
+        XCTAssertEqual(shown.substring(with: view.diffSelectedRange), "Count")
+        XCTAssertEqual(view.diffSelectedRange.location, shown.range(of: "int Count").location + 4,
+                       "a double click goes to the parameter in the signature")
+        XCTAssertFalse(view.clickDiff(at: use + 1, event: try click(count: 1)),
+                       "a plain click still only highlights")
+    }
+
     /// A variable clicked in the diff highlights its every occurrence there,
     /// as a global's name does.
     func testAClickOnAVariableInTheDiffHighlightsIt() throws {

@@ -610,6 +610,8 @@ import ToolModuleKit
     }
     /// The ranges the diff has highlighted, for a test.
     var diffHighlightedRanges: [NSRange] { diffView.highlightedRanges }
+    var diffExplainableRanges: [NSRange] { diffView.explainable }
+    var diffSelectedRange: NSRange { diffView.selectedRange }
     /// Where the diff is scrolled, for a test: another function's diff is
     /// read from its top, never from where a longer one was left.
     var diffScrollOrigin: NSPoint {
@@ -3408,7 +3410,7 @@ import ToolModuleKit
         diffView.onEscape = { [weak self] in self?.clearDiffHighlight() }
         diffView.explainable = diffView.shownTokens.filter { token in
             Self.explainedInC.contains(token.token.kind) && explanation(of: token) != nil
-        }.map(\.range)
+        }.map(\.range) + explainableFieldsInDiff(baseline: baselineModel)
         // Another function's diff is read from the line it was left at; the
         // same function's, redrawn at a new size, stays where the reader was.
         if !stays {
@@ -3461,36 +3463,85 @@ import ToolModuleKit
 
     /// A click in the diff, as in the C: a name highlights its every
     /// occurrence in the diff, ⌘-click or a double click follows what it
-    /// names, and a click on a name that explains itself opens its popover.
+    /// names or, on a variable, selects where it is defined, and a click on a
+    /// name that explains itself opens its popover. A field of a structure is
+    /// found by its place in the C, and a double click asks about it too:
+    /// there is nowhere else for one to go.
     func clickDiff(at character: Int?, event: NSEvent) -> Bool {
-        guard let character, let token = diffView.token(at: character) else {
+        guard let character else {
             clearDiffHighlight()
             return false
         }
-        if let symbol = diffSymbol(token) {
-            diffView.highlight(diffView.shownTokens.filter { diffSymbol($0) == symbol }.map(\.range))
-        }
-        if Self.isJump(event), let linkIndex = token.linkIndex,
-           diffView.shownLinks.indices.contains(linkIndex) {
-            followDiff(diffView.shownLinks[linkIndex], side: token)
-            return true
-        }
-        if !Self.isJump(event), let explained = explanation(of: token), let rect = diffView.rect(of: token.range) {
-            // A line of the earlier revision explains itself from that
-            // revision's model: its uses name its functions and its lines.
-            let current = token.currentSide
-            afterClick(inC: true) { [weak self] in
-                guard let self else { return }
-                if current {
-                    self.showExplanation(explained, relativeTo: rect, of: self.diffView)
-                } else {
-                    self.showExplanation(explained, relativeTo: rect, of: self.diffView,
-                                         in: self.diffBaselineModel,
-                                         onUse: { [weak self] line in self?.goToDiffUse(line) })
-                }
+        let token = diffView.token(at: character)
+        if let token {
+            if let symbol = diffSymbol(token) {
+                diffView.highlight(diffView.shownTokens.filter { diffSymbol($0) == symbol }.map(\.range))
             }
+            if Self.isJump(event), let linkIndex = token.linkIndex,
+               diffView.shownLinks.indices.contains(linkIndex) {
+                followDiff(diffView.shownLinks[linkIndex], side: token)
+                return true
+            }
+            if Self.isJump(event), let definition = diffView.definition(of: token) {
+                diffView.select(definition)
+                return true
+            }
+            if !Self.isJump(event), let explained = explanation(of: token) {
+                explainInDiff(explained, range: token.range, currentSide: token.currentSide)
+                return false
+            }
+        } else {
+            clearDiffHighlight()
+        }
+        if !event.modifierFlags.contains(.command), let field = fieldInDiff(at: character) {
+            explainInDiff(field.explained, range: field.range, currentSide: field.currentSide)
         }
         return false
+    }
+
+    /// The popover over a name of the diff. A line of the earlier revision
+    /// explains itself from that revision's model: its uses name its functions
+    /// and its lines.
+    private func explainInDiff(_ explained: CodeExplanation, range: NSRange, currentSide: Bool) {
+        guard let rect = diffView.rect(of: range) else { return }
+        afterClick(inC: true) { [weak self] in
+            guard let self else { return }
+            if currentSide {
+                self.showExplanation(explained, relativeTo: rect, of: self.diffView)
+            } else {
+                self.showExplanation(explained, relativeTo: rect, of: self.diffView,
+                                     in: self.diffBaselineModel,
+                                     onUse: { [weak self] line in self?.goToDiffUse(line) })
+            }
+        }
+    }
+
+    /// The field of a structure under a character of the diff, if it explains
+    /// itself: from the revision whose line it is.
+    private func fieldInDiff(at character: Int) -> (explained: CodeExplanation, range: NSRange, currentSide: Bool)? {
+        guard let place = diffView.placeInC(at: character) else { return nil }
+        let side = place.currentSide ? state.function.map { (model, $0) }
+            : diffBaselineModel.flatMap { read in diffBaselineIndex.map { (read, $0) } }
+        guard let (read, index) = side,
+              let field = read.field(atC: place.offset, inFunction: index),
+              let explained = read.explanation(ofField: field, inFunction: index),
+              let range = diffView.range(ofC: field.start, length: field.length,
+                                         currentSide: place.currentSide) else { return nil }
+        return (explained, range, place.currentSide)
+    }
+
+    /// The fields of both revisions' C that the diff shows and a click
+    /// explains.
+    private func explainableFieldsInDiff(baseline: CodeModel) -> [NSRange] {
+        func ranges(_ read: CodeModel, _ index: Int?, currentSide: Bool) -> [NSRange] {
+            guard let index, read.functions.indices.contains(index) else { return [] }
+            return read.functions[index].cFields.compactMap { field in
+                guard read.explanation(ofField: field, inFunction: index) != nil else { return nil }
+                return diffView.range(ofC: field.start, length: field.length, currentSide: currentSide)
+            }
+        }
+        return ranges(model, state.function, currentSide: true)
+            + ranges(baseline, diffBaselineIndex, currentSide: false)
     }
 
     private func clearDiffHighlight() { diffView.highlight([]) }
