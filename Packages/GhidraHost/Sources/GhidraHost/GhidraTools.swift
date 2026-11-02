@@ -71,24 +71,24 @@ public enum GhidraTools {
         7. The module's description is a result of the review as much as the code: a Markdown document, \
         kept with the project and published with it, that the app shows beside the code. Write its outline \
         early with `ghidra_describe`, fill and correct one section at a time as the review learns, and \
-        leave it true to the code at every publish: the names in it are the names in the program. \
+        leave it true to the code at every publish. \
         \(descriptionFormat)
         """
 
     /// The description's sections, in order, as the skill's
     /// `reference/description.md` sets them; a model reads this.
     static let descriptionFormat = """
-        Its sections, in this order, headed exactly so: `# <ModuleName>` and a one-paragraph summary; \
-        `## Identity` (file GUID, type, image, base, entry, the board and the module's place in the \
-        firmware's layout — never the dump file it was read from, the same module is in every dump of \
-        the board — source package and how sure); `## Purpose`; `## Interfaces` (what it consumes and \
-        produces — PPIs, protocols, HOBs, variables, callbacks — a table: interface, GUID, kind, where); `## Flow` (numbered, from the \
-        entry point); `## Internal structure` (functions by role, globals, tables, the review's types); \
-        `## Hardware and data`; `## Errors and diagnostics` (status, POST and halt codes, messages, \
-        what the bench sees); `## Findings`; `## Open questions`; `## Review status`. A section with \
-        nothing to say yet is left out. Link a function as `[Name](0xADDRESS)`; the app follows it. \
-        Mark what is not proven (`probably`, `not confirmed`). Markdown: headings, paragraphs, `-` and \
-        `1.` lists, tables, fenced code, `code`, **bold**, *italic*, links.
+        It is an article for a service technician who does not program: plain prose, every abbreviation \
+        expanded at first use, routines by what they do rather than by address; no function inventories, \
+        decompiler artefacts, revision history or review status — the app and the store hold those. Its \
+        sections, in this order, headed exactly so: `# <ModuleName>` and a short summary; `## What it is` \
+        (kind of file, whose, stage of start-up, the board and the module's place in the firmware — never \
+        the dump file it was read from); `## What it does`; `## How it works`; `## What it connects to`; \
+        `## Inside the module`; `## What a technician sees when it fails` (codes, messages, what the bench \
+        sees); `## Known problems` (with their practical effect); `## Terms`. A section with nothing to say \
+        yet is left out. A link `[Name](0xADDRESS)` is optional; a sentence must read without it. Say what \
+        is not proven. Markdown: headings, paragraphs, `-` and `1.` lists, tables, fenced code, `code`, \
+        **bold**, *italic*, links.
         """
 
     // MARK: - The tools
@@ -955,7 +955,7 @@ public enum GhidraTools {
                   + "the sections and the size, not the text: `ghidra_description` reads it. "
                   + descriptionFormat,
                   ["text": AgentSchema.string("The Markdown: the whole description, or one section's body without its heading."),
-                   "section": AgentSchema.string("The `## ` heading whose body `text` replaces, e.g. \"Flow\"."),
+                   "section": AgentSchema.string("The `## ` heading whose body `text` replaces, e.g. \"How it works\"."),
                    "before": AgentSchema.string("The section this `section` goes just before."),
                    "after": AgentSchema.string("The section this `section` goes just after."),
                    "delete": AgentSchema.boolean("Removes the section named, or the whole description. Takes no `text`.")],

@@ -5,9 +5,15 @@ comments), the artifact the app draws from it, and the **module
 description**: one Markdown document that says what the module is for, how
 it works and how it is built. The C answers *what does this function do*;
 the description answers *what is this module, and where in it do I look*.
-It is written for two readers at once: a person at the bench who has never
-opened the module, and an agent that picks the review up later and must not
-re-derive what was already understood.
+It is an article for one reader: a service-centre technician who does not
+program and does not know how the code is implemented. It gives them an idea of
+what the module is for, the logic of its work, how it works with other modules
+and how it is built inside, without deep technical detail.
+
+It is not the review's record. How far the review has got is in the app and in
+the store (`code_query`), per function; what the next agent needs goes in those
+rows and in the report to the person. Nothing of the review's process belongs
+here: no coverage, no revision history, no list of what is left to do.
 
 The description is a result of the review, not a summary written at the end.
 It is started on the first pass, corrected as the review learns, and true to
@@ -43,127 +49,89 @@ Write the outline once, then work section by section; read it with
 touched.
 
 - **Start early.** After the first look at the entry point and the strings:
-  the title, the summary, `Identity`, a provisional `Purpose` and the
-  `Open questions`. Mark what is a first guess (`provisional`).
-- **Keep it true.** When a function is renamed, a guess is confirmed or
-  refuted, a structure is understood, the section that says it is updated
-  before the next publish. A description that names `FUN_0000123` after the
-  function became `ProcessFv` is a defect of the review.
-- **Finish it.** Before `ghidra_done`: every section that has something to
-  say says it, `Review status` says what is done and what is not, and nothing
-  provisional remains unmarked.
+  the title, the summary, `What it is` and a first `What it does`. Say what is a
+  first guess in words.
+- **Keep it true.** When a function's role is understood, a guess is confirmed
+  or refuted, the section that says it is updated before the next publish. A
+  description that says something the review has since disproved is a defect of
+  the review.
+- **Finish it.** Before `ghidra_done`: every section that has something to say
+  says it, in the plain words below.
 
 ## The structure
 
-The headings are fixed, in this order, in English, written exactly so — the
-app, the next agent and a diff all rely on them. A section with nothing to
-say yet is left out rather than left empty. `###` subsections are free.
+The headings are fixed, in this order, in English, written exactly so. A section
+with nothing to say yet is left out rather than left empty. `###` subsections
+are free.
 
 ```markdown
 # <ModuleName>
 
-<One paragraph: what the module is, its phase (SEC, PEI, DXE, SMM), whose it
-is (EDK2, AMI, Insyde, AMD, Intel, the OEM), and its role in one sentence.>
+<Summary: what the module is and what it is for, in a few plain sentences.>
 
-## Identity
-## Purpose
-## Interfaces
-## Flow
-## Internal structure
-## Hardware and data
-## Errors and diagnostics
-## Findings
-## Open questions
-## Review status
+## What it is
+## What it does
+## How it works
+## What it connects to
+## Inside the module
+## What a technician sees when it fails
+## Known problems
+## Terms
 ```
 
 ### `# <ModuleName>` and the summary
 
-The module's name as the firmware file names it. The paragraph under it is
-what someone reads who reads nothing else: three to five sentences.
+The module's name as the firmware file names it. The paragraph under it is what
+someone reads who reads nothing else: three to five sentences.
 
-### `## Identity`
+### `## What it is`
 
-A list of facts, each with its evidence:
+Only what a technician needs: what kind of file this is, whose it is (EDK2, AMI,
+Insyde, AMD, Intel, the OEM), at what stage of the start-up it runs, and which
+board it was read from and where it sits in the firmware. Never the dump file it
+was read from: a module is the same in every dump of the board. Say how sure the
+origin is when it is inferred.
 
-- file GUID and name, FFS file type (PEIM, DXE driver, SEC core…);
-- image: PE32/PE32+/TE, machine, image base, entry point, size;
-- the board (vendor, model, board number) and where the module sits in the
-  firmware's layout: the region, the volume, the path of names in the tree,
-  the offset in the volume or in an unpacked body. Never the dump file it was
-  read from: a module is the same in every dump of the board, the review is
-  of the module, and a file name tells the reader nothing about either;
-- source: the package it is built from (`MdeModulePkg/Core/Pei`, AMI
-  `CpuPei`…) and how sure that is — matched strings, a DEBUG file name, a
-  known GUID, the layout of a known library;
-- the libraries linked into it that matter (`BaseLib`, `PeiServicesLib`,
-  `DebugLib` to serial…).
+### `## What it does`
 
-### `## Purpose`
+What the module does for the machine, why it is in this image, what depends on
+it and what goes wrong without it.
 
-What the module does for the firmware, why it is in this image, what depends
-on it and what goes wrong without it. Two or three paragraphs.
+### `## How it works`
 
-### `## Interfaces`
+The logic of its work, in order, as a story: what happens first, what it decides
+and on what, what happens later and what triggers it. The branches that change
+the outcome — waking from sleep, a missing device — are told as such.
 
-What it consumes and what it produces, as a table:
+### `## What it connects to`
 
-```markdown
-| Interface | GUID | Kind | Where |
-|---|---|---|---|
-| gEfiPeiStallPpiGuid | 1F4C6F90-B06B-48D8-A201-BAE5F1CD7D56 | PPI, located | [CpuInit](0x4BF) |
-| gAmdCpuPolicyHobGuid | … | HOB, built | [PublishPolicy](0x612) |
-```
+The other modules and the parts of the machine it works with: what it needs from
+them, what it gives them, and the settings it reads or keeps, each said by what
+it is for. Not a table of GUIDs.
 
-Kinds: PPI/protocol located, installed or notified on; HOB read or built;
-variable read or written (name and vendor GUID); PCD; a callback registered;
-an event signalled; a table published. The dependency expression goes here
-too.
+### `## Inside the module`
 
-### `## Flow`
+How it is built: its main parts and what each is responsible for, the information
+it keeps. A part is named by what it does. Not an inventory of functions, and the
+code the module merely links in is one sentence together.
 
-The order of what happens, from the entry point: a numbered list, one step
-per thing that matters, each naming its function. Branches that change the
-outcome (boot mode, S3 resume, a missing PPI) are steps of their own or
-nested lists. A callback runs later: say when.
+### `## What a technician sees when it fails`
 
-### `## Internal structure`
+What shows at the bench: a POST or halt code, a message, a beep, a hang, a reset,
+a device that goes missing. For each: when it happens, what it means, and where
+to look next, as far as the code shows. The number or the exact message belongs
+here: it is what the technician reads off the bench.
 
-How the module is built: its functions grouped by role (a `###` per group,
-or a table: function, role), the globals and tables it keeps, the types the
-review defined and what they describe. Functions that only the linker or a
-library put there are one line together, not one each.
+### `## Known problems`
 
-### `## Hardware and data`
+Defects and oddities the review found, in plain language, each with its practical
+effect: what could go wrong on a real machine, and when. Each is also in a note
+at its place in the code and in the report to the person.
 
-What it touches below the firmware: MSRs, I/O ports, MMIO ranges, PCI
-config registers, CMOS, SPI, SMBus — with the value or bit and its meaning.
-Memory it lays out (a stack, a heap, a buffer at a fixed address) and the
-structures it walks, field by field where that is not in a type already.
+### `## Terms`
 
-### `## Errors and diagnostics`
-
-What a technician sees when it fails: status codes it reports
-(`ReportStatusCode` class/value), POST and halt codes, DEBUG and ASSERT
-messages, a deadloop, a beep, a reset. For each: when it happens and what it
-means.
-
-### `## Findings`
-
-Defects and oddities the review found: an unbounded copy, a wrong format, a
-value never checked, a deviation from the EDK2 code it was built from. Each
-with its place. Also a note where they are, and in the report to the person.
-
-### `## Open questions`
-
-What is not understood yet, and where to look next: an unnamed field, a
-callback whose trigger is unknown, a value from another module.
-
-### `## Review status`
-
-What the review covered and what it did not: functions named (`32 of 35`),
-what is still `FUN_`/`local_`, which revision and by whom, what to do next.
-Short: a list.
+A short list of the abbreviations and terms the article uses, each explained in a
+line. The bench's own words need no entry.
 
 ## The Markdown
 
@@ -185,19 +153,21 @@ No HTML, no images, no footnotes.
 - `[text](https://…)` opens in the browser. Any other target is shown as
   text.
 
-Use the link form in `Flow` and in tables, where the name alone may become
-ambiguous; the code form elsewhere.
+A link is optional: it helps the reader who wants the code, and a sentence must
+be understood without following it.
 
 ## Tone
 
-- Facts from the code, with the place that shows them. A conclusion drawn
-  from a pattern says so (`probably`, `not confirmed`); a guess is never
-  written as a fact.
-- Names as the program has them now; constants by their enum name, with the
-  value where a reader will look for it (`EFI_NOT_FOUND`,
-  `POST 0xB2`).
-- No paraphrase of the C line by line: the description is the map, the code
-  and its comments are the territory.
+- More text than symbols. Plain prose in simple, clear language, not a play of
+  abbreviations, technical names and addresses.
+- Every abbreviation is expanded where it is first used, and listed in `Terms`.
+- A routine is referred to by what it does, not by its address, and a technical
+  name only where the reader needs it.
+- No band tables, no function inventories with addresses, no decompiler artefacts
+  (`FUN_`, `local_`, `HASH:`), no revision history, no review status.
+- Facts from the code. A conclusion drawn from a pattern says so, and a guess is
+  never written as a fact; what is not understood is said where it matters to the
+  reader.
 - English, like the names and comments in the code.
-- Typically one to five screens. A module of three functions needs a
-  paragraph per section; DxeCore needs subsections.
+- Typically one to five screens: a small module needs a paragraph per section, a
+  large one subsections.

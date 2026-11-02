@@ -218,11 +218,13 @@ Names alone do not get there. Every review applies these rules:
    function is named for what it was meant to do, and the comment says what it
    actually does.
 7. **The module is described, not only its functions.** The review writes the
-   module description — what the module is for, how it works, how it is built
-   — in the structure `reference/description.md` sets: a summary, then
-   `Identity`, `Purpose`, `Interfaces`, `Flow`, `Internal structure`,
-   `Hardware and data`, `Errors and diagnostics`, `Findings`,
-   `Open questions`, `Review status`. Start it on the first pass, change it a
+   module description — an article, in plain language with every abbreviation
+   expanded, that tells a service technician who does not program what the
+   module is for, how it works, what it works with and how it is built — in the
+   structure `reference/description.md` sets: a summary, then `What it is`,
+   `What it does`, `How it works`, `What it connects to`, `Inside the module`,
+   `What a technician sees when it fails`, `Known problems`, `Terms`. It is not
+   the review's record: review state is in the app and the store. Start it on the first pass, change it a
    section at a time with `ghidra_describe` as the review learns, and keep it
    true at every publish: a rename or a refuted guess is corrected there
    before publishing. It is published with the review as an object of its own,
@@ -252,7 +254,7 @@ was the reason for the review. A function is done when all of this is true:
   through the wrong member of a union, the plate says so in one line each and
   names the places — a reader who meets `Count` holding a size will look.
 - The function is named for what it does for its caller, the functions it calls
-  are named too, and the module description's `Review status` lists it as read.
+  are named too.
 - It is in a published revision.
 
 Reading one function of a reviewed module should look like this (`PeiCore`,
