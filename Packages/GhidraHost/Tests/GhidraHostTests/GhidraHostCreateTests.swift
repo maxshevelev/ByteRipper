@@ -466,6 +466,43 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         XCTAssertTrue(checkedParameter)
     }
 
+    func testARenameTheDecompilerDropsIsNotAnsweredAsApplied() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
+            throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostDroppedNameTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraHostDroppedNameTests"),
+                              writer: store)
+        let image = try Data(contentsOf: URL(fileURLWithPath: path))
+        let module = SHA256Digest(data: image)
+        _ = try await host.create(module: image, name: "Module")
+        defer { Task { await host.stop(module) } }
+        let functions = try json(await host.read(module, "/v1/functions"))["functions"] as? [[String: Any]] ?? []
+        var tried = 0
+        for function in functions {
+            let entry = try XCTUnwrap(function["entry"] as? String)
+            let shown = try json(await host.read(module, "/v1/function/\(entry)"))
+            for local in shown["locals"] as? [[String: Any]] ?? [] where (local["name"] as? String)?.hasPrefix("in_") == true {
+                guard let storage = local["storage"] as? String else { continue }
+                var request: [String: Any] = ["function": entry, "storage": storage, "name": "TriedName\(tried)"]
+                if let first = local["first_use"] as? String { request["first_use"] = first }
+                tried += 1
+                let answer = try? await host.write(module, "/v1/rename/variable",
+                                                   body: try JSONSerialization.data(withJSONObject: request))
+                let after = "\(try json(await host.read(module, "/v1/function/\(entry)")))"
+                print("in_ rename", local["name"] ?? "", storage, answer == nil ? "refused" : "applied",
+                      after.contains("TriedName\(tried - 1)") ? "name shows" : "name absent")
+                if answer != nil { XCTAssertTrue(after.contains("TriedName\(tried - 1)"), after) }
+            }
+            if tried >= 6 { break }
+        }
+        print("in_ locals tried:", tried)
+    }
+
     func testALinkToARenamedFunctionIsReported() async throws {
         guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
             throw XCTSkip("GHIDRA_TYPE_MODULE is not set")

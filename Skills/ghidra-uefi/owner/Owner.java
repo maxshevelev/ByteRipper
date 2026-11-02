@@ -4509,6 +4509,16 @@ public class Owner {
         answer.addProperty("name", applied);
         HighFunction after = decompile(function).getHighFunction();
         if (after != null) {
+            // The decompiler can leave a name out again, as it does for an
+            // `in_` value read before this function writes it: not applied.
+            boolean taken = false;
+            for (Iterator<HighSymbol> scan = after.getLocalSymbolMap().getSymbols(); scan.hasNext(); ) {
+                if (scan.next().getName().equals(applied)) { taken = true; break; }
+            }
+            if (!taken) {
+                throw new Failure(409, "the decompiler did not keep the name " + applied + " on " + match.getName()
+                    + " (" + match.getStorage() + "); nothing was changed — say what it is in a comment");
+            }
             Iterator<HighSymbol> now = after.getLocalSymbolMap().getSymbols();
             while (now.hasNext()) {
                 HighSymbol symbol = now.next();
