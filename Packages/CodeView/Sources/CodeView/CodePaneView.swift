@@ -165,6 +165,8 @@ import ToolModuleKit
     /// What the popup offers; empty until the app has read the module's
     /// history, and the bar stays out of sight while it is.
     private var revisionChoices: [RevisionChoice] = []
+    /// The functions the revision on screen changed; nil when nobody knows.
+    private var changedByCurrentRevision: Set<CodeAddress>?
     /// Whether the module has a history at all, so the bar holds its place
     /// while nothing in it is comparable yet.
     private var hasRevisionHistory = false
@@ -506,11 +508,14 @@ import ToolModuleKit
         public let revision: Int
         public let title: String
         public let hasCode: Bool
+        /// The functions whose C this revision changed; nil when nobody knows.
+        public let changed: Set<CodeAddress>?
 
-        public init(revision: Int, title: String, hasCode: Bool) {
+        public init(revision: Int, title: String, hasCode: Bool, changed: Set<CodeAddress>? = nil) {
             self.revision = revision
             self.title = title
             self.hasCode = hasCode
+            self.changed = changed
         }
     }
 
@@ -518,8 +523,9 @@ import ToolModuleKit
     /// the app reads the module's history and says so here. With nothing to
     /// offer the whole comparison stays out of the bar.
     public func setRevisionChoices(_ choices: [RevisionChoice], current: Int?,
-                                   knowsRevisions: Bool = false) {
+                                   knowsRevisions: Bool = false, currentChanged: Set<CodeAddress>? = nil) {
         revisionChoices = choices
+        changedByCurrentRevision = currentChanged
         hasRevisionHistory = knowsRevisions || !choices.isEmpty
         compareLabel.stringValue = current.map { L("This revision (r%1$@)", String($0)) } ?? L("This revision")
         keepComparisonChoice()
@@ -559,7 +565,8 @@ import ToolModuleKit
         baselineReadFor = artifact == nil ? nil : readFor
         revisionCount += 1
         drawnDiff = nil
-        if keepComparisonChoice() { rebuildRevisionMenu() }
+        keepComparisonChoice()
+        rebuildRevisionMenu()
         selectRevisionItem(comparisonRevision)
         layOutComparison()
         applyMode()
@@ -610,14 +617,33 @@ import ToolModuleKit
 
     private static let noComparisonTag = -1
 
+    /// The revisions worth comparing the open function with: those that changed
+    /// its C, whose comparison is not empty. The newest of them reads as the
+    /// code on screen unless the revision on screen changed it itself, so it is
+    /// left out. A revision nobody knows about stays, and so does the one
+    /// compared with now: the bar has to say what the diff is against.
+    private func offeredRevisionChoices() -> [RevisionChoice] {
+        guard let entry = openFunctionEntry else { return revisionChoices }
+        var newestReadsAsShown = changedByCurrentRevision.map { !$0.contains(entry) } ?? false
+        return revisionChoices.filter { choice in
+            var offered = true
+            if let changed = choice.changed {
+                offered = changed.contains(entry) && !newestReadsAsShown
+                if changed.contains(entry) { newestReadsAsShown = false }
+            }
+            return offered || choice.revision == comparisonRevision
+        }
+    }
+
     /// A revision the store has no code for is listed greyed.
     private func rebuildRevisionMenu() {
         var choices = [CodeMenuLine.Choice(title: L("No comparison"), tag: Self.noComparisonTag)]
-        for (index, choice) in revisionChoices.enumerated() {
+        for (index, choice) in offeredRevisionChoices().enumerated() {
             choices.append(.init(title: choice.title, tag: choice.revision, isEnabled: choice.hasCode,
                                  startsGroup: index == 0))
         }
         revisionLine.setChoices(choices, chosen: comparisonRevision ?? Self.noComparisonTag)
+        revisionLine.isEnabled = choices.count > 1
         selectRevisionItem(comparisonRevision)
     }
 
@@ -1831,6 +1857,8 @@ import ToolModuleKit
             $0.name.isEmpty ? model.displayAddress($0.entry) : $0.name
         } ?? ""
         functionLabel.stringValue = name
+        rebuildRevisionMenu()
+        selectRevisionItem(comparisonRevision)
         // Empty rather than hidden: the module's name across the divider is
         // centred on this line, with no function selected as well.
         updateFunctionMark()

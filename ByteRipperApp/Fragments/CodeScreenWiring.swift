@@ -144,14 +144,16 @@ func wireCodeRevisions(_ codePane: CodePaneView,
         if let previous {
             if let at = choices.firstIndex(where: { $0.revision == previous.revision }) {
                 choices[at] = CodePaneView.RevisionChoice(revision: choices[at].revision,
-                                                          title: choices[at].title, hasCode: true)
+                                                          title: choices[at].title, hasCode: true,
+                                                          changed: choices[at].changed)
             } else {
                 choices.insert(CodePaneView.RevisionChoice(revision: previous.revision,
                                                            title: "r\(previous.revision)", hasCode: true),
                                at: 0)
             }
         }
-        codePane.setRevisionChoices(choices, current: manifest.reading?.rev, knowsRevisions: loaded.hasHistory)
+        codePane.setRevisionChoices(choices, current: manifest.reading?.rev, knowsRevisions: loaded.hasHistory,
+                                    currentChanged: loaded.currentChanged)
 
         // The functions the last launch saw at another revision than the one
         // on screen are New against the revision their record names, and the

@@ -382,10 +382,17 @@ public struct ContentStore: Sendable {
             throw CodeAnalysisError.objectMissing(artifact.hex)
         }
         let url = reviewHistoryURL(module)
+        // Off the lock: it reads the code of two revisions.
+        let changed = artifact.flatMap { artifact -> [String]? in
+            let known = (try? reviewHistory(module: module))?.revisions ?? []
+            return changedFunctions(in: artifact, after: revisionBefore(project: reading.project, rev: reading.rev,
+                                                                       in: known))
+        }
         return try withLock {
             var history = try reviewHistory(module: module) ?? ReviewHistory(module: module)
             let revision = ReviewRevision(project: reading.project, rev: reading.rev, review: review,
                                           description: reading.description, artifact: artifact,
+                                          changedFunctions: changed,
                                           recordedAt: Timestamps.now(), by: by)
             if let at = history.revisions.firstIndex(where: {
                 $0.project == reading.project && $0.rev == reading.rev

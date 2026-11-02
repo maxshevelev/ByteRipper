@@ -251,16 +251,22 @@ public struct ReviewRevision: Codable, Equatable, Sendable {
     /// show it, and diff another revision against. Nil in a history written
     /// before revisions kept their code.
     public var artifact: SHA256Digest?
+    /// The entries of the functions whose C this revision changed, by a
+    /// non-empty diff with the revision before it (`changedEntries`). Nil when
+    /// that has not been worked out: a history written before revisions said so.
+    public var changedFunctions: [String]?
     public var recordedAt: String
     public var by: String?
 
     public init(project: String, rev: Int, review: SHA256Digest, description: SHA256Digest? = nil,
-                artifact: SHA256Digest? = nil, recordedAt: String, by: String? = nil) {
+                artifact: SHA256Digest? = nil, changedFunctions: [String]? = nil,
+                recordedAt: String, by: String? = nil) {
         self.project = project
         self.rev = rev
         self.review = review
         self.description = description
         self.artifact = artifact
+        self.changedFunctions = changedFunctions
         self.recordedAt = recordedAt
         self.by = by
     }
@@ -274,6 +280,7 @@ public struct ReviewRevision: Codable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case project, rev, review, description, artifact, by
         case recordedAt = "recorded_at"
+        case changedFunctions = "changed_functions"
     }
 }
 

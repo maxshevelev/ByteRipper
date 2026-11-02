@@ -1934,6 +1934,45 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(view.selectedRevisionColor, .secondaryLabelColor)
     }
 
+    /// The picker offers what gives a comparison for the function on screen: the
+    /// revisions that changed it, without the one whose code is what is shown;
+    /// and what nobody knows about, and what is compared with now.
+    func testThePickerOffersTheRevisionsThatChangedTheFunction() throws {
+        func choice(_ revision: Int, _ changed: [CodeAddress]?) -> CodePaneView.RevisionChoice {
+            .init(revision: revision, title: "r\(revision)", hasCode: true, changed: changed.map { Set($0) })
+        }
+        let view = CodePaneView(manifest: manifest(revision: 14), artifact: try artifact(),
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 1100, height: 420)
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 1, instruction: nil, showsC: true)
+        let other = try XCTUnwrap(view.selectedFunction?.entry)
+        view.restore(function: 0, instruction: nil, showsC: true)
+        let entry = try XCTUnwrap(view.selectedFunction?.entry)
+        let choices = [choice(13, [other]), choice(12, [entry]), choice(11, []), choice(10, [entry, other]), choice(9, nil)]
+
+        view.setRevisionChoices(choices, current: 14, currentChanged: [])
+        XCTAssertEqual(view.revisionChoiceTitles, ["No comparison", "r10", "r9"],
+                       "r12 reads as the code shown; r13 and r11 did not touch it; r9 is not known")
+
+        view.setRevisionChoices(choices, current: 14, currentChanged: [entry])
+        XCTAssertEqual(view.revisionChoiceTitles, ["No comparison", "r12", "r10", "r9"],
+                       "the revision shown changed it, so r12 reads differently")
+
+        view.setRevisionChoices(choices, current: 14, currentChanged: nil)
+        XCTAssertEqual(view.revisionChoiceTitles, ["No comparison", "r12", "r10", "r9"])
+
+        view.setRevisionChoices(choices, current: 14, currentChanged: [])
+        view.setComparisonRevision(13, artifact: try artifact())
+        XCTAssertTrue(view.revisionChoiceTitles.contains("r13"), "what the diff is against stays named")
+        view.setComparisonRevision(nil, artifact: nil)
+        XCTAssertFalse(view.revisionChoiceTitles.contains("r13"))
+
+        view.selectFunction(at: 1)
+        XCTAssertEqual(view.selectedFunction?.entry, other)
+        XCTAssertEqual(view.revisionChoiceTitles, ["No comparison", "r10", "r9"], "the list follows the function")
+    }
+
     /// A New mark outlives the revisions that follow it: it keeps the revision
     /// it was new against, opening the function compares with that one rather
     /// than with whatever came after, and the mark travels into the pane drawn

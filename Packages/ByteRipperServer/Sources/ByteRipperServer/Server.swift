@@ -74,6 +74,11 @@ public final class Server {
                 Task { await feed.rescan() }
             }
             log("store \(store.root.path) (\(cas.feed.storeID))")
+            // Histories written before revisions said which functions they
+            // changed; the mirrors take them from here.
+            Task.detached(priority: .utility) {
+                if store.backfillChangedFunctions() > 0 { await feed.rescan() }
+            }
         }
         if configuration.roles.contains(.ghidra) {
             // The store is always this server's own (decision 17).

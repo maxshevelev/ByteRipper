@@ -476,4 +476,73 @@ final class ContentStoreTests: XCTestCase {
     func testTheTimestampMatchesThePythonStoresShape() {
         XCTAssertTrue(Timestamps.now().hasSuffix("+00:00"))
     }
+
+    // MARK: - What a revision changed
+
+    private func codeArtifact(_ functions: [(String, String?)]) -> Data {
+        let list = functions.map { entry, c -> [String: Any] in
+            var function: [String: Any] = ["entry": entry, "name": entry, "instructions": []]
+            if let c { function["c"] = c }
+            return function
+        }
+        return try! JSONSerialization.data(withJSONObject: ["script_version": 5, "functions": list])
+    }
+
+    func testARevisionRecordsTheFunctionsItChanged() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("Changed-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = try ContentStore(root: root)
+        let module = SHA256Digest(data: Data("module".utf8))
+        let review = try store.putObject(Data("review".utf8))
+        func record(_ rev: Int, _ functions: [(String, String?)]) throws -> ReviewRevision {
+            let artifact = try store.putObject(codeArtifact(functions))
+            let history = try store.recordRevision(module: module,
+                                                   reading: AnalysisReading(project: "p", rev: rev, review: review),
+                                                   artifact: artifact)
+            return try XCTUnwrap(history.revisions.first { $0.rev == rev })
+        }
+        let first = try record(1, [("0x10", "int a;\n"), ("0x20", "int b;\n"), ("0x30", nil)])
+        XCTAssertEqual(first.changedFunctions, ["0x10", "0x20"], "all there is, at the start")
+        let second = try record(2, [("0x10", "int a;\n"), ("0x20", "int c;\n"), ("0x30", nil)])
+        XCTAssertEqual(second.changedFunctions, ["0x20"])
+        XCTAssertEqual(second.changedEntries, [CodeAddress(0x20)])
+        let third = try record(3, [("0x20", "int c;\n"), ("0x30", "new\n")])
+        XCTAssertEqual(third.changedFunctions, ["0x10", "0x30"], "one gone and one that gained C")
+        let same = try record(4, [("0x20", "int c;\n"), ("0x30", "new\n")])
+        XCTAssertEqual(same.changedFunctions, [], "the same code changes nothing")
+    }
+
+    /// A history from before says nothing; the store works it out once, and a
+    /// mirror, whose code may not be here, leaves it to its server.
+    func testAnOlderHistoryIsWorkedOutOnce() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("Backfill-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = try ContentStore(root: root)
+        let module = SHA256Digest(data: Data("module".utf8))
+        let review = try store.putObject(Data("review".utf8))
+        let one = try store.putObject(codeArtifact([("0x10", "a\n")]))
+        let two = try store.putObject(codeArtifact([("0x10", "b\n")]))
+        let old = ReviewHistory(module: module, revisions: [
+            ReviewRevision(project: "p", rev: 1, review: review, artifact: one, recordedAt: "t"),
+            ReviewRevision(project: "p", rev: 2, review: review, artifact: two, recordedAt: "t"),
+            ReviewRevision(project: "p", rev: 3, review: review, recordedAt: "t")
+        ])
+        let url = store.reviewHistoryURL(module)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        var text = String(decoding: try JSONEncoder().encode(old), as: UTF8.self)
+        text = text.replacingOccurrences(of: "\"changed_functions\":null,", with: "")
+        try Data(text.utf8).write(to: url)
+        XCTAssertNil(try store.reviewHistory(module: module)?.revisions[0].changedFunctions, "an older history reads")
+
+        var mirror = store
+        mirror.objectSource = { _ in Data() }
+        XCTAssertFalse(try mirror.backfillChangedFunctions(module: module))
+
+        XCTAssertEqual(store.backfillChangedFunctions(), 1)
+        let revisions = try XCTUnwrap(store.reviewHistory(module: module)?.revisions)
+        XCTAssertEqual(revisions[0].changedFunctions, ["0x10"])
+        XCTAssertEqual(revisions[1].changedFunctions, ["0x10"])
+        XCTAssertNil(revisions[2].changedFunctions, "no code, nothing to say")
+        XCTAssertEqual(store.backfillChangedFunctions(), 0, "once")
+    }
 }
