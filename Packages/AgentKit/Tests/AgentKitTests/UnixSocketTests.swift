@@ -61,6 +61,28 @@ final class UnixSocketTests: XCTestCase {
         XCTAssertNotNil(behind.clientName)
     }
 
+    /// A child must not keep the socket bound after this process has gone.
+    func testAProcessStartedLaterDoesNotInheritTheSocket() throws {
+        let listener = UnixSocketListener(path: path)
+        try listener.start { _ in }
+        defer { listener.stop() }
+        var pid: pid_t = 0
+        let arguments: [UnsafeMutablePointer<CChar>?] = [strdup("/bin/sleep"), strdup("20"), nil]
+        defer { arguments.forEach { free($0) } }
+        XCTAssertEqual(posix_spawn(&pid, "/bin/sleep", nil, nil, arguments, nil), 0)
+        defer { kill(pid, SIGKILL); waitpid(pid, nil, 0) }
+        Thread.sleep(forTimeInterval: 0.2)
+        let lsof = Process()
+        lsof.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+        lsof.arguments = ["-a", "-U", "-p", String(pid)]
+        let output = Pipe()
+        lsof.standardOutput = output
+        try lsof.run()
+        let text = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        lsof.waitUntilExit()
+        XCTAssertFalse(text.contains("agent.sock"), text)
+    }
+
     func testOnlyTheOwnerMayOpenTheSocket() throws {
         let listener = UnixSocketListener(path: path)
         try listener.start { _ in }

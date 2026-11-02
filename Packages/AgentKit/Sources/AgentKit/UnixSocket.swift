@@ -32,6 +32,7 @@ public enum UnixSocket {
     public static func connect(to path: String) throws -> Int32 {
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fd >= 0 else { throw Failure.system("socket", errno) }
+        closeOnExec(fd)
         noSigPipe(fd)
         var address = try address(for: path)
         let result = withUnsafePointer(to: &address) {
@@ -97,6 +98,13 @@ public enum UnixSocket {
     /// A write to a socket whose reader has gone raises SIGPIPE, and SIGPIPE's
     /// default is to end the process — the whole app, for one client that
     /// closed its terminal. This makes such a write fail with EPIPE instead.
+    /// A process this one starts does not inherit the descriptor. A Ghidra
+    /// owner that did kept the listening socket bound after the server had
+    /// exited, and the next start found it taken.
+    static func closeOnExec(_ fd: Int32) {
+        _ = fcntl(fd, F_SETFD, FD_CLOEXEC)
+    }
+
     static func noSigPipe(_ fd: Int32) {
         var on: Int32 = 1
         setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
@@ -150,12 +158,14 @@ public final class UnixSocketListener: @unchecked Sendable {
         }
         chmod(path, 0o600)
         var pipeFDs: [Int32] = [-1, -1]
+        UnixSocket.closeOnExec(fd)
         guard listen(fd, 8) == 0, pipe(&pipeFDs) == 0 else {
             let code = errno
             Darwin.close(fd)
             unlink(path)
             throw UnixSocket.Failure.system("listen", code)
         }
+        pipeFDs.forEach(UnixSocket.closeOnExec)
         lock.withLock { stopFD = pipeFDs[1] }
         let wakeFD = pipeFDs[0]
 
@@ -171,6 +181,7 @@ public final class UnixSocketListener: @unchecked Sendable {
                 if watched[1].revents != 0 { break }
                 guard watched[0].revents & Int16(POLLIN) != 0 else { continue }
                 let client = accept(fd, nil, nil)
+                if client >= 0 { UnixSocket.closeOnExec(client) }
                 guard client >= 0 else { continue }
                 UnixSocket.noSigPipe(client)
                 onConnection(UnixSocketConnection(fd: client))
