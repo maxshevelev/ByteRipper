@@ -1447,9 +1447,9 @@ public class Owner {
 
     private static boolean nameFunctionPointerMembers(DataType type) {
         DataType base = type instanceof ghidra.program.model.data.TypeDef def ? def.getBaseDataType() : type;
-        if (!(base instanceof ghidra.program.model.data.Structure structure)) return false;
+        if (!(base instanceof ghidra.program.model.data.Composite composite)) return false;
         boolean changed = false;
-        for (ghidra.program.model.data.DataTypeComponent component : structure.getDefinedComponents()) {
+        for (ghidra.program.model.data.DataTypeComponent component : composite.getDefinedComponents()) {
             DataType fieldType = component.getDataType();
             boolean pointer = fieldType instanceof ghidra.program.model.data.Pointer;
             DataType target = pointer
@@ -1460,7 +1460,7 @@ public class Owner {
             String wanted = type.getName() + "_" + field;
             if (wanted.equals(definition.getName())) continue;
             try {
-                ghidra.program.model.data.DataTypeManager manager = structure.getDataTypeManager();
+                ghidra.program.model.data.DataTypeManager manager = composite.getDataTypeManager();
                 DataType copied = definition.copy(manager);
                 copied.setName(wanted);
                 try {
@@ -1473,8 +1473,18 @@ public class Owner {
                 }
                 DataType resolved = manager.resolve(copied, DataTypeConflictHandler.KEEP_HANDLER);
                 DataType replacement = pointer ? manager.getPointer(resolved) : resolved;
-                structure.replaceAtOffset(component.getOffset(), replacement, component.getLength(),
-                                          component.getFieldName(), component.getComment());
+                if (composite instanceof ghidra.program.model.data.Structure structure) {
+                    structure.replaceAtOffset(component.getOffset(), replacement, component.getLength(),
+                                              component.getFieldName(), component.getComment());
+                } else {
+                    // A union has no place to replace at: its members all
+                    // start at zero, and only their order tells them apart.
+                    int ordinal = component.getOrdinal();
+                    int length = component.getLength();
+                    String comment = component.getComment();
+                    composite.delete(ordinal);
+                    composite.insert(ordinal, replacement, length, field, comment);
+                }
                 changed = true;
             } catch (Exception error) {
                 System.out.println("OWNER TYPE member " + wanted + ": " + error.getMessage());
