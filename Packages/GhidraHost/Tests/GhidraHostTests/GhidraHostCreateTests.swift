@@ -331,6 +331,65 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         XCTAssertEqual((second["applied"] as? [Any])?.count, 0, "\(second)")
     }
 
+    func testAValueInADisplacementIsNotTakenForAnImmediate() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
+            throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostDisplacementTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraHostDisplacementTests"),
+                              writer: store)
+        let image = try Data(contentsOf: URL(fileURLWithPath: path))
+        let module = SHA256Digest(data: image)
+        _ = try await host.create(module: image, name: "Module")
+        defer { Task { await host.stop(module) } }
+        func post(_ object: [String: Any]) async throws -> [String: Any] {
+            try json(await host.write(module, "/v1/set/equate", body: try JSONSerialization.data(withJSONObject: object)))
+        }
+        let functions = try json(await host.read(module, "/v1/functions"))["functions"] as? [[String: Any]] ?? []
+        let displacement = try NSRegularExpression(pattern: "\\+ ?(0x[0-9a-fA-F]+)\\]")
+        var found: (entry: String, address: String, value: String, text: String)?
+        var both: (entry: String, address: String, value: String, text: String)?
+        scan: for function in functions.prefix(200) {
+            let entry = try XCTUnwrap(function["entry"] as? String)
+            let shown = try json(await host.read(module, "/v1/disassembly/\(entry)"))
+            for instruction in shown["instructions"] as? [[String: Any]] ?? [] {
+                let text = instruction["text"] as? String ?? ""
+                guard let address = instruction["address"] as? String,
+                      let match = displacement.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+                      let range = Range(match.range(at: 1), in: text) else { continue }
+                let value = String(text[range])
+                if text.hasSuffix("," + value) {
+                    both = both ?? (entry, address, value, text)
+                } else if found == nil, !text.contains(",0x") {
+                    found = (entry, address, value, text)
+                }
+                if found != nil, both != nil { break scan }
+            }
+        }
+        let only = try XCTUnwrap(found)
+        do {
+            _ = try await post(["address": only.address, "value": only.value, "name": "DISP_NAME"])
+            XCTFail("named a displacement unasked: \(only.text)")
+        } catch {
+            XCTAssertTrue("\(error)".contains("memory operand"), "\(error)")
+        }
+        let swept = try await post(["functions": [only.entry], "value": only.value, "name": "DISP_NAME", "dry_run": true])
+        for item in swept["applied"] as? [[String: Any]] ?? [] {
+            XCTAssertNotEqual(item["address"] as? String, only.address, "\(swept)")
+        }
+        if let both {
+            let answer = try await post(["address": both.address, "value": both.value, "name": "IMM_NAME"])
+            XCTAssertEqual(answer["operand"] as? Int, both.text.filter { $0 == "," }.count,
+                           "the last operand is the immediate: \(both.text): \(answer)")
+        } else {
+            print("no instruction here holds one value both ways: \(only.text)")
+        }
+    }
+
     func testALinkToARenamedFunctionIsReported() async throws {
         guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
             throw XCTSkip("GHIDRA_TYPE_MODULE is not set")

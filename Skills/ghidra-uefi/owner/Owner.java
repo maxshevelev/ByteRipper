@@ -548,6 +548,15 @@ public class Owner {
         }
     }
 
+    /** An operand that is a constant by itself, not part of a memory reference. */
+    private static boolean isImmediate(Instruction instruction, int index) {
+        int type = instruction.getOperandType(index);
+        return ghidra.program.model.lang.OperandType.isScalar(type)
+            && !ghidra.program.model.lang.OperandType.isDynamic(type)
+            && !ghidra.program.model.lang.OperandType.isAddress(type)
+            && instruction.getScalar(index) != null;
+    }
+
     /**
      * One name on a value wherever `functions` hold it as an immediate operand.
      * Only an immediate: a value by itself would also match a displacement or
@@ -580,7 +589,7 @@ public class Owner {
             while (instructions.hasNext()) {
                 Instruction instruction = instructions.next();
                 for (int index = 0; index < instruction.getNumOperands(); index++) {
-                    if (!ghidra.program.model.lang.OperandType.isScalar(instruction.getOperandType(index))) continue;
+                    if (!isImmediate(instruction, index)) continue;
                     ghidra.program.model.scalar.Scalar scalar = instruction.getScalar(index);
                     if (scalar == null || (scalar.getUnsignedValue() != value && scalar.getSignedValue() != value)) continue;
                     Address at = instruction.getAddress();
@@ -3941,9 +3950,21 @@ public class Owner {
         int operand = integer(body, "operand", -1);
 
         // The operand and its scalar: the one asked for, or the one holding the value.
+        // Unless an operand is named, only an immediate: the same number as a
+        // displacement in `[reg+1]` is another thing, and is named by `operand`.
         ghidra.program.model.scalar.Scalar scalar = null;
+        boolean inDisplacement = false;
         for (int index = 0; index < instruction.getNumOperands() && scalar == null; index++) {
             if (operand >= 0 && index != operand) continue;
+            if (operand < 0 && !isImmediate(instruction, index)) {
+                for (Object object : instruction.getOpObjects(index)) {
+                    if (object instanceof ghidra.program.model.scalar.Scalar candidate && (value == null
+                        || candidate.getUnsignedValue() == value || candidate.getSignedValue() == value)) {
+                        inDisplacement = true;
+                    }
+                }
+                continue;
+            }
             for (Object object : instruction.getOpObjects(index)) {
                 if (!(object instanceof ghidra.program.model.scalar.Scalar candidate)) continue;
                 if (value == null || candidate.getUnsignedValue() == value || candidate.getSignedValue() == value) {
@@ -3952,6 +3973,11 @@ public class Owner {
                     break;
                 }
             }
+        }
+        if (scalar == null && inDisplacement) {
+            throw new Failure(409, "`" + instruction + "` at " + hex(at) + " holds "
+                              + (value == null ? "a constant" : valueText)
+                              + " only inside a memory operand, not as an immediate: give `operand` if that is meant");
         }
         if (scalar == null) {
             throw new Failure(409, "no operand of `" + instruction + "` at " + hex(at) + " holds "
