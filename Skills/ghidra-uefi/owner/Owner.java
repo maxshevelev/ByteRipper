@@ -4042,6 +4042,7 @@ public class Owner {
             // Every use has to read by the name now. One left unnamed on the
             // slot means the storage was split, not named, and the call is
             // refused rather than answered as applied.
+            if (type != null) requireTypeTaken(function, applied, type);
             HighFunction after = decompile(function).getHighFunction();
             java.util.List<String> left = new java.util.ArrayList<>();
             String nowStorage = storage;
@@ -4140,6 +4141,7 @@ public class Owner {
         } catch (Exception error) {
             throw new Failure(400, error.getMessage() + holderOf(applied, function));
         }
+        if (type != null) requireTypeTaken(function, applied, type);
         // The storage as it is now: a decompiler temporary becomes HASH:… once
         // it is named, and that is what names it from here on.
         decompiled.remove(function.getEntryPoint());
@@ -4159,6 +4161,49 @@ public class Owner {
             }
         }
         return answer;
+    }
+
+    /**
+     * The decompiler can decline a type it was given: the symbol stays as it
+     * was, and an unusable one is left in the program with a warning at the top
+     * of the C. Answered as applied, that would be a success with no effect, so
+     * the call is refused here and its transaction rolls all of it back.
+     */
+    private void requireTypeTaken(Function function, String name, DataType type) throws Failure {
+        decompiled.remove(function.getEntryPoint());
+        DecompileResults results = decompile(function);
+        HighFunction high = results == null ? null : results.getHighFunction();
+        DataType now = null;
+        if (high != null) {
+            Iterator<HighSymbol> symbols = high.getLocalSymbolMap().getSymbols();
+            while (symbols.hasNext()) {
+                HighSymbol symbol = symbols.next();
+                if (symbol.getName().equals(name)) { now = symbol.getDataType(); break; }
+            }
+        }
+        boolean declined;
+        if (now != null) {
+            declined = !sameType(now, type);
+        } else {
+            var c = results == null ? null : results.getDecompiledFunction();
+            declined = c != null && c.getC().contains("Unable to use type for symbol " + name);
+        }
+        // The answer below rolls back: what was just decompiled is of the
+        // program as it will no longer be.
+        decompiled.remove(function.getEntryPoint());
+        if (declined) {
+            throw new Failure(409, "the decompiler did not take the type " + type.getDisplayName() + " for " + name
+                + (now == null ? "" : ": it still reads as " + now.getDisplayName())
+                + " — nothing was changed; type the value it comes from, or say in a comment what it is");
+        }
+    }
+
+    private static boolean sameType(DataType a, DataType b) {
+        return a.isEquivalent(b) || stripTypedef(a).isEquivalent(stripTypedef(b));
+    }
+
+    private static DataType stripTypedef(DataType type) {
+        return type instanceof ghidra.program.model.data.TypeDef def ? def.getBaseDataType() : type;
     }
 
     private JsonObject setSignature(JsonObject body) throws Exception {

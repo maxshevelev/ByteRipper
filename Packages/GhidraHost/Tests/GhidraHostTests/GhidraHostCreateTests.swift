@@ -155,3 +155,54 @@ final class GhidraHostLibraryTests: XCTestCase {
         XCTAssertEqual(behindEntry?.base, added.version)
     }
 }
+
+/// A type the decompiler declines is refused and leaves the C as it was. Run
+/// with `GHIDRA_TYPE_MODULE` naming a module image; skipped otherwise.
+final class GhidraHostDeclinedTypeTests: XCTestCase {
+    private func json(_ data: Data) throws -> [String: Any] {
+        try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+
+    func testATypeNotTakenIsRefusedAndLeavesNothing() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
+            throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostDeclinedTypeTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraHostDeclinedTypeTests"),
+                              writer: store)
+        let image = try Data(contentsOf: URL(fileURLWithPath: path))
+        let module = SHA256Digest(data: image)
+        _ = try await host.create(module: image, name: "Module")
+        let functions = try json(await host.read(module, "/v1/functions"))["functions"] as? [[String: Any]] ?? []
+        var refused = 0, taken = 0
+        for function in functions.prefix(40) {
+            let entry = try XCTUnwrap(function["entry"] as? String)
+            let before = try json(await host.read(module, "/v1/function/\(entry)"))
+            for local in (before["locals"] as? [[String: Any]] ?? []).prefix(6) {
+                guard let storage = local["storage"] as? String else { continue }
+                let shown = try json(await host.read(module, "/v1/function/\(entry)"))
+                var request: [String: Any] = ["function": entry, "storage": storage, "type": "EFI_GUID"]
+                if let first = local["first_use"] as? String { request["first_use"] = first }
+                do {
+                    _ = try await host.write(module, "/v1/rename/variable",
+                                             body: try JSONSerialization.data(withJSONObject: request))
+                    taken += 1
+                    break
+                } catch {
+                    guard "\(error)".contains("did not take the type") else { continue }
+                    refused += 1
+                    let after = try json(await host.read(module, "/v1/function/\(entry)"))
+                    XCTAssertEqual(after["c"] as? String, shown["c"] as? String, "\(entry) \(storage)")
+                    XCTAssertFalse((after["c"] as? String ?? "").contains("Unable to use type"))
+                }
+            }
+        }
+        await host.stop(module)
+        print("DECLINED refused=\(refused) taken=\(taken)")
+        XCTAssertGreaterThan(refused + taken, 0)
+    }
+}
