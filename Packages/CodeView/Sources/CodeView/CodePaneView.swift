@@ -155,11 +155,12 @@ import ToolModuleKit
     private var hasRevisionHistory = false
     /// The revision the Diff compares against; nil for none.
     public private(set) var comparisonRevision: Int?
-    /// Whether the comparison is the reader's own — picked in the bar — and
-    /// so holds for every function until Reset. A comparison a New mark put
-    /// up is the open function's alone: moving to a function the revision did
-    /// not change takes it away again.
-    private var comparisonIsPinned = false
+    /// What each function was left compared with: the revision its New mark
+    /// brought, once the reader has opened it and moved on, or what the reader
+    /// picked in the bar for it. A function not listed here is compared only
+    /// by a mark it still wears. The panel's, as its marks are, and gone with
+    /// the session: nothing writes it to a workspace.
+    private var functionComparisons: [CodeAddress: FunctionComparison] = [:]
     /// The revision before the one on screen, and its code: what opening a
     /// function the revision changed compares against by itself.
     private var previousRevision: (revision: Int, artifact: CodeArtifact)?
@@ -488,11 +489,19 @@ import ToolModuleKit
 
     /// The revision the Diff compares against, its code loaded by the app;
     /// nil clears the comparison. `pinned` is the reader's pick in the bar,
-    /// which holds for every function until Reset; without it the comparison
-    /// belongs to the marked function that put it up.
+    /// which that function keeps until another pick or Reset. `function` is the
+    /// function it was picked for, when the code took long enough to read that
+    /// the reader may have moved on; the open one when nil.
     public func setComparisonRevision(_ revision: Int?, artifact: CodeArtifact?,
-                                      pinned: Bool = false) {
-        comparisonIsPinned = pinned && artifact != nil && revision != nil
+                                      pinned: Bool = false, function: CodeAddress? = nil) {
+        if pinned, let entry = function ?? openFunctionEntry {
+            if let revision, let artifact {
+                functionComparisons[entry] = .against(.init(revision: revision, artifact: artifact))
+            } else {
+                functionComparisons[entry] = .noComparison
+            }
+            guard entry == openFunctionEntry else { return }
+        }
         comparisonRevision = artifact == nil ? nil : revision
         revisionBaseline = artifact
         revisionCount += 1
@@ -541,6 +550,8 @@ import ToolModuleKit
     @objc private func revisionChosen(_ sender: NSMenuItem) { chooseRevision(sender.tag) }
 
     private func chooseRevision(_ tag: Int) {
+        // Reset is a choice too: a mark's comparison does not come back.
+        if tag < 0, let entry = openFunctionEntry { functionComparisons[entry] = .noComparison }
         onChooseRevision?(tag < 0 ? nil : tag)
     }
 
@@ -776,7 +787,8 @@ import ToolModuleKit
         // having seen it, and the next launch is told so.
         if let previous, previous != index {
             noteSeen(previous)
-            if unopenedChanges.removeValue(forKey: previous) != nil {
+            if let taken = unopenedChanges.removeValue(forKey: previous) {
+                keepComparison(of: previous, from: taken)
                 syncingSelection = true
                 functionTable.reloadData()
                 syncingSelection = false
@@ -793,14 +805,52 @@ import ToolModuleKit
         }
     }
 
-    /// The comparison an open function stands for: the revision its New mark
-    /// was made against, or none when the revision changed nothing here. A
-    /// function the earlier revision did not have reads as all added, as the
-    /// diff of a function it lacks is. A comparison the reader pinned in the
-    /// bar is theirs and holds for every function until Reset.
+    /// The function on screen, by the entry that outlives a revision.
+    public var openFunctionEntry: CodeAddress? {
+        guard let index = state.function, model.functions.indices.contains(index) else { return nil }
+        return model.functions[index].entry
+    }
+
+    /// The comparison each function was left with, for the pane drawn next.
+    public var keptComparisons: [CodeAddress: FunctionComparison] { functionComparisons }
+
+    /// Takes the comparisons of the pane before this one. `marks` are the marks
+    /// that pane carried: a function wearing a mark it did not is new against a
+    /// revision that came since, and that mark is what opening it shows.
+    public func restoreComparisons(_ kept: [CodeAddress: FunctionComparison], marks: [NewMark]) {
+        let carried = Set(marks.map(\.entry))
+        var marked: Set<CodeAddress> = []
+        for index in unopenedChanges.keys where model.functions.indices.contains(index) {
+            marked.insert(model.functions[index].entry)
+        }
+        for (entry, comparison) in kept where !marked.contains(entry) || carried.contains(entry) {
+            functionComparisons[entry] = comparison
+        }
+        if let index = state.function { applyOpenComparison(for: index) }
+    }
+
+    /// A function that loses its mark having been open keeps what the mark
+    /// compared it with, unless the reader has chosen for it since.
+    private func keepComparison(of index: Int, from mark: NewMark.Baseline) {
+        guard mark.revision != nil, model.functions.indices.contains(index) else { return }
+        let entry = model.functions[index].entry
+        if functionComparisons[entry] == nil { functionComparisons[entry] = .against(mark) }
+    }
+
+    /// The comparison an open function stands for: what it was left with, or
+    /// the revision its New mark was made against, or none. A function the
+    /// earlier revision did not have reads as all added, as the diff of a
+    /// function it lacks is.
     private func applyOpenComparison(for index: Int) {
-        guard !comparisonIsPinned, model.functions.indices.contains(index) else { return }
-        guard let mark = unopenedChanges[index], let revision = mark.revision else {
+        guard model.functions.indices.contains(index) else { return }
+        let kept = functionComparisons[model.functions[index].entry]
+        let wanted: NewMark.Baseline?
+        switch kept {
+        case .noComparison: wanted = nil
+        case .against(let baseline): wanted = baseline
+        case nil: wanted = unopenedChanges[index]
+        }
+        guard let mark = wanted, let revision = mark.revision else {
             if comparisonRevision != nil { setComparisonRevision(nil, artifact: nil) }
             return
         }
@@ -816,7 +866,7 @@ import ToolModuleKit
         // Told apart only now that the code is here: a record made against
         // another copy of that revision. Nothing changed, so a mark would be
         // about the bookkeeping and not about the function.
-        if mark.artifact == nil, Self.holdsTheSame(artifact.functions[index], in: held) {
+        if kept == nil, mark.artifact == nil, Self.holdsTheSame(artifact.functions[index], in: held) {
             takeMark(of: index)
             return
         }
@@ -1198,6 +1248,8 @@ import ToolModuleKit
         }
         for index in changed where unopenedChanges[index] == nil {
             unopenedChanges[index] = NewMark.Baseline(revision: revision, artifact: previous)
+            // New again: the comparison it was left with is about an older change.
+            functionComparisons[artifact.functions[index].entry] = nil
         }
         marksChanged()
         // The rows changed, not the reader's place: reloading the table must
@@ -1288,6 +1340,13 @@ import ToolModuleKit
     /// A function a revision changed and the reader has not looked at yet:
     /// its entry, and the revision it was new against with that revision's
     /// code — nil revision when the app could not name one.
+    /// What a function is compared with, once it has been settled for it.
+    public enum FunctionComparison {
+        /// The reader reset the comparison for this function.
+        case noComparison
+        case against(NewMark.Baseline)
+    }
+
     public struct NewMark {
         public struct Baseline {
             public let revision: Int?
@@ -1370,10 +1429,14 @@ import ToolModuleKit
 
     /// Takes the New mark off every function, as leaving each of them would:
     /// what they changed counts as read, so the next launch does not put it up
-    /// again. A comparison a mark put up goes with it; one the reader picked
-    /// in the bar stays. Whatever the revision picker holds stays comparable.
+    /// again. The open function has been opened, so it keeps its comparison as
+    /// any function left does. Whatever the revision picker holds stays
+    /// comparable.
     public func clearNewMarks() {
         guard !unopenedChanges.isEmpty else { return }
+        if let index = state.function, let mark = unopenedChanges[index] {
+            keepComparison(of: index, from: mark)
+        }
         unopenedChanges.removeAll()
         if let revision = manifest.reading?.rev {
             seen = Self.seenRecords(of: artifact, revision: revision)

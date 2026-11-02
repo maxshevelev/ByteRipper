@@ -70,6 +70,7 @@ func wireCodeScreen(_ codePane: CodePaneView, to pane: PaneViewModel, owner: Mai
 @MainActor
 func presentCodeScreen(_ screen: CodeScreen, on codePane: CodePaneView) {
     codePane.setNewMarks(screen.newMarks)
+    codePane.restoreComparisons(screen.comparisons, marks: screen.newMarks)
     // Before the place: the function the screen opens on is read from the line
     // it was left at.
     codePane.restoreTopLines(screen.topLines)
@@ -103,21 +104,25 @@ func wireCodeRevisions(_ codePane: CodePaneView,
     }
     codePane.onChooseRevision = { [weak codePane] revision in
         guard let codePane else { return }
+        // The function it was picked for: the code may take long enough to
+        // read that the reader has moved on.
+        let function = codePane.openFunctionEntry
         guard let revision else {
-            codePane.setComparisonRevision(nil, artifact: nil)
+            codePane.setComparisonRevision(nil, artifact: nil, pinned: true, function: function)
             return
         }
         if let previous, previous.revision == revision {
-            codePane.setComparisonRevision(revision, artifact: previous.artifact, pinned: true)
+            codePane.setComparisonRevision(revision, artifact: previous.artifact,
+                                           pinned: true, function: function)
             return
         }
         guard let digest = digests[revision] else {
-            codePane.setComparisonRevision(nil, artifact: nil)
+            codePane.setComparisonRevision(nil, artifact: nil, pinned: true, function: function)
             return
         }
         Task { @MainActor in
             let artifact = await CodeAnalysisStore.artifact(forRevision: digest)
-            codePane.setComparisonRevision(revision, artifact: artifact, pinned: true)
+            codePane.setComparisonRevision(revision, artifact: artifact, pinned: true, function: function)
         }
     }
     let history = Task { @MainActor in await CodeAnalysisStore.revisions(for: manifest) }

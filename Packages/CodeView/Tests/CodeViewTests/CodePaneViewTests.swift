@@ -1343,9 +1343,11 @@ final class CodePaneViewTests: XCTestCase {
                                 moduleBytes: teModule(), hexView: NSView())
         view.frame = NSRect(x: 0, y: 0, width: 640, height: 300)
         view.layoutSubtreeIfNeeded()
+        // A pick is one function's: each of the two is compared by its own.
+        view.selectFunction(at: 1)
         view.setComparisonRevision(54, artifact: baseline, pinned: true)
-
         view.selectFunction(at: 0)
+        view.setComparisonRevision(54, artifact: baseline, pinned: true)
         view.layoutSubtreeIfNeeded()
         XCTAssertTrue(view.showsRevisionDiff)
         view.diffScrollOrigin = NSPoint(x: 0, y: 400)
@@ -1732,7 +1734,7 @@ final class CodePaneViewTests: XCTestCase {
 
         XCTAssertTrue(view.newMarks.isEmpty)
         XCTAssertFalse(view.clearNewMarksButton.isEnabled)
-        XCTAssertNil(view.comparisonRevision, "the mark's comparison goes with it")
+        XCTAssertEqual(view.comparisonRevision, 53, "the function was opened: its comparison stays")
         XCTAssertFalse(view.newBannerIsShown)
         XCTAssertEqual(kept["0x220"]?.revision, 54)
 
@@ -2093,18 +2095,48 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertNil(view.comparisonRevision, "an unchanged function is not compared")
         XCTAssertFalse(view.showsRevisionDiff)
 
-        // The reader's own pick holds across functions until Reset — but a
-        // function the revision did not change is shown as the code, not as a
-        // diff of nothing.
-        view.setComparisonRevision(54, artifact: previous, pinned: true)
+        // The mark has gone, its comparison has not: back on F the reader
+        // sees the change the mark was about.
+        XCTAssertTrue(view.newMarks.isEmpty)
         view.selectFunction(at: 0)
+        XCTAssertEqual(view.comparisonRevision, 54, "the revision the mark brought")
         XCTAssertTrue(view.showsRevisionDiff)
+
+        // A pick is the function's own: G has its pick, F keeps what it had.
         view.selectFunction(at: 1)
-        XCTAssertEqual(view.comparisonRevision, 54, "the pick still holds")
-        XCTAssertFalse(view.showsRevisionDiff, "no change here: the code is shown")
-        let noComparison: (Int?, CodeArtifact?) = (nil, nil)
-        view.setComparisonRevision(noComparison.0, artifact: noComparison.1)
-        XCTAssertFalse(view.showsRevisionDiff)
+        view.setComparisonRevision(53, artifact: previous, pinned: true)
+        XCTAssertEqual(view.comparisonRevision, 53)
+        XCTAssertFalse(view.showsRevisionDiff, "no change in G: the code is shown")
+        view.selectFunction(at: 0)
+        XCTAssertEqual(view.comparisonRevision, 54)
+        view.selectFunction(at: 1)
+        XCTAssertEqual(view.comparisonRevision, 53)
+
+        // Reset is F's alone, and the mark's revision does not come back.
+        view.selectFunction(at: 0)
+        view.chooseRevisionMenuTag(-1)
+        view.setComparisonRevision(nil, artifact: nil, pinned: true)
+        view.selectFunction(at: 1)
+        view.selectFunction(at: 0)
+        XCTAssertNil(view.comparisonRevision)
+        view.selectFunction(at: 1)
+        XCTAssertEqual(view.comparisonRevision, 53)
+
+        // The next pane is handed them, as the app hands them over; a revision
+        // that changes F again makes it new against that one.
+        let next = CodePaneView(manifest: manifest(), artifact: try artifact("void F(void)\n{\n  C();\n}\n", g),
+                                moduleBytes: teModule(), hexView: NSView())
+        next.frame = view.frame
+        next.layoutSubtreeIfNeeded()
+        view.selectFunction(at: 0)
+        view.setComparisonRevision(54, artifact: previous, pinned: true)
+        next.markRevisionChange(from: current, revision: 55)
+        next.setNewMarks(view.newMarks)
+        next.restoreComparisons(view.keptComparisons, marks: view.newMarks)
+        next.selectFunction(at: 1)
+        XCTAssertEqual(next.comparisonRevision, 53, "G keeps its pick in the next pane")
+        next.selectFunction(at: 0)
+        XCTAssertEqual(next.comparisonRevision, 55, "F wears a new mark, and it wins")
     }
 
     /// A click in the diff works as in the C: a name highlights its every
@@ -2196,7 +2228,8 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(code.selectedRange().length, 0, "the C's selection stays behind")
         XCTAssertEqual(code.highlightedRanges, [], "the C's highlight stays behind")
 
-        // The diff, with a change on both functions.
+        // The diff, with a change on both functions, each compared by its own pick.
+        view.setComparisonRevision(54, artifact: try artifact("2"), pinned: true)
         view.selectFunction(at: 0)
         view.setComparisonRevision(54, artifact: try artifact("2"), pinned: true)
         XCTAssertTrue(view.showsRevisionDiff)

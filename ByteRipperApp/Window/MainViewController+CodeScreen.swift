@@ -35,6 +35,7 @@ extension MainViewController {
         code.screen.showsC = view.showsDecompiledC
         code.screen.topLines = view.topLinePositions
         code.screen.newMarks = view.newMarks
+        code.screen.comparisons = view.keptComparisons
         code.screen.openCalls = view.openCallEntries
         codeScreen = code
     }
@@ -111,6 +112,7 @@ extension MainViewController {
             // What the screen holds as it stands now, not as it stood when the
             // store was asked.
             next.newMarks = self.codeScreenView?.newMarks ?? screen.newMarks
+            next.comparisons = self.codeScreenView?.keptComparisons ?? screen.comparisons
             next.openCalls = self.codeScreenView?.openCallEntries ?? screen.openCalls
             self.codeScreen = (pane, pane.document, next)
             self.apply(mode: .singleFile)

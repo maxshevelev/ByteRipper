@@ -59,6 +59,9 @@ struct CodeScreen {
     /// The functions still marked New, each with what it is compared against.
     /// They are the panel's, as its place is, and go wherever it is shown.
     var newMarks: [CodePaneView.NewMark] = []
+    /// What each function was left compared with. The panel's while it lives,
+    /// and never written to a workspace.
+    var comparisons: [CodeAddress: CodePaneView.FunctionComparison] = [:]
     /// The places open in the call tree, by the entries that outlive a revision.
     var openCalls: [[CodeAddress]] = []
 }

@@ -178,6 +178,7 @@ import ToolModuleKit
                                               topLines: code.topLines,
                                               recipes: code.recipes,
                                               newMarks: code.newMarks,
+                                              comparisons: code.comparisons,
                                               openCalls: code.openCalls)),
                      animated: animated)
     }
@@ -485,6 +486,7 @@ import ToolModuleKit
         // redraw of a reading that did not move would take them.
         var screen = next
         screen.newMarks = entry.codePane?.newMarks ?? next.newMarks
+        screen.comparisons = entry.codePane?.keptComparisons ?? next.comparisons
         screen.openCalls = entry.codePane?.openCallEntries ?? next.openCalls
         let dumpVisible = entry.codePane?.isHexDumpVisible ?? true
         let previous = entry.codePane?.artifact
@@ -534,6 +536,7 @@ import ToolModuleKit
         code.showsC = entry.codePane?.showsDecompiledC ?? false
         code.topLines = entry.codePane?.topLinePositions ?? code.topLines
         code.newMarks = entry.codePane?.newMarks ?? code.newMarks
+        code.comparisons = entry.codePane?.keptComparisons ?? code.comparisons
         code.openCalls = entry.codePane?.openCallEntries ?? code.openCalls
         return .code(code)
     }

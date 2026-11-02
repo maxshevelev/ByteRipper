@@ -381,6 +381,11 @@ final class LinkedPartTests: XCTestCase {
         XCTAssertEqual(moved.newMarks.map(\.entry), [CodeAddress(0x10)], "the moved panel keeps the marks")
         XCTAssertEqual(moved.newMarks.first?.baseline.revision, 7)
 
+        // A function's comparison is the panel's too, and follows it.
+        moved.setComparisonRevision(9, artifact: try artifact("Then"), pinned: true,
+                                    function: CodeAddress(0x10))
+        XCTAssertEqual(tab.currentCodeScreen()?.comparisons.keys.map { $0 }, [CodeAddress(0x10)])
+
         // And what the screen holds follows the pane as it changes.
         XCTAssertEqual(tab.currentCodeScreen()?.newMarks.map(\.entry), [CodeAddress(0x10)])
         moved.clearNewMarks()
