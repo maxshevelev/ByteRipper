@@ -252,6 +252,47 @@ final class CodeAgentTests: XCTestCase {
         XCTAssertEqual(pane.selectedFunction?.name, "FUN_00000220")
     }
 
+    /// The description opens at its top, whether its text came before it was
+    /// shown or after, in the panel's real place.
+    func testTheDescriptionOpensAtItsTop() async throws {
+        let controller = try open()
+        let node = try await moduleNode()
+        _ = try await client.answer("open_code", ["node": .string(node), "function": "entry"])
+        let panel = try XCTUnwrap(controller.fragments.expanded)
+        let pane = try XCTUnwrap(controller.fragments.codePane(panel))
+        let filler = (0..<60).map { "Line \($0) of the section." }.joined(separator: "\n\n")
+        let text = "# Module\n\n\(filler)\n\n## How it works\n\n\(filler)"
+        func settle() {
+            controller.view.window?.layoutIfNeeded()
+            pane.layoutSubtreeIfNeeded()
+            RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        }
+
+        pane.setModuleDescription(text)
+        pane.showDescription(true)
+        settle()
+        XCTAssertEqual(pane.descriptionScrollY, 0, "the text came first")
+
+        pane.showDescription(false)
+        pane.setModuleDescription(nil)
+        pane.showDescription(true)
+        settle()
+        pane.setModuleDescription(text)
+        settle()
+        XCTAssertEqual(pane.descriptionScrollY, 0, "the text came after")
+    }
+
+    /// The help stands in the panel's title bar.
+    func testTheCodePanelsHelpStandsInItsTitleBar() async throws {
+        let controller = try open()
+        let node = try await moduleNode()
+        _ = try await client.answer("open_code", ["node": .string(node), "function": "entry"])
+        let panel = try XCTUnwrap(controller.fragments.expanded)
+        let pane = try XCTUnwrap(controller.fragments.codePane(panel))
+        XCTAssertNotNil(pane.titleBarHelp.window, "the button is on screen")
+        XCTAssertFalse(pane.titleBarHelp.isDescendant(of: pane), "over the pane, not in it")
+    }
+
     /// Past the code's own jumps Back goes on through the tab's places; one
     /// in the dump behind puts the panel away, and Forward brings it back and
     /// walks the code again.

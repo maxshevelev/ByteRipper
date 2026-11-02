@@ -105,7 +105,15 @@ import ToolModuleKit
     private let tableScroll = NSScrollView()
     private let cTextView = CodeTextView()
     private let cScroll = NSScrollView()
+    /// ASM, C or the description: which is on screen.
+    private var mode = 1 { didSet { drawModeControls() } }
     private let modeControl: NSSegmentedControl
+    /// Shows and hides the description, at the head of the navigator.
+    private let descriptionButton = CodeOrderButton()
+    /// The panel's page in the book: whoever holds the pane sets it in its title
+    /// bar, over the whole panel.
+    public let titleBarHelp: NSView = HelpButton.greyCircle(for: .topic(.codePanel))
+
     private let descriptionView = CodeDescriptionView()
     private let diffView = CodeDiffView()
     /// The artifact this pane showed before a later revision of its reading
@@ -142,6 +150,8 @@ import ToolModuleKit
     /// Turns while the app reads another analysis the reader chose.
     private let recipeSpinner = NSProgressIndicator()
     private let codeContent = NSView()
+    private var codeStack: NSView?
+    private var descriptionLeading: NSLayoutConstraint?
     private let rightSplit = ALSplitView()
     private let hexDumpBar = CodeDumpBar()
     private let hexDumpButton = NSButton()
@@ -245,10 +255,14 @@ import ToolModuleKit
     private var nameLabel: NSTextField?
     private var revisionLabel: NSTextField?
     private let functionLabel = CodeTitleField(labelWithString: "")
-    /// The function over the code, and in its place while the description is
-    /// on screen the line that opens the description's sections.
+    /// The function over the code; nothing while the description is on screen.
     private let functionLine = NSStackView()
-    private let sectionLine = CodeMenuLine(frame: .zero)
+    private var codeStackLeading: NSLayoutConstraint?
+    /// The description's column of sections runs the height of the code area,
+    /// beside the header as well; the code's margin, without it.
+    private static let codeMargin: CGFloat = 12
+    private static let sectionColumnInset: CGFloat = 8
+    private static let sectionColumnWidth: CGFloat = 220
     /// After the function's name, a library function's badge as the
     /// navigator draws it, with what the library registry says of it.
     let functionMark = CodeBaselineImageView()
@@ -309,9 +323,8 @@ import ToolModuleKit
                     : $0.analyzedAt > $1.analyzedAt
             }
         // ASM and C are names of formats, not words to translate.
-        modeControl = NSSegmentedControl(
-            labels: ["ASM", "C", ""], trackingMode: .selectOne,
-            target: nil, action: nil)
+        modeControl = NSSegmentedControl(labels: ["ASM", "C"], trackingMode: .selectOne,
+                                         target: nil, action: nil)
         listControl = NSSegmentedControl(
             labels: [L("Functions"), L("Strings"), L("POST"), L("Status")],
             trackingMode: .selectOne, target: nil, action: nil)
@@ -356,9 +369,27 @@ import ToolModuleKit
     func navigatorRowText(_ row: Int) -> String { navigatorText(at: row) }
     var navigatorListIndex: Int { listControl.selectedSegment }
     var descriptionSectionTitles: [String] { descriptionView.sections.map(\.title) }
-    /// The section the header names, nil when it names none; for tests.
-    var shownSectionTitle: String? { sectionLine.isHidden ? nil : sectionLine.title }
-    var headerShowsFunction: Bool { !functionLine.isHidden }
+    /// The section selected in the column, nil when none is shown; for tests.
+    var shownSectionTitle: String? { showsSectionColumn ? descriptionView.selectedSectionTitle : nil }
+    var showsSectionColumn: Bool { !descriptionView.sectionColumn.isHidden }
+    var descriptionButtonIsOn: Bool { descriptionButton.state == .on }
+    func clickDescriptionButton() { descriptionButton.performClick(nil) }
+    func clickCloseDescription() { descriptionView.closeButton.performClick(nil) }
+    var descriptionCloseFrame: NSRect { convert(descriptionView.closeButton.bounds, from: descriptionView.closeButton) }
+    var descriptionFrameInPane: NSRect { convert(descriptionView.bounds, from: descriptionView) }
+    var codeAreaFrameInPane: NSRect { convert(codeContent.bounds, from: codeContent) }
+    /// How far the description's text stands from its view's top and bottom.
+    var descriptionTextInset: CGFloat { descriptionView.textView.textContainerInset.height }
+    /// How far the column stands from the top of the code area and from the
+    /// dump's bar, for a test.
+    var sectionColumnGaps: (top: CGFloat, bottom: CGFloat) {
+        let column = convert(descriptionView.sectionColumn.bounds, from: descriptionView.sectionColumn)
+        let area = convert(codeContent.bounds, from: codeContent)
+        let bar = convert(hexDumpBar.bounds, from: hexDumpBar)
+        return (area.maxY - column.maxY, column.minY - bar.maxY)
+    }
+    func clickDescriptionSection(_ index: Int) { descriptionView.clickSection(index) }
+    var headerShowsFunction: Bool { codeStack?.isHidden != true }
     /// The navigator's column headers; none for a one-column list.
     var navigatorColumnTitles: [String] {
         functionTable.headerView == nil ? [] : functionTable.tableColumns.map(\.title)
@@ -409,7 +440,7 @@ import ToolModuleKit
     /// have drawn one of its own by then, and that one is put back at once.
     public func restoreTopLines(_ lines: [String: Int]) {
         topLines = lines
-        guard modeControl.selectedSegment == 1, let index = state.function,
+        guard mode == 1, let index = state.function,
               model.functions.indices.contains(index),
               let line = lines[model.functions[index].entry.description] else { return }
         if showsRevisionDiff { diffView.scroll(toNewLine: line) } else { scrollC(toLine: line) }
@@ -435,7 +466,7 @@ import ToolModuleKit
     /// description or the diff is — what the code shows when the reader goes
     /// back to it.
     public var showsDecompiledC: Bool {
-        modeControl.selectedSegment > 1 ? codeShowsC : modeControl.selectedSegment == 1
+        mode > 1 ? codeShowsC : mode == 1
     }
     /// Sizes the C side to the comparison: the diff where the revisions
     /// differ, the code where they do not, and the code whenever the side on
@@ -443,7 +474,7 @@ import ToolModuleKit
     private func refreshDiffVisibility() {
         showsRevisionDiff = updateDiff()
         diffView.isHidden = !showsRevisionDiff
-        cScroll.isHidden = modeControl.selectedSegment != 1 || showsRevisionDiff
+        cScroll.isHidden = mode != 1 || showsRevisionDiff
     }
 
     /// The C against a revision, while one is compared against, the C side is
@@ -453,10 +484,12 @@ import ToolModuleKit
     public private(set) var showsRevisionDiff = false
     /// What the comparison would show if the function differed.
     private var wantsRevisionDiff: Bool {
-        comparisonRevision != nil && modeControl.selectedSegment == 1
+        comparisonRevision != nil && mode == 1
     }
     /// The module's description is on screen in place of the code.
-    public var showsDescription: Bool { modeControl.selectedSegment == Self.descriptionSegment }
+    /// How far the description is scrolled, for a test.
+    public var descriptionScrollY: CGFloat { descriptionView.scrollOrigin.y }
+    public var showsDescription: Bool { mode == Self.descriptionSegment }
     private static let descriptionSegment = 2
 
     /// Whether the pane has a revision to compare the code against.
@@ -681,14 +714,14 @@ import ToolModuleKit
     /// again — as the segment does.
     public func showDescription(_ shows: Bool) {
         guard shows != showsDescription else { return }
-        modeControl.selectedSegment = shows ? Self.descriptionSegment : (codeShowsC ? 1 : 0)
+        mode = shows ? Self.descriptionSegment : (codeShowsC ? 1 : 0)
         applyMode()
     }
 
     /// Back to the code from the description, on the side it was left on.
     private func leaveDescription() {
         guard showsDescription else { return }
-        modeControl.selectedSegment = codeShowsC ? 1 : 0
+        mode = codeShowsC ? 1 : 0
         applyMode()
     }
     /// The analyses the header can offer, the chosen one first.
@@ -759,7 +792,7 @@ import ToolModuleKit
         if let instruction, model.lines.indices.contains(instruction) {
             select(line: instruction)
         }
-        modeControl.selectedSegment = showsC ? 1 : 0
+        mode = showsC ? 1 : 0
         applyMode()
         resetHistory()
     }
@@ -769,7 +802,7 @@ import ToolModuleKit
     /// listing already showing asks for.
     public func showDecompiledC(_ showsC: Bool) {
         guard showsDecompiledC != showsC || showsDescription else { return }
-        modeControl.selectedSegment = showsC ? 1 : 0
+        mode = showsC ? 1 : 0
         applyMode()
     }
 
@@ -1695,7 +1728,7 @@ import ToolModuleKit
     /// nothing to draw. A function whose only difference is its code needs no
     /// plate: the comparison is the explanation.
     private func updateNewMarkBanner() {
-        guard modeControl.selectedSegment != Self.descriptionSegment,
+        guard mode != Self.descriptionSegment,
               let index = state.function, model.functions.indices.contains(index),
               let mark = unopenedChanges[index] else {
             newMarkBanner.hide()
@@ -1798,7 +1831,8 @@ import ToolModuleKit
             $0.name.isEmpty ? model.displayAddress($0.entry) : $0.name
         } ?? ""
         functionLabel.stringValue = name
-        functionLabel.isHidden = name.isEmpty
+        // Empty rather than hidden: the module's name across the divider is
+        // centred on this line, with no function selected as well.
         updateFunctionMark()
     }
 
@@ -1875,7 +1909,7 @@ import ToolModuleKit
             popover.show(relativeTo: rect, of: cTextView)
         } else {
             // Over the description the header names no function.
-            let anchor: NSView = functionLabel.isHiddenOrHasHiddenAncestor ? modeControl : functionLabel
+            let anchor: NSView = functionLabel.isHiddenOrHasHiddenAncestor ? self : functionLabel
             popover.show(relativeTo: anchor.bounds, of: anchor)
         }
         return popover
@@ -2346,7 +2380,7 @@ import ToolModuleKit
     /// description is — so a position read there does not overwrite the one
     /// the code had.
     private func currentTopLine() -> Int? {
-        guard modeControl.selectedSegment == 1 else { return nil }
+        guard mode == 1 else { return nil }
         if showsRevisionDiff { return diffView.topNewLine }
         guard let place = topOfC() else { return nil }
         let text = cTextView.string as NSString
@@ -2514,6 +2548,19 @@ import ToolModuleKit
         moduleBlock.alignment = .leading
         moduleBlock.spacing = 1
         moduleBlock.translatesAutoresizingMaskIntoConstraints = false
+        descriptionButton.image = NSImage(systemSymbolName: "book", accessibilityDescription: nil)
+        descriptionButton.imagePosition = .imageOnly
+        descriptionButton.isBordered = false
+        descriptionButton.bezelStyle = .inline
+        descriptionButton.setButtonType(.pushOnPushOff)
+        descriptionButton.contentTintColor = .secondaryLabelColor
+        descriptionButton.target = self
+        descriptionButton.action = #selector(descriptionButtonClicked)
+        descriptionButton.translatesAutoresizingMaskIntoConstraints = false
+        descriptionButton.setContentHuggingPriority(.required, for: .horizontal)
+        descriptionButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+        ControlHelp.describe(descriptionButton, name: L("Description"),
+                             tooltip: L("Show or hide the module's description"))
 
         listControl.target = self
         listControl.action = #selector(listChanged)
@@ -2544,6 +2591,7 @@ import ToolModuleKit
         let functionPane = NSView()
         functionPane.translatesAutoresizingMaskIntoConstraints = false
         functionPane.addSubview(moduleBlock)
+        functionPane.addSubview(descriptionButton)
         functionPane.addSubview(listControl)
         functionPane.addSubview(readinessBar)
         functionPane.addSubview(functionScroll)
@@ -2659,7 +2707,9 @@ import ToolModuleKit
         constraints += margin(emptyListLabel.leadingAnchor, functionPane.leadingAnchor, 16)
         constraints += margin(emptyListLabel.trailingAnchor, functionPane.trailingAnchor, -16)
         constraints += margin(moduleBlock.leadingAnchor, functionPane.leadingAnchor, 12)
-        constraints += margin(moduleBlock.trailingAnchor, functionPane.trailingAnchor, -8)
+        constraints += margin(moduleBlock.trailingAnchor, descriptionButton.leadingAnchor, -6)
+        constraints += margin(descriptionButton.trailingAnchor, functionPane.trailingAnchor, -8)
+        constraints.append(descriptionButton.centerYAnchor.constraint(equalTo: moduleLine.centerYAnchor))
         constraints += margin(listControl.leadingAnchor, functionPane.leadingAnchor, 8)
         constraints += margin(listControl.trailingAnchor, functionPane.trailingAnchor, -8)
         constraints += margin(functionScroll.leadingAnchor, functionPane.leadingAnchor, 8)
@@ -2705,39 +2755,20 @@ import ToolModuleKit
         modeControl.target = self
         modeControl.action = #selector(modeChanged)
         // The decompiled C first: it is what a module is read in.
-        modeControl.selectedSegment = 1
-        modeControl.setImage(NSImage(systemSymbolName: "book", accessibilityDescription: L("Description")),
-                             forSegment: Self.descriptionSegment)
-        modeControl.setToolTip(L("Description"), forSegment: Self.descriptionSegment)
+        drawModeControls()
         modeControl.setContentHuggingPriority(.required, for: .horizontal)
         modeControl.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-        // One line, every control centred on it: where the reader is; the
-        // platform's round help button and the
-        // ASM/C switch at the right — the panel's way to its page in the book.
+        // One line: where the reader is.
         let titleSpacer = NSView()
         titleSpacer.setContentHuggingPriority(.init(1), for: .horizontal)
         let occurrenceBar = makeOccurrenceBar()
         self.occurrenceBar = occurrenceBar
-        let codeHelpButton = HelpButton.standard(for: .topic(.codePanel))
-        codeHelpButton.setContentHuggingPriority(.required, for: .horizontal)
-        codeHelpButton.setContentCompressionResistancePriority(.required, for: .horizontal)
-        drawSectionLine()
-        sectionLine.translatesAutoresizingMaskIntoConstraints = false
-        sectionLine.setContentCompressionResistancePriority(.init(498), for: .horizontal)
-        sectionLine.isHidden = true
-        sectionLine.onChoose = { [weak self] index in self?.goToDescriptionSection(index) }
-        // help: panel.code.description-sections
-        ControlHelp.describe(sectionLine, name: L("Sections of the description"),
-                             tooltip: L("Go to a section of the description"))
-        let titleRow = NSStackView(views: [functionLine, sectionLine, titleSpacer,
-                                           occurrenceBar, codeHelpButton, modeControl])
+        let titleRow = NSStackView(views: [functionLine, modeControl, titleSpacer, occurrenceBar])
         titleRow.orientation = .horizontal
         titleRow.alignment = .centerY
         titleRow.spacing = 8
-        titleRow.setCustomSpacing(16, after: occurrenceBar)
-        // A little air between the round `?` and the switch it stands beside.
-        titleRow.setCustomSpacing(12, after: codeHelpButton)
+        titleRow.setCustomSpacing(12, after: functionLine)
         titleRow.setContentHuggingPriority(.required, for: .vertical)
         titleRow.setContentCompressionResistancePriority(.required, for: .vertical)
         titleRow.translatesAutoresizingMaskIntoConstraints = false
@@ -2771,7 +2802,9 @@ import ToolModuleKit
 
         descriptionView.translatesAutoresizingMaskIntoConstraints = false
         descriptionView.isHidden = true
-        descriptionView.onSectionsChanged = { [weak self] in self?.updateSectionLine() }
+        descriptionView.onChooseSection = { [weak self] index in self?.goToDescriptionSection(index) }
+        descriptionView.onClose = { [weak self] in self?.showDescription(false) }
+        descriptionView.onSectionsChanged = { [weak self] in self?.updateHeaderForMode() }
         descriptionView.onFollow = { [weak self] address, link in self?.followFromDescription(address, link: link) }
         descriptionView.resolveName = { [weak self] name in
             guard let self, let index = self.model.functions.firstIndex(where: { $0.name == name }) else { return nil }
@@ -2788,7 +2821,6 @@ import ToolModuleKit
         content.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(tableScroll)
         content.addSubview(cScroll)
-        content.addSubview(descriptionView)
         diffView.translatesAutoresizingMaskIntoConstraints = false
         diffView.isHidden = true
         content.addSubview(diffView)
@@ -2805,7 +2837,7 @@ import ToolModuleKit
         // one of the two constraints is active at a time (`layOutBanner`).
         pageTops = []
         belowBannerTops = []
-        for scroll in [tableScroll, cScroll, descriptionView, diffView] {
+        for scroll in [tableScroll, cScroll, diffView] {
             let top = scroll.topAnchor.constraint(equalTo: content.topAnchor)
             let below = scroll.topAnchor.constraint(equalTo: newMarkBanner.bottomAnchor, constant: 8)
             pageTops.append(top)
@@ -2823,7 +2855,11 @@ import ToolModuleKit
         codeStack.alignment = .width
         codeStack.spacing = 8
         codeStack.translatesAutoresizingMaskIntoConstraints = false
+        // The description runs the height of the area, in place of the stack.
+        descriptionView.translatesAutoresizingMaskIntoConstraints = false
+        codeContent.addSubview(descriptionView)
         codeContent.addSubview(codeStack)
+        self.codeStack = codeStack
         // The margins yield to a pane narrower than twice the margin — a split
         // view lays a pane it has not sized yet at no width, and two required
         // edges 12 points in would ask for a negative width. The solver then
@@ -2833,6 +2869,7 @@ import ToolModuleKit
         let stackTrailing = codeStack.trailingAnchor.constraint(equalTo: codeContent.trailingAnchor,
                                                                 constant: -12)
         stackLeading.priority = NSLayoutConstraint.Priority(999)
+        codeStackLeading = stackLeading
         stackTrailing.priority = NSLayoutConstraint.Priority(999)
         // The top margin, the gap above the bar and the bar's own height yield
         // in a pane laid out with no height, where they would ask for a stack
@@ -2892,6 +2929,27 @@ import ToolModuleKit
         let barHeight = hexDumpBar.heightAnchor.constraint(equalToConstant: Self.dumpBarHeight)
         barHeight.priority = NSLayoutConstraint.Priority(999)
         let stackAboveBar = codeStack.bottomAnchor.constraint(equalTo: hexDumpBar.topAnchor, constant: -8)
+        let column = descriptionView.sectionColumn
+        column.isHidden = true
+        codeContent.addSubview(column)
+        let columnTop = column.topAnchor.constraint(equalTo: codeContent.topAnchor, constant: Self.sectionColumnInset)
+        let columnBottom = column.bottomAnchor.constraint(equalTo: hexDumpBar.topAnchor, constant: -Self.sectionColumnInset)
+        // They yield in a pane laid out with no height, as the stack's do.
+        columnTop.priority = NSLayoutConstraint.Priority(999)
+        columnBottom.priority = NSLayoutConstraint.Priority(999)
+        let descriptionStart = descriptionView.leadingAnchor.constraint(equalTo: codeContent.leadingAnchor)
+        descriptionLeading = descriptionStart
+        NSLayoutConstraint.activate([
+            descriptionStart,
+            descriptionView.trailingAnchor.constraint(equalTo: codeContent.trailingAnchor),
+            descriptionView.topAnchor.constraint(equalTo: codeContent.topAnchor),
+            descriptionView.bottomAnchor.constraint(equalTo: hexDumpBar.topAnchor)
+        ])
+        NSLayoutConstraint.activate([
+            columnTop, columnBottom,
+            column.leadingAnchor.constraint(equalTo: codeContent.leadingAnchor, constant: Self.sectionColumnInset),
+            column.widthAnchor.constraint(equalToConstant: Self.sectionColumnWidth)
+        ])
         stackAboveBar.priority = NSLayoutConstraint.Priority(999)
         NSLayoutConstraint.activate([
             hexDumpBar.leadingAnchor.constraint(equalTo: codeContent.leadingAnchor),
@@ -2972,11 +3030,11 @@ import ToolModuleKit
     private func zoomChanged() {
         emptyListLabel.font = Self.navigatorFont()
         for field in [nameLabel, revisionLabel, functionLabel] { field?.font = ToolPanelFont.title() }
-        drawSectionLine()
         updateFunctionMark()
         drawRecipeIcon()
         drawRecipeTitle()
         drawComparisonFonts()
+        updateHeaderForMode()
         staleLabel.font = ToolPanelFont.body()
         layOutNavigatorColumns()
         // What the reader was looking at stays where it was: the line at the
@@ -3400,12 +3458,23 @@ import ToolModuleKit
     // MARK: - Selection
 
     @objc private func modeChanged() {
+        mode = modeControl.selectedSegment
         applyMode()
     }
 
     // help: panel.code.description
+    @objc private func descriptionButtonClicked() { showDescription(!showsDescription) }
+
+    /// Set outright: a click on the button has just turned its state over.
+    private func drawModeControls() {
+        if mode < Self.descriptionSegment { modeControl.selectedSegment = mode }
+        descriptionButton.isChosen = showsDescription
+        descriptionButton.state = showsDescription ? .on : .off
+    }
+
+    // help: panel.code.description
     private func applyMode() {
-        let segment = modeControl.selectedSegment
+        let segment = mode
         if segment <= 1 { codeShowsC = segment == 1 }
         tableScroll.isHidden = segment != 0
         descriptionView.isHidden = segment != Self.descriptionSegment
@@ -3414,37 +3483,22 @@ import ToolModuleKit
         updateNewMarkBanner()
         currentOccurrence = nil
         drawOccurrenceBar()
-        updateSectionLine()
+        updateHeaderForMode()
     }
 
     /// The header over the description: it is about the whole module, so no
-    /// function stands there, and the line says the section on screen.
-    private func updateSectionLine() {
-        let sections = descriptionView.sections
-        functionLine.isHidden = showsDescription
-        sectionLine.isHidden = !showsDescription || sections.isEmpty
-        guard !sectionLine.isHidden else { return }
-        let top = sections.map(\.level).min() ?? 1
-        let choices = sections.enumerated().map { index, section in
-            CodeMenuLine.Choice(title: section.title, tag: index, indentation: section.level - top)
-        }
-        // Headings the line already offers: this is every step of a scroll.
-        if sectionLine.choices != choices {
-            sectionLine.setChoices(choices, chosen: descriptionView.currentSection)
-        } else {
-            sectionLine.select(descriptionView.currentSection)
-        }
+    /// function stands there. The column of sections stands beside it.
+    private func updateHeaderForMode() {
+        let column = showsDescription && !descriptionView.sections.isEmpty
+        descriptionView.sectionColumn.isHidden = !column
+        codeStackLeading?.constant = column
+            ? Self.sectionColumnInset + Self.sectionColumnWidth + Self.codeMargin
+            : Self.codeMargin
+        descriptionLeading?.constant = column ? Self.sectionColumnInset + Self.sectionColumnWidth : 0
+        // The description runs the height of the area; nothing stands over it.
+        codeStack?.isHidden = showsDescription
     }
 
-    private func drawSectionLine() {
-        let font = ToolPanelFont.title()
-        sectionLine.setFont(font)
-        sectionLine.setTextColor(.labelColor)
-        sectionLine.setIcon(NSImage(systemSymbolName: "list.bullet", accessibilityDescription: nil)?
-            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: font.pointSize - 1, weight: .regular)))
-    }
-
-    // help: panel.code.description-sections
     /// A jump as a link is: Back returns to where the description stood.
     func goToDescriptionSection(_ index: Int) {
         jump(even: true) { descriptionView.goToSection(index) }

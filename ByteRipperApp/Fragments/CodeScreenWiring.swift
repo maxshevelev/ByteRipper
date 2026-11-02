@@ -17,6 +17,7 @@ import Foundation
 func wireCodeScreen(_ codePane: CodePaneView, to pane: PaneViewModel, owner: MainViewController?,
                     previous: (revision: Int, artifact: CodeArtifact)? = nil,
                     reveal: @escaping (Range<UInt64>) -> Void) {
+    owner?.filePaneView(for: pane)?.setHeaderAccessory(codePane.titleBarHelp)
     // A note on the code is the person's as one on the dump is: the same
     // form, the same window.
     codePane.onAnnotate = { [weak owner, weak pane] location, name in

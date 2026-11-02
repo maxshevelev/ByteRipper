@@ -1,4 +1,4 @@
-@source-sha bfb5260eb91e87242276900c464ce36525ffca573819bc1f1fc6311940956df3
+@source-sha 7f97325f5f711331ba435f40e1267364f30d3426742f936dcea1377fea418f01
 # Code-Bereich
 
 > Ein Modul als Code gelesen: seine Funktionen, das ASM-Listing, der dekompilierte C und die Bytes, auf die eine Instruktion zeigt.
@@ -25,9 +25,9 @@ Lässt der Decompiler von Ghidra Blöcke aus dem C weg, weil bei den ihm bekannt
 
 ## Beschreibung
 
-**Beschreibung**, die dritte Wahl neben **ASM** und **C**, als Buch dargestellt, zeigt anstelle des Codes die Beschreibung des Moduls: wozu das Modul dient, wie es arbeitet und wie es aufgebaut ist — seine Schnittstellen, der Ablauf ab dem Einstiegspunkt, die Funktionen nach ihrer Aufgabe, die angesprochene Hardware, die gemeldeten Codes, die Befunde der Analyse und was noch unbekannt ist. Die Beschreibung entsteht bei der Analyse zusammen mit den Namen und Kommentaren und wird mit ihnen in derselben Revision veröffentlicht; sie beschreibt also stets den gezeigten Code. Eine darin genannte Funktion — als Link oder als Code geschrieben — ist ein Link: Ein Klick öffnet die Funktion im Code, und **Darstellung ▸ Zurück** führt an die Stelle der Beschreibung zurück, an der sie verlassen wurde. Auch ein Klick auf eine Funktion in der Liste links führt zum Code zurück. Hat die Analyse noch keine Beschreibung verfasst, sagt die Ansicht dies. Was eine Beschreibung feststellt, ist die Lesart des Codes durch die Analyse; Unbewiesenes ist als solches gekennzeichnet.
+**Beschreibung**, die Schaltfläche mit dem Buch rechts neben dem Modulnamen über der Liste, zeigt anstelle des Codes die Beschreibung des Moduls: wozu das Modul dient, wie es arbeitet und wie es aufgebaut ist — seine Schnittstellen, der Ablauf ab dem Einstiegspunkt, die Funktionen nach ihrer Aufgabe, die angesprochene Hardware, die gemeldeten Codes, die Befunde der Analyse und was noch unbekannt ist. Die Beschreibung entsteht bei der Analyse zusammen mit den Namen und Kommentaren und wird mit ihnen in derselben Revision veröffentlicht; sie beschreibt also stets den gezeigten Code. Eine darin genannte Funktion — als Link oder als Code geschrieben — ist ein Link: Ein Klick öffnet die Funktion im Code, und **Darstellung ▸ Zurück** führt an die Stelle der Beschreibung zurück, an der sie verlassen wurde. Auch ein Klick auf eine Funktion in der Liste links führt zum Code zurück. Hat die Analyse noch keine Beschreibung verfasst, sagt die Ansicht dies. Was eine Beschreibung feststellt, ist die Lesart des Codes durch die Analyse; Unbewiesenes ist als solches gekennzeichnet.
 
-Solange die Beschreibung gezeigt wird, nennt der Kopf über dem Code keine Funktion, denn die Beschreibung gilt für das ganze Modul. Er nennt stattdessen den Abschnitt auf dem Bildschirm; ein Klick darauf öffnet die Liste der Abschnitte der Beschreibung, und ein gewählter Abschnitt rückt an den oberen Rand der Ansicht. **Darstellung ▸ Zurück** führt an die vorherige Stelle der Beschreibung zurück.
+Dieselbe Schaltfläche blendet sie wieder aus, ebenso die runde Schließen-Schaltfläche in der oberen rechten Ecke der Beschreibung. Solange sie gezeigt wird, erscheint der Umschalter **ASM** und **C** über dem Code nicht und keine Funktion wird genannt, denn sie gilt für das ganze Modul. Eine Spalte links neben der Beschreibung listet ihre Abschnitte wie das Inhaltsverzeichnis der Hilfe auf und folgt dem Lesen; ein Klick auf einen Abschnitt rückt ihn an den oberen Rand der Ansicht. **Darstellung ▸ Zurück** führt an die vorherige Stelle der Beschreibung zurück.
 
 ## Diff
 

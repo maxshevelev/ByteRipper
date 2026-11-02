@@ -357,6 +357,7 @@ extension MainViewController {
     /// Puts an ordinary dump's chrome back on a pane that was a code screen:
     /// its own title bar and close button, the tool strip and the map.
     func leaveCodeScreen(in pane: FilePaneView, of paneModel: PaneViewModel) {
+        pane.setHeaderAccessory(nil)
         if pane.isHeaderHoisted {
             pane.restoreHeader()
             pane.hidesCloseButton = false

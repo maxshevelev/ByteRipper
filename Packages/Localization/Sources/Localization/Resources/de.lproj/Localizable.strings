@@ -394,8 +394,9 @@
 "Deleted here" = "Hier gelöscht";
 "Deleted on another Mac" = "Auf einem anderen Mac gelöscht";
 "Description" = "Beschreibung";
+"Show or hide the module's description" = "Beschreibung des Moduls ein- oder ausblenden";
+"Close the description" = "Beschreibung schließen";
 "Sections of the description" = "Abschnitte der Beschreibung";
-"Go to a section of the description" = "Zu einem Abschnitt der Beschreibung gehen";
 "Compare with a revision" = "Vergleich mit einer Revision";
 "Compare the code with a revision" = "Den Code mit einer Revision vergleichen";
 "Reset" = "Zurücksetzen";

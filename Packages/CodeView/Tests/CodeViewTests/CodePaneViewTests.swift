@@ -121,7 +121,8 @@ final class CodePaneViewTests: XCTestCase {
         view.frame = NSRect(x: 0, y: 0, width: 640, height: 360)
         view.layoutSubtreeIfNeeded()
         view.restore(function: 1, instruction: nil, showsC: true)
-        let tables = tables(in: view)
+        // The description's column of sections is a list of its own.
+        let tables = tables(in: view).filter { !($0 is NSOutlineView) }
         XCTAssertEqual(tables.count, 2)
         let smallRow = ToolPanelFont.rowHeight
         XCTAssertEqual(codeFontSize(of: view.decompiledAttributedText), 13)
@@ -277,15 +278,9 @@ final class CodePaneViewTests: XCTestCase {
         let mode = try XCTUnwrap(first(NSSegmentedControl.self, in: view) {
             $0.label(forSegment: 0) == "ASM"
         })
-        XCTAssertEqual((0..<mode.segmentCount).map { mode.label(forSegment: $0) ?? "" },
-                       ["ASM", "C", ""])
-        XCTAssertNotNil(mode.image(forSegment: 2), "the description is a book")
-        XCTAssertEqual(mode.toolTip(forSegment: 2), "Description")
+        XCTAssertEqual((0..<mode.segmentCount).map { mode.label(forSegment: $0) ?? "" }, ["ASM", "C"])
         let modeRect = view.convert(mode.bounds, from: mode)
-        XCTAssertGreaterThan(modeRect.minX, view.bounds.midX,
-                             "the switch is on the code side")
-        XCTAssertGreaterThan(modeRect.minY, view.bounds.maxY - 80,
-                             "and at the top")
+        XCTAssertGreaterThan(modeRect.minY, view.bounds.maxY - 80, "and at the top")
 
         func field(_ text: String) throws -> NSTextField {
             try XCTUnwrap(first(NSTextField.self, in: view) { $0.stringValue == text && !$0.isHidden }, text)
@@ -331,7 +326,8 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(nameEdge.minX, versionsEdge.minX, accuracy: 1,
                        "the line's icon stands under the module's name")
         XCTAssertEqual(rects[0].midY, rects[1].midY, accuracy: 1.5, "the mark is on the function's line")
-        XCTAssertEqual(rects[2].midY, rects[1].midY, accuracy: 1.5, "the controls are centred on the header")
+        XCTAssertEqual(rects[2].midY, rects[1].midY, accuracy: 1.5, "the switch is centred on the header")
+        XCTAssertEqual(rects[2].minX - rects[1].maxX, 12, accuracy: 6, "right after the function's name")
 
         view.selectFunction(at: 1)
         XCTAssertEqual(function.stringValue, "entry", "the function follows the selection")
@@ -2907,7 +2903,7 @@ final class CodePaneViewTests: XCTestCase {
         let call = (text.string as NSString).range(of: "entry")
         XCTAssertNotEqual(call.location, NSNotFound)
         let link = try XCTUnwrap(text.attribute(.link, at: call.location, effectiveRange: nil) as? String)
-        let textView = try XCTUnwrap(first(NSTextView.self, in: view) { _ in true })
+        let textView = try XCTUnwrap(first(CodeTextView.self, in: view) { _ in true })
         XCTAssertTrue(view.textView(textView, clickedOnLink: link, at: call.location))
         XCTAssertEqual(view.selectedFunction?.name, "entry")
         XCTAssertTrue(view.canGoBack)
@@ -3072,46 +3068,129 @@ final class CodePaneViewTests: XCTestCase {
         return text.attribute(.link, at: range.location, effectiveRange: nil)
     }
 
-    /// Over the description the header names no function but the section on
-    /// screen, which opens the others; going to one is a step Back returns from.
+    /// Over the description the header names no function. A column lists the
+    /// sections and follows the reading; a click on one is a step Back returns
+    /// from.
     func testTheHeaderGoesThroughTheDescriptionsSections() throws {
         let view = try describedPane()
         let filler = (0..<40).map { "Line \($0) of the section." }.joined(separator: "\n\n")
-        view.setModuleDescription("# Module\n\n\(filler)\n\n## How it works\n\n\(filler)\n\n### Order\n\nShort.")
+        view.setModuleDescription("# Module\n\n\(filler)\n\n## How it works\n\n\(filler)\n\n"
+            + "## Interfaces\n\n\(filler)\n\n### Order\n\nShort.")
         view.layoutSubtreeIfNeeded()
         XCTAssertTrue(view.headerShowsFunction, "the code keeps its function")
+        let heading = try XCTUnwrap(first(NSTextField.self, in: view) { $0.stringValue == "CpuPei" })
+        let headingY = view.convert(heading.bounds, from: heading).midY
+        XCTAssertFalse(view.showsSectionColumn)
         XCTAssertNil(view.shownSectionTitle)
 
         view.showDescription(true)
+        view.layoutSubtreeIfNeeded()
         XCTAssertFalse(view.headerShowsFunction)
-        XCTAssertEqual(view.descriptionSectionTitles, ["Module", "How it works", "Order"])
-        XCTAssertEqual(view.shownSectionTitle, "Module")
+        XCTAssertTrue(view.showsSectionColumn)
+        XCTAssertEqual(view.convert(heading.bounds, from: heading).midY, headingY, accuracy: 0.5,
+                       "the module's name stays where it is")
+        XCTAssertEqual(view.descriptionSectionTitles, ["How it works", "Interfaces", "Order"],
+                       "the document's title is not a section")
+        XCTAssertEqual(view.sectionColumnGaps.top, view.sectionColumnGaps.bottom, accuracy: 0.5,
+                       "the column stands as far from the top as from the bar")
+        XCTAssertEqual(view.sectionColumnGaps.top, 8, accuracy: 0.5)
+        XCTAssertNil(view.shownSectionTitle, "the introduction is above every section")
 
-        view.goToDescriptionSection(1)
-        XCTAssertEqual(view.shownSectionTitle, "How it works")
+        // The text runs the height of the area, as far from its edges as the
+        // column is.
+        XCTAssertEqual(view.descriptionFrameInPane.maxY, view.codeAreaFrameInPane.maxY, accuracy: 0.5)
+        XCTAssertEqual(view.descriptionTextInset, view.sectionColumnGaps.top, accuracy: 0.5)
+
+        view.clickDescriptionSection(1)
+        XCTAssertEqual(view.shownSectionTitle, "Interfaces")
         XCTAssertGreaterThan(view.descriptionScrollOrigin.y, 0)
         let there = view.descriptionScrollOrigin
-        view.goToDescriptionSection(2)
+        view.clickDescriptionSection(2)
         XCTAssertEqual(view.shownSectionTitle, "Order", "the last one, too short to reach the top")
 
         view.goBack()
         XCTAssertEqual(view.descriptionScrollOrigin.y, there.y, accuracy: 1)
-        XCTAssertEqual(view.shownSectionTitle, "How it works")
+        XCTAssertEqual(view.shownSectionTitle, "Interfaces")
+        view.clickDescriptionSection(0)
+        XCTAssertEqual(view.shownSectionTitle, "How it works", "the column follows the reading")
         view.scrollDescription(to: .zero)
-        XCTAssertEqual(view.shownSectionTitle, "Module", "the line follows the scrolling")
+        XCTAssertNil(view.shownSectionTitle)
 
         view.showDescription(false)
         XCTAssertTrue(view.headerShowsFunction)
+        XCTAssertFalse(view.showsSectionColumn)
         XCTAssertNil(view.shownSectionTitle)
     }
 
     /// A description with no headings has nothing to go through.
-    func testADescriptionWithoutHeadingsHasNoSectionLine() throws {
+    /// The circle of the close button stands as far from the description's top
+    /// as from its right, measured in what is drawn: a symbol has margins of its
+    /// own inside its frame.
+    func testTheCloseButtonStandsEquallyFromBothEdges() throws {
+        let view = try describedPane()
+        view.setModuleDescription("Short.")
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1100, height: 420), styleMask: [.titled],
+                              backing: .buffered, defer: false)
+        window.contentView = view
+        window.layoutIfNeeded()
+        view.showDescription(true)
+        window.layoutIfNeeded()
+        view.layoutSubtreeIfNeeded()
+        view.displayIfNeeded()
+        let rep = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+        view.cacheDisplay(in: view.bounds, to: rep)
+        let scale = CGFloat(rep.pixelsWide) / view.bounds.width
+        let area = view.descriptionFrameInPane
+        let size = Int(40 * scale)
+        let right = Int(area.maxX * scale), top = Int((view.bounds.height - area.maxY) * scale)
+        func isInk(_ x: Int, _ y: Int) -> Bool {
+            guard let color = rep.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else { return false }
+            return color.alphaComponent > 0.5 && color.brightnessComponent < 0.95
+        }
+        var rightGap: CGFloat?, topGap: CGFloat?
+        for offset in 0..<size where rightGap == nil {
+            if (top..<(top + size)).contains(where: { isInk(right - 1 - offset, $0) }) { rightGap = CGFloat(offset) / scale }
+        }
+        for offset in 0..<size where topGap == nil {
+            if ((right - size)..<right).contains(where: { isInk($0, top + offset) }) { topGap = CGFloat(offset) / scale }
+        }
+        XCTAssertEqual(try XCTUnwrap(rightGap), try XCTUnwrap(topGap), accuracy: 0.75)
+        XCTAssertEqual(try XCTUnwrap(topGap), 10, accuracy: 0.75)
+    }
+
+    /// The pointer's moves reach the text under the close button as well; there
+    /// it leaves the arrow, and beside it keeps its own cursor.
+    func testTheTextLeavesTheArrowOverTheCloseButton() throws {
+        let view = try describedPane()
+        view.setModuleDescription("Short.")
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1100, height: 420), styleMask: [.titled],
+                              backing: .buffered, defer: false)
+        window.contentView = view
+        window.layoutIfNeeded()
+        view.showDescription(true)
+        window.layoutIfNeeded()
+        let text = try XCTUnwrap(first(DescriptionTextView.self, in: view) { _ in true })
+        func move(to point: NSPoint) throws -> NSEvent {
+            try XCTUnwrap(NSEvent.mouseEvent(with: .mouseMoved, location: view.convert(point, to: nil), modifierFlags: [],
+                                             timestamp: 0, windowNumber: window.windowNumber, context: nil,
+                                             eventNumber: 0, clickCount: 0, pressure: 0))
+        }
+        let close = view.descriptionCloseFrame
+        NSCursor.iBeam.set()
+        text.mouseMoved(with: try move(to: NSPoint(x: close.midX, y: close.midY)))
+        XCTAssertEqual(NSCursor.current, NSCursor.arrow)
+        NSCursor.iBeam.set()
+        text.cursorUpdate(with: try move(to: NSPoint(x: close.midX, y: close.midY)))
+        XCTAssertEqual(NSCursor.current, NSCursor.arrow)
+    }
+
+    func testADescriptionWithoutHeadingsHasNoSectionColumn() throws {
         let view = try describedPane()
         view.setModuleDescription("Only a paragraph.")
         view.showDescription(true)
         XCTAssertEqual(view.descriptionSectionTitles, [])
         XCTAssertNil(view.shownSectionTitle)
+        XCTAssertFalse(view.showsSectionColumn)
         XCTAssertFalse(view.headerShowsFunction)
     }
 
@@ -3338,7 +3417,7 @@ final class CodePaneViewTests: XCTestCase {
         sheet.choose(row: 1)
         XCTAssertEqual(view.selectedFunction?.name, "FUN_00000220")
         XCTAssertEqual(view.selectedInstruction?.address, CodeAddress(0x222))
-        let textView = try XCTUnwrap(first(NSTextView.self, in: view) { _ in true })
+        let textView = try XCTUnwrap(first(CodeTextView.self, in: view) { _ in true })
         let selected = (textView.string as NSString).substring(with: textView.selectedRange())
         XCTAssertEqual(selected, "entry")
         let second = (textView.string as NSString).range(of: "entry", options: .backwards)
@@ -4377,16 +4456,47 @@ final class CodePaneViewTests: XCTestCase {
     func testTheHeaderOpensTheHelpForTheCodePanel() throws {
         let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
                                 moduleBytes: moduleBytes, hexView: NSView())
-        view.frame = NSRect(x: 0, y: 0, width: 1200, height: 400)
-        view.layoutSubtreeIfNeeded()
-        let help = try XCTUnwrap(all(HelpButton.self, in: view).first)
+        let help = try XCTUnwrap(view.titleBarHelp as? HelpButton)
         XCTAssertEqual(help.opens, .topic(.codePanel))
-        let mode = try XCTUnwrap(all(NSSegmentedControl.self, in: view)
-            .first { $0.segmentCount == 3 && $0.label(forSegment: 1) == "C" })
-        let helpRect = view.convert(help.bounds, from: help)
-        let modeRect = view.convert(mode.bounds, from: mode)
-        XCTAssertLessThan(helpRect.maxX, modeRect.minX, "the help button stands before the switch")
-        XCTAssertEqual(helpRect.midY, modeRect.midY, accuracy: 1.5, "one line with it")
+        XCTAssertFalse(help.isBordered, "a grey circle, not the round button's white one")
+        XCTAssertNotNil(help.image)
+    }
+
+    /// The book at the head of the navigator shows and hides the description,
+    /// the round button in its corner closes it, and the code comes back on the
+    /// side it was left on, with the ASM/C switch.
+    func testTheBookTogglesTheDescriptionAndCloseEndsIt() throws {
+        let view = try describedPane()
+        view.setModuleDescription("# Module\n\nText.")
+        view.frame = NSRect(x: 0, y: 0, width: 1100, height: 420)
+        view.layoutSubtreeIfNeeded()
+        let mode = try XCTUnwrap(first(NSSegmentedControl.self, in: view) { $0.label(forSegment: 0) == "ASM" })
+        mode.selectedSegment = 0
+        mode.sendAction(mode.action, to: mode.target)
+        XCTAssertFalse(view.descriptionButtonIsOn)
+        XCTAssertFalse(mode.isHiddenOrHasHiddenAncestor)
+
+        view.clickDescriptionButton()
+        XCTAssertTrue(view.showsDescription)
+        XCTAssertTrue(view.descriptionButtonIsOn)
+        XCTAssertTrue(mode.isHiddenOrHasHiddenAncestor, "the switch is about the code")
+
+        view.clickDescriptionButton()
+        XCTAssertFalse(view.showsDescription)
+        XCTAssertFalse(view.descriptionButtonIsOn)
+        XCTAssertFalse(view.showsDecompiledC, "the side it was left on")
+        XCTAssertFalse(mode.isHiddenOrHasHiddenAncestor)
+
+        view.clickDescriptionButton()
+        view.layoutSubtreeIfNeeded()
+        // The symbol's frame is wider than what it draws.
+        XCTAssertEqual(view.descriptionCloseFrame.maxY, view.descriptionFrameInPane.maxY - 8, accuracy: 5,
+                       "in the corner of the description")
+        XCTAssertGreaterThan(view.descriptionCloseFrame.minX, view.bounds.midX)
+        XCTAssertNotNil(first(CodeDescriptionCloseButton.self, in: view) { !$0.isBordered && $0.shadow == nil && $0.image != nil })
+        view.clickCloseDescription()
+        XCTAssertFalse(view.showsDescription)
+        XCTAssertFalse(view.descriptionButtonIsOn)
     }
 
     /// The menu lists every analysis newest first — the order the agent's

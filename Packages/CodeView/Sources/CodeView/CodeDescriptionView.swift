@@ -1,5 +1,6 @@
 import AppKit
 import CodeAnalysis
+import HelpUI
 import Localization
 import ToolModuleKit
 
@@ -15,7 +16,11 @@ import ToolModuleKit
     var resolveName: ((String) -> CodeAddress?)?
     /// Whether the code holds an address: a function's entry or an instruction.
     var resolvesAddress: ((CodeAddress) -> Bool)?
-    /// The sections changed, or another one came to the top of the view.
+    /// A section was chosen in the column: a step, which the pane records.
+    var onChooseSection: ((Int) -> Void)?
+    /// The close button was pressed.
+    var onClose: (() -> Void)?
+    /// There are sections to list now, or none any more.
     var onSectionsChanged: (() -> Void)?
 
     /// A heading of the description, and where it stands in the text.
@@ -30,6 +35,21 @@ import ToolModuleKit
     private var chosenSection: (index: Int, origin: NSPoint)?
     private static let headingKey = NSAttributedString.Key("CodeDescriptionHeading")
 
+    private let outline = NSOutlineView()
+    /// The column of sections. The pane places it, beside the header as well as
+    /// the text.
+    let sectionColumn = NSScrollView()
+    private var outlineRoots: [SectionRow] = []
+    fileprivate var sectionRoots: [SectionRow] { outlineRoots }
+    fileprivate var isFollowingReading: Bool { followingReading }
+    fileprivate var sectionOutlineSelection: SectionRow? { outline.item(atRow: outline.selectedRow) as? SectionRow }
+    private var outlineRows: [Int: SectionRow] = [:]
+    /// Set while the column follows the reading: that is not a choice.
+    private var followingReading = false
+
+    /// Over the text's corner: the way out of the description from where it is
+    /// being read.
+    let closeButton = CodeDescriptionCloseButton()
     private let scroll = NSScrollView()
     private let text = DescriptionTextView(usingTextLayoutManager: false)
     private let placeholder = NSTextField(wrappingLabelWithString: "")
@@ -46,13 +66,16 @@ import ToolModuleKit
         text.drawsBackground = false
         text.usesFindBar = true
         text.isIncrementalSearchingEnabled = true
-        text.textContainerInset = NSSize(width: 8, height: 12)
+        // The code's margin and the text's own at the sides; above and below as
+        // far as the column of sections stands from the area's edges.
+        text.textContainerInset = NSSize(width: 20, height: 8)
         text.isHorizontallyResizable = false
         text.isVerticallyResizable = true
         text.autoresizingMask = [.width]
         text.textContainer?.widthTracksTextView = true
         text.linkTextAttributes = [.foregroundColor: NSColor.linkColor, .cursor: NSCursor.pointingHand]
         text.onLink = { [weak self] link, at in self?.clicked(link, at: at) ?? false }
+        text.overlay = closeButton
         scroll.documentView = text
         scroll.hasVerticalScroller = true
         scroll.drawsBackground = false
@@ -68,8 +91,36 @@ import ToolModuleKit
         placeholder.translatesAutoresizingMaskIntoConstraints = false
         placeholder.isHidden = true
 
+        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("section"))
+        column.resizingMask = .autoresizingMask
+        outline.addTableColumn(column)
+        outline.outlineTableColumn = column
+        outline.headerView = nil
+        outline.floatsGroupRows = false
+        outline.indentationPerLevel = 14
+        outline.style = .inset
+        outline.backgroundColor = .windowBackgroundColor
+        outline.rowSizeStyle = .custom
+        outline.dataSource = self
+        outline.delegate = self
+        outline.target = self
+        outline.action = #selector(sectionClicked)
+        // help: panel.code.description-sections
+        ControlHelp.describe(outline, L("Sections of the description"))
+        sectionColumn.documentView = outline
+        sectionColumn.hasVerticalScroller = true
+        sectionColumn.backgroundColor = .windowBackgroundColor
+        sectionColumn.translatesAutoresizingMaskIntoConstraints = false
+
         addSubview(scroll)
         addSubview(placeholder)
+        GreyCircleSymbol.apply("xmark.circle.fill", pointSize: 20, to: closeButton)
+        closeButton.target = self
+        closeButton.action = #selector(closeClicked)
+        closeButton.translatesAutoresizingMaskIntoConstraints = false
+        // help: panel.code.description
+        ControlHelp.describe(closeButton, name: L("Close"), tooltip: L("Close the description"))
+        addSubview(closeButton)
         // The placeholder's margins yield to a pane narrower than they are: a
         // split view lays a pane it has not sized yet at no width, and two
         // required margins 20 points in would ask for negative width.
@@ -80,6 +131,10 @@ import ToolModuleKit
         insetLeading.priority = NSLayoutConstraint.Priority(999)
         insetTrailing.priority = NSLayoutConstraint.Priority(999)
         NSLayoutConstraint.activate([
+            // Measured to put the circle 10 points from both edges: the symbol's
+            // own margins in its frame are not the same on each side.
+            closeButton.topAnchor.constraint(equalTo: topAnchor, constant: 13),
+            closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8.5),
             scroll.topAnchor.constraint(equalTo: topAnchor),
             scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
             scroll.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -120,10 +175,64 @@ import ToolModuleKit
         sections = readSections()
         chosenSection = nil
         scroll(to: origin)
-        onSectionsChanged?()
+        drawOutline()
     }
 
-    @objc private func scrolled() { onSectionsChanged?() }
+    @objc private func scrolled() { followReading() }
+
+    @objc private func closeClicked() { onClose?() }
+
+    /// The column holds the headings under one another by their level. A
+    /// description with no headings has no column.
+    private func drawOutline() {
+        outlineRoots = []
+        outlineRows = [:]
+        var open: [SectionRow] = []
+        for (index, section) in sections.enumerated() {
+            let row = SectionRow(index: index, title: section.title, level: section.level)
+            outlineRows[index] = row
+            while let last = open.last, last.level >= section.level { open.removeLast() }
+            if let parent = open.last { parent.children.append(row) } else { outlineRoots.append(row) }
+            open.append(row)
+        }
+        let font = ToolPanelFont.body()
+        outline.rowHeight = ceil(font.ascender - font.descender - font.leading) + 6
+        outline.reloadData()
+        outline.expandItem(nil, expandChildren: true)
+        onSectionsChanged?()
+        followReading()
+    }
+
+    /// The section being read stands selected in the column.
+    private func followReading() {
+        let row = currentSection.flatMap { outlineRows[$0] }.map { outline.row(forItem: $0) } ?? -1
+        guard row != outline.selectedRow else { return }
+        followingReading = true
+        defer { followingReading = false }
+        guard row >= 0 else {
+            outline.deselectAll(nil)
+            return
+        }
+        outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        outline.scrollRowToVisible(row)
+    }
+
+    /// A click goes to its section even when the row is selected already: the
+    /// reader may have scrolled on through it. The arrow keys change the
+    /// selection instead, which the delegate hears.
+    @objc private func sectionClicked() {
+        guard let row = outline.item(atRow: outline.clickedRow) as? SectionRow else { return }
+        onChooseSection?(row.index)
+    }
+
+    var selectedSectionTitle: String? {
+        (outline.item(atRow: outline.selectedRow) as? SectionRow)?.title
+    }
+    /// A click on a section in the column, for a test.
+    func clickSection(_ index: Int) {
+        guard let item = outlineRows[index] else { return }
+        outline.selectRowIndexes(IndexSet(integer: outline.row(forItem: item)), byExtendingSelection: false)
+    }
 
     private func readSections() -> [Section] {
         let drawn = text.attributedString()
@@ -134,10 +243,16 @@ import ToolModuleKit
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if !title.isEmpty { found.append(Section(title: title, level: level, range: range)) }
         }
+        // A heading alone at the top of the document is its title, the module's
+        // name: the sections are what stands under it.
+        if let first = found.first, !found.dropFirst().contains(where: { $0.level <= first.level }) {
+            found.removeFirst()
+        }
         return found
     }
 
-    /// The section at the top of the view: the last heading at or above it.
+    /// The section at the top of the view: the last heading at or above it, nil
+    /// above the first, where the document's introduction is read.
     var currentSection: Int? {
         guard !sections.isEmpty, let layout = text.layoutManager, let container = text.textContainer else { return nil }
         if let chosenSection, chosenSection.origin == scrollOrigin, sections.indices.contains(chosenSection.index) {
@@ -147,7 +262,7 @@ import ToolModuleKit
         let y = scrollOrigin.y - text.textContainerOrigin.y + size * 2
         let glyph = layout.glyphIndex(for: NSPoint(x: 0, y: max(0, y)), in: container)
         let character = layout.characterIndexForGlyph(at: glyph)
-        return sections.lastIndex { $0.range.location <= character } ?? 0
+        return sections.lastIndex { $0.range.location <= character }
     }
 
     /// Brings a section's heading to the top of the view, and shows it.
@@ -156,7 +271,7 @@ import ToolModuleKit
         scroll(to: NSPoint(x: 0, y: rect(of: sections[index].range).minY - size))
         chosenSection = (index, scrollOrigin)
         flash(sections[index].range)
-        onSectionsChanged?()
+        followReading()
     }
 
     var hasDescription: Bool { !(markdown ?? "").isEmpty }
@@ -409,7 +524,119 @@ import ToolModuleKit
 
 /// The text view under the description: a link is the view's to follow, and
 /// the right-click menu is what read-only text needs.
+/// The description's close button. It stands over the text, whose I-beam would
+/// otherwise stay on the pointer.
+final class CodeDescriptionCloseButton: NSButton {
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas where area.owner === self { removeTrackingArea(area) }
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.cursorUpdate, .mouseMoved, .activeInKeyWindow, .inVisibleRect],
+                                       owner: self, userInfo: nil))
+    }
+
+    override func resetCursorRects() { addCursorRect(bounds, cursor: .arrow) }
+    override func cursorUpdate(with event: NSEvent) { NSCursor.arrow.set() }
+    override func mouseMoved(with event: NSEvent) { NSCursor.arrow.set() }
+}
+
+/// A row of the column of sections: a heading, with those under it.
+final class SectionRow {
+    let index: Int
+    let title: String
+    let level: Int
+    var children: [SectionRow] = []
+
+    init(index: Int, title: String, level: Int) {
+        self.index = index
+        self.title = title
+        self.level = level
+    }
+}
+
+extension CodeDescriptionView: NSOutlineViewDataSource, NSOutlineViewDelegate {
+    func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
+        (item as? SectionRow)?.children.count ?? sectionRoots.count
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, child index: Int, ofItem item: Any?) -> Any {
+        (item as? SectionRow)?.children[index] ?? sectionRoots[index]
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool {
+        (item as? SectionRow).map { !$0.children.isEmpty } ?? false
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
+        guard let row = item as? SectionRow else { return nil }
+        let label = NSTextField(labelWithString: row.title)
+        label.font = ToolPanelFont.body()
+        label.lineBreakMode = .byTruncatingTail
+        label.translatesAutoresizingMaskIntoConstraints = false
+        let cell = NSTableCellView()
+        cell.addSubview(label)
+        cell.textField = label
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2),
+            label.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -2),
+            label.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
+        ])
+        return cell
+    }
+
+    /// A click's own action goes to the section; hearing it here as well would
+    /// make two steps of it.
+    private var isClick: Bool {
+        switch NSApp.currentEvent?.type {
+        case .leftMouseDown?, .leftMouseUp?, .leftMouseDragged?: true
+        default: false
+        }
+    }
+
+    func outlineViewSelectionDidChange(_ notification: Notification) {
+        guard !isFollowingReading, !isClick, let row = sectionOutlineSelection else { return }
+        onChooseSection?(row.index)
+    }
+}
+
 final class DescriptionTextView: NSTextView {
+    /// What stands over the text. Under it the text leaves the arrow alone: it
+    /// hears the pointer's moves too, and setting its I-beam at each one fights
+    /// the button's arrow.
+    weak var overlay: NSView?
+
+    private func isOverOverlay(_ event: NSEvent) -> Bool {
+        guard let overlay, !overlay.isHiddenOrHasHiddenAncestor else { return false }
+        return overlay.bounds.contains(overlay.convert(event.locationInWindow, from: nil))
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        if isOverOverlay(event) { NSCursor.arrow.set() } else { super.mouseMoved(with: event) }
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        if isOverOverlay(event) { NSCursor.arrow.set() } else { super.cursorUpdate(with: event) }
+    }
+
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        if let overlay, !overlay.isHiddenOrHasHiddenAncestor {
+            addCursorRect(convert(overlay.bounds, from: overlay), cursor: .arrow)
+        }
+    }
+
+    /// A text view given a new size scrolls itself (measured: 3.5 points when
+    /// the column of sections takes its width). The document stays where it
+    /// was read.
+    override func setFrameSize(_ newSize: NSSize) {
+        let clip = enclosingScrollView?.contentView
+        let origin = clip?.bounds.origin
+        super.setFrameSize(newSize)
+        if let clip, let origin, clip.bounds.origin != origin {
+            clip.scroll(to: origin)
+            enclosingScrollView?.reflectScrolledClipView(clip)
+        }
+    }
+
     var onLink: ((Any, Int) -> Bool)?
 
     override func clicked(onLink link: Any, at charIndex: Int) {

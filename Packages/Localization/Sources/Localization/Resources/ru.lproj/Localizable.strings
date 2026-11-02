@@ -394,8 +394,9 @@
 "Deleted here" = "Удалено здесь";
 "Deleted on another Mac" = "Удалено на другом Mac";
 "Description" = "Описание";
+"Show or hide the module's description" = "Показать или скрыть описание модуля";
+"Close the description" = "Закрыть описание";
 "Sections of the description" = "Разделы описания";
-"Go to a section of the description" = "Перейти к разделу описания";
 "Compare with a revision" = "Сравнение с ревизией";
 "Compare the code with a revision" = "Сравнить код с ревизией";
 "Reset" = "Сбросить";

@@ -22,6 +22,9 @@ final class FilePaneView: NSView {
     /// close button). Stored so the pane's right-click File menu can be attached
     /// to it via `paneMenu` (§4/§5).
     private let header = PaneHeaderView()
+    private let headerAccessory = NSStackView()
+    private var headerAccessoryGap: NSLayoutConstraint?
+    private var headerAccessoryEdge: NSLayoutConstraint?
 
     /// Whether the header has been handed to a fragment panel
     /// (`hoistHeader()`) and no longer sits in this view.
@@ -72,6 +75,16 @@ final class FilePaneView: NSView {
             columnHeader.topAnchor.constraint(equalTo: header.bottomAnchor)
         ])
         isHeaderHoisted = false
+        needsLayout = true
+    }
+
+    /// Sets what stands at the right end of the title bar for whoever reads this
+    /// pane — a code screen's help button — or takes it away.
+    func setHeaderAccessory(_ accessory: NSView?) {
+        headerAccessory.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        if let accessory { headerAccessory.addArrangedSubview(accessory) }
+        headerAccessoryGap?.constant = accessory == nil ? 0 : -8
+        headerAccessoryEdge?.constant = accessory == nil ? -6 : -8
         needsLayout = true
     }
 
@@ -607,6 +620,9 @@ final class FilePaneView: NSView {
         let collapsed = linkButton.widthAnchor.constraint(equalToConstant: 0)
         collapsed.isActive = true
         linkCollapsed = collapsed
+        headerAccessory.translatesAutoresizingMaskIntoConstraints = false
+        headerAccessory.setContentHuggingPriority(.required, for: .horizontal)
+        header.addSubview(headerAccessory)
         // The horizontal chain is breakable end to end: a pane dragged to zero
         // is squeezed below the ~34pt the insets and spacings need, and a
         // required link in the chain would floor the pane (the least-squares
@@ -647,10 +663,20 @@ final class FilePaneView: NSView {
             lockLabel.trailingAnchor.constraint(equalTo: tabButton.leadingAnchor, constant: -6),
             tabTrailing,
             collapseTrailing,
-            closeButton.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -6),
+            {
+                let gap = closeButton.trailingAnchor.constraint(equalTo: headerAccessory.leadingAnchor, constant: 0)
+                headerAccessoryGap = gap
+                return gap
+            }(),
+            {
+                let edge = headerAccessory.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -6)
+                headerAccessoryEdge = edge
+                return edge
+            }(),
         ]
         for constraint in headerChain { constraint.priority = .defaultHigh }
         NSLayoutConstraint.activate([
+            headerAccessory.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             documentIcon.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             titleLabel.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             linkButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
@@ -1323,6 +1349,7 @@ final class FilePaneView: NSView {
         collapseButton.isHidden = !headerFits || onCollapse == nil
         tabButton.isHidden = !headerFits || onOpenInTab == nil
         lockLabel.isHidden = !headerFits
+        headerAccessory.isHidden = !headerFits
         linkButton.isHidden = !headerFits || viewModel.origin == nil
         codecBadge.isHidden = !headerFits
             || (viewModel.panelBadge == nil && viewModel.origin?.codec.badge == nil)
