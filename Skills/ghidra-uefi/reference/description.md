@@ -72,7 +72,7 @@ are free.
 ## What it is
 ## What it does
 ## Execution flow
-## What it connects to
+## Interactions
 ## Inside the module
 ## Failures
 ## Known problems
@@ -108,7 +108,7 @@ The main chains of execution and the reactions to events, in plain language.
   the module does on it: ready-to-boot, the exit-boot-services hand-over, virtual
   address change, protocol notifications, timers, key events.
 
-### `## What it connects to`
+### `## Interactions`
 
 The other modules and the parts of the machine it works with: what it needs from
 them, what it gives them, and the settings it reads or keeps, each said by what
