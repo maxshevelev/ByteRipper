@@ -183,6 +183,41 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         XCTAssertTrue(names.contains("EFI_HOB_HANDOFF_INFO_TABLE"), "\(answer)")
     }
 
+    func testAPathNamesOneOfATypeHeldTwice() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
+            throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostTypePathTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraHostTypePathTests"),
+                              writer: store)
+        let image = try Data(contentsOf: URL(fileURLWithPath: path))
+        let module = SHA256Digest(data: image)
+        _ = try await host.create(module: image, name: "Module")
+        defer { Task { await host.stop(module) } }
+        let functions = try json(await host.read(module, "/v1/functions"))["functions"] as? [[String: Any]] ?? []
+        var typed = false
+        outer: for function in functions.prefix(40) {
+            let entry = try XCTUnwrap(function["entry"] as? String)
+            let shown = try json(await host.read(module, "/v1/function/\(entry)"))
+            for local in shown["locals"] as? [[String: Any]] ?? [] {
+                guard let storage = local["storage"] as? String, storage.hasSuffix(":4") else { continue }
+                var request: [String: Any] = ["function": entry, "storage": storage,
+                                              "type": "/UefiSpec.h/EFI_EXIT_BOOT_SERVICES"]
+                if let first = local["first_use"] as? String { request["first_use"] = first }
+                let body = try JSONSerialization.data(withJSONObject: request)
+                guard (try? await host.write(module, "/v1/rename/variable", body: body)) != nil else { continue }
+                let after = try json(await host.read(module, "/v1/function/\(entry)"))
+                typed = "\(after)".contains("EFI_EXIT_BOOT_SERVICES")
+                break outer
+            }
+        }
+        XCTAssertTrue(typed)
+    }
+
     func testANameHeldTwiceIsSaidToBe() async throws {
         guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
             throw XCTSkip("GHIDRA_TYPE_MODULE is not set")

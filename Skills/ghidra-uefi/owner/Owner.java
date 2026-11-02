@@ -4913,6 +4913,7 @@ public class Owner {
 
     private DataType type(String text) throws Failure {
         text = edk2(text);
+        if (text.startsWith("/")) return typeAtPath(text);
         importTypes(text);
         try {
             DataType type = new DataTypeParser(program.getDataTypeManager(), program.getDataTypeManager(),
@@ -4924,6 +4925,28 @@ public class Owner {
         } catch (Exception error) {
             throw new Failure(400, "no type " + text + ": " + ambiguity(text, error.getMessage()));
         }
+    }
+
+    /**
+     * A type by its full path, with any `*` after it. EDK2's function pointers
+     * are held twice under one name, the typedef and its function type, and
+     * only the path says which is meant. The parser does not read paths.
+     */
+    private DataType typeAtPath(String text) throws Failure {
+        java.util.regex.Matcher parts = java.util.regex.Pattern.compile("^(/[^*]*?)\\s*((?:\\*\\s*)*)$").matcher(text);
+        if (!parts.matches()) throw new Failure(400, "no type " + text);
+        ghidra.program.model.data.DataTypeManager manager = program.getDataTypeManager();
+        DataType type = manager.getDataType(parts.group(1));
+        for (FileDataTypeManager source : new FileDataTypeManager[] {reviewArchive, archive}) {
+            if (type != null || source == null) continue;
+            DataType there = source.getDataType(parts.group(1));
+            if (there != null) type = manager.resolve(there, DataTypeConflictHandler.DEFAULT_HANDLER);
+        }
+        if (type == null) throw new Failure(400, "no type " + text);
+        for (char mark : parts.group(2).toCharArray()) {
+            if (mark == '*') type = new ghidra.program.model.data.PointerDataType(type, manager);
+        }
+        return type;
     }
 
     /**
@@ -4940,7 +4963,7 @@ public class Owner {
             java.util.List<String> paths = new java.util.ArrayList<>();
             for (DataType type : held) paths.add(type.getPathName());
             return "the program holds " + words.group() + " " + held.size() + " times, differently: "
-                + String.join(", ", paths) + " — delete the copy not meant, then type again";
+                + String.join(", ", paths) + " — name the one meant by its path, or delete a copy that is wrong";
         }
         return message;
     }
