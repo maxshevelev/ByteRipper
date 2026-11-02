@@ -183,6 +183,47 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         XCTAssertTrue(names.contains("EFI_HOB_HANDOFF_INFO_TABLE"), "\(answer)")
     }
 
+    func testANameHeldTwiceIsSaidToBe() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
+            throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostDeclinedTypeTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraHostDeclinedTypeTests"),
+                              writer: store)
+        let image = try Data(contentsOf: URL(fileURLWithPath: path))
+        let module = SHA256Digest(data: image)
+        _ = try await host.create(module: image, name: "Module")
+        defer { Task { await host.stop(module) } }
+        func post(_ route: String, _ object: [String: Any]) async throws -> Data {
+            try await host.write(module, route, body: try JSONSerialization.data(withJSONObject: object))
+        }
+        let functions = try json(await host.read(module, "/v1/functions"))["functions"] as? [[String: Any]] ?? []
+        var refusal = ""
+        // The archive's copy comes in with a first use, then a different one of the review's.
+        outer: for function in functions.prefix(40) {
+            let entry = try XCTUnwrap(function["entry"] as? String)
+            let shown = try json(await host.read(module, "/v1/function/\(entry)"))
+            for local in shown["locals"] as? [[String: Any]] ?? [] {
+                guard let storage = local["storage"] as? String else { continue }
+                var request: [String: Any] = ["function": entry, "storage": storage,
+                                              "type": "EFI_HOB_HANDOFF_INFO_TABLE *"]
+                if let first = local["first_use"] as? String { request["first_use"] = first }
+                guard (try? await post("/v1/rename/variable", request)) != nil else { continue }
+                _ = try await post("/v1/type", ["c": "typedef struct _EFI_HOB_HANDOFF_INFO_TABLE { int Other; } EFI_HOB_HANDOFF_INFO_TABLE;"])
+                do {
+                    _ = try await post("/v1/rename/variable", ["function": entry, "storage": storage,
+                                                               "type": "EFI_HOB_HANDOFF_INFO_TABLE *"])
+                } catch { refusal = "\(error)" }
+                break outer
+            }
+        }
+        XCTAssertTrue(refusal.contains("/PiHob.h/EFI_HOB_HANDOFF_INFO_TABLE"), refusal)
+    }
+
     func testATypeNotTakenIsRefusedAndLeavesNothing() async throws {
         guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
             throw XCTSkip("GHIDRA_TYPE_MODULE is not set")

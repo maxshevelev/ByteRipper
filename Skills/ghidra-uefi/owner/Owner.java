@@ -4872,8 +4872,27 @@ public class Owner {
         } catch (Failure failure) {
             throw failure;
         } catch (Exception error) {
-            throw new Failure(400, "no type " + text + ": " + error.getMessage());
+            throw new Failure(400, "no type " + text + ": " + ambiguity(text, error.getMessage()));
         }
+    }
+
+    /**
+     * Ghidra's parser answers "unrecognized" for a name it holds twice with
+     * different definitions, since it has nobody to ask which. Said as it is,
+     * with the holders, because the name plainly does exist.
+     */
+    private String ambiguity(String text, String message) {
+        java.util.regex.Matcher words = java.util.regex.Pattern.compile("[A-Za-z_][A-Za-z0-9_]*").matcher(text);
+        while (words.find()) {
+            java.util.List<DataType> held = new java.util.ArrayList<>();
+            program.getDataTypeManager().findDataTypes(words.group(), held);
+            if (held.size() < 2) continue;
+            java.util.List<String> paths = new java.util.ArrayList<>();
+            for (DataType type : held) paths.add(type.getPathName());
+            return "the program holds " + words.group() + " " + held.size() + " times, differently: "
+                + String.join(", ", paths) + " — delete the copy not meant, then type again";
+        }
+        return message;
     }
 
     // MARK: - Program
