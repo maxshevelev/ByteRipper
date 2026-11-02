@@ -188,8 +188,10 @@ Names alone do not get there. Every review applies these rules:
    All three are required, and a plate alone does not count:
    - a plate comment on the function. Its first paragraph, up to the first
      blank line, says briefly what the function is for, so that a reader grasps
-     its meaning without the details: the panel shows that paragraph alone in
-     the popover over a call. After it: what it does, why it exists in this
+     its meaning without the details: what it does for its caller, not what it
+     operates on or how ("Finds the boot option to start", not "Walks the
+     option list"). The panel shows that paragraph alone in the popover over a
+     call. After it: what it does, why it exists in this
      module, what it expects, what it returns or halts with, and the numbers a
      caller acts on — status values, `ImageError` codes, `BootMode` values —
      spelled out where the code carries them by number;
