@@ -39,23 +39,24 @@ import HelpUI
     /// The words the popover shows under the facts, for a test as well.
     var descriptionText: String? { Self.plate(ofC: function.c) }
 
-    /// What the review wrote over the function: the comments the C opens with,
-    /// before its signature. A decompiler's warning there is not the review's.
+    /// The first paragraph of what the review wrote over the function: the
+    /// comments the C opens with, before its signature. It says what the
+    /// function is for; the rest of the plate is read at the function. A
+    /// decompiler's warning there is not the review's.
     static func plate(ofC c: String?) -> String? {
         guard var rest = c?[...] else { return nil }
-        var blocks: [String] = []
         while true {
             rest = rest.drop(while: \.isWhitespace)
-            guard rest.hasPrefix("/*"), let end = rest.range(of: "*/") else { break }
+            guard rest.hasPrefix("/*"), let end = rest.range(of: "*/") else { return nil }
             let inner = rest[rest.index(rest.startIndex, offsetBy: 2)..<end.lowerBound]
             rest = rest[end.upperBound...]
-            let text = inner.split(separator: "\n", omittingEmptySubsequences: false)
+            let lines = inner.split(separator: "\n", omittingEmptySubsequences: false)
                 .map { $0.trimmingCharacters(in: .whitespaces) }
-                .joined(separator: "\n")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            if !text.isEmpty, !text.hasPrefix("WARNING:") { blocks.append(text) }
+                .drop(while: \.isEmpty)
+                .prefix { !$0.isEmpty }
+            let text = lines.joined(separator: " ")
+            if !text.isEmpty, !text.hasPrefix("WARNING:") { return text }
         }
-        return blocks.isEmpty ? nil : blocks.joined(separator: "\n\n")
     }
 
     override func loadView() {

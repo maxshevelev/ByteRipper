@@ -2174,7 +2174,7 @@ final class CodePaneViewTests: XCTestCase {
                              [21, 6, "function", "0x230"]],
                  "instructions": [["address": "0x220", "bytes": "C3", "mnemonic": "RET", "text": "RET"]]],
                 ["entry": "0x230", "name": "Second", "signature": "void Second(void)",
-                 "c": "/* Sets the second thing up.\n   Returns nothing. */\n\n/* WARNING: odd */\nvoid Second(void)\n{\n}\n",
+                 "c": "/* Sets the second thing up\n   for the first.\n\n   Returns nothing. */\n\n/* WARNING: odd */\nvoid Second(void)\n{\n}\n",
                  "instructions": [["address": "0x230", "bytes": "C3", "mnemonic": "RET", "text": "RET"]]]
             ]
         ]
@@ -2202,7 +2202,7 @@ final class CodePaneViewTests: XCTestCase {
         let popover = try XCTUnwrap(view.functionPopover)
         XCTAssertTrue(popover.isShown)
         XCTAssertEqual(popover.function.name, "Second")
-        XCTAssertEqual(popover.descriptionText, "Sets the second thing up.\nReturns nothing.")
+        XCTAssertEqual(popover.descriptionText, "Sets the second thing up for the first.")
         popover.pressGo()
         XCTAssertEqual(view.selectedFunctionIndex, 1)
     }

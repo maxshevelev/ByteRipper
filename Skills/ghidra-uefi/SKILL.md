@@ -186,7 +186,10 @@ Names alone do not get there. Every review applies these rules:
    read the answer's `entry` back.
 4. **Comments that a source would have — in the body, not only above it.**
    All three are required, and a plate alone does not count:
-   - a plate comment on the function: what it does, why it exists in this
+   - a plate comment on the function. Its first paragraph, up to the first
+     blank line, says briefly what the function is for, so that a reader grasps
+     its meaning without the details: the panel shows that paragraph alone in
+     the popover over a call. After it: what it does, why it exists in this
      module, what it expects, what it returns or halts with, and the numbers a
      caller acts on — status values, `ImageError` codes, `BootMode` values —
      spelled out where the code carries them by number;
