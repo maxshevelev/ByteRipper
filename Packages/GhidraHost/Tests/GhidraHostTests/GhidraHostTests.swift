@@ -43,6 +43,29 @@ final class GhidraHostUnitTests: XCTestCase {
         XCTAssertEqual(GhidraHost.holdsUnpublishedWrites(hello: ["changed": true], published: nil), true)
     }
 
+    /// Two hosts share the cache: only the same sources may share a jar.
+    func testAJarBelongsToWhatItsSourcesHold() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        func tree(_ name: String, _ owner: String) throws -> OwnerSources {
+            let at = root.appendingPathComponent(name, isDirectory: true)
+            let sources = OwnerSources.directory(at: at)
+            for file in sources.files {
+                try FileManager.default.createDirectory(at: file.deletingLastPathComponent(),
+                                                        withIntermediateDirectories: true)
+                try Data((file.lastPathComponent == "Owner.java" ? owner : "same").utf8).write(to: file)
+            }
+            return sources
+        }
+        let cache = root.appendingPathComponent("cache", isDirectory: true)
+        let server = try OwnerBuild.folder(in: cache, sources: try tree("server", "deployed"))
+        XCTAssertNotEqual(server, try OwnerBuild.folder(in: cache, sources: try tree("checkout", "being edited")),
+                          "a checkout's edit does not reach the server's jar")
+        XCTAssertEqual(server, try OwnerBuild.folder(in: cache, sources: try tree("copy", "deployed")),
+                       "the same sources elsewhere, or newer on disk, are the same jar")
+    }
+
     func testAnExitedChildReadsAsGone() throws {
         let log = FileManager.default.temporaryDirectory.appendingPathComponent("zombie-\(UUID()).log")
         defer { try? FileManager.default.removeItem(at: log) }

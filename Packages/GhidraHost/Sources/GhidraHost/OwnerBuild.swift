@@ -1,3 +1,4 @@
+import CodeAnalysis
 import Darwin
 import Foundation
 
@@ -62,9 +63,9 @@ public struct OwnerSources: Equatable, Sendable {
 }
 
 /// The owner compiled for one Ghidra: a jar built with `javac` against the
-/// install's jars, again whenever a source is newer than it. A jar built for
-/// one Ghidra does not load in another, so each install has its own; the
-/// folder is shared by every owner, and an existing build is reused.
+/// install's jars, one for each set of sources. A jar built for one Ghidra does
+/// not load in another, so each install has its own folder; it is shared by
+/// every owner, and an existing build is reused.
 enum OwnerBuild {
     static func cache(for install: GhidraInstall) -> URL {
         FileManager.default.homeDirectoryForCurrentUser
@@ -80,13 +81,12 @@ enum OwnerBuild {
     }
 
     static func jar(for install: GhidraInstall, sources: OwnerSources) throws -> URL {
-        let folder = cache(for: install)
-        let jar = folder.appendingPathComponent("owner.jar")
-        let newest = sources.files.compactMap(modified).max() ?? .distantFuture
-        if let built = modified(jar), built >= newest { return jar }
         for file in sources.files where !FileManager.default.fileExists(atPath: file.path) {
             throw GhidraHostError(.install, "\(file.path): the owner's source is missing")
         }
+        let folder = try folder(in: cache(for: install), sources: sources)
+        let jar = folder.appendingPathComponent("owner.jar")
+        if FileManager.default.fileExists(atPath: jar.path) { return jar }
         let classes = folder.appendingPathComponent("classes", isDirectory: true)
         try? FileManager.default.removeItem(at: classes)
         try FileManager.default.createDirectory(at: classes, withIntermediateDirectories: true)
@@ -100,10 +100,37 @@ enum OwnerBuild {
             let text = (try? String(contentsOf: log, encoding: .utf8)) ?? ""
             throw GhidraHostError(.install, "javac failed:\n" + String(text.suffix(3000)))
         }
+        // Moved into place whole: another host may be asking for this jar.
+        let building = folder.appendingPathComponent("owner.jar.\(ProcessInfo.processInfo.processIdentifier)")
         let archive = try Subprocess.run(install.jdk.appendingPathComponent("bin/jar"),
-                                         ["cf", jar.path, "-C", classes.path, "."], log: log, timeout: 120)
+                                         ["cf", building.path, "-C", classes.path, "."], log: log, timeout: 120)
         guard archive == 0 else { throw GhidraHostError(.install, "jar failed; log: \(log.path)") }
+        if (try? FileManager.default.moveItem(at: building, to: jar)) == nil {
+            try? FileManager.default.removeItem(at: building)
+            guard FileManager.default.fileExists(atPath: jar.path) else {
+                throw GhidraHostError(.install, "the owner's jar could not be put in \(folder.path)")
+            }
+        }
+        try? FileManager.default.removeItem(at: classes)
         return jar
+    }
+
+    /// Where the jar of these sources lives: a folder named by what they hold.
+    /// The cache is one per user and every host shares it, a server and a test
+    /// run of a checkout alike. Kept by the newest source alone, a test run
+    /// rebuilt the jar a running server starts its owners from, and the server
+    /// then replaced a working owner with code it was never deployed with.
+    static func folder(in cache: URL, sources: OwnerSources) throws -> URL {
+        var held = Data()
+        for file in sources.files {
+            held.append(Data(file.lastPathComponent.utf8))
+            held.append(0)
+            held.append(try Data(contentsOf: file))
+            held.append(0)
+        }
+        let folder = cache.appendingPathComponent(SHA256Digest(data: held).hex, isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        return folder
     }
 
     static func modified(_ url: URL) -> Date? {
