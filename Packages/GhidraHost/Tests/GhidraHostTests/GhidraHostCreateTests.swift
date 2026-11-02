@@ -540,6 +540,24 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         XCTAssertEqual(after.first?["name"] as? String, "RenamedTarget")
         let published = try await host.publish(module, by: nil)
         XCTAssertEqual(published.staleLinks.first?.name, "RenamedTarget")
+        // A datum: set_data echoes its name, and rename and label say to use set_data.
+        let data = try json(await host.read(module, "/v1/data"))["data"] as? [[String: Any]] ?? []
+        if let datum = data.first?["address"] as? String {
+            let named = try json(await host.write(module, "/v1/set/data", body: try JSONSerialization.data(
+                withJSONObject: ["address": datum, "name": "gNamedDatum"])))
+            XCTAssertEqual(named["name"] as? String, "gNamedDatum", "\(named)")
+            for route in ["/v1/rename/function", "/v1/rename/label"] {
+                do {
+                    _ = try await host.write(module, route, body: try JSONSerialization.data(
+                        withJSONObject: ["address": datum, "name": "gOther"]))
+                    XCTFail("\(route) named a datum")
+                } catch {
+                    XCTAssertTrue("\(error)".contains("ghidra_set_data"), "\(route): \(error)")
+                }
+            }
+        } else {
+            XCTFail("no data listed: \(data)")
+        }
     }
 
     func testANameHeldTwiceIsSaidToBe() async throws {

@@ -504,6 +504,9 @@ public final class CodeReadings {
             if let unpublished = await liveState(source.manifest.module.sha256) {
                 body["live"] = .bool(true)
                 body["unpublished_writes"] = .bool(unpublished)
+                if unpublished {
+                    body["unpublished_note"] = .string("This answer is the last publish; the writes since are not in it. `ghidra_function` reads the live C.")
+                }
             } else {
                 body["live"] = .bool(false)
             }

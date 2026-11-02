@@ -273,6 +273,7 @@ final class CodeReadingsTests: XCTestCase {
         guard case .json(.object(let body)) = behind else { return XCTFail("not an object: \(behind)") }
         XCTAssertEqual(body["live"], .bool(true))
         XCTAssertEqual(body["unpublished_writes"], .bool(true))
+        XCTAssertNotNil(body["unpublished_note"])
 
         let current = readings()
         current.liveState = { _ in false }
@@ -281,6 +282,7 @@ final class CodeReadingsTests: XCTestCase {
         guard case .json(.object(let savedBody)) = saved else { return XCTFail("not an object: \(saved)") }
         XCTAssertEqual(savedBody["live"], .bool(true))
         XCTAssertEqual(savedBody["unpublished_writes"], .bool(false))
+        XCTAssertNil(savedBody["unpublished_note"])
         XCTAssertNotNil(savedBody["library"], "the registry block is still there")
 
         let closed = readings()

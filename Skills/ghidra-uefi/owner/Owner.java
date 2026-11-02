@@ -3545,11 +3545,15 @@ public class Owner {
             Symbol atAddress = program.getSymbolTable().getPrimarySymbol(at);
             if (atAddress != null && atAddress.getSymbolType() == ghidra.program.model.symbol.SymbolType.LABEL) {
                 throw new Failure(409, hex(at) + " is a label, not a function's entry: name it with "
-                                  + "/v1/rename/label");
+                                  + (program.getListing().getInstructionAt(at) != null
+                                     ? "`ghidra_label` (/v1/rename/label)" : "`ghidra_set_data` and `name`: it is a datum"));
             }
             function = program.getFunctionManager().getFunctionContaining(at);
         }
-        if (function == null) throw new Failure(404, "no function at " + hex(at));
+        if (function == null) {
+            throw new Failure(404, "no function at " + hex(at) + (program.getListing().getInstructionAt(at) == null
+                ? ": a datum is named with `ghidra_set_data` and `name`" : ""));
+        }
         String name = required(body, "name");
         // Ghidra takes `*Name` for a name; C, the panel and a reader do not.
         if (!name.matches("[A-Za-z_][A-Za-z0-9_]*")) throw new Failure(400, name + " is not a C identifier");
@@ -3589,7 +3593,7 @@ public class Owner {
             throw new Failure(409, hex(at) + " is a function's entry: rename the function with /v1/rename/function");
         }
         if (program.getListing().getInstructionAt(at) == null) {
-            throw new Failure(404, "no instruction starts at " + hex(at) + ": a label marks code");
+            throw new Failure(404, "no instruction starts at " + hex(at) + ": a label marks code; a datum is named with `ghidra_set_data` and `name`");
         }
         // An empty name takes the label away — a name given to a jump target
         // by mistake leaves nothing behind, as an empty comment clears one.
@@ -4756,6 +4760,8 @@ public class Owner {
         answer.addProperty("address", hex(address));
         Data datum = program.getListing().getDefinedDataAt(address);
         if (datum != null) answer.addProperty("type", datum.getDataType().getDisplayName());
+        Symbol named = program.getSymbolTable().getPrimarySymbol(address);
+        answer.addProperty("name", named == null ? null : named.getName());
         return answer;
     }
 
