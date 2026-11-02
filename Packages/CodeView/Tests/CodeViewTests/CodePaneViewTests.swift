@@ -2202,6 +2202,7 @@ final class CodePaneViewTests: XCTestCase {
         let popover = try XCTUnwrap(view.functionPopover)
         XCTAssertTrue(popover.isShown)
         XCTAssertEqual(popover.function.name, "Second")
+        XCTAssertEqual(popover.mark.color, CodeNavigatorIcon.function.color)
         XCTAssertEqual(popover.descriptionText, "Sets the second thing up for the first.")
         popover.pressGo()
         XCTAssertEqual(view.selectedFunctionIndex, 1)

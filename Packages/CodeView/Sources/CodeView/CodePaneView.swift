@@ -4165,12 +4165,37 @@ import ToolModuleKit
             self.explanationPopover?.close()
             self.callersPopover?.close()
             self.functionPopover?.close()
-            let popover = CodeFunctionPopover(function: self.artifact.functions[index], onGo: go)
+            let popover = CodeFunctionPopover(function: self.artifact.functions[index],
+                                              mark: self.reviewMark(of: index), onGo: go)
             popover.show(relativeTo: rect, of: view)
             self.functionPopover = popover
         }
         pendingFunctionPopover = work
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.functionPopoverDelay, execute: work)
+    }
+
+    /// A function's mark as the list draws it.
+    private func reviewMark(of index: Int) -> (glyph: CodeNavigatorIcon.Glyph, color: NSColor) {
+        let function = artifact.functions[index]
+        switch function.reviewLevel {
+        case .partial: return CodeNavigatorIcon.partialFunction
+        case .decompiled: return CodeNavigatorIcon.decompiledFunction
+        case .noBody: return CodeNavigatorIcon.bodylessFunction
+        case .library:
+            let section: LibrarySection = switch function.libraryKind {
+            case .edk2: .edk2
+            case .amd: .amd
+            case .intel: .intel
+            case nil: .unrecorded
+            }
+            let style: CodeNavigatorIcon.BadgeStyle = switch state.registryMark(of: index) {
+            case .entry?: .filled
+            case .matched?: .dotted
+            case nil: .outlined
+            }
+            return CodeNavigatorIcon.library(Self.badge(of: section), style: style)
+        default: return CodeNavigatorIcon.function
+        }
     }
 
     /// How long a click waits to be sure it is not half of a double click.

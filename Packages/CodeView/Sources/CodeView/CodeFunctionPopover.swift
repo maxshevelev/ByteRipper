@@ -9,6 +9,8 @@ import HelpUI
 /// ⌘-click and a double click still go there at once.
 @MainActor final class CodeFunctionPopover: NSViewController {
     let function: CodeArtifact.Function
+    /// The function's mark, as the list draws it: how far its review has got.
+    let mark: (glyph: CodeNavigatorIcon.Glyph, color: NSColor)
     private let onGo: () -> Void
     private let popover = NSPopover()
 
@@ -16,8 +18,10 @@ import HelpUI
     private static var width: CGFloat { (size * 40).rounded() }
     private static var inset: CGFloat { (size * 1.3).rounded() }
 
-    init(function: CodeArtifact.Function, onGo: @escaping () -> Void) {
+    init(function: CodeArtifact.Function, mark: (glyph: CodeNavigatorIcon.Glyph, color: NSColor),
+         onGo: @escaping () -> Void) {
         self.function = function
+        self.mark = mark
         self.onGo = onGo
         super.init(nibName: nil, bundle: nil)
     }
@@ -72,8 +76,20 @@ import HelpUI
         name.font = .systemFont(ofSize: (size * 1.35).rounded(), weight: .bold)
         name.isSelectable = true
         name.lineBreakMode = .byTruncatingMiddle
-        name.widthAnchor.constraint(lessThanOrEqualToConstant: inner).isActive = true
-        stack.addArrangedSubview(name)
+        // The pointer over the mark says the level and what is missing.
+        let titleSize = (size * 1.35).rounded()
+        let side = CodeNavigatorIcon.side(forFontSize: titleSize)
+        let image = CodeNavigatorIcon.image(mark.glyph, color: mark.color, side: side)
+        let icon = NSImageView(image: image)
+        icon.widthAnchor.constraint(equalToConstant: image.size.width).isActive = true
+        icon.heightAnchor.constraint(equalToConstant: image.size.height).isActive = true
+        ControlHelp.describe(icon, CodePaneView.reviewDetail(function))
+        let title = NSStackView(views: [icon, name])
+        title.orientation = .horizontal
+        title.alignment = .centerY
+        title.spacing = (size * 0.5).rounded()
+        name.widthAnchor.constraint(lessThanOrEqualToConstant: inner - image.size.width - title.spacing).isActive = true
+        stack.addArrangedSubview(title)
 
         if let signature = function.signature {
             let line = NSTextField(wrappingLabelWithString: signature)
@@ -82,12 +98,6 @@ import HelpUI
             line.preferredMaxLayoutWidth = inner
             stack.addArrangedSubview(line)
         }
-
-        let level = NSTextField(wrappingLabelWithString: CodePaneView.reviewDetail(function))
-        level.font = .systemFont(ofSize: size)
-        level.textColor = .secondaryLabelColor
-        level.preferredMaxLayoutWidth = inner
-        stack.addArrangedSubview(level)
 
         let said = descriptionText
         let words = NSTextField(wrappingLabelWithString: said ?? L("The review has not described this function yet."))
