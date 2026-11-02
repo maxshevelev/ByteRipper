@@ -714,7 +714,7 @@ public enum GhidraTools {
                     an entry did not. A name already held is answered with the holder — its kind, \
                     address and `storage` — and that storage renames the holder, even one the \
                     decompiler no longer shows (the answer then says `stale: true`); freeing the name \
-                    is what lets the local take it.
+                    is what lets the local take it. A type the decompiler does not take is refused and nothing is changed.
                     """,
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,
