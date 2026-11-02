@@ -270,6 +270,7 @@ public class Owner {
                 if (path.equals("/v1/strings")) { json(exchange, 200, data(query, true)); return; }
                 if (path.equals("/v1/review")) { review(exchange); return; }
                 if (path.equals("/v1/library")) { json(exchange, 200, library()); return; }
+                if (path.equals("/v1/equates-on-memory")) { json(exchange, 200, equatesOnMemory(query)); return; }
                 if (path.equals("/v1/stale-links")) { json(exchange, 200, staleLinks()); return; }
                 if (path.equals("/v1/review/description")) { publishedDescription(exchange); return; }
                 if (path.equals("/v1/description")) { json(exchange, 200, description(query)); return; }
@@ -546,6 +547,41 @@ public class Owner {
             item.addProperty("name", target.getName());
             links.add(item);
         }
+    }
+
+    /**
+     * Equates on a memory operand: a name on the displacement of `[reg+N]`.
+     * `value` once took these for immediates, so each is a suspect to read;
+     * one set on purpose by `operand` is listed too.
+     */
+    private JsonObject equatesOnMemory(Map<String, String> query) throws Failure {
+        int offset = integer(query, "offset", 0), limit = Math.min(integer(query, "limit", 200), 1000);
+        java.util.List<JsonObject> found = new java.util.ArrayList<>();
+        java.util.Iterator<ghidra.program.model.symbol.Equate> equates = program.getEquateTable().getEquates();
+        while (equates.hasNext()) {
+            ghidra.program.model.symbol.Equate equate = equates.next();
+            for (ghidra.program.model.symbol.EquateReference use : equate.getReferences()) {
+                Instruction instruction = program.getListing().getInstructionAt(use.getAddress());
+                int operand = use.getOpIndex();
+                if (instruction == null || operand < 0 || operand >= instruction.getNumOperands()
+                    || isImmediate(instruction, operand)) continue;
+                JsonObject item = new JsonObject();
+                item.addProperty("address", hex(use.getAddress()));
+                item.addProperty("name", equate.getDisplayName());
+                item.addProperty("operand", operand);
+                item.addProperty("text", instruction.toString());
+                Function function = program.getFunctionManager().getFunctionContaining(use.getAddress());
+                if (function != null) item.addProperty("function", function.getName());
+                found.add(item);
+            }
+        }
+        found.sort(java.util.Comparator.comparing(item -> item.get("address").getAsString()));
+        JsonArray page = new JsonArray();
+        for (int i = offset; i < found.size() && i < offset + limit; i++) page.add(found.get(i));
+        JsonObject answer = identity();
+        answer.addProperty("count", found.size());
+        answer.add("equates", page);
+        return answer;
     }
 
     /** An operand that is a constant by itself, not part of a memory reference. */

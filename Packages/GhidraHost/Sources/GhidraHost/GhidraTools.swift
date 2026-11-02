@@ -30,7 +30,7 @@ public enum GhidraTools {
         sessions. A module is named by the SHA-256 of its bytes (`module`). Start with `ghidra_modules` \
         or `ghidra_open`; read with `ghidra_functions`, `ghidra_gaps` (the code between bodies the \
         analysis never cut), `ghidra_function` (decompiled C, parameters and \
-        locals with their storage), `ghidra_disassembly`, `ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_type_definition`, \
+        locals with their storage), `ghidra_disassembly`, `ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_equates_on_memory`, `ghidra_type_definition`, \
         `ghidra_type_uses` (where every module names a type), `ghidra_description`; write with `ghidra_rename`, `ghidra_function_create`, `ghidra_function_delete`, `ghidra_function_merge`, \
         `ghidra_rename_variable`, `ghidra_function_locals_reset`, `ghidra_redecode`, `ghidra_signature`, \
         `ghidra_type`, `ghidra_set_data`, `ghidra_comment`, `ghidra_describe`, `ghidra_code_mode`, `ghidra_equate`, \
@@ -511,6 +511,12 @@ public enum GhidraTools {
                 guard query.count == 1 else { throw AgentToolError("Give `to` or `from`, one of them.") }
                 return try await answer { try await backend.readCall(module, "xrefs", query: query) }
             },
+            paged("ghidra_equates_on_memory", "equates-on-memory", "List equates on memory operands",
+                  "Equates that sit on a memory operand, usually the displacement of `[reg+N]`: `address`, "
+                  + "`name`, `operand`, `text` (the instruction), `function`. `value` in `ghidra_equate` once "
+                  + "chose these by mistake, so read each one; a name meant for the immediate is removed with "
+                  + "an empty `name` and `operand`, then set again. One set on purpose is listed too. "
+                  + "`count` is how many the module has. Paged."),
             paged("ghidra_data", "data", "List a module's defined data",
                   "The defined data — named globals, GUIDs, tables — with address, name and type. Paged."),
             paged("ghidra_strings", "strings", "List a module's strings",
