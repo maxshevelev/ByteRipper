@@ -60,7 +60,7 @@ public enum GhidraTools {
         3. Names for what stays: functions, parameters, locals, in the module's convention (EDK2 \
         CamelCase), a function named for what it does for its caller. After a signature change, read the \
         function again before `ghidra_rename_variable`: Ghidra merges and retypes locals.
-        4. Comments a source would have: a plate comment on each function that matters (what, why, what \
+        4. Comments a source would have: a plate comment on each function that matters, whose first paragraph, up to the first blank line, says briefly what the function is for, since the panel shows that paragraph alone over a call (then what, why, what \
         it expects and returns or halts with); end-of-line comments where the code cannot say it — the \
         hardware or firmware meaning of a value, a path that does not return. Never paraphrase the line; \
         say what is uncertain. A comment replaces the one there: read it first.
