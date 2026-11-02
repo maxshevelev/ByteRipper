@@ -15,6 +15,20 @@ import ToolModuleKit
     var resolveName: ((String) -> CodeAddress?)?
     /// Whether the code holds an address: a function's entry or an instruction.
     var resolvesAddress: ((CodeAddress) -> Bool)?
+    /// The sections changed, or another one came to the top of the view.
+    var onSectionsChanged: (() -> Void)?
+
+    /// A heading of the description, and where it stands in the text.
+    struct Section: Equatable {
+        let title: String
+        let level: Int
+        let range: NSRange
+    }
+    private(set) var sections: [Section] = []
+    /// The section just gone to, and where the view stood then: a short last
+    /// section cannot reach the top of the view, and is still the one chosen.
+    private var chosenSection: (index: Int, origin: NSPoint)?
+    private static let headingKey = NSAttributedString.Key("CodeDescriptionHeading")
 
     private let scroll = NSScrollView()
     private let text = DescriptionTextView(usingTextLayoutManager: false)
@@ -43,6 +57,10 @@ import ToolModuleKit
         scroll.hasVerticalScroller = true
         scroll.drawsBackground = false
         scroll.translatesAutoresizingMaskIntoConstraints = false
+        scroll.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(self, selector: #selector(scrolled),
+                                               name: NSView.boundsDidChangeNotification,
+                                               object: scroll.contentView)
 
         placeholder.font = ToolPanelFont.body()
         placeholder.textColor = .secondaryLabelColor
@@ -99,7 +117,46 @@ import ToolModuleKit
             placeholder.isHidden = !loaded
         }
         placeholder.font = ToolPanelFont.body()
+        sections = readSections()
+        chosenSection = nil
         scroll(to: origin)
+        onSectionsChanged?()
+    }
+
+    @objc private func scrolled() { onSectionsChanged?() }
+
+    private func readSections() -> [Section] {
+        let drawn = text.attributedString()
+        var found: [Section] = []
+        drawn.enumerateAttribute(Self.headingKey, in: NSRange(location: 0, length: drawn.length)) { value, range, _ in
+            guard let level = value as? Int else { return }
+            let title = drawn.attributedSubstring(from: range).string
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !title.isEmpty { found.append(Section(title: title, level: level, range: range)) }
+        }
+        return found
+    }
+
+    /// The section at the top of the view: the last heading at or above it.
+    var currentSection: Int? {
+        guard !sections.isEmpty, let layout = text.layoutManager, let container = text.textContainer else { return nil }
+        if let chosenSection, chosenSection.origin == scrollOrigin, sections.indices.contains(chosenSection.index) {
+            return chosenSection.index
+        }
+        // A little under the edge: the heading gone to stands just below it.
+        let y = scrollOrigin.y - text.textContainerOrigin.y + size * 2
+        let glyph = layout.glyphIndex(for: NSPoint(x: 0, y: max(0, y)), in: container)
+        let character = layout.characterIndexForGlyph(at: glyph)
+        return sections.lastIndex { $0.range.location <= character } ?? 0
+    }
+
+    /// Brings a section's heading to the top of the view, and shows it.
+    func goToSection(_ index: Int) {
+        guard sections.indices.contains(index) else { return }
+        scroll(to: NSPoint(x: 0, y: rect(of: sections[index].range).minY - size))
+        chosenSection = (index, scrollOrigin)
+        flash(sections[index].range)
+        onSectionsChanged?()
     }
 
     var hasDescription: Bool { !(markdown ?? "").isEmpty }
@@ -173,6 +230,7 @@ import ToolModuleKit
         var font = body()
         var color = NSColor.labelColor
         var code = false
+        var headingLevel: Int?
         var lastWasList = false
         var lastWasTable = false
         var markedItems: Set<Int> = []
@@ -196,6 +254,7 @@ import ToolModuleKit
                 font = body()
                 color = quoted ? .secondaryLabelColor : .labelColor
                 code = false
+                headingLevel = nil
                 if (lastWasList && lists.isEmpty) || (lastWasTable && !inTable) {
                     style.paragraphSpacingBefore = size * 0.6
                 }
@@ -203,6 +262,7 @@ import ToolModuleKit
                 lastWasTable = inTable
                 switch components.first?.kind {
                 case .header(let level)?:
+                    headingLevel = level
                     let scale: CGFloat = [8, 4, 2, 1, 0, 0][min(max(level, 1), 6) - 1]
                     font = .systemFont(ofSize: size + scale, weight: level <= 1 ? .bold : .semibold)
                     style.paragraphSpacingBefore = out.length == 0 ? 0 : (level <= 2 ? size * 1.1 : size * 0.7)
@@ -276,7 +336,12 @@ import ToolModuleKit
                     style.paragraphSpacing = size * 0.15
                 }
             }
+            let start = out.length
             out.append(inline(text, run: run, font: font, style: style, color: color, inCodeBlock: code))
+            if let headingLevel {
+                out.addAttribute(Self.headingKey, value: headingLevel,
+                                 range: NSRange(location: start, length: out.length - start))
+            }
         }
         return out
     }

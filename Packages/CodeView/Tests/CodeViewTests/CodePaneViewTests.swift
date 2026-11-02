@@ -278,7 +278,9 @@ final class CodePaneViewTests: XCTestCase {
             $0.label(forSegment: 0) == "ASM"
         })
         XCTAssertEqual((0..<mode.segmentCount).map { mode.label(forSegment: $0) ?? "" },
-                       ["ASM", "C", "Description"])
+                       ["ASM", "C", ""])
+        XCTAssertNotNil(mode.image(forSegment: 2), "the description is a book")
+        XCTAssertEqual(mode.toolTip(forSegment: 2), "Description")
         let modeRect = view.convert(mode.bounds, from: mode)
         XCTAssertGreaterThan(modeRect.minX, view.bounds.midX,
                              "the switch is on the code side")
@@ -290,31 +292,35 @@ final class CodePaneViewTests: XCTestCase {
         }
         let name = try field("CpuPei")
         let revision = try field("(r14)")
-        let mark = try field("▸")
         let function = try XCTUnwrap(first(CodeTitleField.self, in: view) { _ in true })
         XCTAssertEqual(function.stringValue, "FUN_00000220")
         XCTAssertTrue(name.isSelectable)
         XCTAssertTrue(function.isSelectable, "the function's name can be copied too")
         XCTAssertFalse(function.isEditable)
         XCTAssertEqual(revision.textColor, .secondaryLabelColor)
-        let versions = try field("code-v2 · Ghidra 12.1.2")
+        let versions = try XCTUnwrap(all(CodeMenuLine.self, in: view).first { $0.title == "code-v2 · Ghidra 12.1.2" })
         XCTAssertEqual(versions.textColor, .secondaryLabelColor)
         XCTAssertLessThan(versions.font?.pointSize ?? 99, name.font?.pointSize ?? 0)
 
         XCTAssertFalse(view.functionMark.isHidden, "the review's mark stands before the function's name")
         XCTAssertEqual(view.functionMark.toolTip, CodePaneView.reviewDetail(try XCTUnwrap(view.selectedFunction)))
-        let rects = [name, revision, mark, view.functionMark, function, mode].map { view.convert($0.bounds, from: $0) }
+        let rects = [view.functionMark, function, mode].map { view.convert($0.bounds, from: $0) }
         for (left, right) in zip(rects, rects.dropFirst()) {
             XCTAssertLessThan(left.maxX, right.minX + 1, "left to right in reading order")
         }
-        for field in [name, revision, mark, function] {
+        for field in [name, revision, function] {
             XCTAssertGreaterThanOrEqual(field.frame.width, field.intrinsicContentSize.width - 1,
                                         "\(field.stringValue) is shown whole while there is room")
         }
-        let nameRect = rects[0]
+        let nameRect = view.convert(name.bounds, from: name)
+        let revisionRect = view.convert(revision.bounds, from: revision)
+        XCTAssertLessThan(nameRect.maxX, revisionRect.minX + 1, "the revision follows the module's name")
+        XCTAssertEqual(revisionRect.midY, nameRect.midY, accuracy: 1.5, "on one line")
+        XCTAssertLessThan(nameRect.maxX, view.bounds.midX, "the module is the navigator's")
+        XCTAssertGreaterThan(rects[1].minX, revisionRect.maxX, "the function is the code's")
         // The versions line is anchored by its archive box, so the box — not
         // the text after it — stands under the module's name.
-        let versionsLine = try XCTUnwrap(all(CodeVersionsLine.self, in: view).first)
+        let versionsLine = try XCTUnwrap(all(CodeMenuLine.self, in: view).first)
         let versionsRect = view.convert(versionsLine.bounds, from: versionsLine)
         XCTAssertGreaterThan(nameRect.minY, versionsRect.maxY - 1, "the versions are under the name")
         // The text fields carry a bezel inset of their own; the line and the
@@ -324,13 +330,8 @@ final class CodePaneViewTests: XCTestCase {
                                         from: versionsLine)
         XCTAssertEqual(nameEdge.minX, versionsEdge.minX, accuracy: 1,
                        "the line's icon stands under the module's name")
-        for rect in rects[1...4] {
-            XCTAssertEqual(rect.midY, nameRect.midY, accuracy: 1.5, "one line with the module's name")
-        }
-        let block = nameRect.union(versionsRect)
-        for rect in [rects[5]] {
-            XCTAssertEqual(rect.midY, block.midY, accuracy: 1.5, "the controls are centred on the header")
-        }
+        XCTAssertEqual(rects[0].midY, rects[1].midY, accuracy: 1.5, "the mark is on the function's line")
+        XCTAssertEqual(rects[2].midY, rects[1].midY, accuracy: 1.5, "the controls are centred on the header")
 
         view.selectFunction(at: 1)
         XCTAssertEqual(function.stringValue, "entry", "the function follows the selection")
@@ -366,7 +367,7 @@ final class CodePaneViewTests: XCTestCase {
         view.frame = NSRect(x: 0, y: 0, width: 1200, height: 400)
         view.layoutSubtreeIfNeeded()
 
-        let analysis = try XCTUnwrap(all(CodeVersionsLine.self, in: view).first {
+        let analysis = try XCTUnwrap(all(CodeMenuLine.self, in: view).first {
             $0.accessibilityLabel() == "Analysis"
         })
         let fold = try XCTUnwrap(first(NSButton.self, in: view) {
@@ -379,9 +380,10 @@ final class CodePaneViewTests: XCTestCase {
         let nameRect = view.convert(name.bounds, from: name)
         let foldRect = view.convert(fold.bounds, from: fold)
         XCTAssertLessThan(analysisRect.midY, nameRect.midY, "the menu is under the name")
-        // The bezel's own alignment inset puts its frame a couple of points
-        // left of the label's, so the text inside lines up with the name.
-        XCTAssertEqual(analysisRect.minX, nameRect.minX, accuracy: 3, "left with the name")
+        // The line stands by what it draws: its ground reaches left of the name.
+        XCTAssertEqual(view.convert(analysis.alignmentRect(forFrame: analysis.bounds), from: analysis).minX,
+                       view.convert(name.alignmentRect(forFrame: name.bounds), from: name).minX,
+                       accuracy: 1, "left with the name")
         XCTAssertGreaterThan(analysisRect.minY, view.bounds.midY,
                              "in the header, not in the bar at the bottom")
         XCTAssertLessThan(foldRect.maxY, analysisRect.minY,
@@ -393,14 +395,14 @@ final class CodePaneViewTests: XCTestCase {
                              "the line keeps its text beside the chevron")
     }
 
-    func testTheFunctionsHeadingSitsAtTheLeftOfItsList() throws {
+    func testTheModuleHeadingSitsAtTheLeftOfItsList() throws {
         let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
                                 moduleBytes: moduleBytes, hexView: NSView())
         view.frame = NSRect(x: 0, y: 0, width: 480, height: 320)
         view.layoutSubtreeIfNeeded()
 
         let heading = try XCTUnwrap(
-            first(NSTextField.self, in: view) { $0.stringValue == "Functions" })
+            first(NSTextField.self, in: view) { $0.stringValue == "CpuPei" })
         XCTAssertEqual(heading.alignment, .left, "the heading reads from the left")
         let list = try XCTUnwrap(
             first(NSTableView.self, in: view) {
@@ -418,9 +420,7 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(headingLeft, rowTextLeft, accuracy: 3.5,
                        "and starts where the row text does")
 
-        let codeTitle = try XCTUnwrap(first(NSTextField.self, in: view) {
-            $0.stringValue == "CpuPei"
-        })
+        let codeTitle = try XCTUnwrap(first(CodeTitleField.self, in: view) { _ in true })
         let headingY = view.convert(heading.alignmentRect(forFrame: heading.bounds),
                                     from: heading).midY
         let codeTitleY = view.convert(codeTitle.alignmentRect(forFrame: codeTitle.bounds),
@@ -612,7 +612,7 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(view.selectedFunction?.name, "Caller")
         let code = try XCTUnwrap(all(CodeTextView.self, in: view).first)
         XCTAssertEqual(code.selectedRange(), second, "the call in the C")
-        XCTAssertEqual(view.navigatorTitle, "POST codes", "the list stays in front")
+        XCTAssertEqual(view.navigatorListIndex, 2, "the list stays in front")
         XCTAssertEqual(ranges.last, 0x6A..<0x6B, "the call's bytes")
 
         XCTAssertEqual(view.navigatorColumnTitles, ["Code", "Function", "Through", "Call address"],
@@ -1885,7 +1885,6 @@ final class CodePaneViewTests: XCTestCase {
         // with no code in the store is listed greyed and cannot be picked.
         XCTAssertEqual(view.revisionChoiceIsEnabled(54), true)
         XCTAssertEqual(view.revisionChoiceIsEnabled(53), false, "the store holds no code for it")
-        XCTAssertFalse(view.revisionPickerIsBordered, "the picker sits on the bar, as Xcode's does")
         // Reset stays where it is, enabled only while there is something to
         // reset: a control that comes and goes moves the picker under the
         // pointer.
@@ -1922,15 +1921,21 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertFalse(view.showsRevisionDiff, "and the code comes back")
     }
 
-    /// The revision picker is borderless and draws a rounded plate under the
-    /// pointer, as Xcode's bar does.
-    func testTheRevisionPickerLightsUnderThePointer() {
-        let popup = CodeRevisionPopup(frame: .zero, pullsDown: false)
-        XCTAssertFalse(popup.showsPlate)
-        popup.setPointerOnIt(true)
-        XCTAssertTrue(popup.showsPlate)
-        popup.setPointerOnIt(false)
-        XCTAssertFalse(popup.showsPlate)
+    /// The bar's words are one size, and the revision compared with reads
+    /// plainly while "No comparison" keeps the bar's grey.
+    func testTheComparisonBarReadsAtOneSize() throws {
+        let view = CodePaneView(manifest: manifest(revision: 14), artifact: try artifact(),
+                                moduleBytes: moduleBytes, hexView: NSView())
+        view.setRevisionChoices([.init(revision: 13, title: "r13", hasCode: true)], current: 14)
+        XCTAssertEqual(Set(view.comparisonFonts.map { $0?.pointSize }).count, 1)
+        XCTAssertEqual(view.selectedRevisionColor, .secondaryLabelColor)
+
+        view.setComparisonRevision(13, artifact: try artifact())
+        XCTAssertEqual(view.selectedRevisionTitle, "r13")
+        XCTAssertEqual(view.selectedRevisionColor, .labelColor, "what the diff is against reads plainly")
+
+        view.setComparisonRevision(nil, artifact: nil)
+        XCTAssertEqual(view.selectedRevisionColor, .secondaryLabelColor)
     }
 
     /// A New mark outlives the revisions that follow it: it keeps the revision
@@ -3065,6 +3070,49 @@ final class CodePaneViewTests: XCTestCase {
         let range = (text.string as NSString).range(of: words)
         guard range.location != NSNotFound else { return nil }
         return text.attribute(.link, at: range.location, effectiveRange: nil)
+    }
+
+    /// Over the description the header names no function but the section on
+    /// screen, which opens the others; going to one is a step Back returns from.
+    func testTheHeaderGoesThroughTheDescriptionsSections() throws {
+        let view = try describedPane()
+        let filler = (0..<40).map { "Line \($0) of the section." }.joined(separator: "\n\n")
+        view.setModuleDescription("# Module\n\n\(filler)\n\n## How it works\n\n\(filler)\n\n### Order\n\nShort.")
+        view.layoutSubtreeIfNeeded()
+        XCTAssertTrue(view.headerShowsFunction, "the code keeps its function")
+        XCTAssertNil(view.shownSectionTitle)
+
+        view.showDescription(true)
+        XCTAssertFalse(view.headerShowsFunction)
+        XCTAssertEqual(view.descriptionSectionTitles, ["Module", "How it works", "Order"])
+        XCTAssertEqual(view.shownSectionTitle, "Module")
+
+        view.goToDescriptionSection(1)
+        XCTAssertEqual(view.shownSectionTitle, "How it works")
+        XCTAssertGreaterThan(view.descriptionScrollOrigin.y, 0)
+        let there = view.descriptionScrollOrigin
+        view.goToDescriptionSection(2)
+        XCTAssertEqual(view.shownSectionTitle, "Order", "the last one, too short to reach the top")
+
+        view.goBack()
+        XCTAssertEqual(view.descriptionScrollOrigin.y, there.y, accuracy: 1)
+        XCTAssertEqual(view.shownSectionTitle, "How it works")
+        view.scrollDescription(to: .zero)
+        XCTAssertEqual(view.shownSectionTitle, "Module", "the line follows the scrolling")
+
+        view.showDescription(false)
+        XCTAssertTrue(view.headerShowsFunction)
+        XCTAssertNil(view.shownSectionTitle)
+    }
+
+    /// A description with no headings has nothing to go through.
+    func testADescriptionWithoutHeadingsHasNoSectionLine() throws {
+        let view = try describedPane()
+        view.setModuleDescription("Only a paragraph.")
+        view.showDescription(true)
+        XCTAssertEqual(view.descriptionSectionTitles, [])
+        XCTAssertNil(view.shownSectionTitle)
+        XCTAssertFalse(view.headerShowsFunction)
     }
 
     /// The Markdown is set as a document: a table, a list with its markers,
@@ -4367,11 +4415,91 @@ final class CodePaneViewTests: XCTestCase {
                         "code-v3-ghidra-12.2", "code-v0-ghidra-12.0"])
     }
 
+    /// The recipe, the revision and the section are one control: it shows what
+    /// is chosen, ticks it in its menu, greys what cannot be chosen, and with
+    /// nothing to choose from is only text.
+    func testAMenuLineOffersItsChoices() throws {
+        let line = CodeMenuLine(frame: NSRect(x: 0, y: 0, width: 120, height: 14))
+        line.title = "Plain"
+        XCTAssertFalse(line.opensMenu)
+        XCTAssertNil(line.hitTest(NSPoint(x: 5, y: 5)), "text takes no click")
+
+        var chosen: [Int] = []
+        line.onChoose = { chosen.append($0) }
+        line.setChoices([.init(title: "None", tag: -1),
+                         .init(title: "r2", tag: 2, startsGroup: true),
+                         .init(title: "r1", tag: 1, isEnabled: false, indentation: 1)], chosen: 2)
+        XCTAssertTrue(line.opensMenu)
+        XCTAssertEqual(line.title, "r2")
+
+        let menu = line.makeMenu()
+        XCTAssertEqual(menu.items.map(\.title), ["None", "", "r2", "r1"])
+        XCTAssertTrue(menu.items[1].isSeparatorItem)
+        XCTAssertEqual(menu.items.map(\.state), [.off, .off, .on, .off])
+        XCTAssertFalse(menu.items[3].isEnabled, "a choice meant to be greyed stays grey")
+        XCTAssertEqual(menu.items[3].indentationLevel, 1)
+
+        menu.performActionForItem(at: 0)
+        XCTAssertEqual(chosen, [-1])
+        XCTAssertEqual(line.title, "r2", "it shows the choice when the owner says it came to something")
+        line.select(-1)
+        XCTAssertEqual(line.title, "None")
+        line.select(99)
+        XCTAssertEqual(line.title, "None", "an unknown one falls back to the first")
+
+        // The line's own menu reaches the owner, and its words stay out of it.
+        line.setFont(.systemFont(ofSize: 20, weight: .bold))
+        line.setChoices(line.choices, chosen: 2)
+        let own = try XCTUnwrap(line.menu)
+        own.performActionForItem(at: 0)
+        XCTAssertEqual(chosen, [-1, -1])
+        XCTAssertEqual(line.title, "r2")
+        XCTAssertEqual(own.items[0].attributedTitle?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont,
+                       NSFont.menuFont(ofSize: 0), "the menu keeps the menu's font")
+    }
+
+    /// What the line draws starts where the module's name does, in pixels: the
+    /// cell's own inset must not push the recipe right of the heading.
+    func testTheRecipeStartsWhereTheHeadingDoes() throws {
+        var second = manifest()
+        second.recipe = AnalysisRecipe(id: "code-v3-ghidra-12.2", exporter: 3,
+                                       ghidra: "12.2", script: "ExportCode.java")
+        let view = CodePaneView(manifest: manifest(revision: 14), artifact: try artifact(), moduleBytes: moduleBytes,
+                                hexView: NSView(), recipes: [manifest(revision: 14), second])
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1100, height: 420), styleMask: [.titled],
+                              backing: .buffered, defer: false)
+        window.contentView = view
+        window.layoutIfNeeded()
+        view.layoutSubtreeIfNeeded()
+        view.displayIfNeeded()
+        let rep = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+        view.cacheDisplay(in: view.bounds, to: rep)
+        let scale = CGFloat(rep.pixelsWide) / view.bounds.width
+        /// The first column, in points, with ink in the height of `field`.
+        func firstInk(of field: NSView) throws -> CGFloat {
+            let rect = view.convert(field.bounds, from: field)
+            let top = Int((view.bounds.height - rect.maxY) * scale)
+            let bottom = Int((view.bounds.height - rect.minY) * scale)
+            for x in 0..<Int(view.bounds.midX * scale) {
+                for y in top..<bottom {
+                    if let color = rep.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB),
+                       color.alphaComponent > 0.5, color.brightnessComponent < 0.75 {
+                        return CGFloat(x) / scale
+                    }
+                }
+            }
+            throw XCTSkip("no ink found")
+        }
+        let name = try XCTUnwrap(first(NSTextField.self, in: view) { $0.stringValue == "CpuPei" })
+        let line = try XCTUnwrap(all(CodeMenuLine.self, in: view).first { $0.accessibilityLabel() == "Analysis" })
+        XCTAssertEqual(try firstInk(of: line), try firstInk(of: name), accuracy: 1.5)
+    }
+
     /// The line wears its ground while the menu is up and under the pointer,
     /// and takes it off when the menu closes without a choice.
     func testTheGroundGoesWhenTheMenuCloses() {
-        let line = CodeVersionsLine(frame: NSRect(x: 0, y: 0, width: 120, height: 14))
-        line.onOpen = {}
+        let line = CodeMenuLine(frame: NSRect(x: 0, y: 0, width: 120, height: 14))
+        line.setChoices([.init(title: "One", tag: 1)], chosen: 1)
         XCTAssertFalse(line.showsGround, "no ground at rest")
         line.menuOpened()
         XCTAssertTrue(line.showsGround, "the line stays marked while its menu is up")

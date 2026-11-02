@@ -394,6 +394,8 @@
 "Deleted here" = "Hier gelöscht";
 "Deleted on another Mac" = "Auf einem anderen Mac gelöscht";
 "Description" = "Beschreibung";
+"Sections of the description" = "Abschnitte der Beschreibung";
+"Go to a section of the description" = "Zu einem Abschnitt der Beschreibung gehen";
 "Compare with a revision" = "Vergleich mit einer Revision";
 "Compare the code with a revision" = "Den Code mit einer Revision vergleichen";
 "Reset" = "Zurücksetzen";
@@ -1768,7 +1770,6 @@
 "Function" = "Funktion";
 "Through" = "Über";
 "Call address" = "Aufrufadresse";
-"POST codes" = "POST-Codes";
 "Port unknown" = "Port unbekannt";
 "Value unknown" = "Wert unbekannt";
 "Sent at %1$@" = "Gesendet bei %1$@";
@@ -1779,7 +1780,6 @@
 "The value comes from a caller this module does not show." = "Den Wert bestimmt ein Aufrufer, der nicht in diesem Modul liegt.";
 "The value is worked out at run time: from a table, a loop or a read." = "Der Wert wird zur Laufzeit ermittelt: aus einer Tabelle, in einer Schleife oder aus einem Lesezugriff.";
 "Status" = "Status";
-"Status codes" = "Statuscodes";
 "Strings" = "Zeichenketten";
 "Dump Row Height:" = "Zeilenhöhe des Dumps:";
 "Code Line Spacing:" = "Zeilenabstand des Codes:";

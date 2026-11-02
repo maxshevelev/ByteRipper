@@ -43,7 +43,6 @@ import ToolModuleKit
 
     private let functionTable = NSTableView()
     private let functionScroll = NSScrollView()
-    private let navigatorLabel = NSTextField(labelWithString: "")
     /// The band under the list's switch: the review's groups as a strip, each
     /// as wide as its share of the module's functions.
     private let readinessBar = CodeReviewReadinessBar()
@@ -139,7 +138,7 @@ import ToolModuleKit
     private var pendingDescriptionScroll: NSPoint?
     /// The link in the description the reader just followed.
     private var leavingDescriptionMark: NSRange?
-    private let recipeLine = CodeVersionsLine(frame: .zero)
+    private let recipeLine = CodeMenuLine(frame: .zero)
     /// Turns while the app reads another analysis the reader chose.
     private let recipeSpinner = NSProgressIndicator()
     private let codeContent = NSView()
@@ -151,7 +150,7 @@ import ToolModuleKit
     /// against and Reset.
     private let compareLabel = NSTextField(labelWithString: "")
     private let compareArrows = NSImageView()
-    private let revisionPopup = CodeRevisionPopup()
+    private let revisionLine = CodeMenuLine(frame: .zero)
     private let resetComparisonButton = NSButton()
     /// What the popup offers; empty until the app has read the module's
     /// history, and the bar stays out of sight while it is.
@@ -240,13 +239,16 @@ import ToolModuleKit
     private var belowBannerTops: [NSLayoutConstraint] = []
     /// Whether the pages are under the plate now.
     private var bannerIsUp = false
-    /// The header's first line — the module, its revision, the function —
-    /// kept to follow the zoom. The versions line under it follows with
-    /// `recipeLine`.
+    /// The navigator's first line — the module, its revision — and the
+    /// function over the code, kept to follow the zoom. The versions line
+    /// under the module follows with `recipeLine`.
     private var nameLabel: NSTextField?
     private var revisionLabel: NSTextField?
-    private var pathMark: NSTextField?
     private let functionLabel = CodeTitleField(labelWithString: "")
+    /// The function over the code, and in its place while the description is
+    /// on screen the line that opens the description's sections.
+    private let functionLine = NSStackView()
+    private let sectionLine = CodeMenuLine(frame: .zero)
     /// After the function's name, a library function's badge as the
     /// navigator draws it, with what the library registry says of it.
     let functionMark = CodeBaselineImageView()
@@ -308,7 +310,7 @@ import ToolModuleKit
             }
         // ASM and C are names of formats, not words to translate.
         modeControl = NSSegmentedControl(
-            labels: ["ASM", "C", L("Description")], trackingMode: .selectOne,
+            labels: ["ASM", "C", ""], trackingMode: .selectOne,
             target: nil, action: nil)
         listControl = NSSegmentedControl(
             labels: [L("Functions"), L("Strings"), L("POST"), L("Status")],
@@ -352,7 +354,11 @@ import ToolModuleKit
     public var listedStatusCodeCount: Int { state.listedStatusCodes.count }
     /// What a navigator row reads, for tests.
     func navigatorRowText(_ row: Int) -> String { navigatorText(at: row) }
-    var navigatorTitle: String { navigatorLabel.stringValue }
+    var navigatorListIndex: Int { listControl.selectedSegment }
+    var descriptionSectionTitles: [String] { descriptionView.sections.map(\.title) }
+    /// The section the header names, nil when it names none; for tests.
+    var shownSectionTitle: String? { sectionLine.isHidden ? nil : sectionLine.title }
+    var headerShowsFunction: Bool { !functionLine.isHidden }
     /// The navigator's column headers; none for a one-column list.
     var navigatorColumnTitles: [String] {
         functionTable.headerView == nil ? [] : functionTable.tableColumns.map(\.title)
@@ -541,27 +547,27 @@ import ToolModuleKit
 
     /// For a test: what the picker offers, by title.
     var revisionChoiceTitles: [String] {
-        (revisionPopup.menu?.items ?? []).filter { !$0.isSeparatorItem }.map(\.title)
+        revisionLine.choices.map(\.title)
     }
     var comparisonIsHidden: Bool { compareLabel.isHidden }
     var comparisonResetIsHidden: Bool { resetComparisonButton.isHidden }
     var comparisonResetIsEnabled: Bool { resetComparisonButton.isEnabled }
     var comparisonResetTint: NSColor? { resetComparisonButton.contentTintColor }
-    var revisionPickerIsBordered: Bool { revisionPopup.isBordered }
     /// Whether the picker offers a revision, for a test: a revision the store
     /// has no code for is listed greyed and cannot be chosen.
     func revisionChoiceIsEnabled(_ revision: Int) -> Bool? {
-        revisionPopup.menu?.items.first { $0.tag == revision }?.isEnabled
+        revisionLine.choices.first { $0.tag == revision }?.isEnabled
     }
     /// The title the picker shows as chosen, for a test.
-    var selectedRevisionTitle: String? { revisionPopup.titleOfSelectedItem }
+    var selectedRevisionTitle: String? { revisionLine.title }
+    /// The bar's words, for a test: their fonts, and the chosen revision's colour.
+    var comparisonFonts: [NSFont?] { [compareLabel.font, revisionLine.font, resetComparisonButton.font] }
+    var selectedRevisionColor: NSColor? { revisionLine.textColor }
 
     /// Picks a revision in the bar as the reader would.
     func chooseRevisionMenuTag(_ tag: Int) { chooseRevision(tag) }
 
     @objc private func resetComparison() { onChooseRevision?(nil) }
-
-    @objc private func revisionChosen(_ sender: NSMenuItem) { chooseRevision(sender.tag) }
 
     private func chooseRevision(_ tag: Int) {
         // Reset is a choice too: a mark's comparison does not come back.
@@ -569,35 +575,32 @@ import ToolModuleKit
         onChooseRevision?(tag < 0 ? nil : tag)
     }
 
+    private static let noComparisonTag = -1
+
+    /// A revision the store has no code for is listed greyed.
     private func rebuildRevisionMenu() {
-        let menu = NSMenu()
-        // A menu enables every item whose target can take its action, which
-        // would offer a revision the store has no code for: the enabled flags
-        // below are the ones meant.
-        menu.autoenablesItems = false
-        let none = NSMenuItem(title: L("No comparison"), action: #selector(revisionChosen(_:)), keyEquivalent: "")
-        none.tag = -1
-        none.target = self
-        menu.addItem(none)
-        if !revisionChoices.isEmpty { menu.addItem(.separator()) }
-        for choice in revisionChoices {
-            let item = NSMenuItem(title: choice.title, action: #selector(revisionChosen(_:)),
-                                  keyEquivalent: "")
-            item.tag = choice.revision
-            item.target = self
-            item.isEnabled = choice.hasCode
-            menu.addItem(item)
+        var choices = [CodeMenuLine.Choice(title: L("No comparison"), tag: Self.noComparisonTag)]
+        for (index, choice) in revisionChoices.enumerated() {
+            choices.append(.init(title: choice.title, tag: choice.revision, isEnabled: choice.hasCode,
+                                 startsGroup: index == 0))
         }
-        revisionPopup.menu = menu
+        revisionLine.setChoices(choices, chosen: comparisonRevision ?? Self.noComparisonTag)
+        selectRevisionItem(comparisonRevision)
     }
 
+    /// A revision compared with reads plainly: it is what the diff is against.
+    /// "No comparison" keeps the bar's grey, as Reset does then.
     private func selectRevisionItem(_ revision: Int?) {
-        let tag = revision ?? -1
-        if let item = revisionPopup.menu?.items.first(where: { $0.tag == tag }) {
-            revisionPopup.select(item)
-        } else {
-            revisionPopup.selectItem(at: 0)
-        }
+        revisionLine.select(revision ?? Self.noComparisonTag)
+        revisionLine.setTextColor(revision == nil ? .secondaryLabelColor : .labelColor)
+    }
+
+    /// The comparison's words at one size, following the zoom.
+    private func drawComparisonFonts() {
+        let font = Self.recipeFont()
+        compareLabel.font = font
+        revisionLine.setFont(font)
+        resetComparisonButton.font = font
     }
 
     /// The comparison shows only when the app found revisions to offer. Reset
@@ -606,7 +609,7 @@ import ToolModuleKit
     /// pointer.
     private func layOutComparison() {
         let shows = hasRevisionHistory
-        for view in [compareLabel, compareArrows, revisionPopup, resetComparisonButton] as [NSView] {
+        for view in [compareLabel, compareArrows, revisionLine, resetComparisonButton] as [NSView] {
             view.isHidden = !shows
         }
         updateResetButton()
@@ -1041,7 +1044,6 @@ import ToolModuleKit
     /// The navigator's title and rows for the list in front, with the selected
     /// function's row chosen when Functions is showing.
     private func drawNavigator() {
-        navigatorLabel.stringValue = title(for: state.list)
         listControl.selectedSegment = state.list.rawValue
         // The switch speaks about the functions only: with another list in
         // front the filter takes its room.
@@ -1780,15 +1782,6 @@ import ToolModuleKit
         }
     }
 
-    private func title(for list: List) -> String {
-        switch list {
-        case .functions: L("Functions")
-        case .strings: L("Strings")
-        case .postCodes: L("POST codes")
-        case .statusCodes: L("Status codes")
-        }
-    }
-
     @objc private func listChanged() {
         guard let list = List(rawValue: listControl.selectedSegment) else { return }
         selectList(list)
@@ -1806,7 +1799,6 @@ import ToolModuleKit
         } ?? ""
         functionLabel.stringValue = name
         functionLabel.isHidden = name.isEmpty
-        pathMark?.isHidden = name.isEmpty
         updateFunctionMark()
     }
 
@@ -1882,7 +1874,9 @@ import ToolModuleKit
         if let range = asked, !cTextView.isHiddenOrHasHiddenAncestor, let rect = cRect(range) {
             popover.show(relativeTo: rect, of: cTextView)
         } else {
-            popover.show(relativeTo: functionLabel.bounds, of: functionLabel)
+            // Over the description the header names no function.
+            let anchor: NSView = functionLabel.isHiddenOrHasHiddenAncestor ? modeControl : functionLabel
+            popover.show(relativeTo: anchor.bounds, of: anchor)
         }
         return popover
     }
@@ -2484,13 +2478,42 @@ import ToolModuleKit
     // MARK: - Building
 
     private func build(hexView: NSView) {
-        navigatorLabel.stringValue = L("Functions")
-        navigatorLabel.font = ToolPanelFont.title()
-        navigatorLabel.textColor = .labelColor
-        navigatorLabel.alignment = .left
-        navigatorLabel.lineBreakMode = .byTruncatingTail
-        navigatorLabel.maximumNumberOfLines = 1
-        navigatorLabel.translatesAutoresizingMaskIntoConstraints = false
+        // The navigator's head says what is being read: the module and the
+        // revision of its review. What produced the analysis is the small grey
+        // line under them.
+        let nameLabel = label(
+            manifest.module.name.isEmpty ? manifest.recipe.id : manifest.module.name,
+            font: ToolPanelFont.title())
+        let revisionLabel = label(manifest.reading.map { "(r\($0.rev))" } ?? "",
+                                  font: ToolPanelFont.title(), color: .secondaryLabelColor)
+        revisionLabel.isHidden = manifest.reading == nil
+        // The name is what one searches for elsewhere — in the tree, in a
+        // report — so it can be selected and copied.
+        nameLabel.isSelectable = true
+        // Above the stacks' own hugging (250), so a name is shown whole while
+        // the pane has room for it; below required, so it is cut when there is
+        // none, the versions first.
+        nameLabel.setContentCompressionResistancePriority(.init(500), for: .horizontal)
+        let nameMinimum = nameLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 40)
+        nameMinimum.priority = .init(501)
+        nameMinimum.isActive = true
+        revisionLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        revisionLabel.setContentHuggingPriority(.required, for: .horizontal)
+        self.nameLabel = nameLabel
+        self.revisionLabel = revisionLabel
+        let moduleLine = NSStackView(views: [nameLabel, revisionLabel])
+        moduleLine.orientation = .horizontal
+        moduleLine.alignment = .firstBaseline
+        moduleLine.spacing = 4
+        // Where the store holds more than one analysis of the module, the
+        // versions line is the menu that chooses among them, each named the
+        // same way.
+        let versionsLine: NSView = recipes.count > 1 ? recipeMenu() : recipeVersions()
+        let moduleBlock = NSStackView(views: [moduleLine, versionsLine])
+        moduleBlock.orientation = .vertical
+        moduleBlock.alignment = .leading
+        moduleBlock.spacing = 1
+        moduleBlock.translatesAutoresizingMaskIntoConstraints = false
 
         listControl.target = self
         listControl.action = #selector(listChanged)
@@ -2520,7 +2543,7 @@ import ToolModuleKit
 
         let functionPane = NSView()
         functionPane.translatesAutoresizingMaskIntoConstraints = false
-        functionPane.addSubview(navigatorLabel)
+        functionPane.addSubview(moduleBlock)
         functionPane.addSubview(listControl)
         functionPane.addSubview(readinessBar)
         functionPane.addSubview(functionScroll)
@@ -2613,8 +2636,8 @@ import ToolModuleKit
         // the type checker of Xcode 26.3 past its time limit.
         var constraints: [NSLayoutConstraint] = [
             emptyListLabel.topAnchor.constraint(equalTo: listControl.bottomAnchor, constant: 16),
-            navigatorLabel.topAnchor.constraint(equalTo: functionPane.topAnchor, constant: 12),
-            listControl.topAnchor.constraint(equalTo: navigatorLabel.bottomAnchor,
+            moduleBlock.topAnchor.constraint(greaterThanOrEqualTo: functionPane.topAnchor, constant: 8),
+            listControl.topAnchor.constraint(equalTo: moduleBlock.bottomAnchor,
                                              constant: Self.navigatorSpacing),
             readinessBar.topAnchor.constraint(equalTo: listControl.bottomAnchor, constant: 4),
             readinessHeight,
@@ -2635,8 +2658,8 @@ import ToolModuleKit
         ]
         constraints += margin(emptyListLabel.leadingAnchor, functionPane.leadingAnchor, 16)
         constraints += margin(emptyListLabel.trailingAnchor, functionPane.trailingAnchor, -16)
-        constraints += margin(navigatorLabel.leadingAnchor, functionPane.leadingAnchor, 12)
-        constraints += margin(navigatorLabel.trailingAnchor, functionPane.trailingAnchor, -8)
+        constraints += margin(moduleBlock.leadingAnchor, functionPane.leadingAnchor, 12)
+        constraints += margin(moduleBlock.trailingAnchor, functionPane.trailingAnchor, -8)
         constraints += margin(listControl.leadingAnchor, functionPane.leadingAnchor, 8)
         constraints += margin(listControl.trailingAnchor, functionPane.trailingAnchor, -8)
         constraints += margin(functionScroll.leadingAnchor, functionPane.leadingAnchor, 8)
@@ -2652,70 +2675,40 @@ import ToolModuleKit
         codeContent.wantsLayer = true
         applyCodeBackground()
 
-        // The first line is where the reader is: the module, the revision
-        // of its review, the function. What produced the analysis is the
-        // small grey line under it.
-        let nameLabel = label(
-            manifest.module.name.isEmpty ? manifest.recipe.id : manifest.module.name,
-            font: ToolPanelFont.title())
-        let revisionLabel = label(manifest.reading.map { "(r\($0.rev))" } ?? "",
-                                  font: ToolPanelFont.title(), color: .secondaryLabelColor)
-        revisionLabel.isHidden = manifest.reading == nil
-        let pathMark = label("▸", font: ToolPanelFont.title(), color: .tertiaryLabelColor)
+        // Over the code stands where the reader is: the function.
         functionLabel.font = ToolPanelFont.title()
         functionLabel.textColor = .labelColor
         functionLabel.lineBreakMode = .byTruncatingTail
         functionLabel.maximumNumberOfLines = 1
         functionLabel.translatesAutoresizingMaskIntoConstraints = false
         functionLabel.onMenu = { [weak self] in self?.functionMenu(for: self?.state.function) }
-        // The names are what one searches for elsewhere — in the tree, in a
-        // report — so they can be selected and copied.
-        nameLabel.isSelectable = true
+        // The name is what one searches for elsewhere, so it can be selected
+        // and copied. Above the stacks' own hugging (250), so it is shown whole
+        // while the row has room for it; below required, so it is cut when
+        // there is none — down to a few letters, enough to tell it.
         functionLabel.isSelectable = true
-        // Above the stacks' own hugging (250), so a name is shown whole while
-        // the row has room for it; below required, so it is cut when there is
-        // none: the versions first, then the function's name — down to a few
-        // letters, enough to tell it — and the module's last.
         functionLabel.setContentCompressionResistancePriority(.init(499), for: .horizontal)
-        nameLabel.setContentCompressionResistancePriority(.init(500), for: .horizontal)
         let functionMinimum = functionLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 80)
         functionMinimum.priority = .init(502)
         functionMinimum.isActive = true
-        let nameMinimum = nameLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 40)
-        nameMinimum.priority = .init(501)
-        nameMinimum.isActive = true
-        for field in [revisionLabel, pathMark] {
-            field.setContentCompressionResistancePriority(.required, for: .horizontal)
-            field.setContentHuggingPriority(.required, for: .horizontal)
-        }
-        self.nameLabel = nameLabel
-        self.revisionLabel = revisionLabel
-        self.pathMark = pathMark
         functionMark.isHidden = true
         functionMark.imageScaling = .scaleNone
         functionMark.setContentHuggingPriority(.required, for: .horizontal)
         functionMark.setContentCompressionResistancePriority(.required, for: .horizontal)
-        let pathLine = NSStackView(views: [nameLabel, revisionLabel, pathMark, functionMark, functionLabel])
-        pathLine.orientation = .horizontal
-        pathLine.alignment = .firstBaseline
-        pathLine.spacing = 6
-        pathLine.setCustomSpacing(4, after: nameLabel)
-        pathLine.setCustomSpacing(4, after: functionMark)
-        // The line under the names says what produced the analysis — the
-        // recipe and the Ghidra version. Where the store holds more than one
-        // analysis of the module, the line is the menu that chooses among
-        // them, each named the same way.
-        let versionsLine: NSView = recipes.count > 1 ? recipeMenu() : recipeVersions()
-        let titleBlock = NSStackView(views: [pathLine, versionsLine])
-        titleBlock.orientation = .vertical
-        titleBlock.alignment = .leading
-        titleBlock.spacing = 1
-        titleBlock.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+        functionLine.addArrangedSubview(functionMark)
+        functionLine.addArrangedSubview(functionLabel)
+        functionLine.orientation = .horizontal
+        functionLine.alignment = .firstBaseline
+        functionLine.spacing = 4
+        functionLine.setContentHuggingPriority(.defaultHigh, for: .horizontal)
 
         modeControl.target = self
         modeControl.action = #selector(modeChanged)
         // The decompiled C first: it is what a module is read in.
         modeControl.selectedSegment = 1
+        modeControl.setImage(NSImage(systemSymbolName: "book", accessibilityDescription: L("Description")),
+                             forSegment: Self.descriptionSegment)
+        modeControl.setToolTip(L("Description"), forSegment: Self.descriptionSegment)
         modeControl.setContentHuggingPriority(.required, for: .horizontal)
         modeControl.setContentCompressionResistancePriority(.required, for: .horizontal)
 
@@ -2729,7 +2722,15 @@ import ToolModuleKit
         let codeHelpButton = HelpButton.standard(for: .topic(.codePanel))
         codeHelpButton.setContentHuggingPriority(.required, for: .horizontal)
         codeHelpButton.setContentCompressionResistancePriority(.required, for: .horizontal)
-        let titleRow = NSStackView(views: [titleBlock, titleSpacer,
+        drawSectionLine()
+        sectionLine.translatesAutoresizingMaskIntoConstraints = false
+        sectionLine.setContentCompressionResistancePriority(.init(498), for: .horizontal)
+        sectionLine.isHidden = true
+        sectionLine.onChoose = { [weak self] index in self?.goToDescriptionSection(index) }
+        // help: panel.code.description-sections
+        ControlHelp.describe(sectionLine, name: L("Sections of the description"),
+                             tooltip: L("Go to a section of the description"))
+        let titleRow = NSStackView(views: [functionLine, sectionLine, titleSpacer,
                                            occurrenceBar, codeHelpButton, modeControl])
         titleRow.orientation = .horizontal
         titleRow.alignment = .centerY
@@ -2770,6 +2771,7 @@ import ToolModuleKit
 
         descriptionView.translatesAutoresizingMaskIntoConstraints = false
         descriptionView.isHidden = true
+        descriptionView.onSectionsChanged = { [weak self] in self?.updateSectionLine() }
         descriptionView.onFollow = { [weak self] address, link in self?.followFromDescription(address, link: link) }
         descriptionView.resolveName = { [weak self] name in
             guard let self, let index = self.model.functions.firstIndex(where: { $0.name == name }) else { return nil }
@@ -2862,7 +2864,6 @@ import ToolModuleKit
         hexDumpBar.addSubview(hexDumpButton)
         // The comparison, on the bar's right as Xcode keeps one: the review
         // shown, the arrows, the revision to compare it against and Reset.
-        compareLabel.font = .systemFont(ofSize: 11)
         compareLabel.textColor = .secondaryLabelColor
         compareLabel.lineBreakMode = .byTruncatingTail
         compareLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -2871,21 +2872,20 @@ import ToolModuleKit
             .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 10, weight: .regular))
         compareArrows.contentTintColor = .tertiaryLabelColor
         compareArrows.translatesAutoresizingMaskIntoConstraints = false
-        revisionPopup.isBordered = false
-        revisionPopup.controlSize = .small
-        revisionPopup.font = .systemFont(ofSize: 11)
-        revisionPopup.toolTip = L("Compare the code with a revision")
-        revisionPopup.translatesAutoresizingMaskIntoConstraints = false
+        revisionLine.onChoose = { [weak self] tag in self?.chooseRevision(tag) }
+        ControlHelp.describe(revisionLine, L("Compare the code with a revision"))
+        revisionLine.setContentCompressionResistancePriority(.init(498), for: .horizontal)
+        revisionLine.translatesAutoresizingMaskIntoConstraints = false
         resetComparisonButton.title = L("Reset")
         resetComparisonButton.isBordered = false
         resetComparisonButton.bezelStyle = .inline
         resetComparisonButton.controlSize = .small
-        resetComparisonButton.font = .systemFont(ofSize: 11)
+        drawComparisonFonts()
         resetComparisonButton.contentTintColor = .controlAccentColor
         resetComparisonButton.target = self
         resetComparisonButton.action = #selector(resetComparison)
         resetComparisonButton.translatesAutoresizingMaskIntoConstraints = false
-        for view in [compareLabel, compareArrows, revisionPopup, resetComparisonButton] {
+        for view in [compareLabel, compareArrows, revisionLine, resetComparisonButton] {
             hexDumpBar.addSubview(view)
         }
         codeContent.addSubview(hexDumpBar)
@@ -2903,11 +2903,10 @@ import ToolModuleKit
             hexDumpButton.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor),
             resetComparisonButton.trailingAnchor.constraint(equalTo: hexDumpButton.leadingAnchor, constant: -10),
             resetComparisonButton.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor),
-            revisionPopup.trailingAnchor.constraint(equalTo: resetComparisonButton.leadingAnchor, constant: -6),
-            revisionPopup.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor),
-            revisionPopup.widthAnchor.constraint(lessThanOrEqualToConstant: 260),
-            revisionPopup.heightAnchor.constraint(equalToConstant: 22),
-            compareArrows.trailingAnchor.constraint(equalTo: revisionPopup.leadingAnchor, constant: -6),
+            revisionLine.trailingAnchor.constraint(equalTo: resetComparisonButton.leadingAnchor, constant: -6),
+            revisionLine.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor),
+            revisionLine.widthAnchor.constraint(lessThanOrEqualToConstant: 260),
+            compareArrows.trailingAnchor.constraint(equalTo: revisionLine.leadingAnchor, constant: -6),
             compareArrows.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor),
             compareLabel.trailingAnchor.constraint(equalTo: compareArrows.leadingAnchor, constant: -6),
             compareLabel.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor),
@@ -2956,6 +2955,10 @@ import ToolModuleKit
             split.leadingAnchor.constraint(equalTo: leadingAnchor),
             split.trailingAnchor.constraint(equalTo: trailingAnchor)
         ])
+        // The module and the function read on one line across the divider, at
+        // every zoom: the row is as high as its controls, the module's block
+        // is not.
+        moduleLine.centerYAnchor.constraint(equalTo: titleRow.centerYAnchor).isActive = true
     }
 
     /// The grey line under the module's name: two points under the body.
@@ -2967,13 +2970,13 @@ import ToolModuleKit
     /// around them. Where the reader is stays: the function, the instruction,
     /// the selected row.
     private func zoomChanged() {
-        navigatorLabel.font = ToolPanelFont.title()
         emptyListLabel.font = Self.navigatorFont()
-        for field in [nameLabel, revisionLabel, pathMark, functionLabel] { field?.font = ToolPanelFont.title() }
+        for field in [nameLabel, revisionLabel, functionLabel] { field?.font = ToolPanelFont.title() }
+        drawSectionLine()
         updateFunctionMark()
         drawRecipeIcon()
-        drawRecipeChevron()
         drawRecipeTitle()
+        drawComparisonFonts()
         staleLabel.font = ToolPanelFont.body()
         layOutNavigatorColumns()
         // What the reader was looking at stays where it was: the line at the
@@ -3327,20 +3330,18 @@ import ToolModuleKit
     }
 
     /// The versions line as a menu: the analysis shown, named as the plain
-    /// line names it, and a small chevron that says the line opens — a jump
-    /// bar's. The button has no bezel of its own, so the line reads as the
-    /// plain one does until the pointer is over it, and then it takes the
-    /// rounded ground an inline button shows. The spinner turns beside it
-    /// while the app reads the chosen analysis.
+    /// line names it. The spinner turns beside it while the app reads the
+    /// chosen analysis.
     private func recipeMenu() -> NSView {
         drawRecipeIcon()
         drawRecipeTitle()
-        drawRecipeChevron()
+        recipeLine.setChoices(recipes.enumerated().map { .init(title: Self.recipeSummary(of: $1), tag: $0) },
+                              chosen: recipes.firstIndex { $0.recipe.id == manifest.recipe.id })
+        recipeLine.onChoose = { [weak self] index in self?.chooseRecipe(at: index) }
         recipeLine.translatesAutoresizingMaskIntoConstraints = false
         // Above the stacks' own hugging as the plain line was, so the text is
         // shown whole while the row has room and gives way, truncated, first.
         recipeLine.setContentCompressionResistancePriority(.init(498), for: .horizontal)
-        recipeLine.onOpen = { [weak self] in self?.recipeMenuClicked() }
         // help: panel.code.analysis
         ControlHelp.describe(recipeLine, name: L("Analysis"),
                              tooltip: L("Choose the stored analysis shown here"))
@@ -3384,15 +3385,6 @@ import ToolModuleKit
         recipeLine.setFont(Self.recipeFont())
     }
 
-    /// The small up-and-down chevron the line wears when it opens a menu, as
-    /// a jump bar's does: the system's own symbol, sized with the line.
-    private func drawRecipeChevron() {
-        let size = max(Self.recipeFont().pointSize - 1, 8)
-        recipeLine.setChevron(NSImage(systemSymbolName: "chevron.up.chevron.down",
-                                      accessibilityDescription: nil)?
-            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: size, weight: .regular)))
-    }
-
     private func label(_ text: String, font: NSFont,
                        color: NSColor = .labelColor) -> NSTextField {
         let label = NSTextField(labelWithString: text)
@@ -3411,28 +3403,6 @@ import ToolModuleKit
         applyMode()
     }
 
-    /// The line opens the analyses the store holds, the one shown ticked. A
-    /// menu pops below it, as a control's menu does.
-    @objc private func recipeMenuClicked() {
-        let menu = NSMenu()
-        menu.autoenablesItems = false
-        for (index, recipe) in recipes.enumerated() {
-            let item = NSMenuItem(title: Self.recipeSummary(of: recipe),
-                                  action: #selector(recipeChosen(_:)), keyEquivalent: "")
-            item.target = self
-            item.tag = index
-            item.state = recipe.recipe.id == manifest.recipe.id ? .on : .off
-            menu.addItem(item)
-        }
-        recipeLine.menuOpened()
-        defer { recipeLine.menuClosed() }
-        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: 0), in: recipeLine)
-    }
-
-    @objc private func recipeChosen(_ item: NSMenuItem) {
-        chooseRecipe(at: item.tag)
-    }
-
     // help: panel.code.description
     private func applyMode() {
         let segment = modeControl.selectedSegment
@@ -3444,6 +3414,40 @@ import ToolModuleKit
         updateNewMarkBanner()
         currentOccurrence = nil
         drawOccurrenceBar()
+        updateSectionLine()
+    }
+
+    /// The header over the description: it is about the whole module, so no
+    /// function stands there, and the line says the section on screen.
+    private func updateSectionLine() {
+        let sections = descriptionView.sections
+        functionLine.isHidden = showsDescription
+        sectionLine.isHidden = !showsDescription || sections.isEmpty
+        guard !sectionLine.isHidden else { return }
+        let top = sections.map(\.level).min() ?? 1
+        let choices = sections.enumerated().map { index, section in
+            CodeMenuLine.Choice(title: section.title, tag: index, indentation: section.level - top)
+        }
+        // Headings the line already offers: this is every step of a scroll.
+        if sectionLine.choices != choices {
+            sectionLine.setChoices(choices, chosen: descriptionView.currentSection)
+        } else {
+            sectionLine.select(descriptionView.currentSection)
+        }
+    }
+
+    private func drawSectionLine() {
+        let font = ToolPanelFont.title()
+        sectionLine.setFont(font)
+        sectionLine.setTextColor(.labelColor)
+        sectionLine.setIcon(NSImage(systemSymbolName: "list.bullet", accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: font.pointSize - 1, weight: .regular)))
+    }
+
+    // help: panel.code.description-sections
+    /// A jump as a link is: Back returns to where the description stood.
+    func goToDescriptionSection(_ index: Int) {
+        jump(even: true) { descriptionView.goToSection(index) }
     }
 
     private func notifyInstruction() {

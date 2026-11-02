@@ -394,6 +394,8 @@
 "Deleted here" = "Удалено здесь";
 "Deleted on another Mac" = "Удалено на другом Mac";
 "Description" = "Описание";
+"Sections of the description" = "Разделы описания";
+"Go to a section of the description" = "Перейти к разделу описания";
 "Compare with a revision" = "Сравнение с ревизией";
 "Compare the code with a revision" = "Сравнить код с ревизией";
 "Reset" = "Сбросить";
@@ -1768,7 +1770,6 @@
 "Function" = "Функция";
 "Through" = "Через";
 "Call address" = "Адрес вызова";
-"POST codes" = "Коды POST";
 "Port unknown" = "Порт неизвестен";
 "Value unknown" = "Значение неизвестно";
 "Sent at %1$@" = "Посылается в %1$@";
@@ -1779,7 +1780,6 @@
 "The value comes from a caller this module does not show." = "Значение задаёт вызывающий код, которого нет в этом модуле.";
 "The value is worked out at run time: from a table, a loop or a read." = "Значение вычисляется во время работы: из таблицы, в цикле или по результату чтения.";
 "Status" = "Статус";
-"Status codes" = "Коды состояния";
 "Strings" = "Строки";
 "Dump Row Height:" = "Высота строки дампа:";
 "Code Line Spacing:" = "Интервал строк кода:";
