@@ -135,9 +135,11 @@ at its place in the code and in the report to the person.
 
 ### `## Terms`
 
-The abbreviations and terms the article uses, the same ones it expanded at first
-mention, now explained in full: what the thing is, where it sits and why it matters
-to this module. The bench's own words need no entry.
+Only the narrow terms specific to this module's review that the article actually
+uses, each explained in full: what the thing is, where it sits and why it matters
+to this module. Common terms a technician already knows (BIOS, USB, CMOS, UEFI,
+Variable) stay out: they clutter the content. A module with no such terms has no
+`Terms` section.
 
 ## The Markdown
 
@@ -167,8 +169,8 @@ be understood without following it.
 - More text than symbols. Plain prose in simple, clear language, not a play of
   abbreviations, technical names and addresses.
 - Every abbreviation is expanded in parentheses at its first mention in the text,
-  shortly: "DXE (Driver Execution Environment)". It is also in `Terms`, in full:
-  both, not one or the other.
+  shortly: "DXE (Driver Execution Environment)". `Terms` does not repeat every
+  abbreviation: it explains only the narrow terms of this module.
 - A routine is referred to by what it does, not by its address, and a technical
   name only where the reader needs it.
 - No band tables, no function inventories with addresses, no decompiler artefacts
