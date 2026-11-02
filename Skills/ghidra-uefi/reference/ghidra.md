@@ -212,3 +212,11 @@ open:
 - **Ghidra has no TE loader** — 12.2 neither (checked in its `Base.jar`).
   Until one comes, the conversion is part of the path, not a workaround for
   one version.
+- **A jump to another function's entry can print that function's body as this
+  one's.** `AttemptLoadOption` at 0xA0BC in BdsDxe is a 0x36-byte dispatcher:
+  it refuses a bad option at 0xA0E7, then `JZ 0x8804` at 0xA0DC and `JMP 0x8EEC`
+  at 0xA0E2. Its C prints the whole body of 0x8804 in place of the branch, and
+  the jump to 0x8EEC as a call that returns. A review of that C gives the stub
+  the behaviour of 0x8804 and never sees the choice between the two. When a
+  short function's C is longer than its instructions could produce, read
+  `ghidra_disassembly`, and put the real flow in the plate.
