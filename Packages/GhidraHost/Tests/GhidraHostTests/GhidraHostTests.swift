@@ -21,6 +21,28 @@ final class GhidraHostUnitTests: XCTestCase {
 
     /// An owner that exited on its idle timeout is the host's zombie until
     /// reaped; it must read as gone, not as an owner too busy to answer.
+    /// The count survives an owner's restart, where the modification number
+    /// starts again and a number from the session before compares with nothing.
+    func testUnpublishedWritesAreReadFromTheCount() {
+        func published(modification: Int?, writes: Int?) -> ProjectState.Published {
+            ProjectState.Published(artifact: "a", recipe: "r", at: "now", modification: modification, writes: writes)
+        }
+        let afterRestart: [String: Any] = ["modification": 6, "writes": 501, "changed": false]
+        XCTAssertEqual(GhidraHost.holdsUnpublishedWrites(hello: afterRestart,
+                                                         published: published(modification: 834, writes: 500)), true)
+        XCTAssertEqual(GhidraHost.holdsUnpublishedWrites(hello: ["modification": 4, "writes": 500, "changed": false],
+                                                         published: published(modification: 834, writes: 500)), false)
+        // A publish made before the count: only what was counted since is work.
+        XCTAssertEqual(GhidraHost.holdsUnpublishedWrites(hello: ["modification": 4, "writes": 0, "changed": false],
+                                                         published: published(modification: 834, writes: nil)), false)
+        XCTAssertEqual(GhidraHost.holdsUnpublishedWrites(hello: ["modification": 5, "writes": 1, "changed": false],
+                                                         published: published(modification: 834, writes: nil)), true)
+        // An owner of an older build has no count.
+        XCTAssertEqual(GhidraHost.holdsUnpublishedWrites(hello: ["modification": 9, "changed": false],
+                                                         published: published(modification: 8, writes: nil)), true)
+        XCTAssertEqual(GhidraHost.holdsUnpublishedWrites(hello: ["changed": true], published: nil), true)
+    }
+
     func testAnExitedChildReadsAsGone() throws {
         let log = FileManager.default.temporaryDirectory.appendingPathComponent("zombie-\(UUID()).log")
         defer { try? FileManager.default.removeItem(at: log) }

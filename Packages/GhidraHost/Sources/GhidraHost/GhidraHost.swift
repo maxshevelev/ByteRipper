@@ -344,12 +344,13 @@ public actor GhidraHost {
         // one is a write the store has not got. Read after the marks, which
         // save the program themselves.
         let modification = try? await Self.call(record.port, "GET", "/v1/hello", timeout: 10).data
-        let number = modification
+        let hello = modification
             .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
-            .flatMap { $0["modification"] as? Int }
+        let number = hello.flatMap { $0["modification"] as? Int }
+        let writes = hello.flatMap { $0["writes"] as? Int }
         state.published = .init(artifact: manifest.artifact.sha256.hex, recipe: recipe.id, review: review?.hex,
                                 description: described?.hex, rev: reading?.rev, at: Self.now(),
-                                modification: number)
+                                modification: number, writes: writes)
         state.reviewed = reviewed
         try project.write(state)
         return Publication(manifest: manifest, typeConflicts: conflicts, typeConflictsTaken: taken,

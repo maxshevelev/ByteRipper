@@ -42,6 +42,11 @@ public struct ProjectState: Codable, Equatable, Sendable {
         /// The program's modification number when this publish stored it: a
         /// later number is work the store has not got, saved or not.
         public var modification: Int?
+        /// The owner's count of the program's changes over all its sessions
+        /// when this publish stored it. Unlike `modification`, which starts
+        /// again at every open, a later count can be compared with it after a
+        /// restart.
+        public var writes: Int?
     }
 
     public var schema: Int

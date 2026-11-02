@@ -131,6 +131,11 @@ public class Owner {
     private long decompiledAt = -1;
     /** How far rollbacks have moved the program's number: see `modification()`. */
     private long rolledBack;
+    /** See `writes()`: the file beside the project, what it held at open, the number then, what it holds now. */
+    private File writesFile;
+    private long writesCarried;
+    private long modificationAtOpen;
+    private long writesWritten;
     private volatile long lastRequest = System.currentTimeMillis();
     // The write lease (§7.3): one holder at a time, renewed by every write.
     private String leaseToken;
@@ -190,6 +195,11 @@ public class Owner {
             program.endTransaction(transaction, recorded);
         }
         if (recorded) program.save("baseline", TaskMonitor.DUMMY);
+        // From here a change counts; the count goes on from the last session's.
+        writesFile = new File(options.get("project-dir"), "writes");
+        writesCarried = readWrites();
+        writesWritten = writesCarried;
+        modificationAtOpen = program.getModificationNumber();
 
         int port = Integer.parseInt(options.getOrDefault("port", "0"));
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
@@ -223,6 +233,7 @@ public class Owner {
         try {
             if (program == null) return;
             if (program.isChanged()) program.save("owner", TaskMonitor.DUMMY);
+            keepWrites();
             if (decompiler != null) decompiler.dispose();
             if (archive != null) archive.close();
             if (reviewArchive != null) reviewArchive.close();
@@ -328,6 +339,7 @@ public class Owner {
         answer.addProperty("functions", program.getFunctionManager().getFunctionCount());
         answer.addProperty("changed", program.isChanged());
         answer.addProperty("modification", modification());
+        answer.addProperty("writes", writes());
         if (leaseToken != null) {
             answer.addProperty("lease_holder", leaseHolder);
             answer.addProperty("lease_expires_in", Math.max(0, (leaseExpires - System.currentTimeMillis()) / 1000));
@@ -3093,7 +3105,47 @@ public class Owner {
      */
     private void endTransaction(int transaction, boolean commit, long before) {
         program.endTransaction(transaction, commit);
-        if (!commit) rolledBack += program.getModificationNumber() - before;
+        if (commit) keepWrites();
+        else rolledBack += program.getModificationNumber() - before;
+    }
+
+    /**
+     * How much the program has changed over all its sessions: what a publish
+     * records, and what tells a later read whether the store has it. The
+     * modification number cannot say that alone, since it starts again at
+     * every open, and a number from the session before compares with nothing.
+     */
+    private long writes() {
+        return writesCarried + modification() - modificationAtOpen;
+    }
+
+    /**
+     * Writes the count down as soon as it moves: an owner that dies keeps
+     * nothing it did not write. A count ahead of the program after such a death
+     * reads as work to publish, which a publish clears; the reverse would hide
+     * work.
+     */
+    private void keepWrites() {
+        long now = writes();
+        if (now == writesWritten || writesFile == null) return;
+        try {
+            File next = new File(writesFile.getPath() + ".new");
+            Files.writeString(next.toPath(), Long.toString(now));
+            Files.move(next.toPath(), writesFile.toPath(), StandardCopyOption.REPLACE_EXISTING,
+                       StandardCopyOption.ATOMIC_MOVE);
+            writesWritten = now;
+        } catch (Exception error) {
+            System.err.println("OWNER writes: " + error);
+        }
+    }
+
+    private long readWrites() {
+        try {
+            return writesFile.isFile() ? Long.parseLong(Files.readString(writesFile.toPath()).trim()) : 0;
+        } catch (Exception error) {
+            System.err.println("OWNER writes: " + error);
+            return 0;
+        }
     }
 
     /**

@@ -157,7 +157,9 @@ Verified in phase 0 (2026-10-26, Ghidra 12.1.2, JDK 21, CpuPei; the spike is
   itself, and `DomainObject.save` saves mid-session.
 - **The modification number restarts with every open** (1757 in one run, 3
   after reopening the same program), so it says "changed since the last
-  publish" only within one run (§5.5).
+  publish" only within one run (§5.5). What a later read compares across runs
+  is the owner's count of changes, kept in a `writes` file beside the project
+  and recorded by each publish.
 - **Crashes and locks.** After `kill -9`, everything saved is there and
   nothing unsaved is; the stale lock file does not stop the next open. While
   an owner runs, a second process opening the same project gets

@@ -351,16 +351,26 @@ extension GhidraHost {
 
     /// Whether the module's running owner holds a program the store has not
     /// got — modified after the last publish — and nil when no owner runs for
-    /// it. The modification number a publish recorded is the mark; a project
-    /// written before it falls back to the owner's unsaved-changes flag.
+    /// it.
     public func ownerHasUnpublishedWrites(_ module: SHA256Digest) async throws -> Bool? {
         let project = self.project(module)
         guard project.exists, let record = await runningOwner(project) else { return nil }
         let data = try await Self.call(record.port, "GET", "/v1/hello", timeout: 10).data
         guard let hello = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-        if let published = (try? project.state())?.published?.modification,
-           let modification = hello["modification"] as? Int {
-            return modification > published
+        return Self.holdsUnpublishedWrites(hello: hello, published: (try? project.state())?.published)
+    }
+
+    /// The owner's count of changes against the one the last publish recorded.
+    /// A publish made before the count existed recorded none: any count at all
+    /// is then work done since. An owner that has no count compares the
+    /// modification number, which holds only within one of its sessions.
+    static func holdsUnpublishedWrites(hello: [String: Any], published: ProjectState.Published?) -> Bool? {
+        if let writes = hello["writes"] as? Int {
+            if let recorded = published?.writes { return writes > recorded }
+            return writes > 0 || hello["changed"] as? Bool == true
+        }
+        if let recorded = published?.modification, let modification = hello["modification"] as? Int {
+            return modification > recorded
         }
         return hello["changed"] as? Bool
     }
