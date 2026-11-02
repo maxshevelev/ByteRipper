@@ -3021,16 +3021,28 @@ public class Owner {
      * heading whose body it replaces.
      */
     private JsonObject setDescription(JsonObject body) throws Exception {
-        if (!body.has("text") || body.get("text").isJsonNull()) throw new Failure(400, "text is required");
-        String text = body.get("text").getAsString();
+        boolean delete = body.has("delete") && body.get("delete").getAsBoolean();
+        String text = body.has("text") && !body.get("text").isJsonNull() ? body.get("text").getAsString() : null;
+        boolean blank = text == null || text.isBlank();
+        // Removing is said in so many words: an empty text is as often a
+        // mistake, and it would take the section with it unannounced.
+        if (delete && !blank) throw new Failure(400, "`delete` removes; it takes no text");
+        if (!delete && blank) {
+            throw new Failure(400, "text is empty and nothing was changed: `delete: true` removes"
+                + " a section or the whole description");
+        }
         String section = string(body, "section", null);
         String next;
         if (section == null || section.isEmpty()) {
-            next = Harvest.normalized(text);
+            next = delete ? null : Harvest.normalized(text);
         } else {
             String heading = section.startsWith("## ") ? section.substring(3).trim() : section.trim();
             if (heading.isEmpty() || heading.contains("\n")) throw new Failure(400, "section is one heading's words");
-            next = Harvest.replaceSection(Harvest.description(program), heading, text);
+            String now = Harvest.description(program);
+            next = Harvest.replaceSection(now, heading, delete ? "" : text);
+            if (delete && java.util.Objects.equals(next, Harvest.normalized(now))) {
+                throw new Failure(404, "no section \"" + heading + "\"");
+            }
         }
         if (next != null && next.getBytes(StandardCharsets.UTF_8).length > Harvest.DESCRIPTION_LIMIT) {
             throw new Failure(413, "a description is at most " + Harvest.DESCRIPTION_LIMIT / 1024 + " KiB");
@@ -3041,6 +3053,7 @@ public class Owner {
         JsonObject answer = description();
         answer.remove("text");
         if (section != null && !section.isEmpty()) answer.addProperty("section", section);
+        if (delete) answer.addProperty("removed", section == null || section.isEmpty() ? "description" : section);
         return answer;
     }
 

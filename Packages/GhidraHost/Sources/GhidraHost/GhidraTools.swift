@@ -939,14 +939,18 @@ public enum GhidraTools {
                   "Writes the module's description — Markdown, what the module is for, how it works and how "
                   + "it is built — kept in the project and published with the review as an object of its "
                   + "own, which the app shows beside the code. With `section`, `text` replaces the body of "
-                  + "that `## ` section only (added at the end if missing; empty `text` removes it); without "
-                  + "it, `text` is the whole description (empty clears it). Up to 256 KiB. The answer names "
+                  + "that `## ` section only (added at the end if missing); without it, `text` is the whole "
+                  + "description. Empty `text` is refused; `delete: true`, without `text`, removes the section "
+                  + "named, or the whole description, and the answer says which in `removed`. Up to 256 KiB. The answer names "
                   + "the sections and the size, not the text: `ghidra_description` reads it. "
                   + descriptionFormat,
                   ["text": AgentSchema.string("The Markdown: the whole description, or one section's body without its heading."),
-                   "section": AgentSchema.string("The `## ` heading whose body `text` replaces, e.g. \"Flow\".")],
-                  required: ["text"]) { arguments in
-                var body: [String: JSONValue] = ["text": .string(try arguments.string("text"))]
+                   "section": AgentSchema.string("The `## ` heading whose body `text` replaces, e.g. \"Flow\"."),
+                   "delete": AgentSchema.boolean("Removes the section named, or the whole description. Takes no `text`.")],
+                  required: []) { arguments in
+                var body: [String: JSONValue] = [:]
+                if let text = try arguments.optionalString("text") { body["text"] = .string(text) }
+                if try arguments.bool("delete", default: false) { body["delete"] = .bool(true) }
                 if let section = try arguments.optionalString("section") { body["section"] = .string(section) }
                 return body
             },

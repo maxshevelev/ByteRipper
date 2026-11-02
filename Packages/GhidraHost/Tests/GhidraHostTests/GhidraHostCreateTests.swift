@@ -224,6 +224,42 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         XCTAssertTrue(refusal.contains("/PiHob.h/EFI_HOB_HANDOFF_INFO_TABLE"), refusal)
     }
 
+    func testRemovingADescriptionSectionIsSaidInSoManyWords() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
+            throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostDeclinedTypeTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraHostDeclinedTypeTests"),
+                              writer: store)
+        let image = try Data(contentsOf: URL(fileURLWithPath: path))
+        let module = SHA256Digest(data: image)
+        _ = try await host.create(module: image, name: "Module")
+        defer { Task { await host.stop(module) } }
+        func post(_ object: [String: Any]) async throws -> [String: Any] {
+            try json(await host.write(module, "/v1/set/description",
+                                      body: try JSONSerialization.data(withJSONObject: object)))
+        }
+        func sections() async throws -> [String] {
+            try json(await host.read(module, "/v1/description"))["sections"] as? [String] ?? []
+        }
+        _ = try await post(["text": "# M\n\n## Purpose\n\nA.\n\n## Flow\n\nB.\n"])
+        for empty in [["section": "Flow", "text": ""], ["section": "Flow", "text": "  \n"], ["text": ""]] {
+            do { _ = try await post(empty); XCTFail("\(empty)") } catch {}
+        }
+        do { _ = try await post(["section": "Nothing", "delete": true]); XCTFail("no such section") } catch {}
+        do { _ = try await post(["section": "Flow", "delete": true, "text": "x"]); XCTFail("both") } catch {}
+        let kept = try await sections()
+        XCTAssertEqual(kept, ["Purpose", "Flow"])
+        let answer = try await post(["section": "Flow", "delete": true])
+        XCTAssertEqual(answer["removed"] as? String, "Flow")
+        let left = try await sections()
+        XCTAssertEqual(left, ["Purpose"])
+    }
+
     func testATypeNotTakenIsRefusedAndLeavesNothing() async throws {
         guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
             throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
