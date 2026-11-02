@@ -4499,6 +4499,8 @@ public class Owner {
             return answer;
         }
         String applied = name != null ? name : match.getName();
+        String asked = match.getName();
+        String askedStorage = match.getStorage().toString();
         try {
             HighFunctionDBUtil.updateDBVariable(match, applied, type, SourceType.USER_DEFINED);
         } catch (Exception error) {
@@ -4522,6 +4524,22 @@ public class Owner {
             if (!taken) {
                 throw new Failure(409, "the decompiler did not keep the name " + applied + " on " + match.getName()
                     + " (" + match.getStorage() + "); nothing was changed — say what it is in a comment");
+            }
+            // The name can land on another symbol: a zero hash gives Ghidra
+            // nothing of its own to commit against, and the symbol stored at
+            // that first use takes it. The one asked for still shows as it was.
+            if (!applied.equals(asked)) {
+                String holder = null;
+                boolean still = false;
+                for (Iterator<HighSymbol> scan = after.getLocalSymbolMap().getSymbols(); scan.hasNext(); ) {
+                    HighSymbol symbol = scan.next();
+                    if (symbol.getName().equals(asked) && symbol.getStorage().toString().equals(askedStorage)) still = true;
+                    if (symbol.getName().equals(applied)) holder = symbol.getStorage().toString();
+                }
+                if (still) {
+                    throw new Failure(409, "the name " + applied + " landed on another variable (" + holder + "), not on "
+                        + asked + " (" + askedStorage + "); nothing was changed — say what " + asked + " is in a comment");
+                }
             }
             Iterator<HighSymbol> now = after.getLocalSymbolMap().getSymbols();
             while (now.hasNext()) {
