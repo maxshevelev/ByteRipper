@@ -329,6 +329,13 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         let second = try await post(["functions": [entry], "value": value, "name": "BATCH_OTHER"])
         XCTAssertEqual((second["skipped"] as? [Any])?.count, applied.count, "\(second)")
         XCTAssertEqual((second["applied"] as? [Any])?.count, 0, "\(second)")
+        // An enum's typedef stands for the enum.
+        let address = try XCTUnwrap(applied.first?["address"] as? String)
+        _ = try await post(["address": address, "value": value, "name": ""])
+        _ = try await host.write(module, "/v1/type", body: try JSONSerialization.data(withJSONObject: [
+            "c": "typedef enum _BATCH_KIND { BATCH_OTHER_KIND = 999999 } BATCH_KIND;"]))
+        let typed = try await post(["address": address, "value": value, "name": "BATCH_TYPED", "enum": "BATCH_KIND"])
+        XCTAssertEqual(typed["address"] as? String, address, "\(typed)")
     }
 
     func testAValueInADisplacementIsNotTakenForAnImmediate() async throws {

@@ -4116,6 +4116,7 @@ public class Owner {
                 new ghidra.program.model.data.CategoryPath("/ByteRipper"), name, size, manager),
                 DataTypeConflictHandler.DEFAULT_HANDLER);
         }
+        if (found instanceof ghidra.program.model.data.TypeDef def) found = def.getBaseDataType();
         if (!(found instanceof ghidra.program.model.data.Enum values)) {
             throw new Failure(409, name + " is a " + TypeText.kind(found) + ", not an enum");
         }
