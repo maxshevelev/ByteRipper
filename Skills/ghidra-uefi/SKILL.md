@@ -224,7 +224,7 @@ Names alone do not get there. Every review applies these rules:
    that tells a service technician who does not program what the
    module is for, how it works, what it works with and how it is built — in the
    structure `reference/description.md` sets: a summary, then `What it is`,
-   `What it does`, `Execution flow` (the main chains as short ordered walks, and
+   `What it does`, `Execution flow` (the main chains as short ordered walks, linking the main functions responsible, and
    the events it registers for), `Interactions`, `Inside the module`,
    `Failures`, `Known problems`, `Terms`. It is not
    the review's record: review state is in the app and the store. Start it on the first pass, change it a

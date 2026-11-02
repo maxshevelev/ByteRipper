@@ -109,6 +109,10 @@ The main chains of execution and the reactions to events, in plain language.
 - A short list of the events the module registers for, when each fires and what
   the module does on it: ready-to-boot, the exit-boot-services hand-over, virtual
   address change, protocol notifications, timers, key events.
+- Each chain and each event links the main function or functions responsible for
+  it, as `[Name](0xADDRESS)` or `` `Name` ``: usually one or two, not an inventory,
+  with helpers left out. A sentence must still be understood without following
+  the link.
 
 ### `## Interactions`
 
@@ -163,8 +167,9 @@ No HTML, no images, no footnotes.
 - `[text](https://…)` opens in the browser. Any other target is shown as
   text.
 
-A link is optional: it helps the reader who wants the code, and a sentence must
-be understood without following it.
+A link is optional, except in `Execution flow`, where the main functions are
+linked: it helps the reader who wants the code, and a sentence must be understood
+without following it.
 
 ## Tone
 
@@ -174,7 +179,8 @@ be understood without following it.
   shortly: "DXE (Driver Execution Environment)". `Terms` does not repeat every
   abbreviation: it explains only the narrow terms of this module.
 - A routine is referred to by what it does, not by its address, and a technical
-  name only where the reader needs it.
+  name only where the reader needs it. `Execution flow` also carries links to the
+  main functions; that is not a function inventory.
 - No band tables, no function inventories with addresses, no decompiler artefacts
   (`FUN_`, `local_`, `HASH:`), no revision history, no review status.
 - Facts from the code. A conclusion drawn from a pattern says so, and a guess is
