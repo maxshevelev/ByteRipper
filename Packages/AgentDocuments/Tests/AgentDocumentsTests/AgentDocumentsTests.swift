@@ -113,6 +113,7 @@ final class CodeReadingsTests: XCTestCase {
     private static let artifact = """
         {"script_version": 4, "ghidra": "12.1.2", "functions": [
           {"entry": "0x1000", "name": "entry", "size": 1, "signature": "void entry(void)",
+           "c": "void entry(void)\\n{\\n  return;\\n}\\n",
            "instructions": [{"address": "0x1000", "text": "RET"}]}
         ], "strings": [], "post_codes": [], "status_code_calls": []}
         """
@@ -138,6 +139,11 @@ final class CodeReadingsTests: XCTestCase {
         let answer = try await tool.run(AgentCall(tool: "code_query", arguments: AgentArguments([
             "module": .string(module.sha256.hex), "what": .string("functions")])))
         guard case .json(.object(let members)) = answer else { return XCTFail("not an object: \(answer)") }
+        let found = try await tool.run(AgentCall(tool: "code_query", arguments: AgentArguments([
+            "module": .string(module.sha256.hex), "what": .string("c"), "search": .string("RETURN"), "limit": .int(1)])))
+        guard case .json(.object(let search)) = found else { return XCTFail("not an object: \(found)") }
+        XCTAssertEqual(search["matches"]?.arrayValue?.count, 1, "\(search)")
+        XCTAssertEqual(search["functions_matched"], search["total"], "\(search)")
         XCTAssertEqual(members["module"]?.stringValue, "CpuPei")
         XCTAssertEqual(members["sha256"]?.stringValue, module.sha256.hex)
         XCTAssertEqual(members["recipe"]?.stringValue, recipe.id)

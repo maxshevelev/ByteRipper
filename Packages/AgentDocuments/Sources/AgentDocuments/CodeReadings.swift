@@ -102,7 +102,7 @@ public final class CodeReadings {
         properties["function"] = AgentSchema.string(
             "A function name or Ghidra entry address, for \"instructions\", \"c\" and \"references\".")
         properties["address"] = AgentSchema.string("A Ghidra address, for \"uses\".")
-        properties["search"] = AgentSchema.string("A word to narrow functions, strings or symbols by.")
+        properties["search"] = AgentSchema.string("A word to narrow functions, strings or symbols by; with `what: \"c\"` and no `function`, text to find in every function's stored C, any case, as written.")
         properties["limit"] = AgentSchema.limit(default: 200, maximum: 500)
         return AgentTool(
             name: "code_query",
@@ -371,6 +371,34 @@ public final class CodeReadings {
             })
 
         case "c":
+            // Across the module: the lines of stored C holding the text.
+            if let search, !search.isEmpty, try arguments.optionalString("function") == nil {
+                var matches: [JSONValue] = []
+                var total = 0
+                var holding = 0
+                for function in model.functions {
+                    guard let c = function.c else { continue }
+                    var held = false
+                    for (number, line) in c.split(separator: "\n", omittingEmptySubsequences: false).enumerated()
+                    where line.lowercased().contains(search) {
+                        held = true
+                        total += 1
+                        guard matches.count < limit else { continue }
+                        matches.append(.object([
+                            "function": .string(function.name),
+                            "entry": .string(function.entry.description),
+                            "line": .int(Int64(number + 1)),
+                            "text": .string(String(line.trimmingCharacters(in: .whitespaces).prefix(300)))
+                        ]))
+                    }
+                    if held { holding += 1 }
+                }
+                body["search"] = .string(search)
+                body["total"] = .int(Int64(total))
+                body["functions_matched"] = .int(Int64(holding))
+                body["matches"] = .array(matches)
+                break
+            }
             let function = try namedFunction()
             body["function"] = .string(function.name)
             body["entry"] = .string(function.entry.description)
