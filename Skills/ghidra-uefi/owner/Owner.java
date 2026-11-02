@@ -1820,8 +1820,10 @@ public class Owner {
     private static boolean commentsConflict(DataType own, DataType shared) {
         DataType ownBase = own instanceof ghidra.program.model.data.TypeDef def ? def.getBaseDataType() : own;
         DataType sharedBase = shared instanceof ghidra.program.model.data.TypeDef def ? def.getBaseDataType() : shared;
+        // Asked only of two equivalent types, so what is not a composite — a
+        // function definition, a typedef of a scalar — has nothing left to differ.
         if (!(ownBase instanceof ghidra.program.model.data.Composite mine)
-            || !(sharedBase instanceof ghidra.program.model.data.Composite theirs)) return true;
+            || !(sharedBase instanceof ghidra.program.model.data.Composite theirs)) return false;
         return !uncommented(mine).isEquivalent(uncommented(theirs));
     }
 
@@ -1865,22 +1867,25 @@ public class Owner {
      * A structure that differs from the shared one only in its comments and
      * description is the same structure better explained: the shared one
      * takes this review's comments. Answers the number of changes, or -1
-     * when the structures differ in more than that.
+     * when the structures differ in more than that. Asked only of two
+     * equivalent types: one that is not a composite has no members to
+     * compare, and only its description can be better explained.
      */
     private static int mergeComments(DataType own, DataType shared) {
         DataType ownBase = own instanceof ghidra.program.model.data.TypeDef def ? def.getBaseDataType() : own;
         DataType sharedBase = shared instanceof ghidra.program.model.data.TypeDef def ? def.getBaseDataType() : shared;
-        if (!(ownBase instanceof ghidra.program.model.data.Composite mine)
-            || !(sharedBase instanceof ghidra.program.model.data.Composite theirs)) return -1;
-        if (!uncommented(mine).isEquivalent(uncommented(theirs))) return -1;
         int changes = 0;
-        ghidra.program.model.data.DataTypeComponent[] from = mine.getDefinedComponents();
-        ghidra.program.model.data.DataTypeComponent[] to = theirs.getDefinedComponents();
-        for (int i = 0; i < from.length && i < to.length; i++) {
-            String comment = from[i].getComment();
-            if (comment != null && !comment.isEmpty() && !comment.equals(to[i].getComment())) {
-                to[i].setComment(comment);
-                changes++;
+        if (ownBase instanceof ghidra.program.model.data.Composite mine
+            && sharedBase instanceof ghidra.program.model.data.Composite theirs) {
+            if (!uncommented(mine).isEquivalent(uncommented(theirs))) return -1;
+            ghidra.program.model.data.DataTypeComponent[] from = mine.getDefinedComponents();
+            ghidra.program.model.data.DataTypeComponent[] to = theirs.getDefinedComponents();
+            for (int i = 0; i < from.length && i < to.length; i++) {
+                String comment = from[i].getComment();
+                if (comment != null && !comment.isEmpty() && !comment.equals(to[i].getComment())) {
+                    to[i].setComment(comment);
+                    changes++;
+                }
             }
         }
         for (DataType[] pair : new DataType[][] {{own, shared}, {ownBase, sharedBase}}) {
