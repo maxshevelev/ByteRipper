@@ -129,6 +129,8 @@ public class Owner {
     private FileDataTypeManager reviewArchive;
     private final Map<Address, DecompileResults> decompiled = new HashMap<>();
     private long decompiledAt = -1;
+    /** How far rollbacks have moved the program's number: see `modification()`. */
+    private long rolledBack;
     private volatile long lastRequest = System.currentTimeMillis();
     // The write lease (§7.3): one holder at a time, renewed by every write.
     private String leaseToken;
@@ -325,7 +327,7 @@ public class Owner {
         answer.addProperty("ghidra", Application.getApplicationVersion());
         answer.addProperty("functions", program.getFunctionManager().getFunctionCount());
         answer.addProperty("changed", program.isChanged());
-        answer.addProperty("modification", program.getModificationNumber());
+        answer.addProperty("modification", modification());
         if (leaseToken != null) {
             answer.addProperty("lease_holder", leaseHolder);
             answer.addProperty("lease_expires_in", Math.max(0, (leaseExpires - System.currentTimeMillis()) / 1000));
@@ -801,6 +803,7 @@ public class Owner {
             Data data = entry.getValue();
             DataType original = data.getDataType();
             int length = Math.max(data.getLength(), 1);
+            long before = program.getModificationNumber();
             int transaction = program.startTransaction("explain " + hex(target));
             boolean completed = false;
             try {
@@ -809,7 +812,7 @@ public class Owner {
             } catch (Exception error) {
                 completed = false;
             } finally {
-                program.endTransaction(transaction, false);
+                endTransaction(transaction, false, before);
             }
             Data restored = program.getListing().getDataAt(target);
             boolean intact = restored != null && restored.getDataType() != null
@@ -1148,12 +1151,13 @@ public class Owner {
         if (!dryRun) {
             // Before the export: the artifact's types and the C read the named
             // members, and the merge below finds them in the same publish.
+            long before = program.getModificationNumber();
             int transaction = program.startTransaction("type member names");
             boolean named = false;
             try {
                 named = nameFunctionPointerMembers();
             } finally {
-                program.endTransaction(transaction, named);
+                endTransaction(transaction, named, before);
             }
         }
         if (!dryRun && program.isChanged()) program.save("publish", TaskMonitor.DUMMY);
@@ -1163,7 +1167,7 @@ public class Owner {
             Merge merge = mergeReviewTypes(!dryRun, take);
             exchange.getResponseHeaders().set("X-Owner-Dry-Run", Boolean.toString(dryRun));
             exchange.getResponseHeaders().set("Content-Type", "application/json");
-            exchange.getResponseHeaders().set("X-Owner-Modification", Long.toString(program.getModificationNumber()));
+            exchange.getResponseHeaders().set("X-Owner-Modification", Long.toString(modification()));
             exchange.getResponseHeaders().set("X-Owner-Reviewed", Boolean.toString(published.reviewed));
             if (!merge.conflicts.isEmpty()) {
                 exchange.getResponseHeaders().set("X-Owner-Type-Conflicts", String.join(",", merge.conflicts));
@@ -1207,13 +1211,14 @@ public class Owner {
 
     /** The registry states the exporter reads, in a transaction of their own. */
     private void writeLibraryStates() throws Exception {
+        long before = program.getModificationNumber();
         int transaction = program.startTransaction("library states");
         boolean done = false;
         try {
             refreshLibraryStates();
             done = true;
         } finally {
-            program.endTransaction(transaction, done);
+            endTransaction(transaction, done, before);
         }
     }
 
@@ -2345,6 +2350,7 @@ public class Owner {
             progress = false;
             for (Iterator<JsonObject> it = pending.iterator(); it.hasNext();) {
                 JsonObject item = it.next();
+                long before = program.getModificationNumber();
                 int transaction = program.startTransaction("library apply");
                 boolean done = false;
                 JsonObject answer;
@@ -2366,7 +2372,7 @@ public class Owner {
                     answer.addProperty("ok", false);
                     answer.addProperty("error", error.toString());
                 } finally {
-                    program.endTransaction(transaction, done && !dryRun);
+                    endTransaction(transaction, done && !dryRun, before);
                 }
                 answers.put(item, answer);
                 if (done) { it.remove(); progress = true; }
@@ -2899,6 +2905,7 @@ public class Owner {
     private JsonObject libraryMarkRequest(HttpExchange exchange) throws Exception {
         requireLease(exchange);
         JsonObject body = body(exchange);
+        long before = program.getModificationNumber();
         int transaction = program.startTransaction("library marks");
         boolean done = false;
         JsonObject answer;
@@ -2906,7 +2913,7 @@ public class Owner {
             answer = libraryMarkAll(body);
             done = true;
         } finally {
-            program.endTransaction(transaction, done);
+            endTransaction(transaction, done, before);
         }
         if (program.isChanged()) program.save("library marks", TaskMonitor.DUMMY);
         return answer;
@@ -3066,9 +3073,29 @@ public class Owner {
      * committed only if the change succeeded. A refused change rolls back
      * itself and nothing before it — the lesson of phase 0.
      */
+    /**
+     * Ends a transaction begun when the program's number stood at `before`. A
+     * rollback leaves the program as it was and still moves that number, so
+     * what it moved is counted aside: a refused call is not a write.
+     */
+    private void endTransaction(int transaction, boolean commit, long before) {
+        program.endTransaction(transaction, commit);
+        if (!commit) rolledBack += program.getModificationNumber() - before;
+    }
+
+    /**
+     * What a publish records and a later read compares: the program's number
+     * without the rollbacks. The decompiler's cache keeps the plain number,
+     * since a rollback does restore the program it read.
+     */
+    private long modification() {
+        return program.getModificationNumber() - rolledBack;
+    }
+
     private JsonObject write(HttpExchange exchange, Change change) throws Exception {
         requireLease(exchange);
         JsonObject body = body(exchange);
+        long before = program.getModificationNumber();
         int transaction = program.startTransaction(exchange.getRequestURI().getPath());
         boolean done = false;
         try {
@@ -3078,7 +3105,7 @@ public class Owner {
                                + " " + body);
             return answer;
         } finally {
-            program.endTransaction(transaction, done);
+            endTransaction(transaction, done, before);
         }
     }
 
@@ -3104,6 +3131,7 @@ public class Owner {
                 answers.add(refused);
                 continue;
             }
+            long before = program.getModificationNumber();
             int transaction = program.startTransaction("batch item");
             boolean done = false;
             try {
@@ -3123,7 +3151,7 @@ public class Owner {
                 refused.addProperty("error", error.toString());
                 answers.add(refused);
             } finally {
-                program.endTransaction(transaction, done);
+                endTransaction(transaction, done, before);
             }
         }
         System.out.println("OWNER BATCH " + leaseHolder + " "
