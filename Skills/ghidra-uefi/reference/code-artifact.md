@@ -138,6 +138,11 @@ not that the C holds no placeholder: a decompiler temporary (`sVar1`, `pCVar3`)
 on a register piece or in the `unique:` space has no storage to name. Such
 pieces are `leftovers.fragments` in `ghidra_function`, and are read there.
 
+`full` says the fields are filled, not that they are right. Nothing in the
+store can tell a right name or type from a wrong one: a sweep of BdsDxe's `full`
+rows found two size locals swapped, an inverted flag's name and a `uint[2]`
+under a single dword's name. Only reading the instructions finds those.
+
 `review_gaps` is always written, empty when there are none. A v2–v6 artifact
 has neither field, and the panel shows its functions as "Review level not
 recorded".

@@ -3002,7 +3002,12 @@ public class Owner {
             throw new Failure(413, "a description is at most " + Harvest.DESCRIPTION_LIMIT / 1024 + " KiB");
         }
         Harvest.setDescription(program, next);
-        return description();
+        // The caller has the text it sent, and a whole description is tens of
+        // kilobytes: what the write did is enough, and a read gives the rest.
+        JsonObject answer = description();
+        answer.remove("text");
+        if (section != null && !section.isEmpty()) answer.addProperty("section", section);
+        return answer;
     }
 
     // MARK: - The lease
@@ -4313,7 +4318,18 @@ public class Owner {
                                      DataUtilities.ClearDataMode.CLEAR_ALL_CONFLICT_DATA);
         }
         String name = string(body, "name", null);
-        if (name != null) {
+        if (name != null && name.isEmpty()) {
+            // An empty name takes a leftover label off the address, as it does
+            // on a jump target. Only a label: a function's symbol is the function.
+            Symbol primary = program.getSymbolTable().getPrimarySymbol(address);
+            if (primary == null || primary.isDynamic()) {
+                throw new Failure(404, "no label a review can remove at " + hex(address));
+            }
+            if (primary.getSymbolType() != ghidra.program.model.symbol.SymbolType.LABEL) {
+                throw new Failure(409, hex(address) + " is named by a " + primary.getSymbolType() + ", not a label");
+            }
+            primary.delete();
+        } else if (name != null) {
             Symbol primary = program.getSymbolTable().getPrimarySymbol(address);
             try {
                 if (primary != null && !primary.isDynamic()) primary.setName(name, SourceType.USER_DEFINED);

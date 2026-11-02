@@ -928,9 +928,10 @@ public enum GhidraTools {
                 try optional(arguments, ["address", "tag"])
             },
             write("ghidra_set_data", "set/data", "Name or type a datum",
-                  "Names and/or types the datum at `address`, e.g. a GUID or a table.",
+                  "Names and/or types the datum at `address`, e.g. a GUID or a table. An empty `name` removes "
+                  + "the label there, a leftover under a type that now names the place.",
                   ["address": AgentSchema.string("The address."),
-                   "name": AgentSchema.string("Its name."),
+                   "name": AgentSchema.string("Its name; empty removes the label."),
                    "type": AgentSchema.string("Its C type, e.g. \"EFI_GUID\" or \"UINT32[4]\".")],
                   required: ["address"]) { arguments in
                 try optional(arguments, ["address", "name", "type"])
@@ -940,7 +941,8 @@ public enum GhidraTools {
                   + "it is built — kept in the project and published with the review as an object of its "
                   + "own, which the app shows beside the code. With `section`, `text` replaces the body of "
                   + "that `## ` section only (added at the end if missing; empty `text` removes it); without "
-                  + "it, `text` is the whole description (empty clears it). Up to 256 KiB. "
+                  + "it, `text` is the whole description (empty clears it). Up to 256 KiB. The answer names "
+                  + "the sections and the size, not the text: `ghidra_description` reads it. "
                   + descriptionFormat,
                   ["text": AgentSchema.string("The Markdown: the whole description, or one section's body without its heading."),
                    "section": AgentSchema.string("The `## ` heading whose body `text` replaces, e.g. \"Flow\".")],
