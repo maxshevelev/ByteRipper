@@ -301,10 +301,9 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(versions.textColor, .secondaryLabelColor)
         XCTAssertLessThan(versions.font?.pointSize ?? 99, name.font?.pointSize ?? 0)
 
-        let buttons = all(NSButton.self, in: view).filter { !($0 is NSPopUpButton) }
-        let back = try XCTUnwrap(buttons.first { $0.accessibilityLabel() == "Back" })
-        let forward = try XCTUnwrap(buttons.first { $0.accessibilityLabel() == "Forward" })
-        let rects = [back, forward, name, revision, mark, function, mode].map { view.convert($0.bounds, from: $0) }
+        XCTAssertFalse(view.functionMark.isHidden, "the review's mark stands before the function's name")
+        XCTAssertEqual(view.functionMark.toolTip, CodePaneView.reviewDetail(try XCTUnwrap(view.selectedFunction)))
+        let rects = [name, revision, mark, view.functionMark, function, mode].map { view.convert($0.bounds, from: $0) }
         for (left, right) in zip(rects, rects.dropFirst()) {
             XCTAssertLessThan(left.maxX, right.minX + 1, "left to right in reading order")
         }
@@ -312,7 +311,7 @@ final class CodePaneViewTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(field.frame.width, field.intrinsicContentSize.width - 1,
                                         "\(field.stringValue) is shown whole while there is room")
         }
-        let nameRect = rects[2]
+        let nameRect = rects[0]
         // The versions line is anchored by its archive box, so the box — not
         // the text after it — stands under the module's name.
         let versionsLine = try XCTUnwrap(all(CodeVersionsLine.self, in: view).first)
@@ -325,11 +324,11 @@ final class CodePaneViewTests: XCTestCase {
                                         from: versionsLine)
         XCTAssertEqual(nameEdge.minX, versionsEdge.minX, accuracy: 1,
                        "the line's icon stands under the module's name")
-        for rect in rects[3...5] {
+        for rect in rects[1...4] {
             XCTAssertEqual(rect.midY, nameRect.midY, accuracy: 1.5, "one line with the module's name")
         }
         let block = nameRect.union(versionsRect)
-        for rect in [rects[0], rects[1], rects[6]] {
+        for rect in [rects[5]] {
             XCTAssertEqual(rect.midY, block.midY, accuracy: 1.5, "the controls are centred on the header")
         }
 
@@ -1167,10 +1166,10 @@ final class CodePaneViewTests: XCTestCase {
 
         view.selectFunction(at: 0)
         view.layoutSubtreeIfNeeded()
-        XCTAssertFalse(view.registryMark.isHidden, "the header carries the badge of a library function")
-        XCTAssertEqual(view.registryMark.toolTip, "Library registry entry, version 3")
+        XCTAssertFalse(view.functionMark.isHidden, "the header carries the badge of a library function")
+        XCTAssertEqual(view.functionMark.toolTip, "Library registry entry, version 3")
         view.selectFunction(at: 2)
-        XCTAssertEqual(view.registryMark.toolTip, "Library function: EDK2. The library registry does not hold it.")
+        XCTAssertEqual(view.functionMark.toolTip, "Library function: EDK2. The library registry does not hold it.")
     }
 
     /// A revision the panel receives marks the functions it changed: they read
@@ -2204,6 +2203,10 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(popover.function.name, "Second")
         XCTAssertEqual(popover.mark.color, CodeNavigatorIcon.function.color)
         XCTAssertEqual(popover.descriptionText, "Sets the second thing up for the first.")
+        let signature = try XCTUnwrap(popover.signatureText)
+        XCTAssertEqual(signature.string, "void Second(void)")
+        XCTAssertEqual(signature.attribute(.foregroundColor, at: 5, effectiveRange: nil) as? NSColor,
+                       CodeColors.function, "the name is coloured as in the code")
         popover.pressGo()
         XCTAssertEqual(view.selectedFunctionIndex, 1)
     }

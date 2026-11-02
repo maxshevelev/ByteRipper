@@ -225,6 +225,30 @@ extension CodeModel {
         return tokens
     }
 
+    /// The tokens of a function's signature, for which an artifact has no
+    /// spans: what the lexer knows, and each other word as the function's C
+    /// calls it, which is how a type the review named gets its colour. No
+    /// token is a link: the signature says what the function is.
+    public func signatureTokens(ofFunction index: Int) -> [CodeToken] {
+        guard functions.indices.contains(index), let signature = functions[index].signature else { return [] }
+        var named: [String: CodeToken.Kind] = [:]
+        if let c = functions[index].c {
+            for token in cTokens(ofFunction: index) where token.kind == .type || token.kind == .parameter {
+                named[utf16Slice(c, token.start, token.length)] = token.kind
+            }
+        }
+        var tokens = lexC(signature).map { CodeToken(start: $0.start, length: $0.length, kind: $0.kind) }
+        let known = Set(tokens.map(\.start))
+        let text = signature as NSString
+        let words = try? NSRegularExpression(pattern: "\\b[A-Za-z_][A-Za-z0-9_]*")
+        for match in words?.matches(in: signature, range: NSRange(location: 0, length: text.length)) ?? [] {
+            guard !known.contains(match.range.location), let kind = named[text.substring(with: match.range)]
+            else { continue }
+            tokens.append(CodeToken(start: match.range.location, length: match.range.length, kind: kind))
+        }
+        return tokens.sorted { $0.start < $1.start }
+    }
+
     private func identifierToken(_ word: String, start: Int) -> CodeToken? {
         let length = word.utf16.count
         if Self.cKeywords.contains(word) {

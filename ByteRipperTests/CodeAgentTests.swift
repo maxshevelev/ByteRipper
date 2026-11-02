@@ -252,6 +252,36 @@ final class CodeAgentTests: XCTestCase {
         XCTAssertEqual(pane.selectedFunction?.name, "FUN_00000220")
     }
 
+    /// Past the code's own jumps Back goes on through the tab's places; one
+    /// in the dump behind puts the panel away, and Forward brings it back and
+    /// walks the code again.
+    func testBackLeavesTheCodePanelAndForwardReturnsToIt() async throws {
+        let controller = try open()
+        let node = try await moduleNode()
+        controller.recordJump(in: controller.windowModel.pane1)
+        _ = try await client.answer("open_code", ["node": .string(node), "function": "entry"])
+        let panel = try XCTUnwrap(controller.fragments.expanded)
+        let pane = try XCTUnwrap(controller.fragments.codePane(panel))
+        pane.go(to: CodeLocation(function: CodeAddress(0x220)))
+        controller.view.window?.makeFirstResponder(pane)
+
+        controller.navigateBack()
+        XCTAssertEqual(pane.selectedFunction?.name, "entry")
+        XCTAssertFalse(pane.canGoBack)
+        for _ in 0..<4 where controller.fragments.expanded != nil && controller.canNavigateBack {
+            controller.navigateBack()
+        }
+        XCTAssertNil(controller.fragments.expanded, "a place in the dump puts the panel away")
+
+        for _ in 0..<4 where controller.fragments.expanded == nil && controller.canNavigateForward {
+            controller.navigateForward()
+        }
+        XCTAssertEqual(controller.fragments.expanded, panel, "the panel is back")
+        XCTAssertTrue(pane.canGoForward)
+        controller.navigateForward()
+        XCTAssertEqual(pane.selectedFunction?.name, "FUN_00000220", "and its own jump after it")
+    }
+
     // MARK: - Annotations on code
 
     func testAnAnnotationOnCodeOpensTheCodePanelThere() async throws {

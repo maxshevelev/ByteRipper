@@ -2,6 +2,7 @@ import AppKit
 import CodeAnalysis
 import Localization
 import HelpUI
+import ToolModuleKit
 
 /// What a called function is, in a popover off the call: its name, its
 /// signature, how far its review has got, the review's description of it and
@@ -11,6 +12,7 @@ import HelpUI
     let function: CodeArtifact.Function
     /// The function's mark, as the list draws it: how far its review has got.
     let mark: (glyph: CodeNavigatorIcon.Glyph, color: NSColor)
+    private let signatureTokens: [CodeToken]
     private let onGo: () -> Void
     private let popover = NSPopover()
 
@@ -19,9 +21,10 @@ import HelpUI
     private static var inset: CGFloat { (size * 1.3).rounded() }
 
     init(function: CodeArtifact.Function, mark: (glyph: CodeNavigatorIcon.Glyph, color: NSColor),
-         onGo: @escaping () -> Void) {
+         signatureTokens: [CodeToken], onGo: @escaping () -> Void) {
         self.function = function
         self.mark = mark
+        self.signatureTokens = signatureTokens
         self.onGo = onGo
         super.init(nibName: nil, bundle: nil)
     }
@@ -63,6 +66,15 @@ import HelpUI
         }
     }
 
+    /// The signature, coloured as the code is.
+    var signatureText: NSAttributedString? {
+        guard let signature = function.signature else { return nil }
+        var links: [CodeLink] = []
+        return CodeColors.attributed(signature, tokens: signatureTokens,
+                                     font: ToolPanelFont.monospaced(size: Self.size, bold: false),
+                                     links: &links, asTextLinks: false, spacedCommas: true)
+    }
+
     override func loadView() {
         let size = Self.size
         let inner = Self.width - 2 * Self.inset
@@ -91,10 +103,9 @@ import HelpUI
         name.widthAnchor.constraint(lessThanOrEqualToConstant: inner - image.size.width - title.spacing).isActive = true
         stack.addArrangedSubview(title)
 
-        if let signature = function.signature {
-            let line = NSTextField(wrappingLabelWithString: signature)
-            line.font = .monospacedSystemFont(ofSize: size, weight: .regular)
-            line.textColor = .secondaryLabelColor
+        if let signature = signatureText {
+            let line = NSTextField(wrappingLabelWithString: signature.string)
+            line.attributedStringValue = signature
             line.preferredMaxLayoutWidth = inner
             stack.addArrangedSubview(line)
         }

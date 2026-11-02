@@ -28,6 +28,31 @@ final class CodeSyntaxTests: XCTestCase {
         return CodeModel(artifact: artifact, moduleBytes: CodeModelTests.teModule())
     }
 
+    /// A signature has no spans of its own: a type the review named takes its
+    /// kind from the function's C, and the function's name is no link.
+    func testASignatureIsColouredAsTheFunctionsCCallsIt() throws {
+        let c = "EFI_STATUS Setup(UINT32 Count)\n{\n}\n"
+        let spans = [("EFI_STATUS", "type"), ("UINT32", "type"), ("Count", "parameter")].map { word, kind in
+            let at = (c as NSString).range(of: word)
+            return [at.location, at.length, kind] as [Any]
+        }
+        let json: [String: Any] = [
+            "script_version": 5, "program": ["image_base": "0x0"],
+            "functions": [["entry": "0x0", "name": "Setup", "signature": "EFI_STATUS Setup(UINT32 Count, void *Base)",
+                           "c": c, "c_spans": spans,
+                           "instructions": [["address": "0x0", "bytes": "C3", "mnemonic": "RET", "text": "RET"]]]]
+        ]
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        let signature = "EFI_STATUS Setup(UINT32 Count, void *Base)" as NSString
+        let model = CodeModel(artifact: artifact, moduleBytes: CodeModelTests.teModule())
+        let tokens = model.signatureTokens(ofFunction: 0)
+        let read = tokens.map { signature.substring(with: NSRange(location: $0.start, length: $0.length)) }
+        XCTAssertEqual(read, ["EFI_STATUS", "Setup", "UINT32", "Count", "void"])
+        XCTAssertEqual(tokens.map(\.kind), [.type, .function, .type, .parameter, .type])
+        XCTAssertTrue(tokens.allSatisfy { $0.link == nil })
+        XCTAssertEqual(model.signatureTokens(ofFunction: 1), [])
+    }
+
     private func text(_ model: CodeModel, _ token: CodeToken) -> String {
         let c = model.functions[0].c ?? ""
         let units = Array(c.utf16)[token.start..<token.start + token.length]

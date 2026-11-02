@@ -1752,8 +1752,6 @@
 "A PEI dependency expression cannot use %1$@ (at %2$@)." = "Ein PEI-Abhängigkeitsausdruck darf %1$@ nicht verwenden (bei %2$@).";
 "PPI GUID" = "PPI-GUID";
 "Protocol GUID" = "Protokoll-GUID";
-"Go back to the previous place in the code (⌘[)" = "Zur vorherigen Stelle im Code zurückgehen (⌘[)";
-"Go forward again (⌘])" = "Wieder vorwärtsgehen (⌘])";
 "Open the code here" = "Den Code an dieser Stelle öffnen";
 "Opening the code…" = "Code wird geöffnet…";
 "The annotation is shown beside the code and listed in the Annotations window. A double-click on it opens the code here." = "Die Anmerkung erscheint neben dem Code und im Fenster „Anmerkungen“. Ein Doppelklick darauf öffnet den Code an dieser Stelle.";

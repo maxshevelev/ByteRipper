@@ -56,8 +56,6 @@ import ToolModuleKit
     private let navigatorHeader = CodeNavigatorHeader()
     /// What an empty list says in place of its rows.
     private let emptyListLabel = NSTextField(wrappingLabelWithString: "")
-    private let backButton = NSButton()
-    private let forwardButton = NSButton()
     /// The places the reader went to, oldest first, and which one is current:
     /// Back and Forward walk it as in an IDE. A jump — a click on a call, a
     /// caller, a function in the list — adds a place; moving inside one
@@ -248,7 +246,7 @@ import ToolModuleKit
     private let functionLabel = CodeTitleField(labelWithString: "")
     /// After the function's name, a library function's badge as the
     /// navigator draws it, with what the library registry says of it.
-    let registryMark = CodeBaselineImageView()
+    let functionMark = CodeBaselineImageView()
     private var zoomObserver: NSObjectProtocol?
     /// Set while the view moves a table's selection itself, so the table's
     /// delegate does not take the move for a click.
@@ -1787,35 +1785,43 @@ import ToolModuleKit
         functionLabel.stringValue = name
         functionLabel.isHidden = name.isEmpty
         pathMark?.isHidden = name.isEmpty
-        updateRegistryMark()
+        updateFunctionMark()
     }
 
     // help: panel.code.registry
-    /// The badge after the function's name in the header: shown for a library
-    /// function, filled when it is the registry's entry, with a dot when the
-    /// registry matched it otherwise; its hover what the registry says.
-    private func updateRegistryMark() {
-        guard let index = state.function, model.functions.indices.contains(index),
-              state.group(of: index) == .library else {
-            registryMark.isHidden = true
-            registryMark.image = nil
+    /// The mark before the function's name in the header, as the list draws
+    /// it: how far the review has got; for a library function, filled when it
+    /// is the registry's entry, with a dot when the registry matched it
+    /// otherwise. Its hover says the level and what is missing, or what the
+    /// registry says.
+    private func updateFunctionMark() {
+        guard let index = state.function, model.functions.indices.contains(index) else {
+            functionMark.isHidden = true
+            functionMark.image = nil
             return
         }
         let function = model.functions[index]
-        let section = state.librarySection(of: index) ?? .unrecorded
-        let style: CodeNavigatorIcon.BadgeStyle = switch state.registryMark(of: index) {
-        case .entry?: .filled
-        case .matched?: .dotted
-        case nil: .outlined
+        let mark: (glyph: CodeNavigatorIcon.Glyph, color: NSColor)
+        let detail: String
+        if state.group(of: index) == .library {
+            let section = state.librarySection(of: index) ?? .unrecorded
+            let style: CodeNavigatorIcon.BadgeStyle = switch state.registryMark(of: index) {
+            case .entry?: .filled
+            case .matched?: .dotted
+            case nil: .outlined
+            }
+            mark = CodeNavigatorIcon.library(Self.badge(of: section), style: style)
+            detail = Self.registryDetail(function)
+                ?? L("Library function: %1$@. The library registry does not hold it.", Self.title(of: section))
+        } else {
+            mark = reviewMark(of: index)
+            detail = Self.reviewDetail(function)
         }
-        let mark = CodeNavigatorIcon.library(Self.badge(of: section), style: style)
         let side = CodeNavigatorIcon.side(forFontSize: ToolPanelFont.title().pointSize)
-        registryMark.image = CodeNavigatorIcon.image(mark.glyph, color: mark.color, side: side)
-        registryMark.lineFont = ToolPanelFont.title()
-        registryMark.isHidden = false
-        let detail = Self.registryDetail(function)
-            ?? L("Library function: %1$@. The library registry does not hold it.", Self.title(of: section))
-        ControlHelp.describe(registryMark, detail)
+        functionMark.image = CodeNavigatorIcon.image(mark.glyph, color: mark.color, side: side)
+        functionMark.lineFont = ToolPanelFont.title()
+        functionMark.isHidden = false
+        ControlHelp.describe(functionMark, detail)
     }
 
     /// Every call to function `index`, one row each — a caller that calls it
@@ -2027,13 +2033,13 @@ import ToolModuleKit
            history[historyIndex].line == place.line, history[historyIndex].view.description == nil { return }
         history = Array(history.prefix(historyIndex + 1)) + [place]
         historyIndex = history.count - 1
-        updateHistoryButtons()
+        historyChanged()
     }
 
     private func resetHistory() {
         history = currentPlace.map { [$0] } ?? []
         historyIndex = history.count - 1
-        updateHistoryButtons()
+        historyChanged()
     }
 
     /// Back and forward by address, where in it the reader is, and how each
@@ -2088,7 +2094,7 @@ import ToolModuleKit
         adopted[current] = here
         history = adopted
         historyIndex = current
-        updateHistoryButtons()
+        historyChanged()
     }
 
     /// Shows the annotations on this module's code: a mark beside each
@@ -2172,13 +2178,13 @@ import ToolModuleKit
         if let origin = place.view.description {
             showDescription(true)
             descriptionView.scroll(to: origin)
-            updateHistoryButtons()
+            historyChanged()
             if let mark = place.view.descriptionMark { descriptionView.flash(mark) }
             return
         }
         leaveDescription()
         show(place.view)
-        updateHistoryButtons()
+        historyChanged()
         flashArrival(cMark: place.view.cMark)
     }
 
@@ -2405,13 +2411,12 @@ import ToolModuleKit
         }
     }
 
-    private func updateHistoryButtons() {
-        backButton.isEnabled = canGoBack
-        forwardButton.isEnabled = canGoForward
+    /// The window's Back and Forward answer `canGoBack` and `canGoForward`
+    /// when they are validated, and a jump an agent makes comes with no event
+    /// that would validate them.
+    private func historyChanged() {
+        window?.toolbar?.validateVisibleItems()
     }
-
-    @objc private func goBackClicked() { goBack() }
-    @objc private func goForwardClicked() { goForward() }
 
     /// The width the navigator's columns were last fitted to. A pane is built
     /// before it has its size, so the columns are fitted again once it does —
@@ -2664,15 +2669,16 @@ import ToolModuleKit
         self.nameLabel = nameLabel
         self.revisionLabel = revisionLabel
         self.pathMark = pathMark
-        registryMark.isHidden = true
-        registryMark.imageScaling = .scaleNone
-        registryMark.setContentHuggingPriority(.required, for: .horizontal)
-        registryMark.setContentCompressionResistancePriority(.required, for: .horizontal)
-        let pathLine = NSStackView(views: [nameLabel, revisionLabel, pathMark, functionLabel, registryMark])
+        functionMark.isHidden = true
+        functionMark.imageScaling = .scaleNone
+        functionMark.setContentHuggingPriority(.required, for: .horizontal)
+        functionMark.setContentCompressionResistancePriority(.required, for: .horizontal)
+        let pathLine = NSStackView(views: [nameLabel, revisionLabel, pathMark, functionMark, functionLabel])
         pathLine.orientation = .horizontal
         pathLine.alignment = .firstBaseline
         pathLine.spacing = 6
         pathLine.setCustomSpacing(4, after: nameLabel)
+        pathLine.setCustomSpacing(4, after: functionMark)
         // The line under the names says what produced the analysis — the
         // recipe and the Ghidra version. Where the store holds more than one
         // analysis of the module, the line is the menu that chooses among
@@ -2691,28 +2697,8 @@ import ToolModuleKit
         modeControl.setContentHuggingPriority(.required, for: .horizontal)
         modeControl.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-        for (button, action) in [
-            (backButton, #selector(goBackClicked)),
-            (forwardButton, #selector(goForwardClicked))
-        ] {
-            button.imagePosition = .imageOnly
-            button.isBordered = false
-            button.bezelStyle = .inline
-            button.controlSize = .regular
-            button.target = self
-            button.action = action
-            button.setContentHuggingPriority(.required, for: .horizontal)
-            button.setContentCompressionResistancePriority(.required, for: .horizontal)
-        }
-        drawNavigationImages()
-        // help: panel.code.navigate
-        ControlHelp.describe(backButton, name: L("Back"),
-                             tooltip: L("Go back to the previous place in the code (⌘[)"))
-        ControlHelp.describe(forwardButton, name: L("Forward"),
-                             tooltip: L("Go forward again (⌘])"))
-
-        // One line, every control centred on it: the way back and forward,
-        // then where the reader is; the platform's round help button and the
+        // One line, every control centred on it: where the reader is; the
+        // platform's round help button and the
         // ASM/C switch at the right — the panel's way to its page in the book.
         let titleSpacer = NSView()
         titleSpacer.setContentHuggingPriority(.init(1), for: .horizontal)
@@ -2721,13 +2707,11 @@ import ToolModuleKit
         let codeHelpButton = HelpButton.standard(for: .topic(.codePanel))
         codeHelpButton.setContentHuggingPriority(.required, for: .horizontal)
         codeHelpButton.setContentCompressionResistancePriority(.required, for: .horizontal)
-        let titleRow = NSStackView(views: [backButton, forwardButton, titleBlock, titleSpacer,
+        let titleRow = NSStackView(views: [titleBlock, titleSpacer,
                                            occurrenceBar, codeHelpButton, modeControl])
         titleRow.orientation = .horizontal
         titleRow.alignment = .centerY
         titleRow.spacing = 8
-        titleRow.setCustomSpacing(6, after: backButton)
-        titleRow.setCustomSpacing(12, after: forwardButton)
         titleRow.setCustomSpacing(16, after: occurrenceBar)
         // A little air between the round `?` and the switch it stands beside.
         titleRow.setCustomSpacing(12, after: codeHelpButton)
@@ -2952,15 +2936,6 @@ import ToolModuleKit
         ])
     }
 
-    /// Back and Forward, large enough to hit at a glance: the size of the
-    /// title's text, in the weight of the title.
-    private func drawNavigationImages() {
-        for (button, symbol) in [(backButton, "chevron.backward"), (forwardButton, "chevron.forward")] {
-            button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
-                .withSymbolConfiguration(.init(pointSize: ToolPanelFont.titleSize + 3, weight: .semibold))
-        }
-    }
-
     /// The grey line under the module's name: two points under the body.
     private static func recipeFont() -> NSFont {
         .systemFont(ofSize: max(9, ToolPanelFont.size - 2))
@@ -2973,12 +2948,11 @@ import ToolModuleKit
         navigatorLabel.font = ToolPanelFont.title()
         emptyListLabel.font = Self.navigatorFont()
         for field in [nameLabel, revisionLabel, pathMark, functionLabel] { field?.font = ToolPanelFont.title() }
-        updateRegistryMark()
+        updateFunctionMark()
         drawRecipeIcon()
         drawRecipeChevron()
         drawRecipeTitle()
         staleLabel.font = ToolPanelFont.body()
-        drawNavigationImages()
         layOutNavigatorColumns()
         // What the reader was looking at stays where it was: the line at the
         // top of each list and of the C is at the top again, at the new size.
@@ -4166,7 +4140,9 @@ import ToolModuleKit
             self.callersPopover?.close()
             self.functionPopover?.close()
             let popover = CodeFunctionPopover(function: self.artifact.functions[index],
-                                              mark: self.reviewMark(of: index), onGo: go)
+                                              mark: self.reviewMark(of: index),
+                                              signatureTokens: self.model.signatureTokens(ofFunction: index),
+                                              onGo: go)
             popover.show(relativeTo: rect, of: view)
             self.functionPopover = popover
         }
