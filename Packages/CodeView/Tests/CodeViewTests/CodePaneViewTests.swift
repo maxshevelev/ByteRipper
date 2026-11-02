@@ -2034,6 +2034,65 @@ final class CodePaneViewTests: XCTestCase {
         view.shownExplanationClose()
     }
 
+    /// What is selected and highlighted in one function means nothing in the
+    /// next: those are places in a text no longer there.
+    func testAnotherFunctionLeavesNoSelectionOrHighlightBehind() throws {
+        func artifact(_ value: String) throws -> CodeArtifact {
+            func function(_ entry: String, _ name: String, _ body: String) -> [String: Any] {
+                let c = "void \(name)(void)\n{\n  UINT8 value = \(value);\n\(body)  Use(value);\n}\n"
+                let text = c as NSString
+                var spans: [[Any]] = []
+                var from = 0
+                while true {
+                    let found = text.range(of: "value", range: NSRange(location: from, length: text.length - from))
+                    guard found.location != NSNotFound else { break }
+                    spans.append([found.location, found.length, "local"])
+                    from = found.location + found.length
+                }
+                return ["entry": entry, "name": name, "c": c, "c_spans": spans,
+                        "instructions": [["address": entry, "bytes": "C3", "mnemonic": "RET", "text": "RET"]]]
+            }
+            let json: [String: Any] = [
+                "script_version": 5, "program": ["image_base": "0x0"],
+                "functions": [function("0x220", "First", ""),
+                              function("0x230", "Second", "  Other(1);\n  Other(2);\n  Other(3);\n")]
+            ]
+            return try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        }
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact("1"),
+                                moduleBytes: teModule(), hexView: NSView())
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 480),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        view.layoutSubtreeIfNeeded()
+        view.restore(function: 0, instruction: nil, showsC: true)
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil) }
+
+        // The C alone.
+        let code = try XCTUnwrap(first(CodeTextView.self, in: view) { $0.string.contains("First") })
+        let use = (code.string as NSString).range(of: "Use(value)").location + 5
+        XCTAssertTrue(view.clickC(at: use, event: try click(count: 2)))
+        XCTAssertGreaterThan(code.selectedRange().length, 0)
+        XCTAssertFalse(code.highlightedRanges.isEmpty)
+        view.selectFunction(at: 1)
+        XCTAssertEqual(code.selectedRange().length, 0, "the C's selection stays behind")
+        XCTAssertEqual(code.highlightedRanges, [], "the C's highlight stays behind")
+
+        // The diff, with a change on both functions.
+        view.selectFunction(at: 0)
+        view.setComparisonRevision(54, artifact: try artifact("2"), pinned: true)
+        XCTAssertTrue(view.showsRevisionDiff)
+        let at = (view.diffText as NSString).range(of: "Use(value)").location + 5
+        XCTAssertTrue(view.clickDiff(at: at, event: try click(count: 2)))
+        XCTAssertGreaterThan(view.diffSelectedRange.length, 0)
+        XCTAssertFalse(view.diffHighlightedRanges.isEmpty)
+        view.selectFunction(at: 1)
+        XCTAssertTrue(view.showsRevisionDiff)
+        XCTAssertEqual(view.diffSelectedRange.length, 0, "the diff's selection stays behind")
+        XCTAssertEqual(view.diffHighlightedRanges, [], "the diff's highlight stays behind")
+    }
+
     /// A field of a structure has no token of its own in the C: the diff finds
     /// it by its place, on either side, and marks it as the C does.
     func testAFieldInTheDiffExplainsItself() throws {

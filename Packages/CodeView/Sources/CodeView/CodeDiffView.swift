@@ -221,7 +221,15 @@ struct CodeDiffCode {
         shown.addAttribute(.paragraphStyle, value: paragraph, range: whole)
         shown.addAttribute(.baselineOffset, value: padding, range: whole)
         text.highlightInset = padding
+        // A selection and a highlight are places in the text: in another text
+        // they would mark whatever came to stand there. The same text, drawn
+        // again at a new size, keeps them.
+        let sameText = text.string == shown.string
         text.textStorage?.setAttributedString(shown)
+        if !sameText {
+            text.setSelectedRange(NSRange(location: 0, length: 0))
+            text.highlight([])
+        }
         text.rowTints = tints
         if let layout = text.layoutManager, let container = text.textContainer {
             layout.ensureLayout(for: container)
