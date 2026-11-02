@@ -563,7 +563,8 @@ public enum GhidraTools {
                     origin, and `builtin` adds Ghidra's own types, left out by default. `sources` lists \
                     every origin the program's types hold — the reviews' archive included — so `source` \
                     is named rather than guessed. Paged by `offset` and `limit`; `total` is how many \
-                    match.
+                    match. With `contains`, `in_archives` lists what the review archive and EDK2 hold under that \
+                    name and the program does not yet: it needs no definition, and is taken in when first used.
                     """,
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,

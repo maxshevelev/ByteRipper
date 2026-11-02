@@ -993,7 +993,41 @@ public class Owner {
         sources.forEach(origins::add);
         answer.add("sources", origins);
         if (end < total) answer.addProperty("next", end);
+        if (contains != null) answer.add("in_archives", archiveMatches(contains));
         return answer;
+    }
+
+    /**
+     * The types of the shared review archive and of EDK2 a name search also
+     * matches and the program does not hold yet. A program takes one the first
+     * time it is used, so "none here" must not read as "define it": that is how
+     * a duplicate of an archive's type gets written.
+     */
+    private JsonArray archiveMatches(String contains) {
+        String wanted = contains.toLowerCase(java.util.Locale.ROOT);
+        ghidra.program.model.data.DataTypeManager manager = program.getDataTypeManager();
+        JsonArray found = new JsonArray();
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (FileDataTypeManager source : new FileDataTypeManager[] {reviewArchive, archive}) {
+            if (source == null) continue;
+            Iterator<DataType> all = source.getAllDataTypes();
+            while (all.hasNext() && found.size() < 50) {
+                DataType type = all.next();
+                if (type instanceof ghidra.program.model.data.BuiltInDataType) continue;
+                if (!type.getName().toLowerCase(java.util.Locale.ROOT).contains(wanted)) continue;
+                if (!seen.add(type.getName())) continue;
+                java.util.List<DataType> held = new java.util.ArrayList<>();
+                manager.findDataTypes(type.getName(), held);
+                if (!held.isEmpty()) continue;
+                JsonObject item = new JsonObject();
+                item.addProperty("name", type.getName());
+                item.addProperty("kind", kind(type));
+                item.addProperty("size", type.getLength());
+                item.addProperty("source", source == archive ? "edk2" : "review");
+                found.add(item);
+            }
+        }
+        return found;
     }
 
     /**
