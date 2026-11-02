@@ -549,6 +549,70 @@ public class Owner {
     }
 
     /**
+     * One name on a value wherever `functions` hold it as an immediate operand.
+     * Only an immediate: a value by itself would also match a displacement or
+     * an address. An operand that already has another name keeps it and is
+     * listed in `skipped`, since a value like 4 means different things.
+     */
+    private JsonObject setEquateInFunctions(JsonObject body) throws Exception {
+        if (body.has("address")) throw new Failure(400, "give `functions` or `address`, not both");
+        if (body.has("operand")) throw new Failure(400, "`functions` finds the operands: it takes no `operand`");
+        String name = required(body, "name");
+        if (name.isEmpty()) throw new Failure(400, "`functions` names a value; removing is per `address`");
+        String valueText = required(body, "value");
+        long value;
+        try {
+            value = valueText.startsWith("0x") || valueText.startsWith("0X")
+                ? Long.parseUnsignedLong(valueText.substring(2), 16) : Long.parseLong(valueText);
+        } catch (NumberFormatException error) {
+            throw new Failure(400, valueText + " is not a number");
+        }
+        java.util.List<Function> functions = new java.util.ArrayList<>();
+        for (com.google.gson.JsonElement item : body.getAsJsonArray("functions")) {
+            functions.add(functionAt(item.getAsString()));
+        }
+        JsonArray applied = new JsonArray();
+        JsonArray skipped = new JsonArray();
+        ghidra.program.model.symbol.EquateTable table = program.getEquateTable();
+        for (Function function : functions) {
+            InstructionIterator instructions = program.getListing().getInstructions(function.getBody(), true);
+            while (instructions.hasNext()) {
+                Instruction instruction = instructions.next();
+                for (int index = 0; index < instruction.getNumOperands(); index++) {
+                    if (!ghidra.program.model.lang.OperandType.isScalar(instruction.getOperandType(index))) continue;
+                    ghidra.program.model.scalar.Scalar scalar = instruction.getScalar(index);
+                    if (scalar == null || (scalar.getUnsignedValue() != value && scalar.getSignedValue() != value)) continue;
+                    Address at = instruction.getAddress();
+                    String held = null;
+                    for (ghidra.program.model.symbol.Equate equate : table.getEquates(at, index)) {
+                        if (!equate.getDisplayName().equals(name)) held = equate.getDisplayName();
+                    }
+                    if (held != null) {
+                        JsonObject item = new JsonObject();
+                        item.addProperty("address", hex(at));
+                        item.addProperty("name", held);
+                        skipped.add(item);
+                        continue;
+                    }
+                    JsonObject one = body.deepCopy();
+                    one.remove("functions");
+                    one.addProperty("address", hex(at));
+                    one.addProperty("operand", index);
+                    setEquate(one);
+                    applied.add(hex(at));
+                }
+            }
+        }
+        JsonObject answer = identity();
+        answer.addProperty("name", name);
+        answer.addProperty("value", valueText);
+        answer.addProperty("functions", functions.size());
+        answer.add("applied", applied);
+        answer.add("skipped", skipped);
+        return answer;
+    }
+
+    /**
      * Every comment in the function's body, by address and kind: what a re-read
      * of the C is checked against, since a stale step comment shows nowhere else.
      */
@@ -3843,6 +3907,7 @@ public class Owner {
      * `enum`, a name the program's enums already hold is that member.
      */
     private JsonObject setEquate(JsonObject body) throws Exception {
+        if (body.has("functions")) return setEquateInFunctions(body);
         Address at = address(required(body, "address"));
         Instruction instruction = program.getListing().getInstructionAt(at);
         if (instruction == null) throw new Failure(404, "no instruction at " + hex(at));

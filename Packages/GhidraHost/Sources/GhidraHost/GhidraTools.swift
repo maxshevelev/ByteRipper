@@ -905,16 +905,21 @@ public enum GhidraTools {
                   + "its section, a coreboot or EDK2 header, the PPR, or `not confirmed`). The app shows "
                   + "the comment when the reader clicks the name, and the enum is shared with the next "
                   + "module reviewed, so a name given once brings its comment along: later, `name` and "
-                  + "`enum` are enough. One value has one name in an enum.",
+                  + "`enum` are enough. One value has one name in an enum. Instead of `address`, `functions` with "
+                  + "`value` names that value wherever those functions hold it as an immediate operand; the answer "
+                  + "lists `applied` addresses and `skipped` operands, which keep another name they already have.",
                   ["address": AgentSchema.string("The instruction's address."),
+                   "functions": .object(["type": "array", "items": .object(["type": "string"]),
+                                         "description": .string("Functions by entry address, instead of `address`; needs `value`.")]),
                    "name": AgentSchema.string("A C identifier, in the module's convention; empty removes it."),
                    "value": AgentSchema.string("The constant, e.g. \"0xCF8\", to pick the operand that holds it."),
                    "operand": AgentSchema.integer("Or the operand by its index, from 0."),
                    "enum": AgentSchema.string("The enum the name is a member of; made when missing."),
                    "comment": AgentSchema.string("What the name stands for and its source; replaces the member's comment."),
                    "enum_comment": AgentSchema.string("What the enum groups, e.g. \"FCH legacy I/O ports\".")],
-                  required: ["address", "name"]) { arguments in
+                  required: ["name"]) { arguments in
                 var body = try optional(arguments, ["address", "name", "value", "enum", "comment", "enum_comment"])
+                if let functions = arguments["functions"] { body["functions"] = functions }
                 if arguments.has("operand") { body["operand"] = .int(try arguments.integer("operand")) }
                 return body
             },

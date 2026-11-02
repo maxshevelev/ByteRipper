@@ -282,6 +282,49 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         XCTAssertTrue(differing.typeConflicts.contains("_TC_C"), "\(differing.typeConflicts)")
     }
 
+    func testAnEquateNamesAValueAcrossFunctionsAndKeepsOtherNames() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
+            throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostEquateTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraHostEquateTests"),
+                              writer: store)
+        let image = try Data(contentsOf: URL(fileURLWithPath: path))
+        let module = SHA256Digest(data: image)
+        _ = try await host.create(module: image, name: "Module")
+        defer { Task { await host.stop(module) } }
+        func post(_ object: [String: Any]) async throws -> [String: Any] {
+            try json(await host.write(module, "/v1/set/equate", body: try JSONSerialization.data(withJSONObject: object)))
+        }
+        let functions = try json(await host.read(module, "/v1/functions"))["functions"] as? [[String: Any]] ?? []
+        // A value some function holds as an immediate, found by asking for one.
+        var entry = "", value = ""
+        search: for function in functions.prefix(60) {
+            let at = try XCTUnwrap(function["entry"] as? String)
+            let shown = try json(await host.read(module, "/v1/disassembly/\(at)"))
+            for instruction in shown["instructions"] as? [[String: Any]] ?? [] {
+                let text = instruction["text"] as? String ?? ""
+                if text.hasPrefix("PUSH 0x") || (text.hasPrefix("MOV E") && text.contains(",0x")) {
+                    value = String(text[text.range(of: "0x")!.lowerBound...])
+                    entry = at
+                    break search
+                }
+            }
+        }
+        XCTAssertFalse(entry.isEmpty)
+        let first = try await post(["functions": [entry], "value": value, "name": "BATCH_NAME"])
+        let applied = first["applied"] as? [String] ?? []
+        XCTAssertFalse(applied.isEmpty, "\(first)")
+        // Named otherwise, one operand is left alone by the next call.
+        let second = try await post(["functions": [entry], "value": value, "name": "BATCH_OTHER"])
+        XCTAssertEqual((second["skipped"] as? [Any])?.count, applied.count, "\(second)")
+        XCTAssertEqual((second["applied"] as? [Any])?.count, 0, "\(second)")
+    }
+
     func testALinkToARenamedFunctionIsReported() async throws {
         guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
             throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
