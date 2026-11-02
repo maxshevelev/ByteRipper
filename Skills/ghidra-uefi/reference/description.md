@@ -74,7 +74,7 @@ are free.
 ## Execution flow
 ## What it connects to
 ## Inside the module
-## What a technician sees when it fails
+## Failures
 ## Known problems
 ## Terms
 ```
@@ -120,7 +120,7 @@ How it is built: its main parts and what each is responsible for, the informatio
 it keeps. A part is named by what it does. Not an inventory of functions, and the
 code the module merely links in is one sentence together.
 
-### `## What a technician sees when it fails`
+### `## Failures`
 
 What shows at the bench: a POST or halt code, a message, a beep, a hang, a reset,
 a device that goes missing. For each: when it happens, what it means, and where

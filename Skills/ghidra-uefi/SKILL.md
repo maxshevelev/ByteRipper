@@ -225,7 +225,7 @@ Names alone do not get there. Every review applies these rules:
    structure `reference/description.md` sets: a summary, then `What it is`,
    `What it does`, `Execution flow` (the main chains as short ordered walks, and
    the events it registers for), `What it connects to`, `Inside the module`,
-   `What a technician sees when it fails`, `Known problems`, `Terms`. It is not
+   `Failures`, `Known problems`, `Terms`. It is not
    the review's record: review state is in the app and the store. Start it on the first pass, change it a
    section at a time with `ghidra_describe` as the review learns, and keep it
    true at every publish: a rename or a refuted guess is corrected there
