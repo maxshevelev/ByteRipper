@@ -270,6 +270,7 @@ public class Owner {
                 if (path.equals("/v1/strings")) { json(exchange, 200, data(query, true)); return; }
                 if (path.equals("/v1/review")) { review(exchange); return; }
                 if (path.equals("/v1/library")) { json(exchange, 200, library()); return; }
+                if (path.equals("/v1/stale-links")) { json(exchange, 200, staleLinks()); return; }
                 if (path.equals("/v1/review/description")) { publishedDescription(exchange); return; }
                 if (path.equals("/v1/description")) { json(exchange, 200, description(query)); return; }
                 if (path.equals("/v1/type")) { json(exchange, 200, readType(query)); return; }
@@ -494,6 +495,57 @@ public class Owner {
             answer.add("summary", summary);
         }
         return answer;
+    }
+
+    private static final java.util.regex.Pattern LINK =
+        java.util.regex.Pattern.compile("\\[([^\\]\\n]+)\\]\\((0[xX][0-9A-Fa-f]+)\\)");
+    private static final java.util.regex.Pattern DEFAULT_NAME =
+        java.util.regex.Pattern.compile("(?:thunk_)?(?:FUN|LAB|SUB|DAT|PTR|UNK)_[0-9A-Fa-f]+");
+
+    /**
+     * Links in comments and the description whose text is a default name of
+     * Ghidra's while the target now has a real one: a rename leaves them, and
+     * the reader sees a name that no longer exists. Reported, not rewritten,
+     * because a comment is its author's.
+     */
+    private JsonObject staleLinks() {
+        JsonArray links = new JsonArray();
+        ghidra.program.model.listing.Listing listing = program.getListing();
+        ghidra.program.model.address.AddressIterator addresses =
+            listing.getCommentAddressIterator(program.getMemory(), true);
+        while (addresses.hasNext()) {
+            Address at = addresses.next();
+            for (CommentType kind : CommentType.values()) {
+                addStaleLinks(links, listing.getComment(kind, at), hex(at), kind.name().toLowerCase(java.util.Locale.ROOT));
+            }
+        }
+        addStaleLinks(links, Harvest.description(program), "description", "description");
+        JsonObject answer = new JsonObject();
+        answer.add("stale_links", links);
+        return answer;
+    }
+
+    private void addStaleLinks(JsonArray links, String text, String at, String kind) {
+        if (text == null) return;
+        java.util.regex.Matcher link = LINK.matcher(text);
+        while (link.find()) {
+            if (!DEFAULT_NAME.matcher(link.group(1)).matches()) continue;
+            Symbol target;
+            try {
+                target = program.getSymbolTable().getPrimarySymbol(address(link.group(2)));
+            } catch (Failure notAnAddress) {
+                continue;
+            }
+            if (target == null || target.getSource() == SourceType.DEFAULT
+                || target.getName().equals(link.group(1))) continue;
+            JsonObject item = new JsonObject();
+            item.addProperty("at", at);
+            item.addProperty("kind", kind);
+            item.addProperty("text", link.group(1));
+            item.addProperty("target", link.group(2));
+            item.addProperty("name", target.getName());
+            links.add(item);
+        }
     }
 
     /**

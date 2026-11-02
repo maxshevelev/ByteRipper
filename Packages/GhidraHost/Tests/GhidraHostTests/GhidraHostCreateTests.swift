@@ -218,6 +218,45 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         XCTAssertTrue(typed)
     }
 
+    func testALinkToARenamedFunctionIsReported() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
+            throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostStaleLinkTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraHostStaleLinkTests"),
+                              writer: store)
+        let image = try Data(contentsOf: URL(fileURLWithPath: path))
+        let module = SHA256Digest(data: image)
+        _ = try await host.create(module: image, name: "Module")
+        defer { Task { await host.stop(module) } }
+        func post(_ route: String, _ object: [String: Any]) async throws {
+            _ = try await host.write(module, route, body: try JSONSerialization.data(withJSONObject: object))
+        }
+        func stale() async throws -> [[String: Any]] {
+            try json(await host.read(module, "/v1/stale-links"))["stale_links"] as? [[String: Any]] ?? []
+        }
+        let functions = try json(await host.read(module, "/v1/functions"))["functions"] as? [[String: Any]] ?? []
+        let target = try XCTUnwrap(functions.first { ($0["name"] as? String)?.hasPrefix("FUN_") == true })
+        let host0 = try XCTUnwrap(functions.first { $0["entry"] as? String != target["entry"] as? String })
+        let entry = try XCTUnwrap(target["entry"] as? String)
+        let old = try XCTUnwrap(target["name"] as? String)
+        try await post("/v1/set/comment", ["address": try XCTUnwrap(host0["entry"] as? String), "kind": "plate",
+                                           "text": "Calls [\(old)](\(entry)) and [its helper](\(entry))."])
+        let before = try await stale()
+        XCTAssertTrue(before.isEmpty, "\(before)")
+        try await post("/v1/rename/function", ["address": entry, "name": "RenamedTarget"])
+        let after = try await stale()
+        XCTAssertEqual(after.count, 1, "\(after)")
+        XCTAssertEqual(after.first?["text"] as? String, old)
+        XCTAssertEqual(after.first?["name"] as? String, "RenamedTarget")
+        let published = try await host.publish(module, by: nil)
+        XCTAssertEqual(published.staleLinks.first?.name, "RenamedTarget")
+    }
+
     func testANameHeldTwiceIsSaidToBe() async throws {
         guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
             throw XCTSkip("GHIDRA_TYPE_MODULE is not set")

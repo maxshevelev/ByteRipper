@@ -1043,7 +1043,9 @@ public enum GhidraTools {
             description: """
                 Saves the module's program and stores its artifact and review document as the next \
                 revision: every ByteRipper reading this store shows the new names. Publishing an unchanged \
-                program is the same revision. `type_conflicts` names types another review defines \
+                program is the same revision. `stale_links` lists links in comments and the description whose \
+                text is a default name (`FUN_…`) while the target now has a real one: `at` and `kind` say \
+                where, `name` is what the text should read; they are reported, not rewritten. `type_conflicts` names types another review defines \
                 differently, which stay in this module only: `ghidra_type_definition` shows both, and \
                 `type_conflict_origins` names the module that wrote the shared copy. \
                 `take_type_conflicts: true` replaces the shared copy of each conflicting type with this \

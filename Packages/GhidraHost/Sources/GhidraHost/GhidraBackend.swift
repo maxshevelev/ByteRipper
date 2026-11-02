@@ -86,6 +86,7 @@ public struct PublishAnswer: Codable, Sendable {
     public var library: LibraryWriteResult?
     public var libraryBelowBar: [GhidraHost.LibraryShortfall]?
     public var libraryError: String?
+    public var staleLinks: [GhidraHost.StaleLink]?
 
     public init(_ publication: GhidraHost.Publication?) {
         manifest = publication?.manifest
@@ -95,6 +96,7 @@ public struct PublishAnswer: Codable, Sendable {
         library = publication?.library
         libraryBelowBar = publication.map(\.libraryBelowBar).flatMap { $0.isEmpty ? nil : $0 }
         libraryError = publication?.libraryError
+        staleLinks = publication.map(\.staleLinks).flatMap { $0.isEmpty ? nil : $0 }
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -105,6 +107,7 @@ public struct PublishAnswer: Codable, Sendable {
         case library
         case libraryBelowBar = "library_below_bar"
         case libraryError = "library_error"
+        case staleLinks = "stale_links"
     }
 }
 

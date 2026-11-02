@@ -42,6 +42,17 @@ public actor GhidraHost {
     /// What a publish stored, and the review types another review defines
     /// differently, which stayed in this program (§6.5) — with the module
     /// that wrote the shared copy of each, where the archive's sidecar knows it.
+    /// A link in a comment or the description that still shows a default name
+    /// after its target was renamed.
+    public struct StaleLink: Codable, Equatable, Sendable {
+        /// The comment's address, or `description`.
+        public var at: String
+        public var kind: String
+        public var text: String
+        public var target: String
+        public var name: String
+    }
+
     public struct Publication: Sendable {
         public var manifest: AnalysisManifest
         public var typeConflicts: [String]
@@ -57,10 +68,13 @@ public actor GhidraHost {
         /// Why the registry could not be offered the functions, when it could
         /// not: the publish itself is stored either way.
         public var libraryError: String?
+        /// Links whose text is a default name while the target has a real one.
+        public var staleLinks: [StaleLink]
 
         public init(manifest: AnalysisManifest, typeConflicts: [String], typeConflictsTaken: [String] = [],
                     typeConflictOrigins: [String: String] = [:], library: LibraryWriteResult? = nil,
-                    libraryBelowBar: [LibraryShortfall] = [], libraryError: String? = nil) {
+                    libraryBelowBar: [LibraryShortfall] = [], libraryError: String? = nil,
+                    staleLinks: [StaleLink] = []) {
             self.manifest = manifest
             self.typeConflicts = typeConflicts
             self.typeConflictsTaken = typeConflictsTaken
@@ -68,6 +82,7 @@ public actor GhidraHost {
             self.library = library
             self.libraryBelowBar = libraryBelowBar
             self.libraryError = libraryError
+            self.staleLinks = staleLinks
         }
     }
 
@@ -355,7 +370,16 @@ public actor GhidraHost {
         try project.write(state)
         return Publication(manifest: manifest, typeConflicts: conflicts, typeConflictsTaken: taken,
                            typeConflictOrigins: origins, library: library, libraryBelowBar: shortfalls,
-                           libraryError: libraryError)
+                           libraryError: libraryError, staleLinks: await staleLinks(port: record.port))
+    }
+
+    /// A report beside a stored publish: failing to read it never fails that.
+    private func staleLinks(port: Int) async -> [StaleLink] {
+        struct Answer: Decodable {
+            var stale_links: [StaleLink]
+        }
+        guard let data = try? await Self.call(port, "GET", "/v1/stale-links").data else { return [] }
+        return (try? JSONDecoder().decode(Answer.self, from: data))?.stale_links ?? []
     }
 
     /// The functions the registry took or matched carry the version it holds
@@ -480,6 +504,7 @@ public actor GhidraHost {
         // from "this build has no such field".
         preview["type_conflicts_taken"] = taken
         preview["type_conflict_origins"] = Self.typeOrigins(headers["x-owner-type-origins"])
+        preview["stale_links"] = try Self.plain(await staleLinks(port: record.port))
         if let descriptionDigest {
             preview["description"] = ["sha256": descriptionDigest, "size": description.count]
         }
