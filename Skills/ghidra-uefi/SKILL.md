@@ -219,7 +219,8 @@ Names alone do not get there. Every review applies these rules:
    actually does.
 7. **The module is described, not only its functions.** The review writes the
    module description — an article, in plain language with every abbreviation
-   expanded, that tells a service technician who does not program what the
+   expanded in parentheses at its first mention and explained in full in `Terms`,
+   that tells a service technician who does not program what the
    module is for, how it works, what it works with and how it is built — in the
    structure `reference/description.md` sets: a summary, then `What it is`,
    `What it does`, `How it works`, `What it connects to`, `Inside the module`,

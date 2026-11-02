@@ -130,8 +130,9 @@ at its place in the code and in the report to the person.
 
 ### `## Terms`
 
-A short list of the abbreviations and terms the article uses, each explained in a
-line. The bench's own words need no entry.
+The abbreviations and terms the article uses, the same ones it expanded at first
+mention, now explained in full: what the thing is, where it sits and why it matters
+to this module. The bench's own words need no entry.
 
 ## The Markdown
 
@@ -160,7 +161,9 @@ be understood without following it.
 
 - More text than symbols. Plain prose in simple, clear language, not a play of
   abbreviations, technical names and addresses.
-- Every abbreviation is expanded where it is first used, and listed in `Terms`.
+- Every abbreviation is expanded in parentheses at its first mention in the text,
+  shortly: "DXE (Driver Execution Environment)". It is also in `Terms`, in full:
+  both, not one or the other.
 - A routine is referred to by what it does, not by its address, and a technical
   name only where the reader needs it.
 - No band tables, no function inventories with addresses, no decompiler artefacts
