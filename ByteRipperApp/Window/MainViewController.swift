@@ -7872,10 +7872,15 @@ final class MainViewController: NSViewController {
         // A panel that is up covers the whole content area, so the window is
         // fitted around it: its one dump's grid, and the margins it stands in
         // by at either side — without them the grid came out that much short.
+        // A code screen is fitted to its code, not to the dump under it.
+        if let code = fragments.frontCodePane {
+            return code.codeFitWidth + FragmentPanelLayout.sideInset * 2
+        }
         if let front = fragments.frontSurface {
             guard let fit = front.paneViewsInMapOrder().first?.contentFitWidth else { return 0 }
             return fit + FragmentPanelLayout.sideInset * 2
         }
+        if let code = codeScreenView { return code.codeFitWidth }
         switch mode {
         case .singleFile:
             return activeFilePane?.contentFitWidth ?? 0

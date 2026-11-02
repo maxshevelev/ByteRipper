@@ -2139,6 +2139,30 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(next.comparisonRevision, 55, "F wears a new mark, and it wins")
     }
 
+    /// The fit is the longest line the decompiler writes, in the chosen font:
+    /// the function on screen does not enter into it.
+    func testTheCodeFitComesFromTheLineLimitAndTheFont() throws {
+        func pane(_ c: String) throws -> CodePaneView {
+            let json: [String: Any] = [
+                "script_version": 2, "program": ["image_base": "0x0"],
+                "functions": [["entry": "0x220", "name": "F", "c": c,
+                               "instructions": [["address": "0x220", "bytes": "C3", "mnemonic": "RET", "text": "RET"]]]]
+            ]
+            let artifact = try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+            return CodePaneView(manifest: manifest(), artifact: artifact, moduleBytes: teModule(), hexView: NSView())
+        }
+        let short = try pane("void F(void) {}\n")
+        let long = try pane(String(repeating: "x", count: 300) + "\n")
+        XCTAssertEqual(short.codeFitWidth, long.codeFitWidth)
+        let column = ("M" as NSString).size(withAttributes: [.font: CodePaneView.codeFont()]).width
+        XCTAssertGreaterThanOrEqual(short.codeFitWidth - CodePaneView.navigatorWidth,
+                                    column * CGFloat(CodePaneView.longestCodeLine + CodePaneView.diffGutterColumns))
+        // Wide enough in fact: a line of the limit does not wrap at that width.
+        short.frame = NSRect(x: 0, y: 0, width: short.codeFitWidth, height: 400)
+        short.layoutSubtreeIfNeeded()
+        XCTAssertGreaterThanOrEqual(short.codeTextWidthForTest, column * CGFloat(CodePaneView.longestCodeLine))
+    }
+
     /// A click in the diff works as in the C: a name highlights its every
     /// occurrence there, and a name that explains itself opens its popover —
     /// from the revision whose line it is, either side.

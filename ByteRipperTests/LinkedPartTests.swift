@@ -381,6 +381,12 @@ final class LinkedPartTests: XCTestCase {
         XCTAssertEqual(moved.newMarks.map(\.entry), [CodeAddress(0x10)], "the moved panel keeps the marks")
         XCTAssertEqual(moved.newMarks.first?.baseline.revision, 7)
 
+        // Zoom fits the window to the code, not to the dump under it.
+        let tabWindow = NSWindow(contentViewController: tab)
+        let zoomed = tab.windowWillUseStandardFrame(tabWindow, defaultFrame: NSRect(x: 0, y: 0, width: 5000, height: 3000))
+        let screenWidth = (tabWindow.screen ?? NSScreen.main)?.visibleFrame.width ?? .infinity
+        XCTAssertEqual(zoomed.width, min(moved.codeFitWidth, screenWidth), accuracy: 1)
+
         // A function's comparison is the panel's too, and follows it.
         moved.setComparisonRevision(9, artifact: try artifact("Then"), pinned: true,
                                     function: CodeAddress(0x10))
