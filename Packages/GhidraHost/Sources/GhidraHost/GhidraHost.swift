@@ -465,7 +465,9 @@ public actor GhidraHost {
             "dry_run": true,
             "reviewed": reviewed,
             "changed": changed,
-            "artifact": ["sha256": artifactDigest, "size": raw.count],
+            // A publish writes the registry's states and marks into the artifact,
+            // which a preview cannot: the review's hash holds, this one need not.
+            "artifact": ["sha256": artifactDigest, "size": raw.count, "before_library_marks": true],
             "document": ["sha256": documentDigest, "size": document.count],
             "functions": functions.count,
             "instructions": instructions,

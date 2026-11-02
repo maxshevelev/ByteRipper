@@ -1048,7 +1048,7 @@ public enum GhidraTools {
                 each and kept in the entry's history. The conflicts not taken come back in `conflicts`, \
                 with the version this review was based on as `base`. By default the answer carries only \
                 what the publish changed; `full: true` adds the list of entries it left as they were. \
-                `dry_run: true` answers the same without storing: the artifact's counts, the revision \
+                `dry_run: true` answers the same without storing (its artifact hash is taken before the registry's states and marks, so a publish that touches the registry stores another): the artifact's counts, the revision \
                 it would become, the description's size, the type conflicts, and — with the library \
                 decision given as it would be to the publish — `library`, what the registry offer would \
                 do: the entries it would add or move to their next version, the conflicts it would leave, \
