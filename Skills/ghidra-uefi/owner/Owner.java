@@ -1148,20 +1148,20 @@ public class Owner {
         // `dry_run` it answers what would be taken, and nothing is written.
         boolean take = "1".equals(parameters.get("take_type_conflicts"));
         if (!dryRun) writeLibraryStates();
-        if (!dryRun) {
-            // Before the export: the artifact's types and the C read the named
-            // members, and the merge below finds them in the same publish.
-            long before = program.getModificationNumber();
-            int transaction = program.startTransaction("type member names");
-            boolean named = false;
-            try {
-                named = nameFunctionPointerMembers();
-            } finally {
-                endTransaction(transaction, named, before);
-            }
+        // Before the export: the artifact's types and the C read the named
+        // members, and the merge below finds them in the same publish. A
+        // preview names them too, so it compares what the publish would, and
+        // gives them back when it has answered.
+        long before = program.getModificationNumber();
+        int transaction = program.startTransaction("type member names");
+        boolean named = false;
+        try {
+            named = nameFunctionPointerMembers();
+        } finally {
+            if (!dryRun) endTransaction(transaction, named, before);
         }
         if (!dryRun && program.isChanged()) program.save("publish", TaskMonitor.DUMMY);
-        {
+        try {
             byte[] artifact = exportArtifact();
             published = Harvest.of(program, options.get("module"), options.get("project-id"));
             Merge merge = mergeReviewTypes(!dryRun, take);
@@ -1189,6 +1189,8 @@ public class Owner {
             }
             exchange.sendResponseHeaders(200, artifact.length);
             try (OutputStream body = exchange.getResponseBody()) { body.write(artifact); }
+        } finally {
+            if (dryRun) endTransaction(transaction, false, before);
         }
     }
 
@@ -1398,7 +1400,7 @@ public class Owner {
         // the archive then holds the names every module after it reads.
         if (!theirs.isEquivalent(here) || memberTypesRenamed(here, theirs)) {
             if (take && replaceable(here, theirs)) {
-                merge.taken.add(name);
+                if (!merge.taken.contains(name)) merge.taken.add(name);
                 merge.origins.put(name, originOf(origins, name));
                 if (!apply) return false;
                 replaceShared(shared, theirs, here);
@@ -1598,7 +1600,8 @@ public class Owner {
     }
 
     private static void recordConflict(Merge merge, JsonObject origins, String name) {
-        merge.conflicts.add(name);
+        // A type several others are made of is asked about for each of them.
+        if (!merge.conflicts.contains(name)) merge.conflicts.add(name);
         merge.origins.put(name, originOf(origins, name));
     }
 
