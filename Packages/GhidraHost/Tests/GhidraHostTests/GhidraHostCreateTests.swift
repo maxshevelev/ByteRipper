@@ -289,6 +289,19 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         do { _ = try await post(["section": "Flow", "delete": true, "text": "x"]); XCTFail("both") } catch {}
         let kept = try await sections()
         XCTAssertEqual(kept, ["Purpose", "Flow"])
+        // One string inside a section.
+        _ = try await post(["section": "Purpose", "text": "One two. Two."])
+        _ = try await post(["section": "Purpose", "old_text": "One", "new_text": "Three"])
+        let changed = try json(await host.read(module, "/v1/description?section=Purpose"))["text"] as? String
+        XCTAssertEqual(changed?.trimmingCharacters(in: .whitespacesAndNewlines), "Three two. Two.")
+        let flowKept = try json(await host.read(module, "/v1/description?section=Flow"))["text"] as? String
+        XCTAssertEqual(flowKept?.trimmingCharacters(in: .whitespacesAndNewlines), "B.")
+        do { _ = try await post(["section": "Purpose", "old_text": "wo", "new_text": "x"]); XCTFail("twice") } catch {}
+        do { _ = try await post(["section": "Purpose", "old_text": "absent", "new_text": "x"]); XCTFail("absent") } catch {}
+        do { _ = try await post(["section": "Purpose", "old_text": "One", "new_text": "x"]); XCTFail("already gone") } catch {}
+        do { _ = try await post(["section": "Purpose", "old_text": "Three", "new_text": "x", "text": "y"]); XCTFail("with text") } catch {}
+        do { _ = try await post(["old_text": "Three", "new_text": "x"]); XCTFail("no section") } catch {}
+        _ = try await post(["section": "Purpose", "text": "A."])
         // Placed, moved and read alone.
         _ = try await post(["section": "Errors", "text": "E.", "before": "Flow"])
         let placed = try await sections()

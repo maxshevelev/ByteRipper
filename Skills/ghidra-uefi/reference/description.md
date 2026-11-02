@@ -44,6 +44,8 @@ removes a section, or the whole description. `before` or `after` names the secti
 this one goes beside: a new section is placed there, and either alone moves an
 existing one. `ghidra_description` reads one `section`, or with `outline: true` only
 the headings and the size, so a section is changed without carrying the rest.
+With `section`, `old_text` and `new_text` change one string inside it, and are
+refused unless `old_text` occurs there exactly once.
 Write the outline once, then work section by section; read it with
 `ghidra_description` before changing a section someone else may have
 touched.

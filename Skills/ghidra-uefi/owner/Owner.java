@@ -3039,8 +3039,11 @@ public class Owner {
      * The module's description, whole or one `## ` section of it: `text` is
      * the Markdown, `section` the heading whose body it replaces, `delete`
      * removes, and `before` or `after` names the section it goes beside.
+     * `old_text` and `new_text` change one string inside a section, so one line
+     * is changed without sending the rest; it must occur exactly once.
      */
     private JsonObject setDescription(JsonObject body) throws Exception {
+        if (body.has("old_text") || body.has("new_text")) replaceInSection(body);
         boolean delete = body.has("delete") && body.get("delete").getAsBoolean();
         String text = body.has("text") && !body.get("text").isJsonNull() ? body.get("text").getAsString() : null;
         boolean blank = text == null || text.isBlank();
@@ -3092,6 +3095,28 @@ public class Owner {
         if (section != null && !section.isEmpty()) answer.addProperty("section", section);
         if (delete) answer.addProperty("removed", section == null || section.isEmpty() ? "description" : section);
         return answer;
+    }
+
+    /** Turns `old_text` and `new_text` into the section's new `text`. */
+    private void replaceInSection(JsonObject body) throws Failure {
+        String old = string(body, "old_text", null), replacement = string(body, "new_text", null);
+        String section = string(body, "section", null);
+        if (old == null || old.isEmpty() || replacement == null) {
+            throw new Failure(400, "give `old_text` and `new_text` together; `old_text` is not empty");
+        }
+        if (section == null || section.isEmpty()) throw new Failure(400, "`old_text` is looked for in a `section`");
+        for (String other : new String[] {"text", "delete", "before", "after"}) {
+            if (body.has(other)) throw new Failure(400, "`old_text` takes no `" + other + "`");
+        }
+        String heading = section.startsWith("## ") ? section.substring(3).trim() : section.trim();
+        String now = Harvest.sectionBody(Harvest.description(program), heading);
+        if (now == null) throw new Failure(404, "no section \"" + heading + "\"");
+        int first = now.indexOf(old);
+        if (first < 0) throw new Failure(404, "`old_text` is not in section \"" + heading + "\"");
+        if (now.indexOf(old, first + 1) >= 0) {
+            throw new Failure(409, "`old_text` occurs more than once in section \"" + heading + "\": nothing was changed");
+        }
+        body.addProperty("text", now.substring(0, first) + replacement + now.substring(first + old.length()));
     }
 
     // MARK: - The lease

@@ -951,17 +951,21 @@ public enum GhidraTools {
                   + "own, which the app shows beside the code. With `section`, `text` replaces the body of "
                   + "that `## ` section only (added at the end if missing, or beside the section `before` or `after` names; either alone moves the section); without it, `text` is the whole "
                   + "description. Empty `text` is refused; `delete: true`, without `text`, removes the section "
-                  + "named, or the whole description, and the answer says which in `removed`. Up to 256 KiB. The answer names "
+                  + "named, or the whole description, and the answer says which in `removed`. With `section`, `old_text` and `new_text` change one string inside that section without sending the rest; refused unless `old_text` occurs there exactly once. Up to 256 KiB. The answer names "
                   + "the sections and the size, not the text: `ghidra_description` reads it. "
                   + descriptionFormat,
                   ["text": AgentSchema.string("The Markdown: the whole description, or one section's body without its heading."),
                    "section": AgentSchema.string("The `## ` heading whose body `text` replaces, e.g. \"Execution flow\"."),
                    "before": AgentSchema.string("The section this `section` goes just before."),
                    "after": AgentSchema.string("The section this `section` goes just after."),
+                   "old_text": AgentSchema.string("A string in `section` to change; it must occur there exactly once. Goes with `new_text`, takes no `text`."),
+                   "new_text": AgentSchema.string("What `old_text` becomes; may be empty."),
                    "delete": AgentSchema.boolean("Removes the section named, or the whole description. Takes no `text`.")],
                   required: []) { arguments in
                 var body: [String: JSONValue] = [:]
                 if let text = try arguments.optionalString("text") { body["text"] = .string(text) }
+                if let old = try arguments.optionalString("old_text") { body["old_text"] = .string(old) }
+                if let new = try arguments.optionalString("new_text") { body["new_text"] = .string(new) }
                 if let before = try arguments.optionalString("before") { body["before"] = .string(before) }
                 if let after = try arguments.optionalString("after") { body["after"] = .string(after) }
                 if try arguments.bool("delete", default: false) { body["delete"] = .bool(true) }
