@@ -611,6 +611,7 @@ import ToolModuleKit
     /// The ranges the diff has highlighted, for a test.
     var diffHighlightedRanges: [NSRange] { diffView.highlightedRanges }
     var diffExplainableRanges: [NSRange] { diffView.explainable }
+    var comparisonRevisionForTest: Int? { comparisonRevision }
     var diffSelectedRange: NSRange { diffView.selectedRange }
     /// Where the diff is scrolled, for a test: another function's diff is
     /// read from its top, never from where a longer one was left.
@@ -799,14 +800,83 @@ import ToolModuleKit
     /// bar is theirs and holds for every function until Reset.
     private func applyOpenComparison(for index: Int) {
         guard !comparisonIsPinned, model.functions.indices.contains(index) else { return }
-        if let mark = unopenedChanges[index], let revision = mark.revision {
-            if comparisonRevision != revision {
-                setComparisonRevision(revision, artifact: mark.artifact)
-            }
-        } else if comparisonRevision != nil {
-            setComparisonRevision(nil, artifact: nil)
+        guard let mark = unopenedChanges[index], let revision = mark.revision else {
+            if comparisonRevision != nil { setComparisonRevision(nil, artifact: nil) }
+            return
+        }
+        guard comparisonRevision != revision else { return }
+        guard let held = mark.artifact ?? readRevisions[revision] else {
+            // The code of that revision is read now, the first time something
+            // needs it. Until it comes the function reads as it is: another
+            // function's comparison would be with the wrong revision.
+            if comparisonRevision != nil { setComparisonRevision(nil, artifact: nil) }
+            readRevision(revision)
+            return
+        }
+        // Told apart only now that the code is here: a record made against
+        // another copy of that revision. Nothing changed, so a mark would be
+        // about the bookkeeping and not about the function.
+        if mark.artifact == nil, Self.holdsTheSame(artifact.functions[index], in: held) {
+            takeMark(of: index)
+            return
+        }
+        setComparisonRevision(revision, artifact: held)
+    }
+
+    /// Reads a revision's code for the comparison, and goes on with the function
+    /// on screen when it comes.
+    private func readRevision(_ revision: Int) {
+        guard let onReadRevision, revisionsBeingRead.insert(revision).inserted else { return }
+        revisionReads += 1
+        Task { @MainActor [weak self] in
+            let read = await onReadRevision(revision)
+            guard let self else { return }
+            self.revisionsBeingRead.remove(revision)
+            guard let read else { return }
+            self.keepRead(read, revision: revision)
+            if let index = self.state.function { self.applyOpenComparison(for: index) }
+            self.updateNewMarkBanner()
         }
     }
+
+    /// Keeps the revisions read last. A revision's code is the size of the whole
+    /// analysis, so they are not all held for the marks that may ask for them.
+    private func keepRead(_ read: CodeArtifact, revision: Int) {
+        readRevisions[revision] = read
+        readOrder.removeAll { $0 == revision }
+        readOrder.append(revision)
+        while readOrder.count > Self.revisionsKept {
+            readRevisions[readOrder.removeFirst()] = nil
+        }
+    }
+
+    /// Takes a mark that turned out to be about nothing: the reader is as far
+    /// along as the code.
+    private func takeMark(of index: Int) {
+        unopenedChanges[index] = nil
+        if let revision = manifest.reading?.rev {
+            let function = artifact.functions[index]
+            seen[function.entry.description] = SeenRecord(revision: revision,
+                                                          fingerprint: Self.fingerprint(of: function))
+            if seenLoaded { onSeenChanged?(seen) }
+        }
+        syncingSelection = true
+        functionTable.reloadData()
+        syncingSelection = false
+        marksChanged()
+        applyOpenComparison(for: index)
+        updateNewMarkBanner()
+    }
+
+    /// Reads a revision's code from the store, for the comparison a mark puts
+    /// up; nil when the store has none. The app's half of the seam.
+    public var onReadRevision: ((Int) async -> CodeArtifact?)?
+    private var readRevisions: [Int: CodeArtifact] = [:]
+    private var readOrder: [Int] = []
+    private var revisionsBeingRead: Set<Int> = []
+    private static let revisionsKept = 2
+    /// How many revisions were read for marks, for a test.
+    private(set) var revisionReads = 0
 
     /// Marks the selected function's range as the main zone without a click —
     /// what the screen does when it opens on a function.
@@ -1221,9 +1291,11 @@ import ToolModuleKit
     public struct NewMark {
         public struct Baseline {
             public let revision: Int?
-            public let artifact: CodeArtifact
+            /// The code it is new against, when the mark came with it: nil
+            /// names `revision` in the store, read when it is first needed.
+            public let artifact: CodeArtifact?
 
-            public init(revision: Int?, artifact: CodeArtifact) {
+            public init(revision: Int?, artifact: CodeArtifact?) {
                 self.revision = revision
                 self.artifact = artifact
             }
@@ -1266,7 +1338,8 @@ import ToolModuleKit
             guard let index = byEntry[mark.entry] else { continue }
             // Changed and changed back: the revision the mark began at reads
             // as the code does now, and there is nothing to show against it.
-            if Self.holdsTheSame(artifact.functions[index], in: mark.baseline.artifact) { continue }
+            if let baseline = mark.baseline.artifact,
+               Self.holdsTheSame(artifact.functions[index], in: baseline) { continue }
             if let existing = unopenedChanges[index] {
                 switch (mark.baseline.revision, existing.revision) {
                 case let (carried?, current?) where carried >= current:
@@ -1350,14 +1423,21 @@ import ToolModuleKit
 
     /// Takes what the last launch left: every function that reads otherwise
     /// than it did when the reader last saw it goes up as New against the
-    /// revision it was seen at, with that revision's code for the comparison.
-    /// A function still reading the same is that much further seen; one the
-    /// records never had is new against the newest kept revision that does not
-    /// read as it does now, and one that reads the same in all of them is not
-    /// new at all. A module the records know nothing of is seeded as seen now
-    /// — a first open has nothing to be new against.
+    /// revision it was seen at. The record says so without the code of that
+    /// revision, so the marks are up at once; the code is read when a function
+    /// is opened. A function still reading the same is that much further seen;
+    /// one the records never had is new against the newest kept revision that
+    /// does not read as it does now, and one that reads the same in all of them
+    /// is not new at all — that does take the code, and is finished through
+    /// `nextRevisionToSettle`. A module the records know nothing of is seeded as
+    /// seen now — a first open has nothing to be new against.
+    ///
+    /// `baselines` is the code already in hand, `available` the revisions the
+    /// store holds code for, those included; the others cannot be compared, and
+    /// their functions wait unseen.
     public func restoreSeen(_ records: [String: SeenRecord],
-                            baselines: [Int: CodeArtifact]) {
+                            baselines: [Int: CodeArtifact],
+                            available: Set<Int>? = nil) {
         guard let revision = manifest.reading?.rev else { return }
         seenLoaded = true
         guard !records.isEmpty, !marksWereCleared else {
@@ -1366,31 +1446,15 @@ import ToolModuleKit
             return
         }
         seen = records
+        let holds = available ?? Set(baselines.keys)
         var marks: [NewMark] = []
-        for function in artifact.functions {
+        unrecorded = []
+        for (index, function) in artifact.functions.enumerated() {
             let key = function.entry.description
             let fingerprint = Self.fingerprint(of: function)
             guard let record = records[key] else {
-                // Never opened: the review made it after the records began. The
-                // newest revision anything was seen at is usually the one on
-                // screen, and a mark against itself has no comparison to draw
-                // and nothing for the plate to say; so it is shown against the
-                // newest one that differs.
-                if let newest = baselines.keys.sorted(by: >).first(where: { revision in
-                    baselines[revision].map { !Self.holdsTheSame(function, in: $0) } ?? false
-                }), let baseline = baselines[newest] {
-                    marks.append(NewMark(entry: function.entry,
-                                         baseline: .init(revision: newest, artifact: baseline)))
-                    // The mark is kept as any other is, by a record of what the
-                    // function read at that revision; nothing if it was not
-                    // there. Without one the next pane — the panel opened in a
-                    // tab, the next launch — would look only at the revisions
-                    // the others' records name, which by then are this one.
-                    let then = baseline.functions.first { $0.entry == function.entry }
-                    seen[key] = SeenRecord(revision: newest, fingerprint: then.map(Self.fingerprint) ?? "")
-                } else if !baselines.isEmpty {
-                    seen[key] = SeenRecord(revision: revision, fingerprint: fingerprint)
-                }
+                // Never opened: the review made it after the records began.
+                unrecorded.append(index)
                 continue
             }
             if record.fingerprint == fingerprint {
@@ -1402,18 +1466,75 @@ import ToolModuleKit
                 // changed, so a mark would be about the bookkeeping and not
                 // about the function; the reader is as far along as the code.
                 seen[key] = SeenRecord(revision: revision, fingerprint: fingerprint)
-            } else if let baseline = baselines[record.revision] {
+            } else if holds.contains(record.revision) {
                 // The record stays where it is: the change is not seen until
                 // the reader opens the function.
                 marks.append(NewMark(entry: function.entry,
-                                     baseline: .init(revision: record.revision, artifact: baseline)))
+                                     baseline: .init(revision: record.revision,
+                                                     artifact: baselines[record.revision])))
             }
         }
         if !marks.isEmpty { setNewMarks(marks) }
+        revisionsToSettle = holds.sorted(by: >)
+        if unrecorded.isEmpty { revisionsToSettle = [] }
+        while let next = nextRevisionToSettle, let baseline = baselines[next] {
+            settleUnrecorded(revision: next, artifact: baseline, keeping: false)
+        }
         // The function on screen is not a reader's choice — the pane opens on
         // one of its own — so nothing is seen yet; a mark it carries still
         // puts its comparison up, as opening it would.
         if let index = state.function { applyOpenComparison(for: index) }
+        onSeenChanged?(seen)
+    }
+
+    /// The functions the records never had, and the revisions still to look
+    /// for them in, newest first.
+    private var unrecorded: [Int] = []
+    private var revisionsToSettle: [Int] = []
+
+    /// The revision whose code the functions with no record are waiting for;
+    /// nil when none are. The app reads it and hands it to `settleUnrecorded`.
+    public var nextRevisionToSettle: Int? { unrecorded.isEmpty ? nil : revisionsToSettle.first }
+
+    /// Compares the functions with no record against `revision`, the newest not
+    /// yet looked at: a function that reads otherwise is new against it, with a
+    /// record of what it read then, or the next pane — the panel opened in a tab,
+    /// the next launch — would look only at the revisions the others' records
+    /// name, which by then are this one. A function reading the same everywhere
+    /// is seen. Nil is a revision the store could not give.
+    public func settleUnrecorded(revision: Int, artifact read: CodeArtifact?) {
+        settleUnrecorded(revision: revision, artifact: read, keeping: true)
+    }
+
+    private func settleUnrecorded(revision: Int, artifact read: CodeArtifact?, keeping: Bool) {
+        revisionsToSettle.removeAll { $0 == revision }
+        var marks: [NewMark] = []
+        if let read {
+            var old: [CodeAddress: CodeArtifact.Function] = [:]
+            for function in read.functions where old[function.entry] == nil { old[function.entry] = function }
+            unrecorded.removeAll { index in
+                let function = artifact.functions[index]
+                let then = old[function.entry]
+                if let then, then.name == function.name, then.signature == function.signature,
+                   then.c == function.c { return false }
+                marks.append(NewMark(entry: function.entry, baseline: .init(revision: revision, artifact: read)))
+                seen[function.entry.description] = SeenRecord(revision: revision,
+                                                              fingerprint: then.map(Self.fingerprint) ?? "")
+                return true
+            }
+        }
+        if revisionsToSettle.isEmpty, read != nil, let current = manifest.reading?.rev {
+            for index in unrecorded {
+                let function = artifact.functions[index]
+                seen[function.entry.description] = SeenRecord(revision: current,
+                                                              fingerprint: Self.fingerprint(of: function))
+            }
+            unrecorded = []
+        }
+        if !marks.isEmpty { setNewMarks(marks) }
+        guard keeping else { return }
+        if let index = state.function { applyOpenComparison(for: index) }
+        updateNewMarkBanner()
         onSeenChanged?(seen)
     }
 
@@ -1493,7 +1614,13 @@ import ToolModuleKit
         }
         let function = model.functions[index]
         let before = mark.revision.map { "r\($0)" }
-        let old = mark.artifact.functions.first { $0.entry == function.entry }
+        // Its code is on the way when neither has it: the plate comes with it.
+        guard let baseline = mark.artifact ?? mark.revision.flatMap({ readRevisions[$0] }) else {
+            newMarkBanner.hide()
+            layOutBanner(false)
+            return
+        }
+        let old = baseline.functions.first { $0.entry == function.entry }
         var bullets: [String] = []
         if let old {
             if old.name != function.name {

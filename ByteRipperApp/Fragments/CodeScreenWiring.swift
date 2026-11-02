@@ -120,8 +120,17 @@ func wireCodeRevisions(_ codePane: CodePaneView,
             codePane.setComparisonRevision(revision, artifact: artifact, pinned: true)
         }
     }
+    let history = Task { @MainActor in await CodeAnalysisStore.revisions(for: manifest) }
+    // What a New mark compares with is read when a function asks for it: a
+    // revision's code is the size of the whole analysis.
+    codePane.onReadRevision = { revision in
+        if let previous, previous.revision == revision { return previous.artifact }
+        let options = await history.value.options
+        guard let digest = options.first(where: { $0.choice.revision == revision })?.artifact else { return nil }
+        return await CodeAnalysisStore.artifact(forRevision: digest)
+    }
     Task { @MainActor in
-        let loaded = await CodeAnalysisStore.revisions(for: manifest)
+        let loaded = await history.value
         let options = loaded.options
         digests = Dictionary(options.map { ($0.choice.revision, $0.artifact) },
                              uniquingKeysWith: { first, _ in first })
@@ -139,18 +148,26 @@ func wireCodeRevisions(_ codePane: CodePaneView,
         codePane.setRevisionChoices(choices, current: manifest.reading?.rev, knowsRevisions: loaded.hasHistory)
 
         // The functions the last launch saw at another revision than the one
-        // on screen, and the code they read then: each is New against the
-        // revision the record names. A record whose revision the store holds
-        // no code for cannot be compared, and its function waits unseen.
-        var baselines: [Int: CodeArtifact] = [:]
-        for revision in Set(kept.values.map(\.revision)) {
-            if let previous, previous.revision == revision {
-                baselines[revision] = previous.artifact
-            } else if let digest = digests[revision],
-                      let artifact = await CodeAnalysisStore.artifact(forRevision: digest) {
-                baselines[revision] = artifact
-            }
+        // on screen are New against the revision their record names, and the
+        // records say which without any code. A record whose revision the store
+        // holds no code for cannot be compared, and its function waits unseen.
+        let named = Set(kept.values.map(\.revision))
+        var available = named.intersection(digests.keys)
+        var inHand: [Int: CodeArtifact] = [:]
+        if let previous, named.contains(previous.revision) {
+            available.insert(previous.revision)
+            inHand[previous.revision] = previous.artifact
         }
-        codePane.restoreSeen(kept, baselines: baselines)
+        codePane.restoreSeen(kept, baselines: inHand, available: available)
+        // Only a function with no record takes code to judge.
+        while let revision = codePane.nextRevisionToSettle {
+            let read: CodeArtifact?
+            if let digest = digests[revision] {
+                read = await CodeAnalysisStore.artifact(forRevision: digest)
+            } else {
+                read = nil
+            }
+            codePane.settleUnrecorded(revision: revision, artifact: read)
+        }
     }
 }

@@ -1581,6 +1581,78 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(third.newMarks.count, 0)
     }
 
+    /// The marks come from the records alone: no revision's code is read until
+    /// a function is opened, and then only the one it is new against.
+    func testMarksAreUpWithoutReadingARevisionsCode() throws {
+        func function(_ entry: String, _ name: String, _ c: String) -> [String: Any] {
+            ["entry": entry, "name": name, "c": c,
+             "instructions": [["address": entry, "bytes": "C3", "mnemonic": "RET", "text": "RET"]]]
+        }
+        func artifact(_ a: String, _ b: String, _ d: String) throws -> CodeArtifact {
+            let json: [String: Any] = ["script_version": 5, "program": ["image_base": "0x0"],
+                                       "functions": [function("0x220", "A", a), function("0x240", "B", b),
+                                                     function("0x260", "D", d)]]
+            return try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        }
+        let now = try artifact("now a\n", "now b\n", "same\n")
+        let r100 = try artifact("was a\n", "was b\n", "same\n")
+        let r101 = try artifact("was a\n", "now b\n", "same\n")
+        let view = CodePaneView(manifest: manifest(revision: 102), artifact: now,
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.layoutSubtreeIfNeeded()
+        var asked: [Int] = []
+        view.onReadRevision = { revision in
+            asked.append(revision)
+            return revision == 100 ? r100 : r101
+        }
+        func record(_ name: String, _ c: String, _ revision: Int) -> SeenRecord {
+            SeenRecord(revision: revision, fingerprint: SeenRecord.fingerprint(name: name, signature: nil, c: c))
+        }
+        view.restoreSeen(["0x220": record("A", "was a\n", 100), "0x240": record("B", "stale copy\n", 101),
+                          "0x260": record("D", "same\n", 100)],
+                         baselines: [:], available: [100, 101])
+        XCTAssertEqual(Set(view.newMarks.map(\.entry)), [CodeAddress(0x220), CodeAddress(0x240)],
+                       "up at once, from the records")
+        XCTAssertNil(view.nextRevisionToSettle)
+        XCTAssertEqual(view.seenRecords["0x260"]?.revision, 102, "a function reading the same moved on")
+
+        func settle() { RunLoop.main.run(until: Date().addingTimeInterval(0.1)) }
+        settle()
+        view.selectFunction(at: 0)
+        settle()
+        XCTAssertEqual(view.comparisonRevisionForTest, 100, "opening compares with that revision")
+        XCTAssertEqual(asked.filter { $0 == 100 }.count, 1, "read once")
+        XCTAssertFalse(asked.contains(101), "and only that one")
+
+        // A record made against another copy of the revision: only the code
+        // can tell, and then there is nothing to mark.
+        view.selectFunction(at: 1)
+        settle()
+        XCTAssertEqual(asked.filter { $0 == 101 }.count, 1)
+        XCTAssertFalse(view.newMarks.contains { $0.entry == CodeAddress(0x240) })
+        XCTAssertNil(view.comparisonRevisionForTest)
+        XCTAssertEqual(view.seenRecords["0x240"]?.revision, 102)
+    }
+
+    /// A function with no record does take code: the newest revision first, and
+    /// no further than it has to.
+    func testAFunctionWithNoRecordReadsOnlyTheRevisionsItNeeds() throws {
+        let current = try oneFunction(name: "F", signature: "void F(void)", c: "{\n  A();\n}")
+        let older = try oneFunction(name: "F", signature: "void F(void)", c: "{\n}")
+        let view = CodePaneView(manifest: manifest(revision: 113), artifact: current,
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.layoutSubtreeIfNeeded()
+        view.restoreSeen(["0x999": SeenRecord(revision: 108, fingerprint: "gone")],
+                         baselines: [:], available: [100, 108, 112])
+        XCTAssertEqual(view.newMarks.count, 0, "nothing can be said yet")
+        XCTAssertEqual(view.nextRevisionToSettle, 112)
+        view.settleUnrecorded(revision: 112, artifact: older)
+        XCTAssertEqual(view.newMarks.map(\.baseline.revision), [112])
+        XCTAssertNil(view.nextRevisionToSettle, "the older two stay unread")
+    }
+
     func testAFunctionWithNoRecordIsNewAgainstARevisionThatDiffers() throws {
         let current = try oneFunction(name: "F", signature: "void F(void)", c: "{\n  A();\n}")
         let older = try oneFunction(name: "G", signature: "void G(void)", c: "{\n}", entry: "0x260")
