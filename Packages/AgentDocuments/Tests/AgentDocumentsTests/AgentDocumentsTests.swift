@@ -204,6 +204,12 @@ final class CodeReadingsTests: XCTestCase {
         XCTAssertEqual(levels["library"], .int(0))
         XCTAssertEqual(levels["no_body"], .int(0))
         XCTAssertEqual(levels["unrecorded"], .int(1))
+        let partial = try await tool.run(AgentCall(tool: "code_query", arguments: AgentArguments([
+            "module": .string(module.sha256.hex), "what": .string("functions"), "level": .string("partial")])))
+        guard case .json(.object(let only)) = partial else { return XCTFail("not an object: \(partial)") }
+        XCTAssertEqual(only["total"], .int(1))
+        XCTAssertEqual(only["functions"]?.arrayValue?.first?["name"]?.stringValue, "LibAmdIoWrite")
+        XCTAssertEqual(only["review_levels"]?.objectValue?["full"], .int(1), "the counts stay whole")
         XCTAssertEqual(library["edk2"], .int(1))
         XCTAssertEqual(library["amd"], .int(2))
         XCTAssertEqual(library["intel"], .int(0))

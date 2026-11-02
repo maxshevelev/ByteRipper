@@ -102,6 +102,8 @@ public final class CodeReadings {
         properties["function"] = AgentSchema.string(
             "A function name or Ghidra entry address, for \"instructions\", \"c\" and \"references\".")
         properties["address"] = AgentSchema.string("A Ghidra address, for \"uses\".")
+        properties["level"] = AgentSchema.choice(ReviewLevel.allCases.map(\.rawValue),
+                                                 "With `what: \"functions\"`: only functions at this review level.")
         properties["search"] = AgentSchema.string("A word to narrow functions, strings or symbols by; with `what: \"c\"` and no `function`, text to find in every function's stored C, any case, as written.")
         properties["limit"] = AgentSchema.limit(default: 200, maximum: 500)
         return AgentTool(
@@ -340,13 +342,21 @@ public final class CodeReadings {
 
         switch what {
         case "functions":
-            let functions = model.functions(matching: search ?? "").map { model.functions[$0] }
+            let matching = model.functions(matching: search ?? "").map { model.functions[$0] }
+            var functions = matching
+            if let text = try arguments.optionalString("level") {
+                guard let level = ReviewLevel(rawValue: text) else {
+                    throw AgentToolError("`level` is one of "
+                        + ReviewLevel.allCases.map(\.rawValue).joined(separator: ", ") + ".")
+                }
+                functions = matching.filter { $0.reviewLevel == level }
+            }
             body["total"] = .int(Int64(functions.count))
             // Over every match, not the page: the list itself can be too long to read.
             var levels: [String: Int64] = Dictionary(uniqueKeysWithValues:
                 ReviewLevel.allCases.map { ($0.rawValue, 0) })
             var unrecorded: Int64 = 0
-            for function in functions {
+            for function in matching {
                 if let level = function.reviewLevel { levels[level.rawValue, default: 0] += 1 } else { unrecorded += 1 }
             }
             if unrecorded > 0 { levels["unrecorded"] = unrecorded }
