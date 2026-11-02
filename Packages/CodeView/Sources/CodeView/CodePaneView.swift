@@ -113,6 +113,9 @@ import ToolModuleKit
     /// replaced it: what Diff compares the code against, nil while the pane
     /// has seen no revision — beside another recipe, say, or after a restart.
     private var revisionBaseline: CodeArtifact?
+    /// The function `revisionBaseline` holds the code of, when it was read for
+    /// one; nil when it holds them all.
+    private var baselineReadFor: CodeAddress?
     /// What the diff on screen was drawn from, so a redraw is made only when
     /// the function or the revision changed.
     private var drawnDiff: (function: Int, revision: Int)?
@@ -497,6 +500,13 @@ import ToolModuleKit
     /// the reader may have moved on; the open one when nil.
     public func setComparisonRevision(_ revision: Int?, artifact: CodeArtifact?,
                                       pinned: Bool = false, function: CodeAddress? = nil) {
+        setComparisonRevision(revision, artifact: artifact, pinned: pinned, function: function, readFor: nil)
+    }
+
+    /// `readFor`: the one function `artifact` holds the code of, when it was
+    /// read for that function alone.
+    private func setComparisonRevision(_ revision: Int?, artifact: CodeArtifact?, pinned: Bool,
+                                       function: CodeAddress?, readFor: CodeAddress?) {
         if pinned, let entry = function ?? openFunctionEntry {
             if let revision, let artifact {
                 functionComparisons[entry] = .against(.init(revision: revision, artifact: artifact))
@@ -507,6 +517,7 @@ import ToolModuleKit
         }
         comparisonRevision = artifact == nil ? nil : revision
         revisionBaseline = artifact
+        baselineReadFor = artifact == nil ? nil : readFor
         revisionCount += 1
         drawnDiff = nil
         if keepComparisonChoice() { rebuildRevisionMenu() }
@@ -858,13 +869,16 @@ import ToolModuleKit
             if comparisonRevision != nil { setComparisonRevision(nil, artifact: nil) }
             return
         }
-        guard comparisonRevision != revision else { return }
-        guard let held = mark.artifact ?? readRevisions[revision] else {
+        let entry = model.functions[index].entry
+        // The same revision still has to be read again for another function.
+        guard comparisonRevision != revision || (baselineReadFor != nil && baselineReadFor != entry) else { return }
+        let read = mark.artifact == nil ? readRevisions[RevisionRead(revision: revision, function: entry)] : nil
+        guard let held = mark.artifact ?? read else {
             // The code of that revision is read now, the first time something
             // needs it. Until it comes the function reads as it is: another
             // function's comparison would be with the wrong revision.
             if comparisonRevision != nil { setComparisonRevision(nil, artifact: nil) }
-            readRevision(revision)
+            readRevision(revision, function: entry)
             return
         }
         // Told apart only now that the code is here: a record made against
@@ -874,32 +888,34 @@ import ToolModuleKit
             takeMark(of: index)
             return
         }
-        setComparisonRevision(revision, artifact: held)
+        setComparisonRevision(revision, artifact: held, pinned: false, function: nil,
+                              readFor: mark.artifact == nil ? entry : nil)
     }
 
-    /// Reads a revision's code for the comparison, and goes on with the function
-    /// on screen when it comes.
-    private func readRevision(_ revision: Int) {
-        guard let onReadRevision, revisionsBeingRead.insert(revision).inserted else { return }
+    /// Reads a revision's code for the comparison of `function`, and goes on
+    /// with the function on screen when it comes.
+    private func readRevision(_ revision: Int, function: CodeAddress) {
+        let wanted = RevisionRead(revision: revision, function: function)
+        guard let onReadRevision, revisionsBeingRead.insert(wanted).inserted else { return }
         revisionReads += 1
         Task { @MainActor [weak self] in
-            let read = await onReadRevision(revision)
+            let read = await onReadRevision(revision, function)
             guard let self else { return }
-            self.revisionsBeingRead.remove(revision)
+            self.revisionsBeingRead.remove(wanted)
             guard let read else { return }
-            self.keepRead(read, revision: revision)
+            self.keepRead(read, wanted)
             if let index = self.state.function { self.applyOpenComparison(for: index) }
             self.updateNewMarkBanner()
         }
     }
 
-    /// Keeps the revisions read last. A revision's code is the size of the whole
-    /// analysis, so they are not all held for the marks that may ask for them.
-    private func keepRead(_ read: CodeArtifact, revision: Int) {
-        readRevisions[revision] = read
-        readOrder.removeAll { $0 == revision }
-        readOrder.append(revision)
-        while readOrder.count > Self.revisionsKept {
+    /// Keeps the reads made last. Each holds one function's code and the tables
+    /// of its revision, so they are not all held for the marks that may ask.
+    private func keepRead(_ read: CodeArtifact, _ wanted: RevisionRead) {
+        readRevisions[wanted] = read
+        readOrder.removeAll { $0 == wanted }
+        readOrder.append(wanted)
+        while readOrder.count > Self.readsKept {
             readRevisions[readOrder.removeFirst()] = nil
         }
     }
@@ -922,13 +938,18 @@ import ToolModuleKit
         updateNewMarkBanner()
     }
 
-    /// Reads a revision's code from the store, for the comparison a mark puts
-    /// up; nil when the store has none. The app's half of the seam.
-    public var onReadRevision: ((Int) async -> CodeArtifact?)?
-    private var readRevisions: [Int: CodeArtifact] = [:]
-    private var readOrder: [Int] = []
-    private var revisionsBeingRead: Set<Int> = []
-    private static let revisionsKept = 2
+    /// Reads a revision's code from the store for one function, for the
+    /// comparison a mark puts up; nil when the store has none. It may hold the
+    /// other functions without their code. The app's half of the seam.
+    public var onReadRevision: ((Int, CodeAddress) async -> CodeArtifact?)?
+    private struct RevisionRead: Hashable {
+        let revision: Int
+        let function: CodeAddress
+    }
+    private var readRevisions: [RevisionRead: CodeArtifact] = [:]
+    private var readOrder: [RevisionRead] = []
+    private var revisionsBeingRead: Set<RevisionRead> = []
+    private static let readsKept = 8
     /// How many revisions were read for marks, for a test.
     private(set) var revisionReads = 0
 
@@ -1682,7 +1703,8 @@ import ToolModuleKit
         let function = model.functions[index]
         let before = mark.revision.map { "r\($0)" }
         // Its code is on the way when neither has it: the plate comes with it.
-        guard let baseline = mark.artifact ?? mark.revision.flatMap({ readRevisions[$0] }) else {
+        let read = mark.revision.flatMap { readRevisions[RevisionRead(revision: $0, function: function.entry)] }
+        guard let baseline = mark.artifact ?? read else {
             newMarkBanner.hide()
             layOutBanner(false)
             return

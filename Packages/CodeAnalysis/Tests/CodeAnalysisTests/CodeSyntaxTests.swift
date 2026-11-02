@@ -28,6 +28,50 @@ final class CodeSyntaxTests: XCTestCase {
         return CodeModel(artifact: artifact, moduleBytes: CodeModelTests.teModule())
     }
 
+    /// Read for one function, an artifact holds that function whole and the
+    /// others without their code, and otherwise reads as the whole one does.
+    func testAnArtifactReadForOneFunctionHoldsOnlyItsCode() throws {
+        let text = #"""
+        { "script_version" : 7, "ghidra": "12.1",
+          "program": {"image_base": "0x0"},
+          "functions": [
+            {"entry": "0x10", "name": "A", "signature": "void A(void)", "c": "a \" quote } ] \\",
+             "c_spans": [[0, 1, "keyword"]], "instructions": [
+               {"address": "0x10", "bytes": "C3", "mnemonic": "RET", "text": "RET"}]},
+            {"name": "B", "c": "b", "entry": "0x20", "callers": ["0x10"],
+             "instructions": [{"address": "0x20", "bytes": "90", "mnemonic": "NOP", "text": "]}"}]},
+            {"entry": "0x30", "name": "C"}
+          ],
+          "symbols": [{"address": "0x40", "name": "mPort", "source": "USER_DEFINED"}] }
+        """#
+        let data = Data(text.utf8)
+        let whole = try JSONDecoder().decode(CodeArtifact.self, from: data)
+        let read = try CodeArtifact.decoding(data, function: CodeAddress(0x20))
+
+        XCTAssertEqual(read.functions.map(\.name), ["A", "B", "C"])
+        XCTAssertEqual(read.functions[1], whole.functions[1], "the function asked for is as it was")
+        XCTAssertNil(read.functions[0].c)
+        XCTAssertEqual(read.functions[0].instructions, [])
+        XCTAssertEqual(read.functions[0].cSpans, [])
+        XCTAssertEqual(read.functions[0].signature, "void A(void)", "the others keep what is not code")
+        XCTAssertEqual(read.symbols, whole.symbols)
+        XCTAssertEqual(read.ghidra, whole.ghidra)
+
+        let missing = try CodeArtifact.decoding(data, function: CodeAddress(0x99))
+        XCTAssertTrue(missing.functions.allSatisfy { $0.c == nil })
+        XCTAssertEqual(missing.functions.count, 3, "a function it does not hold is simply not there")
+
+        let first = try CodeArtifact.decoding(data, function: CodeAddress(0x10))
+        XCTAssertEqual(first.functions[0], whole.functions[0], "escapes in the C do not end its string")
+    }
+
+    /// Text that is not an artifact's layout is decoded whole, which says why.
+    func testAnUnreadableArtifactIsRefusedAsAWholeOneIs() {
+        for text in ["", "[]", "{\"functions\": [{\"entry\": \"0x10\"", "{\"functions\": []}"] {
+            XCTAssertThrowsError(try CodeArtifact.decoding(Data(text.utf8), function: CodeAddress(0x10)), text)
+        }
+    }
+
     /// A signature has no spans of its own: a type the review named takes its
     /// kind from the function's C, and the function's name is no link.
     func testASignatureIsColouredAsTheFunctionsCCallsIt() throws {

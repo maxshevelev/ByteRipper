@@ -1603,7 +1603,7 @@ final class CodePaneViewTests: XCTestCase {
         view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
         view.layoutSubtreeIfNeeded()
         var asked: [Int] = []
-        view.onReadRevision = { revision in
+        view.onReadRevision = { revision, _ in
             asked.append(revision)
             return revision == 100 ? r100 : r101
         }
@@ -1634,6 +1634,56 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertFalse(view.newMarks.contains { $0.entry == CodeAddress(0x240) })
         XCTAssertNil(view.comparisonRevisionForTest)
         XCTAssertEqual(view.seenRecords["0x240"]?.revision, 102)
+    }
+
+    /// A revision is read for the function that opens: another function
+    /// against the same revision is read for itself, and its diff is its own.
+    func testAnotherFunctionAgainstTheSameRevisionIsReadForItself() throws {
+        func artifact(_ a: String, _ b: String) throws -> Data {
+            let json: [String: Any] = [
+                "script_version": 3, "program": ["image_base": "0x0"],
+                "functions": [
+                    ["entry": "0x220", "name": "A", "c": a,
+                     "instructions": [["address": "0x220", "bytes": "C3", "mnemonic": "RET", "text": "RET"]]],
+                    ["entry": "0x240", "name": "B", "c": b,
+                     "instructions": [["address": "0x240", "bytes": "C3", "mnemonic": "RET", "text": "RET"]]]
+                ]
+            ]
+            return try JSONSerialization.data(withJSONObject: json)
+        }
+        let now = try JSONDecoder().decode(CodeArtifact.self, from: artifact("now a\n", "now b\n"))
+        let older = try artifact("was a\n", "was b\n")
+        let view = CodePaneView(manifest: manifest(revision: 102), artifact: now,
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.layoutSubtreeIfNeeded()
+        var asked: [CodeAddress] = []
+        view.onReadRevision = { _, function in
+            asked.append(function)
+            return try? CodeArtifact.decoding(older, function: function)
+        }
+        func record(_ name: String, _ c: String) -> SeenRecord {
+            SeenRecord(revision: 100, fingerprint: SeenRecord.fingerprint(name: name, signature: nil, c: c))
+        }
+        view.restoreSeen(["0x220": record("A", "was a\n"), "0x240": record("B", "was b\n")],
+                         baselines: [:], available: [100])
+        func settle() { RunLoop.main.run(until: Date().addingTimeInterval(0.1)) }
+        func diffText() -> String { all(NSTextView.self, in: view).map(\.string).joined() }
+
+        view.selectFunction(at: 0)
+        settle()
+        XCTAssertEqual(view.comparisonRevision, 100)
+        XCTAssertTrue(view.showsRevisionDiff)
+        XCTAssertTrue(diffText().contains("was a"))
+        view.selectFunction(at: 1)
+        settle()
+        XCTAssertEqual(view.comparisonRevision, 100)
+        XCTAssertTrue(diffText().contains("was b"), "the second function's own earlier code")
+        XCTAssertEqual(asked, [CodeAddress(0x220), CodeAddress(0x240)])
+        view.selectFunction(at: 0)
+        settle()
+        XCTAssertTrue(diffText().contains("was a"))
+        XCTAssertEqual(asked.count, 2, "a function read once is not read again")
     }
 
     /// A function with no record does take code: the newest revision first, and

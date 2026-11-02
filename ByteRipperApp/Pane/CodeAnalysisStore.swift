@@ -87,6 +87,19 @@ enum CodeAnalysisStore {
         }.value
     }
 
+    /// A revision's code for one function: that function whole, the others
+    /// without their code (`CodeArtifact.decoding(_:function:)`). What opening a
+    /// function compared with that revision waits for.
+    static func artifact(forRevision digest: SHA256Digest, function: CodeAddress,
+                         root: URL? = nil) async -> CodeArtifact? {
+        let root = root ?? self.root
+        return await Task.detached(priority: .userInitiated) { () -> CodeArtifact? in
+            guard let store = try? ContentStore(root: root, create: false),
+                  let data = try? store.object(digest) else { return nil }
+            return try? CodeArtifact.decoding(data, function: function)
+        }.value
+    }
+
     /// The module description a manifest's reading names, read off the main
     /// actor; nil when it has none or the store cannot give it.
     static func moduleDescription(for manifest: AnalysisManifest, root: URL? = nil) async -> String? {

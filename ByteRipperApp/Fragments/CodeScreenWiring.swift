@@ -126,13 +126,13 @@ func wireCodeRevisions(_ codePane: CodePaneView,
         }
     }
     let history = Task { @MainActor in await CodeAnalysisStore.revisions(for: manifest) }
-    // What a New mark compares with is read when a function asks for it: a
-    // revision's code is the size of the whole analysis.
-    codePane.onReadRevision = { revision in
+    // What a New mark compares with is read when a function asks for it, and
+    // for that function: a revision's code is the size of the whole analysis.
+    codePane.onReadRevision = { revision, function in
         if let previous, previous.revision == revision { return previous.artifact }
         let options = await history.value.options
         guard let digest = options.first(where: { $0.choice.revision == revision })?.artifact else { return nil }
-        return await CodeAnalysisStore.artifact(forRevision: digest)
+        return await CodeAnalysisStore.artifact(forRevision: digest, function: function)
     }
     Task { @MainActor in
         let loaded = await history.value
