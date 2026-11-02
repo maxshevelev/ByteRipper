@@ -251,6 +251,12 @@ was the reason for the review. A function is done when all of this is true:
   function. A value whose role the code does not establish gets an honest name
   (`HeaderField`, `TeOffset`, `HobOrStatus`) and the plate says what it stands
   for — never a plausible invention.
+  A decompiler's temporary is no exception: a register piece or a `HASH:` local
+  (`bVar1`, `pEVar1`) is not counted against `full`, but its purpose is still
+  worked out from how the code uses it, and it is named. Only where no definite
+  purpose can be established may a default name stay, as an exception. Where the
+  tool refuses a name for a local whose purpose is known, the default name stays
+  and a comment says what the value is.
 - The plate and the `pre`/`eol` comments of rule 4 are there, with the error
   and status numbers spelled out.
 - Where the decompiler merged two meanings into one name, or printed a field

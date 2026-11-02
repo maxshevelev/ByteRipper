@@ -58,7 +58,7 @@ public enum GhidraTools {
         fields `comments` with `ghidra_type`: the reader sees them by clicking the name in the C. Fix signatures first: a typed \
         parameter retypes the locals that follow from it, here and in the callers.
         3. Names for what stays: functions, parameters, locals, in the module's convention (EDK2 \
-        CamelCase), a function named for what it does for its caller. After a signature change, read the \
+        CamelCase), a function named for what it does for its caller. A decompiler's temporary (`bVar1`) does not count against `full`, but work out its purpose from its uses and name it; a default name stays only, as an exception, where no definite purpose can be established, or with a comment where the tool refuses the name. After a signature change, read the \
         function again before `ghidra_rename_variable`: Ghidra merges and retypes locals.
         4. Comments a source would have: a plate comment on each function that matters, whose first paragraph, up to the first blank line, says briefly what the function is for, since the app shows that paragraph alone over a call (then what, why, what \
         it expects and returns or halts with); end-of-line comments where the code cannot say it — the \
