@@ -521,12 +521,22 @@ public enum GhidraTools {
                 description: """
                     The module's description as the project holds it now: `text` (Markdown, null while \
                     there is none), its `sections` (the `## ` headings, in order) and its size in \
-                    `bytes`. Read it before `ghidra_describe` changes it.
+                    `bytes`. `section` answers that section's body alone as `text`; `outline: true` leaves \
+                    `text` out. Read what `ghidra_describe` is about to change: one section need not cost \
+                    the whole description.
                     """,
-                inputSchema: AgentSchema.object(["module": moduleProperty], required: ["module"])
+                inputSchema: AgentSchema.object([
+                    "module": moduleProperty,
+                    "section": AgentSchema.string("The `## ` heading to read alone."),
+                    "outline": AgentSchema.boolean("Only the headings and the size.")
+                ], required: ["module"])
             ) { call in
                 let module = try module(call.arguments)
-                return try await answer { try await backend.readCall(module, "description", query: [:]) }
+                var query: [String: String] = [:]
+                if let section = try call.arguments.optionalString("section") { query["section"] = section }
+                if try call.arguments.bool("outline", default: false) { query["outline"] = "1" }
+                let asked = query
+                return try await answer { try await backend.readCall(module, "description", query: asked) }
             },
             AgentTool(
                 name: "ghidra_type_definition",
@@ -939,17 +949,21 @@ public enum GhidraTools {
                   "Writes the module's description — Markdown, what the module is for, how it works and how "
                   + "it is built — kept in the project and published with the review as an object of its "
                   + "own, which the app shows beside the code. With `section`, `text` replaces the body of "
-                  + "that `## ` section only (added at the end if missing); without it, `text` is the whole "
+                  + "that `## ` section only (added at the end if missing, or beside the section `before` or `after` names; either alone moves the section); without it, `text` is the whole "
                   + "description. Empty `text` is refused; `delete: true`, without `text`, removes the section "
                   + "named, or the whole description, and the answer says which in `removed`. Up to 256 KiB. The answer names "
                   + "the sections and the size, not the text: `ghidra_description` reads it. "
                   + descriptionFormat,
                   ["text": AgentSchema.string("The Markdown: the whole description, or one section's body without its heading."),
                    "section": AgentSchema.string("The `## ` heading whose body `text` replaces, e.g. \"Flow\"."),
+                   "before": AgentSchema.string("The section this `section` goes just before."),
+                   "after": AgentSchema.string("The section this `section` goes just after."),
                    "delete": AgentSchema.boolean("Removes the section named, or the whole description. Takes no `text`.")],
                   required: []) { arguments in
                 var body: [String: JSONValue] = [:]
                 if let text = try arguments.optionalString("text") { body["text"] = .string(text) }
+                if let before = try arguments.optionalString("before") { body["before"] = .string(before) }
+                if let after = try arguments.optionalString("after") { body["after"] = .string(after) }
                 if try arguments.bool("delete", default: false) { body["delete"] = .bool(true) }
                 if let section = try arguments.optionalString("section") { body["section"] = .string(section) }
                 return body

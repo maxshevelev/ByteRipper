@@ -158,6 +158,61 @@ final class Harvest {
         return found;
     }
 
+    /** Where the section headed `## heading` lies: first line, and the line after its last; null if none. */
+    private static int[] sectionLines(String[] lines, String heading) {
+        int start = -1;
+        boolean fenced = false;
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            if (line.startsWith("```")) fenced = !fenced;
+            if (fenced || line.startsWith("```")) continue;
+            boolean top = line.startsWith("# ") || line.startsWith("## ");
+            if (start < 0 && line.startsWith("## ") && line.substring(3).trim().equals(heading)) {
+                start = i;
+            } else if (start >= 0 && top) {
+                return new int[] {start, i};
+            }
+        }
+        return start < 0 ? null : new int[] {start, lines.length};
+    }
+
+    /** The body of one section, without its heading; null if there is no such section. */
+    static String sectionBody(String text, String heading) {
+        if (text == null) return null;
+        String[] lines = text.split("\n", -1);
+        int[] at = sectionLines(lines, heading);
+        if (at == null) return null;
+        String body = normalized(String.join("\n", java.util.Arrays.copyOfRange(lines, at[0] + 1, at[1])));
+        return body == null ? "" : body;
+    }
+
+    /**
+     * `text` with the section headed `## heading` moved to just before or just
+     * after the section `anchor`; null if either is missing. Bytes other than
+     * the section's place do not change.
+     */
+    static String moveSection(String text, String heading, String anchor, boolean after) {
+        if (text == null) return null;
+        String[] lines = text.replaceAll("\n+$", "").split("\n", -1);
+        int[] from = sectionLines(lines, heading);
+        int[] to = sectionLines(lines, anchor);
+        if (from == null || to == null) return null;
+        java.util.List<String> moved = new java.util.ArrayList<>(
+            java.util.Arrays.asList(lines).subList(from[0], from[1]));
+        while (!moved.isEmpty() && moved.get(moved.size() - 1).isEmpty()) moved.remove(moved.size() - 1);
+        moved.add("");
+        int place = after ? to[1] : to[0];
+        java.util.List<String> out = new java.util.ArrayList<>();
+        for (int i = 0; i <= lines.length; i++) {
+            if (i == place) {
+                if (i == lines.length && !out.isEmpty() && !out.get(out.size() - 1).isEmpty()) out.add("");
+                out.addAll(moved);
+            }
+            if (i < lines.length && (i < from[0] || i >= from[1])) out.add(lines[i]);
+        }
+        return normalized(String.join("\n", out));
+    }
+
     /**
      * `text` with the section headed `## heading` given `body`: the lines up
      * to the next `#` or `##` heading are replaced, a missing section is added

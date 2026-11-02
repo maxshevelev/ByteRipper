@@ -254,10 +254,30 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         do { _ = try await post(["section": "Flow", "delete": true, "text": "x"]); XCTFail("both") } catch {}
         let kept = try await sections()
         XCTAssertEqual(kept, ["Purpose", "Flow"])
+        // Placed, moved and read alone.
+        _ = try await post(["section": "Errors", "text": "E.", "before": "Flow"])
+        let placed = try await sections()
+        XCTAssertEqual(placed, ["Purpose", "Errors", "Flow"])
+        _ = try await post(["section": "Purpose", "after": "Flow"])
+        let moved = try await sections()
+        XCTAssertEqual(moved, ["Errors", "Flow", "Purpose"])
+        _ = try await post(["section": "Errors", "text": "E2.", "after": "Purpose"])
+        let both = try await sections()
+        XCTAssertEqual(both, ["Flow", "Purpose", "Errors"])
+        let one = try json(await host.read(module, "/v1/description?section=Errors"))
+        XCTAssertEqual(one["text"] as? String, "E2.\n")
+        let outline = try json(await host.read(module, "/v1/description?outline=1"))
+        XCTAssertNil(outline["text"])
+        do { _ = try await post(["section": "New", "before": "Nowhere", "text": "x"]); XCTFail("no anchor") } catch {}
+        do { _ = try await post(["section": "Absent", "before": "Flow"]); XCTFail("nothing to move") } catch {}
+        do { _ = try await post(["section": "Flow", "before": "Flow"]); XCTFail("itself") } catch {}
+        _ = try await post(["section": "Errors", "delete": true])
         let answer = try await post(["section": "Flow", "delete": true])
         XCTAssertEqual(answer["removed"] as? String, "Flow")
         let left = try await sections()
         XCTAssertEqual(left, ["Purpose"])
+        let whole = try json(await host.read(module, "/v1/description"))["text"] as? String
+        XCTAssertEqual(whole, "# M\n\n## Purpose\n\nA.\n")
     }
 
     func testATypeNotTakenIsRefusedAndLeavesNothing() async throws {

@@ -34,7 +34,10 @@ newline. Up to 256 KiB.
 `ghidra_describe` takes the whole document, or one section: with `section`,
 `text` replaces the body of that `## ` heading (without the heading) — the
 section is added at the end if it is missing. Empty `text` is refused; `delete: true`
-removes a section, or the whole description.
+removes a section, or the whole description. `before` or `after` names the section
+this one goes beside: a new section is placed there, and either alone moves an
+existing one. `ghidra_description` reads one `section`, or with `outline: true` only
+the headings and the size, so a section is changed without carrying the rest.
 Write the outline once, then work section by section; read it with
 `ghidra_description` before changing a section someone else may have
 touched.

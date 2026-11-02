@@ -271,7 +271,7 @@ public class Owner {
                 if (path.equals("/v1/review")) { review(exchange); return; }
                 if (path.equals("/v1/library")) { json(exchange, 200, library()); return; }
                 if (path.equals("/v1/review/description")) { publishedDescription(exchange); return; }
-                if (path.equals("/v1/description")) { json(exchange, 200, description()); return; }
+                if (path.equals("/v1/description")) { json(exchange, 200, description(query)); return; }
                 if (path.equals("/v1/type")) { json(exchange, 200, readType(query)); return; }
                 if (path.equals("/v1/types")) { json(exchange, 200, types(query)); return; }
             } else if (method.equals("DELETE") && path.equals("/v1/lease")) {
@@ -3016,18 +3016,45 @@ public class Owner {
     }
 
     /**
+     * Without the whole text where the reader does not want it: `outline=1`
+     * answers the headings and the size, `section` that section's body. A
+     * description runs to tens of kilobytes, and a section is what is changed.
+     */
+    private JsonObject description(Map<String, String> query) throws Failure {
+        JsonObject answer = description();
+        String section = query.get("section");
+        if (section != null && !section.isEmpty()) {
+            String heading = section.startsWith("## ") ? section.substring(3).trim() : section.trim();
+            String body = Harvest.sectionBody(Harvest.description(program), heading);
+            if (body == null) throw new Failure(404, "no section \"" + heading + "\"");
+            answer.addProperty("section", heading);
+            answer.addProperty("text", body);
+        } else if ("1".equals(query.get("outline"))) {
+            answer.remove("text");
+        }
+        return answer;
+    }
+
+    /**
      * The module's description, whole or one `## ` section of it: `text` is
-     * the Markdown (empty clears it, or removes the section), `section` the
-     * heading whose body it replaces.
+     * the Markdown, `section` the heading whose body it replaces, `delete`
+     * removes, and `before` or `after` names the section it goes beside.
      */
     private JsonObject setDescription(JsonObject body) throws Exception {
         boolean delete = body.has("delete") && body.get("delete").getAsBoolean();
         String text = body.has("text") && !body.get("text").isJsonNull() ? body.get("text").getAsString() : null;
         boolean blank = text == null || text.isBlank();
+        String before = string(body, "before", null), after = string(body, "after", null);
+        boolean placed = before != null || after != null;
+        if (before != null && after != null) throw new Failure(400, "give `before` or `after`, not both");
+        if (placed && delete) throw new Failure(400, "`delete` takes no place");
+        if (placed && (string(body, "section", null) == null || string(body, "section", null).isEmpty())) {
+            throw new Failure(400, "`before` and `after` place a `section`");
+        }
         // Removing is said in so many words: an empty text is as often a
         // mistake, and it would take the section with it unannounced.
         if (delete && !blank) throw new Failure(400, "`delete` removes; it takes no text");
-        if (!delete && blank) {
+        if (!delete && blank && !(placed && text == null)) {
             throw new Failure(400, "text is empty and nothing was changed: `delete: true` removes"
                 + " a section or the whole description");
         }
@@ -3039,7 +3066,17 @@ public class Owner {
             String heading = section.startsWith("## ") ? section.substring(3).trim() : section.trim();
             if (heading.isEmpty() || heading.contains("\n")) throw new Failure(400, "section is one heading's words");
             String now = Harvest.description(program);
-            next = Harvest.replaceSection(now, heading, delete ? "" : text);
+            if (placed) {
+                String anchor = (before != null ? before : after).replaceFirst("^## ", "").trim();
+                if (anchor.equals(heading)) throw new Failure(400, "a section cannot go beside itself");
+                if (!Harvest.sections(now).contains(anchor)) throw new Failure(404, "no section \"" + anchor + "\"");
+                if (blank && !Harvest.sections(now).contains(heading)) {
+                    throw new Failure(404, "no section \"" + heading + "\" to move: give its `text`");
+                }
+            }
+            next = blank && placed ? now : Harvest.replaceSection(now, heading, delete ? "" : text);
+            if (placed) next = Harvest.moveSection(next, heading, before != null ? before.replaceFirst("^## ", "").trim()
+                                                                                 : after.replaceFirst("^## ", "").trim(), before == null);
             if (delete && java.util.Objects.equals(next, Harvest.normalized(now))) {
                 throw new Failure(404, "no section \"" + heading + "\"");
             }
