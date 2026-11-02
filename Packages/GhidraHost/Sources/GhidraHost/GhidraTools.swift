@@ -727,9 +727,9 @@ public enum GhidraTools {
                     can change, and a type alone gives it a `HASH:` storage. `items` does several in \
                     one call, each in a transaction of its own: the answer lists what applied and why \
                     an entry did not. A name already held is answered with the holder — its kind, \
-                    address and `storage` — and that storage renames the holder, even one the \
+                    address, `storage` and `first_use` — and those rename the holder, even one the \
                     decompiler no longer shows (the answer then says `stale: true`); freeing the name \
-                    is what lets the local take it. A type the decompiler does not take is refused and nothing is changed.
+                    is what lets the local take it. A `first_use` that is no longer the variable's is refused with what the storage holds now, since a retype can merge locals: list them again. A type the decompiler does not take is refused and nothing is changed.
                     """,
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,

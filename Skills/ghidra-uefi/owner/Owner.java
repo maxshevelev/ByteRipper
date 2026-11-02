@@ -4449,18 +4449,34 @@ public class Owner {
             // retyping — still sits in the function's table and holds its
             // name. The refusal of a rename names it; the table is where the
             // rename of it lands, so the name can be freed.
+            // A `first_use` has to be the variable's own: a storage alone would
+            // hand a register's name to whichever local or parameter comes
+            // first, and answer as if that had been asked for.
             ghidra.program.model.listing.Variable stale = null;
             if (storage != null) {
+                java.util.List<ghidra.program.model.listing.Variable> onStorage = new java.util.ArrayList<>();
                 for (ghidra.program.model.listing.Variable variable : function.getLocalVariables()) {
-                    if (variable.getVariableStorage().toString().equals(storage)) { stale = variable; break; }
+                    if (!variable.getVariableStorage().toString().equals(storage)) continue;
+                    if (firstUse == null || firstUseOf(function, variable).equalsIgnoreCase(firstUse)) onStorage.add(variable);
                 }
-                if (stale == null) {
+                if (onStorage.size() > 1) {
+                    throw new Failure(409, "several variables are stored in " + storage + "; give first_use: "
+                        + candidates(function, high, storage));
+                }
+                if (!onStorage.isEmpty()) stale = onStorage.get(0);
+                if (stale == null && firstUse == null) {
                     for (Parameter parameter : function.getParameters()) {
                         if (parameter.getVariableStorage().toString().equals(storage)) { stale = parameter; break; }
                     }
                 }
             }
-            if (stale == null) throw new Failure(404, "no such variable in " + function.getName());
+            if (stale == null) {
+                throw new Failure(404, firstUse == null || storage == null
+                    ? "no such variable in " + function.getName()
+                    : "no variable in " + function.getName() + " is stored in " + storage + " with the first use "
+                        + firstUse + "; nothing was changed. A retype can merge or move locals: "
+                        + candidates(function, high, storage));
+            }
             try {
                 if (name != null) stale.setName(name, SourceType.USER_DEFINED);
                 if (type != null) stale.setDataType(type, SourceType.USER_DEFINED);
@@ -4472,7 +4488,7 @@ public class Owner {
             answer.addProperty("function", hex(function.getEntryPoint()));
             answer.addProperty("name", stale.getName());
             answer.addProperty("storage", stale.getVariableStorage().toString());
-            answer.addProperty("first_use", (String) null);
+            answer.addProperty("first_use", stale instanceof Parameter ? null : firstUseOf(function, stale));
             answer.addProperty("parameter", stale instanceof Parameter);
             answer.addProperty("stale", true);
             return answer;
@@ -5008,6 +5024,28 @@ public class Owner {
      * because the name was taken: the refusal alone names neither address nor
      * kind, and a symbol no decompiled variable shows is otherwise invisible.
      */
+    private static String firstUseOf(Function function, ghidra.program.model.listing.Variable variable) {
+        return hex(function.getEntryPoint().addWrap(variable.getFirstUseOffset()));
+    }
+
+    /** What a storage holds now, for a refusal: the decompiler's symbols and the table's variables. */
+    private String candidates(Function function, HighFunction high, String storage) {
+        java.util.Set<String> found = new java.util.LinkedHashSet<>();
+        Iterator<HighSymbol> symbols = high.getLocalSymbolMap().getSymbols();
+        while (symbols.hasNext()) {
+            HighSymbol symbol = symbols.next();
+            if (!symbol.getStorage().toString().equals(storage)) continue;
+            Address first = symbol.getPCAddress();
+            found.add(symbol.getName() + (symbol.isParameter() ? " (parameter " + symbol.getCategoryIndex() + ")"
+                : " (first_use " + (first == null ? "none" : hex(first)) + ")"));
+        }
+        for (ghidra.program.model.listing.Variable variable : function.getLocalVariables()) {
+            if (!variable.getVariableStorage().toString().equals(storage)) continue;
+            found.add(variable.getName() + " (first_use " + firstUseOf(function, variable) + ")");
+        }
+        return found.isEmpty() ? "that storage holds nothing now" : "that storage holds " + String.join(", ", found);
+    }
+
     private String holderOf(String name, Function function) {
         if (name == null) return "";
         StringBuilder holders = new StringBuilder();
@@ -5021,7 +5059,9 @@ public class Owner {
             // The address alone is the storage space's, which no call takes;
             // the variable's storage is what to rename it by.
             if (symbol.getObject() instanceof ghidra.program.model.listing.Variable variable) {
-                holders.append(" (storage ").append(variable.getVariableStorage()).append(")");
+                holders.append(" (storage ").append(variable.getVariableStorage());
+                if (!(variable instanceof Parameter)) holders.append(", first_use ").append(firstUseOf(function, variable));
+                holders.append(")");
             }
         }
         return holders.toString();

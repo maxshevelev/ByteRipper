@@ -402,6 +402,63 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         }
     }
 
+    func testAFirstUseThatIsGoneRenamesNothing() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
+            throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostFirstUseTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraHostFirstUseTests"),
+                              writer: store)
+        let image = try Data(contentsOf: URL(fileURLWithPath: path))
+        let module = SHA256Digest(data: image)
+        _ = try await host.create(module: image, name: "Module")
+        defer { Task { await host.stop(module) } }
+        func rename(_ object: [String: Any]) async throws -> [String: Any] {
+            try json(await host.write(module, "/v1/rename/variable", body: try JSONSerialization.data(withJSONObject: object)))
+        }
+        let functions = try json(await host.read(module, "/v1/functions"))["functions"] as? [[String: Any]] ?? []
+        var checkedLocal = false, checkedParameter = false
+        for function in functions.prefix(80) where !(checkedLocal && checkedParameter) {
+            let entry = try XCTUnwrap(function["entry"] as? String)
+            let shown = try json(await host.read(module, "/v1/function/\(entry)"))
+            // A local: named once so the table holds it, then asked for by a first use it never had.
+            if !checkedLocal, let local = (shown["locals"] as? [[String: Any]] ?? []).first(where: {
+                ($0["storage"] as? String)?.contains(":") == true && $0["first_use"] is String
+                    && ($0["storage"] as? String)?.hasPrefix("Stack") == false && ($0["storage"] as? String)?.hasPrefix("HASH") == false
+            }), let storage = local["storage"] as? String, let first = local["first_use"] as? String {
+                guard (try? await rename(["function": entry, "storage": storage, "first_use": first,
+                                          "name": "KeptLocal"])) != nil else { continue }
+                do {
+                    _ = try await rename(["function": entry, "storage": storage, "first_use": "0x1", "name": "WrongLocal"])
+                    XCTFail("a first use that is gone renamed something")
+                } catch {
+                    XCTAssertTrue("\(error)".contains("KeptLocal"), "the refusal lists what is there: \(error)")
+                }
+                let after = "\(try json(await host.read(module, "/v1/function/\(entry)")))"
+                XCTAssertTrue(after.contains("KeptLocal"), after)
+                XCTAssertFalse(after.contains("WrongLocal"), after)
+                checkedLocal = true
+            }
+            // A parameter is never reached through a local's first use.
+            if !checkedParameter, let parameter = (shown["parameters"] as? [[String: Any]] ?? []).first,
+               let storage = parameter["storage"] as? String, let name = parameter["name"] as? String {
+                do {
+                    _ = try await rename(["function": entry, "storage": storage, "first_use": "0x1", "name": "WrongParameter"])
+                    XCTFail("a parameter was renamed through a first use")
+                } catch {}
+                let after = try json(await host.read(module, "/v1/function/\(entry)"))
+                XCTAssertEqual((after["parameters"] as? [[String: Any]])?.first?["name"] as? String, name)
+                checkedParameter = true
+            }
+        }
+        XCTAssertTrue(checkedLocal)
+        XCTAssertTrue(checkedParameter)
+    }
+
     func testALinkToARenamedFunctionIsReported() async throws {
         guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
             throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
