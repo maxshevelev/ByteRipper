@@ -50,10 +50,21 @@ extension CodeArtifact {
 
     /// The function an instruction belongs to.
     public func function(containing address: CodeAddress) -> Function? {
-        functions.first { function in
-            guard function.codeIsPending else { return function.instructions.contains { $0.address == address } }
-            guard let size = function.size, size > 0 else { return function.entry == address }
-            return function.entry <= address && address.value < function.entry.value + UInt64(size)
-        } ?? functions.first { $0.instructions.contains { $0.address == address } }
+        functions.first { $0.instructions.contains { $0.address == address } }
+            ?? pendingFunction(holding: address).map { functions[$0] }
+    }
+
+    /// The function not read yet that `address` lies in: by its size, or, an
+    /// artifact that gives none, the nearest entry at or before it. What its
+    /// code then holds at that address is for the code to say.
+    public func pendingFunction(holding address: CodeAddress) -> Int? {
+        var nearest: Int?
+        for (index, function) in functions.enumerated() where function.entry <= address {
+            if let held = nearest, functions[held].entry >= function.entry { continue }
+            nearest = index
+        }
+        guard let nearest, functions[nearest].codeIsPending else { return nil }
+        guard let size = functions[nearest].size, size > 0 else { return nearest }
+        return address.value < functions[nearest].entry.value + UInt64(size) ? nearest : nil
     }
 }

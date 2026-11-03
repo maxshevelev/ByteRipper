@@ -41,13 +41,18 @@ import ToolModuleKit
     /// nil; nil when it could not. A pane opened on a cut artifact's index reads
     /// a function's code when it is first shown.
     public var onLoadFunctions: ((Set<CodeAddress>?) async -> [CodeArtifact.Function]?)? {
-        // The pane is drawn before it is given this.
-        didSet { readSelectedFunction() }
+        // The pane is drawn, and put at its place, before it is given this.
+        didSet {
+            let asked = waitingForFunctions.reduce(into: Set<Int>()) { $0.formUnion($1.wanted) }
+            if !asked.isEmpty { whenRead(asked) {} }
+            readSelectedFunction()
+        }
     }
     private var functionsBeingRead: Set<Int> = []
     private var functionsNotRead: Set<Int> = []
     private var lastFunctionAsked: Int?
-    private var waitingForFunctions: [(wanted: Set<Int>, then: @MainActor () -> Void)] = []
+    private var waitingForFunctions: [(wanted: Set<Int>, then: @MainActor () -> Void,
+                                       otherwise: (@MainActor () -> Void)?)] = []
     /// The readable analyses of the same module, the chosen one first. One
     /// entry is the ordinary case; more makes the header offer the others.
     private let recipes: [AnalysisManifest]
@@ -464,7 +469,8 @@ import ToolModuleKit
     /// description is, keeps the line it had.
     public var topLinePositions: [String: Int] {
         var lines = topLines
-        if let index = state.function, model.functions.indices.contains(index),
+        // A function not read yet shows no code to have a line in.
+        if let index = state.function, model.functions.indices.contains(index), !model.isPending(index),
            let line = currentTopLine() {
             lines[model.functions[index].entry.description] = line
         }
@@ -1002,7 +1008,7 @@ import ToolModuleKit
         // The function being left keeps the line it was read at; the one
         // arrived at is read from its own, in `updateC` and `updateDiff`.
         if let previous, previous != index, model.functions.indices.contains(previous),
-           let line = currentTopLine() {
+           !model.isPending(previous), let line = currentTopLine() {
             topLines[model.functions[previous].entry.description] = line
         }
         // A caller can point at a function the current search or list hides:
@@ -1924,6 +1930,22 @@ import ToolModuleKit
 
     // MARK: - Code read as it is shown
 
+    /// Whether the listing has no instruction at `address`.
+    public func holdsNoInstruction(at address: CodeAddress) -> Bool { model.line(at: address) == nil }
+
+    /// Whether the function `address` lies in has still not been read.
+    public func isWaitingForCode(at address: CodeAddress) -> Bool { model.pendingFunction(holding: address) != nil }
+
+    /// Returns once the function holding `location` has its code, or its read
+    /// has failed: for a caller that says what stands at the place.
+    public func readCode(at location: CodeLocation) async {
+        guard let function = model.indices(of: location).function, model.isPending(function),
+              onLoadFunctions != nil else { return }
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            whenRead([function], otherwise: { done.resume() }, { done.resume() })
+        }
+    }
+
     /// Reads the function on screen when its code is not here yet. One whose
     /// read failed is asked for again when the reader comes back to it.
     private func readSelectedFunction() {
@@ -1941,14 +1963,15 @@ import ToolModuleKit
     /// needs the code of all of them asks only when the reader asks for it.
     @discardableResult
     func whenRead(_ functions: Set<Int>?, quietly: Bool = false,
+                  otherwise: (@MainActor () -> Void)? = nil,
                   _ then: @escaping @MainActor () -> Void) -> Task<Void, Never>? {
         let wanted = (functions ?? model.pendingFunctions).intersection(model.pendingFunctions)
         guard !wanted.isEmpty else {
             then()
             return nil
         }
+        waitingForFunctions.append((wanted, then, otherwise))
         guard let onLoadFunctions else { return nil }
-        waitingForFunctions.append((wanted, then))
         let toRead = wanted.subtracting(functionsBeingRead)
         guard !toRead.isEmpty else { return nil }
         functionsBeingRead.formUnion(toRead)
@@ -1981,7 +2004,11 @@ import ToolModuleKit
             let waiting = self.waitingForFunctions
             self.waitingForFunctions = waiting.filter { !$0.wanted.isDisjoint(with: self.functionsBeingRead) }
             for waiter in waiting where waiter.wanted.isDisjoint(with: self.functionsBeingRead) {
-                if waiter.wanted.isDisjoint(with: self.model.pendingFunctions) { waiter.then() }
+                if waiter.wanted.isDisjoint(with: self.model.pendingFunctions) {
+                    waiter.then()
+                } else {
+                    waiter.otherwise?()
+                }
             }
         }
     }

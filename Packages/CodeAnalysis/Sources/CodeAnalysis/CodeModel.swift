@@ -147,11 +147,7 @@ public struct CodeModel: Sendable {
     /// The function yet to be read that holds an address, by the size the
     /// index gives it: a read of it may find the line `line(at:)` lacks.
     public func pendingFunction(holding address: CodeAddress) -> Int? {
-        pendingFunctions.first { index in
-            let function = artifact.functions[index]
-            guard let size = function.size, size > 0 else { return function.entry == address }
-            return function.entry <= address && address.value < function.entry.value + UInt64(size)
-        }
+        artifact.pendingFunction(holding: address)
     }
 
     /// The same for a place in the module's bytes.

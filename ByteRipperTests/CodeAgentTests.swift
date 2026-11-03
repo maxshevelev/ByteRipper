@@ -345,6 +345,8 @@ final class CodeAgentTests: XCTestCase {
         let panel = try XCTUnwrap(controller.fragments.expanded)
         let pane = try XCTUnwrap(controller.fragments.codePane(panel))
         XCTAssertEqual(pane.selectedFunction?.name, "FUN_00000220")
+        // The instruction comes with its function's code.
+        try await until { pane.selectedInstruction != nil }
         XCTAssertEqual(pane.selectedInstruction?.address, CodeAddress(0x221))
         XCTAssertEqual(pane.notes.map(\.id), [id], "the panel shows the note at its place")
     }

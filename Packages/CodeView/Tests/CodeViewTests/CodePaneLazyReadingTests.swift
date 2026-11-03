@@ -90,6 +90,17 @@ final class CodePaneLazyReadingTests: XCTestCase {
         XCTAssertTrue(view.currentModelForTest.pendingFunctions.isEmpty)
     }
 
+    /// The line a function was left at outlives the wait for its code: the
+    /// words shown meanwhile have no line 0 to overwrite it with.
+    func testALineKeptSurvivesTheWaitForTheCode() async throws {
+        let loader = Loader()
+        let view = try pane(loader)
+        view.restoreTopLines(["0x220": 20])
+        XCTAssertEqual(view.topLinePositions["0x220"], 20)
+        await settle()
+        XCTAssertTrue(code(in: view).contains("void Alpha(void)"))
+    }
+
     /// Who calls a function is in every function's code.
     func testCallersReadEverythingFirst() async throws {
         let loader = Loader()

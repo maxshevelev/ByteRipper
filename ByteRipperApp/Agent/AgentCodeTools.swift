@@ -141,7 +141,11 @@ final class AgentCodeTools {
         let showingC = try wantedC(arguments)
         // A Code panel already: move it.
         if let screen = controller.codeScreen(for: place.pane), let view = controller.codePaneView(for: place.pane) {
-            if let location = try location(arguments, in: screen.artifact) { view.go(to: location) }
+            if let location = try location(arguments, in: screen.artifact) {
+                await view.readCode(at: location)
+                try confirm(location, in: view)
+                view.go(to: location)
+            }
             if let showingC { view.showDecompiledC(showingC) }
             desk.bringForward(place)
             var answer = openAnswer(place.id, manifest: screen.manifest, view: view)
@@ -163,11 +167,24 @@ final class AgentCodeTools {
               let opened = desk.places().first(where: { $0.pane === pane })
         else { throw AgentToolError("The Code panel could not be opened over \(place.named).") }
         let openedView = controller.fragments.codePane(panel)
+        if let location, let openedView {
+            await openedView.readCode(at: location)
+            try confirm(location, in: openedView)
+        }
         if let showingC { openedView?.showDecompiledC(showingC) }
         var answer = openAnswer(opened.id, manifest: opening.manifest, view: openedView)
         answer["node"] = .string(node)
         if let openedView { answer["view"] = .string(openedView.showsDecompiledC ? "c" : "asm") }
         return .json(.object(answer))
+    }
+
+    /// An address the index could only place in a function, checked once that
+    /// function's code is here.
+    private func confirm(_ location: CodeLocation, in view: CodePaneView) throws {
+        guard let address = location.address, view.holdsNoInstruction(at: address) else { return }
+        throw AgentToolError(view.isWaitingForCode(at: address)
+            ? "The code at \(address) cannot be read now: the analysis store does not give it."
+            : "No instruction at \(address) in this analysis: give an address `code_query` lists under \"instructions\".")
     }
 
     /// `view` as `true` for the decompiled C side, `false` for the assembly;
