@@ -103,8 +103,22 @@ public struct LibraryIndex: Codable, Equatable, Sendable {
     public var schema = 1
     public var entries: [String: LibraryIndexEntry] = [:]
     public var bodies: [String: String] = [:]
+    /// Bodies given back to their modules, by key. Nil while there are none.
+    public var takenOut: [String: LibraryTakenOut]?
+    /// Where a body's constant is defined in its library's source, by key.
+    public var sources: [String: LibraryCitation]?
+    /// Readers see a marked function as its entry, and a module links to the
+    /// entry rather than holding a copy. Off until the registry is in order:
+    /// an entry that is not one function would read as one.
+    public var readThrough: Bool?
 
     public init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case schema, entries, bodies, sources
+        case takenOut = "taken_out"
+        case readThrough = "read_through"
+    }
 
     /// The entry a body belongs to.
     public func entry(for body: LibraryBody) -> (id: String, entry: LibraryIndexEntry)? {
@@ -202,12 +216,19 @@ public struct LibraryProposal: Codable, Equatable, Sendable {
     public var signatureReason: String?
     /// The function carries the entry's mark and was not edited since.
     public var linked: Bool = false
+    /// What the body refers to, by offset from its entry, and what it calls:
+    /// what decides whether it depends on a module. Nil from an owner that
+    /// does not say. Beside the review, not part of it.
+    public var dataReferences: [String]?
+    public var callees: [LibraryCallee]?
 
     public init(body: LibraryBody, name: String, kind: String, address: String, entry: Data,
                 variantOf: String? = nil, codes: [String]? = nil, role: String? = nil,
                 basedOn: String? = nil, base: Int? = nil, signatureReason: String? = nil,
-                linked: Bool = false) {
+                linked: Bool = false, dataReferences: [String]? = nil, callees: [LibraryCallee]? = nil) {
         self.linked = linked
+        self.dataReferences = dataReferences
+        self.callees = callees
         self.body = body
         self.name = name
         self.kind = kind
@@ -261,6 +282,36 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
     /// body is a different function, and the review gives it a narrower name.
     /// Nil from a store that has none.
     public var nameConflicts: [NameConflict]?
+    /// Functions the registry did not take: they depend on a module, or were
+    /// taken out. Nil from a store that has none.
+    public var notLibrary: [NotLibrary]?
+    /// What a change on the registry itself did; nil otherwise.
+    public var takenOut: [Change]?
+    public var cited: [String]?
+    public var readThrough: Bool?
+
+    public struct NotLibrary: Codable, Equatable, Sendable {
+        public var address: String
+        public var name: String
+        public var body: String
+        /// `data`: a data reference no citation covers. `callee`: a call to a
+        /// function the registry does not hold. `taken_out`: taken out before.
+        public var why: String
+        public var reason: String?
+        public var data: [String]?
+        public var callees: [String]?
+
+        public init(address: String, name: String, body: String, why: String, reason: String? = nil,
+                    data: [String]? = nil, callees: [String]? = nil) {
+            self.address = address
+            self.name = name
+            self.body = body
+            self.why = why
+            self.reason = reason
+            self.data = data
+            self.callees = callees
+        }
+    }
 
     public struct NameConflict: Codable, Equatable, Sendable {
         public var address: String
@@ -288,7 +339,11 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case added, updated, unchanged, conflicts, variants
+        case cited
         case nameConflicts = "name_conflicts"
+        case notLibrary = "not_library"
+        case takenOut = "taken_out"
+        case readThrough = "read_through"
     }
 }
 
@@ -410,6 +465,12 @@ extension ContentStore {
             let now = Timestamps.now()
             for (proposal, digest) in zip(proposals, stored).sorted(by: { $0.0.body < $1.0.body }) {
                 let source = LibrarySource(module: module, address: proposal.address, rev: rev, by: by)
+                // Only a new body is judged here: what the registry already
+                // holds is put in order by a review, entry by entry.
+                if index.entry(for: proposal.body) == nil, let refusal = proposal.refusal(in: index) {
+                    result.notLibrary = (result.notLibrary ?? []) + [refusal]
+                    continue
+                }
                 // A body applied as a variant joins its entry when the review
                 // is the entry's and the body differs only in its constants:
                 // one review, another body. Another shape is other code — a
@@ -628,17 +689,7 @@ extension ContentStore {
                 throw CodeAnalysisError.analysisMismatch("the entry \(id)'s review is not an object")
             }
             let old = entry.name
-            func renamed(_ signature: String) -> String {
-                signature.replacingOccurrences(of: "\\b\(NSRegularExpression.escapedPattern(for: old))\\b",
-                                               with: name, options: .regularExpression)
-            }
-            review["name"] = name
-            if let signature = review["signature"] as? String { review["signature"] = renamed(signature) }
-            if var function = review["function"] as? [String: Any] {
-                function["name"] = name
-                if let signature = function["signature"] as? String { function["signature"] = renamed(signature) }
-                review["function"] = function
-            }
+            Self.rename(&review, from: old, to: name)
             let data = try JSONSerialization.data(withJSONObject: review, options: [.sortedKeys, .withoutEscapingSlashes])
             var history = try libraryHistory(id: id) ?? LibraryHistory(id: id, versions: [])
             entry.version += 1
@@ -653,6 +704,21 @@ extension ContentStore {
             try atomicWrite(try encoder.encode(history), to: libraryHistoryURL(id))
             try atomicWrite(try encoder.encode(index), to: libraryIndexURL)
             return change
+        }
+    }
+
+    /// A review object under another name: its name, and the name in its signatures.
+    static func rename(_ review: inout [String: Any], from old: String, to name: String) {
+        func renamed(_ signature: String) -> String {
+            signature.replacingOccurrences(of: "\\b\(NSRegularExpression.escapedPattern(for: old))\\b",
+                                           with: name, options: .regularExpression)
+        }
+        review["name"] = name
+        if let signature = review["signature"] as? String { review["signature"] = renamed(signature) }
+        if var function = review["function"] as? [String: Any] {
+            function["name"] = name
+            if let signature = function["signature"] as? String { function["signature"] = renamed(signature) }
+            review["function"] = function
         }
     }
 
@@ -685,7 +751,9 @@ extension ContentStore {
     func libraryObjects() -> Set<SHA256Digest> {
         guard let index = try? libraryIndex() else { return [] }
         var objects = Set(index.entries.values.map(\.entry))
-        for id in index.entries.keys {
+        // A body taken out keeps its text: its modules take it at their next open.
+        objects.formUnion((index.takenOut ?? [:]).values.map(\.entry))
+        for id in Set(index.entries.keys).union((index.takenOut ?? [:]).values.map(\.id)) {
             if let history = try? libraryHistory(id: id) {
                 objects.formUnion(history.versions.map(\.entry))
             }

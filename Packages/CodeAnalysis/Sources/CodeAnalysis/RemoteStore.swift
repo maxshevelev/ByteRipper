@@ -276,6 +276,13 @@ public struct RemoteStore: Sendable {
         return try await json("POST", "library", body: body)
     }
 
+    public func changeLibrary(_ change: LibraryChange, by: String?, module: SHA256Digest,
+                              dryRun: Bool = false) async throws -> LibraryWriteResult {
+        let body = try encoder.encode(ServedStoreProtocol.PutLibrary(
+            module: module, rev: nil, by: by, proposals: [], dryRun: dryRun ? true : nil, change: change))
+        return try await json("POST", "library", body: body)
+    }
+
     public func conflicts() async throws -> [AnalysisManifest] {
         try await json("GET", "conflicts")
     }

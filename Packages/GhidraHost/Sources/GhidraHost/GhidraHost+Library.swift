@@ -20,6 +20,8 @@ extension GhidraHost {
             case entry
             /// The entry `id` takes the narrower `name`, for `reason`.
             case rename
+            /// A write on the registry itself: `change`.
+            case change
         }
 
         public var action: Action
@@ -36,12 +38,15 @@ extension GhidraHost {
         public var fields: [String]?
         /// The name `rename` gives the entry.
         public var name: String?
+        public var change: LibraryChange?
         /// Answer what the apply would do and write nothing: each entry is
         /// applied in its transaction and rolled back.
         public var dryRun: Bool?
 
         public init(action: Action, address: String? = nil, id: String? = nil, reason: String? = nil,
-                    replace: Bool? = nil, fields: [String]? = nil, dryRun: Bool? = nil, name: String? = nil) {
+                    replace: Bool? = nil, fields: [String]? = nil, dryRun: Bool? = nil, name: String? = nil,
+                    change: LibraryChange? = nil) {
+            self.change = change
             self.name = name
             self.action = action
             self.address = address
@@ -151,9 +156,12 @@ extension GhidraHost {
         /// until an agent says why they are not.
         public var candidates: [LibraryStep] = []
         public var declined: [LibraryStep] = []
+        /// Functions whose body the registry gave back: the module keeps the
+        /// text, and the function stops being offered as a library function.
+        public var released: [LibraryStep] = []
 
         private enum CodingKeys: String, CodingKey {
-            case entries, hashed, applied, edited, candidates, declined
+            case entries, hashed, applied, edited, candidates, declined, released
             case toApply = "to_apply"
         }
     }
@@ -173,7 +181,10 @@ extension GhidraHost {
             let shape = shape(of: key)
             if !(shapes[shape] ?? []).contains(id) { shapes[shape, default: []].append(id) }
         }
-        return (index.bodies, shapes.mapValues { $0.sorted() })
+        // A body taken out is still looked for: its functions have to be told.
+        var bodies = index.bodies
+        for (key, out) in index.takenOut ?? [:] { bodies[key] = out.id }
+        return (bodies, shapes.mapValues { $0.sorted() })
     }
 
     /// The pairs of a function and an entry of its shape that the owner is
@@ -192,7 +203,21 @@ extension GhidraHost {
     static func libraryPlan(_ matches: [LibraryMatch], index: LibraryIndex, hashed: Int,
                             comparisons: [String: LibraryComparison]) -> LibraryPlan {
         var plan = LibraryPlan(entries: index.entries.count, hashed: hashed)
+        // A module holds a copy until the registry reads through: linking
+        // before that would leave its function with no text to show.
+        let linking = index.readThrough == true
         for match in matches {
+            // The module's function again, if it ever took the entry or was
+            // offered as one. Any other function of that body stays untouched:
+            // no review of this module said anything about it.
+            if let out = index.takenOut?[match.key] {
+                if match.mark != nil || match.kind != nil {
+                    plan.released.append(LibraryStep(address: match.address, name: match.name, entryName: out.name,
+                                                     id: match.key, version: out.version, mode: "release",
+                                                     state: "taken_out", why: out.reason))
+                }
+                continue
+            }
             func step(_ id: String, _ held: LibraryIndexEntry, mode: String?, state: String,
                       codes: [String]? = nil, differences: [LibraryConstant]? = nil, why: String? = nil) -> LibraryStep {
                 LibraryStep(address: match.address, name: match.name, entryName: held.name, id: id,
@@ -217,11 +242,11 @@ extension GhidraHost {
             if let id = match.exact, let held = index.entries[id] {
                 if (match.declined ?? []).contains(id) {
                     plan.declined.append(step(id, held, mode: nil, state: "declined"))
-                } else if marked(id, held, mode: "link") {
+                } else if marked(id, held, mode: linking ? "link" : "whole") {
                 } else if !match.named {
-                    plan.toApply.append(step(id, held, mode: "link", state: "unnamed"))
+                    plan.toApply.append(step(id, held, mode: linking ? "link" : "whole", state: "unnamed"))
                 } else {
-                    plan.toApply.append(step(id, held, mode: "link", state: "named"))
+                    plan.toApply.append(step(id, held, mode: linking ? "link" : "fill", state: "named"))
                 }
                 continue
             }
@@ -232,11 +257,11 @@ extension GhidraHost {
                     plan.declined.append(step(id, held, mode: nil, state: "declined"))
                     continue
                 }
-                if marked(id, held, mode: "link") { applying = true; continue }
+                if marked(id, held, mode: linking ? "link" : "variant") { applying = true; continue }
                 let comparison = comparisons["\(match.address) \(id)"]
                 if !applying, let comparison, comparison.comparable, comparison.assertCodesOnly == true {
                     applying = true
-                    plan.toApply.append(step(id, held, mode: "link", state: "assert_codes",
+                    plan.toApply.append(step(id, held, mode: linking ? "link" : "variant", state: "assert_codes",
                                              codes: comparison.differences?.map(\.value),
                                              differences: comparison.differences))
                 } else {
@@ -263,6 +288,13 @@ extension GhidraHost {
             }
             let result = try await writer.renameLibraryEntry(id: id, name: name, reason: reason, by: "agent",
                                                              module: module, dryRun: request.dryRun ?? false)
+            return try JSONSerialization.data(withJSONObject: try Self.plain(result), options: [.sortedKeys])
+        case .change:
+            guard let change = request.change else {
+                throw GhidraHostError(.refused, "no change named", status: 400)
+            }
+            let result = try await writer.changeLibrary(change, by: "agent", module: module,
+                                                        dryRun: request.dryRun ?? false)
             return try JSONSerialization.data(withJSONObject: try Self.plain(result), options: [.sortedKeys])
         case .entry:
             guard let id = request.id else { throw GhidraHostError(.refused, "name the entry by `id`", status: 400) }
@@ -299,6 +331,18 @@ extension GhidraHost {
                                         replace: request.replace ?? false, fields: request.fields)
             }
             var answer = try Self.plain(plan) as? [String: Any] ?? [:]
+            // What the registry gave back goes with a plain apply and an open.
+            if request.address == nil, !plan.released.isEmpty, request.dryRun != true {
+                var items: [[String: Any]] = []
+                for step in plan.released {
+                    guard let out = index.takenOut?[step.id] else { continue }
+                    items.append(["address": step.address, "id": out.id, "version": step.version,
+                                  "entry": try JSONSerialization.jsonObject(with: try await writer.readObject(out.entry))])
+                }
+                let body = try JSONSerialization.data(withJSONObject: ["items": items])
+                answer["released"] = (try JSONSerialization.jsonObject(
+                    with: try await write(module, "/v1/library/release", body: body)) as? [String: Any])?["items"] ?? []
+            }
             guard !steps.isEmpty else {
                 answer["results"] = []
                 return try JSONSerialization.data(withJSONObject: answer, options: [.sortedKeys])

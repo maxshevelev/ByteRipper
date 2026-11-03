@@ -15,6 +15,9 @@ final class LibraryViewTests: XCTestCase {
         directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("LibraryViewTests-\(UUID().uuidString)", isDirectory: true)
         store = try ContentStore(root: directory)
+        var index = try store.libraryIndex()
+        index.readThrough = true
+        try store.mirrorLibrary(index)
     }
 
     override func tearDownWithError() throws {
@@ -234,5 +237,114 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertEqual(taken.added.map(\.name), ["CopyMem"])
         // And a rename onto a name another entry holds says which.
         XCTAssertThrowsError(try store.renameLibraryEntry(id: body.key, name: "CopyMem", reason: "x", by: "agent"))
+    }
+
+    private func offerBody(_ key: LibraryBody, _ name: String, data: [String]? = nil,
+                           callees: [LibraryCallee]? = nil) throws -> LibraryWriteResult {
+        let object = try JSONSerialization.data(withJSONObject: ["schema": 1, "name": name, "kind": "edk2"], options: .sortedKeys)
+        return try store.putLibraryEntries(module: source, rev: 1, by: "agent", proposals: [
+            LibraryProposal(body: key, name: name, kind: "edk2", address: "0x3000", entry: object,
+                            dataReferences: data, callees: callees)
+        ])
+    }
+
+    /// The approved rule at the door: a new body with a data reference needs a
+    /// citation, and a new body's callees must all be in the registry already.
+    func testABodyThatDependsOnAModuleIsNotTaken() throws {
+        let leaf = LibraryBody(size: 0x13, full: "ffeeddccbbaa9988", specific: "7766554433221100")
+        let refusedData = try offerBody(leaf, "ReadsData", data: ["0x4"])
+        XCTAssertEqual(refusedData.notLibrary?.map(\.why), ["data"])
+        XCTAssertEqual(refusedData.notLibrary?.first?.data, ["0x4"])
+        XCTAssertEqual(try store.libraryIndex().entries.count, 0)
+
+        try store.changeLibrary(.init(action: .cite, body: leaf.key, file: "MdePkg/Foo.c", line: 12), by: "agent")
+        XCTAssertEqual(try offerBody(leaf, "ReadsData", data: ["0x4"]).added.count, 1)
+
+        let caller = LibraryBody(size: 0x20, full: "aaeeddccbbaa9988", specific: "1166554433221100")
+        let unknown = LibraryBody(size: 0x21, full: "bbeeddccbbaa9988", specific: "2266554433221100")
+        let refusedCall = try offerBody(caller, "Caller", callees: [LibraryCallee(name: "Local", body: unknown.key)])
+        XCTAssertEqual(refusedCall.notLibrary?.map(\.why), ["callee"])
+        XCTAssertEqual(refusedCall.notLibrary?.first?.callees, ["Local"])
+        let unhashed = try offerBody(caller, "Caller", callees: [LibraryCallee(name: "Tiny", body: nil)])
+        XCTAssertEqual(unhashed.notLibrary?.map(\.why), ["callee"])
+        let taken = try offerBody(caller, "Caller", callees: [LibraryCallee(name: "ReadsData", body: leaf.key),
+                                                              LibraryCallee(name: "Caller", body: caller.key)])
+        XCTAssertEqual(taken.added.map(\.name), ["Caller"])
+    }
+
+    /// Taken out: gone from the index, its name free, refused at the next
+    /// offer, its text kept for its modules, and the decision can be undone.
+    func testATakenOutEntryStaysOutAndCanComeBack() throws {
+        try register(try entryObject())
+        XCTAssertEqual(try store.changeLibrary(.init(action: .takeOut, id: body.key, reason: "x"), by: "agent",
+                                               dryRun: true).takenOut?.count, 1)
+        XCTAssertNotNil(try store.libraryIndex().entries[body.key])
+        XCTAssertThrowsError(try store.changeLibrary(.init(action: .takeOut, id: body.key), by: "agent"))
+
+        try store.changeLibrary(.init(action: .takeOut, id: body.key, reason: "the GUID is the module's"), by: "agent")
+        let index = try store.libraryIndex()
+        XCTAssertNil(index.entries[body.key])
+        XCTAssertNil(index.bodies[body.key])
+        let out = try XCTUnwrap(index.takenOut?[body.key])
+        XCTAssertEqual(out.name, "CopyMem")
+        XCTAssertNoThrow(try store.object(out.entry))
+        XCTAssertTrue(store.libraryObjects().contains(out.entry), "a collection must not lose its text")
+        XCTAssertEqual(try store.libraryHistory(id: body.key)?.versions.last?.reason,
+                       "taken out: the GUID is the module's")
+
+        let offered = try offerBody(body, "CopyMem")
+        XCTAssertEqual(offered.notLibrary?.map(\.why), ["taken_out"])
+        XCTAssertEqual(offered.added.count, 0)
+        let read = store.throughRegistry(try moduleArtifact()).functions[0]
+        XCTAssertNotEqual(read.reviewLevel, .library)
+
+        try store.changeLibrary(.init(action: .restore, body: body.key, reason: "wrong"), by: "agent")
+        let back = try store.libraryIndex()
+        XCTAssertEqual(back.bodies[body.key], body.key)
+        XCTAssertEqual(back.takenOut?[body.key], nil)
+        XCTAssertEqual(back.entries[body.key]?.version, out.version + 1)
+    }
+
+    /// One body of a two-body entry leaves; the entry and its other body stay.
+    func testOneBodyOfAnEntryCanBeTakenOutOrSplitOff() throws {
+        let second = LibraryBody(size: 0x15, full: "00112233445566aa", specific: "aaaaaaaaaaaaaaaa")
+        let third = LibraryBody(size: 0x15, full: "00112233445566aa", specific: "bbbbbbbbbbbbbbbb")
+        try register(try entryObject())
+        var index = try store.libraryIndex()
+        for extra in [second, third] {
+            index.entries[body.key]?.variants.append(LibraryVariant(body: extra, module: source))
+            index.bodies[extra.key] = body.key
+        }
+        try store.mirrorLibrary(index)
+
+        try store.changeLibrary(.init(action: .takeOut, id: body.key, body: second.key, reason: "x"), by: "agent")
+        index = try store.libraryIndex()
+        XCTAssertEqual(index.entries[body.key]?.variants.map(\.body), [body, third])
+        XCTAssertEqual(index.takenOut?.keys.sorted(), [second.key])
+
+        // The body the entry is keyed by, the name already held: refused.
+        XCTAssertThrowsError(try store.changeLibrary(.init(action: .split, id: body.key, body: body.key, name: "A", reason: "x"), by: "agent"))
+        XCTAssertThrowsError(try store.changeLibrary(.init(action: .split, id: body.key, body: third.key, name: "CopyMem", reason: "x"), by: "agent"))
+
+        let split = try store.changeLibrary(.init(action: .split, id: body.key, body: third.key, name: "CopyMemNarrow", reason: "y"), by: "agent")
+        XCTAssertEqual(split.added.map(\.id), [third.key])
+        index = try store.libraryIndex()
+        XCTAssertEqual(index.entries[body.key]?.variants.map(\.body), [body])
+        XCTAssertEqual(index.bodies[third.key], third.key)
+        XCTAssertEqual(index.entries[third.key]?.name, "CopyMemNarrow")
+        let review = try JSONSerialization.jsonObject(with: try store.object(try XCTUnwrap(index.entries[third.key]).entry)) as? [String: Any]
+        XCTAssertEqual(review?["name"] as? String, "CopyMemNarrow")
+        XCTAssertEqual(try store.libraryHistory(id: third.key)?.versions.first?.reason,
+                       "split from \(body.key) (CopyMem): y")
+    }
+
+    /// Off, the default: readers see what the module published.
+    func testReadThroughIsOffUntilTurnedOn() throws {
+        try register(try entryObject())
+        try store.changeLibrary(.init(action: .readThrough, on: false), by: "agent")
+        XCTAssertNotEqual(store.throughRegistry(try moduleArtifact()).functions[0].reviewLevel, .library)
+        try store.changeLibrary(.init(action: .readThrough, on: true), by: "agent")
+        XCTAssertEqual(store.throughRegistry(try moduleArtifact()).functions[0].reviewLevel, .library)
+        XCTAssertNil(LibraryIndex().readThrough)
     }
 }

@@ -169,11 +169,20 @@ public enum GhidraTools {
     static func openSummary(_ plan: [String: Any]) -> [String: Any] {
         var summary: [String: Any] = ["entries": plan["entries"] ?? 0,
                                       "already_applied": (plan["applied"] as? [Any])?.count ?? 0]
-        for key in ["results", "edited", "candidates"] {
+        for key in ["results", "edited", "candidates", "released"] {
             if let list = plan[key] as? [Any], !list.isEmpty { summary[key] = list }
         }
         if let declined = plan["declined"] as? [Any], !declined.isEmpty { summary["declined"] = declined.count }
         return summary
+    }
+
+    /// A write on the registry itself, as a tool asks for it.
+    private static func change(_ arguments: AgentArguments, _ backend: GhidraBackend,
+                               _ change: LibraryChange) async throws -> AgentAnswer {
+        let module = try module(arguments)
+        let request = GhidraHost.LibraryRequest(action: .change, dryRun: try arguments.bool("dry_run", default: false),
+                                                change: change)
+        return try await answer { try await backend.library(module, request) }
     }
 
     static func libraryTools(_ backend: GhidraBackend) -> [AgentTool] {
@@ -238,6 +247,116 @@ public enum GhidraTools {
                     action: .rename, id: try arguments.string("id"), reason: try arguments.string("reason"),
                     dryRun: try arguments.bool("dry_run", default: false), name: try arguments.string("name"))
                 return try await answer { try await backend.library(module, request) }
+            },
+            AgentTool(
+                name: "ghidra_library_take_out",
+                title: "Give a body back to its modules",
+                description: """
+                    A library function depends on no module: it refers to no data but a constant of its own \
+                    library's source, and calls only library functions. A body that does not qualify leaves \
+                    the registry with this tool: with `body`, that body alone; without, the whole entry, and \
+                    its name is free. A publish does not offer it again. A module whose function took it or \
+                    was tagged with it keeps the text at its next open, and the function stops being library. \
+                    The history stays. `ghidra_library_restore` takes a wrong decision back. `dry_run: true` \
+                    answers the same and writes nothing.
+                    """,
+                inputSchema: AgentSchema.object([
+                    "module": moduleProperty,
+                    "id": AgentSchema.string("The entry."),
+                    "body": AgentSchema.string("One of its bodies; omit for the whole entry."),
+                    "reason": AgentSchema.string("What in the code ties it to a module."),
+                    "dry_run": AgentSchema.boolean("Answer what would be done and write nothing.")
+                ], required: ["module", "id", "reason"]),
+                annotations: .edit
+            ) { call in
+                try await change(call.arguments, backend, LibraryChange(
+                    action: .takeOut, id: try call.arguments.string("id"),
+                    body: try call.arguments.optionalString("body"), reason: try call.arguments.string("reason")))
+            },
+            AgentTool(
+                name: "ghidra_library_restore",
+                title: "Take a body back into the registry",
+                description: """
+                    Takes back a `ghidra_library_take_out`: the body returns to its entry, or the entry returns \
+                    with it. The name must still be free. `dry_run: true` answers the same and writes nothing.
+                    """,
+                inputSchema: AgentSchema.object([
+                    "module": moduleProperty,
+                    "body": AgentSchema.string("The body key, as the index's `taken_out` lists it."),
+                    "reason": AgentSchema.string("Why the decision was wrong."),
+                    "dry_run": AgentSchema.boolean("Answer what would be done and write nothing.")
+                ], required: ["module", "body", "reason"]),
+                annotations: .edit
+            ) { call in
+                try await change(call.arguments, backend, LibraryChange(
+                    action: .restore, body: try call.arguments.string("body"), reason: try call.arguments.string("reason")))
+            },
+            AgentTool(
+                name: "ghidra_library_split",
+                title: "Make one body of an entry its own entry",
+                description: """
+                    Different bodies are different functions. One body of an entry becomes an entry of its own, \
+                    under the name its code earns, starting from the review they shared; correct its text from \
+                    a module that holds it. The body the entry is keyed by stays: give it its name with \
+                    `ghidra_library_rename`, and split the others off. `dry_run: true` answers the same and \
+                    writes nothing.
+                    """,
+                inputSchema: AgentSchema.object([
+                    "module": moduleProperty,
+                    "id": AgentSchema.string("The entry."),
+                    "body": AgentSchema.string("The body to split off."),
+                    "name": AgentSchema.string("Its name, free in the registry."),
+                    "reason": AgentSchema.string("What the review found."),
+                    "dry_run": AgentSchema.boolean("Answer what would be done and write nothing.")
+                ], required: ["module", "id", "body", "name", "reason"]),
+                annotations: .edit
+            ) { call in
+                try await change(call.arguments, backend, LibraryChange(
+                    action: .split, id: try call.arguments.string("id"), body: try call.arguments.string("body"),
+                    name: try call.arguments.string("name"), reason: try call.arguments.string("reason")))
+            },
+            AgentTool(
+                name: "ghidra_library_cite",
+                title: "Cite the source of a body's constant",
+                description: """
+                    A body that refers to data enters the registry only if the data is a constant defined in \
+                    its own library's source. Cite the file and line after comparing the bytes with that \
+                    source; the registry cannot check it and keeps who said so. Give `id` for an entry's bodies, \
+                    or `body` for one, also before its first publish: a publish's `library.not_library` names \
+                    the key. A GUID never qualifies. `dry_run: true` answers the same and writes nothing.
+                    """,
+                inputSchema: AgentSchema.object([
+                    "module": moduleProperty,
+                    "id": AgentSchema.string("The entry; omit when naming a `body`."),
+                    "body": AgentSchema.string("One body key."),
+                    "file": AgentSchema.string("The source file, by its path in its tree."),
+                    "line": AgentSchema.integer("The line that defines the constant."),
+                    "note": AgentSchema.string("What was compared."),
+                    "dry_run": AgentSchema.boolean("Answer what would be done and write nothing.")
+                ], required: ["module", "file", "line"]),
+                annotations: .edit
+            ) { call in
+                try await change(call.arguments, backend, LibraryChange(
+                    action: .cite, id: try call.arguments.optionalString("id"),
+                    body: try call.arguments.optionalString("body"), reason: try call.arguments.optionalString("note"),
+                    file: try call.arguments.string("file"), line: Int(try call.arguments.integer("line"))))
+            },
+            AgentTool(
+                name: "ghidra_library_read_through",
+                title: "Turn reading through the registry on or off",
+                description: """
+                    On: a reader sees a registry function as its entry, and a module links to the entry instead \
+                    of holding a copy. Off: modules hold and show their copies. Turn it on only when the \
+                    registry is in order, or an entry that is not one function reads as one. No restart.
+                    """,
+                inputSchema: AgentSchema.object([
+                    "module": moduleProperty,
+                    "on": AgentSchema.boolean("On or off.")
+                ], required: ["module", "on"]),
+                annotations: .edit
+            ) { call in
+                try await change(call.arguments, backend, LibraryChange(
+                    action: .readThrough, on: try call.arguments.bool("on", default: false)))
             },
             AgentTool(
                 name: "ghidra_library_apply",

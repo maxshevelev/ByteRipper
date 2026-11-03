@@ -101,11 +101,14 @@ public enum ServedStoreProtocol {
         /// of taking any proposals; a server that predates it answers nothing done.
         public var renameID: String?
         public var renameTo: String?
+        /// A write on the registry itself, instead of taking any proposals.
+        public var change: LibraryChange?
 
         public init(module: SHA256Digest, rev: Int?, by: String?, proposals: [LibraryProposal],
                     take: Bool? = nil, reason: String? = nil,
                     takeIDs: [String]? = nil, reasons: [String: String]? = nil,
-                    dryRun: Bool? = nil, renameID: String? = nil, renameTo: String? = nil) {
+                    dryRun: Bool? = nil, renameID: String? = nil, renameTo: String? = nil, change: LibraryChange? = nil) {
+            self.change = change
             self.renameID = renameID
             self.renameTo = renameTo
             self.module = module

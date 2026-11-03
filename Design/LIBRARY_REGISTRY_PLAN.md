@@ -16,7 +16,17 @@
 > it does not belong here. §1 and §4 still describe the copy this replaces where
 > they speak of applying a review to a function; they are to be rewritten when the
 > change is finished. An open now links (`mode: link`); `whole` remains only as the
-> working copy `replace` asks for, to change an entry on.
+> working copy `replace` asks for, to change an entry on. Linking and reading through
+> are off until `read_through` is set in the index (`ghidra_library_read_through`):
+> until the registry is in order an entry that is not one function would read as one.
+>
+> **What a library function is (2026-11-03):** it depends on no module. It refers to
+> no data, or only to a constant defined in its own library's source file, cited by
+> file and line by an agent who compared the bytes; a GUID never qualifies. It calls
+> only library functions, so classification runs bottom-up, from functions that call
+> nothing. A doubt goes to the module. A publish refuses a new body that fails
+> (`not_library`); `taken_out` in the index holds what was given back, with its last
+> text, for its modules to take at their next open (`LibraryChanges.swift`).
 
 A library function — EDK2's, AGESA's, Intel's (`Skills/ghidra-uefi/SKILL.md`,
 "Library functions") — is the same code in every module that links it:

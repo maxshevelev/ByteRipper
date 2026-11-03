@@ -418,6 +418,35 @@ fits the new one better, give the old one the narrower name it earns with
 `ghidra_library_rename` and the reason, then publish again. A module's own function
 is in the module's scope: it is not offered here and conflicts with nothing elsewhere.
 
+**What a library function is.** It depends on no module, which is decided bottom-up:
+functions that call nothing first, then their callers.
+- It refers to no data, or only to a constant defined in its own library's source
+  file. Compare the bytes with that source and cite the file and line with
+  `ghidra_library_cite`. A GUID never qualifies: its value lives in a package `.dec`
+  and the variable is each module's. Code without sources in the tree cannot qualify
+  through a constant.
+- It calls only functions the registry already holds.
+- A doubt keeps it in the module.
+
+A publish refuses a new body that fails this, under `library.not_library`, with `why`:
+`data` (the offsets, no citation), `callee` (the names, publish again once they are
+in), or `taken_out`. The owner reads data references from the instructions and treats
+a constant that lands in the image as one, so it errs towards refusing.
+
+**Putting the registry in order.** These change the registry itself; each needs a
+`reason` and takes `dry_run`, and the history keeps it.
+- `ghidra_library_take_out` gives an entry, or one `body` of it, back to its modules.
+  A publish does not offer it again. A function that took it or was tagged with it
+  keeps the text at its module's next open, and its mark and tag come off; then
+  publish that module. Open and publish every module that holds it: the registry
+  does not list them. `ghidra_library_restore` takes a wrong decision back.
+- `ghidra_library_split` makes one body its own entry under a narrower name.
+- `ghidra_library_rename` narrows the name of a whole entry.
+- A text is corrected by editing the function in a module holding the body and
+  publishing with `take_library_conflicts` and `library_reason`.
+- `ghidra_library_read_through` turns reading through the registry on, once the
+  registry is in order. Until then modules hold and show their copies.
+
 **Resolving a conflict.** `library.conflicts` means the registry holds another
 review of the same body than this module's, and neither side is right by
 default. Read the entry's review (`library_registry` with its `id`) beside the

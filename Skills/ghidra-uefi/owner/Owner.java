@@ -308,6 +308,7 @@ public class Owner {
                     case "/v1/set/equate" -> write(exchange, this::setEquate);
                     case "/v1/tag/function" -> write(exchange, this::tagFunction);
                     case "/v1/library/decline" -> write(exchange, this::libraryDecline);
+                    case "/v1/library/release" -> write(exchange, this::libraryRelease);
                     case "/v1/type" -> write(exchange, this::addType);
                     case "/v1/save" -> write(exchange, body -> {
                         if (program.isChanged()) program.save("save", TaskMonitor.DUMMY);
@@ -2269,6 +2270,9 @@ public class Owner {
             item.add("body", body);
             item.add("entry", libraryEntry(function, kind, body));
             if (linked) item.addProperty("linked", true);
+            // What decides whether it depends on a module: beside the review.
+            item.add("data_references", libraryDataReferences(function));
+            item.add("callees", libraryCallees(function, fid));
             // Why its signature is what it is: not of the review's text, so it
             // goes beside the entry, for the history of the version it makes.
             StringPropertyMap signatureReasons =
@@ -2293,6 +2297,62 @@ public class Owner {
         JsonObject answer = identity();
         answer.add("entries", entries);
         answer.add("below_bar", below);
+        return answer;
+    }
+
+    /**
+     * What the body reads outside itself and the stack, by offset from its
+     * entry: a reference to memory that is not a call or a jump, or a constant
+     * that lands in the image — a `PUSH imm32` of a GUID's address carries no
+     * reference until something makes one. A small constant in an image based
+     * at zero is not taken for an address. It errs towards a reference: a doubt
+     * keeps a function in its module.
+     */
+    private JsonArray libraryDataReferences(Function function) {
+        JsonArray answer = new JsonArray();
+        java.util.Set<String> seen = new java.util.LinkedHashSet<>();
+        Address entry = function.getEntryPoint();
+        boolean baseIsReal = program.getImageBase().getOffset() >= 0x10000;
+        ghidra.program.model.listing.InstructionIterator code =
+            program.getListing().getInstructions(function.getBody(), true);
+        while (code.hasNext()) {
+            ghidra.program.model.listing.Instruction instruction = code.next();
+            String offset = String.format("0x%X", instruction.getAddress().subtract(entry));
+            for (ghidra.program.model.symbol.Reference reference : instruction.getReferencesFrom()) {
+                if (reference.isStackReference() || reference.getReferenceType().isFlow()) continue;
+                Address to = reference.getToAddress();
+                if (!to.isMemoryAddress() || function.getBody().contains(to)) continue;
+                seen.add(offset);
+            }
+            if (!baseIsReal) continue;
+            for (int operand = 0; operand < instruction.getNumOperands(); operand++) {
+                for (Object part : instruction.getOpObjects(operand)) {
+                    if (!(part instanceof ghidra.program.model.scalar.Scalar scalar)) continue;
+                    Address to;
+                    try {
+                        to = entry.getNewAddress(scalar.getUnsignedValue());
+                    } catch (Exception error) {
+                        continue;
+                    }
+                    if (program.getMemory().contains(to) && !function.getBody().contains(to)) seen.add(offset);
+                }
+            }
+        }
+        seen.forEach(answer::add);
+        return answer;
+    }
+
+    /** What the body calls: each function's name and body key, none for one that has no body to match. */
+    private JsonArray libraryCallees(Function function, ghidra.feature.fid.service.FidService fid) throws Exception {
+        JsonArray answer = new JsonArray();
+        for (Function called : function.getCalledFunctions(ghidra.util.task.TaskMonitor.DUMMY)) {
+            Function target = called.isThunk() ? called.getThunkedFunction(true) : called;
+            JsonObject item = new JsonObject();
+            item.addProperty("name", target.getName());
+            ghidra.feature.fid.hash.FidHashQuad hash = target.isExternal() ? null : fid.hashFunction(target);
+            if (hash != null) item.addProperty("body", bodyKey(hash));
+            answer.add(item);
+        }
         return answer;
     }
 
@@ -3264,6 +3324,41 @@ public class Owner {
         JsonArray list = new JsonArray();
         ids.forEach(list::add);
         answer.add("declined", list);
+        return answer;
+    }
+
+    /**
+     * `POST /v1/library/release`: the registry gave these bodies back, `{"items":
+     * [{address, id, version, entry}]}`. Each function stops being a library
+     * function: its mark and tag come off, so a publish does not offer it. A
+     * function that holds a copy keeps it; one that only linked to the entry,
+     * with no text of its own, takes the entry's review as its own first.
+     */
+    private JsonObject libraryRelease(JsonObject body) throws Exception {
+        JsonArray list = new JsonArray();
+        for (JsonElement element : body.getAsJsonArray("items")) {
+            JsonObject item = element.getAsJsonObject();
+            Function function = functionAt(required(item, "address"));
+            JsonObject answer = new JsonObject();
+            answer.addProperty("address", hex(function.getEntryPoint()));
+            answer.addProperty("id", required(item, "id"));
+            String plate = function.getComment();
+            if (plate == null || plate.isBlank()) {
+                JsonObject whole = item.deepCopy();
+                whole.addProperty("mode", "whole");
+                whole.addProperty("reason", "the registry gave this body back");
+                applyEntry(whole);
+                answer.addProperty("text", "taken from the entry");
+            } else {
+                answer.addProperty("text", "the module's own");
+            }
+            removeLibraryTags(function);
+            StringPropertyMap marks = program.getUsrPropertyManager().getStringPropertyMap(LIBRARY_MARK);
+            if (marks != null) marks.remove(function.getEntryPoint());
+            list.add(answer);
+        }
+        JsonObject answer = identity();
+        answer.add("items", list);
         return answer;
     }
 

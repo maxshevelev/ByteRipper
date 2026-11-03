@@ -42,6 +42,7 @@ public enum LibraryView {
     /// external have no body to match.
     public static func entryID(of function: CodeArtifact.Function, in index: LibraryIndex) -> String? {
         guard !function.external, !function.thunk else { return nil }
+        if let body = function.body, index.takenOut?[body] != nil { return nil }
         if let body = function.body, let id = index.bodies[body] { return id }
         if let id = function.libraryEntry?.id, index.entries[id] != nil { return id }
         return nil
@@ -173,7 +174,7 @@ extension ContentStore {
     /// as its entry. One with no registry, or an entry that cannot be read,
     /// stays as it was published.
     public func throughRegistry(_ artifact: CodeArtifact) -> CodeArtifact {
-        guard let index = try? libraryIndex(), !index.entries.isEmpty else { return artifact }
+        guard let index = try? libraryIndex(), index.readThrough == true, !index.entries.isEmpty else { return artifact }
         var artifact = artifact
         artifact.functions = throughRegistry(artifact.functions, names: artifact, index: index)
         return artifact
@@ -182,6 +183,7 @@ extension ContentStore {
     /// Functions as a reader sees them; `names` is the artifact they are from.
     func throughRegistry(_ functions: [CodeArtifact.Function], names artifact: CodeArtifact,
                          index: LibraryIndex) -> [CodeArtifact.Function] {
+        guard index.readThrough == true else { return functions }
         var named: [CodeAddress: String] = [:]
         for symbol in artifact.symbols { named[symbol.address] = symbol.name }
         // A function's own name, the entry's when the registry has it, so a
