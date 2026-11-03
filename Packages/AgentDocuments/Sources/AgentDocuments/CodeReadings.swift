@@ -593,7 +593,8 @@ public final class CodeReadings {
             "comments": .count(below["comments"] ?? 0),
             "params": .count(below["params"] ?? 0),
             "locals": .count(below["locals"] ?? 0),
-            "return": .count(below["return"] ?? 0)
+            "return": .count(below["return"] ?? 0),
+            "c": .count(below["c"] ?? 0)
         ]
         if let probe = tooShortCount {
             if let count = await probe(module) {

@@ -13,7 +13,7 @@ import Foundation
 /// is a reading of the C, and stays one.
 public enum LibraryEntryReview {
     /// The words a gap may be, in the order the panel and the tools list them.
-    public static let gapWords = ["name", "plate", "comments", "params", "locals", "return"]
+    public static let gapWords = ["name", "plate", "comments", "params", "locals", "return", "c"]
 
     /// The gaps of one entry object, as `put-object` stored it.
     public static func gaps(of entry: Data) -> [String] {

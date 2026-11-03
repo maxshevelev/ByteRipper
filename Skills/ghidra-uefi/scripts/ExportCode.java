@@ -581,7 +581,7 @@ public class ExportCode extends GhidraScript {
     /**
      * How far a review has got with a function by the bar `full` sets, whatever
      * its level: the gaps that keep it from full — `name`, `plate`, `comments`,
-     * `params`, `locals` — and whether any review work is there at all. The
+     * `params`, `locals`, `c` — and whether any review work is there at all. The
      * export asks it of every function with a body; the owner asks it of a
      * library function too, which the library registry takes only at the bar.
      */
@@ -639,6 +639,10 @@ public class ExportCode extends GhidraScript {
         if (steps == 0) result.gaps.add("comments");
         if (badParameter) result.gaps.add("params");
         if (badLocal) result.gaps.add("locals");
+        // A body the decompiler could not read has no C to judge: its names
+        // and comments can all pass while nobody can read the function. An
+        // external or a thunk has no body of its own, and no C is what it is.
+        if (high == null && !function.isExternal() && !function.isThunk()) result.gaps.add("c");
         result.reviewWork = reviewWork;
         return result;
     }

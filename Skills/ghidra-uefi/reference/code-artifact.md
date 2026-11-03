@@ -128,7 +128,8 @@ empty list does not mean the C is clean of raw offsets. The levels are:
   `FUN_` placeholder. Ghidra's own variable names (`iVar1`, `EVar1`, `uVar2`,
   `local_4`, `param_1`) are placeholders too.
 - `partial` — some of that is done. `review_gaps` names what is missing:
-  `name`, `plate`, `comments`, `params` or `locals`.
+  `name`, `plate`, `comments`, `params`, `locals` or `c`, a body that did not
+  decompile: a function with no C is never `full`, whatever its names say.
 - `decompiled` — nothing of the review: no plate, no step comments, and no
   parameter, local or function name a person gave. A name the UEFI pass read
   or the image carried is not review work.

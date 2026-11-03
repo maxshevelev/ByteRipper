@@ -219,6 +219,7 @@
 "missing step comments" = "keine Kommentare zu den Schritten";
 "unnamed parameters" = "unbenannte Parameter";
 "unnamed locals" = "unbenannte lokale Variablen";
+"did not decompile" = "wurde nicht dekompiliert";
 "General" = "Allgemein";
 "Go to Original" = "Zum Original";
 "Go to Top Swap Copy" = "Zur Top-Swap-Kopie";

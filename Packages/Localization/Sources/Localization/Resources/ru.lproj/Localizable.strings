@@ -219,6 +219,7 @@
 "missing step comments" = "нет комментариев к шагам";
 "unnamed parameters" = "безымянные параметры";
 "unnamed locals" = "безымянные локальные переменные";
+"did not decompile" = "не декомпилируется";
 "General" = "Основные";
 "Go to Original" = "Перейти к оригиналу";
 "Go to Top Swap Copy" = "Перейти к копии Top Swap";

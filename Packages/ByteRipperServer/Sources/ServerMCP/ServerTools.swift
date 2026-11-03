@@ -74,7 +74,7 @@ public enum ServerTools {
             says from what), IMPORTED the image's own. `review_level` is how far the review has got — full, partial, \
             decompiled, library or no_body; null in an analysis made before it was recorded — and \
             `level` lists one level; `review_levels` in the `functions` answer counts them over every match of `search`, whatever the `limit` or `level`, with `unrecorded` for a null one; \
-            `review_gaps` what keeps it from full: name, plate, comments, params, locals; `temporaries` \
+            `review_gaps` what keeps it from full: name, plate, comments, params, locals, c (a body that did not decompile); `temporaries` \
             the placeholder names its C still prints (uVar1, in_ECX), reported only: not a gap, and a library \
             function can hold them, so a clean row does not mean the locals are named; a library \
             function's `library_kind` whose library it is — edk2, amd (AGESA) or intel (FSP/RC) — and \
@@ -84,7 +84,7 @@ public enum ServerTools {
             kind (`edk2`, `amd`, `intel`), how many carry a registry entry (`with_entry`) and in which `state`, \
             how many entries hold this module's current version (`installed`), how many moved on after it \
             (`updated_since`), how many still print a placeholder name (`with_temporaries`, reported only), and `below_bar` — the tagged functions short of the bar, counted by the gap each \
-            keeps (name, plate, comments, params, locals, return) — with `too_short`, bodies Function ID cannot \
+            keeps (name, plate, comments, params, locals, return, c) — with `too_short`, bodies Function ID cannot \
             hash, known only while the module's owner runs. `live` says whether an owner has this module's program open — the `ghidra_*` tools read that program, \
             `code_query` reads the stored analysis — and, while it does, `unpublished_writes` whether the program \
             holds writes the store has not got: publish to bring them across. Addresses come twice: `entry`/`address` is \

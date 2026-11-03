@@ -1520,6 +1520,7 @@ import ToolModuleKit
             case "comments": L("missing step comments")
             case "params": L("unnamed parameters")
             case "locals": L("unnamed locals")
+            case "c": L("did not decompile")
             default: nil
             }
         }

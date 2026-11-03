@@ -247,7 +247,10 @@ final class CodeReadingsTests: XCTestCase {
             {"script_version": 9, "ghidra": "12.1.2", "functions": [
               {"entry": "0x1020", "name": "SetJump", "signature": "undefined8 SetJump(void)",
                "library_kind": "edk2", "review_level": "library", "review_gaps": ["locals"],
-               "instructions": [{"address": "0x1020", "text": "RET"}]}
+               "instructions": [{"address": "0x1020", "text": "RET"}]},
+              {"entry": "0x1040", "name": "LongJump", "signature": "void LongJump(void)",
+               "library_kind": "edk2", "review_level": "library", "review_gaps": ["c"],
+               "instructions": [{"address": "0x1040", "text": "RET"}]}
             ]}
             """
         try ContentStore(root: directory).putAnalysis(module: module, recipe: recipe,
@@ -260,8 +263,9 @@ final class CodeReadingsTests: XCTestCase {
               let below = library["below_bar"]?.objectValue else {
             return XCTFail("no library block: \(answer)")
         }
-        XCTAssertEqual(library["edk2"], .int(1), "the tag still says whose library it is")
+        XCTAssertEqual(library["edk2"], .int(2), "the tag still says whose library it is")
         XCTAssertEqual(below["locals"], .int(1), "the gap the owner's bar also reads")
+        XCTAssertEqual(below["c"], .int(1), "a body with no C is short of the bar")
         XCTAssertEqual(below["plate"], .int(0))
     }
 
