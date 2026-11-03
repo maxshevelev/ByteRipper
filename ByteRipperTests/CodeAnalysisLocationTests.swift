@@ -168,6 +168,39 @@ final class CodeAnalysisLocationTests: XCTestCase {
 
     /// A 403 names the rights the token lacks, in the tab's words and in the
     /// send button's line.
+    func testTheTitleBarCloudFollowsTheServer() async throws {
+        let cloud = CodeServerIndicator(location: location)
+        XCTAssertTrue(cloud.isHidden, "on this Mac there is no server to speak of")
+
+        try location.choose(.server, server: address, token: "secret")
+        await wait("the connection") { if case .connected = location.state { return true } else { return false } }
+        XCTAssertFalse(cloud.isHidden)
+        XCTAssertEqual(cloud.symbolName, "cloud")
+        XCTAssertEqual(cloud.contentTintColor, .secondaryLabelColor)
+        XCTAssertEqual(cloud.toolTip, L("The analysis server is available: %1$@", address))
+
+        server.stop()
+        await wait("the loss", timeout: 40) {
+            if case .unreachable = location.state { return true } else { return false }
+        }
+        XCTAssertEqual(cloud.symbolName, "cloud.slash")
+        XCTAssertEqual(cloud.contentTintColor, .systemRed)
+        guard case .unreachable(let reason) = location.state else { return XCTFail("the state changed") }
+        XCTAssertEqual(cloud.toolTip, L("The analysis server is not available. %1$@", reason))
+        XCTAssertEqual(cloud.accessibilityLabel(), cloud.toolTip)
+
+        try location.choose(.thisMac, server: "", token: nil)
+        XCTAssertTrue(cloud.isHidden)
+    }
+
+    func testAWrongTokenStrikesTheCloudThrough() async throws {
+        let cloud = CodeServerIndicator(location: location)
+        try location.choose(.server, server: address, token: "wrong")
+        await wait("the refusal") { if case .refused = location.state { return true } else { return false } }
+        XCTAssertEqual(cloud.symbolName, "cloud.slash")
+        XCTAssertEqual(cloud.contentTintColor, .systemRed)
+    }
+
     func testAMissingRightIsNamed() {
         let refusal = RemoteStore.Failure.refused(status: 403, message: "this token has no cas.write right",
                                                   rights: ["cas.write"])

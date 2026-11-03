@@ -1865,3 +1865,5 @@
 "Reading the function…" = "Funktion wird gelesen…";
 "Reading all functions…" = "Alle Funktionen werden gelesen…";
 "The code of this function has not been read, and the analysis store cannot give it now." = "Der Code dieser Funktion wurde noch nicht gelesen, und der Analysespeicher kann ihn derzeit nicht liefern.";
+"The analysis server is available: %1$@" = "Der Analyseserver ist erreichbar: %1$@";
+"The analysis server is not available. %1$@" = "Der Analyseserver ist nicht erreichbar. %1$@";

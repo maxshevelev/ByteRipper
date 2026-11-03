@@ -1,4 +1,4 @@
-@source-sha ae8e614a4c6a9c1c75790ef7e1882f247000204855fed45e9b9b28e58bff2d4e
+@source-sha 3b5fbc381c2d6cae575042962bedf1fd56301d1da0049e8b10046b43a12c9a73
 # Code-Bereich
 
 > Ein Modul als Code gelesen: seine Funktionen, das ASM-Listing, der dekompilierte C und die Bytes, auf die eine Instruktion zeigt.
@@ -22,6 +22,8 @@ Lässt der Decompiler von Ghidra Blöcke aus dem C weg, weil bei den ihm bekannt
 ## Der Kopf
 
 Über der Liste links stehen das Modul und in Klammern die Revision seiner veröffentlichten Analyse — **(r14)**. Die Zeile darunter nennt die Analyse und die Ghidra-Version, mit der sie erstellt wurde. Sind mehrere Analysen des Moduls gespeichert, ist diese Zeile ein Menü: Jede Analyse ist dort gleich benannt, und eine gewählte stellt den Code des Moduls aus dieser Analyse dar und lässt dieselbe Funktion und Instruktion auf dem Bildschirm. Der Kopf über dem Code nennt die gezeigte Funktion mit dem Analysezeichen vor ihrem Namen. Der Name des Moduls und der Name der Funktion lassen sich markieren und kopieren. Der Zeiger über dem Zeichen nennt die Stufe und was fehlt, bei einer Bibliotheksfunktion die Angaben des Registers. Der eigene Name der Funktion in ihrer Signatur ist kein Link: Diese Funktion ist bereits geöffnet. Wird sie aufgerufen, unterstreicht sich der Name unter dem Mauszeiger wie ein Aufruf, und ein Klick darauf — ebenso **⌘**-Klick oder Doppelklick — öffnet stattdessen **Aufrufe anzeigen…**. Ein Rechtsklick auf den Namen einer Funktion — im Kopf, in der Signatur oder an einem Aufruf im C — bietet **Aufrufe anzeigen…** an; an einem Aufruf steht davor **Gehe zu Definition**, das wie ein **⌘**-Klick die aufgerufene Funktion öffnet. Die Liste öffnet sich als Popover neben dem Namen und nennt jeden Aufruf dieser Funktion, eine Zeile je Aufruf: die aufrufende Funktion, die Adresse des Aufrufs und ihre Instruktion; ein Sprung, mit dem die aufrufende Funktion endet, ist mit **Sprung** markiert. Eine Funktion, die sie zweimal aufruft, steht zweimal da. Eine aufrufende Funktion, die Ghidra kennt, deren Aufruf im Listing aber nicht gefunden wurde — ein Aufruf über einen Zeiger —, steht mit **Aufrufstelle unbekannt** da. Ein Klick auf eine Zeile schließt das Popover und öffnet die aufrufende Funktion an diesem Aufruf, markiert im Listing und im C; eine lange Liste lässt sich im Popover scrollen.
+
+Werden die Analysen auf einem Analyseserver gehalten, zeigt die Titelleiste des Bereichs neben der Hilfeschaltfläche den Zustand des Servers. Eine Wolke bedeutet, dass der Server antwortet. Eine rote, durchgestrichene Wolke bedeutet, dass er nicht antwortet oder das Token dieses Macs ablehnt; den Grund nennt der Hinweis unter dem Mauszeiger. Bereits gelesener Code bleibt lesbar, noch nicht gelesener Code ist erst wieder verfügbar, wenn der Server erreichbar ist. Während der Verbindungsaufnahme ist die Wolke blass. Werden die Analysen auf diesem Mac gehalten, erscheint kein Symbol.
 
 ## Beschreibung
 
