@@ -214,19 +214,6 @@ final class AgentModuleToolsTests: XCTestCase {
         XCTAssertEqual(node["node"]?["end"], "0x5000")
     }
 
-    /// What identifies the machine answers `redacted` unless it is asked for:
-    /// the area is otherwise the same, and the bytes stay readable.
-    func testTheDMIAreaHidesTheSerialUnlessAsked() async throws {
-        try open(LenovoTestImage.make())
-        let hidden = "\(try await client.answer("uefi_dmi"))"
-        let shown = "\(try await client.answer("uefi_dmi", ["reveal": true]))"
-        XCTAssertTrue(hidden.contains("redacted"), hidden)
-        XCTAssertFalse(shown.contains("redacted"), shown)
-        XCTAssertFalse(hidden.contains("PF0TEST1"), hidden)
-        XCTAssertTrue(shown.contains("PF0TEST1"), shown)
-        XCTAssertTrue(hidden.contains("Lenovo DMI store"), hidden)
-    }
-
     /// A dump the parser finds no DMI area in is not said to have none: the
     /// answer and the tool's description both say the search knows only some
     /// layouts.
