@@ -132,6 +132,66 @@ final class ContentStorePartsTests: XCTestCase {
         XCTAssertFalse(store.hasObject(lonePart))
     }
 
+    func testADryRunTouchesNothingAndAMigrationKeepsEveryByte() throws {
+        let store = try store(parted: false)
+        let text = Data("# A description\n".utf8)
+        let one = artifact("one"), two = artifact("two")
+        let names = try [one, two, text].map { try store.putObject($0) }
+        func file(_ index: Int) throws -> Data { try Data(contentsOf: store.objectURL(names[index])) }
+
+        let dry = try store.migrateToPartedObjects()
+        XCTAssertEqual(dry.parted, 3)
+        XCTAssertEqual(dry.cut, 2)
+        XCTAssertEqual(dry.filesAfter, 7, "two roots, three functions, the types, the text")
+        XCTAssertEqual(try file(0), one)
+        XCTAssertEqual(objectFiles(store), 3)
+        XCTAssertFalse(store.writesPartedObjects)
+
+        let real = try store.migrateToPartedObjects(dryRun: false)
+        XCTAssertEqual(real.problems, [])
+        XCTAssertTrue(real.switched)
+        XCTAssertTrue(store.writesPartedObjects)
+        XCTAssertEqual(objectFiles(store), 7)
+        XCTAssertNotEqual(try file(0), one)
+        XCTAssertEqual(try store.object(names[0]), one)
+        XCTAssertEqual(try store.object(names[1]), two)
+        XCTAssertEqual(try store.object(names[2]), text)
+        XCTAssertEqual(store.verify(), [])
+
+        let again = try store.migrateToPartedObjects(dryRun: false)
+        XCTAssertEqual(again.parted, 0, "a second run goes on from where the first stopped")
+        XCTAssertEqual(again.alreadyParted, 7)
+    }
+
+    func testADamagedObjectStopsTheSwitchAndIsLeftAlone() throws {
+        let store = try store(parted: false)
+        let good = try store.putObject(artifact("one"))
+        let bad = try store.putObject(Data("words".utf8))
+        try Data("damage".utf8).write(to: store.objectURL(bad))
+        let report = try store.migrateToPartedObjects(dryRun: false)
+        XCTAssertEqual(report.problems.count, 1, "\(report.problems)")
+        XCTAssertFalse(report.switched)
+        XCTAssertFalse(store.writesPartedObjects)
+        XCTAssertEqual(try Data(contentsOf: store.objectURL(bad)), Data("damage".utf8))
+        XCTAssertEqual(try store.object(good), artifact("one"))
+    }
+
+    func testABundleCarriesTheWholeBytesBetweenStoresOfEitherForm() throws {
+        let parted = try store()
+        let data = Data("m".utf8)
+        let module = ModuleIdentity(sha256: SHA256Digest(data: data), size: data.count, name: "M", kind: "TE",
+                                    language: "x86:LE:32:default", imageBase: "0x0")
+        let recipe = AnalysisRecipe(id: "r", exporter: 2, ghidra: "12.2", script: "ExportCode.java")
+        let bytes = artifact("one")
+        let manifest = try parted.putAnalysis(module: module, recipe: recipe, artifact: bytes)
+        let bundle = folder.appendingPathComponent("bundle.zip")
+        _ = try parted.exportBundle([try XCTUnwrap(manifest.key)], to: bundle)
+        let plain = try ContentStore(root: folder.appendingPathComponent("other"))
+        _ = try plain.importBundle(from: bundle)
+        XCTAssertEqual(try Data(contentsOf: plain.objectURL(SHA256Digest(data: bytes))), bytes)
+        XCTAssertEqual(try plain.object(SHA256Digest(data: bytes)), bytes)
+    }
+
     func testJSONThatCannotBeCutIsKeptWhole() throws {
         for text in ["{\"functions\": []}", "[1, 2]", "{\"script_version\": 1, \"functions\": 3}", "not json"] {
             XCTAssertNil(PartedObject.segments(of: Data(text.utf8)), text)

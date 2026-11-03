@@ -23,7 +23,7 @@ builds it therefore needs Xcode or its command line tools; one that sets
 byteripper-cas [--store <root>] [--no-create] <command>
   hello | put-object | has-object | get-object | put-analysis | analysis
   recipes | list | conflicts | record-revision | review-history | set-ref
-  refs | remove-ref | verify | gc | export | import
+  refs | remove-ref | verify | gc | migrate-objects | export | import
   library-rebody <id> <body> --reason <why> [--apply]
 ```
 
@@ -78,6 +78,15 @@ bytes. The file under the artifact's name holds `{"byteripper_parted":1,
 read checks the whole against its name. Two revisions that differ in a few
 functions share the others. `verify` names a part that is missing, and `gc`
 keeps the parts of what it keeps.
+
+`byteripper-cas migrate-objects` brings a store to this form. Without `--apply`
+it does the work in a scratch folder and reports what would come of it: the
+store is not touched. With `--apply` each file is replaced only after what will
+stand there has been read back as the same bytes, and the store is switched
+only when every object came through; a run that stops leaves a store that reads,
+and a second run goes on from there. Nothing else may write the store meanwhile.
+Every build reading it must know the form: an older one cannot read a migrated
+object, and going back means the backup, without what was published since.
 
 ### Analyses
 

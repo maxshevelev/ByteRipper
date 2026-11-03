@@ -26,6 +26,12 @@ extension ContentStore {
 
     /// Writes `data`, named `digest`, in the parted form.
     func writeParted(_ data: Data, digest: SHA256Digest) throws {
+        try atomicWrite(try packed(data), to: objectURL(digest))
+    }
+
+    /// What the file under the object's name is to hold. An artifact's parts
+    /// are written here, so the name of the whole never stands before them.
+    private func packed(_ data: Data) throws -> Data {
         if let segments = PartedObject.segments(of: data) {
             var names: [PartedObject.Part] = []
             for segment in segments {
@@ -38,12 +44,78 @@ extension ContentStore {
                     names.append(.object(name.hex))
                 }
             }
-            // Last, so the name of the whole never stands before its parts.
-            let root = try PartedObject.encodedRoot(names)
-            try atomicWrite(try Gzip.compress(root), to: objectURL(digest))
-            return
+            return try Gzip.compress(try PartedObject.encodedRoot(names))
         }
-        try atomicWrite(try Gzip.compress(data), to: objectURL(digest))
+        return try Gzip.compress(data)
+    }
+
+    /// Brings every object of the store to the parted form and switches the
+    /// store to write it. A dry run does the same in a scratch folder, so the
+    /// numbers and the check are the real ones and the store is not touched.
+    ///
+    /// An object's file is replaced only after what will stand there has been
+    /// read back as the same bytes, by one atomic rename, so a run that stops
+    /// leaves a store that reads, and a second run goes on from there. The
+    /// store is switched only when every object came through. Nothing else may
+    /// write the store meanwhile, and every build reading it must know parts.
+    public func migrateToPartedObjects(dryRun: Bool = true) throws -> PartedMigrationReport {
+        var report = PartedMigrationReport(dryRun: dryRun)
+        let scratch = dryRun
+            ? FileManager.default.temporaryDirectory
+                .appendingPathComponent("byteripper-cas-migrate-\(UUID().uuidString)", isDirectory: true)
+            : nil
+        defer { if let scratch { try? FileManager.default.removeItem(at: scratch) } }
+        let target = try scratch.map { try ContentStore(root: $0) } ?? self
+        // A dry run writes nothing here, so it keeps no publish waiting.
+        func exclusive(_ body: () throws -> Void) throws {
+            if dryRun { try body() } else { try withLock(body) }
+        }
+        try exclusive {
+            for url in contents(of: objectsURL) {
+                guard let digest = SHA256Digest(hex: url.lastPathComponent) else {
+                    report.problems.append("objects/\(url.lastPathComponent): not a SHA-256 name")
+                    continue
+                }
+                guard let stored = try? Data(contentsOf: url) else {
+                    report.problems.append("objects/\(digest.hex): cannot be read")
+                    continue
+                }
+                report.objects += 1
+                guard SHA256Digest(data: stored) == digest else {
+                    // Not plain: parted by an earlier run, or damaged.
+                    do {
+                        _ = try unpacked(stored, digest: digest)
+                        report.alreadyParted += 1
+                    } catch {
+                        report.problems.append("objects/\(digest.hex): \(error)")
+                    }
+                    continue
+                }
+                report.bytesBefore += stored.count
+                do {
+                    let file = try target.packed(stored)
+                    guard try target.unpacked(file, digest: digest) == stored else {
+                        throw CodeAnalysisError.objectCorrupt(digest.hex)
+                    }
+                    try target.atomicWrite(file, to: target.objectURL(digest))
+                    report.parted += 1
+                    if !target.parts(of: digest).isEmpty { report.cut += 1 }
+                } catch {
+                    report.problems.append("objects/\(digest.hex): \(error)")
+                }
+            }
+            for url in target.contents(of: target.objectsURL) {
+                let values = try? url.resourceValues(forKeys: [.fileSizeKey, .totalFileAllocatedSizeKey])
+                report.filesAfter += 1
+                report.bytesAfter += values?.fileSize ?? 0
+                report.bytesOnDiskAfter += values?.totalFileAllocatedSize ?? 0
+            }
+            if report.problems.isEmpty, !dryRun {
+                try enablePartedObjects()
+                report.switched = true
+            }
+        }
+        return report
     }
 
     /// The bytes named `digest`, from what its file holds, in any form the
@@ -66,10 +138,9 @@ extension ContentStore {
                         throw CodeAnalysisError.objectMissing(hex)
                     }
                     // Checked once, as a whole, below.
-                    guard let bytes = Gzip.decompress(file) else {
-                        throw CodeAnalysisError.objectCorrupt(hex)
-                    }
-                    whole.append(bytes)
+                    // A part can be an object written plain before the store
+                    // was switched: the same bytes happened to exist.
+                    whole.append(Gzip.decompress(file) ?? file)
                 }
             }
             guard SHA256Digest(data: whole) == digest else {
@@ -94,6 +165,27 @@ extension ContentStore {
             return nil
         }
     }
+}
+
+/// What `migrateToPartedObjects` did, or in a dry run would do.
+public struct PartedMigrationReport: Codable, Equatable, Sendable {
+    public var dryRun: Bool
+    public var objects = 0
+    /// Brought to the parted form by this run.
+    public var parted = 0
+    /// Of those, the artifacts cut into parts.
+    public var cut = 0
+    public var alreadyParted = 0
+    public var bytesBefore = 0
+    public var filesAfter = 0
+    /// What the object files hold, and what they take on the disk.
+    public var bytesAfter = 0
+    public var bytesOnDiskAfter = 0
+    public var problems: [String] = []
+    /// Whether the store now writes the parted form.
+    public var switched = false
+
+    public init(dryRun: Bool) { self.dryRun = dryRun }
 }
 
 /// The file under a cut artifact's name, and the cutting.
