@@ -3092,13 +3092,17 @@ import ToolModuleKit
     /// What the diff puts before a line: two four-digit numbers and the mark.
     /// The C reads in the same width whether or not it is compared.
     static let diffGutterColumns = 14
+    /// The commas a line of the limit is allowed for: each is drawn a space
+    /// wider than the characters the decompiler counted. An estimate of a
+    /// busy argument list, not a bound.
+    static let commaColumns = 12
 
     /// The width the pane needs for any code to fit without wrapping: the list
     /// as the reader left it and the longest line the decompiler can write in
     /// the chosen font, whichever function is on screen.
     public var codeFitWidth: CGFloat {
         let column = ("M" as NSString).size(withAttributes: [.font: Self.codeFont()]).width
-        let columns = CGFloat(Self.longestCodeLine + Self.diffGutterColumns)
+        let columns = CGFloat(Self.longestCodeLine + Self.diffGutterColumns + Self.commaColumns)
         let padding = 2 * (cTextView.textContainerInset.width
                            + (cTextView.textContainer?.lineFragmentPadding ?? 0))
         let scroller = NSScroller.scrollerWidth(for: .regular, scrollerStyle: NSScroller.preferredScrollerStyle)

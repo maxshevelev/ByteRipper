@@ -84,15 +84,20 @@ enum CodeColors {
         }
         if spacedCommas {
             // Ghidra's printer sets a comma hard against what follows it —
-            // `f(a,b)`. A kern widens the comma the way a space would, and
-            // the text keeps the offsets the artifact's spans are measured in.
+            // `f(a,b)`. A kern of a space's width sets it apart as a space
+            // would, and the text keeps the offsets the artifact's spans are
+            // measured in. A comma that already has a space after it, in a
+            // comment's prose, keeps that one.
+            let space = (" " as NSString).size(withAttributes: [.font: font]).width
             let commas = string.string as NSString
             var search = NSRange(location: 0, length: string.length)
             while search.length > 0 {
                 let found = commas.range(of: ",", options: [], range: search)
                 guard found.location != NSNotFound else { break }
-                string.addAttribute(.kern, value: font.pointSize * 0.3, range: found)
                 let next = found.location + found.length
+                let spaced = next < string.length
+                    && CharacterSet.whitespacesAndNewlines.contains(UnicodeScalar(commas.character(at: next)) ?? "x")
+                if !spaced { string.addAttribute(.kern, value: space, range: found) }
                 search = NSRange(location: next, length: string.length - next)
             }
         }

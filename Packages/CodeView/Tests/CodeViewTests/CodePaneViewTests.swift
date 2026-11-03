@@ -2228,6 +2228,20 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(next.comparisonRevision, 55, "F wears a new mark, and it wins")
     }
 
+    /// A comma Ghidra sets hard against the next name is drawn a space apart,
+    /// in the C and in the diff; one with a space after it keeps that one.
+    func testACommaIsDrawnASpaceApart() {
+        var links: [CodeLink] = []
+        let font = CodePaneView.codeFont()
+        let text = CodeColors.attributed("f(a,b), c,\nd", tokens: [], font: font, links: &links,
+                                         asTextLinks: false, spacedCommas: true)
+        func kern(_ at: Int) -> CGFloat? { text.attribute(.kern, at: at, effectiveRange: nil) as? CGFloat }
+        XCTAssertEqual(kern(3), (" " as NSString).size(withAttributes: [.font: font]).width)
+        XCTAssertNil(kern(6), "a space follows")
+        XCTAssertNil(kern(9), "the line ends")
+        XCTAssertEqual(text.string, "f(a,b), c,\nd", "the offsets the spans are measured in stay")
+    }
+
     /// The fit is the longest line the decompiler writes, in the chosen font:
     /// the function on screen does not enter into it.
     func testTheCodeFitComesFromTheLineLimitAndTheFont() throws {

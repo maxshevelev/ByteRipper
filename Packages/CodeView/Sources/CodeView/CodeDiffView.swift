@@ -192,7 +192,7 @@ struct CodeDiffCode {
                 }
             }
             shown.append(CodeColors.attributed(lineText, tokens: shifted, font: font,
-                                               links: &shownLinks, asTextLinks: true))
+                                               links: &shownLinks, asTextLinks: true, spacedCommas: true))
             shownCode.append(CodeDiffCode(range: NSRange(location: codeStart, length: shown.length - codeStart),
                                           lineStart: line.lineStart, currentSide: line.currentSide))
             let added = if case .added = line.row { true } else { false }
