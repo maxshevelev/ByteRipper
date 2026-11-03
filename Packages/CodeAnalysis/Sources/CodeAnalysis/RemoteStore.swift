@@ -58,13 +58,33 @@ public struct RemoteStore: Sendable {
     }
 
     /// The same as `object`, for `ContentStore.objectSource`, which is called
-    /// from synchronous code off the main actor.
+    /// from synchronous code off the main actor — usually from inside a task,
+    /// blocking a thread of the cooperative pool. So the wait needs no task:
+    /// `blocking` here would starve once the pool is full of such waits, and
+    /// the answer comes back at the waiting thread's own QoS.
     public func objectBlocking(_ digest: SHA256Digest) throws -> Data {
-        try Self.blocking { try await object(digest) }
+        let request = try request("GET", "objects/\(digest.hex)", query: [:], body: nil, timeout: 20)
+        let box = BlockingResult<Data>()
+        let semaphore = DispatchSemaphore(value: 0)
+        session.dataTask(with: request) { data, response, error in
+            box.value = Result {
+                if let error { throw unreachable(error) }
+                guard let data, let response else { throw Failure.unexpected("not an HTTP answer") }
+                return try checked(data, response)
+            }
+            semaphore.signal()
+        }.resume()
+        semaphore.wait()
+        let data = try box.value!.get()
+        guard SHA256Digest(data: data) == digest else {
+            throw CodeAnalysisError.objectCorrupt(digest.hex)
+        }
+        return data
     }
 
     /// Waits on this thread for an async call. Only off the main actor, and
-    /// never from inside a task the call would need: it blocks the thread.
+    /// never from inside a task: the call needs a thread of the cooperative
+    /// pool, and this one blocks.
     public static func blocking<T>(_ body: @escaping @Sendable () async throws -> T) throws -> T {
         let box = BlockingResult<T>()
         let semaphore = DispatchSemaphore(value: 0)
@@ -221,6 +241,19 @@ public struct RemoteStore: Sendable {
 
     private func call(_ method: String, _ path: String, query: [String: String] = [:],
                       body: Data? = nil, timeout: TimeInterval = 20) async throws -> Data {
+        let request = try request(method, path, query: query, body: body, timeout: timeout)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw unreachable(error)
+        }
+        return try checked(data, response)
+    }
+
+    private func request(_ method: String, _ path: String, query: [String: String],
+                         body: Data?, timeout: TimeInterval) throws -> URLRequest {
         var components = URLComponents(url: base, resolvingAgainstBaseURL: false)!
         components.path = (components.path.hasSuffix("/") ? String(components.path.dropLast()) : components.path)
             + ServedStoreProtocol.prefix + "/" + path
@@ -232,13 +265,14 @@ public struct RemoteStore: Sendable {
         request.httpMethod = method
         request.httpBody = body
         if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        let data: Data
-        let response: URLResponse
-        do {
-            (data, response) = try await session.data(for: request)
-        } catch {
-            throw Failure.unreachable("\(base.absoluteString): \(error.localizedDescription)")
-        }
+        return request
+    }
+
+    private func unreachable(_ error: Error) -> Failure {
+        .unreachable("\(base.absoluteString): \(error.localizedDescription)")
+    }
+
+    private func checked(_ data: Data, _ response: URLResponse) throws -> Data {
         guard let http = response as? HTTPURLResponse else {
             throw Failure.unexpected("not an HTTP answer")
         }
