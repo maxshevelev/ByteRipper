@@ -308,6 +308,28 @@ public struct RemoteStore: Sendable {
                        timeout: TimeInterval(wait + 30))
     }
 
+    /// Listens to the server's heartbeat, calling `beat` at each one, until the
+    /// connection ends. Throws `refused` with 404 for a server from before it.
+    public func listenToHeartbeat(_ beat: @escaping @Sendable () async -> Void) async throws {
+        let request = try request("GET", "heartbeat", query: [:], body: nil, timeout: 60)
+        do {
+            let (bytes, response) = try await session.bytes(for: request)
+            guard (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) == true else {
+                var refusal = Data()
+                for try await byte in bytes { refusal.append(byte) }
+                _ = try checked(refusal, response)
+                return
+            }
+            for try await line in bytes.lines where line.hasPrefix("data:") {
+                await beat()
+            }
+        } catch let failure as Failure {
+            throw failure
+        } catch {
+            throw unreachable(error)
+        }
+    }
+
     // MARK: - Transport
 
     private var encoder: JSONEncoder {

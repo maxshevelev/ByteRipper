@@ -264,6 +264,10 @@ public final class HTTPServer: @unchecked Sendable {
                                      duration: Date().timeIntervalSince(started),
                                      principal: request.principal, peer: peer))
             self.queue.async {
+                if let stream = response.stream {
+                    self.send(stream, head: response.streamHead(), on: connection)
+                    return
+                }
                 self.send(response, on: connection, keepAlive: keepAlive)
                 if keepAlive { self.receive(on: connection, parser: parser) }
             }
@@ -292,6 +296,40 @@ public final class HTTPServer: @unchecked Sendable {
                         completion: .contentProcessed { _ in
             if !keepAlive { connection.cancel() }
         })
+    }
+
+    /// A long-lived answer: the head now, then each piece as `body` writes it.
+    /// A client that went away ends it at its next write, and `stop` the same.
+    private func send(_ body: @escaping @Sendable (HTTPStreamWriter) async -> Void, head: Data,
+                      on connection: NWConnection) {
+        connection.send(content: head, completion: .contentProcessed { _ in })
+        watchForTheEnd(of: connection)
+        let writer = HTTPStreamWriter { data in
+            await withCheckedContinuation { written in
+                connection.send(content: HTTPResponse.chunk(data), completion: .contentProcessed { error in
+                    written.resume(returning: error == nil)
+                })
+            }
+        }
+        Task {
+            await body(writer)
+            connection.send(content: HTTPResponse.lastChunk, completion: .contentProcessed { _ in
+                connection.cancel()
+            })
+        }
+    }
+
+    /// Nothing more is read as a request on a connection that holds a stream:
+    /// a read only tells when the client has gone.
+    private func watchForTheEnd(of connection: NWConnection) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 1 << 12) {
+            [weak self] _, _, isComplete, error in
+            if error != nil || isComplete {
+                connection.cancel()
+            } else {
+                self?.watchForTheEnd(of: connection)
+            }
+        }
     }
 
 }

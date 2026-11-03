@@ -168,6 +168,66 @@ final class HTTPServerTests: XCTestCase {
         return ((response as! HTTPURLResponse).statusCode, data)
     }
 
+    /// A stream reaches the client piece by piece, while it runs, and ends at
+    /// its next write once the client has gone.
+    func testAStreamArrivesAsItIsWrittenAndEndsWithItsClient() async throws {
+        final class Ended: @unchecked Sendable {
+            private let lock = NSLock()
+            private var ended = false
+            func end() { lock.withLock { ended = true } }
+            var isEnded: Bool { lock.withLock { ended } }
+        }
+        let ended = Ended()
+        let (gate, open) = AsyncStream.makeStream(of: Void.self)
+        let (server, base) = try await serve { router in
+            router.add("GET", "/stream") { _ in
+                .stream(type: "text/event-stream") { client in
+                    _ = await client.write(Data("data: first\n\n".utf8))
+                    for await _ in gate { break }
+                    while await client.write(Data("data: more\n\n".utf8)) {
+                        try? await Task.sleep(nanoseconds: 20_000_000)
+                    }
+                    ended.end()
+                }
+            }
+        }
+        defer { server.stop() }
+        var request = URLRequest(url: base.appendingPathComponent("stream"))
+        request.setValue("Bearer s3cret", forHTTPHeaderField: "Authorization")
+        let reading = Task { () -> [String] in
+            let (bytes, _) = try await URLSession.shared.bytes(for: request)
+            var lines: [String] = []
+            for try await line in bytes.lines {
+                lines.append(line)
+                // Told only once the first piece is here: it did not wait for
+                // the rest of the answer.
+                if lines.count == 1 { open.yield() }
+                if lines.count == 2 { break }
+            }
+            return lines
+        }
+        let lines = try await reading.value
+        XCTAssertEqual(lines, ["data: first", "data: more"])
+        for _ in 0..<500 where !ended.isEnded { try await Task.sleep(nanoseconds: 10_000_000) }
+        XCTAssertTrue(ended.isEnded, "nobody is listening any more")
+    }
+
+    /// A stream that ends is a well-formed answer, and the end of its connection.
+    func testAStreamThatEndsIsAWholeAnswer() async throws {
+        let (server, base) = try await serve { router in
+            router.add("GET", "/short") { _ in
+                .stream(type: "text/plain") { client in
+                    _ = await client.write(Data("one".utf8))
+                    _ = await client.write(Data("two".utf8))
+                }
+            }
+        }
+        defer { server.stop() }
+        let (status, data) = try await call(base.appendingPathComponent("short"), token: "s3cret")
+        XCTAssertEqual(status, 200)
+        XCTAssertEqual(String(decoding: data, as: UTF8.self), "onetwo")
+    }
+
     func testAServedRouteAnswersOverLoopbackWithKeepAlive() async throws {
         let (server, base) = try await serve { router in
             router.add("POST", "/echo") { .bytes($0.body) }

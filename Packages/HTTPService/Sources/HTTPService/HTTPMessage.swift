@@ -65,6 +65,17 @@ public struct HTTPStatus: Equatable, Sendable {
     public static let unavailable = HTTPStatus(503, "Service Unavailable")
 }
 
+/// Where a long-lived answer writes, one piece at a time.
+public struct HTTPStreamWriter: Sendable {
+    let send: @Sendable (Data) async -> Bool
+
+    /// Puts `data` on the wire now. False once the client is gone: the answer
+    /// has nobody left to write to, and should end.
+    public func write(_ data: Data) async -> Bool {
+        await send(data)
+    }
+}
+
 public struct HTTPResponse: Sendable {
     public var status: HTTPStatus
     public var headers: [String: String]
@@ -72,6 +83,9 @@ public struct HTTPResponse: Sendable {
     /// Each a `Set-Cookie` line of its own: a header the protocol repeats
     /// rather than joins, which `headers` cannot hold twice.
     public var cookies: [String] = []
+    /// An answer that goes on: its pieces are written as they come, chunked,
+    /// and the connection ends with it. `body` is not sent.
+    public var stream: (@Sendable (HTTPStreamWriter) async -> Void)?
 
     public init(_ status: HTTPStatus = .ok, headers: [String: String] = [:], body: Data = Data()) {
         self.status = status
@@ -93,6 +107,15 @@ public struct HTTPResponse: Sendable {
 
     public static func bytes(_ data: Data, type: String = "application/octet-stream") -> HTTPResponse {
         HTTPResponse(.ok, headers: ["content-type": type], body: data)
+    }
+
+    /// An answer the server pushes for as long as `body` runs and the client
+    /// stays. The connection holds it and nothing else.
+    public static func stream(type: String,
+                              _ body: @escaping @Sendable (HTTPStreamWriter) async -> Void) -> HTTPResponse {
+        var response = HTTPResponse(.ok, headers: ["content-type": type, "cache-control": "no-store"])
+        response.stream = body
+        return response
     }
 
     /// `{"error": "…"}`, the shape `byteripper-cas` refuses with — and
@@ -125,6 +148,31 @@ public struct HTTPResponse: Sendable {
         data.append(body)
         return data
     }
+
+    /// The head of a `stream` answer: chunked, no length, and the last on its
+    /// connection.
+    func streamHead() -> Data {
+        var head = "HTTP/1.1 \(status.code) \(status.reason)\r\n"
+        var fields = headers
+        fields["transfer-encoding"] = "chunked"
+        fields["connection"] = "close"
+        for name in fields.keys.sorted() {
+            head += "\(name): \(fields[name]!)\r\n"
+        }
+        head += "\r\n"
+        return Data(head.utf8)
+    }
+
+    /// One piece of a `stream` answer on the wire.
+    static func chunk(_ data: Data) -> Data {
+        var chunk = Data((String(data.count, radix: 16) + "\r\n").utf8)
+        chunk.append(data)
+        chunk.append(Data("\r\n".utf8))
+        return chunk
+    }
+
+    /// What ends a `stream` answer.
+    static let lastChunk = Data("0\r\n\r\n".utf8)
 }
 
 /// A refusal a route throws; the server answers it as `HTTPResponse.error`.

@@ -111,6 +111,7 @@ carries `Authorization: Bearer <token>`.
 | `POST import` | a bundle as the body → the import report |
 | `POST export` | `{keys}` → a bundle |
 | `GET verify` | the report, read-only |
+| `GET heartbeat` | a stream the server pushes, `data: {"beat":<n>}` every 5 s: what a client watches to see the connection |
 | `GET changes?since=<seq>&wait=<s>` | long poll: `{store, seq, modules: […]}` — the modules whose manifests or histories changed since `seq` |
 
 - **Garbage collection is not served.** It runs on the server's own

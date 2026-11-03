@@ -1,6 +1,7 @@
 import CodeAnalysis
 import Foundation
 import Localization
+import Network
 import UEFIToolUI
 
 /// Where the app keeps its code analyses: on this Mac, or on a
@@ -88,10 +89,28 @@ final class CodeAnalysisLocation {
     private(set) var mirror: StoreMirror?
     private var following: Task<Void, Never>?
 
+    /// The server is connected, and a heartbeat is late or never comes: nothing
+    /// is known to have failed.
+    private(set) var isServerDoubtful = false {
+        didSet {
+            guard isServerDoubtful != oldValue else { return }
+            NotificationCenter.default.post(name: Self.didChange, object: self)
+        }
+    }
+    private var heartbeatWatch = HeartbeatWatch()
+    private var listening: Task<Void, Never>?
+    private var heartbeatTimer: Timer?
+    private var pathMonitor: NWPathMonitor?
+    private var hasNetwork = true
+
+    /// The server refuses to send a heartbeat, being older than it.
+    var serverHasNoHeartbeat: Bool { heartbeatWatch.serverHasNone }
+
     /// Applies the stored choice; at launch, and after the tab changes it.
     func apply() {
         following?.cancel()
         following = nil
+        stopWatchingTheConnection()
         remote = nil
         mirror = nil
         guard mode == .server, let url = Self.serverURL(serverAddress) else {
@@ -116,6 +135,96 @@ final class CodeAnalysisLocation {
             state = .refused(reason: L("This Mac keeps no token for the server: enter the one made on the server by byteripper-server token add."))
             return
         }
+        following = Task { [weak self] in await self?.follow(mirror) }
+        watchTheConnection(remote)
+    }
+
+    // MARK: - The connection
+
+    private func watchTheConnection(_ remote: RemoteStore) {
+        heartbeatWatch = HeartbeatWatch()
+        hasNetwork = true
+        listening = Task { [weak self] in await self?.listen(to: remote) }
+        heartbeatTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.checkHeartbeat(at: Date()) }
+        }
+        // The Mac's own side: known at once, where a heartbeat takes seconds.
+        // A tunnel keeps its path satisfied when what is behind it goes, so
+        // this does not replace the heartbeat.
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            let satisfied = path.status == .satisfied
+            Task { @MainActor in self?.networkChanged(satisfied: satisfied) }
+        }
+        monitor.start(queue: DispatchQueue(label: "CodeAnalysisLocation.path"))
+        pathMonitor = monitor
+    }
+
+    private func stopWatchingTheConnection() {
+        listening?.cancel()
+        listening = nil
+        heartbeatTimer?.invalidate()
+        heartbeatTimer = nil
+        pathMonitor?.cancel()
+        pathMonitor = nil
+        isServerDoubtful = false
+    }
+
+    /// Stays on the heartbeat, connecting again whenever it ends. A refusal —
+    /// a server from before the heartbeat — is asked again only now and then:
+    /// that server may be updated.
+    private func listen(to remote: RemoteStore) async {
+        while !Task.isCancelled {
+            do {
+                try await remote.listenToHeartbeat { [weak self] in
+                    await self?.heartbeatHeard()
+                }
+            } catch RemoteStore.Failure.refused {
+                heartbeatWatch.serverHasNoHeartbeat()
+                checkHeartbeat(at: Date())
+                try? await Task.sleep(nanoseconds: 60_000_000_000)
+                continue
+            } catch {}
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+        }
+    }
+
+    private func heartbeatHeard() {
+        heartbeatWatch.beat(at: Date())
+        isServerDoubtful = false
+    }
+
+    /// What the time since the last beat says about a server taken to be
+    /// connected. Each second, and a test's own `now`.
+    func checkHeartbeat(at now: Date) {
+        guard case .connected = state else { return }
+        switch heartbeatWatch.verdict(at: now) {
+        case .alive: isServerDoubtful = false
+        case .doubtful: isServerDoubtful = true
+        case .lost: connectionLost(reason: L("The server's heartbeat has stopped."))
+        }
+    }
+
+    /// The Mac gained or lost its network. Regained, the feed connects now
+    /// rather than at the end of its pause.
+    func networkChanged(satisfied: Bool) {
+        guard satisfied != hasNetwork else { return }
+        hasNetwork = satisfied
+        if !satisfied {
+            connectionLost(reason: L("This Mac has no network connection."))
+        } else if let mirror {
+            following?.cancel()
+            following = Task { [weak self] in await self?.follow(mirror) }
+        }
+    }
+
+    /// The feed's long poll would go on waiting on the dead connection, so it
+    /// starts over; connecting again is what says the server is back.
+    private func connectionLost(reason: String) {
+        guard let mirror else { return }
+        following?.cancel()
+        isServerDoubtful = false
+        state = .unreachable(reason: reason)
         following = Task { [weak self] in await self?.follow(mirror) }
     }
 
@@ -143,6 +252,7 @@ final class CodeAnalysisLocation {
                 let storeID = store.root.lastPathComponent
                 AppDefaults.store.set(storeID, forKey: Self.storeKey)
                 UEFIToolModule.codeAnalysisRoot = store.root
+                heartbeatWatch.connected(at: Date())
                 state = .connected(store: storeID)
                 try? await mirror.collectGarbage()
                 pause = 2

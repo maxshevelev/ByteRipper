@@ -31,6 +31,33 @@ final class CASServiceTests: XCTestCase {
 
     // MARK: - Helpers
 
+    /// The server beats by itself, for as long as the client listens, and asks
+    /// the same right as the feed.
+    func testAClientHearsTheHeartbeat() async throws {
+        service.heartbeatInterval = 0.05
+        let beating = HTTPServer(configuration: .init(port: 0, token: "token"), router: service.routes())
+        let port = try await beating.start()
+        defer { beating.stop() }
+        let client = RemoteStore(base: URL(string: "http://127.0.0.1:\(port)")!, token: "token")
+        let (beats, heard) = AsyncStream.makeStream(of: Void.self)
+        let listening = Task { try await client.listenToHeartbeat { heard.yield() } }
+        defer { listening.cancel() }
+        var count = 0
+        for await _ in beats {
+            count += 1
+            if count == 3 { break }
+        }
+        XCTAssertEqual(count, 3)
+
+        let stranger = RemoteStore(base: URL(string: "http://127.0.0.1:\(port)")!, token: "wrong")
+        do {
+            try await stranger.listenToHeartbeat {}
+            XCTFail("a token it does not know hears nothing")
+        } catch RemoteStore.Failure.refused(let status, _, _) {
+            XCTAssertEqual(status, 401)
+        }
+    }
+
     private func artifact(_ functions: Int) -> Data {
         let functions = (0..<functions).map { index in
             ["entry": String(format: "0x%X", index), "name": "FUN_\(index)",

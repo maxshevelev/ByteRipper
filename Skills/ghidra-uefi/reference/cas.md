@@ -285,6 +285,10 @@ python3 scripts/cas_cli.py --store http://100.64.0.7:8765 list
   change by a long poll, `GET /cas/v1/changes?since=<seq>&epoch=<epoch>&wait=<s>`:
   it answers as soon as a module's manifests or history change, with the
   modules that did, or `resync` when the client must read everything again.
+- `GET /cas/v1/heartbeat` is a stream the server pushes for as long as the client
+  stays: `text/event-stream`, one `data: {"beat":<n>}` every 5 seconds. A client
+  that stops hearing it knows the connection is gone without waiting for a
+  request to time out. An older server answers 404.
 
 ## The project's part
 

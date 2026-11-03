@@ -14,6 +14,8 @@ public struct CASService: Sendable {
     public let feed: ChangeFeed
     /// The longest a long poll is held, whatever the client asks.
     public var maxWait: TimeInterval = 60
+    /// How often `heartbeat` writes; a test's own.
+    public var heartbeatInterval = HeartbeatWatch.interval
 
     public init(store: ContentStore) throws {
         self.store = store
@@ -41,6 +43,7 @@ public struct CASService: Sendable {
         let store = self.store
         let feed = self.feed
         let maxWait = self.maxWait
+        let heartbeatInterval = self.heartbeatInterval
 
         router.add("GET", "\(prefix)/hello", access: .rights([.casRead])) { _ in
             .json(ServedStoreProtocol.Hello(store: feed.storeID, epoch: feed.epoch, seq: await feed.current))
@@ -191,6 +194,19 @@ public struct CASService: Sendable {
             let since = Int(request.query["since"] ?? "") ?? 0
             let wait = min(TimeInterval(request.query["wait"] ?? "") ?? 0, maxWait)
             return .json(await feed.changes(since: since, epoch: request.query["epoch"], wait: wait))
+        }
+
+        // Pushed, not asked for: a client that stops hearing it knows the
+        // connection is gone, which a long poll says only when it times out.
+        router.add("GET", "\(prefix)/heartbeat", access: .rights([.casRead])) { _ in
+            .stream(type: "text/event-stream") { client in
+                var beat = 0
+                while true {
+                    beat += 1
+                    guard await client.write(Data("data: {\"beat\":\(beat)}\n\n".utf8)) else { return }
+                    try? await Task.sleep(nanoseconds: UInt64(heartbeatInterval * 1_000_000_000))
+                }
+            }
         }
         return router
     }

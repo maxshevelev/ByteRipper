@@ -1872,3 +1872,7 @@
 "The analysis store could not be opened: %1$@" = "Не удалось открыть хранилище разборов: %1$@";
 "The analysis could not be read: %1$@" = "Не удалось прочитать разбор: %1$@";
 "Opened without their code panel. It stays saved, and the next launch tries again:" = "Открыто без панели кода. Панель остаётся сохранённой, при следующем запуске будет выполнена новая попытка:";
+"The analysis server's heartbeat is late: %1$@" = "Сигнал сервера разборов запаздывает: %1$@";
+"The server's heartbeat has stopped." = "Сигнал сервера прекратился.";
+"This Mac has no network connection." = "У этого Mac нет подключения к сети.";
+"This analysis server sends no heartbeat, so a lost connection shows late: %1$@" = "Этот сервер разборов не отправляет сигнал, поэтому потеря соединения обнаруживается с задержкой: %1$@";

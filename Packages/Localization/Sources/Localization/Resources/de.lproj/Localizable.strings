@@ -1872,3 +1872,7 @@
 "The analysis store could not be opened: %1$@" = "Der Analysespeicher konnte nicht geöffnet werden: %1$@";
 "The analysis could not be read: %1$@" = "Die Analyse konnte nicht gelesen werden: %1$@";
 "Opened without their code panel. It stays saved, and the next launch tries again:" = "Ohne Code-Bereich geöffnet. Er bleibt gespeichert, beim nächsten Start wird es erneut versucht:";
+"The analysis server's heartbeat is late: %1$@" = "Das Signal des Analyseservers verspätet sich: %1$@";
+"The server's heartbeat has stopped." = "Das Signal des Servers ist ausgeblieben.";
+"This Mac has no network connection." = "Dieser Mac hat keine Netzwerkverbindung.";
+"This analysis server sends no heartbeat, so a lost connection shows late: %1$@" = "Dieser Analyseserver sendet kein Signal, daher wird ein Verbindungsverlust erst verspätet erkannt: %1$@";

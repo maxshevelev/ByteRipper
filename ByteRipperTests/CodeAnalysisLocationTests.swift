@@ -1,3 +1,4 @@
+import AppPalette
 import CASService
 import CodeAnalysis
 import HTTPService
@@ -173,18 +174,23 @@ final class CodeAnalysisLocationTests: XCTestCase {
         XCTAssertTrue(cloud.isHidden, "on this Mac there is no server to speak of")
 
         try location.choose(.server, server: address, token: "secret")
+        XCTAssertTrue(cloud.isPulsing, "connecting")
+        XCTAssertEqual(cloud.symbolName, "icloud")
         await wait("the connection") { if case .connected = location.state { return true } else { return false } }
         XCTAssertFalse(cloud.isHidden)
-        XCTAssertEqual(cloud.symbolName, "cloud")
-        XCTAssertEqual(cloud.contentTintColor, .secondaryLabelColor)
+        XCTAssertEqual(cloud.symbolName, "icloud")
+        XCTAssertNotNil(cloud.image)
+        XCTAssertEqual(cloud.contentTintColor, SemanticColors.quiet)
         XCTAssertEqual(cloud.toolTip, L("The analysis server is available: %1$@", address))
+        XCTAssertFalse(cloud.isPulsing)
 
         server.stop()
         await wait("the loss", timeout: 40) {
             if case .unreachable = location.state { return true } else { return false }
         }
-        XCTAssertEqual(cloud.symbolName, "cloud.slash")
-        XCTAssertEqual(cloud.contentTintColor, .systemRed)
+        XCTAssertEqual(cloud.symbolName, "xmark.icloud.fill")
+        XCTAssertNotNil(cloud.image, "a symbol the system has: a name it lacks draws nothing")
+        XCTAssertEqual(cloud.contentTintColor, SemanticColors.bad)
         guard case .unreachable(let reason) = location.state else { return XCTFail("the state changed") }
         XCTAssertEqual(cloud.toolTip, L("The analysis server is not available. %1$@", reason))
         XCTAssertEqual(cloud.accessibilityLabel(), cloud.toolTip)
@@ -193,12 +199,97 @@ final class CodeAnalysisLocationTests: XCTestCase {
         XCTAssertTrue(cloud.isHidden)
     }
 
+    /// A heartbeat that stops: a doubt first, then a lost connection, and the
+    /// feed connecting again brings the cloud back.
+    func testALateHeartbeatIsADoubtThenALostConnection() async throws {
+        service.heartbeatInterval = 0.1
+        server.stop()
+        server = HTTPServer(configuration: .init(port: 0, token: "secret"), router: service.routes())
+        address = "http://127.0.0.1:\(try await server.start())"
+        let cloud = CodeServerIndicator(location: location)
+        try location.choose(.server, server: address, token: "secret")
+        await wait("the connection") { if case .connected = location.state { return true } else { return false } }
+        // A beat has been heard: nothing says so but what silence then means.
+        await wait("the doubt") {
+            location.checkHeartbeat(at: Date().addingTimeInterval(HeartbeatWatch.doubtfulAfter + 1))
+            return location.isServerDoubtful
+        }
+        XCTAssertEqual(cloud.symbolName, "exclamationmark.icloud")
+        XCTAssertEqual(cloud.contentTintColor, SemanticColors.caution)
+        XCTAssertNotNil(cloud.image)
+        XCTAssertEqual(cloud.toolTip, L("The analysis server's heartbeat is late: %1$@", address))
+        XCTAssertEqual(cloud.symbolConfiguration, NSImage.SymbolConfiguration(pointSize: 14, weight: .bold))
+
+        await wait("the next beat") { !location.isServerDoubtful }
+        XCTAssertEqual(cloud.symbolName, "icloud")
+        XCTAssertEqual(cloud.symbolConfiguration, NSImage.SymbolConfiguration(pointSize: 14, weight: .regular))
+
+        location.checkHeartbeat(at: Date().addingTimeInterval(HeartbeatWatch.lostAfter + 1))
+        XCTAssertEqual(cloud.symbolName, "xmark.icloud.fill", "the server is up, and the heartbeat says otherwise")
+        XCTAssertEqual(location.state, .unreachable(reason: L("The server's heartbeat has stopped.")))
+        await wait("connecting again") { if case .connected = location.state { return true } else { return false } }
+        XCTAssertEqual(cloud.symbolName, "icloud")
+    }
+
+    /// The Mac's own network going is known at once, and its return reconnects.
+    func testTheMacsNetworkGoingIsALostConnection() async throws {
+        let cloud = CodeServerIndicator(location: location)
+        try location.choose(.server, server: address, token: "secret")
+        await wait("the connection") { if case .connected = location.state { return true } else { return false } }
+        location.networkChanged(satisfied: false)
+        XCTAssertEqual(cloud.symbolName, "xmark.icloud.fill")
+        XCTAssertEqual(cloud.contentTintColor, SemanticColors.bad)
+        location.networkChanged(satisfied: true)
+        await wait("connecting again") { if case .connected = location.state { return true } else { return false } }
+        XCTAssertEqual(cloud.symbolName, "icloud")
+    }
+
+    /// A server from before the heartbeat: the cloud is brown while it stays
+    /// connected, and says why. It is not called lost for that.
+    func testAServerWithNoHeartbeatKeepsTheCloudBrown() async throws {
+        server.stop()
+        server = HTTPServer(configuration: .init(port: 0, authorizer: StaticAuthorizer(token: "secret"), screen: { request in
+            request.path.hasSuffix("/heartbeat") ? HTTPError(.notFound, "no such route") : nil
+        }), router: service.routes())
+        address = "http://127.0.0.1:\(try await server.start())"
+        let cloud = CodeServerIndicator(location: location)
+        try location.choose(.server, server: address, token: "secret")
+        await wait("the doubt") {
+            if case .connected = location.state { return location.isServerDoubtful } else { return false }
+        }
+        XCTAssertEqual(cloud.symbolName, "exclamationmark.icloud")
+        XCTAssertEqual(cloud.contentTintColor, SemanticColors.caution)
+        XCTAssertEqual(cloud.toolTip,
+                       L("This analysis server sends no heartbeat, so a lost connection shows late: %1$@", address))
+        location.checkHeartbeat(at: Date().addingTimeInterval(HeartbeatWatch.lostAfter * 10))
+        XCTAssertEqual(cloud.symbolName, "exclamationmark.icloud")
+    }
+
+    func testWhatSilenceMeans() {
+        var watch = HeartbeatWatch()
+        let now = Date()
+        XCTAssertEqual(watch.verdict(at: now.addingTimeInterval(1000)), .alive, "nothing is connected yet")
+        watch.connected(at: now)
+        XCTAssertEqual(watch.verdict(at: now.addingTimeInterval(HeartbeatWatch.doubtfulAfter)), .doubtful,
+                       "no beat since connecting")
+        watch.beat(at: now)
+        XCTAssertEqual(watch.verdict(at: now.addingTimeInterval(HeartbeatWatch.interval)), .alive)
+        XCTAssertEqual(watch.verdict(at: now.addingTimeInterval(HeartbeatWatch.doubtfulAfter)), .doubtful)
+        XCTAssertEqual(watch.verdict(at: now.addingTimeInterval(HeartbeatWatch.lostAfter)), .lost)
+        watch.serverHasNoHeartbeat()
+        XCTAssertEqual(watch.verdict(at: now), .doubtful)
+        XCTAssertEqual(watch.verdict(at: now.addingTimeInterval(1000)), .doubtful)
+        watch.beat(at: now)
+        XCTAssertEqual(watch.verdict(at: now), .alive, "the server was updated")
+    }
+
     func testAWrongTokenStrikesTheCloudThrough() async throws {
         let cloud = CodeServerIndicator(location: location)
         try location.choose(.server, server: address, token: "wrong")
         await wait("the refusal") { if case .refused = location.state { return true } else { return false } }
-        XCTAssertEqual(cloud.symbolName, "cloud.slash")
-        XCTAssertEqual(cloud.contentTintColor, .systemRed)
+        XCTAssertEqual(cloud.symbolName, "xmark.icloud.fill")
+        XCTAssertNotNil(cloud.image, "a symbol the system has: a name it lacks draws nothing")
+        XCTAssertEqual(cloud.contentTintColor, SemanticColors.bad)
     }
 
     func testAMissingRightIsNamed() {
