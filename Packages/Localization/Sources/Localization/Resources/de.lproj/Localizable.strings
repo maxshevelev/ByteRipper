@@ -405,9 +405,6 @@
 "Reading revision r%1$@…" = "Revision r%1$@ wird gelesen…";
 "Reading the module's revisions…" = "Revisionen des Moduls werden gelesen…";
 "Reading the analysis…" = "Analyse wird gelesen…";
-"Cannot read revision r%1$@" = "Revision r%1$@ kann nicht gelesen werden";
-"The code of this revision could not be obtained from the analysis server. The comparison stays as it was. Check that the server is running and reachable, then choose the revision again." = "Der Code dieser Revision konnte nicht vom Analyseserver bezogen werden. Der Vergleich bleibt unverändert. Prüfen Sie, ob der Server läuft und erreichbar ist, und wählen Sie die Revision dann erneut.";
-"The analysis store could not give the code of this revision: the object is missing or damaged. The comparison stays as it was." = "Der Analysespeicher konnte den Code dieser Revision nicht liefern: Das Objekt fehlt oder ist beschädigt. Der Vergleich bleibt unverändert.";
 "This revision (r%1$@)" = "Diese Revision (r%1$@)";
 "This revision" = "Diese Revision";
 "No decompiled C for this function in either revision." = "In keiner der beiden Revisionen hat die Funktion dekompilierten C.";
@@ -1803,7 +1800,6 @@
 "This panel reads the module's stored code analysis. Its bytes are a read-only snapshot." = "Diese Palette zeigt die gespeicherte Codeanalyse des Moduls. Ihre Bytes sind eine schreibgeschützte Momentaufnahme.";
 "Analysis" = "Analyse";
 "Choose the stored analysis shown here" = "Die hier gezeigte gespeicherte Analyse wählen";
-"The stored analysis is missing or cannot be read. The panel keeps the analysis it has." = "Die gespeicherte Analyse fehlt oder ist nicht lesbar. Die Palette behält die bereits geöffnete Analyse.";
 "Hide hex dump" = "Hex-Dump ausblenden";
 "Show hex dump" = "Hex-Dump einblenden";
 "Not every code analysis of the project is shown as it was saved" = "Nicht jede Codeanalyse des Projekts wird so gezeigt, wie sie gesichert wurde";
@@ -1842,7 +1838,6 @@
 "Sent: %1$@ new, %2$@ already there, %3$@ not taken, %4$@ kept aside." = "Gesendet: %1$@ neu, %2$@ schon vorhanden, %3$@ nicht übernommen, %4$@ beiseitegelegt.";
 "The server's address is not of the form http://host:port." = "Die Adresse des Servers hat nicht die Form http://host:port.";
 "The project's code analyses did not reach the analysis server" = "Die Codeanalysen des Projekts haben den Analyseserver nicht erreicht";
-"The analysis server cannot be reached" = "Der Analyseserver ist nicht erreichbar";
 "The server does not accept the token." = "Der Server nimmt das Token nicht an.";
 "The server does not answer: %1$@" = "Der Server antwortet nicht: %1$@";
 "The server is not an analysis server of this version." = "Der Server ist kein Analyseserver dieser Version.";
@@ -1876,3 +1871,13 @@
 "The server's heartbeat has stopped." = "Das Signal des Servers ist ausgeblieben.";
 "This Mac has no network connection." = "Dieser Mac hat keine Netzwerkverbindung.";
 "This analysis server sends no heartbeat, so a lost connection shows late: %1$@" = "Dieser Analyseserver sendet kein Signal, daher wird ein Verbindungsverlust erst verspätet erkannt: %1$@";
+"The server does not hold the code of revision r%1$@." = "Der Server enthält den Code der Revision r%1$@ nicht.";
+"The server refused the code of revision r%1$@: %2$@" = "Der Server hat den Code der Revision r%1$@ verweigert: %2$@";
+"The code of revision r%1$@ on the server is damaged." = "Der Code der Revision r%1$@ auf dem Server ist beschädigt.";
+"The analysis store on this Mac does not hold the code of revision r%1$@." = "Der Analysespeicher auf diesem Mac enthält den Code der Revision r%1$@ nicht.";
+"The code of revision r%1$@ in the analysis store on this Mac is damaged." = "Der Code der Revision r%1$@ im Analysespeicher auf diesem Mac ist beschädigt.";
+"The server does not hold the code of this analysis." = "Der Server enthält den Code dieser Analyse nicht.";
+"The server refused the code of this analysis: %1$@" = "Der Server hat den Code dieser Analyse verweigert: %1$@";
+"The analysis store on this Mac does not hold the code of this analysis." = "Der Analysespeicher auf diesem Mac enthält den Code dieser Analyse nicht.";
+"The code of this analysis on the server is damaged." = "Der Code dieser Analyse auf dem Server ist beschädigt.";
+"The code of this analysis in the analysis store on this Mac is damaged." = "Der Code dieser Analyse im Analysespeicher auf diesem Mac ist beschädigt.";

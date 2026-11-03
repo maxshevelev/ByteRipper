@@ -405,9 +405,6 @@
 "Reading revision r%1$@…" = "Чтение ревизии r%1$@…";
 "Reading the module's revisions…" = "Чтение ревизий модуля…";
 "Reading the analysis…" = "Чтение анализа…";
-"Cannot read revision r%1$@" = "Не удалось прочитать ревизию r%1$@";
-"The code of this revision could not be obtained from the analysis server. The comparison stays as it was. Check that the server is running and reachable, then choose the revision again." = "Код этой ревизии не удалось получить с сервера разборов. Сравнение осталось прежним. Проверьте, что сервер запущен и доступен, затем выберите ревизию ещё раз.";
-"The analysis store could not give the code of this revision: the object is missing or damaged. The comparison stays as it was." = "Хранилище анализов не смогло выдать код этой ревизии: объект отсутствует или повреждён. Сравнение осталось прежним.";
 "This revision (r%1$@)" = "Эта ревизия (r%1$@)";
 "This revision" = "Эта ревизия";
 "No decompiled C for this function in either revision." = "Ни в этой, ни в предыдущей ревизии у функции нет декомпилированного C.";
@@ -1803,7 +1800,6 @@
 "This panel reads the module's stored code analysis. Its bytes are a read-only snapshot." = "Панель показывает сохранённый анализ кода модуля. Её байты — снимок только для чтения.";
 "Analysis" = "Анализ";
 "Choose the stored analysis shown here" = "Выбрать сохранённый анализ для показа";
-"The stored analysis is missing or cannot be read. The panel keeps the analysis it has." = "Сохранённый анализ отсутствует или не читается. Панель оставляет тот анализ, который уже открыт.";
 "Hide hex dump" = "Скрыть дамп";
 "Show hex dump" = "Показать дамп";
 "Not every code analysis of the project is shown as it was saved" = "Не все разборы кода проекта показаны в том виде, в каком были сохранены";
@@ -1842,7 +1838,6 @@
 "Sent: %1$@ new, %2$@ already there, %3$@ not taken, %4$@ kept aside." = "Отправлено: новых — %1$@, уже было — %2$@, не принято — %3$@, отложено — %4$@.";
 "The server's address is not of the form http://host:port." = "Адрес сервера должен иметь вид http://host:port.";
 "The project's code analyses did not reach the analysis server" = "Разборы кода проекта не переданы на сервер разборов";
-"The analysis server cannot be reached" = "Сервер разборов недоступен";
 "The server does not accept the token." = "Сервер не принимает токен.";
 "The server does not answer: %1$@" = "Сервер не отвечает: %1$@";
 "The server is not an analysis server of this version." = "Сервер не является сервером разборов этой версии.";
@@ -1876,3 +1871,13 @@
 "The server's heartbeat has stopped." = "Сигнал сервера прекратился.";
 "This Mac has no network connection." = "У этого Mac нет подключения к сети.";
 "This analysis server sends no heartbeat, so a lost connection shows late: %1$@" = "Этот сервер разборов не отправляет сигнал, поэтому потеря соединения обнаруживается с задержкой: %1$@";
+"The server does not hold the code of revision r%1$@." = "На сервере нет кода ревизии r%1$@.";
+"The server refused the code of revision r%1$@: %2$@" = "Сервер отказал в выдаче кода ревизии r%1$@: %2$@";
+"The code of revision r%1$@ on the server is damaged." = "Код ревизии r%1$@ на сервере повреждён.";
+"The analysis store on this Mac does not hold the code of revision r%1$@." = "В хранилище разборов на этом Mac нет кода ревизии r%1$@.";
+"The code of revision r%1$@ in the analysis store on this Mac is damaged." = "Код ревизии r%1$@ в хранилище разборов на этом Mac повреждён.";
+"The server does not hold the code of this analysis." = "На сервере нет кода этого разбора.";
+"The server refused the code of this analysis: %1$@" = "Сервер отказал в выдаче кода этого разбора: %1$@";
+"The analysis store on this Mac does not hold the code of this analysis." = "В хранилище разборов на этом Mac нет кода этого разбора.";
+"The code of this analysis on the server is damaged." = "Код этого разбора на сервере повреждён.";
+"The code of this analysis in the analysis store on this Mac is damaged." = "Код этого разбора в хранилище разборов на этом Mac повреждён.";

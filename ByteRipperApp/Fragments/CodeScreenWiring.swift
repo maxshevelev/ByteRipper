@@ -101,6 +101,7 @@ func wireCodeRevisions(_ codePane: CodePaneView,
     let module = manifest.module.sha256
     let recipe = manifest.recipe.id
     var digests: [Int: SHA256Digest] = [:]
+    var failedPicks: [Int: Error] = [:]
     // The dump bar tells a download from this machine's own work.
     func downloading(_ revision: Int) -> @MainActor @Sendable (Bool) -> Void {
         { [weak codePane] in codePane?.noteRevisionDownload(revision, underWay: $0) }
@@ -135,19 +136,23 @@ func wireCodeRevisions(_ codePane: CodePaneView,
             return
         }
         codePane.compareWithPickedRevision(revision) {
-            await CodeAnalysisStore.artifact(forRevision: digest, function: function,
-                                             downloading: downloading(revision))
+            switch await CodeAnalysisStore.revisionCode(digest, function: function,
+                                                        downloading: downloading(revision)) {
+            case let .success(artifact):
+                return artifact
+            case let .failure(error):
+                failedPicks[revision] = error
+                return nil
+            }
         }
     }
+    // What a store answered stays in the dump bar; a connection that failed
+    // answered nothing, and the cloud shows it.
     codePane.onRevisionUnreadable = { [weak codePane] revision in
-        guard let window = codePane?.window else { return }
-        let alert = NSAlert()
-        alert.alertStyle = .warning
-        alert.messageText = L("Cannot read revision r%1$@", String(revision))
-        alert.informativeText = CodeAnalysisLocation.shared.remote != nil
-            ? L("The code of this revision could not be obtained from the analysis server. The comparison stays as it was. Check that the server is running and reachable, then choose the revision again.")
-            : L("The analysis store could not give the code of this revision: the object is missing or damaged. The comparison stays as it was.")
-        alert.beginSheetModal(for: window)
+        guard let failure = failedPicks.removeValue(forKey: revision),
+              let words = CodeAnalysisLocation.revisionProblem(
+                revision, failure, onServer: CodeAnalysisLocation.shared.remote != nil) else { return }
+        codePane?.showRevisionProblem(words)
     }
     let history = Task { @MainActor in
         await codePane.whileWorking(L("Reading the module's revisions…")) {

@@ -15,9 +15,14 @@ enum CodeAnalysisStore {
 
     /// The artifact a manifest names, decoded off the main actor.
     static func artifact(for manifest: AnalysisManifest, root: URL? = nil) async -> CodeArtifact? {
+        try? await analysisCode(for: manifest, root: root).get()
+    }
+
+    /// The same read, saying why it failed.
+    static func analysisCode(for manifest: AnalysisManifest, root: URL? = nil) async -> Result<CodeArtifact, Error> {
         let root = root ?? self.root
-        return await Task.detached(priority: .userInitiated) { () -> CodeArtifact? in
-            try? ContentStore(root: root, create: false).artifactToShow(for: manifest)
+        return await Task.detached(priority: .userInitiated) { () -> Result<CodeArtifact, Error> in
+            Result { try ContentStore(root: root, create: false).artifactToShow(for: manifest) }
         }.value
     }
 
@@ -99,18 +104,28 @@ enum CodeAnalysisStore {
     /// first, and when it has come: what is left is this machine's work.
     static func artifact(forRevision digest: SHA256Digest, function: CodeAddress?, root: URL? = nil,
                          downloading: (@MainActor @Sendable (Bool) -> Void)? = nil) async -> CodeArtifact? {
+        try? await revisionCode(digest, function: function, root: root, downloading: downloading).get()
+    }
+
+    /// The same read, saying why it failed.
+    static func revisionCode(_ digest: SHA256Digest, function: CodeAddress?, root: URL? = nil,
+                             downloading: (@MainActor @Sendable (Bool) -> Void)? = nil) async
+        -> Result<CodeArtifact, Error> {
         let root = root ?? self.root
-        return await Task.detached(priority: .userInitiated) { () -> CodeArtifact? in
-            guard let store = try? ContentStore(root: root, create: false) else { return nil }
-            if store.mustFetch(digest, function: function) {
-                await downloading?(true)
-                let fetched = (try? store.fetch(digest, function: function)) != nil
-                await downloading?(false)
-                guard fetched else { return nil }
+        return await Task.detached(priority: .userInitiated) { () -> Result<CodeArtifact, Error> in
+            do {
+                let store = try ContentStore(root: root, create: false)
+                if store.mustFetch(digest, function: function) {
+                    await downloading?(true)
+                    let fetched = Result { try store.fetch(digest, function: function) }
+                    await downloading?(false)
+                    try fetched.get()
+                }
+                if let function { return .success(try store.artifact(digest, function: function)) }
+                return .success(try JSONDecoder().decode(CodeArtifact.self, from: store.object(digest)))
+            } catch {
+                return .failure(error)
             }
-            if let function { return try? store.artifact(digest, function: function) }
-            guard let data = try? store.object(digest) else { return nil }
-            return try? JSONDecoder().decode(CodeArtifact.self, from: data)
         }.value
     }
 

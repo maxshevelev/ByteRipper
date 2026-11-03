@@ -4751,6 +4751,47 @@ final class CodePaneViewTests: XCTestCase {
         return view.subviews.lazy.compactMap { field(in: $0, saying: words) }.first
     }
 
+    /// A problem a read answered with stays in the dump bar, for the function
+    /// it was asked for, until the reader picks again; the strip has the place
+    /// while something is under way.
+    func testADamagedRevisionStaysSaidInTheDumpBar() async throws {
+        let view = CodePaneView(manifest: manifest(revision: 55), artifact: try artifact(),
+                                moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 1200, height: 700)
+        view.setRevisionChoices([.init(revision: 54, title: "r54", hasCode: true)], current: 55, knowsRevisions: true)
+        view.workShownAfter = 0
+        view.selectFunction(at: 0)
+        view.onRevisionUnreadable = { [weak view] _ in view?.showRevisionProblem("damaged") }
+        await view.compareWithPickedRevision(54) { nil }.value
+        XCTAssertEqual(view.shownProblem, "damaged")
+        XCTAssertEqual(view.toolTip(ofProblem: ()), "damaged", "cut short where the bar is narrow, whole under the pointer")
+
+        view.selectFunction(at: 1)
+        XCTAssertNil(view.shownProblem, "about another function")
+        view.selectFunction(at: 0)
+        XCTAssertEqual(view.shownProblem, "damaged", "still so")
+
+        let (next, answer) = AsyncStream.makeStream(of: CodeArtifact?.self)
+        let pick = view.compareWithPickedRevision(54) {
+            for await artifact in next { return artifact }
+            return nil
+        }
+        XCTAssertNil(view.shownProblem, "picked again")
+        XCTAssertEqual(view.shownWork, "Reading revision r54…")
+        view.onRevisionUnreadable = nil
+        answer.yield(nil)
+        await pick.value
+        XCTAssertNil(view.shownProblem, "nothing was said this time: a connection that failed")
+
+        // An analysis chosen in the header is about no function, and stays.
+        view.recipeLoadFailed(problem: "analysis damaged")
+        XCTAssertEqual(view.shownProblem, "analysis damaged")
+        view.selectFunction(at: 1)
+        XCTAssertEqual(view.shownProblem, "analysis damaged")
+        view.recipeLoadFailed()
+        XCTAssertNil(view.shownProblem)
+    }
+
     /// The book at the head of the navigator shows and hides the description,
     /// the round button in its corner closes it, and the code comes back on the
     /// side it was left on, with the ASM/C switch.

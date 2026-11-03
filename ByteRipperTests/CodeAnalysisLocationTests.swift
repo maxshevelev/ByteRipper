@@ -283,6 +283,39 @@ final class CodeAnalysisLocationTests: XCTestCase {
         XCTAssertEqual(watch.verdict(at: now), .alive, "the server was updated")
     }
 
+    /// A connection that failed answered nothing, and says nothing in the bar;
+    /// the rest is told alike wherever the analyses are kept.
+    func testWhatTheDumpBarSaysOfCodeThatDidNotCome() {
+        let gone = RemoteStore.Failure.unreachable("gone")
+        let refused = RemoteStore.Failure.refused(status: 500, message: "no", rights: [])
+        let absent = RemoteStore.Failure.refused(status: 404, message: "", rights: [])
+        let corrupt = CodeAnalysisError.objectCorrupt("ab"), missing = CodeAnalysisError.objectMissing("ab")
+        func revision(_ error: Error, onServer: Bool = true) -> String? {
+            CodeAnalysisLocation.revisionProblem(54, error, onServer: onServer)
+        }
+        XCTAssertNil(revision(gone))
+        XCTAssertEqual(revision(corrupt), L("The code of revision r%1$@ on the server is damaged.", "54"))
+        XCTAssertEqual(revision(absent), L("The server does not hold the code of revision r%1$@.", "54"))
+        XCTAssertEqual(revision(missing), L("The server does not hold the code of revision r%1$@.", "54"))
+        XCTAssertEqual(revision(refused), L("The server refused the code of revision r%1$@: %2$@", "54", "no"))
+        XCTAssertEqual(revision(corrupt, onServer: false),
+                       L("The code of revision r%1$@ in the analysis store on this Mac is damaged.", "54"))
+        XCTAssertEqual(revision(missing, onServer: false),
+                       L("The analysis store on this Mac does not hold the code of revision r%1$@.", "54"))
+
+        func analysis(_ error: Error, onServer: Bool = true) -> String? {
+            CodeAnalysisLocation.analysisProblem(error, onServer: onServer)
+        }
+        XCTAssertNil(analysis(gone))
+        XCTAssertEqual(analysis(corrupt), L("The code of this analysis on the server is damaged."))
+        XCTAssertEqual(analysis(absent), L("The server does not hold the code of this analysis."))
+        XCTAssertEqual(analysis(refused), L("The server refused the code of this analysis: %1$@", "no"))
+        XCTAssertEqual(analysis(corrupt, onServer: false),
+                       L("The code of this analysis in the analysis store on this Mac is damaged."))
+        XCTAssertEqual(analysis(missing, onServer: false),
+                       L("The analysis store on this Mac does not hold the code of this analysis."))
+    }
+
     func testAWrongTokenStrikesTheCloudThrough() async throws {
         let cloud = CodeServerIndicator(location: location)
         try location.choose(.server, server: address, token: "wrong")

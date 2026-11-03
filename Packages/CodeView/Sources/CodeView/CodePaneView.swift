@@ -1,5 +1,6 @@
 import ALSplitView
 import AppKit
+import AppPalette
 import CodeAnalysis
 import HelpBook
 import HelpUI
@@ -209,7 +210,7 @@ import ToolModuleKit
     /// is loaded off the pane's hands — and for none when Reset is pressed.
     public var onChooseRevision: ((Int?) -> Void)?
     /// The code of a revision the reader picked could not be read. The
-    /// comparison stays as it was; the app says why.
+    /// comparison stays as it was; the app says why, with `showRevisionProblem`.
     public var onRevisionUnreadable: ((Int) -> Void)?
     /// The last pick in the bar each function is still waiting on the code of.
     /// A later pick for the function replaces it, so what comes last from the
@@ -220,6 +221,14 @@ import ToolModuleKit
     private let workBar = NSProgressIndicator()
     private let workLabel = NSTextField(labelWithString: "")
     private var workLabelClearsComparison: NSLayoutConstraint?
+    /// Where the strip stands when nothing is under way: what a read the reader
+    /// asked for answered, for the function it was asked for. It stays until
+    /// they pick again.
+    private let problemLabel = NSTextField(labelWithString: "")
+    private var problemLabelClearsComparison: NSLayoutConstraint?
+    private var barProblems: [CodeAddress?: String] = [:]
+    /// The same for an analysis chosen in the header, which is about no function.
+    private var analysisProblem: String?
     /// What is under way, the last begun last: that one is what the bar names.
     private var worksUnderWay: [(id: Int, words: String, revision: Int?)] = []
     /// The revisions whose code is coming from the server now, and how many
@@ -608,6 +617,8 @@ import ToolModuleKit
     public func compareWithPickedRevision(_ revision: Int,
                                           read: @escaping @MainActor () async -> CodeArtifact?) -> Task<Void, Never> {
         let function = openFunctionEntry
+        barProblems[function] = nil
+        updateProblemLine()
         if let function, let held = readRevisions[RevisionRead(revision: revision, function: function)] {
             setComparisonRevision(revision, artifact: held, pinned: true, function: function, readFor: function)
             return Task {}
@@ -626,9 +637,21 @@ import ToolModuleKit
                                            readFor: function)
             } else {
                 if function == self.openFunctionEntry { self.selectRevisionItem(self.comparisonRevision) }
+                self.unreadableFunction = function
                 self.onRevisionUnreadable?(revision)
             }
         }
+    }
+
+    /// The function the last `onRevisionUnreadable` was about: the reader may
+    /// have moved on since asking.
+    private var unreadableFunction: CodeAddress?
+
+    /// Says in the dump bar, until the reader picks again, why the revision
+    /// `onRevisionUnreadable` just reported did not come.
+    public func showRevisionProblem(_ words: String) {
+        barProblems[unreadableFunction] = words
+        updateProblemLine()
     }
 
     /// Names a long read in the dump bar for as long as `body` takes.
@@ -698,7 +721,21 @@ import ToolModuleKit
         workLabel.isHidden = !shows
         workLabelClearsComparison?.isActive = shows
         if shows { workBar.startAnimation(nil) } else { workBar.stopAnimation(nil) }
+        updateProblemLine()
     }
+
+    /// The problem of the function on screen, unless the strip has the place.
+    private func updateProblemLine() {
+        let words = workBar.isHidden ? barProblems[openFunctionEntry] ?? analysisProblem : nil
+        problemLabel.stringValue = words ?? ""
+        ControlHelp.describe(problemLabel, words)
+        problemLabel.isHidden = words == nil
+        problemLabelClearsComparison?.isActive = words != nil
+    }
+
+    /// What the dump bar says went wrong, for a test.
+    var shownProblem: String? { problemLabel.isHidden ? nil : problemLabel.stringValue }
+    func toolTip(ofProblem: Void) -> String? { problemLabel.toolTip }
 
     /// What the dump bar says is under way, for a test; nil while it shows nothing.
     var shownWork: String? { workBar.isHidden ? nil : workLabel.stringValue }
@@ -815,6 +852,7 @@ import ToolModuleKit
         let font = Self.recipeFont()
         compareLabel.font = font
         workLabel.font = font
+        problemLabel.font = font
         revisionLine.setFont(font)
         resetComparisonButton.font = font
     }
@@ -921,6 +959,7 @@ import ToolModuleKit
         recipeLine.isEnabled = false
         recipeSpinner.isHidden = false
         recipeSpinner.startAnimation(nil)
+        analysisProblem = nil
         recipeWork = beginWork(L("Reading the analysis…"))
         onChooseRecipe?(recipes[index])
     }
@@ -929,13 +968,17 @@ import ToolModuleKit
     public var isLoadingRecipe: Bool { !recipeSpinner.isHidden }
 
     /// The chosen analysis could not be read: the pane keeps the one it has,
-    /// and the dropdown says so again.
-    public func recipeLoadFailed() {
+    /// the dropdown says so again, and `problem` — nil for a connection that
+    /// failed, which the app shows elsewhere — stays in the dump bar until
+    /// another is chosen.
+    public func recipeLoadFailed(problem: String? = nil) {
+        analysisProblem = problem
         recipeSpinner.stopAnimation(nil)
         recipeSpinner.isHidden = true
         recipeLine.isEnabled = true
         if let recipeWork { endWork(recipeWork) }
         recipeWork = nil
+        updateProblemLine()
     }
 
     /// Switches the navigator: Functions, Strings, POST writes, Status codes.
@@ -1044,6 +1087,7 @@ import ToolModuleKit
         // it compares with that revision, so the reader sees the change the
         // mark is about even after further revisions have arrived.
         applyOpenComparison(for: index)
+        updateProblemLine()
         drawSelection()
         if notify, let range = model.moduleRange(ofFunction: index) {
             onFocusRange?(range)
@@ -3297,6 +3341,14 @@ import ToolModuleKit
         hexDumpBar.addSubview(workLabel)
         workLabelClearsComparison = workLabel.trailingAnchor.constraint(lessThanOrEqualTo: compareLabel.leadingAnchor,
                                                                         constant: -8)
+        problemLabel.textColor = SemanticColors.bad
+        problemLabel.lineBreakMode = .byTruncatingTail
+        problemLabel.isHidden = true
+        problemLabel.setContentCompressionResistancePriority(.init(240), for: .horizontal)
+        problemLabel.translatesAutoresizingMaskIntoConstraints = false
+        hexDumpBar.addSubview(problemLabel)
+        problemLabelClearsComparison = problemLabel.trailingAnchor.constraint(lessThanOrEqualTo: compareLabel.leadingAnchor,
+                                                                              constant: -8)
         codeContent.addSubview(hexDumpBar)
         let barHeight = hexDumpBar.heightAnchor.constraint(equalToConstant: Self.dumpBarHeight)
         barHeight.priority = NSLayoutConstraint.Priority(999)
@@ -3345,7 +3397,9 @@ import ToolModuleKit
             workBar.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor),
             workBar.widthAnchor.constraint(equalToConstant: 80),
             workLabel.leadingAnchor.constraint(equalTo: workBar.trailingAnchor, constant: 6),
-            workLabel.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor)
+            workLabel.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor),
+            problemLabel.leadingAnchor.constraint(equalTo: hexDumpBar.leadingAnchor, constant: 8),
+            problemLabel.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor)
         ])
         updateHexDumpButton()
         layOutComparison()

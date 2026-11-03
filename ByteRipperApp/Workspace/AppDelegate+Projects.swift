@@ -151,18 +151,15 @@ extension AppDelegate {
                 do {
                     notice(try await location.sendBundle(at: CodeAnalysisStore.bundleURL(in: url)))
                 } catch {
-                    // One line, read at a glance: the plate is square and as
-                    // wide as its widest line, and the system's sentence with
-                    // the address made it the size of the window. Why is in
-                    // Settings ▸ Code Analysis.
-                    let line: String
-                    if case .unreachable? = error as? RemoteStore.Failure {
-                        line = L("The analysis server cannot be reached")
-                    } else {
-                        line = L("The project's code analyses did not reach the analysis server")
-                    }
+                    // A server out of reach is the cloud's to show. Anything
+                    // else is one line, read at a glance: the plate is square
+                    // and as wide as its widest line, and the system's sentence
+                    // with the address made it the size of the window. Why is
+                    // in Settings ▸ Code Analysis.
+                    if case .unreachable? = error as? RemoteStore.Failure { return }
                     self.windowControllers.last?.mainViewController.showNotice(
-                        symbol: "exclamationmark.triangle", lines: [line])
+                        symbol: "exclamationmark.triangle",
+                        lines: [L("The project's code analyses did not reach the analysis server")])
                 }
             }
         }

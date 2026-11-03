@@ -84,9 +84,13 @@ extension MainViewController {
         let dumpVisible = codeScreenView?.isHexDumpVisible ?? true
         Task { @MainActor [weak self] in
             guard let self else { return }
-            guard let artifact = await CodeAnalysisStore.artifact(for: manifest) else {
-                self.codeScreenView?.recipeLoadFailed()
-                self.reportCodeAnalysisUnreadable()
+            let artifact: CodeArtifact
+            switch await CodeAnalysisStore.analysisCode(for: manifest) {
+            case let .success(read):
+                artifact = read
+            case let .failure(error):
+                self.codeScreenView?.recipeLoadFailed(problem: CodeAnalysisLocation.analysisProblem(
+                    error, onServer: CodeAnalysisLocation.shared.remote != nil))
                 return
             }
             var next = CodeScreen(manifest: manifest, artifact: artifact,
@@ -237,14 +241,6 @@ extension MainViewController {
                          message: refusal?.message.text ?? "\(error)", outcome: .problem)
             return nil
         }
-    }
-
-    /// A recipe chosen from the panel's header names an artifact the store no
-    /// longer has, or cannot read.
-    func reportCodeAnalysisUnreadable() {
-        presentAlert(title: L("The code analysis could not be read."),
-                     message: L("The stored analysis is missing or cannot be read. The panel keeps the analysis it has."),
-                     outcome: .problem)
     }
 
     /// The code pane drawing `pane`: the tab's code screen, or a code panel.

@@ -461,9 +461,13 @@ import ToolModuleKit
         screen.topLines = view.topLinePositions
         Task { @MainActor [weak self] in
             guard let self else { return }
-            guard let artifact = await CodeAnalysisStore.artifact(for: manifest) else {
-                view.recipeLoadFailed()
-                self.host?.reportCodeAnalysisUnreadable()
+            let artifact: CodeArtifact
+            switch await CodeAnalysisStore.analysisCode(for: manifest) {
+            case let .success(read):
+                artifact = read
+            case let .failure(error):
+                view.recipeLoadFailed(problem: CodeAnalysisLocation.analysisProblem(
+                    error, onServer: CodeAnalysisLocation.shared.remote != nil))
                 return
             }
             let next = CodeScreen(manifest: manifest, artifact: artifact,

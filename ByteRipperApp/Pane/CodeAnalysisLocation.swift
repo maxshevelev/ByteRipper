@@ -304,6 +304,45 @@ final class CodeAnalysisLocation {
         return .unreachable(reason: describe(error))
     }
 
+    /// What the dump bar says about a revision that was asked for and did not
+    /// come. Nil for a connection that failed: the cloud shows that, and no
+    /// answer came to report.
+    nonisolated static func revisionProblem(_ revision: Int, _ error: Error, onServer: Bool) -> String? {
+        let name = String(revision)
+        switch (error, onServer) {
+        case (RemoteStore.Failure.unreachable, _):
+            return nil
+        case (RemoteStore.Failure.refused(status: 404, _, _), _), (CodeAnalysisError.objectMissing, true):
+            return L("The server does not hold the code of revision r%1$@.", name)
+        case (RemoteStore.Failure.refused(_, let message, _), _):
+            return L("The server refused the code of revision r%1$@: %2$@", name, message)
+        case (CodeAnalysisError.objectMissing, false):
+            return L("The analysis store on this Mac does not hold the code of revision r%1$@.", name)
+        case (_, true):
+            return L("The code of revision r%1$@ on the server is damaged.", name)
+        case (_, false):
+            return L("The code of revision r%1$@ in the analysis store on this Mac is damaged.", name)
+        }
+    }
+
+    /// The same about an analysis chosen in the panel's header.
+    nonisolated static func analysisProblem(_ error: Error, onServer: Bool) -> String? {
+        switch (error, onServer) {
+        case (RemoteStore.Failure.unreachable, _):
+            return nil
+        case (RemoteStore.Failure.refused(status: 404, _, _), _), (CodeAnalysisError.objectMissing, true):
+            return L("The server does not hold the code of this analysis.")
+        case (RemoteStore.Failure.refused(_, let message, _), _):
+            return L("The server refused the code of this analysis: %1$@", message)
+        case (CodeAnalysisError.objectMissing, false):
+            return L("The analysis store on this Mac does not hold the code of this analysis.")
+        case (_, true):
+            return L("The code of this analysis on the server is damaged.")
+        case (_, false):
+            return L("The code of this analysis in the analysis store on this Mac is damaged.")
+        }
+    }
+
     /// Why the server did not serve this Mac, in the words of the tab.
     nonisolated static func describe(_ error: Error) -> String {
         switch error as? RemoteStore.Failure {
