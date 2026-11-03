@@ -73,18 +73,13 @@ public enum LibraryView {
 
     /// Where each address of the entry's function is in this module's: an
     /// instruction by its place, what it refers to by the same reference of the
-    /// same instruction. Bodies that are equal have as many of both; where they
-    /// have not, only the instructions' own distance from the entry carries over.
+    /// same instruction. Bodies that are equal have as many of both. Another
+    /// body of the function has its own: its C reads the same, and only the
+    /// function's own entry can be linked, rather than a place that is not it.
     static func carriedOver(from source: CodeArtifact.Function,
                             to local: CodeArtifact.Function) -> [CodeAddress: CodeAddress] {
         var map: [CodeAddress: CodeAddress] = [source.entry: local.entry]
-        guard source.instructions.count == local.instructions.count else {
-            for instruction in source.instructions where instruction.address >= source.entry {
-                map[instruction.address] = CodeAddress(
-                    instruction.address.value - source.entry.value + local.entry.value)
-            }
-            return map
-        }
+        guard source.instructions.count == local.instructions.count else { return map }
         for (theirs, ours) in zip(source.instructions, local.instructions) {
             map[theirs.address] = ours.address
             guard theirs.references.count == ours.references.count else { continue }

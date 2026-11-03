@@ -551,6 +551,59 @@ extension ContentStore {
         }
     }
 
+    /// One function, one description: the entries of one library function,
+    /// each from a body of its own, become one entry that covers all their
+    /// bodies and holds `entry`, the text the review made of them. The kept
+    /// id's next version says why. The entries merged in leave the index; their
+    /// histories stay on disk, and their objects with them, so nothing a review
+    /// wrote is lost. `dryRun` answers the same and writes nothing.
+    @discardableResult
+    public func mergeLibraryEntries(into id: String, from others: [String], entry data: Data,
+                                    module: SHA256Digest, address: String, rev: Int?, by: String?,
+                                    reason: String, dryRun: Bool = false) throws -> LibraryWriteResult.Change {
+        let why = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !why.isEmpty else { throw CodeAnalysisError.analysisMismatch("merging library entries needs a reason") }
+        guard !others.isEmpty, !others.contains(id) else {
+            throw CodeAnalysisError.analysisMismatch("name the entries to merge into \(id), other than itself")
+        }
+        guard let review = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let name = review["name"] as? String, LibraryProposal.hasFunction(data) else {
+            throw CodeAnalysisError.analysisMismatch("the merged entry needs a name and the function as it reads")
+        }
+        return try withLock {
+            var index = try libraryIndex()
+            guard var held = index.entries[id] else {
+                throw CodeAnalysisError.analysisMismatch("the registry holds no entry \(id)")
+            }
+            var history = try libraryHistory(id: id) ?? LibraryHistory(id: id, versions: [])
+            for other in others {
+                guard let merged = index.entries[other] else {
+                    throw CodeAnalysisError.analysisMismatch("the registry holds no entry \(other)")
+                }
+                held.variants += merged.variants
+            }
+            let source = LibrarySource(module: module, address: address, rev: rev, by: by)
+            held.version += 1
+            held.entry = SHA256Digest(data: data)
+            held.name = name
+            held.source = source
+            history.versions.append(LibraryVersion(
+                version: held.version, entry: held.entry, source: source,
+                reason: "\(why) (merged \(others.joined(separator: ", ")))", recordedAt: Timestamps.now()))
+            let change = LibraryWriteResult.Change(id: id, name: name, version: held.version)
+            if dryRun { return change }
+            _ = try putObject(data)
+            for other in others {
+                index.entries[other] = nil
+                for (body, owner) in index.bodies where owner == other { index.bodies[body] = id }
+            }
+            index.entries[id] = held
+            try atomicWrite(try encoder.encode(history), to: libraryHistoryURL(id))
+            try atomicWrite(try encoder.encode(index), to: libraryIndexURL)
+            return change
+        }
+    }
+
     /// The entry ids a publish's proposals may conflict with: the entry their
     /// body belongs to, the id of a body the registry does not hold yet, and
     /// the entry a variant was applied from.
@@ -580,7 +633,11 @@ extension ContentStore {
     func libraryObjects() -> Set<SHA256Digest> {
         guard let index = try? libraryIndex() else { return [] }
         var objects = Set(index.entries.values.map(\.entry))
-        for id in index.entries.keys {
+        // Every history on disk, an entry merged into another's among them.
+        let histories = libraryURL.appendingPathComponent("history", isDirectory: true)
+        let files = (try? FileManager.default.contentsOfDirectory(at: histories, includingPropertiesForKeys: nil)) ?? []
+        let ids = Set(index.entries.keys).union(files.map { $0.deletingPathExtension().lastPathComponent })
+        for id in ids {
             if let history = try? libraryHistory(id: id) {
                 objects.formUnion(history.versions.map(\.entry))
             }

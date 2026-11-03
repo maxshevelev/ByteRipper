@@ -1,5 +1,18 @@
 # A shared registry of library functions — reviewed once, applied everywhere
 
+> **The rule, as the person set it (2026-11-03), over everything below that says
+> otherwise:** a library function is one code, one C and one description, whichever
+> module it is in, and the description exists only in the registry. A module holds
+> the code at its addresses, and a link to the entry: the name and signature its
+> callers print, and nothing else. A reader takes the rest from the entry
+> (`LibraryView`). The entries of one function with several bodies are merged into
+> one that covers them all (`mergeLibraryEntries`), with the text a review makes of
+> them. A text true of one module only means the function is not a library function,
+> and it does not belong here. §1 and §4 still describe the copy this replaces where
+> they speak of applying a review to a function; they are to be rewritten when the
+> change is finished. An open now links (`mode: link`); `whole` remains only as the
+> working copy `replace` asks for, to change an entry on.
+
 A library function — EDK2's, AGESA's, Intel's (`Skills/ghidra-uefi/SKILL.md`,
 "Library functions") — is the same code in every module that links it:
 `InternalX86Delay` is in 35 modules of one Cezanne image, `LibAmdIoWrite` in

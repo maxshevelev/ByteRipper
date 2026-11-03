@@ -178,4 +178,43 @@ final class LibraryViewTests: XCTestCase {
         ])
         XCTAssertEqual(again.updated.count, 0)
     }
+
+    /// The bodies of one function read alike: one C, one description, whichever
+    /// module and body they are read from, and what was merged stays kept.
+    func testOneFunctionWithTwoBodiesHasOneDescription() throws {
+        let otherBody = LibraryBody(size: 0x13, full: "ffeeddccbbaa9988", specific: "7766554433221100")
+        try register(try entryObject())
+        _ = try store.putLibraryEntries(module: source, rev: 1, by: "agent", proposals: [
+            LibraryProposal(body: otherBody, name: "CopyMem", kind: "edk2", address: "0x3000", entry: try entryObject(plate: "Another"))
+        ])
+        let oldObject = try XCTUnwrap(try store.libraryIndex().entries[otherBody.key]).entry
+        let merged = try store.mergeLibraryEntries(
+            into: body.key, from: [otherBody.key], entry: try entryObject(plate: "The merged text"),
+            module: source, address: "0x1000", rev: 2, by: "agent", reason: "one function")
+        XCTAssertEqual(merged.version, 2)
+        let index = try store.libraryIndex()
+        XCTAssertEqual(index.entries.count, 1)
+        XCTAssertEqual(index.bodies[otherBody.key], body.key)
+        XCTAssertEqual(index.entries[body.key]?.variants.count, 2)
+
+        // A body with other instructions: the same text, and no link it cannot make.
+        let data = try JSONSerialization.data(withJSONObject: [
+            "script_version": 10, "ghidra": "12.2", "functions": [
+                ["entry": "0x7000", "name": "Mine", "body": otherBody.key, "c": "mine",
+                 "instructions": [["address": "0x7000", "bytes": "90", "text": "NOP"]]]
+            ]
+        ])
+        let read = store.throughRegistry(try JSONDecoder().decode(CodeArtifact.self, from: data)).functions[0]
+        let same = store.throughRegistry(try moduleArtifact()).functions[0]
+        XCTAssertEqual(read.name, "CopyMem")
+        XCTAssertEqual(read.libraryEntry?.id, body.key)
+        XCTAssertTrue(read.c?.contains("Theirs(Count)") ?? false, read.c ?? "")
+        XCTAssertTrue(read.cSites.isEmpty)
+        XCTAssertNil(read.cSpans.first { $0.kind == .function }?.target)
+        XCTAssertEqual(read.signature, same.signature)
+        XCTAssertTrue(store.libraryObjects().contains(oldObject), "what was merged is kept")
+        XCTAssertThrowsError(try store.mergeLibraryEntries(
+            into: body.key, from: [otherBody.key], entry: try entryObject(), module: source,
+            address: "0x1000", rev: 2, by: "agent", reason: " "))
+    }
 }
