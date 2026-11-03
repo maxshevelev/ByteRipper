@@ -2967,6 +2967,8 @@ public class Owner {
         JsonObject copy = entry.deepCopy();
         copy.remove("body");
         copy.remove("constants");
+        // The function as it read when it was recorded: no part of the review.
+        copy.remove("function");
         return copy;
     }
 
