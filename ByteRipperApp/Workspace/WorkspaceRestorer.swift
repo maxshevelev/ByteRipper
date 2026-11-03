@@ -278,7 +278,7 @@ import Workspace
                                 index: Int, in tab: Tab) async {
         tab.fragments[index] = opened
         if let id = saved.pane.id { panes[id] = opened }
-        await tab.controller.finishWorkspaceFragment(saved, opened: opened)
+        if let issue = await tab.controller.finishWorkspaceFragment(saved, opened: opened) { issues.append(issue) }
     }
 
     /// Lays a tab out around its own panes. A pane alone is File A, whichever
@@ -289,7 +289,7 @@ import Workspace
         if !model.pane1.isOpen, model.pane2.isOpen {
             model.swapPanes()
         }
-        await tab.controller.finishWorkspaceTab(tab.state, opened: tab.opened)
+        if let issue = await tab.controller.finishWorkspaceTab(tab.state, opened: tab.opened) { issues.append(issue) }
     }
 }
 

@@ -46,6 +46,8 @@ When either happens, one message after the restore lists the files concerned.
 
 The changes ByteRipper keeps beside the workspace are checked the same way. Changes that cannot be read back exactly as they were written — the files beside the workspace were damaged — are not applied: the file opens as it is on disk, a part as its file holds it, and a document with no file is not opened. The message after the restore names them. When the kept history no longer leads back to its beginning, the content comes back as it was but without the steps to undo it, and the message says that too.
 
+A code panel whose analysis cannot be read opens as the bytes of its module, and the warning gives the reason. The panel stays saved in the workspace or the project, and the next launch tries it again. If the analysis has been removed for good, the warning returns at each launch until the tab or the panel is closed.
+
 ## Other versions of ByteRipper
 
 A version of ByteRipper restores the workspace that an earlier version wrote: what is new in it simply starts empty.

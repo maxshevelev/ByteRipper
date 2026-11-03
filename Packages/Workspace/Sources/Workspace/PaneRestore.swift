@@ -76,4 +76,8 @@ public enum RestoreIssue: Equatable, Sendable {
     /// Its content came back, but not the steps to undo it: the log no longer
     /// held the way back.
     case historyLost(name: String)
+    /// It opened as bytes, without the code panel it was: the analysis could
+    /// not be read, for `reason`. The panel stays written down for the next
+    /// launch.
+    case codeNotRestored(name: String, reason: String)
 }

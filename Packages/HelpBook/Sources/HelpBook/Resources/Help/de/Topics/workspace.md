@@ -1,4 +1,4 @@
-@source-sha 08dcdfe92bfa1e02e965904f73a390c5d57b1670528b624ceee824465cfc2126
+@source-sha 719d4ad257deb5f075f5179cbbf94f914221d500598d17f90eeb58ec6205ccc9
 # Der Arbeitsbereich
 
 > Bei eingeschalteter Einstellung öffnet ByteRipper beim Start, was beim Beenden geöffnet war.
@@ -40,6 +40,8 @@ Beim Start wird jede Datei mit der Größe und dem Änderungsdatum verglichen, d
 In beiden Fällen nennt eine Meldung nach der Wiederherstellung die betroffenen Dateien.
 
 Ebenso werden die Änderungen geprüft, die ByteRipper neben dem Arbeitsbereich aufbewahrt. Änderungen, die sich nicht genau so zurücklesen lassen, wie sie geschrieben wurden – die Dateien neben dem Arbeitsbereich sind beschädigt –, werden nicht angewendet: Die Datei öffnet sich so, wie sie auf dem Datenträger liegt, ein Teil so, wie seine Datei ihn enthält, und ein Dokument ohne Datei wird nicht geöffnet. Die Meldung nach der Wiederherstellung nennt sie. Führt der aufbewahrte Verlauf nicht mehr bis zu seinem Anfang zurück, kehrt der Inhalt so zurück, wie er war, jedoch ohne die Schritte, ihn zu widerrufen, und auch das sagt die Meldung.
+
+Ein Code-Bereich, dessen Analyse sich nicht lesen lässt, öffnet sich als die Bytes seines Moduls, und die Warnung nennt den Grund. Der Bereich bleibt im Arbeitsbereich oder im Projekt gespeichert, und beim nächsten Start wird es erneut versucht. Ist die Analyse endgültig entfernt, erscheint die Warnung bei jedem Start, bis der Tab oder der Bereich geschlossen wird.
 
 ## Andere Versionen von ByteRipper
 

@@ -845,6 +845,9 @@ final class MainViewController: NSViewController {
     /// Stored here; read and written by `MainViewController+CodeScreen.swift`.
     var codeScreen: (pane: PaneViewModel, document: BinaryDocument?,
                      screen: CodeScreen)?
+    /// What a restore could not show as code, by pane: the workspace goes on
+    /// writing it down, for the next launch to try.
+    var heldCodeScreens: [ObjectIdentifier: HeldCodeScreen] = [:]
     /// The code screen on display, for the mode's content and for tests.
     var codeScreenView: CodePaneView?
     /// The artifact the screen showed before a new revision of the same

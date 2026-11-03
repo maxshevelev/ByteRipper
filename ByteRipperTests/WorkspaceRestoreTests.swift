@@ -801,6 +801,29 @@ final class WorkspaceRestoreTests: XCTestCase {
         XCTAssertTrue(target.hasCodeScreen, "the tab is still a code screen")
         XCTAssertTrue(target.codeScreenView?.showsDecompiledC ?? false)
         XCTAssertEqual(target.codeScreenView?.selectedFunction?.name, "entry")
+
+        // The analysis out of reach: the tab opens as bytes, the warning says
+        // why, and what is written next still holds the panel.
+        UEFIToolModule.codeAnalysisRoot = storeRoot.appendingPathComponent("gone")
+        let without = shownWindow().mainViewController
+        let refused = await restore([(tab, without)])
+        XCTAssertFalse(without.hasCodeScreen)
+        guard case let .codeNotRestored(name, reason)? = refused.first, refused.count == 1 else {
+            return XCTFail("the warning names it: \(refused)")
+        }
+        XCTAssertEqual(name, fileURL.lastPathComponent)
+        XCTAssertFalse(reason.isEmpty)
+        XCTAssertEqual(without.workspaceTab().code, tab.code, "the next launch can still bring it back")
+
+        UEFIToolModule.codeAnalysisRoot = storeRoot
+        let again = shownWindow().mainViewController
+        let none = await restore([(without.workspaceTab(), again)])
+        XCTAssertEqual(none, [])
+        XCTAssertTrue(again.hasCodeScreen, "and does")
+
+        // Another file in that pane is no longer what the panel was about.
+        without.openFiles([try tempFile([1, 2, 3], "other")])
+        XCTAssertNil(without.workspaceTab().code)
     }
 
     // MARK: - Parts torn off into tabs

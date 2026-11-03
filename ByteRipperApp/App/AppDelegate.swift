@@ -373,6 +373,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             sections.append(L("Their kept changes could not be read. Files were opened as they are on disk and parts as their file holds them; documents with no file were not opened:")
                             + "\n" + list(unreadable))
         }
+        let code = issues.compactMap { issue -> String? in
+            if case let .codeNotRestored(name, reason) = issue { "\(name): \(reason)" } else { nil }
+        }
+        if !code.isEmpty {
+            sections.append(L("Opened without their code panel. It stays saved, and the next launch tries again:")
+                            + "\n" + list(code))
+        }
         let alert = NSAlert()
         alert.messageText = L("The workspace was not restored in full")
         alert.informativeText = sections.joined(separator: "\n\n")
