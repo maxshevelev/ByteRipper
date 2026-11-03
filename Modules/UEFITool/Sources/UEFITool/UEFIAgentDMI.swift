@@ -45,10 +45,11 @@ public enum UEFIAgentDMI {
             areas by their bytes, which is where to look next. With `survey`, group a folder of dumps by \
             "total" or "areas.0.layout" — the whole answer holds each board's own serials, so no two dumps \
             would share a group. Serial numbers, the UUID and the Windows key answer `redacted`, and \
-            `reveal: true` gives them when the person asked for them: they identify one machine and its \
-            licence, and belong in no review. `uefi_node_data` still reads the bytes.
+            `reveal: true` gives them, only when the person has asked for these values themselves: never \
+            by default, to complete an answer, or for a review or a description, where they do not belong. \
+            They identify one machine and its licence. `uefi_node_data` still reads the bytes.
             """,
-        properties: ["reveal": AgentSchema.boolean("Give the serial numbers, the UUID and the Windows key. Default false.")]
+        properties: ["reveal": AgentSchema.boolean("Only when the person asked for these values themselves: gives the serial numbers, the UUID and the Windows key. Default false.")]
     ) { host, arguments in
         let reveal = try arguments.bool("reveal", default: false)
         let tree = try await UEFIAgentQueries.readyTree(host)
