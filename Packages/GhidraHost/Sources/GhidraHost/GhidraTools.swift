@@ -230,7 +230,9 @@ public enum GhidraTools {
                     If the name fits the new function, or fits neither well, give the entry the narrower name \
                     its code earns with this tool, and publish again; otherwise rename the new function. The \
                     `reason` says what the review found, and the history keeps it. Every module takes the new \
-                    name at its next open. `dry_run: true` answers the same and writes nothing.
+                    name at its next open. The text of the entry's recorded `function.c` keeps the old name \
+                    until a new C is recorded; a reader through the registry sees the new one. `dry_run: true` \
+                    answers the same and writes nothing.
                     """,
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,

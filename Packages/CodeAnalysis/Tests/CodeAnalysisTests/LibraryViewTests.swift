@@ -176,6 +176,15 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertEqual(completed.updated.first?.version, 1, "the C recorded is no new version of the review")
         let (_, held) = try XCTUnwrap(try store.libraryIndex().entry(for: body))
         XCTAssertTrue(LibraryProposal.hasFunction(try store.object(held.entry)))
+        // Who wrote the review stays who wrote it; the C says where it came from.
+        XCTAssertEqual(held.source.module, source, "recording the C does not change the review's author")
+        let recorded = try JSONSerialization.jsonObject(with: try store.object(held.entry)) as? [String: Any]
+        let origin = (recorded?["function"] as? [String: Any])?["source"] as? [String: Any]
+        XCTAssertEqual(origin?["module"] as? String, other.hex)
+        XCTAssertEqual(origin?["address"] as? String, "0x1")
+        let last = try XCTUnwrap(try store.libraryHistory(id: body.key)?.versions.last)
+        XCTAssertEqual(last.source.module, source)
+        XCTAssertTrue(last.reason?.contains(other.hex) == true, "\(last.reason ?? "")")
         let again = try store.putLibraryEntries(module: source, rev: 2, by: "agent", proposals: [
             LibraryProposal(body: body, name: "CopyMem", kind: "edk2", address: "0x2", entry: try entryObject())
         ])

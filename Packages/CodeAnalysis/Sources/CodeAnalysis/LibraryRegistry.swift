@@ -364,6 +364,17 @@ extension LibraryProposal {
         return left.isEqual(right)
     }
 
+    /// The entry object with its function saying which module's reading it is.
+    static func recordingOrigin(of data: Data, source: LibrarySource) throws -> Data {
+        guard var object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              var function = object["function"] as? [String: Any] else { return data }
+        var origin: [String: Any] = ["module": source.module.hex, "address": source.address]
+        origin["rev"] = source.rev
+        function["source"] = origin
+        object["function"] = function
+        return try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes])
+    }
+
     /// Whether the entry object holds the function a reader is shown.
     static func hasFunction(_ data: Data) -> Bool {
         ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])?["function"] != nil
@@ -562,11 +573,19 @@ extension ContentStore {
                 // review: no module's copy is behind for it, so none applies
                 // the entry again and no module's revision moves.
                 if !lacksFunction { next.version += 1 }
-                next.entry = digest
+                // Recording what the review lacked does not make the module
+                // that recorded it the review's author: `source` stays, and the
+                // C says where it came from in its own `function.source`.
+                var recorded = digest
+                if lacksFunction {
+                    let object = try LibraryProposal.recordingOrigin(of: proposal.entry, source: source)
+                    recorded = dryRun ? SHA256Digest(data: object) : try putObject(object)
+                }
+                next.entry = recorded
                 next.name = proposal.name
                 next.kind = proposal.kind
                 next.role = proposal.role
-                next.source = source
+                if !completes { next.source = source }
                 index.entries[id] = next
                 var history = try histories[id] ?? libraryHistory(id: id) ?? LibraryHistory(id: id, versions: [])
                 func signature(_ entry: Data) -> String? {
@@ -575,8 +594,10 @@ extension ContentStore {
                 let signatureChanged = signature(heldObject) != signature(proposal.entry)
                 let why = current ? (signatureChanged ? proposal.signatureReason : nil)
                     : completes ? (lacksFunction ? "the function's C recorded" : "the body's constants recorded") : taken
-                history.versions.append(LibraryVersion(version: next.version, entry: digest, source: source,
-                                                       reason: why, recordedAt: now))
+                let recordedWhy = lacksFunction ? "\(why ?? "") from \(source.module.hex) at \(source.address)" : why
+                history.versions.append(LibraryVersion(version: next.version, entry: recorded,
+                                                       source: completes ? held.source : source,
+                                                       reason: recordedWhy, recordedAt: now))
                 histories[id] = history
                 result.updated.append(.init(id: id, name: proposal.name, version: next.version))
             }
