@@ -161,6 +161,18 @@ final class ContentStoreTests: XCTestCase {
         XCTAssertFalse(store.hasObject(digest))
     }
 
+    /// A mirror holds what was asked of it: a manifest naming an object it has
+    /// not fetched yet is not a damaged store, and the same store with no source
+    /// to fetch it from is.
+    func testAVerifyOnAMirrorDoesNotCountWhatItHasNotFetched() throws {
+        let manifest = try store.putAnalysis(module: module(), recipe: recipe(), artifact: artifact())
+        try FileManager.default.removeItem(at: directory.appendingPathComponent("objects/\(manifest.artifact.sha256.hex)"))
+        XCTAssertFalse(store.verify().isEmpty, "with no source, an object gone is a problem")
+        defer { ContentStore.register(partSource: nil, forRoot: directory) }
+        ContentStore.register(partSource: .init(root: { _ in nil }, files: { _ in [:] }), forRoot: directory)
+        XCTAssertEqual(try ContentStore(root: directory).verify(), [])
+    }
+
     func testAVerifyIsQuietOnASoundStore() throws {
         let manifest = try store.putAnalysis(module: module(), recipe: recipe(), artifact: artifact())
         try store.setRef("project", analyses: [manifest.key!])

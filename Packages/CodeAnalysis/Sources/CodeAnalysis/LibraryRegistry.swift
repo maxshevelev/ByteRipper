@@ -118,9 +118,10 @@ public struct LibraryVersion: Codable, Equatable, Sendable {
     public var version: Int
     public var entry: SHA256Digest
     public var source: LibrarySource
-    /// Why an agent took a review the entry's current version was not the
-    /// base of; nil for the first version and for a change made on the
-    /// current version.
+    /// Why this version differs: what an agent said on taking a review the
+    /// entry's current version was not the base of, or the function's reason for
+    /// a signature that changed. Nil for the first version and for a change
+    /// nobody gave a reason for.
     public var reason: String?
     public var recordedAt: String
 
@@ -196,10 +197,13 @@ public struct LibraryProposal: Codable, Equatable, Sendable {
     /// module.
     public var basedOn: String?
     public var base: Int?
+    /// The function's reason for its signature: not the review's text, so not
+    /// in `entry`. The history keeps it for a version that changes the signature.
+    public var signatureReason: String?
 
     public init(body: LibraryBody, name: String, kind: String, address: String, entry: Data,
                 variantOf: String? = nil, codes: [String]? = nil, role: String? = nil,
-                basedOn: String? = nil, base: Int? = nil) {
+                basedOn: String? = nil, base: Int? = nil, signatureReason: String? = nil) {
         self.body = body
         self.name = name
         self.kind = kind
@@ -209,6 +213,7 @@ public struct LibraryProposal: Codable, Equatable, Sendable {
         self.codes = codes
         self.role = role
         self.basedOn = basedOn
+        self.signatureReason = signatureReason
         self.base = base
     }
 }
@@ -438,7 +443,12 @@ extension ContentStore {
                 next.source = source
                 index.entries[id] = next
                 var history = try histories[id] ?? libraryHistory(id: id) ?? LibraryHistory(id: id, versions: [])
-                let why = current ? nil : completes ? "the body's constants recorded" : taken
+                func signature(_ entry: Data) -> String? {
+                    ((try? JSONSerialization.jsonObject(with: entry)) as? [String: Any])?["signature"] as? String
+                }
+                let signatureChanged = signature(heldObject) != signature(proposal.entry)
+                let why = current ? (signatureChanged ? proposal.signatureReason : nil)
+                    : completes ? "the body's constants recorded" : taken
                 history.versions.append(LibraryVersion(version: next.version, entry: digest, source: source,
                                                        reason: why, recordedAt: now))
                 histories[id] = history

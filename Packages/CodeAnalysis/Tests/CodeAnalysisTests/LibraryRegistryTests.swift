@@ -73,6 +73,29 @@ final class LibraryRegistryTests: XCTestCase {
     /// A review not made on the entry — here another name for the same body,
     /// from a function that never carried it — is a conflict, not a second
     /// entry; taking it needs a reason.
+    /// A version made on the current one that changes the signature says why,
+    /// in the function's own words; one that changes something else has no reason.
+    func testASignatureChangeKeepsItsReasonInTheHistory() throws {
+        func proposed(signature: String, plate: String, reason: String?, base: Int?) -> LibraryProposal {
+            var made = proposal("SetMem", plate: plate, base: base)
+            var object = try! JSONSerialization.jsonObject(with: made.entry) as! [String: Any]
+            object["signature"] = signature
+            made.entry = try! JSONSerialization.data(withJSONObject: object, options: .sortedKeys)
+            made.signatureReason = reason
+            return made
+        }
+        let module = SHA256Digest(data: Data("a".utf8))
+        let first = try store.putLibraryEntries(module: module, rev: 1, by: "agent", proposals: [
+            proposed(signature: "void SetMem(void)", plate: "p", reason: nil, base: nil)])
+        let id = try XCTUnwrap(first.added.first?.id)
+        try store.putLibraryEntries(module: module, rev: 2, by: "agent", proposals: [
+            proposed(signature: "void SetMem(UINT8 v)", plate: "p", reason: "the byte reaches AL", base: 1)])
+        try store.putLibraryEntries(module: module, rev: 3, by: "agent", proposals: [
+            proposed(signature: "void SetMem(UINT8 v)", plate: "q", reason: "the byte reaches AL", base: 2)])
+        let versions = try XCTUnwrap(store.libraryHistory(id: id)).versions
+        XCTAssertEqual(versions.map(\.reason), [nil, "the byte reaches AL", nil])
+    }
+
     func testAnotherModulesReviewIsAConflictTakenOnlyWithAReason() throws {
         try store.putLibraryEntries(module: first, rev: 33, by: "agent", proposals: [proposal("SetMem")])
         let refused = try store.putLibraryEntries(module: second, rev: 4, by: "agent",

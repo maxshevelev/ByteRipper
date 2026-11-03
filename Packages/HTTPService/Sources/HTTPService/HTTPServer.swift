@@ -81,7 +81,11 @@ public final class HTTPServer: @unchecked Sendable {
             }
             entry = current.pointee.ai_next
         }
-        guard let address = found.first(where: { !$0.contains(":") }) ?? found.first else {
+        // The resolver's order changes from one call to the next, on a Mac with
+        // several addresses under one name: the same name has to mean the same
+        // address, and an alias on the loopback is not where a client comes from.
+        let v4 = found.filter { !$0.contains(":") }.sorted()
+        guard let address = v4.first(where: { !$0.hasPrefix("127.") }) ?? v4.first ?? found.sorted().first else {
             throw StartError.cannotListen("\(host) does not resolve to an address")
         }
         return address

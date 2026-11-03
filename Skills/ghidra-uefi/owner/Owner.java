@@ -463,6 +463,7 @@ public class Owner {
             throw new Failure(400, "filter is \"unfinished\" or left out");
         }
         boolean unfinished = filter.equals("unfinished");
+        int fragmentsOnly = 0;
         String contains = query.get("name_contains");
         String source = query.get("name_source");
         Long from = query.containsKey("address_from") ? address(query.get("address_from")).getOffset() : null;
@@ -478,6 +479,7 @@ public class Owner {
             if (from != null && entry < from) continue;
             if (to != null && entry > to) continue;
             JsonObject leftovers = unfinished ? leftovers(function) : null;
+            if (unfinished && leftovers != null && !unfinished(leftovers) && leftovers.has("fragments")) fragmentsOnly++;
             if (unfinished && (leftovers == null || !unfinished(leftovers))) continue;
             JsonObject item = item(function);
             if (leftovers != null) item.add("leftovers", leftovers);
@@ -494,6 +496,7 @@ public class Owner {
             JsonObject summary = new JsonObject();
             summary.addProperty("functions", scanned);
             summary.addProperty("unfinished", total);
+            summary.addProperty("fragments_only", fragmentsOnly);
             answer.add("summary", summary);
         }
         return answer;
@@ -651,7 +654,7 @@ public class Owner {
                     one.remove("dry_run");
                     one.addProperty("address", hex(at));
                     one.addProperty("operand", index);
-                    setEquate(one);
+                    applyEquate(one);
                 }
             }
         }
@@ -949,7 +952,9 @@ public class Owner {
         if (!summary) {
             answer.add("equates", equatesIn(function));
             answer.addProperty("c", results != null && results.getDecompiledFunction() != null
-                               ? results.getDecompiledFunction().getC() : null);
+                               ? ExportCode.indentedC(function, results) : null);
+            JsonArray dataComments = dataCommentsOf(function);
+            if (dataComments.size() > 0) answer.add("data_comments", dataComments);
         }
         if (results != null && !results.decompileCompleted()) {
             answer.addProperty("decompile_error", results.getErrorMessage());
@@ -1052,6 +1057,32 @@ public class Owner {
      * it has no fields. The list is short by design; it saves bisecting the
      * body by hand.
      */
+    /**
+     * What is written on the data the function's instructions reach: no
+     * function's C prints it, so a stale comment on a global shows nowhere a
+     * review of the function looks.
+     */
+    private JsonArray dataCommentsOf(Function function) {
+        JsonArray comments = new JsonArray();
+        java.util.Set<Address> seen = new java.util.HashSet<>();
+        InstructionIterator code = program.getListing().getInstructions(function.getBody(), true);
+        while (code.hasNext()) {
+            for (Reference reference : code.next().getReferencesFrom()) {
+                Address to = reference.getToAddress();
+                if (!to.isMemoryAddress() || !seen.add(to) || program.getListing().getDataAt(to) == null) continue;
+                String said = ExportCode.dataComment(program.getListing(), to);
+                if (said == null || said.isBlank()) continue;
+                JsonObject item = new JsonObject();
+                item.addProperty("address", hex(to));
+                ghidra.program.model.symbol.Symbol symbol = program.getSymbolTable().getPrimarySymbol(to);
+                if (symbol != null) item.addProperty("name", symbol.getName());
+                item.addProperty("comment", said);
+                comments.add(item);
+            }
+        }
+        return comments;
+    }
+
     private JsonArray decompileSuspects(Function function) {
         JsonArray suspects = new JsonArray();
         java.util.Set<String> seen = new java.util.HashSet<>();
@@ -1246,7 +1277,13 @@ public class Owner {
      * function does not fit in one answer.
      */
     private JsonObject disassembly(String text, Map<String, String> query) throws Failure {
-        Function function = functionAt(text);
+        Function function = program.getFunctionManager().getFunctionContaining(address(text));
+        // Code no function holds, as `ghidra_gaps` lists it: read to the next
+        // function, which is what deciding what to make of a gap needs.
+        Address gap = function == null ? address(text) : null;
+        if (gap != null && program.getListing().getInstructionAt(gap) == null) {
+            throw new Failure(404, "no function and no instruction at " + text);
+        }
         Address from = query.containsKey("from") ? address(query.get("from")) : null;
         int limit = Integer.MAX_VALUE;
         if (query.containsKey("limit")) {
@@ -1259,9 +1296,12 @@ public class Owner {
         }
         JsonArray instructions = new JsonArray();
         String next = null;
-        InstructionIterator iterator = program.getListing().getInstructions(function.getBody(), true);
+        InstructionIterator iterator = function != null
+            ? program.getListing().getInstructions(function.getBody(), true)
+            : program.getListing().getInstructions(gap, true);
         while (iterator.hasNext()) {
             Instruction instruction = iterator.next();
+            if (gap != null && program.getFunctionManager().getFunctionContaining(instruction.getAddress()) != null) break;
             if (from != null && instruction.getAddress().compareTo(from) < 0) continue;
             if (instructions.size() == limit) {
                 next = hex(instruction.getAddress());
@@ -1301,7 +1341,8 @@ public class Owner {
             instructions.add(item);
         }
         JsonObject answer = identity();
-        answer.addProperty("entry", hex(function.getEntryPoint()));
+        if (function != null) answer.addProperty("entry", hex(function.getEntryPoint()));
+        else answer.addProperty("gap", hex(gap));
         answer.add("instructions", instructions);
         if (next != null) answer.addProperty("next", next);
         return answer;
@@ -2221,6 +2262,12 @@ public class Owner {
             item.addProperty("kind", kind);
             item.add("body", body);
             item.add("entry", libraryEntry(function, kind, body));
+            // Why its signature is what it is: not of the review's text, so it
+            // goes beside the entry, for the history of the version it makes.
+            StringPropertyMap signatureReasons =
+                program.getUsrPropertyManager().getStringPropertyMap(Harvest.SIGNATURE_REASON);
+            String signatureReason = signatureReasons == null ? null : signatureReasons.getString(function.getEntryPoint());
+            if (signatureReason != null) item.addProperty("signature_reason", signatureReason);
             // A body applied as a variant of another entry says which, and
             // the assert codes that made it one.
             JsonObject mark = libraryMark(function);
@@ -2542,7 +2589,7 @@ public class Owner {
                 return answer;
             }
             if (own.get("value").equals(other.get("value"))) continue;
-            Address at = function.getEntryPoint().add(Long.decode(own.get("offset").getAsString()));
+            Address at = function.getEntryPoint().add(relative(own.get("offset").getAsString()));
             boolean code = assertArgument(program.getListing().getInstructionAt(at), assertKeys, assertIds, fid);
             allAssert &= code;
             JsonObject item = own.deepCopy();
@@ -2987,7 +3034,7 @@ public class Owner {
             for (JsonElement element : locals) {
                 JsonObject theirs = element.getAsJsonObject();
                 kept.add(theirs.get("storage").getAsString() + "@"
-                         + Long.decode(theirs.get("first_use").getAsString()));
+                         + relative(theirs.get("first_use").getAsString()));
             }
             for (ghidra.program.model.listing.Variable local : function.getLocalVariables()) {
                 ghidra.program.model.listing.VariableStorage held = local.getVariableStorage();
@@ -3000,7 +3047,7 @@ public class Owner {
         for (JsonElement element : locals) {
             JsonObject theirs = element.getAsJsonObject();
             String place = theirs.get("storage").getAsString(), name = theirs.get("name").getAsString();
-            int firstUse = Long.decode(theirs.get("first_use").getAsString()).intValue();
+            int firstUse = (int) relative(theirs.get("first_use").getAsString());
             DataType type;
             try {
                 type = type(theirs.get("type").getAsString());
@@ -3055,7 +3102,7 @@ public class Owner {
         int set = 0, differ = 0;
         for (JsonElement element : comments) {
             JsonObject theirs = element.getAsJsonObject();
-            Address at = start.add(Long.decode(theirs.get("offset").getAsString()));
+            Address at = start.add(relative(theirs.get("offset").getAsString()));
             Instruction instruction = program.getListing().getInstructionAt(at);
             if (instruction == null || !function.getBody().contains(at)) {
                 unplaced.add("comment at " + theirs.get("offset").getAsString());
@@ -3804,13 +3851,33 @@ public class Owner {
      * again: the candidate for a function the decompiler refuses — two symbols
      * assigned to one variable — where the names it kept, its own and the
      * review's, stand in the way. The review's names go with them; the answer
-     * lists what was cleared, and whether the C now decompiles at all.
+     * lists what was cleared, each with its storage, first use and type so that
+     * it can be given back, and whether the C now decompiles at all. `names`
+     * lets only those go.
      */
     private JsonObject clearLocals(JsonObject body) throws Exception {
         Function function = functionAt(required(body, "address"));
+        java.util.Set<String> only = null;
+        if (body.has("names")) {
+            only = new java.util.LinkedHashSet<>();
+            for (JsonElement name : body.getAsJsonArray("names")) only.add(name.getAsString());
+            java.util.Set<String> held = new java.util.HashSet<>();
+            for (ghidra.program.model.listing.Variable local : function.getLocalVariables()) held.add(local.getName());
+            for (String name : only) {
+                if (!held.contains(name)) throw new Failure(404, function.getName() + " keeps no local " + name + "; nothing was changed");
+            }
+        }
         java.util.List<String> cleared = new java.util.ArrayList<>();
+        JsonArray clearedLocals = new JsonArray();
         for (ghidra.program.model.listing.Variable local : function.getLocalVariables()) {
+            if (only != null && !only.contains(local.getName())) continue;
             cleared.add(local.getName());
+            JsonObject item = new JsonObject();
+            item.addProperty("name", local.getName());
+            item.addProperty("storage", local.getVariableStorage().toString());
+            item.addProperty("first_use", firstUseOf(function, local));
+            item.addProperty("type", local.getDataType().getDisplayName());
+            clearedLocals.add(item);
             function.removeVariable(local);
         }
         decompiled.remove(function.getEntryPoint());
@@ -3833,6 +3900,7 @@ public class Owner {
         JsonArray names = new JsonArray();
         for (String name : cleared) names.add(name);
         answer.add("names", names);
+        answer.add("locals", clearedLocals);
         answer.addProperty("decompiles", decompiles);
         if (error != null) answer.addProperty("error", error);
         if (!decompiles) answer.add("suspects", decompileSuspects(function));
@@ -3863,7 +3931,13 @@ public class Owner {
         // refusal after this rolls the removal back with the transaction.
         Address gone = from.getEntryPoint();
         String goneName = from.getName();
+        Address kept = into.getEntryPoint();
+        String keptName = into.getName();
         program.getFunctionManager().removeFunction(gone);
+        // Removing a function can drop the object held for its neighbour: read
+        // again, a stale one answers "Object has been deleted" to setBody.
+        into = program.getFunctionManager().getFunctionAt(kept);
+        if (into == null) throw new Failure(409, keptName + " at " + hex(kept) + " went with " + goneName + "; nothing was changed");
         java.util.Iterator<Function> overlapping = program.getFunctionManager().getFunctionsOverlapping(merged);
         while (overlapping.hasNext()) {
             Function other = overlapping.next();
@@ -4028,6 +4102,69 @@ public class Owner {
      */
     private JsonObject setEquate(JsonObject body) throws Exception {
         if (body.has("functions")) return setEquateInFunctions(body);
+        if (body.has("items")) return setEquateItems(body);
+        JsonObject answer = applyEquate(body);
+        String name = string(body, "name", "");
+        if (!name.isEmpty()) noteWhetherCPrintsIt(answer, java.util.List.of(address(required(body, "address"))), name);
+        return answer;
+    }
+
+    /**
+     * Several operands in one call, and one transaction: each item is what a
+     * single call takes, and what the call itself gives is the default of each.
+     */
+    private JsonObject setEquateItems(JsonObject body) throws Exception {
+        JsonArray answers = new JsonArray();
+        java.util.Map<String, java.util.List<Address>> places = new java.util.LinkedHashMap<>();
+        for (JsonElement element : body.getAsJsonArray("items")) {
+            JsonObject one = body.deepCopy();
+            one.remove("items");
+            for (Map.Entry<String, JsonElement> field : element.getAsJsonObject().entrySet()) one.add(field.getKey(), field.getValue());
+            JsonObject answer = applyEquate(one);
+            answer.addProperty("address", required(one, "address"));
+            String name = string(one, "name", "");
+            if (!name.isEmpty()) places.computeIfAbsent(name, key -> new java.util.ArrayList<>()).add(address(required(one, "address")));
+            answers.add(answer);
+        }
+        JsonObject answer = identity();
+        answer.add("items", answers);
+        JsonArray notInC = new JsonArray();
+        for (Map.Entry<String, java.util.List<Address>> place : places.entrySet()) {
+            JsonObject check = new JsonObject();
+            noteWhetherCPrintsIt(check, place.getValue(), place.getKey());
+            if (check.has("in_c") && !check.get("in_c").getAsBoolean()) notInC.add(place.getKey());
+        }
+        answer.add("not_in_c", notInC);
+        return answer;
+    }
+
+    /**
+     * An equate stands on the instruction; the C prints it only where the
+     * decompiler keeps that constant, and may print something else: an enum
+     * member the operand's type already chose. `in_c` says which of the two
+     * happened, so that an answer of ok is not taken for the C reading so.
+     */
+    private void noteWhetherCPrintsIt(JsonObject answer, java.util.List<Address> places, String name) {
+        java.util.regex.Pattern word = java.util.regex.Pattern.compile("\\b" + java.util.regex.Pattern.quote(name) + "\\b");
+        java.util.Set<Function> functions = new java.util.LinkedHashSet<>();
+        for (Address place : places) {
+            Function function = program.getFunctionManager().getFunctionContaining(place);
+            if (function != null) functions.add(function);
+        }
+        if (functions.isEmpty()) return;
+        for (Function function : functions) {
+            decompiled.remove(function.getEntryPoint());
+            DecompileResults results = decompile(function);
+            if (results == null || results.getDecompiledFunction() == null
+                    || !word.matcher(results.getDecompiledFunction().getC()).find()) {
+                answer.addProperty("in_c", false);
+                return;
+            }
+        }
+        answer.addProperty("in_c", true);
+    }
+
+    private JsonObject applyEquate(JsonObject body) throws Exception {
         Address at = address(required(body, "address"));
         Instruction instruction = program.getListing().getInstructionAt(at);
         if (instruction == null) throw new Failure(404, "no instruction at " + hex(at));
@@ -4373,7 +4510,11 @@ public class Owner {
         }
         DecompileResults results = decompile(function);
         HighFunction high = results == null ? null : results.getHighFunction();
-        if (high == null) throw new Failure(500, "the function does not decompile");
+        if (high == null) {
+            String why = results == null ? null : results.getErrorMessage();
+            throw new Failure(409, "the function does not decompile" + (why == null || why.isBlank() ? "" : ": " + why.trim())
+                + "; ghidra_function_locals_reset with `names` lets the locals in the way go and keeps the rest");
+        }
         if (shared) {
             if (ordinal != null) throw new Failure(400, "`shared` names a storage; a parameter is named by ordinal");
             if (storage == null) throw new Failure(400, "`shared` needs a storage");
@@ -4602,7 +4743,8 @@ public class Owner {
                 }
                 if (still) {
                     throw new Failure(409, "the name " + applied + " landed on another variable (" + holder + "), not on "
-                        + asked + " (" + askedStorage + "); nothing was changed — say what " + asked + " is in a comment");
+                        + asked + " (" + askedStorage + "); nothing was changed. This can depend on the order: name the function's other "
+                        + "variables and try again, and only if it is still refused say what " + asked + " is in a comment");
                 }
             }
             Iterator<HighSymbol> now = after.getLocalSymbolMap().getSymbols();
@@ -4711,6 +4853,8 @@ public class Owner {
         JsonObject answer = identity();
         answer.addProperty("entry", hex(function.getEntryPoint()));
         answer.addProperty("signature", function.getPrototypeString(false, false));
+        JsonArray shifted = alignedParameters(function);
+        if (shifted.size() > 0) answer.add("aligned", shifted);
         if (function.hasCustomVariableStorage()) {
             JsonArray storage = new JsonArray();
             for (Parameter parameter : function.getParameters()) storage.add(parameter.getVariableStorage().toString());
@@ -4718,6 +4862,32 @@ public class Owner {
             answer.addProperty("return_storage", function.getReturn().getVariableStorage().toString());
         }
         return answer;
+    }
+
+    /**
+     * The parameters a 32-bit convention moved past a slot to align them: a
+     * UINT64 goes to an 8-byte boundary, and what follows moves with it. The
+     * code may read them with no such hole, and only `storage` says so; nothing
+     * else in the answer shows it happened.
+     */
+    private JsonArray alignedParameters(Function function) {
+        JsonArray shifted = new JsonArray();
+        if (function.hasCustomVariableStorage() || program.getDefaultPointerSize() != 4) return shifted;
+        long expected = -1;
+        for (Parameter parameter : function.getParameters()) {
+            ghidra.program.model.listing.VariableStorage storage = parameter.getVariableStorage();
+            if (!storage.isStackStorage()) continue;
+            long at = storage.getStackOffset();
+            if (expected >= 0 && at > expected) {
+                JsonObject item = new JsonObject();
+                item.addProperty("name", parameter.getName());
+                item.addProperty("storage", storage.toString());
+                item.addProperty("expected", String.format("Stack[0x%X]", expected));
+                shifted.add(item);
+            }
+            expected = (at + Math.max(parameter.getLength(), 4) + 3) & ~3L;
+        }
+        return shifted;
     }
 
     /**
@@ -5424,6 +5594,16 @@ public class Owner {
     }
 
     // MARK: - Program
+
+    /**
+     * An offset from a function's entry as an entry holds it: `%X` of a long, so
+     * code before the entry, a loop head the body jumps back to, reads as
+     * 0xFFFFFFFFFFFFFFFA, which `Long.decode` refuses.
+     */
+    private static long relative(String text) {
+        return text.startsWith("0x") || text.startsWith("0X")
+            ? Long.parseUnsignedLong(text.substring(2), 16) : Long.decode(text);
+    }
 
     private Function functionAt(String text) throws Failure {
         Address address = address(text);

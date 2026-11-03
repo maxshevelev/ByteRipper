@@ -44,10 +44,13 @@ public enum UEFIAgentDMI {
             say so to the person, never that the dump has no DMI; `region_scan` judges the nameless \
             areas by their bytes, which is where to look next. With `survey`, group a folder of dumps by \
             "total" or "areas.0.layout" — the whole answer holds each board's own serials, so no two dumps \
-            would share a group.
+            would share a group. Serial numbers, the UUID and the Windows key answer `redacted`, and \
+            `reveal: true` gives them when the person asked for them: they identify one machine and its \
+            licence, and belong in no review. `uefi_node_data` still reads the bytes.
             """,
-        properties: [:]
+        properties: ["reveal": AgentSchema.boolean("Give the serial numbers, the UUID and the Windows key. Default false.")]
     ) { host, arguments in
+        let reveal = try arguments.bool("reveal", default: false)
         let tree = try await UEFIAgentQueries.readyTree(host)
         await withCheckedContinuation { continuation in
             tree.resolveDMIStores { continuation.resume() }
@@ -70,17 +73,62 @@ public enum UEFIAgentDMI {
                 catalogue: .empty,
                 lenovoDMIReaders: tree.lenovoDMIReadersSearched ? tree.lenovoDMIReaders : nil,
                 in: .english)
-            areas.append(UEFIAgentQueries.merged(
+            let area = UEFIAgentQueries.merged(
                 UEFIAgentQueries.summary(of: node, in: tree),
                 [
                     "layout": .string(layout(of: store.kind)),
                     "size": .string(UEFIAgentQueries.hex(store.range.upperBound - store.range.lowerBound)),
                     "path": .array(UEFIAgentQueries.path(to: node.id, in: tree).map { .string($0) })
-                ].merging(UEFIAgentQueries.detailMembers(detail)) { first, _ in first }))
+                ].merging(UEFIAgentQueries.detailMembers(detail)) { first, _ in first })
+            areas.append(reveal ? area : redacted(area))
         }
         var answer: [String: JSONValue] = ["areas": .array(areas), "total": .count(areas.count)]
         answer["note"] = .string(areas.isEmpty ? "None found. \(scope)" : scope)
         return .json(.object(answer))
+    }
+
+    /// The area without what identifies the one machine: a field or a table's
+    /// row by its label, and that value wherever else the area repeats it, as a
+    /// title made of the model and the serial does.
+    nonisolated static func redacted(_ area: JSONValue) -> JSONValue {
+        var values: Set<String> = []
+        func hidden(_ label: String?) -> Bool {
+            guard let label else { return false }
+            return label.range(of: #"(?i)serial|\bS/?N\b|\bSR\b|uuid|windows key|product key"#,
+                               options: .regularExpression) != nil
+        }
+        func masked(_ value: JSONValue) -> JSONValue {
+            switch value {
+            case .object(var members):
+                if hidden(members["label"]?.stringValue), let text = members["value"]?.stringValue, !text.isEmpty {
+                    values.insert(text)
+                    members["value"] = "redacted"
+                    return .object(members)
+                }
+                return .object(members.mapValues(masked))
+            case .array(let items):
+                // A table's row: the entry's name, then its value.
+                let cells = items.compactMap(\.stringValue)
+                if cells.count == items.count, cells.count >= 2, hidden(cells[0]) {
+                    values.formUnion(cells.dropFirst().filter { !$0.isEmpty })
+                    return .array([items[0]] + items.dropFirst().map { _ in "redacted" })
+                }
+                return .array(items.map(masked))
+            default:
+                return value
+            }
+        }
+        func scrubbed(_ value: JSONValue) -> JSONValue {
+            switch value {
+            case .object(let members): return .object(members.mapValues(scrubbed))
+            case .array(let items): return .array(items.map(scrubbed))
+            case .string(let text):
+                let long = values.filter { $0.count >= 4 }
+                return .string(long.reduce(text) { $0.replacingOccurrences(of: $1, with: "redacted") })
+            default: return value
+            }
+        }
+        return scrubbed(masked(area))
     }
 
     /// Which of the known layouts a store is, by the name the bench knows it

@@ -391,7 +391,7 @@ public enum GhidraTools {
                     "module": moduleProperty,
                     "offset": AgentSchema.integer("How many to skip. Default 0."),
                     "limit": AgentSchema.limit(default: 200, maximum: 1000),
-                    "filter": AgentSchema.choice(["unfinished"], "Only the functions a review has not passed."),
+                    "filter": AgentSchema.choice(["unfinished"], "Only the functions a review has not passed: a placeholder parameter or stored local, or no plate. A decompiler's temporary (`uVar1`) does not count, since some cannot be named; `summary.fragments_only` counts the functions it leaves out with only those left."),
                     "name_contains": AgentSchema.string("Only functions whose name holds this text."),
                     "name_source": AgentSchema.string(
                         "Only functions from this Ghidra source: DEFAULT, ANALYSIS, IMPORTED, USER_DEFINED."),
@@ -478,7 +478,9 @@ public enum GhidraTools {
                 name: "ghidra_disassembly",
                 title: "Read a function's instructions",
                 description: "The instructions of the function at `address`, with their bytes, references and "
-                    + "the names of their constants (`equates`). A large function comes in pages: `limit` "
+                    + "the names of their constants (`equates`). At an instruction no function holds, as "
+                    + "`ghidra_gaps` lists them, the code from there to the next function, and `gap` in place of "
+                    + "`entry`. A large function comes in pages: `limit` "
                     + "instructions from `from`; `next` is the address to pass as `from` for the rest.",
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,
@@ -686,17 +688,23 @@ public enum GhidraTools {
                 try optional(arguments, ["address"])
             },
             write("ghidra_function_locals_reset", "clear/locals", "Let a function's locals go",
-                  "Removes every local variable of the function at `address` — the decompiler's and the "
-                  + "review's — and decompiles it again, answering what was cleared and whether the C now "
-                  + "decompiles (`decompiles`), with the error when it does not. The candidate for a "
-                  + "function the decompiler refuses, such as two symbols assigned to one variable, where "
-                  + "names it kept stand in the way. It is not a guarantee, and the review's names go with "
-                  + "the rest: read the function again and name what matters. While the C still fails, the "
+                  "Removes the local variables of the function at `address` — the decompiler's and the "
+                  + "review's, or with `names` only those — and decompiles it again, answering what was cleared "
+                  + "(`locals`: each one's name, storage, first use and type, to give back what matters with "
+                  + "`ghidra_rename_variable`) and whether the C now decompiles (`decompiles`), with the error "
+                  + "when it does not. The candidate for a function the decompiler refuses, such as two symbols "
+                  + "assigned to one variable, where names it kept stand in the way: name the two its error names "
+                  + "before clearing everything. It is not a guarantee, and what is cleared goes: read the "
+                  + "function again and name what matters. While the C still fails, the "
                   + "answer names `suspects` — the parameters, locals and referenced data typed as a pointer "
                   + "to something that is not a structure, which is where such a failure comes from.",
-                  ["address": AgentSchema.string("The function's entry address, or any address inside it.")],
+                  ["address": AgentSchema.string("The function's entry address, or any address inside it."),
+                   "names": .object(["type": "array", "items": .object(["type": "string"]),
+                                     "description": .string("Only these locals. Default: every one.")])],
                   required: ["address"]) { arguments in
-                try optional(arguments, ["address"])
+                var body = try optional(arguments, ["address"])
+                if let names = arguments["names"] { body["names"] = names }
+                return body
             },
             write("ghidra_function_merge", "merge/functions", "Make two functions one",
                   "Gives the body of `from` to `into` and removes `from`: the way back from a split the "
@@ -787,7 +795,9 @@ public enum GhidraTools {
                 return try await answer { try await backend.writeCall(module, "rename/variable", body: payload) }
             },
             write("ghidra_signature", "set/signature", "Set a function's signature",
-                  "Sets the C signature of the function at `address`, the EDK2 way if wanted "
+                  "Sets the C signature of the function at `address`, the EDK2 way if wanted; `aligned` in the "
+                  + "answer lists the parameters a 32-bit convention moved to an aligned slot, which a UINT64 is, "
+                  + "and `storage` puts them back where the code reads them "
                   + "(`EFI_STATUS EFIAPI Foo (IN CONST EFI_PEI_SERVICES **PeiServices)`). Types the module "
                   + "lacks come from the EDK2 archive or from types a review defined. For a function no "
                   + "calling convention fits — a linker's clone that takes an argument in EDX, or returns "
@@ -925,10 +935,12 @@ public enum GhidraTools {
                   + "`enum` are enough. One value has one name in an enum. Instead of `address`, `functions` with "
                   + "`value` names that value wherever those functions hold it as an immediate operand; the answer "
                   + "lists `applied`, each address with its instruction, and `skipped` operands, which keep another name they already have. A small value is held by unrelated instructions too: "
-                  + "`dry_run: true` answers the same and writes nothing, so read the instructions first and name by `address` where only some are meant.",
+                  + "`dry_run: true` answers the same and writes nothing, so read the instructions first and name by `address` where only some are meant. `items` takes several operands in one call, each `address` with its own `operand`, `value` or `name` over the call's own, all or none; that is the way to name a displacement in many places. `in_c` says whether the function's C now prints the name, `not_in_c` lists the names of `items` it does not: an equate stands on the instruction, and the C can print something else, such as an enum member the operand's type chose.",
                   ["address": AgentSchema.string("The instruction's address."),
                    "functions": .object(["type": "array", "items": .object(["type": "string"]),
                                          "description": .string("Functions by entry address, instead of `address`; needs `value`.")]),
+                   "items": .object(["type": "array", "items": .object(["type": "object"]),
+                                     "description": .string("Several operands, each {address, operand or value, and optionally name, enum, comment}.")]),
                    "dry_run": AgentSchema.boolean("With `functions`: answer what would be named and write nothing."),
                    "name": AgentSchema.string("A C identifier, in the module's convention; empty removes it."),
                    "value": AgentSchema.string("The constant, e.g. \"0xCF8\", to pick the operand that holds it."),
@@ -939,6 +951,7 @@ public enum GhidraTools {
                   required: ["name"]) { arguments in
                 var body = try optional(arguments, ["address", "name", "value", "enum", "comment", "enum_comment"])
                 if let functions = arguments["functions"] { body["functions"] = functions }
+                if let items = arguments["items"] { body["items"] = items }
                 if try arguments.bool("dry_run", default: false) { body["dry_run"] = .bool(true) }
                 if arguments.has("operand") { body["operand"] = .int(try arguments.integer("operand")) }
                 return body

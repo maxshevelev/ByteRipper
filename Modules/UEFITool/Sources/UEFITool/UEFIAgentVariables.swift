@@ -56,7 +56,7 @@ public enum UEFIAgentVariables {
         description: """
             The NVRAM variables the image keeps, from every VSS, VSS2, NVAR, Dell DVAR and GPNV store — \
             those inside compressed sections too, so the first call on a large image takes a few seconds. \
-            `stores` lists the stores the rows are in, with how many variables each holds. \
+            `stores` lists the stores the rows are in, with how many variables each holds, those it no longer holds (`deleted`) among them. \
             One row per variable: the copy that stands for it now. `copies` above 1 says the store still \
             keeps earlier values (`uefi_node` on the entry lists them); `deleted: true` is a variable the \
             store no longer holds, listed only with `deleted`. Each row: name, GUID, the store's and the \
@@ -101,7 +101,8 @@ public enum UEFIAgentVariables {
             var stores: [NodeID: UEFINode] = [:]
             for variable in rows { stores[variable.store.id] = variable.store }
             return .array(stores.values.sorted { $0.id.path.lexicographicallyPrecedes($1.id.path) }.map { store in
-                .object(storeSummary(store, variables: all.filter { $0.store.id == store.id }.count))
+                let held = all.filter { $0.store.id == store.id }
+                return .object(storeSummary(store, variables: held.count, deleted: held.filter(\.isDeleted).count))
             })
         }
         let candidates = chosen.dropFirst(paging.first).prefix(limit)
@@ -311,12 +312,13 @@ public enum UEFIAgentVariables {
         variable.entry.space == .file ? variable.value : nil
     }
 
-    private static func storeSummary(_ store: UEFINode, variables: Int) -> [String: JSONValue] {
+    private static func storeSummary(_ store: UEFINode, variables: Int, deleted: Int = 0) -> [String: JSONValue] {
         let type = UEFITreeDisplay.typeText(for: store)
         var members: [String: JSONValue] = [
             "id": .string(store.id.description),
             "type": .string(type),
-            "variables": .count(variables)
+            "variables": .count(variables),
+            "deleted": .count(deleted)
         ]
         let name = UEFITreeDisplay.ownName(of: store) ?? store.name
         if name != type { members["name"] = .string(name) }

@@ -502,6 +502,9 @@ public struct ContentStore: Sendable {
     /// reference's target. Empty means the store is sound.
     public func verify() -> [String] {
         var problems: [String] = []
+        // A mirror holds what was asked of it and fetches the rest: an object
+        // it has not got is not a problem of the store.
+        let lacks: (SHA256Digest) -> Bool = { self.partSource == nil && !self.hasObject($0) }
         let objects = contents(of: objectsURL)
         for url in objects {
             let name = url.lastPathComponent
@@ -534,13 +537,13 @@ public struct ContentStore: Sendable {
             if key.module.hex != entry.module || key.recipe != entry.recipe {
                 problems.append("\(entry.module)/\(entry.recipe): manifest names \(key.description)")
             }
-            if !hasObject(manifest.artifact.sha256) {
+            if lacks(manifest.artifact.sha256) {
                 problems.append("\(key.description): artifact \(manifest.artifact.sha256.hex) is missing")
             }
-            if let review = manifest.reading?.review, !hasObject(review) {
+            if let review = manifest.reading?.review, lacks(review) {
                 problems.append("\(key.description): review document \(review.hex) is missing")
             }
-            if let description = manifest.reading?.description, !hasObject(description) {
+            if let description = manifest.reading?.description, lacks(description) {
                 problems.append("\(key.description): module description \(description.hex) is missing")
             }
         }
@@ -560,15 +563,15 @@ public struct ContentStore: Sendable {
             }
             var latest: [String: Int] = [:]
             for revision in history.revisions {
-                if !hasObject(revision.review) {
+                if lacks(revision.review) {
                     problems.append("reviews/\(name): revision \(revision.rev) of \(revision.project): "
                                     + "review document \(revision.review.hex) is missing")
                 }
-                if let description = revision.description, !hasObject(description) {
+                if let description = revision.description, lacks(description) {
                     problems.append("reviews/\(name): revision \(revision.rev) of \(revision.project): "
                                     + "module description \(description.hex) is missing")
                 }
-                if let artifact = revision.artifact, !hasObject(artifact) {
+                if let artifact = revision.artifact, lacks(artifact) {
                     problems.append("reviews/\(name): revision \(revision.rev) of \(revision.project): "
                                     + "artifact \(artifact.hex) is missing")
                 }
@@ -585,7 +588,7 @@ public struct ContentStore: Sendable {
             }
         }
 
-        for manifest in conflicts() where !hasObject(manifest.artifact.sha256) {
+        for manifest in conflicts() where lacks(manifest.artifact.sha256) {
             problems.append("conflicts/\(manifest.key?.description ?? "?"): artifact "
                             + "\(manifest.artifact.sha256.hex) is missing")
         }

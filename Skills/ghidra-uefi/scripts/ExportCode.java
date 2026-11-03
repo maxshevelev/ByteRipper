@@ -373,6 +373,24 @@ public class ExportCode extends GhidraScript {
     // follows: a called function with its entry, a global with its address,
     // a type, a parameter, a local, a constant, a keyword, a comment. Offsets
     // are UTF-16 code units into `c`, the units a Swift or Java string counts.
+    /**
+     * The C as the artifact holds it, comments indented with the code, for what
+     * reads the live program: Ghidra's own text sets every comment at a fixed
+     * column.
+     */
+    static String indentedC(Function function, DecompileResults results) {
+        if (results.getCCodeMarkup() == null) return results.getDecompiledFunction().getC();
+        List<ClangLine> lines = new PrettyPrinter(function, results.getCCodeMarkup(), null).getLines();
+        List<String> indents = commentIndents(lines);
+        StringBuilder text = new StringBuilder();
+        for (int at = 0; at < lines.size(); at++) {
+            text.append(indents.get(at));
+            for (ClangToken token : lines.get(at).getAllTokens()) text.append(token.getText());
+            text.append('\n');
+        }
+        return text.toString();
+    }
+
     private void appendC(StringBuilder json, Function function, DecompileResults results) {
         PrettyPrinter printer = new PrettyPrinter(function, results.getCCodeMarkup(), null);
         HighFunction high = results.getHighFunction();
@@ -702,7 +720,7 @@ public class ExportCode extends GhidraScript {
 
     // What a review wrote at a named datum: its plate comment, else its pre,
     // end-of-line or repeatable one — what the name stands for.
-    private static String dataComment(Listing listing, Address address) {
+    static String dataComment(Listing listing, Address address) {
         for (CommentType kind : new CommentType[] {
                 CommentType.PLATE, CommentType.PRE, CommentType.EOL, CommentType.REPEATABLE }) {
             String text = listing.getComment(kind, address);

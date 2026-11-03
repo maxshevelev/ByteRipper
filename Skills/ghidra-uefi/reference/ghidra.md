@@ -31,7 +31,7 @@ CAS, and its project lock keeps the owner off the project.
 | a function only a table's slot points at | `ghidra_function_create` — an address inside another function's body is refused |
 | a split the analysis made: two functions that are one | `ghidra_function_merge` (body of `from` into `into`, `from` removed) |
 | a function that is not one, or half of a split | `ghidra_function_delete` |
-| a function the decompiler refuses (two symbols, one variable) | `ghidra_function_locals_reset` — the locals let go and the C tried again; the review's names go with them |
+| a function the decompiler refuses (two symbols, one variable) | `ghidra_function_locals_reset` with `names`, the two symbols its error names — they let go and the C tried again; the answer's `locals` lists what went, to give back. Without `names` every local goes |
 | a function whose C does not print (a `PTRSUB` error) | `ghidra_function` with `explain: true` — bisects the referenced data with rolled-back clears and names the datum; retype that datum to `void *` if it is the workaround |
 | a kept project to start over | `ghidra_forget` — owner stopped, `GhidraProjects/<sha>` to the Trash; the store is untouched |
 | a slot the decompiler shows as two variables, one meaning per use | `ghidra_rename_variable` with `shared` — one neutral name for the storage, the meanings in the plate |

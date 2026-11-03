@@ -363,8 +363,14 @@ public actor GhidraHost {
             .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
         let number = hello.flatMap { $0["modification"] as? Int }
         let writes = hello.flatMap { $0["writes"] as? Int }
+        // A publish that stored nothing new keeps its time: `at` says when this
+        // revision was published, and a release with no writes publishes none.
+        let before = state.published
+        let same = before?.artifact == manifest.artifact.sha256.hex && before?.recipe == recipe.id
+            && before?.review == review?.hex && before?.description == described?.hex && before?.rev == reading?.rev
         state.published = .init(artifact: manifest.artifact.sha256.hex, recipe: recipe.id, review: review?.hex,
-                                description: described?.hex, rev: reading?.rev, at: Self.now(),
+                                description: described?.hex, rev: reading?.rev,
+                                at: same ? (before?.at ?? Self.now()) : Self.now(),
                                 modification: number, writes: writes)
         state.reviewed = reviewed
         try project.write(state)
@@ -439,7 +445,8 @@ public actor GhidraHost {
                                              codes: item["codes"] as? [String],
                                              role: entry["assert"] as? Bool == true ? "assert" : nil,
                                              basedOn: item["based_on"] as? String,
-                                             base: item["base"] as? Int))
+                                             base: item["base"] as? Int,
+                                             signatureReason: item["signature_reason"] as? String))
         }
         let below = try JSONSerialization.data(withJSONObject: answer["below_bar"] ?? [])
         let shortfalls = try JSONDecoder().decode([LibraryShortfall].self, from: below)
