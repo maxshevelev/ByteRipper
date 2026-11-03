@@ -82,14 +82,40 @@ public struct LibraryChange: Codable, Equatable, Sendable {
 }
 
 extension LibraryProposal {
+    /// The new bodies of one publish that can enter together: each one's
+    /// callees are held or are among them. So a function and its callee enter in
+    /// one publish, and a pair that call each other enter as a pair: neither
+    /// depends on anything but the other. A body with a refusal of its own, or a
+    /// name another entry holds, does not enter, and neither does what calls it.
+    static func admitted(_ proposals: [LibraryProposal], in index: LibraryIndex) -> Set<String> {
+        var admitted = Set(proposals.filter { proposal in
+            index.bodies[proposal.body.key] == nil
+                && !index.entries.values.contains { $0.name == proposal.name }
+                && proposal.refusal(in: index, admitted: Set(proposals.map(\.body.key))) == nil
+        }.map(\.body.key))
+        var changed = true
+        while changed {
+            changed = false
+            for proposal in proposals where admitted.contains(proposal.body.key) {
+                if proposal.refusal(in: index, admitted: admitted) != nil {
+                    admitted.remove(proposal.body.key)
+                    changed = true
+                }
+            }
+        }
+        return admitted
+    }
+
     /// Why this body cannot be a library function, nil when it can. A proposal
-    /// that does not say what it refers to is not judged on it.
-    func refusal(in index: LibraryIndex) -> LibraryWriteResult.NotLibrary? {
+    /// that does not say what it refers to is not judged on it. `admitted` are
+    /// the bodies entering with it, which count as held.
+    func refusal(in index: LibraryIndex, admitted: Set<String> = []) -> LibraryWriteResult.NotLibrary? {
         if let out = index.takenOut?[body.key] {
             return .init(address: address, name: name, body: body.key, why: "taken_out", reason: out.reason)
         }
         let foreign = (callees ?? []).filter { callee in
-            callee.body != body.key && callee.body.flatMap { index.bodies[$0] } == nil
+            guard let key = callee.body else { return true }
+            return key != body.key && index.bodies[key] == nil && !admitted.contains(key)
         }
         if !foreign.isEmpty {
             return .init(address: address, name: name, body: body.key, why: "callee", callees: foreign.map(\.name))

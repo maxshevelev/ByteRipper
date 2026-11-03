@@ -429,8 +429,9 @@ functions that call nothing first, then their callers.
 - A doubt keeps it in the module.
 
 A publish refuses a new body that fails this, under `library.not_library`, with `why`:
-`data` (the offsets, no citation), `callee` (the names, publish again once they are
-in), or `taken_out`. The owner reads data references from the instructions and treats
+`data` (the offsets, no citation), `callee` (the names), or `taken_out`. Bodies of one
+publish enter together when each one's callees are held or among them, so a pair that
+call each other enters as a pair; a citation can be given before a body's first publish. The owner reads data references from the instructions and treats
 a constant that lands in the image as one, so it errs towards refusing.
 
 **Putting the registry in order.** These change the registry itself; each needs a

@@ -376,4 +376,41 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertEqual((now["constants"] as? [Any])?.count, 1)
         XCTAssertNotNil(now["function"])
     }
+
+    /// Callees entering in the same publish count: a pair that call each other
+    /// enter together, and a foreign callee or a data reference keeps out the
+    /// body and whatever calls it.
+    func testBodiesOfOnePublishEnterTogetherOrNotAtAll() throws {
+        let a = LibraryBody(size: 0x20, full: "aaeeddccbbaa9988", specific: "1166554433221100")
+        let b = LibraryBody(size: 0x21, full: "bbeeddccbbaa9988", specific: "2266554433221100")
+        let c = LibraryBody(size: 0x22, full: "cceeddccbbaa9988", specific: "3366554433221100")
+        func proposal(_ key: LibraryBody, _ name: String, calls: [LibraryCallee], data: [String] = []) throws -> LibraryProposal {
+            let object = try JSONSerialization.data(withJSONObject: ["schema": 1, "name": name, "kind": "edk2"], options: .sortedKeys)
+            return LibraryProposal(body: key, name: name, kind: "edk2", address: "0x1", entry: object,
+                                   dataReferences: data, callees: calls)
+        }
+        // Each calls the other, and the third reads data: it is out, and so is whoever calls it.
+        let pair = try store.putLibraryEntries(module: source, rev: 1, by: "agent", proposals: [
+            try proposal(a, "PrintA", calls: [LibraryCallee(name: "PrintB", body: b.key)]),
+            try proposal(b, "PrintB", calls: [LibraryCallee(name: "PrintA", body: a.key)])
+        ])
+        XCTAssertEqual(pair.added.map(\.name).sorted(), ["PrintA", "PrintB"])
+        XCTAssertNil(pair.notLibrary)
+        let d = LibraryBody(size: 0x23, full: "ddeeddccbbaa9988", specific: "4466554433221100")
+        let out = try store.putLibraryEntries(module: source, rev: 1, by: "agent", proposals: [
+            try proposal(c, "ReadsData", calls: [], data: ["0x4"]),
+            try proposal(d, "CallsIt", calls: [LibraryCallee(name: "ReadsData", body: c.key)])
+        ])
+        XCTAssertEqual(out.added.count, 0)
+        XCTAssertEqual(out.notLibrary?.map(\.why).sorted(), ["callee", "data"])
+        // A pair where one half has a foreign callee: neither enters.
+        let e = LibraryBody(size: 0x24, full: "eeeeddccbbaa9988", specific: "5566554433221100")
+        let f = LibraryBody(size: 0x25, full: "ffeeddccbbaa9988", specific: "6666554433221100")
+        let half = try store.putLibraryEntries(module: source, rev: 1, by: "agent", proposals: [
+            try proposal(e, "HalfE", calls: [LibraryCallee(name: "HalfF", body: f.key)]),
+            try proposal(f, "HalfF", calls: [LibraryCallee(name: "HalfE", body: e.key), LibraryCallee(name: "Local", body: nil)])
+        ])
+        XCTAssertEqual(half.added.count, 0)
+        XCTAssertEqual(half.notLibrary?.count, 2)
+    }
 }

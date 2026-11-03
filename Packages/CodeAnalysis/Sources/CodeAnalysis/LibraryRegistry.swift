@@ -476,11 +476,12 @@ extension ContentStore {
             var variantOf: [String: LibraryProposal] = [:]
             var settled: [String: String] = [:]
             let now = Timestamps.now()
+            let admitted = LibraryProposal.admitted(proposals, in: index)
             for (proposal, digest) in zip(proposals, stored).sorted(by: { $0.0.body < $1.0.body }) {
                 let source = LibrarySource(module: module, address: proposal.address, rev: rev, by: by)
                 // Only a new body is judged here: what the registry already
                 // holds is put in order by a review, entry by entry.
-                if index.entry(for: proposal.body) == nil, let refusal = proposal.refusal(in: index) {
+                if index.entry(for: proposal.body) == nil, let refusal = proposal.refusal(in: index, admitted: admitted) {
                     result.notLibrary = (result.notLibrary ?? []) + [refusal]
                     continue
                 }
