@@ -129,7 +129,11 @@ public struct ContentStore: Sendable {
         if FileManager.default.fileExists(atPath: url.path) {
             return digest
         }
-        try atomicWrite(data, to: url)
+        if writesPartedObjects {
+            try writeParted(data, digest: digest)
+        } else {
+            try atomicWrite(data, to: url)
+        }
         return digest
     }
 
@@ -146,10 +150,7 @@ public struct ContentStore: Sendable {
             }
             throw CodeAnalysisError.objectMissing(digest.hex)
         }
-        guard SHA256Digest(data: data) == digest else {
-            throw CodeAnalysisError.objectCorrupt(digest.hex)
-        }
-        return data
+        return try unpacked(data, digest: digest)
     }
 
     /// The typed artifact a manifest names: its object, checked against its
@@ -487,7 +488,11 @@ public struct ContentStore: Sendable {
                 problems.append("objects/\(name): cannot be read")
                 continue
             }
-            if SHA256Digest(data: data) != digest {
+            do {
+                _ = try unpacked(data, digest: digest)
+            } catch CodeAnalysisError.objectMissing(let part) {
+                problems.append("objects/\(name): part \(part) is missing")
+            } catch {
                 problems.append("objects/\(name): bytes hash to \(SHA256Digest(data: data).hex)")
             }
         }
@@ -607,9 +612,11 @@ public struct ContentStore: Sendable {
             .union(reviewHistories().flatMap { $0.revisions.flatMap(\.objects) })
             // The library registry's entries, every version its histories keep.
             .union(libraryObjects())
+        // A kept artifact's functions and sections are kept with it.
+        let keptParts = Set(keepObjects.flatMap { parts(of: $0) })
         let orphanObjects = contents(of: objectsURL).filter {
             guard let digest = SHA256Digest(hex: $0.lastPathComponent) else { return true }
-            return !keepObjects.contains(digest)
+            return !keepObjects.contains(digest) && !keptParts.contains(digest)
         }
         let report = GarbageReport(objects: orphanObjects.count, analyses: drop.count,
                                    keptAnalyses: keep.count, keptObjects: keepObjects.count,

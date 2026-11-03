@@ -62,6 +62,23 @@ the same bytes is a no-op. `get_object` hashes what it read and refuses a
 corrupt or missing object. Two analyses with the same artifact share one
 object.
 
+### Parted objects
+
+A store holding the file `parted-objects` writes new objects in a smaller form;
+one without it writes them as above, because a build that cannot read parts may
+share it. An object keeps its name, the SHA-256 of its whole bytes, and
+`get_object` returns exactly those bytes; a reader of the store through
+`ContentStore` sees no difference, and both forms read in either kind of store.
+
+Every file is gzip. An artifact is cut along its JSON: each function, and each
+top-level section of 1 KiB or more, is an object of its own, named by its own
+bytes. The file under the artifact's name holds `{"byteripper_parted":1,
+"parts":[…]}`, gzipped: in order, the text between the parts, as strings, and
+`{"sha256": …}` for each part. Put end to end they are the original bytes, and a
+read checks the whole against its name. Two revisions that differ in a few
+functions share the others. `verify` names a part that is missing, and `gc`
+keeps the parts of what it keeps.
+
 ### Analyses
 
 `analyses/<module-sha>/<recipe>/manifest.json` says which module bytes and
