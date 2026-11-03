@@ -276,6 +276,34 @@ final class ContentStorePartsTests: XCTestCase {
 
     /// A store's real objects, each put into a parted store and read back.
     /// Reads `PARTS_STORE`, never writes to it. Skipped unless it is set.
+    /// Against a migrated copy of a real store: a function read through the
+    /// root is what reading it out of the whole gives. `PARTS_MIGRATED` names it.
+    func testARealFunctionReadsAsFromTheWhole() throws {
+        guard let path = ProcessInfo.processInfo.environment["PARTS_MIGRATED"] else {
+            throw XCTSkip("PARTS_MIGRATED is not set")
+        }
+        let store = try ContentStore(root: URL(fileURLWithPath: path), create: false)
+        var compared = 0, slowestPart = 0.0, slowestWhole = 0.0
+        for manifest in store.analyses() where manifest.artifact.size > 1_000_000 {
+            let digest = manifest.artifact.sha256
+            let started = Date()
+            let whole = try store.object(digest)
+            let functions = try JSONDecoder().decode(CodeArtifact.self, from: whole).functions
+            for function in stride(from: 0, to: functions.count, by: max(1, functions.count / 5)) {
+                let entry = functions[function].entry
+                let wholeRead = try CodeArtifact.decoding(whole, function: entry)
+                slowestWhole = max(slowestWhole, Date().timeIntervalSince(started))
+                let at = Date()
+                let read = try store.artifact(digest, function: entry)
+                slowestPart = max(slowestPart, Date().timeIntervalSince(at))
+                XCTAssertEqual(read, wholeRead, "\(digest.hex) \(entry)")
+                compared += 1
+            }
+        }
+        print("REAL FUNCTION READS \(compared) slowest \(slowestPart) s, whole read and decode \(slowestWhole) s")
+        XCTAssertGreaterThan(compared, 0)
+    }
+
     func testARealStoreRoundTrips() throws {
         guard let path = ProcessInfo.processInfo.environment["PARTS_STORE"] else {
             throw XCTSkip("PARTS_STORE is not set")

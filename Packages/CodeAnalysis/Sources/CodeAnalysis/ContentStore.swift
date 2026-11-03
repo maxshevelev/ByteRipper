@@ -26,12 +26,28 @@ public struct ContentStore: Sendable {
     /// network, so a mirror is read off the main actor, as every store is.
     public typealias ObjectSource = @Sendable (SHA256Digest) throws -> Data
 
+    /// How a mirror takes a cut artifact piece by piece: its root, nil when the
+    /// server has none to give and the object comes whole from `ObjectSource`,
+    /// and objects by name as gzip files, each already checked against its name.
+    public struct PartSource: Sendable {
+        public var root: @Sendable (SHA256Digest) throws -> Data?
+        public var files: @Sendable ([SHA256Digest]) throws -> [SHA256Digest: Data]
+
+        public init(root: @escaping @Sendable (SHA256Digest) throws -> Data?,
+                    files: @escaping @Sendable ([SHA256Digest]) throws -> [SHA256Digest: Data]) {
+            self.root = root
+            self.files = files
+        }
+    }
+
     public let root: URL
     public var objectSource: ObjectSource?
+    public var partSource: PartSource?
 
     public init(root: URL, create: Bool = true) throws {
         self.root = root.standardizedFileURL
         self.objectSource = Self.registeredSource(for: self.root)
+        self.partSource = Self.partSources.get(self.root.path)
         if create {
             for folder in [self.root, objectsURL, analysesURL, refsURL, tmpURL] {
                 try FileManager.default.createDirectory(
@@ -45,7 +61,14 @@ public struct ContentStore: Sendable {
 
     // MARK: - Mirrors
 
-    private static let sources = SourceRegistry()
+    private static let sources = SourceRegistry<ObjectSource>()
+    private static let partSources = SourceRegistry<PartSource>()
+
+    /// Beside `register(objectSource:forRoot:)`: the root also takes what it
+    /// lacks of a cut artifact one part at a time.
+    public static func register(partSource source: PartSource?, forRoot root: URL) {
+        partSources.set(source, for: root.standardizedFileURL.path)
+    }
 
     /// Every store opened at `root` from now on fetches what it lacks from
     /// `source` — how a mirror is read by code that only knows a directory.
@@ -58,17 +81,17 @@ public struct ContentStore: Sendable {
         sources.get(root.path)
     }
 
-    private final class SourceRegistry: @unchecked Sendable {
+    private final class SourceRegistry<Source>: @unchecked Sendable {
         private let lock = NSLock()
-        private var sources: [String: ObjectSource] = [:]
+        private var sources: [String: Source] = [:]
 
-        func set(_ source: ObjectSource?, for path: String) {
+        func set(_ source: Source?, for path: String) {
             lock.lock()
             defer { lock.unlock() }
             sources[path] = source
         }
 
-        func get(_ path: String) -> ObjectSource? {
+        func get(_ path: String) -> Source? {
             lock.lock()
             defer { lock.unlock() }
             return sources[path]
@@ -140,6 +163,7 @@ public struct ContentStore: Sendable {
     public func object(_ digest: SHA256Digest) throws -> Data {
         let url = objectURL(digest)
         guard let data = try? Data(contentsOf: url) else {
+            if try fetchRoot(digest) { return try object(digest) }
             if let objectSource {
                 let fetched = try objectSource(digest)
                 guard SHA256Digest(data: fetched) == digest else {
@@ -150,7 +174,12 @@ public struct ContentStore: Sendable {
             }
             throw CodeAnalysisError.objectMissing(digest.hex)
         }
-        return try unpacked(data, digest: digest)
+        do {
+            return try unpacked(data, digest: digest)
+        } catch CodeAnalysisError.objectMissing where partSource != nil {
+            try fetchParts(parts(of: digest).filter { !hasObject($0) })
+            return try unpacked(data, digest: digest)
+        }
     }
 
     /// The typed artifact a manifest names: its object, checked against its
@@ -491,7 +520,8 @@ public struct ContentStore: Sendable {
             do {
                 _ = try unpacked(data, digest: digest)
             } catch CodeAnalysisError.objectMissing(let part) {
-                problems.append("objects/\(name): part \(part) is missing")
+                // A mirror holds what was asked of it, and fetches the rest.
+                if partSource == nil { problems.append("objects/\(name): part \(part) is missing") }
             } catch {
                 problems.append("objects/\(name): bytes hash to \(SHA256Digest(data: data).hex)")
             }
@@ -664,11 +694,10 @@ public struct ContentStore: Sendable {
             }
             let manifestURL = manifestURL(key)
             entries["analyses/\(key.description)/manifest.json"] = try Data(contentsOf: manifestURL)
-            entries["objects/\(manifest.artifact.sha256.hex)"] =
-                try object(manifest.artifact.sha256)
+            try addToBundle(manifest.artifact.sha256, entries: &entries)
             // The reading travels with its rendering.
             for named in manifest.reading?.objects ?? [] {
-                entries["objects/\(named.hex)"] = try object(named)
+                try addToBundle(named, entries: &entries)
             }
         }
         try BundleArchive.write(entries: entries, to: url)
@@ -681,8 +710,13 @@ public struct ContentStore: Sendable {
     /// aside under `conflicts/`, and the rest is skipped. Every object that
     /// matches its hash is stored, so a workspace naming a skipped artifact
     /// still opens it. Only a bundle with no readable `bundle.json` throws.
+    ///
+    /// An artifact the bundle holds only part of is taken when the bundle and
+    /// this store together hold all of it. With `acceptingPartial`, as a project
+    /// opened without a server has it, what it holds is kept as it is, and
+    /// the rest reads as missing; otherwise it is skipped.
     @discardableResult
-    public func importBundle(from url: URL) throws -> BundleImport {
+    public func importBundle(from url: URL, acceptingPartial: Bool = false) throws -> BundleImport {
         let entries = try BundleArchive.read(from: url)
         guard let bundleData = entries["bundle.json"],
               let bundle = try? decoder.decode(BundleInfo.self, from: bundleData) else {
@@ -709,12 +743,23 @@ public struct ContentStore: Sendable {
                 continue
             }
             let objectPath = "objects/\(manifest.artifact.sha256.hex)"
-            guard let artifact = entries[objectPath],
-                  SHA256Digest(data: artifact) == manifest.artifact.sha256 else {
+            if let artifact = entries[objectPath], SHA256Digest(data: artifact) == manifest.artifact.sha256 {
+                try putObject(artifact)
+            } else if let root = entries["roots/\(manifest.artifact.sha256.hex)"] {
+                do {
+                    guard try takeRoot(root, of: manifest.artifact.sha256, entries: entries,
+                                       acceptingPartial: acceptingPartial) else {
+                        result.skipped.append(.init(key: name, reason: "the bundle holds only part of this artifact, and the store does not have the rest", kind: .incomplete))
+                        continue
+                    }
+                } catch {
+                    result.skipped.append(.init(key: name, reason: "\(objectPath): \(error)", kind: .damaged))
+                    continue
+                }
+            } else if !hasObject(manifest.artifact.sha256) {
                 result.skipped.append(.init(key: name, reason: "\(objectPath) is missing or does not match its hash", kind: .damaged))
                 continue
             }
-            try putObject(artifact)
             // A bundle written before documents travelled has none; the
             // analysis still imports, and `verify` names the missing document.
             for named in manifest.reading?.objects ?? [] {

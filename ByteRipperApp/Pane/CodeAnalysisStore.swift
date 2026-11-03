@@ -90,9 +90,9 @@ enum CodeAnalysisStore {
                          root: URL? = nil) async -> CodeArtifact? {
         let root = root ?? self.root
         return await Task.detached(priority: .userInitiated) { () -> CodeArtifact? in
-            guard let store = try? ContentStore(root: root, create: false),
-                  let data = try? store.object(digest) else { return nil }
-            if let function { return try? CodeArtifact.decoding(data, function: function) }
+            guard let store = try? ContentStore(root: root, create: false) else { return nil }
+            if let function { return try? store.artifact(digest, function: function) }
+            guard let data = try? store.object(digest) else { return nil }
             return try? JSONDecoder().decode(CodeArtifact.self, from: data)
         }.value
     }
@@ -128,7 +128,7 @@ enum CodeAnalysisStore {
         let url = bundleURL(in: project)
         guard FileManager.default.fileExists(atPath: url.path),
               let store = try? ContentStore(root: root ?? self.root) else { return nil }
-        return try? store.importBundle(from: url)
+        return try? store.importBundle(from: url, acceptingPartial: true)
     }
 
     /// What a notice says about a bundle import, or nothing when every
@@ -138,7 +138,8 @@ enum CodeAnalysisStore {
         let kept = result.conflicts.count
         let other = result.skipped.filter { $0.kind == .otherAnalysis }.count
         let damaged = result.skipped.filter { $0.kind == .damaged }.count
-        guard kept + other + damaged > 0 else { return nil }
+        let incomplete = result.skipped.filter { $0.kind == .incomplete }.count
+        guard kept + other + damaged + incomplete > 0 else { return nil }
         var lines = [L("Not every code analysis of the project is shown as it was saved")]
         if kept > 0 {
             lines.append(L("Another project's analysis is shown instead: %1$@", String(kept)))
@@ -148,6 +149,9 @@ enum CodeAnalysisStore {
         }
         if damaged > 0 {
             lines.append(L("Damaged in the project and not read: %1$@", String(damaged)))
+        }
+        if incomplete > 0 {
+            lines.append(L("Saved in part, and the server does not have the rest: %1$@", String(incomplete)))
         }
         return lines
     }

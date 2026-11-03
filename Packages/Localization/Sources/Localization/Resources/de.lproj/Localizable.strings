@@ -1809,6 +1809,7 @@
 "Another project's analysis is shown instead: %1$@" = "Stattdessen wird die Analyse eines anderen Projekts gezeigt: %1$@";
 "A different stored analysis is shown instead: %1$@" = "Stattdessen wird eine andere gespeicherte Analyse gezeigt: %1$@";
 "Damaged in the project and not read: %1$@" = "Im Projekt beschädigt und nicht gelesen: %1$@";
+"Saved in part, and the server does not have the rest: %1$@" = "Teilweise gesichert, und dem Server fehlt der Rest: %1$@";
 
 /* Settings ▸ Code Analysis: where the code analyses are kept (Design/SERVER_PLAN.md). */
 "Code Analysis" = "Codeanalyse";

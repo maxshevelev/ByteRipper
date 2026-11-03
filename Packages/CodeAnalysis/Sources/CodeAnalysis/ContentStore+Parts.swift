@@ -166,6 +166,123 @@ extension ContentStore {
         return inflated
     }
 
+    /// Takes a cut artifact's root from the source, when there is one to take.
+    func fetchRoot(_ digest: SHA256Digest) throws -> Bool {
+        guard let partSource, let root = try partSource.root(digest) else { return false }
+        guard PartedObject.root(of: root) != nil else { throw CodeAnalysisError.objectCorrupt(digest.hex) }
+        try atomicWrite(try Gzip.compress(root), to: objectURL(digest))
+        return true
+    }
+
+    /// Takes these objects from the source and keeps them.
+    func fetchParts(_ names: [SHA256Digest]) throws {
+        guard let partSource, !names.isEmpty else { return }
+        let files = try partSource.files(names)
+        for name in names {
+            guard let file = files[name] else { throw CodeAnalysisError.objectMissing(name.hex) }
+            try atomicWrite(file, to: objectURL(name))
+        }
+    }
+
+    /// A revision's code for one function: that function whole, the others as
+    /// the root's index has them, the tables of the analysis as they are. What
+    /// `CodeArtifact.decoding(_:function:)` makes of the whole, for that part
+    /// and the sections alone. A mirror fetches only what it lacks of those.
+    public func artifact(_ digest: SHA256Digest, function entry: CodeAddress) throws -> CodeArtifact {
+        if !hasObject(digest) { _ = try fetchRoot(digest) }
+        guard let root = hasObject(digest) ? try objectRoot(digest) : nil,
+              let parts = PartedObject.root(of: root),
+              let functions = PartedObject.functions(ofRoot: root) else {
+            return try CodeArtifact.decoding(try object(digest), function: entry)
+        }
+        let wanted = Set(functions.filter { CodeAddress(hex: $0.entry) == entry }.map(\.part))
+        let others = Dictionary(functions.map { ($0.part, $0.json) }, uniquingKeysWith: { first, _ in first })
+        let needed = parts.compactMap { part -> SHA256Digest? in
+            guard case .object(let hex) = part, wanted.contains(hex) || others[hex] == nil else { return nil }
+            return SHA256Digest(hex: hex)
+        }
+        try fetchParts(Array(Set(needed)).filter { !hasObject($0) })
+        var reduced = Data()
+        for part in parts {
+            switch part {
+            case .literal(let text):
+                reduced.append(contentsOf: text.utf8)
+            case .object(let hex):
+                if !wanted.contains(hex), let json = others[hex] {
+                    reduced.append(json)
+                } else {
+                    guard let name = SHA256Digest(hex: hex),
+                          let file = try? Data(contentsOf: objectURL(name)) else {
+                        throw CodeAnalysisError.objectMissing(hex)
+                    }
+                    reduced.append(Gzip.decompress(file) ?? file)
+                }
+            }
+        }
+        return try JSONDecoder().decode(CodeArtifact.self, from: reduced)
+    }
+
+    /// Puts an object in a bundle as this store has it now, fetching nothing.
+    /// Whole when it can be; a cut artifact short of parts goes as its root under
+    /// `roots/` and the parts it has. A mirror's object it never read stays out.
+    func addToBundle(_ digest: SHA256Digest, entries: inout [String: Data]) throws {
+        guard hasObject(digest) else {
+            if objectSource != nil { return }
+            throw CodeAnalysisError.objectMissing(digest.hex)
+        }
+        let stored = try Data(contentsOf: objectURL(digest))
+        if let root = try objectRoot(digest) {
+            let names = parts(of: digest)
+            if !names.allSatisfy(hasObject) {
+                entries["roots/\(digest.hex)"] = root
+                for name in names where hasObject(name) {
+                    let file = try Data(contentsOf: objectURL(name))
+                    entries["objects/\(name.hex)"] = Gzip.decompress(file) ?? file
+                }
+                return
+            }
+        }
+        entries["objects/\(digest.hex)"] = try unpacked(stored, digest: digest)
+    }
+
+    /// Takes a cut artifact from a bundle's `roots/` entry. False when it comes
+    /// short of parts and that is not to be accepted, with nothing written.
+    func takeRoot(_ root: Data, of digest: SHA256Digest, entries: [String: Data],
+                  acceptingPartial: Bool) throws -> Bool {
+        guard let parts = PartedObject.root(of: root) else { throw CodeAnalysisError.objectCorrupt(digest.hex) }
+        var carried: [SHA256Digest: Data] = [:]
+        var complete = true
+        var whole = Data()
+        for part in parts {
+            switch part {
+            case .literal(let text):
+                whole.append(contentsOf: text.utf8)
+            case .object(let hex):
+                guard let name = SHA256Digest(hex: hex) else { throw CodeAnalysisError.objectCorrupt(digest.hex) }
+                if let bytes = entries["objects/\(hex)"], SHA256Digest(data: bytes) == name {
+                    carried[name] = bytes
+                    whole.append(bytes)
+                } else if complete, let file = try? Data(contentsOf: objectURL(name)) {
+                    whole.append(Gzip.decompress(file) ?? file)
+                } else {
+                    complete = false
+                }
+            }
+        }
+        if complete {
+            guard SHA256Digest(data: whole) == digest else { throw CodeAnalysisError.objectCorrupt(digest.hex) }
+            try putObject(whole)
+            return true
+        }
+        if hasObject(digest), (try? object(digest)) != nil { return true }
+        guard acceptingPartial else { return false }
+        for (name, bytes) in carried where !hasObject(name) {
+            try atomicWrite(try Gzip.compress(bytes), to: objectURL(name))
+        }
+        if !hasObject(digest) { try atomicWrite(try Gzip.compress(root), to: objectURL(digest)) }
+        return true
+    }
+
     /// The file under a cut object's name, inflated: its parts and the index of
     /// its functions, for a reader that wants less than the whole. Nil for an
     /// object that is not cut; throws `objectMissing` for one not here.
@@ -192,7 +309,7 @@ extension ContentStore {
 
     /// The objects a kept object needs besides itself; nothing for one that is
     /// not cut.
-    func parts(of digest: SHA256Digest) -> [SHA256Digest] {
+    public func parts(of digest: SHA256Digest) -> [SHA256Digest] {
         guard let stored = try? Data(contentsOf: objectURL(digest)),
               let inflated = Gzip.decompress(stored),
               let parts = PartedObject.root(of: inflated) else { return [] }
@@ -265,6 +382,21 @@ enum PartedObject {
             entries.append(entry)
         }
         return entries
+    }
+
+    /// A root's index: each function's entry, its part, and its own text. Nil
+    /// for a root with no usable index.
+    static func functions(ofRoot root: Data) -> [(entry: String, part: String, json: Data)]? {
+        guard let object = try? JSONSerialization.jsonObject(with: root) as? [String: Any],
+              let list = object["functions"] as? [[String: Any]] else { return nil }
+        var functions: [(entry: String, part: String, json: Data)] = []
+        functions.reserveCapacity(list.count)
+        for function in list {
+            guard let entry = function["entry"] as? String, let part = function["part"] as? String,
+                  let json = try? JSONSerialization.data(withJSONObject: function) else { return nil }
+            functions.append((entry, part, json))
+        }
+        return functions
     }
 
     /// Whether a root says anything of an index, even that it has none.

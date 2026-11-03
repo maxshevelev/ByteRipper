@@ -1,4 +1,4 @@
-@source-sha 805a5e8668991a8b70a2fe7855647772532028662a5dbf728dd810b55ea36921
+@source-sha e5cb5ee6e26377d67a209b867796968e197e6a9593af2f5fc8ba9e2af1871102
 # Codeanalysen und der Analyseserver
 
 > Eine Codeanalyse ist das, was Ghidra in einem PEI- oder DXE-Modul gefunden hat: seine Funktionen, Befehle und den dekompilierten C-Code sowie die Namen, die eine Durchsicht ihnen gegeben hat. ByteRipper liest Analysen aus einem Speicher — einem Ordner auf diesem Mac oder einem Analyseserver, den alle Macs eines Netzwerks gemeinsam nutzen.
@@ -35,7 +35,7 @@ Die Zeile unter den Feldern zeigt, ob der Server erreichbar ist. Weist der Serve
 ## Arbeiten mit einem Server
 
 - **Neue Analysen erscheinen von selbst.** Der Server meldet jede Änderung sofort; eine von einem beliebigen Rechner gespeicherte Analyse oder veröffentlichte Durchsicht erscheint daher binnen ein bis zwei Sekunden auf allen Macs, und eine offene Codepalette wird an derselben Stelle neu aus ihr aufgebaut.
-- **Bereits Gelesenes bleibt lesbar.** Dieser Mac behält eine Kopie dessen, was er vom Server gelesen hat. Ist der Server nicht erreichbar, meldet die Zeile in den Einstellungen dies; bereits gelesene Analysen werden weiter gezeigt, noch nicht gelesene nicht. Die Verbindung wird selbsttätig erneut aufgebaut.
+- **Bereits Gelesenes bleibt lesbar.** Dieser Mac behält eine Kopie dessen, was er vom Server gelesen hat. Von einer früheren Revision, mit der eine Funktion verglichen wird, wird nur diese Funktion gelesen. Ist der Server nicht erreichbar, meldet die Zeile in den Einstellungen dies; bereits gelesene Analysen werden weiter gezeigt, noch nicht gelesene nicht. Die Verbindung wird selbsttätig erneut aufgebaut.
 - **Projekte nutzen den Server.** Beim Öffnen eines Projekts werden die Analysen, die es enthält, an den Server gesendet, der sie nach den üblichen Regeln übernimmt (siehe [[topic:projects|Projekte]]); die Meldung nach dem Öffnen gibt die Antwort des Servers wieder.
 
 ## Durchsicht durch einen Agenten

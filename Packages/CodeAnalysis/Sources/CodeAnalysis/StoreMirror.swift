@@ -6,7 +6,8 @@ import Foundation
 /// The mirror is a `ContentStore` in a directory of its own, named by the
 /// served store's identity. Manifests and histories are copied as the server
 /// decided them; objects are fetched the first time something reads them and
-/// kept, since they never change. Every copy is an ordinary atomic write in
+/// kept, since they never change: of a cut artifact its root, and of its
+/// functions those something asked for. Every copy is an ordinary atomic write in
 /// `analyses/` or `reviews/`, so the FSEvents stream the app already follows
 /// announces a change on the server like a local one.
 public actor StoreMirror {
@@ -107,7 +108,13 @@ public actor StoreMirror {
         // Registered, not only set: the app opens the store by its root in
         // many places, and each of them must fetch what the mirror lacks.
         ContentStore.register(objectSource: { try remote.objectBlocking($0) }, forRoot: root)
+        ContentStore.register(partSource: .init(root: { try remote.objectRootBlocking($0) },
+                                                files: { try remote.gzippedObjectsBlocking($0) }),
+                              forRoot: root)
         let store = try ContentStore(root: root)
+        // A mirror written before it kept parts; one that stops short reads as
+        // it is, and goes on at the next start.
+        if !store.writesPartedObjects { _ = try? store.migrateToPartedObjects(dryRun: false) }
         mirror = store
         storeID = id
         epoch = nil

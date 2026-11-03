@@ -89,6 +89,14 @@ not cut or not there, and `POST /cas/v1/objects/parts` with up to 1024 objects:
 eight big-endian bytes and that many bytes of gzip file, length 0 for an object
 it lacks.
 
+A mirror keeps this form too, holding the root and only what something read: a
+read of one function (`ContentStore.artifact(_:function:)`) fetches that function
+and the sections, and a read of the whole fetches the rest. A bundle is written
+from what the store has and fetches nothing: an artifact short of parts goes as
+`roots/<sha>` and the parts it has. `importBundle` takes that when bundle and
+store make the whole; only `acceptingPartial`, as a project opened without a
+server, keeps less.
+
 `byteripper-cas migrate-objects` brings a store to this form. Without `--apply`
 it does the work in a scratch folder and reports what would come of it: the
 store is not touched. With `--apply` each file is replaced only after what will

@@ -444,6 +444,8 @@ public struct BundleImport: Codable, Equatable, Sendable {
             case otherProject = "other_project"
             /// The bundle's entry cannot be read or does not match its hash.
             case damaged
+            /// The bundle holds part of the artifact, and the store not the rest.
+            case incomplete
         }
 
         public var key: String

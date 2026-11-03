@@ -80,28 +80,7 @@ public struct RemoteStore: Sendable {
             let answer = try await call("POST", "objects/parts",
                                         body: try encoder.encode(ServedStoreProtocol.Parts(sha256: names)),
                                         timeout: 300)
-            var at = answer.startIndex
-            for name in names {
-                guard answer.distance(from: at, to: answer.endIndex) >= 72,
-                      String(decoding: answer[at..<(at + 64)], as: UTF8.self) == name.hex else {
-                    throw Failure.unexpected("the answer does not name \(name.hex) where it should")
-                }
-                let length = answer[(at + 64)..<(at + 72)].reduce(UInt64(0)) { $0 << 8 | UInt64($1) }
-                at += 72
-                guard length <= UInt64(answer.distance(from: at, to: answer.endIndex)) else {
-                    throw Failure.unexpected("the answer ends inside \(name.hex)")
-                }
-                let end = at + Int(length)
-                if length > 0 {
-                    let file = Data(answer[at..<end])
-                    guard let bytes = Gzip.decompress(file), SHA256Digest(data: bytes) == name else {
-                        throw CodeAnalysisError.objectCorrupt(name.hex)
-                    }
-                    files[name] = file
-                }
-                at = end
-            }
-            guard at == answer.endIndex else { throw Failure.unexpected("the answer holds more than was asked") }
+            try Self.read(frames: answer, naming: names, into: &files)
         }
         return files
     }
@@ -112,7 +91,31 @@ public struct RemoteStore: Sendable {
     /// `blocking` here would starve once the pool is full of such waits, and
     /// the answer comes back at the waiting thread's own QoS.
     public func objectBlocking(_ digest: SHA256Digest) throws -> Data {
-        let request = try request("GET", "objects/\(digest.hex)", query: [:], body: nil, timeout: 20)
+        let data = try waited(try request("GET", "objects/\(digest.hex)", query: [:], body: nil, timeout: 20))
+        guard SHA256Digest(data: data) == digest else {
+            throw CodeAnalysisError.objectCorrupt(digest.hex)
+        }
+        return data
+    }
+
+    /// The same as `objectRoot`, for `ContentStore.partSource`.
+    public func objectRootBlocking(_ digest: SHA256Digest) throws -> Data? {
+        do {
+            return try waited(try request("GET", "objects/\(digest.hex)/root", query: [:], body: nil, timeout: 20))
+        } catch Failure.refused(let status, _, _) where status == 404 {
+            return nil
+        }
+    }
+
+    /// The same as `gzippedObjects`, for `ContentStore.partSource`.
+    public func gzippedObjectsBlocking(_ digests: [SHA256Digest]) throws -> [SHA256Digest: Data] {
+        try batches(of: digests) { names in
+            try waited(try request("POST", "objects/parts", query: [:],
+                                   body: try encoder.encode(ServedStoreProtocol.Parts(sha256: names)), timeout: 300))
+        }
+    }
+
+    private func waited(_ request: URLRequest) throws -> Data {
         let box = BlockingResult<Data>()
         let semaphore = DispatchSemaphore(value: 0)
         session.dataTask(with: request) { data, response, error in
@@ -124,11 +127,45 @@ public struct RemoteStore: Sendable {
             semaphore.signal()
         }.resume()
         semaphore.wait()
-        let data = try box.value!.get()
-        guard SHA256Digest(data: data) == digest else {
-            throw CodeAnalysisError.objectCorrupt(digest.hex)
+        return try box.value!.get()
+    }
+
+    private func batches(of digests: [SHA256Digest],
+                         _ ask: ([SHA256Digest]) throws -> Data) throws -> [SHA256Digest: Data] {
+        var files: [SHA256Digest: Data] = [:]
+        var start = 0
+        while start < digests.count {
+            let names = Array(digests[start..<min(start + ServedStoreProtocol.Parts.limit, digests.count)])
+            start += names.count
+            try Self.read(frames: try ask(names), naming: names, into: &files)
         }
-        return data
+        return files
+    }
+
+    private static func read(frames answer: Data, naming names: [SHA256Digest],
+                             into files: inout [SHA256Digest: Data]) throws {
+        var at = answer.startIndex
+        for name in names {
+            guard answer.distance(from: at, to: answer.endIndex) >= 72,
+                  String(decoding: answer[at..<(at + 64)], as: UTF8.self) == name.hex else {
+                throw Failure.unexpected("the answer does not name \(name.hex) where it should")
+            }
+            let length = answer[(at + 64)..<(at + 72)].reduce(UInt64(0)) { $0 << 8 | UInt64($1) }
+            at += 72
+            guard length <= UInt64(answer.distance(from: at, to: answer.endIndex)) else {
+                throw Failure.unexpected("the answer ends inside \(name.hex)")
+            }
+            let end = at + Int(length)
+            if length > 0 {
+                let file = Data(answer[at..<end])
+                guard let bytes = Gzip.decompress(file), SHA256Digest(data: bytes) == name else {
+                    throw CodeAnalysisError.objectCorrupt(name.hex)
+                }
+                files[name] = file
+            }
+            at = end
+        }
+        guard at == answer.endIndex else { throw Failure.unexpected("the answer holds more than was asked") }
     }
 
     /// Waits on this thread for an async call. Only off the main actor, and

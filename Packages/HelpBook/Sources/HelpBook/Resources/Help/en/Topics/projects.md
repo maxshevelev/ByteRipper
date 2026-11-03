@@ -40,8 +40,11 @@ A file not found at its path or relative to the project is not opened. A file th
 
 A project also keeps the code analyses its Code panels show, inside the `.brp` package, so they open on another Mac without Ghidra. While the project is open, a new analysis of a module it shows — the module analyzed again, or its review published again — is written into the project too.
 
+When the analyses are kept on an analysis server, the project holds what this Mac has read from the server by the time it is saved; saving reads nothing more. A function not read by then opens only where that server can be reached.
+
 On opening, each analysis is added to the ones stored on this Mac — or, when the analyses are kept on an analysis server, to the server's ([[topic:code-analyses|Code Analyses and the Analysis Server]]). One stored here is replaced only by a later revision of the same review; when this Mac holds the later revision, that one is shown. A notice after opening says when an analysis is shown other than as the project saved it, and how many:
 
 - **Another project's analysis is shown instead** — this Mac holds a review of the module made in another Ghidra project. The project's copy is kept aside, not lost.
 - **A different stored analysis is shown instead** — this Mac holds another analysis of the module made the same way.
 - **Damaged in the project and not read** — the project's copy cannot be read.
+- **Saved in part, and the server does not have the rest** — the project holds only part of the analysis and the server lacks the remainder, so the server has not taken it.

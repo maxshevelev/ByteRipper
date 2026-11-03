@@ -1809,6 +1809,7 @@
 "Another project's analysis is shown instead: %1$@" = "Вместо сохранённого показан разбор другого проекта: %1$@";
 "A different stored analysis is shown instead: %1$@" = "Вместо сохранённого показан другой разбор с этого Mac: %1$@";
 "Damaged in the project and not read: %1$@" = "Повреждены в проекте и не прочитаны: %1$@";
+"Saved in part, and the server does not have the rest: %1$@" = "Сохранены частично, а остального на сервере нет: %1$@";
 
 /* Settings ▸ Code Analysis: where the code analyses are kept (Design/SERVER_PLAN.md). */
 "Code Analysis" = "Разбор кода";
