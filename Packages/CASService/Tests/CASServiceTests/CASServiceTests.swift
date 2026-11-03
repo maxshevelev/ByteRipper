@@ -79,6 +79,41 @@ final class CASServiceTests: XCTestCase {
         XCTAssertEqual(problems, [])
     }
 
+    /// A client knows nothing of how the server keeps its objects: a publish,
+    /// a read, a mirror and a bundle all see the whole bytes under the same name.
+    func testAServerKeepingPartedObjectsLooksTheSameToItsClients() async throws {
+        // Written before the switch, in the old form, then migrated.
+        let before = artifact(3)
+        let old = try await remote.putAnalysis(module: module("old"), recipe: recipe, artifact: before)
+        XCTAssertEqual(try served.migrateToPartedObjects(dryRun: false).problems, [])
+        XCTAssertNotEqual(try Data(contentsOf: served.objectURL(old.artifact.sha256)), before)
+
+        let after = artifact(4)
+        let new = try await remote.putAnalysis(module: module("new"), recipe: recipe, artifact: after)
+        XCTAssertNotEqual(try Data(contentsOf: served.objectURL(new.artifact.sha256)), after, "kept parted")
+        let overTheWire = try await remote.object(new.artifact.sha256)
+        XCTAssertEqual(overTheWire, after)
+        let oldOverTheWire = try await remote.object(old.artifact.sha256)
+        XCTAssertEqual(oldOverTheWire, before)
+
+        // A mirror is a store of its own, in the form it writes.
+        let mirror = StoreMirror(remote: remote, mirrorsRoot: directory.appendingPathComponent("mirrors"))
+        let store = try await mirror.connect()
+        let digest = new.artifact.sha256
+        let fetched = try await Task.detached { try store.object(digest) }.value
+        XCTAssertEqual(fetched, after)
+        XCTAssertEqual(try Data(contentsOf: store.objectURL(new.artifact.sha256)), after, "a mirror is unaffected")
+
+        let bundle = try await remote.exportBundle([try XCTUnwrap(new.key)])
+        let elsewhere = try ContentStore(root: directory.appendingPathComponent("elsewhere"))
+        let file = directory.appendingPathComponent("bundle.zip")
+        try bundle.write(to: file)
+        _ = try elsewhere.importBundle(from: file)
+        XCTAssertEqual(try elsewhere.object(new.artifact.sha256), after)
+        let problems = try await remote.verify()
+        XCTAssertEqual(problems, [])
+    }
+
     func testAnObjectIsCheckedOnTheWayInAndOut() async throws {
         let digest = try await remote.putObject(Data("bytes".utf8))
         let fetched = try await remote.object(digest)

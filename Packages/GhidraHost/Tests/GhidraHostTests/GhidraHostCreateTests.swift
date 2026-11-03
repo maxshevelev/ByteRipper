@@ -163,6 +163,42 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 
+    /// A real publish into a store keeping parted objects: the artifact comes
+    /// back whole, and a second publish shares what did not change.
+    func testAPublishIntoAPartedStoreReadsBack() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
+            throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostPartedTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        try store.enablePartedObjects()
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraHostPartedTests"),
+                              writer: store)
+        let image = try Data(contentsOf: URL(fileURLWithPath: path))
+        let module = SHA256Digest(data: image)
+        _ = try await host.create(module: image, name: "Module")
+        let first = try await host.publish(module, by: "test")
+        let functions = try store.artifact(for: first.manifest).functions
+        XCTAssertFalse(functions.isEmpty)
+        let count = { (try? FileManager.default.contentsOfDirectory(atPath: store.objectsURL.path).count) ?? 0 }
+        let files = count()
+        XCTAssertGreaterThan(files, functions.count, "cut into its functions")
+        let entry = String(format: "0x%llX", functions[0].entry.value)
+        _ = try await host.write(module, "/v1/set/comment", body: try JSONSerialization.data(withJSONObject: [
+            "address": entry, "kind": "plate", "text": "A change to one function."]))
+        let second = try await host.publish(module, by: "test")
+        await host.stop(module)
+        XCTAssertNotEqual(second.manifest.artifact.sha256, first.manifest.artifact.sha256)
+        XCTAssertEqual(try store.artifact(for: second.manifest).functions.count, functions.count)
+        XCTAssertEqual(store.verify(), [])
+        let added = count() - files
+        print("PARTED PUBLISH functions \(functions.count) files \(files) added by the second publish \(added)")
+        XCTAssertLessThan(added, functions.count / 2 + 8, "a revision shares what it did not change")
+    }
+
     func testANameSearchAlsoSaysWhatTheArchivesHold() async throws {
         guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
             throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
