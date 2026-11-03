@@ -569,14 +569,19 @@ import ToolModuleKit
     }
 
     /// The reader's pick in the bar, for the function on screen, whose code
-    /// has to be read first. It may take long: the reader may move on to another
-    /// function, which keeps the pick, or pick again, which replaces it. The
-    /// task is for a test to wait on.
+    /// has to be read first, by `read`, for that function alone. It may take
+    /// long: the reader may move on to another function, which keeps the pick,
+    /// or pick again, which replaces it. A read this pane still holds is not
+    /// made again. The task is for a test to wait on.
     // help: panel.code.diff
     @discardableResult
     public func compareWithPickedRevision(_ revision: Int,
                                           read: @escaping @MainActor () async -> CodeArtifact?) -> Task<Void, Never> {
         let function = openFunctionEntry
+        if let function, let held = readRevisions[RevisionRead(revision: revision, function: function)] {
+            setComparisonRevision(revision, artifact: held, pinned: true, function: function, readFor: function)
+            return Task {}
+        }
         if let replaced = picksBeingRead[function] { endWork(replaced) }
         let pick = beginWork(L("Reading revision r%1$@…", String(revision)))
         picksBeingRead[function] = pick
@@ -586,7 +591,9 @@ import ToolModuleKit
             self.picksBeingRead[function] = nil
             self.endWork(pick)
             if let artifact {
-                self.setComparisonRevision(revision, artifact: artifact, pinned: true, function: function)
+                if let function { self.keepRead(artifact, RevisionRead(revision: revision, function: function)) }
+                self.setComparisonRevision(revision, artifact: artifact, pinned: true, function: function,
+                                           readFor: function)
             } else {
                 if function == self.openFunctionEntry { self.selectRevisionItem(self.comparisonRevision) }
                 self.onRevisionUnreadable?(revision)
@@ -652,7 +659,7 @@ import ToolModuleKit
         if pinned, let pick = picksBeingRead.removeValue(forKey: function ?? openFunctionEntry) { endWork(pick) }
         if pinned, let entry = function ?? openFunctionEntry {
             if let revision, let artifact {
-                functionComparisons[entry] = .against(.init(revision: revision, artifact: artifact))
+                functionComparisons[entry] = .against(.init(revision: revision, artifact: artifact, readFor: readFor))
             } else {
                 functionComparisons[entry] = .noComparison
             }
@@ -1053,7 +1060,7 @@ import ToolModuleKit
             return
         }
         setComparisonRevision(revision, artifact: held, pinned: false, function: nil,
-                              readFor: mark.artifact == nil ? entry : nil)
+                              readFor: mark.artifact == nil ? entry : mark.readFor)
     }
 
     /// Reads a revision's code for the comparison of `function`, and goes on
@@ -1543,10 +1550,14 @@ import ToolModuleKit
             /// The code it is new against, when the mark came with it: nil
             /// names `revision` in the store, read when it is first needed.
             public let artifact: CodeArtifact?
+            /// The one function `artifact` holds the code of, when it was read
+            /// for that function alone: no other function can be compared with it.
+            public let readFor: CodeAddress?
 
-            public init(revision: Int?, artifact: CodeArtifact?) {
+            public init(revision: Int?, artifact: CodeArtifact?, readFor: CodeAddress? = nil) {
                 self.revision = revision
                 self.artifact = artifact
+                self.readFor = readFor
             }
         }
 
@@ -1749,6 +1760,12 @@ import ToolModuleKit
     /// nil when none are. The app reads it and hands it to `settleUnrecorded`.
     public var nextRevisionToSettle: Int? { unrecorded.isEmpty ? nil : revisionsToSettle.first }
 
+    /// The one function that revision is read for, when only one has no record;
+    /// nil when it takes the code of several.
+    public var functionToSettle: CodeAddress? {
+        unrecorded.count == 1 ? artifact.functions[unrecorded[0]].entry : nil
+    }
+
     /// Compares the functions with no record against `revision`, the newest not
     /// yet looked at: a function that reads otherwise is new against it, with a
     /// record of what it read then, or the next pane — the panel opened in a tab,
@@ -1761,6 +1778,7 @@ import ToolModuleKit
 
     private func settleUnrecorded(revision: Int, artifact read: CodeArtifact?, keeping: Bool) {
         revisionsToSettle.removeAll { $0 == revision }
+        let readFor = functionToSettle
         var marks: [NewMark] = []
         if let read {
             var old: [CodeAddress: CodeArtifact.Function] = [:]
@@ -1770,7 +1788,8 @@ import ToolModuleKit
                 let then = old[function.entry]
                 if let then, then.name == function.name, then.signature == function.signature,
                    then.c == function.c { return false }
-                marks.append(NewMark(entry: function.entry, baseline: .init(revision: revision, artifact: read)))
+                marks.append(NewMark(entry: function.entry,
+                                     baseline: .init(revision: revision, artifact: read, readFor: readFor)))
                 seen[function.entry.description] = SeenRecord(revision: revision,
                                                               fingerprint: then.map(Self.fingerprint) ?? "")
                 return true

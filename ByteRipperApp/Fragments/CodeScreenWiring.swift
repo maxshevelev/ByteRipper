@@ -124,7 +124,7 @@ func wireCodeRevisions(_ codePane: CodePaneView,
             return
         }
         codePane.compareWithPickedRevision(revision) {
-            await CodeAnalysisStore.artifact(forRevision: digest)
+            await CodeAnalysisStore.artifact(forRevision: digest, function: function)
         }
     }
     codePane.onRevisionUnreadable = { [weak codePane] revision in
@@ -186,8 +186,9 @@ func wireCodeRevisions(_ codePane: CodePaneView,
         while let revision = codePane.nextRevisionToSettle {
             let read: CodeArtifact?
             if let digest = digests[revision] {
+                let function = codePane.functionToSettle
                 read = await codePane.whileWorking(L("Reading revision r%1$@…", String(revision))) {
-                    await CodeAnalysisStore.artifact(forRevision: digest)
+                    await CodeAnalysisStore.artifact(forRevision: digest, function: function)
                 }
             } else {
                 read = nil

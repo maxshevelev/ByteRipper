@@ -1682,6 +1682,89 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(asked.count, 2, "a function read once is not read again")
     }
 
+    /// A pick in the bar is read for the function on screen, as a mark's is: the
+    /// next function picking the same revision has its own code to compare, and
+    /// its comparison stays its own when the reader comes back.
+    func testAPickedRevisionIsReadForTheFunctionOnScreen() async throws {
+        func artifact(_ a: String, _ b: String) throws -> Data {
+            let json: [String: Any] = [
+                "script_version": 3, "program": ["image_base": "0x0"],
+                "functions": [
+                    ["entry": "0x220", "name": "A", "c": a,
+                     "instructions": [["address": "0x220", "bytes": "C3", "mnemonic": "RET", "text": "RET"]]],
+                    ["entry": "0x240", "name": "B", "c": b,
+                     "instructions": [["address": "0x240", "bytes": "C3", "mnemonic": "RET", "text": "RET"]]]
+                ]
+            ]
+            return try JSONSerialization.data(withJSONObject: json)
+        }
+        let now = try JSONDecoder().decode(CodeArtifact.self, from: artifact("now a\n", "now b\n"))
+        let older = try artifact("was a\n", "was b\n")
+        let view = CodePaneView(manifest: manifest(revision: 102), artifact: now,
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        view.layoutSubtreeIfNeeded()
+        view.setRevisionChoices([.init(revision: 100, title: "r100", hasCode: true)], current: 102)
+        var reads = 0
+        func pick() async {
+            guard let function = view.openFunctionEntry else { return XCTFail("nothing open") }
+            await view.compareWithPickedRevision(100) {
+                reads += 1
+                return try? CodeArtifact.decoding(older, function: function)
+            }.value
+        }
+        func diffText() -> String { all(NSTextView.self, in: view).map(\.string).joined() }
+
+        view.selectFunction(at: 0)
+        await pick()
+        XCTAssertTrue(diffText().contains("was a"))
+        view.selectFunction(at: 1)
+        XCTAssertFalse(view.showsRevisionDiff, "the first function's pick is its own")
+        await pick()
+        XCTAssertTrue(diffText().contains("was b"), "the second function's own earlier code")
+        XCTAssertEqual(reads, 2)
+        view.selectFunction(at: 0)
+        XCTAssertEqual(view.comparisonRevision, 100)
+        XCTAssertTrue(diffText().contains("was a"), "not the code read for the other function")
+        XCTAssertEqual(reads, 2, "the comparison it kept takes no read")
+        view.selectFunction(at: 1)
+        XCTAssertTrue(diffText().contains("was b"), "a comparison taken back still names whom it was read for")
+        view.selectFunction(at: 0)
+
+        // Reset and the same pick again: the read is still held.
+        view.setComparisonRevision(nil, artifact: nil, pinned: true)
+        await pick()
+        XCTAssertTrue(diffText().contains("was a"))
+        XCTAssertEqual(reads, 2)
+    }
+
+    /// One function with no record reads its revision for that function alone,
+    /// and several take the code of all of them.
+    func testOnlyOneFunctionWithNoRecordIsReadForItself() throws {
+        func artifact(_ entries: [String]) throws -> CodeArtifact {
+            let functions: [[String: Any]] = entries.map { entry in
+                ["entry": entry, "name": "F" + entry, "c": "now\n",
+                 "instructions": [["address": entry, "bytes": "C3", "mnemonic": "RET", "text": "RET"]]]
+            }
+            let json: [String: Any] = ["script_version": 3, "program": ["image_base": "0x0"], "functions": functions]
+            return try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        }
+        func pane(_ entries: [String]) throws -> CodePaneView {
+            let view = CodePaneView(manifest: manifest(revision: 113), artifact: try artifact(entries),
+                                    moduleBytes: teModule(), hexView: NSView())
+            view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+            view.layoutSubtreeIfNeeded()
+            view.restoreSeen(["0x999": SeenRecord(revision: 108, fingerprint: "gone")], baselines: [:], available: [112])
+            return view
+        }
+        let one = try pane(["0x220"])
+        XCTAssertEqual(one.nextRevisionToSettle, 112)
+        XCTAssertEqual(one.functionToSettle, CodeAddress(0x220))
+        let two = try pane(["0x220", "0x240"])
+        XCTAssertEqual(two.nextRevisionToSettle, 112)
+        XCTAssertNil(two.functionToSettle)
+    }
+
     /// A function with no record does take code: the newest revision first, and
     /// no further than it has to.
     func testAFunctionWithNoRecordReadsOnlyTheRevisionsItNeeds() throws {
@@ -1908,7 +1991,7 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(view.selectedRevisionTitle, "No comparison")
 
         // A read over before the delay leaves the bar as it was.
-        await view.compareWithPickedRevision(53) { r53 }.value
+        await view.compareWithPickedRevision(52) { r53 }.value
         XCTAssertNil(view.shownWork)
 
         // A long one is named on the bar's left, the one begun last on top; a
@@ -1921,11 +2004,11 @@ final class CodePaneViewTests: XCTestCase {
         }
         XCTAssertEqual(view.shownWork, "Reading revision r54…")
         let (next53, answer53) = AsyncStream.makeStream(of: CodeArtifact?.self)
-        let replacing = view.compareWithPickedRevision(53) {
+        let replacing = view.compareWithPickedRevision(51) {
             for await artifact in next53 { return artifact }
             return nil
         }
-        XCTAssertEqual(view.shownWork, "Reading revision r53…")
+        XCTAssertEqual(view.shownWork, "Reading revision r51…")
         answer53.yield(r53)
         await replacing.value
         XCTAssertNil(view.shownWork, "the earlier pick's read may run on, unasked for")
