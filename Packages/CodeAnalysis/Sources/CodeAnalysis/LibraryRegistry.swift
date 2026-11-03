@@ -558,7 +558,10 @@ extension ContentStore {
                     continue
                 }
                 var next = held
-                next.version += 1
+                // The function's C recorded in an entry is no change of its
+                // review: no module's copy is behind for it, so none applies
+                // the entry again and no module's revision moves.
+                if !lacksFunction { next.version += 1 }
                 next.entry = digest
                 next.name = proposal.name
                 next.kind = proposal.kind

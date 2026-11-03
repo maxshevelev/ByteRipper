@@ -566,9 +566,10 @@ public actor GhidraHost {
                 let offer = try Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data,
                                                   artifact: raw)
                 preview["library_below_bar"] = try Self.plain(offer.shortfalls)
-                if !offer.proposals.isEmpty {
+                let offered = try await Self.withoutLinked(offer.proposals, writer: writer)
+                if !offered.isEmpty {
                     let would = try await writer.previewLibraryEntries(
-                        module: module, rev: revision, by: nil, proposals: offer.proposals,
+                        module: module, rev: revision, by: nil, proposals: offered,
                         take: takeLibrary)
                     preview["library"] = try Self.plain(would)
                 }

@@ -173,7 +173,7 @@ final class LibraryViewTests: XCTestCase {
         let completed = try store.putLibraryEntries(module: other, rev: 1, by: "agent", proposals: [
             LibraryProposal(body: body, name: "CopyMem", kind: "edk2", address: "0x1", entry: try entryObject())
         ])
-        XCTAssertEqual(completed.updated.first?.version, 2)
+        XCTAssertEqual(completed.updated.first?.version, 1, "the C recorded is no new version of the review")
         let (_, held) = try XCTUnwrap(try store.libraryIndex().entry(for: body))
         XCTAssertTrue(LibraryProposal.hasFunction(try store.object(held.entry)))
         let again = try store.putLibraryEntries(module: source, rev: 2, by: "agent", proposals: [

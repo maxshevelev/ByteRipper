@@ -2256,6 +2256,7 @@ public class Owner {
                 JsonArray list = new JsonArray();
                 gaps.forEach(list::add);
                 item.add("gaps", list);
+                libraryDependencies(function, fid, item);
                 below.add(item);
                 continue;
             }
@@ -2270,9 +2271,7 @@ public class Owner {
             item.add("body", body);
             item.add("entry", libraryEntry(function, kind, body));
             if (linked) item.addProperty("linked", true);
-            // What decides whether it depends on a module: beside the review.
-            item.add("data_references", libraryDataReferences(function));
-            item.add("callees", libraryCallees(function, fid));
+            libraryDependencies(function, fid, item);
             // Why its signature is what it is: not of the review's text, so it
             // goes beside the entry, for the history of the version it makes.
             StringPropertyMap signatureReasons =
@@ -2301,59 +2300,77 @@ public class Owner {
     }
 
     /**
-     * What the body reads outside itself and the stack, by offset from its
-     * entry: a reference to memory that is not a call or a jump, or a constant
-     * that lands in the image — a `PUSH imm32` of a GUID's address carries no
-     * reference until something makes one. A small constant in an image based
-     * at zero is not taken for an address. It errs towards a reference: a doubt
-     * keeps a function in its module.
+     * What the body names outside itself and the stack: a reference to memory
+     * that is not a call or a jump, or a constant that lands in the image — a
+     * `PUSH imm32` of a GUID's address, or `MOV EAX,imm; CALL EAX`, carries no
+     * reference until something makes one. An address where an instruction
+     * starts is code, an indirect callee; any other is data, by the offset that
+     * names it. A small constant in an image based at zero is not taken for an
+     * address. It errs towards naming: a doubt keeps a function in its module.
      */
-    private JsonArray libraryDataReferences(Function function) {
-        JsonArray answer = new JsonArray();
-        java.util.Set<String> seen = new java.util.LinkedHashSet<>();
+    private void libraryOutside(Function function, java.util.Set<String> data, java.util.Set<Address> code) {
         Address entry = function.getEntryPoint();
         boolean baseIsReal = program.getImageBase().getOffset() >= 0x10000;
-        ghidra.program.model.listing.InstructionIterator code =
-            program.getListing().getInstructions(function.getBody(), true);
-        while (code.hasNext()) {
-            ghidra.program.model.listing.Instruction instruction = code.next();
-            String offset = String.format("0x%X", instruction.getAddress().subtract(entry));
+        ghidra.program.model.listing.Listing listing = program.getListing();
+        ghidra.program.model.listing.InstructionIterator instructions = listing.getInstructions(function.getBody(), true);
+        while (instructions.hasNext()) {
+            ghidra.program.model.listing.Instruction instruction = instructions.next();
+            java.util.List<Address> named = new java.util.ArrayList<>();
             for (ghidra.program.model.symbol.Reference reference : instruction.getReferencesFrom()) {
                 if (reference.isStackReference() || reference.getReferenceType().isFlow()) continue;
-                Address to = reference.getToAddress();
-                if (!to.isMemoryAddress() || function.getBody().contains(to)) continue;
-                seen.add(offset);
+                named.add(reference.getToAddress());
             }
-            if (!baseIsReal) continue;
-            for (int operand = 0; operand < instruction.getNumOperands(); operand++) {
-                for (Object part : instruction.getOpObjects(operand)) {
-                    if (!(part instanceof ghidra.program.model.scalar.Scalar scalar)) continue;
-                    Address to;
-                    try {
-                        to = entry.getNewAddress(scalar.getUnsignedValue());
-                    } catch (Exception error) {
-                        continue;
+            if (baseIsReal) {
+                for (int operand = 0; operand < instruction.getNumOperands(); operand++) {
+                    for (Object part : instruction.getOpObjects(operand)) {
+                        if (!(part instanceof ghidra.program.model.scalar.Scalar scalar)) continue;
+                        try {
+                            named.add(entry.getNewAddress(scalar.getUnsignedValue()));
+                        } catch (Exception error) {
+                            // Not an address of this space.
+                        }
                     }
-                    if (program.getMemory().contains(to) && !function.getBody().contains(to)) seen.add(offset);
                 }
             }
+            for (Address to : named) {
+                if (!to.isMemoryAddress() || !program.getMemory().contains(to) || function.getBody().contains(to)) continue;
+                if (listing.getInstructionAt(to) != null) code.add(to);
+                else data.add(String.format("0x%X", instruction.getAddress().subtract(entry)));
+            }
         }
-        seen.forEach(answer::add);
-        return answer;
     }
 
-    /** What the body calls: each function's name and body key, none for one that has no body to match. */
-    private JsonArray libraryCallees(Function function, ghidra.feature.fid.service.FidService fid) throws Exception {
-        JsonArray answer = new JsonArray();
-        for (Function called : function.getCalledFunctions(ghidra.util.task.TaskMonitor.DUMMY)) {
-            Function target = called.isThunk() ? called.getThunkedFunction(true) : called;
-            JsonObject item = new JsonObject();
-            item.addProperty("name", target.getName());
-            ghidra.feature.fid.hash.FidHashQuad hash = target.isExternal() ? null : fid.hashFunction(target);
-            if (hash != null) item.addProperty("body", bodyKey(hash));
-            answer.add(item);
+    /** What decides whether a function depends on a module: `data_references` and `callees`, beside the review. */
+    private void libraryDependencies(Function function, ghidra.feature.fid.service.FidService fid, JsonObject item)
+            throws Exception {
+        java.util.Set<String> data = new java.util.LinkedHashSet<>();
+        java.util.Set<Address> code = new java.util.LinkedHashSet<>();
+        libraryOutside(function, data, code);
+        JsonArray references = new JsonArray();
+        data.forEach(references::add);
+        item.add("data_references", references);
+        JsonArray callees = new JsonArray();
+        java.util.Set<Function> called = new java.util.LinkedHashSet<>(
+            function.getCalledFunctions(ghidra.util.task.TaskMonitor.DUMMY));
+        for (Address to : code) {
+            Function target = program.getFunctionManager().getFunctionAt(to);
+            if (target != null) {
+                called.add(target);
+            } else {
+                JsonObject unknown = new JsonObject();
+                unknown.addProperty("name", "code at " + hex(to));
+                callees.add(unknown);
+            }
         }
-        return answer;
+        for (Function each : called) {
+            Function target = each.isThunk() ? each.getThunkedFunction(true) : each;
+            JsonObject callee = new JsonObject();
+            callee.addProperty("name", target.getName());
+            ghidra.feature.fid.hash.FidHashQuad hash = target.isExternal() ? null : fid.hashFunction(target);
+            if (hash != null) callee.addProperty("body", bodyKey(hash));
+            callees.add(callee);
+        }
+        item.add("callees", callees);
     }
 
     /**

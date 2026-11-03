@@ -145,7 +145,9 @@ public final class CodeReadings {
                 its `review` (signature, parameters and locals by storage, plate, step comments by offset \
                 from the entry) and its `history` of versions, each with the module that published it and, \
                 for a version taken over another module's, the reason. A publish offers the registry every \
-                function tagged `library.<kind>` whose review meets the bar of a finished function.
+                function tagged `library.<kind>` whose review meets the bar of a finished function. Beside \
+                the entries: `taken_out`, the bodies given back to their modules and why, readable by their \
+                `id`; `sources`, the citations by body; `read_through`, whether readers see entries.
                 """,
             inputSchema: AgentSchema.object([
                 "id": AgentSchema.string("An entry's id, as the list gives it, for the entry itself."),
@@ -174,6 +176,33 @@ public final class CodeReadings {
                          "rev": source.rev.map { JSONValue.int(Int64($0)) } ?? .null,
                          "by": source.by.map(JSONValue.string) ?? .null])
             }
+            func citation(_ cited: LibraryCitation) -> JSONValue {
+                .object(["file": .string(cited.file), "line": .int(Int64(cited.line)),
+                         "note": cited.note.map(JSONValue.string) ?? .null,
+                         "by": cited.by.map(JSONValue.string) ?? .null, "at": .string(cited.at)])
+            }
+            func takenOut(_ body: String, _ out: LibraryTakenOut) -> JSONValue {
+                .object(["body": .string(body), "id": .string(out.id), "name": .string(out.name),
+                         "kind": .string(out.kind), "version": .int(Int64(out.version)),
+                         "reason": .string(out.reason), "by": out.by.map(JSONValue.string) ?? .null,
+                         "at": .string(out.at)])
+            }
+            let allTakenOut = (index.takenOut ?? [:]).sorted { $0.key < $1.key }
+            if let id, index.entries[id] == nil {
+                let bodies = allTakenOut.filter { $0.value.id == id }
+                guard let last = bodies.first?.value else {
+                    throw AgentToolError("The registry has no entry \(id): `library_registry` without `id` lists them.")
+                }
+                var answer: [String: JSONValue] = [
+                    "id": .string(id), "name": .string(last.name),
+                    "taken_out": .array(bodies.map { takenOut($0.key, $0.value) })
+                ]
+                if let data = try? store.object(last.entry),
+                   let review = try? JSONDecoder().decode(JSONValue.self, from: data) {
+                    answer["review"] = review
+                }
+                return .object(answer)
+            }
             if let id {
                 guard let entry = index.entries[id] else {
                     throw AgentToolError("The registry has no entry \(id): `library_registry` without `id` lists them.")
@@ -185,7 +214,8 @@ public final class CodeReadings {
                 answer["version"] = .int(Int64(entry.version))
                 answer["source"] = source(entry.source)
                 answer["variants"] = .array(entry.variants.map {
-                    .object(["body": .string($0.body.key), "module": .string($0.module.hex)])
+                    .object(["body": .string($0.body.key), "module": .string($0.module.hex),
+                             "source": index.sources?[$0.body.key].map(citation) ?? .null])
                 })
                 if let data = try? store.object(entry.entry),
                    let review = try? JSONDecoder().decode(JSONValue.self, from: data) {
@@ -206,6 +236,9 @@ public final class CodeReadings {
                 .filter { search == nil || $0.value.name.lowercased().contains(search!) }
                 .sorted { ($0.value.name, $0.key) < ($1.value.name, $1.key) }
             return .object([
+                "taken_out": .array(allTakenOut.map { takenOut($0.key, $0.value) }),
+                "sources": .object((index.sources ?? [:]).mapValues(citation)),
+                "read_through": .bool(index.readThrough == true),
                 "total": .int(Int64(matching.count)),
                 "entries": .array(matching.prefix(limit).map { id, entry in
                     .object(["id": .string(id), "name": .string(entry.name), "kind": .string(entry.kind),
