@@ -95,12 +95,19 @@ enum CodeAnalysisStore {
     /// give it. With `function`, that function whole and the others without
     /// their code (`CodeArtifact.decoding(_:function:)`): anything about one
     /// function reads this way, since decoding them all takes seconds on a large
-    /// module.
-    static func artifact(forRevision digest: SHA256Digest, function: CodeAddress?,
-                         root: URL? = nil) async -> CodeArtifact? {
+    /// module. `downloading` is told when the code has to come from the server
+    /// first, and when it has come: what is left is this machine's work.
+    static func artifact(forRevision digest: SHA256Digest, function: CodeAddress?, root: URL? = nil,
+                         downloading: (@MainActor @Sendable (Bool) -> Void)? = nil) async -> CodeArtifact? {
         let root = root ?? self.root
         return await Task.detached(priority: .userInitiated) { () -> CodeArtifact? in
             guard let store = try? ContentStore(root: root, create: false) else { return nil }
+            if store.mustFetch(digest, function: function) {
+                await downloading?(true)
+                let fetched = (try? store.fetch(digest, function: function)) != nil
+                await downloading?(false)
+                guard fetched else { return nil }
+            }
             if let function { return try? store.artifact(digest, function: function) }
             guard let data = try? store.object(digest) else { return nil }
             return try? JSONDecoder().decode(CodeArtifact.self, from: data)

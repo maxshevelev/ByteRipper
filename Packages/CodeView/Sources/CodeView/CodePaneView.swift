@@ -208,7 +208,10 @@ import ToolModuleKit
     private let workLabel = NSTextField(labelWithString: "")
     private var workLabelClearsComparison: NSLayoutConstraint?
     /// What is under way, the last begun last: that one is what the bar names.
-    private var worksUnderWay: [(id: Int, words: String)] = []
+    private var worksUnderWay: [(id: Int, words: String, revision: Int?)] = []
+    /// The revisions whose code is coming from the server now, and how many
+    /// reads wait on each.
+    private var revisionDownloads: [Int: Int] = [:]
     private var worksBegun = 0
     private var workReveal: DispatchWorkItem?
     private var recipeWork: Int?
@@ -594,7 +597,7 @@ import ToolModuleKit
             return Task {}
         }
         if let replaced = picksBeingRead[function] { endWork(replaced) }
-        let pick = beginWork(L("Reading revision r%1$@…", String(revision)))
+        let pick = beginRevisionWork(revision)
         picksBeingRead[function] = pick
         return Task { @MainActor [weak self] in
             let artifact = await read()
@@ -619,9 +622,28 @@ import ToolModuleKit
         return await body()
     }
 
-    private func beginWork(_ words: String) -> Int {
+    /// Names a read of a revision's code in the dump bar for as long as `body`
+    /// takes: as a download while `noteRevisionDownload` says one is under way.
+    public func whileReadingRevision<T>(_ revision: Int, _ body: @MainActor () async -> T) async -> T {
+        let work = beginRevisionWork(revision)
+        defer { endWork(work) }
+        return await body()
+    }
+
+    /// The code of `revision` has started or finished coming from the server.
+    public func noteRevisionDownload(_ revision: Int, underWay: Bool) {
+        let count = (revisionDownloads[revision] ?? 0) + (underWay ? 1 : -1)
+        revisionDownloads[revision] = count > 0 ? count : nil
+        updateWorkLine()
+    }
+
+    private func beginRevisionWork(_ revision: Int) -> Int {
+        beginWork(L("Reading revision r%1$@…", String(revision)), revision: revision)
+    }
+
+    private func beginWork(_ words: String, revision: Int? = nil) -> Int {
         worksBegun += 1
-        worksUnderWay.append((worksBegun, words))
+        worksUnderWay.append((worksBegun, words, revision))
         updateWorkLine()
         return worksBegun
     }
@@ -632,12 +654,14 @@ import ToolModuleKit
     }
 
     private func updateWorkLine() {
-        guard let words = worksUnderWay.last?.words else {
+        guard let work = worksUnderWay.last else {
             workReveal?.cancel()
             workReveal = nil
             showWorkLine(false)
             return
         }
+        let words = work.revision.flatMap { revisionDownloads[$0] == nil ? nil : $0 }
+            .map { L("Downloading revision r%1$@…", String($0)) } ?? work.words
         workLabel.stringValue = words
         ControlHelp.describe(workBar, words)
         guard workBar.isHidden, workReveal == nil else { return }
@@ -1090,7 +1114,7 @@ import ToolModuleKit
         revisionReads += 1
         Task { @MainActor [weak self] in
             guard let self else { return }
-            let read = await self.whileWorking(L("Reading revision r%1$@…", String(revision))) {
+            let read = await self.whileReadingRevision(revision) {
                 await onReadRevision(revision, function)
             }
             self.revisionsBeingRead.remove(wanted)

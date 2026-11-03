@@ -196,6 +196,39 @@ extension ContentStore {
         return try reduced(parts, functions, keeping: wanted, marked: false)
     }
 
+    /// Whether reading this object, or with `function` that function alone,
+    /// has to fetch: the store is a mirror lacking the object or a part of it.
+    public func mustFetch(_ digest: SHA256Digest, function entry: CodeAddress? = nil) -> Bool {
+        guard hasObject(digest) else { return objectSource != nil || partSource != nil }
+        return partSource != nil && !partsLacking(digest, function: entry).isEmpty
+    }
+
+    /// Takes from the source what `mustFetch` found lacking, so that the read
+    /// after it is this machine's work alone.
+    public func fetch(_ digest: SHA256Digest, function entry: CodeAddress? = nil) throws {
+        if !hasObject(digest), try !fetchRoot(digest) {
+            _ = try object(digest)
+            return
+        }
+        try fetchParts(partsLacking(digest, function: entry))
+    }
+
+    /// The parts of a held object that are not here, without those of the other
+    /// functions when one function is what is read: their index entries do.
+    private func partsLacking(_ digest: SHA256Digest, function entry: CodeAddress?) -> [SHA256Digest] {
+        guard let root = try? objectRoot(digest), let parts = PartedObject.root(of: root) else { return [] }
+        var others: Set<String> = []
+        if let entry, let functions = PartedObject.functions(ofRoot: root) {
+            others = Set(functions.map(\.part))
+                .subtracting(functions.filter { CodeAddress(hex: $0.entry) == entry }.map(\.part))
+        }
+        let names = parts.compactMap { part -> SHA256Digest? in
+            guard case .object(let hex) = part, !others.contains(hex) else { return nil }
+            return SHA256Digest(hex: hex)
+        }
+        return Set(names).filter { !hasObject($0) }.sorted { $0.hex < $1.hex }
+    }
+
     /// An artifact with every function as its index has it and no code at all:
     /// what a Code panel opens on, to read a function's code when it is shown.
     /// Nil for an artifact with no such index, to be read whole.

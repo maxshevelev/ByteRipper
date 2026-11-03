@@ -545,4 +545,54 @@ final class ContentStoreTests: XCTestCase {
         XCTAssertNil(revisions[2].changedFunctions, "no code, nothing to say")
         XCTAssertEqual(store.backfillChangedFunctions(), 0, "once")
     }
+
+    /// Only a mirror lacking the object has anything to fetch.
+    func testAStoreMustFetchOnlyWhatAMirrorLacks() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        var store = try ContentStore(root: root)
+        let held = try store.putObject(Data("held".utf8))
+        let absent = SHA256Digest(data: Data("absent".utf8))
+        XCTAssertFalse(store.mustFetch(absent), "a store of its own has nowhere to fetch from")
+        store.objectSource = { _ in Data() }
+        XCTAssertTrue(store.mustFetch(absent))
+        XCTAssertFalse(store.mustFetch(held))
+    }
+
+    func testAMirrorMustFetchOnlyThePartsOfWhatIsRead() throws {
+        func function(_ entry: Int) -> [String: Any] {
+            let name = "F\(entry)", address = "0x\(String(entry, radix: 16))"
+            return ["entry": address, "name": name, "signature": "void \(name)(void)", "size": 1,
+                    "c": "void \(name)(void) { /* \(String(repeating: name, count: 40)) */ }",
+                    "instructions": [["address": address, "bytes": "C3", "mnemonic": "RET", "text": "RET"]]]
+        }
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let server = try ContentStore(root: folder.appendingPathComponent("server"))
+        try server.enablePartedObjects()
+        let artifact = try JSONSerialization.data(withJSONObject: [
+            "script_version": 9, "program": ["image_base": "0x0"],
+            "functions": [function(0x1000), function(0x2000)]
+        ], options: [.sortedKeys])
+        let digest = try server.putObject(artifact)
+        let parts = server.parts(of: digest)
+        XCTAssertEqual(try server.objectRoot(digest).flatMap { PartedObject.functions(ofRoot: $0) }?.count, 2,
+                       "the artifact is cut, or this tests nothing")
+
+        var mirror = try ContentStore(root: folder.appendingPathComponent("mirror"))
+        mirror.partSource = ContentStore.PartSource(root: { try server.objectRoot($0) },
+                                                    files: { names in
+            try Dictionary(uniqueKeysWithValues: names.map { ($0, try server.gzippedObject($0)) })
+        })
+        let first = try XCTUnwrap(CodeAddress(hex: "0x1000"))
+        XCTAssertTrue(mirror.mustFetch(digest, function: first), "the root is not here")
+        try mirror.fetch(digest, function: first)
+        XCTAssertFalse(mirror.mustFetch(digest, function: first), "all that function takes is here")
+        XCTAssertTrue(mirror.mustFetch(digest, function: CodeAddress(hex: "0x2000")), "the other's part is not")
+        XCTAssertTrue(mirror.mustFetch(digest), "nor is the whole here")
+        XCTAssertLessThan(parts.filter(mirror.hasObject).count, parts.count)
+        try mirror.fetch(digest)
+        XCTAssertFalse(mirror.mustFetch(digest))
+    }
 }
+

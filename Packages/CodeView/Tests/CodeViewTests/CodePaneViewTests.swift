@@ -1682,6 +1682,37 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(asked.count, 2, "a function read once is not read again")
     }
 
+    /// The dump bar says when a revision's code is coming from the server, and
+    /// goes back to the read when it has come; another revision's download is
+    /// not what the read on top is waiting for.
+    func testTheDumpBarTellsADownloadFromTheRead() async throws {
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact(),
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 900, height: 400)
+        view.layoutSubtreeIfNeeded()
+        view.workShownAfter = 0
+        let (gate, open) = AsyncStream.makeStream(of: Void.self)
+        let reading = Task { @MainActor in
+            await view.whileReadingRevision(54) { for await _ in gate { return } }
+        }
+        while view.shownWork == nil { await Task.yield() }
+        XCTAssertEqual(view.shownWork, "Reading revision r54…")
+        view.noteRevisionDownload(53, underWay: true)
+        XCTAssertEqual(view.shownWork, "Reading revision r54…")
+        view.noteRevisionDownload(53, underWay: false)
+        view.noteRevisionDownload(54, underWay: true)
+        XCTAssertEqual(view.shownWork, "Downloading revision r54…")
+        // Two reads of one revision wait on one object: both have to have it.
+        view.noteRevisionDownload(54, underWay: true)
+        view.noteRevisionDownload(54, underWay: false)
+        XCTAssertEqual(view.shownWork, "Downloading revision r54…")
+        view.noteRevisionDownload(54, underWay: false)
+        XCTAssertEqual(view.shownWork, "Reading revision r54…")
+        open.yield()
+        await reading.value
+        XCTAssertNil(view.shownWork)
+    }
+
     /// A pick in the bar is read for the function on screen, as a mark's is: the
     /// next function picking the same revision has its own code to compare, and
     /// its comparison stays its own when the reader comes back.

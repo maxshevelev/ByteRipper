@@ -401,6 +401,7 @@
 "Compare the code with a revision" = "Den Code mit einer Revision vergleichen";
 "Reset" = "Zurücksetzen";
 "No comparison" = "Kein Vergleich";
+"Downloading revision r%1$@…" = "Revision r%1$@ wird vom Server geladen…";
 "Reading revision r%1$@…" = "Revision r%1$@ wird gelesen…";
 "Reading the module's revisions…" = "Revisionen des Moduls werden gelesen…";
 "Reading the analysis…" = "Analyse wird gelesen…";

@@ -100,6 +100,10 @@ func wireCodeRevisions(_ codePane: CodePaneView,
     let module = manifest.module.sha256
     let recipe = manifest.recipe.id
     var digests: [Int: SHA256Digest] = [:]
+    // The dump bar tells a download from this machine's own work.
+    func downloading(_ revision: Int) -> @MainActor @Sendable (Bool) -> Void {
+        { [weak codePane] in codePane?.noteRevisionDownload(revision, underWay: $0) }
+    }
     // The records of the last launch, read before anything can write: the
     // pane's own `restore` notes the function it opens on, and that note —
     // taken over a map the pane has not been given yet — would run ahead of
@@ -130,7 +134,8 @@ func wireCodeRevisions(_ codePane: CodePaneView,
             return
         }
         codePane.compareWithPickedRevision(revision) {
-            await CodeAnalysisStore.artifact(forRevision: digest, function: function)
+            await CodeAnalysisStore.artifact(forRevision: digest, function: function,
+                                             downloading: downloading(revision))
         }
     }
     codePane.onRevisionUnreadable = { [weak codePane] revision in
@@ -154,7 +159,8 @@ func wireCodeRevisions(_ codePane: CodePaneView,
         if let previous, previous.revision == revision { return previous.artifact }
         let options = await history.value.options
         guard let digest = options.first(where: { $0.choice.revision == revision })?.artifact else { return nil }
-        return await CodeAnalysisStore.artifact(forRevision: digest, function: function)
+        return await CodeAnalysisStore.artifact(forRevision: digest, function: function,
+                                                downloading: downloading(revision))
     }
     Task { @MainActor in
         let loaded = await history.value
@@ -193,8 +199,9 @@ func wireCodeRevisions(_ codePane: CodePaneView,
             let read: CodeArtifact?
             if let digest = digests[revision] {
                 let function = codePane.functionToSettle
-                read = await codePane.whileWorking(L("Reading revision r%1$@…", String(revision))) {
-                    await CodeAnalysisStore.artifact(forRevision: digest, function: function)
+                read = await codePane.whileReadingRevision(revision) {
+                    await CodeAnalysisStore.artifact(forRevision: digest, function: function,
+                                                     downloading: downloading(revision))
                 }
             } else {
                 read = nil

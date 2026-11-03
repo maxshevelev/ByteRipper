@@ -401,6 +401,7 @@
 "Compare the code with a revision" = "Сравнить код с ревизией";
 "Reset" = "Сбросить";
 "No comparison" = "Без сравнения";
+"Downloading revision r%1$@…" = "Загрузка ревизии r%1$@ с сервера…";
 "Reading revision r%1$@…" = "Чтение ревизии r%1$@…";
 "Reading the module's revisions…" = "Чтение ревизий модуля…";
 "Reading the analysis…" = "Чтение анализа…";
