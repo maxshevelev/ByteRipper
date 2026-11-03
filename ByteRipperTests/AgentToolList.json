@@ -759,7 +759,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
-    "description" : "Read a module's stored code analysis. The module is the Code panel or tab given as `document`; or a PE32/TE image `node` of a dump (`code_modules` lists the ones with an analysis), its bytes hashed to find the analysis; or a `module` SHA-256, read from the store alone. No panel needs to be open. `what` picks the list (default \"functions\"): \"functions\"; one function's \"instructions\" or decompiled \"c\"; a function's callers and callees (\"references\"); the instructions that \"uses\" an address — who calls a function, jumps to a label, or reads a global or a string; \"strings\"; \"symbols\", the named data — GUIDs, service tables, interfaces; or \"post_codes\", the values written to port 0x80 (what a POST card shows), each at the call that supplies it, with the functions it passes through (`via`) — `search` narrows by value — and, last, the writes whose value or port the code does not say (`unresolved`). A function's `name_source` says where its name came from: DEFAULT is Ghidra's FUN_ placeholder, ANALYSIS a name the UEFI pass read from the module (`name_reason` says from what), IMPORTED the image's own. `review_level` is how far the review has got — full, partial, decompiled, library or no_body; null in an analysis made before it was recorded — and `review_gaps` what keeps it from full: name, plate, comments, params, locals; a library function's `library_kind` whose library it is — edk2, amd (AGESA) or intel (FSP/RC) — and `library_entry`, the library registry entry it was matched with: `id`, `version`, and `state` — entry (the function is it), edited (changed on it since), differs (its review keeps `differences`) or conflict (its review was made on version `base`, not the current one). Addresses come twice: `entry`/`address` is Ghidra's virtual address, `offset` the same byte's offset in the module, the number the hex view shows (none when read by `module` alone). To show the person a function, `open_code`; to leave a note on it, `annotate` with `function`. These are stored observations, not a live disassembly; the C is Ghidra's reading of the instructions, not the source.",
+    "description" : "Read a module's stored code analysis. The module is the Code panel or tab given as `document`; or a PE32/TE image `node` of a dump (`code_modules` lists the ones with an analysis), its bytes hashed to find the analysis; or a `module` SHA-256, read from the store alone. No panel needs to be open. `what` picks the list (default \"functions\"): \"functions\"; one function's \"instructions\" or decompiled \"c\"; a function's callers and callees (\"references\"); the instructions that \"uses\" an address — who calls a function, jumps to a label, or reads a global or a string; \"strings\"; \"symbols\", the named data — GUIDs, service tables, interfaces; or \"post_codes\", the values written to port 0x80 (what a POST card shows), each at the call that supplies it, with the functions it passes through (`via`) — `search` narrows by value — and, last, the writes whose value or port the code does not say (`unresolved`). A function's `name_source` says where its name came from: DEFAULT is Ghidra's FUN_ placeholder, ANALYSIS a name the UEFI pass read from the module (`name_reason` says from what), IMPORTED the image's own. `review_level` is how far the review has got — full, partial, decompiled, library or no_body; null in an analysis made before it was recorded — and `review_gaps` what keeps it from full: name, plate, comments, params, locals, c (a body that did not decompile); `temporaries` the placeholder names its C still prints (uVar1, in_ECX), reported only: not a gap, and a library function can hold them, so a clean row does not mean the locals are named; a library function's `library_kind` whose library it is — edk2, amd (AGESA) or intel (FSP/RC) — and `library_entry`, the library registry entry it was matched with: `id`, `version`, and `state` — entry (the function is it), edited (changed on it since), differs (its review keeps `differences`) or conflict (its review was made on version `base`, not the current one). The answer to `what: \"functions\"` also carries `library`: the module's tagged library functions by kind (`edk2`, `amd`, `intel`), how many carry a registry entry (`with_entry`) and in which `state`, how many entries hold this module's current version (`installed`), how many moved on after it (`updated_since`), how many still print a placeholder name (`with_temporaries`, reported only), and `below_bar` — the tagged functions short of the bar, counted by the gap each keeps (name, plate, comments, params, locals, return, c) — with `too_short`, bodies Function ID cannot hash, known only while the module's owner runs. `live` says whether an owner has this module's program open — the `ghidra_*` tools read that program, `code_query` reads the stored analysis — and, while it does, `unpublished_writes` whether the program holds writes the store has not got: publish to bring them across. Addresses come twice: `entry`/`address` is Ghidra's virtual address, `offset` the same byte's offset in the module, the number the hex view shows (none when read by `module` alone). To show the person a function, `open_code`; to leave a note on it, `annotate` with `function`. These are stored observations, not a live disassembly; the C is Ghidra's reading of the instructions, not the source.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -773,6 +773,17 @@
         },
         "function" : {
           "description" : "A function name or Ghidra entry address, for \"instructions\", \"c\" and \"references\".",
+          "type" : "string"
+        },
+        "level" : {
+          "description" : "With `what: \"functions\"`: only functions at this review level.",
+          "enum" : [
+            "full",
+            "partial",
+            "decompiled",
+            "library",
+            "no_body"
+          ],
           "type" : "string"
         },
         "limit" : {
@@ -794,7 +805,7 @@
           "type" : "string"
         },
         "search" : {
-          "description" : "A word to narrow functions, strings or symbols by.",
+          "description" : "A word to narrow functions, strings or symbols by; with `what: \"c\"` and no `function`, text to find in every function's stored C, any case, as written.",
           "type" : "string"
         },
         "what" : {
@@ -973,7 +984,37 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
-    "description" : "The module's functions as Ghidra holds them now: entry, name, name_source, size, signature, `tags`, and for a function the export writes at the library review level `library` — `edk2_name` or `tag` — and `library_kind` — edk2, amd or intel; none for a bare `library` tag. `name_contains` and `name_source` (a Ghidra source such as USER_DEFINED) narrow the list, `address_from`/`address_to` narrow it by entry. `filter: \"unfinished\"` keeps what a review has not passed — a parameter or a local Ghidra still names itself or holds as `undefined`, or no plate comment — each with `leftovers`, and `summary` says how many of how many; that filter decompiles every function, so it is slow on a large module. `leftovers.fragments` counts the register and `unique:` pieces the decompiler splits off while a review types a function — its own artefacts, which do not make a function unfinished. Paged by `offset` and `limit`; `next` says where the next page starts.",
+    "description" : "Where every module's last published analysis names a type, whole identifiers only, by its name and its tag together: `modules`, each with `module`, `name`, `revision` and `uses` — `functions` (`entry`, `name`, `in_signature`, `line_count` and the first `lines` of C, comments included), `data` typed with it or whose comment names it, the module's other `types` that name it, and `holds_the_type`. For correcting a name across the modules, before or after `ghidra_type` withdraws it. It reads the store: a module with no project here is found, and writes not yet published are not seen. `functions` counts them all; `limit` bounds how many are listed, and `truncated` says some were left out. Slow on a large store: it reads every module.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "limit" : {
+          "description" : "The most items one page holds — a ceiling: a page stops sooner when the answer would pass the size bound, and says so with `truncated: \"size\"`. Default 200, at most 1000.",
+          "maximum" : 1000,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "name" : {
+          "description" : "The type's name or its tag.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "name"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_type_uses",
+    "title" : "Find where the modules name a type"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The module's functions as Ghidra holds them now: entry, name, name_source, size, signature, `tags`, and for a function the export writes at the library review level `library` — `edk2_name` or `tag` — and `library_kind` — edk2, amd or intel; none for a bare `library` tag. `name_contains` and `name_source` (a Ghidra source such as USER_DEFINED) narrow the list, `address_from`/`address_to` narrow it by entry. `filter: \"unfinished\"` keeps what a review has not passed — a parameter or a local Ghidra still names itself, or one still typed `undefined`, or no plate comment — each with `leftovers`, and `summary` says how many of how many; that filter decompiles every function, so it is slow on a large module. `leftovers.fragments` counts the register and `unique:` pieces the decompiler splits off while a review types a function — its own artefacts, which do not make a function unfinished. Paged by `offset` and `limit`; `next` says where the next page starts.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -992,7 +1033,7 @@
           ]
         },
         "filter" : {
-          "description" : "Only the functions a review has not passed.",
+          "description" : "Only the functions a review has not passed: a placeholder parameter or stored local, or no plate. A decompiler's temporary (`uVar1`) does not count, since some cannot be named; `summary.fragments_only` counts the functions it leaves out with only those left.",
           "enum" : [
             "unfinished"
           ],
@@ -1036,13 +1077,51 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
-    "description" : "One function as Ghidra holds it now: its signature, its `tags` and — for a function the export writes at the library review level — `library`, why: `edk2_name` for a name on the EDK2 list, `tag` for a review's library tag — and `library_kind`, whose: edk2, amd or intel; its parameters and locals with their `storage` and `first_use` (what `ghidra_rename_variable` names a local by), its plate comment, what is left to name (`leftovers`, whose `fragments` are the decompiler's register pieces rather than missing names), and its decompiled C — fresh after every write, ahead of what the app shows until a publish. `summary: true` leaves the C and the equates out, for walking a module without its text.",
+    "description" : "The spans of executable memory between neighbouring function bodies that hold anything but padding — the code the analysis never made a function of, because it cuts a function where a reference points and a body registered in a table, or reached by nothing at all, has none. Each gap says `start`, `end`, `size` and `first_bytes` (16); whether its first byte is already an `instruction` or `defined_data`; the `references` into it from outside — `all`, `data`, `code` — with up to eight `reference_targets` and, when something points in with data, `body_at`; whether a body `preceded_by_body` runs into it; and a `verdict`: `data` — what refers in reads a datum that already has its type; `body` — a data reference lands in the gap outside any datum, so something registered it (a callback, a table slot) and `ghidra_function_create` at that target makes it a function, whatever its first bytes look like; `tail` — nothing refers to it and the body before it runs into it, so it is that body's tail and belongs with it, not a function of its own; `unclaimed` — nothing refers to it and no body runs into it; `referenced` — code refers into it, which a function ought to have taken. `count` is how many gaps the module has; paged by `offset` and `limit`.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "limit" : {
+          "description" : "The most items one page holds — a ceiling: a page stops sooner when the answer would pass the size bound, and says so with `truncated: \"size\"`. Default 200, at most 1000.",
+          "maximum" : 1000,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "offset" : {
+          "description" : "How many to skip. Default 0.",
+          "type" : "integer"
+        }
+      },
+      "required" : [
+        "module"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_gaps",
+    "title" : "List the gaps between function bodies"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "One function as Ghidra holds it now: its signature, its `tags` and — for a function the export writes at the library review level — `library`, why: `edk2_name` for a name on the EDK2 list, `tag` for a review's library tag — and `library_kind`, whose: edk2, amd or intel; its parameters and locals with their `storage` and `first_use` (what `ghidra_rename_variable` names a local by), its plate comment, its `comments` — every comment in the body with its `address`, `kind` (plate, pre, eol, post, repeatable) and `text`, to check against a re-read of the C — what is left to name or type — a name Ghidra made up, or an `undefined` type — (`leftovers`, whose `fragments` are the decompiler's register pieces rather than missing names), and its decompiled C — fresh after every write, ahead of what the app shows until a publish. `summary: true` leaves the C and the equates out, for walking a module without its text. A function the decompiler refuses answers `decompile_error` and `suspects`: the parameters, locals and referenced data whose applied type is a pointer to something that is not a structure — where `PTRSUB off of non structured pointer type` comes from — so the offending symbol is named rather than bisected for.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
         "address" : {
           "description" : "The function's entry address, e.g. \"0x68A\".",
           "type" : "string"
+        },
+        "explain" : {
+          "description" : "When the C does not come out, bisect the data the body references: each datum is let go in turn inside a transaction that is rolled back, and the ones after which the C decompiles are named under `explained`. Nothing is kept; a rollback that did not take says so and stops.",
+          "type" : "boolean"
         },
         "module" : {
           "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
@@ -1069,7 +1148,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
-    "description" : "The instructions of the function at `address`, with their bytes, references and the names of their constants (`equates`). A large function comes in pages: `limit` instructions from `from`; `next` is the address to pass as `from` for the rest.",
+    "description" : "The instructions of the function at `address`, with their bytes, references and the names of their constants (`equates`). At an instruction no function holds, as `ghidra_gaps` lists them, the code from there to the next function, and `gap` in place of `entry`. A large function comes in pages: `limit` instructions from `from`; `next` is the address to pass as `from` for the rest.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -1130,6 +1209,40 @@
     },
     "name" : "ghidra_xrefs",
     "title" : "Find references"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "Equates that sit on a memory operand, usually the displacement of `[reg+N]`: `address`, `name`, `operand`, `text` (the instruction), `function`. `value` in `ghidra_equate` once chose these by mistake, so read each one; a name meant for the immediate is removed with an empty `name` and `operand`, then set again. One set on purpose is listed too. `count` is how many the module has. Paged.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "limit" : {
+          "description" : "The most items one page holds — a ceiling: a page stops sooner when the answer would pass the size bound, and says so with `truncated: \"size\"`. Default 200, at most 1000.",
+          "maximum" : 1000,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "offset" : {
+          "description" : "How many to skip. Default 0.",
+          "type" : "integer"
+        }
+      },
+      "required" : [
+        "module"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_equates_on_memory",
+    "title" : "List equates on memory operands"
   },
   {
     "annotations" : {
@@ -1206,12 +1319,20 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
-    "description" : "The module's description as the project holds it now: `text` (Markdown, null while there is none), its `sections` (the `## ` headings, in order) and its size in `bytes`. Read it before `ghidra_describe` changes it.",
+    "description" : "The module's description as the project holds it now: `text` (Markdown, null while there is none), its `sections` (the `## ` headings, in order) and its size in `bytes`. `section` answers that section's body alone as `text`; `outline: true` leaves `text` out. Read what `ghidra_describe` is about to change: one section need not cost the whole description.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
         "module" : {
           "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "outline" : {
+          "description" : "Only the headings and the size.",
+          "type" : "boolean"
+        },
+        "section" : {
+          "description" : "The `## ` heading to read alone.",
           "type" : "string"
         }
       },
@@ -1259,7 +1380,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
-    "description" : "The types the program holds — what a review defined and what the module used — with `kind` (struct, union, enum, typedef, function, pointer, array), `size` and `source` (the program, or the archive the type came from). `contains` narrows by name, `kind` by what a type is — one kind, or several separated by commas — `source` by origin, and `builtin` adds Ghidra's own types, left out by default. `sources` lists every origin the program's types hold — the reviews' archive included — so `source` is named rather than guessed. Paged by `offset` and `limit`; `total` is how many match.",
+    "description" : "The types the program holds — what a review defined and what the module used — with `kind` (struct, union, enum, typedef, function, pointer, array), `size` and `source` (the program, or the archive the type came from). `contains` narrows by name, `kind` by what a type is — one kind, or several separated by commas — `source` by origin, and `builtin` adds Ghidra's own types, left out by default. `sources` lists every origin the program's types hold — the reviews' archive included — so `source` is named rather than guessed. Paged by `offset` and `limit`; `total` is how many match. With `contains`, `in_archives` lists what the review archive and EDK2 hold under that name and the program does not yet: it needs no definition, and is taken in when first used.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -1385,7 +1506,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "Makes a function at `address`: code only a table points at — a slot of a services table, a member of a PPI or a protocol — which no call names, so Ghidra left it outside any function and `ghidra_rename` finds nothing there. Disassembles it first if needed. With `name`, names it as `ghidra_rename` would. A function already there is answered as it is.",
+    "description" : "Makes a function at `address`: code only a table points at — a slot of a services table, a member of a PPI or a protocol — which no call names, so Ghidra left it outside any function and `ghidra_rename` finds nothing there. Disassembles it first if needed. With `name`, names it as `ghidra_rename` would. A function already there is answered as it is. An address inside another function's body is refused, naming that function: a function made there splits the body it belongs to. Undo a split with `ghidra_function_delete` or `ghidra_function_merge` first.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -1422,7 +1543,106 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "Names, and perhaps types, a local by its `storage` and, for a register, `first_use` — as `ghidra_function` lists them — or a parameter by its `ordinal`. Never by Ghidra's own name for it (`iVar4`): those renumber. `type` alone types it and keeps the name. After any call, read the function again: a local's `storage` can change, and a type alone gives it a `HASH:` storage. `items` does several in one call, each in a transaction of its own: the answer lists what applied and why an entry did not. A name already held is answered with the holder — its kind, address and `storage` — and that storage renames the holder, even one the decompiler no longer shows (the answer then says `stale: true`); freeing the name is what lets the local take it. A type the decompiler does not take is refused and nothing is changed.",
+    "description" : "Removes the function at `address` — its entry or any address inside it. The bytes stay disassembled; what the function said about them is gone, and the next publish drops it from the analysis. This is how a split is undone: `ghidra_function_create` refuses to make a function inside another function's body, and a body the analysis split on a conditional jump is removed here and the right one made again.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "address" : {
+          "description" : "The function's entry, or any address inside it.",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module",
+        "address"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_function_delete",
+    "title" : "Remove a function"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Removes the local variables of the function at `address` — the decompiler's and the review's, or with `names` only those — and decompiles it again, answering what was cleared (`locals`: each one's name, storage, first use and type, to give back what matters with `ghidra_rename_variable`) and whether the C now decompiles (`decompiles`), with the error when it does not. The candidate for a function the decompiler refuses, such as two symbols assigned to one variable, where names it kept stand in the way: name the two its error names before clearing everything. It is not a guarantee, and what is cleared goes: read the function again and name what matters. While the C still fails, the answer names `suspects` — the parameters, locals and referenced data typed as a pointer to something that is not a structure, which is where such a failure comes from.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "address" : {
+          "description" : "The function's entry address, or any address inside it.",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "names" : {
+          "description" : "Only these locals. Default: every one.",
+          "items" : {
+            "type" : "string"
+          },
+          "type" : "array"
+        }
+      },
+      "required" : [
+        "module",
+        "address"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_function_locals_reset",
+    "title" : "Let a function's locals go"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Gives the body of `from` to `into` and removes `from`: the way back from a split the analysis made, where a conditional jump inside a body it took for a function left half of it as a function of its own. Both are named by entry or any address inside them, as `ghidra_function` lists them; the answer gives the survivor's entry, name and size. Merging a function into itself, or one that is already part of the other, is refused.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "from" : {
+          "description" : "The function that becomes part of it.",
+          "type" : "string"
+        },
+        "into" : {
+          "description" : "The function that keeps its entry and name.",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module",
+        "into",
+        "from"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_function_merge",
+    "title" : "Make two functions one"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Names, and perhaps types, a local by its `storage` and, for a register, `first_use` — as `ghidra_function` lists them — or a parameter by its `ordinal`. Never by Ghidra's own name for it (`iVar4`): those renumber. Two locals that share a storage and a first use cannot be told apart — a function holds one variable per storage — and naming either is refused; say what each is in the plate comment, and name the slot itself with `shared`: the whole storage takes one name, every use of it reads by that name, and the plate says which meaning each use carries. Use a neutral name there (`PcieSizeTooSmall`), never one of the meanings. A slot whose storage a parameter also holds is refused: name the parameter by ordinal. A slot that cannot be named whole — one use stays under another name — is refused too, and nothing is changed, rather than answered as applied. With `shared`, a `HASH:…` or `unique:…` storage is refused: it is the decompiler's own temporary, made afresh by each decompile, not a slot the module holds. Without `shared`, such a local is named and typed by its storage as any other. `type` alone types it and keeps the name. After any call, read the function again: a local's `storage` can change, and a type alone gives it a `HASH:` storage. `items` does several in one call, each in a transaction of its own: the answer lists what applied and why an entry did not. A name already held is answered with the holder — its kind, address, `storage` and `first_use` — and those rename the holder, even one the decompiler no longer shows (the answer then says `stale: true`); freeing the name is what lets the local take it. A `first_use` that is no longer the variable's is refused with what the storage holds now, since a retype can merge locals: list them again. A type the decompiler does not take is refused and nothing is changed.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -1476,6 +1696,10 @@
           "description" : "Or a parameter by its position, from 0.",
           "type" : "integer"
         },
+        "shared" : {
+          "description" : "Name the whole storage once, for a slot the decompiler shows as several variables; with this, `storage` alone names it and `first_use` is not given.",
+          "type" : "boolean"
+        },
         "storage" : {
           "description" : "The local's storage, e.g. \"EAX:4\" or \"Stack[-0x18]:4\".",
           "type" : "string"
@@ -1501,7 +1725,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "Sets the C signature of the function at `address`, the EDK2 way if wanted (`EFI_STATUS EFIAPI Foo (IN CONST EFI_PEI_SERVICES **PeiServices)`). Types the module lacks come from the EDK2 archive or from types a review defined. For a function no calling convention fits — a linker's clone that takes an argument in EDX, or returns through a pointer in ECX — give `storage`, one place per parameter as `ghidra_function` lists storage (`[\"ECX:4\", \"Stack[0x4]:4\"]`), and `return_storage` if the result is not where the convention puts it (`EDX:4,EAX:4` for 64 bits, high part first, `void`). Then no dummy parameter is needed for a register the function does not read.",
+    "description" : "Sets the C signature of the function at `address`, the EDK2 way if wanted; `aligned` in the answer lists the parameters a 32-bit convention moved to an aligned slot, which a UINT64 is, and `storage` puts them back where the code reads them (`EFI_STATUS EFIAPI Foo (IN CONST EFI_PEI_SERVICES **PeiServices)`). Types the module lacks come from the EDK2 archive or from types a review defined. For a function no calling convention fits — a linker's clone that takes an argument in EDX, or returns through a pointer in ECX — give `storage`, one place per parameter as `ghidra_function` lists storage (`[\"ECX:4\", \"Stack[0x4]:4\"]`), and `return_storage` if the result is not where the convention puts it (`EDX:4,EAX:4` for 64 bits, high part first, `void`). Then no dummy parameter is needed for a register the function does not read.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -1514,7 +1738,7 @@
           "type" : "string"
         },
         "reason" : {
-          "description" : "Why, in a few words.",
+          "description" : "Why the signature is this one. Kept as `signature_reason`, apart from the name's reason.",
           "type" : "string"
         },
         "return_storage" : {
@@ -1626,6 +1850,78 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
+    "description" : "Extends the body of `function` to `end` (exclusive), for a body the analysis ended at an instruction it took for the end of the flow, such as INT1: the last instruction is set to fall through and the following instructions join the body. Refused when a function holds part of the range or the range is not whole decoded instructions.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "end" : {
+          "description" : "The first address past the new body.",
+          "type" : "string"
+        },
+        "function" : {
+          "description" : "The function, by entry or any address inside it.",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module",
+        "function",
+        "end"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_function_extend",
+    "title" : "Extend a body cut short"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Decodes the instructions in [`start`, `end`) again from `start`, in the mode already there: the correction for a boundary the analysis got wrong, where it decoded from a byte inside an instruction. An instruction reaching into the range goes too. The answer lists the `instructions` now there and the `functions` whose bodies were fixed. A function whose entry now falls inside an instruction was cut at a false boundary: one Ghidra named is removed (`functions_removed`), one a review named stays and is reported (`entries_inside_instructions`) for `ghidra_function_delete` or `ghidra_function_merge`. Defined data in the range is refused: clear it first. For 16-bit code in a 32-bit module use `ghidra_code_mode`.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "end" : {
+          "description" : "The first address past the range: [start, end).",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "reason" : {
+          "description" : "What shows the boundary was wrong.",
+          "type" : "string"
+        },
+        "start" : {
+          "description" : "The address the true instruction starts at.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module",
+        "start",
+        "end"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_redecode",
+    "title" : "Decode a range of code again"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
     "description" : "Reads the code in [`start`, `end`) as 16-bit or as 32-bit x86. A 32-bit module holds 16-bit code at its reset vector (real mode, before the switch to protected mode), which Ghidra decodes as 32-bit and so gets wrong: overlapping instructions, nonsense C. The instructions in the range are cleared and decoded again from `start` in the given size, without leaving the range; functions there get their bodies fixed. Addresses stay offsets: real-mode segments are not modelled, so a `cs:[F490h]` operand names F490h, not where it lands. `ghidra_disassembly` marks 16-bit instructions `bits: 16`. Defined data in the range is refused: clear it first.",
     "inputSchema" : {
       "additionalProperties" : false,
@@ -1673,7 +1969,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "Names a constant an instruction holds — an I/O port (`PCI_CONFIG_ADDRESS` for 0xCF8), an MSR or register index, a magic value — as a Ghidra equate on that operand; the disassembly and the C show the name instead of the number, also where the number reaches an `out()` through a register. `value` picks the operand that holds it; `operand` picks one by index instead. Empty `name` removes it. One name stands for one value: a name already used for another is refused. A number the code computes (`ADD DL,4` to reach 0xCFC) is in no operand and gets a comment instead. Give every name an `enum` that groups it (`FCH_IO_PORT`, `AMD_MSR`, `LPC_DECODE_BITS`) and a `comment`: what the name stands for and where that is known from (a spec and its section, a coreboot or EDK2 header, the PPR, or `not confirmed`). The app shows the comment when the reader clicks the name, and the enum is shared with the next module reviewed, so a name given once brings its comment along: later, `name` and `enum` are enough. One value has one name in an enum.",
+    "description" : "Names a constant an instruction holds — an I/O port (`PCI_CONFIG_ADDRESS` for 0xCF8), an MSR or register index, a magic value — as a Ghidra equate on that operand; the disassembly and the C show the name instead of the number, also where the number reaches an `out()` through a register. `value` picks the immediate operand that holds it, never a displacement in `[reg+1]`; `operand` picks one by index instead, and is how a displacement is named. Empty `name` removes it. One name stands for one value: a name already used for another is refused. A number the code computes (`ADD DL,4` to reach 0xCFC) is in no operand and gets a comment instead. Give every name an `enum` that groups it (`FCH_IO_PORT`, `AMD_MSR`, `LPC_DECODE_BITS`) and a `comment`: what the name stands for and where that is known from (a spec and its section, a coreboot or EDK2 header, the PPR, or `not confirmed`). The app shows the comment when the reader clicks the name, and the enum is shared with the next module reviewed, so a name given once brings its comment along: later, `name` and `enum` are enough. One value has one name in an enum. Instead of `address`, `functions` with `value` names that value wherever those functions hold it as an immediate operand; the answer lists `applied`, each address with its instruction, and `skipped` operands, which keep another name they already have. A small value is held by unrelated instructions too: `dry_run: true` answers the same and writes nothing, so read the instructions first and name by `address` where only some are meant. `items` takes several operands in one call, each `address` with its own `operand`, `value` or `name` over the call's own, all or none; that is the way to name a displacement in many places. `in_c` says whether the function's C now prints the name, `not_in_c` lists the names of `items` it does not: an equate stands on the instruction, and the C can print something else, such as an enum member the operand's type chose.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -1685,6 +1981,10 @@
           "description" : "What the name stands for and its source; replaces the member's comment.",
           "type" : "string"
         },
+        "dry_run" : {
+          "description" : "With `functions`: answer what would be named and write nothing.",
+          "type" : "boolean"
+        },
         "enum" : {
           "description" : "The enum the name is a member of; made when missing.",
           "type" : "string"
@@ -1692,6 +1992,20 @@
         "enum_comment" : {
           "description" : "What the enum groups, e.g. \"FCH legacy I/O ports\".",
           "type" : "string"
+        },
+        "functions" : {
+          "description" : "Functions by entry address, instead of `address`; needs `value`.",
+          "items" : {
+            "type" : "string"
+          },
+          "type" : "array"
+        },
+        "items" : {
+          "description" : "Several operands, each {address, operand or value, and optionally name, enum, comment}.",
+          "items" : {
+            "type" : "object"
+          },
+          "type" : "array"
         },
         "module" : {
           "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
@@ -1712,7 +2026,6 @@
       },
       "required" : [
         "module",
-        "address",
         "name"
       ],
       "type" : "object"
@@ -1761,7 +2074,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "Names and/or types the datum at `address`, e.g. a GUID or a table.",
+    "description" : "Names and/or types the datum at `address`, e.g. a GUID or a table. An empty `name` removes the label there, a leftover under a type that now names the place. A type laid over decoded instructions is refused, naming them, unless `clear_code: true`: they go, the function holding them gives those bytes up, and `code_cleared` says so.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -1769,12 +2082,16 @@
           "description" : "The address.",
           "type" : "string"
         },
+        "clear_code" : {
+          "description" : "Remove instructions the type covers and shorten the body.",
+          "type" : "boolean"
+        },
         "module" : {
           "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
           "type" : "string"
         },
         "name" : {
-          "description" : "Its name.",
+          "description" : "Its name; empty removes the label.",
           "type" : "string"
         },
         "type" : {
@@ -1798,16 +2115,36 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "Writes the module's description — Markdown, what the module is for, how it works and how it is built — kept in the project and published with the review as an object of its own, which the app shows beside the code. With `section`, `text` replaces the body of that `## ` section only (added at the end if missing; empty `text` removes it); without it, `text` is the whole description (empty clears it). Up to 256 KiB. Its sections, in this order, headed exactly so: `# <ModuleName>` and a one-paragraph summary; `## Identity` (file GUID, type, image, base, entry, the board and the module's place in the firmware's layout — never the dump file it was read from, the same module is in every dump of the board — source package and how sure); `## Purpose`; `## Interfaces` (what it consumes and produces — PPIs, protocols, HOBs, variables, callbacks — a table: interface, GUID, kind, where); `## Flow` (numbered, from the entry point); `## Internal structure` (functions by role, globals, tables, the review's types); `## Hardware and data`; `## Errors and diagnostics` (status, POST and halt codes, messages, what the bench sees); `## Findings`; `## Open questions`; `## Review status`. A section with nothing to say yet is left out. Link a function as `[Name](0xADDRESS)`; the app follows it. Mark what is not proven (`probably`, `not confirmed`). Markdown: headings, paragraphs, `-` and `1.` lists, tables, fenced code, `code`, **bold**, *italic*, links.",
+    "description" : "Writes the module's description — Markdown, what the module is for, how it works and how it is built — kept in the project and published with the review as an object of its own, which the app shows beside the code. With `section`, `text` replaces the body of that `## ` section only (added at the end if missing, or beside the section `before` or `after` names; either alone moves the section); without it, `text` is the whole description. Empty `text` is refused; `delete: true`, without `text`, removes the section named, or the whole description, and the answer says which in `removed`. With `section`, `old_text` and `new_text` change one string inside that section without sending the rest; refused unless `old_text` occurs there exactly once. Up to 256 KiB. The answer names the sections and the size, not the text: `ghidra_description` reads it. It is an article for a service technician who does not program: plain prose, every abbreviation expanded in parentheses at its first mention, routines by what they do rather than by address; no function inventories, decompiler artefacts, revision history or review status — the app and the store hold those. Its sections, in this order, headed exactly so: `# <ModuleName>` and a short summary; `## What it is` (kind of file, whose, stage of start-up, the board and the module's place in the firmware — never the dump file it was read from); `## What it does`; `## Execution flow` (the main chains as short ordered walks; the events it registers for, when each fires, what it does; each chain and event links its main function or two, helpers left out); `## Interactions`; `## Inside the module`; `## Failures` (codes, messages, what the bench sees); `## Known problems` (with their practical effect); `## Terms` (only the narrow terms specific to this module that the article uses, in full: what each is, where it sits, why it matters here; common terms a technician knows, such as BIOS, USB, CMOS, UEFI, Variable, stay out). A section with nothing to say yet is left out. A link `[Name](0xADDRESS)` is optional outside `Execution flow`; a sentence must read without it. Say what is not proven. Markdown: headings, paragraphs, `-` and `1.` lists, tables, fenced code, `code`, **bold**, *italic*, links.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
+        "after" : {
+          "description" : "The section this `section` goes just after.",
+          "type" : "string"
+        },
+        "before" : {
+          "description" : "The section this `section` goes just before.",
+          "type" : "string"
+        },
+        "delete" : {
+          "description" : "Removes the section named, or the whole description. Takes no `text`.",
+          "type" : "boolean"
+        },
         "module" : {
           "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
           "type" : "string"
         },
+        "new_text" : {
+          "description" : "What `old_text` becomes; may be empty.",
+          "type" : "string"
+        },
+        "old_text" : {
+          "description" : "A string in `section` to change; it must occur there exactly once. Goes with `new_text`, takes no `text`.",
+          "type" : "string"
+        },
         "section" : {
-          "description" : "The `## ` heading whose body `text` replaces, e.g. \"Flow\".",
+          "description" : "The `## ` heading whose body `text` replaces, e.g. \"Execution flow\".",
           "type" : "string"
         },
         "text" : {
@@ -1816,8 +2153,7 @@
         }
       },
       "required" : [
-        "module",
-        "text"
+        "module"
       ],
       "type" : "object"
     },
@@ -1831,7 +2167,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "Adds a structure, union, enum or typedef from C to the module, shared with modules opened after the next publish. Write the tag: `typedef struct _NAME { … } NAME;`. Without `c`, `name` picks a type the module or its archives hold. `description` says what the type is and where its layout is known from; `comments` gives fields or enum members theirs — what each holds and its source. The app shows them when the reader clicks the type or a field; an empty comment removes one. Comments are set after the C, which drops its own — a type defined again keeps its fields' comments and its description, and the answer says how many comments came back (`comments_kept`; it counts a redefinition, so it is 0 when no `c` is given), whether the C declares what the program already held (`unchanged`) and gives the type's `size`. A structure is laid out by the compiler spec unless the C says otherwise: `#pragma pack(1)` … `#pragma pack()` is how a packed record is written, and `size` beside the field offsets is how a wrong layout shows. `delete: true` with `name` removes a type the program holds — a probe or a mistake — so a publish cannot carry it; a type an archive holds is refused.",
+    "description" : "Adds a structure, union, enum or typedef from C to the module, shared with modules opened after the next publish. Write the tag: `typedef struct _NAME { … } NAME;`. Without `c`, `name` picks a type the module or its archives hold. `description` says what the type is and where its layout is known from; `comments` gives fields or enum members theirs — what each holds and its source. The app shows them when the reader clicks the type or a field; an empty comment removes one. Comments are set after the C, which drops its own — a type defined again keeps its fields' comments and its description, and the answer says how many comments came back (`comments_kept`; it counts a redefinition, so it is 0 when no `c` is given), whether the C declares what the program already held (`unchanged`) and gives the type's `size`. A structure is laid out by the compiler spec unless the C says otherwise: `#pragma pack(1)` … `#pragma pack()` is how a packed record is written, and `size` beside the field offsets is how a wrong layout shows. `delete: true` with `name` removes a type the program holds — a probe or a mistake — so a publish cannot carry it; a type an archive holds is refused. With `shared: true` and a `reason` it takes a type out of the shared review archive instead: a name that turned out false. The typedef and its tag go together, and it is refused while another archive type uses them, naming those. Who and why are recorded and shown by `ghidra_type_definition` (`withdrawn`). Modules that took the type keep their copy, but no module opened after it gets it, and a publish cannot bring it back — it reads as a `type_conflicts` entry whose origin says `withdrawn`, and `take_type_conflicts` does not override that. Owners already running hold their copy of the archive until they restart. `ghidra_type_uses` lists what still names it, to walk and correct.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -1861,6 +2197,14 @@
         "name" : {
           "description" : "Without `c`: the type to describe, comment or delete.",
           "type" : "string"
+        },
+        "reason" : {
+          "description" : "With `shared`: why the name is withdrawn. Required, and recorded.",
+          "type" : "string"
+        },
+        "shared" : {
+          "description" : "With `delete`: from the shared review archive, not the program.",
+          "type" : "boolean"
         }
       },
       "required" : [
@@ -1878,7 +2222,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
-    "description" : "The module's functions against the shared registry of reviewed library functions, matched by body (Ghidra's Function ID: the code with relocated addresses masked, and its constants). `applied`: functions carrying the current version of their entry. `to_apply`: matches that apply by themselves — `ghidra_open` applies them, and `ghidra_library_apply` without `address` does: an unnamed function takes the whole entry (`whole`); one a review named takes the entry's name, its old name kept in the reason, and only what its review left empty (`fill`); a newer version replaces one applied and not edited since; a body that differs from an entry only in the codes an assert routine is called with is a `variant` of it. `edited`: applied, then edited — the review's now. `candidates`: bodies of an entry's shape with other constants, each difference listed (`value`, `entry_value`, `assert`): other functions unless a review says why the values make no difference. `declined`: entries a review refused for the function. With `id`: one entry — its index row, its review and its history.",
+    "description" : "The module's functions against the shared registry of reviewed library functions, matched by body (Ghidra's Function ID: the code with relocated addresses masked, and its constants). `applied`: functions carrying the current version of their entry. `to_apply`: matches that apply by themselves — `ghidra_open` applies them, and `ghidra_library_apply` without `address` does: an unnamed function takes the whole entry (`whole`); one a review named takes the entry's name, its old name kept in the reason, and only what its review left empty (`fill`); a newer version replaces one applied and not edited since; a body that differs from an entry only in the codes an assert routine is called with is a `variant` of it. `edited`: applied, then edited — the review's now. `candidates`: bodies of an entry's shape with other constants, each difference listed (`value`, `entry_value`, `assert`): other functions unless a review says why the values make no difference. `declined`: entries a review refused for the function. With `id`: one entry — its index row, its review, its history and `gaps`, what its review lacks, read from the review itself. A match's `gaps` are the function's own missing parts as the last published analysis recorded them, and `entry_gaps` the entry's, so a decision to apply, replace or take can be made without opening either — and the two are read in the same words.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -1906,7 +2250,50 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "Applies the registry's entries to the module, each in a transaction of its own, and answers each in `results`: `renamed` (from, to), `filled`, `differences` the function's review keeps, `unplaced` (a variable or comment the function has no place for), `marked` when the function is now the entry's. Without `address`: every match `ghidra_library` lists in `to_apply`. With `address`: that function — a candidate only with `reason` (why its other constants make no difference: it becomes a variant of the entry at the next publish); `replace: true` puts the entry's review in place of a review that differs or was edited since. `decline: true` refuses the entry for the function (`id`, or the one matched), and it is not offered again. A difference a review keeps is settled by keeping it, or by publishing it as the entry's next version (`ghidra_publish` with `take_library_conflicts` and a reason).",
+    "description" : "A library function's name is unique in the registry, and it goes by what the functions mean, not by who published first. When a publish answers `library.name_conflicts`, read the entry that holds the name (`library_registry` with its `id`) beside the new function. If the name fits the new function, or fits neither well, give the entry the narrower name its code earns with this tool, and publish again; otherwise rename the new function. The `reason` says what the review found, and the history keeps it. Every module takes the new name at its next open. `dry_run: true` answers the same and writes nothing.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "dry_run" : {
+          "description" : "Answer what the rename would do and write nothing.",
+          "type" : "boolean"
+        },
+        "id" : {
+          "description" : "The entry to rename, as a name conflict's `held_by` gives it.",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "name" : {
+          "description" : "The narrower name, free in the registry.",
+          "type" : "string"
+        },
+        "reason" : {
+          "description" : "What the review of both functions found.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module",
+        "id",
+        "name",
+        "reason"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_library_rename",
+    "title" : "Give a library registry entry a narrower name"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Applies the registry's entries to the module, each in a transaction of its own, and answers each in `results`: `renamed` (from, to), `filled`, `differences` the function's review keeps, `unplaced` (a variable or comment the function has no place for), `leftovers` — the gaps the function still keeps after the apply, so a local it left unnamed says so at once — and `marked` when the function is now the entry's. Without `address`: every match `ghidra_library` lists in `to_apply`. With `address`: that function — a candidate only with `reason` (why its other constants make no difference: it becomes a variant of the entry at the next publish); `replace: true` puts the entry's review in place of a review that differs or was edited since; `leftovers` accompany an apply that names `address`, and a bulk apply leaves them out (the reading decompiles each function it answers); `fields` takes only the parts named — signature (return type, convention, parameter types), names (the function's and its parameters'), locals, plate, comments — and keeps the rest of the function's. `dry_run: true` answers the same and writes nothing: each entry is applied in its transaction and rolled back, so a `replace` can be read before it is made. `decline: true` refuses the entry for the function (`id`, or the one matched), and it is not offered again. A difference a review keeps is settled by keeping it, or by publishing it as the entry's next version (`ghidra_publish` with `take_library_conflicts` and a reason). A match's `gaps` are the function's own missing parts and `entry_gaps` the entry's, so the two reviews can be compared before either is changed.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -1916,6 +2303,21 @@
         },
         "decline" : {
           "description" : "Refuse the entry for the function at `address`.",
+          "type" : "boolean"
+        },
+        "dry_run" : {
+          "description" : "Answer what the apply would do — filled, differences, unplaced, leftovers — and write nothing.",
+          "type" : "boolean"
+        },
+        "fields" : {
+          "description" : "Take parts of the entry's review and keep the rest of the function's: signature, names, locals, plate, comments.",
+          "items" : {
+            "type" : "string"
+          },
+          "type" : "array"
+        },
+        "full" : {
+          "description" : "Answer with the functions already carrying their entry; by default only a count.",
           "type" : "boolean"
         },
         "id" : {
@@ -1950,7 +2352,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "Saves the module's program and stores its artifact and review document as the next revision: every ByteRipper reading this store shows the new names. Publishing an unchanged program is the same revision. `type_conflicts` names types another review defines differently, which stay in this module only: `ghidra_type_definition` shows both, and `type_conflict_origins` names the module that wrote the shared copy. `take_type_conflicts: true` replaces the shared copy of each conflicting type with this module's — the answer to a layout that was published wrong, and never an enum, whose clashing member means one of the two reviews is wrong. The types replaced come back as `type_conflicts_taken`, a typedef and the structure it names each named, since the archive holds them separately; a dry run with both flags says what would be taken. The library registry is offered every function tagged `library.<kind>` whose review meets the bar of a finished function: `library` says which bodies became entries (`added`), new versions (`updated` — a change to a function that was the entry's current version, from any module: no module holds an entry), were the same (`unchanged`), or hold another review not made on the current version (`conflicts`: the entry's name and version, the version this review was made on as `base`, who published the current one, and the name this module proposes); `library_below_bar` lists the tagged functions short of the bar with their gaps. `take_library_conflicts: true` with `library_reason` makes this module's review of each conflicting body the entry's next version — the reason is required and kept. `dry_run: true` answers the same without storing: the artifact's counts, the revision it would become, the description's size and the type conflicts — the export is done, so it costs what a publish costs. Publishing is the point another host sees the work; the owner also writes the program out when it idles out, is stopped or gets a signal — not after every change — so only an owner killed outright or crashed loses what came after the last publish.",
+    "description" : "Saves the module's program and stores its artifact and review document as the next revision: every ByteRipper reading this store shows the new names. Publishing an unchanged program is the same revision. `stale_links` lists links in comments and the description whose text is a default name (`FUN_…`) while the target now has a real one: `at` and `kind` say where, `name` is what the text should read; they are reported, not rewritten. `type_conflicts` names types another review defines differently, which stay in this module only: `ghidra_type_definition` shows both, and `type_conflict_origins` names the module that wrote the shared copy. `take_type_conflicts: true` replaces the shared copy of each conflicting type with this module's — the answer to a layout that was published wrong, and never an enum, whose clashing member means one of the two reviews is wrong. The types replaced come back as `type_conflicts_taken`, a typedef and the structure it names each named, since the archive holds them separately. A type made of a replaced one follows it and is not named, so a take can name fewer types than `type_conflicts` listed; a dry run with both flags merges into a copy of the archive and answers what the publish would. The library registry is offered every function tagged `library.<kind>` whose review meets the bar of a finished function: `library` says which bodies became entries (`added`), new versions (`updated` — a change to a function that was the entry's current version, from any module: no module holds an entry), were the same (`unchanged`), or hold another review not made on the current version (`conflicts`: the entry's name and version, the version this review was made on as `base`, who published the current one, and the name this module proposes); `library_below_bar` lists the tagged functions short of the bar with their gaps. `take_library_conflicts: true` with `library_reason` makes this module's review of every conflicting body the entry's next version; a list of entry ids takes those alone, each with its own reason in `library_reason` given as an object — a reason is required for each and kept in the entry's history. The conflicts not taken come back in `conflicts`, with the version this review was based on as `base`. By default the answer carries only what the publish changed; `full: true` adds the list of entries it left as they were. `dry_run: true` answers the same without storing (its artifact hash is taken before the registry's states and marks, so a publish that touches the registry stores another): the artifact's counts, the revision it would become, the description's size, the type conflicts, and — with the library decision given as it would be to the publish — `library`, what the registry offer would do: the entries it would add or move to their next version, the conflicts it would leave, and the same refusal a take of an entry that is not in conflict gets, in `library_error`. The export is done, so it costs what a publish costs. Publishing is the point another host sees the work; the owner also writes the program out when it idles out, is stopped or gets a signal — not after every change — so only an owner killed outright or crashed loses what came after the last publish.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -1958,17 +2360,33 @@
           "description" : "Answer what a publish would store — counts, the revision, the conflicts — and store nothing.",
           "type" : "boolean"
         },
+        "full" : {
+          "description" : "Answer with every entry the publish left as it was; by default only what changed.",
+          "type" : "boolean"
+        },
         "library_reason" : {
-          "description" : "Why this module's review is the better one; required with take_library_conflicts.",
-          "type" : "string"
+          "additionalProperties" : {
+            "type" : "string"
+          },
+          "description" : "Why this module's review is the better one: one text for take_library_conflicts: true, or an object of entry id to reason for a list.",
+          "type" : [
+            "string",
+            "object"
+          ]
         },
         "module" : {
           "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
           "type" : "string"
         },
         "take_library_conflicts" : {
-          "description" : "Make this module's review of each conflicting library body the registry entry's next version.",
-          "type" : "boolean"
+          "description" : "Take the conflicts this module's review wins: true for every one, or a list of entry ids for those alone.",
+          "items" : {
+            "type" : "string"
+          },
+          "type" : [
+            "boolean",
+            "array"
+          ]
         },
         "take_type_conflicts" : {
           "description" : "Replace the shared copy of each conflicting type with this module's. An enum is never taken.",
@@ -2006,6 +2424,30 @@
     },
     "name" : "ghidra_done",
     "title" : "End the review session"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Stops the module's owner and moves its kept Ghidra project to the Trash, and answers where it went. Nothing of the analysis store is touched: the module's revisions, their artifacts and the shared review types stay, and the module opens again from its bytes and is analysed afresh. This is for a project whose program cannot be put right — an analysis gone wrong that a re-run should replace. Publish what is worth keeping first: the store is the only part that survives.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_forget",
+    "title" : "Let a module's kept project go"
   },
   {
     "annotations" : {
@@ -2513,7 +2955,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
-    "description" : "The NVRAM variables the image keeps, from every VSS, VSS2, NVAR, Dell DVAR and GPNV store — those inside compressed sections too, so the first call on a large image takes a few seconds. `stores` lists the stores the rows are in, with how many variables each holds. One row per variable: the copy that stands for it now. `copies` above 1 says the store still keeps earlier values (`uefi_node` on the entry lists them); `deleted: true` is a variable the store no longer holds, listed only with `deleted`. Each row: name, GUID, the store's and the entry's node ids, the value's bytes (`start`, `end`, `size`), and `value` — the value read as its type (a number, text, a boot option, a device path, a signature list) or as hex when it is short. Other stores (EVSA, Apple SysF, flash maps) are in `uefi_tree`. Pages: `limit` is a ceiling — a page also stops before the answer passes the size bound and then says `truncated: \"size\"`; pass `next` back as `after` until it is null. `total` counts every row. A row too large alone comes without its `value`, marked `truncated: \"item\"`; `read` its bytes.",
+    "description" : "The NVRAM variables the image keeps, from every VSS, VSS2, NVAR, Dell DVAR and GPNV store — those inside compressed sections too, so the first call on a large image takes a few seconds. `stores` lists the stores the rows are in, with how many variables each holds, those it no longer holds (`deleted`) among them. One row per variable: the copy that stands for it now. `copies` above 1 says the store still keeps earlier values (`uefi_node` on the entry lists them); `deleted: true` is a variable the store no longer holds, listed only with `deleted`. Each row: name, GUID, the store's and the entry's node ids, the value's bytes (`start`, `end`, `size`), and `value` — the value read as its type (a number, text, a boot option, a device path, a signature list) or as hex when it is short. Other stores (EVSA, Apple SysF, flash maps) are in `uefi_tree`. Pages: `limit` is a ceiling — a page also stops before the answer passes the size bound and then says `truncated: \"size\"`; pass `next` back as `after` until it is null. `total` counts every row. A row too large alone comes without its `value`, marked `truncated: \"item\"`; `read` its bytes.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
