@@ -8,7 +8,9 @@
 > (`LibraryView`). A different body is a different function: its own entry, its own
 > C, and its own name. A library function's name is unique in the registry: a body
 > offered under a name another entry holds is refused (`name_conflicts`), and the
-> review looks at what the function means and gives a narrower name. A module's own
+> review looks at what both functions mean and resolves it, by renaming either: a
+> name goes by meaning, not by who came first, and `ghidra_library_rename` lets the
+> entry that holds one too wide give it up. A module's own
 > function is in the module's scope and conflicts with nothing in other modules.
 > A text true of one module only means the function is not a library function, and
 > it does not belong here. §1 and §4 still describe the copy this replaces where

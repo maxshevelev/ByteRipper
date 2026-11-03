@@ -18,6 +18,8 @@ extension GhidraHost {
             case decline
             /// One entry: its review and its history.
             case entry
+            /// The entry `id` takes the narrower `name`, for `reason`.
+            case rename
         }
 
         public var action: Action
@@ -32,12 +34,15 @@ extension GhidraHost {
         /// of the function's kept — `signature`, `names`, `locals`, `plate`,
         /// `comments`. Nil takes the whole review, as `replace` does.
         public var fields: [String]?
+        /// The name `rename` gives the entry.
+        public var name: String?
         /// Answer what the apply would do and write nothing: each entry is
         /// applied in its transaction and rolled back.
         public var dryRun: Bool?
 
         public init(action: Action, address: String? = nil, id: String? = nil, reason: String? = nil,
-                    replace: Bool? = nil, fields: [String]? = nil, dryRun: Bool? = nil) {
+                    replace: Bool? = nil, fields: [String]? = nil, dryRun: Bool? = nil, name: String? = nil) {
+            self.name = name
             self.action = action
             self.address = address
             self.id = id
@@ -252,6 +257,13 @@ extension GhidraHost {
     /// `ghidra_library_apply`, and what `ghidra_open` applies.
     public func library(_ module: SHA256Digest, _ request: LibraryRequest) async throws -> Data {
         switch request.action {
+        case .rename:
+            guard let id = request.id, let name = request.name, let reason = request.reason else {
+                throw GhidraHostError(.refused, "renaming an entry takes `id`, `name` and `reason`", status: 400)
+            }
+            let result = try await writer.renameLibraryEntry(id: id, name: name, reason: reason, by: "agent",
+                                                             module: module, dryRun: request.dryRun ?? false)
+            return try JSONSerialization.data(withJSONObject: try Self.plain(result), options: [.sortedKeys])
         case .entry:
             guard let id = request.id else { throw GhidraHostError(.refused, "name the entry by `id`", status: 400) }
             let index = try await writer.readLibraryIndex()

@@ -212,6 +212,34 @@ public enum GhidraTools {
                 return try await answer { try await backend.library(module, .init(action: .status)) }
             },
             AgentTool(
+                name: "ghidra_library_rename",
+                title: "Give a library registry entry a narrower name",
+                description: """
+                    A library function's name is unique in the registry, and it goes by what the functions \
+                    mean, not by who published first. When a publish answers `library.name_conflicts`, read \
+                    the entry that holds the name (`library_registry` with its `id`) beside the new function. \
+                    If the name fits the new function, or fits neither well, give the entry the narrower name \
+                    its code earns with this tool, and publish again; otherwise rename the new function. The \
+                    `reason` says what the review found, and the history keeps it. Every module takes the new \
+                    name at its next open. `dry_run: true` answers the same and writes nothing.
+                    """,
+                inputSchema: AgentSchema.object([
+                    "module": moduleProperty,
+                    "id": AgentSchema.string("The entry to rename, as a name conflict's `held_by` gives it."),
+                    "name": AgentSchema.string("The narrower name, free in the registry."),
+                    "reason": AgentSchema.string("What the review of both functions found."),
+                    "dry_run": AgentSchema.boolean("Answer what the rename would do and write nothing.")
+                ], required: ["module", "id", "name", "reason"]),
+                annotations: .edit
+            ) { call in
+                let arguments = call.arguments
+                let module = try module(arguments)
+                let request = GhidraHost.LibraryRequest(
+                    action: .rename, id: try arguments.string("id"), reason: try arguments.string("reason"),
+                    dryRun: try arguments.bool("dry_run", default: false), name: try arguments.string("name"))
+                return try await answer { try await backend.library(module, request) }
+            },
+            AgentTool(
                 name: "ghidra_library_apply",
                 title: "Apply or decline a library registry entry",
                 description: """

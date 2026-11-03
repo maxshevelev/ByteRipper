@@ -97,11 +97,17 @@ public enum ServedStoreProtocol {
         public var reasons: [String: String]?
         /// Answer what the offer would do and write nothing.
         public var dryRun: Bool?
+        /// Give the entry `renameID` the name `renameTo`, for `reason`, instead
+        /// of taking any proposals; a server that predates it answers nothing done.
+        public var renameID: String?
+        public var renameTo: String?
 
         public init(module: SHA256Digest, rev: Int?, by: String?, proposals: [LibraryProposal],
                     take: Bool? = nil, reason: String? = nil,
                     takeIDs: [String]? = nil, reasons: [String: String]? = nil,
-                    dryRun: Bool? = nil) {
+                    dryRun: Bool? = nil, renameID: String? = nil, renameTo: String? = nil) {
+            self.renameID = renameID
+            self.renameTo = renameTo
             self.module = module
             self.rev = rev
             self.by = by
@@ -127,6 +133,8 @@ public enum ServedStoreProtocol {
             case module, rev, by, proposals, take, reason, reasons
             case takeIDs = "take_ids"
             case dryRun = "dry_run"
+            case renameID = "rename_id"
+            case renameTo = "rename_to"
         }
     }
 

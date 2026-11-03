@@ -400,6 +400,24 @@ published ones. The names-and-types reading says what it can: a value the
 entry split into two variables (a 64-bit register as two dwords) is a reading
 of the C, not a gap, and stays one.
 
+**One description, in the registry.** A library function is one code, one C and
+one description, whichever module it is in. Opening a module links its function
+to the entry: the name, the signature and a mark, and nothing else goes into the
+project; the panel and `code_query` show the entry. To change an entry, take it
+as a working copy (`ghidra_library_apply` with `address` and `replace: true`),
+change it, and publish. A text true of one module only means the function is not
+a library function: do not tag it.
+
+**A name goes by meaning, not by who came first.** A different body is a different
+function, with its own entry and its own name, and a library name is unique in the
+registry. A publish that offers a body under a name another entry holds answers
+`library.name_conflicts` with `held_by`. Read that entry beside the new function
+(`library_registry`), compare what they do, and resolve it either way: rename the new
+function if the name fits the old one, or, if the name is too wide for the old one or
+fits the new one better, give the old one the narrower name it earns with
+`ghidra_library_rename` and the reason, then publish again. A module's own function
+is in the module's scope: it is not offered here and conflicts with nothing elsewhere.
+
 **Resolving a conflict.** `library.conflicts` means the registry holds another
 review of the same body than this module's, and neither side is right by
 default. Read the entry's review (`library_registry` with its `id`) beside the

@@ -193,7 +193,7 @@ final class LibraryViewTests: XCTestCase {
         }
         let refused = try offer("CopyMem")
         XCTAssertEqual(refused.added.count, 0)
-        XCTAssertEqual(refused.nameConflicts.map(\.heldBy), [body.key])
+        XCTAssertEqual(refused.nameConflicts?.map(\.heldBy), [body.key])
         XCTAssertEqual(try store.libraryIndex().entries.count, 1)
         XCTAssertEqual(try offer("CopyMemForward").added.map(\.name), ["CopyMemForward"])
         // Renaming an entry onto another's name is refused too.
@@ -202,7 +202,37 @@ final class LibraryViewTests: XCTestCase {
                             entry: try JSONSerialization.data(withJSONObject: ["schema": 1, "name": "CopyMem", "kind": "edk2"], options: .sortedKeys),
                             basedOn: other.key, base: 1)
         ])
-        XCTAssertEqual(renamed.nameConflicts.count, 1)
+        XCTAssertEqual(renamed.nameConflicts?.count, 1)
         XCTAssertEqual(try store.libraryIndex().entries[other.key]?.name, "CopyMemForward")
+    }
+
+    /// A name goes by what the functions mean: the entry holding one too wide
+    /// gives it up, and a later function may take it or a narrower one.
+    func testAnEntryWithAWideNameCanGiveItUp() throws {
+        try register(try entryObject())
+        XCTAssertThrowsError(try store.renameLibraryEntry(id: body.key, name: "CopyMemForward", reason: " ", by: "agent"))
+        let preview = try store.renameLibraryEntry(id: body.key, name: "CopyMemForward", reason: "copies forward only",
+                                                   by: "agent", dryRun: true)
+        XCTAssertEqual(preview.version, 2)
+        XCTAssertEqual(try store.libraryIndex().entries[body.key]?.name, "CopyMem")
+        try store.renameLibraryEntry(id: body.key, name: "CopyMemForward", reason: "copies forward only", by: "agent")
+        let index = try store.libraryIndex()
+        XCTAssertEqual(index.entries[body.key]?.name, "CopyMemForward")
+        XCTAssertEqual(index.entries[body.key]?.version, 2)
+        let history = try XCTUnwrap(try store.libraryHistory(id: body.key))
+        XCTAssertEqual(history.versions.last?.reason, "copies forward only (was CopyMem)")
+        let read = store.throughRegistry(try moduleArtifact()).functions[0]
+        XCTAssertEqual(read.name, "CopyMemForward")
+        XCTAssertEqual(read.signature, "void CopyMemForward(void)")
+
+        // The name is free again, for a function the review finds it fits.
+        let other = LibraryBody(size: 0x13, full: "ffeeddccbbaa9988", specific: "7766554433221100")
+        let object = try JSONSerialization.data(withJSONObject: ["schema": 1, "name": "CopyMem", "kind": "edk2"], options: .sortedKeys)
+        let taken = try store.putLibraryEntries(module: source, rev: 2, by: "agent", proposals: [
+            LibraryProposal(body: other, name: "CopyMem", kind: "edk2", address: "0x3000", entry: object)
+        ])
+        XCTAssertEqual(taken.added.map(\.name), ["CopyMem"])
+        // And a rename onto a name another entry holds says which.
+        XCTAssertThrowsError(try store.renameLibraryEntry(id: body.key, name: "CopyMem", reason: "x", by: "agent"))
     }
 }

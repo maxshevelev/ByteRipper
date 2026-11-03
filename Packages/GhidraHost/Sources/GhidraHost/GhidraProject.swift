@@ -142,6 +142,9 @@ public protocol AnalysisWriter: Sendable {
     /// What `writeLibraryEntries` would do, writing nothing.
     func previewLibraryEntries(module: SHA256Digest, rev: Int?, by: String?, proposals: [LibraryProposal],
                                take: LibraryTake) async throws -> LibraryWriteResult
+    /// An entry given a narrower name, as `ContentStore.renameLibraryEntry` does.
+    func renameLibraryEntry(id: String, name: String, reason: String, by: String?, module: SHA256Digest,
+                            dryRun: Bool) async throws -> LibraryWriteResult
     /// The last published analysis' review gaps by function entry; nil when
     /// the module has no stored analysis.
     func reviewGaps(module: SHA256Digest) async throws -> [String: [String]]?
@@ -183,6 +186,13 @@ extension ContentStore: AnalysisWriter {
                                       proposals: [LibraryProposal],
                                       take: LibraryTake) async throws -> LibraryWriteResult {
         try putLibraryEntries(module: module, rev: rev, by: by, proposals: proposals, take: take, dryRun: true)
+    }
+
+    public func renameLibraryEntry(id: String, name: String, reason: String, by: String?, module: SHA256Digest,
+                                   dryRun: Bool) async throws -> LibraryWriteResult {
+        var result = LibraryWriteResult()
+        result.updated = [try renameLibraryEntry(id: id, name: name, reason: reason, by: by, dryRun: dryRun)]
+        return result
     }
 
     public func reviewGaps(module: SHA256Digest) async throws -> [String: [String]]? {

@@ -259,7 +259,8 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
     public var variants: [Change]?
     /// Functions refused because another entry holds the name: a different
     /// body is a different function, and the review gives it a narrower name.
-    public var nameConflicts: [NameConflict] = []
+    /// Nil from a store that has none.
+    public var nameConflicts: [NameConflict]?
 
     public struct NameConflict: Codable, Equatable, Sendable {
         public var address: String
@@ -284,6 +285,11 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
     }
 
     public init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case added, updated, unchanged, conflicts, variants
+        case nameConflicts = "name_conflicts"
+    }
 }
 
 extension LibraryProposal {
@@ -440,7 +446,7 @@ extension ContentStore {
                 }
                 guard let (id, held) = index.entry(for: proposal.body) else {
                     if let conflict = namedOtherwise(than: nil) {
-                        result.nameConflicts.append(conflict)
+                        result.nameConflicts = (result.nameConflicts ?? []) + [conflict]
                         continue
                     }
                     let id = proposal.body.key
@@ -476,7 +482,7 @@ extension ContentStore {
                     continue
                 }
                 if proposal.name != held.name, let conflict = namedOtherwise(than: id) {
-                    result.nameConflicts.append(conflict)
+                    result.nameConflicts = (result.nameConflicts ?? []) + [conflict]
                     continue
                 }
                 let base = proposal.basedOn == id ? proposal.base : nil
@@ -588,6 +594,64 @@ extension ContentStore {
             try atomicWrite(try encoder.encode(history), to: libraryHistoryURL(bodyKey))
             try atomicWrite(try encoder.encode(index), to: libraryIndexURL)
             if bodyKey != id { try FileManager.default.removeItem(at: libraryHistoryURL(id)) }
+            return change
+        }
+    }
+
+    /// Give an entry a narrower name, for a review that finds it holds one too
+    /// wide. A name goes by what the functions mean, not by who came first: the
+    /// entry that holds a name another function also has a claim to can give it
+    /// up. The reason is the history's, and every module takes the new name at
+    /// its next open. `dryRun` answers the same and writes nothing.
+    @discardableResult
+    public func renameLibraryEntry(id: String, name: String, reason: String, by: String?,
+                                   dryRun: Bool = false) throws -> LibraryWriteResult.Change {
+        let why = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !why.isEmpty else { throw CodeAnalysisError.analysisMismatch("renaming a library entry needs a reason") }
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !LibraryEntryReview.isPlaceholder(name) else {
+            throw CodeAnalysisError.analysisMismatch("\(name) is not a name a review gives")
+        }
+        return try withLock {
+            var index = try libraryIndex()
+            guard var entry = index.entries[id] else {
+                throw CodeAnalysisError.analysisMismatch("the registry holds no entry \(id)")
+            }
+            guard entry.name != name else {
+                throw CodeAnalysisError.analysisMismatch("the entry \(id) is already \(name)")
+            }
+            if let other = index.entries.first(where: { $0.key != id && $0.value.name == name }) {
+                throw CodeAnalysisError.analysisMismatch(
+                    "the entry \(other.key) holds the name \(name): rename that one first, if the review finds it should")
+            }
+            guard var review = try JSONSerialization.jsonObject(with: try object(entry.entry)) as? [String: Any] else {
+                throw CodeAnalysisError.analysisMismatch("the entry \(id)'s review is not an object")
+            }
+            let old = entry.name
+            func renamed(_ signature: String) -> String {
+                signature.replacingOccurrences(of: "\\b\(NSRegularExpression.escapedPattern(for: old))\\b",
+                                               with: name, options: .regularExpression)
+            }
+            review["name"] = name
+            if let signature = review["signature"] as? String { review["signature"] = renamed(signature) }
+            if var function = review["function"] as? [String: Any] {
+                function["name"] = name
+                if let signature = function["signature"] as? String { function["signature"] = renamed(signature) }
+                review["function"] = function
+            }
+            let data = try JSONSerialization.data(withJSONObject: review, options: [.sortedKeys, .withoutEscapingSlashes])
+            var history = try libraryHistory(id: id) ?? LibraryHistory(id: id, versions: [])
+            entry.version += 1
+            entry.entry = SHA256Digest(data: data)
+            entry.name = name
+            history.versions.append(LibraryVersion(version: entry.version, entry: entry.entry, source: entry.source,
+                                                   reason: "\(why) (was \(old))", recordedAt: Timestamps.now()))
+            let change = LibraryWriteResult.Change(id: id, name: name, version: entry.version)
+            if dryRun { return change }
+            _ = try putObject(data)
+            index.entries[id] = entry
+            try atomicWrite(try encoder.encode(history), to: libraryHistoryURL(id))
+            try atomicWrite(try encoder.encode(index), to: libraryIndexURL)
             return change
         }
     }
