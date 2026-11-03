@@ -4726,6 +4726,31 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertNotNil(help.image)
     }
 
+    /// A status stands right after the revision and level with its words,
+    /// and showing another replaces it.
+    func testAModuleStatusFollowsTheRevision() throws {
+        let view = CodePaneView(manifest: manifest(revision: 14), artifact: try artifact(),
+                                moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 1200, height: 700)
+        let cloud = NSImageView(image: try XCTUnwrap(NSImage(systemSymbolName: "cloud", accessibilityDescription: nil)))
+        view.setModuleStatus(cloud)
+        view.layoutSubtreeIfNeeded()
+
+        let revision = try XCTUnwrap(Self.field(in: view, saying: "(r14)"))
+        let words = revision.convert(revision.bounds, to: view)
+        let status = cloud.convert(cloud.bounds, to: view)
+        XCTAssertEqual(status.minX - words.maxX, 6, accuracy: 3, "right after the revision, not at the line's end")
+        XCTAssertEqual(status.midY, words.midY, accuracy: 2)
+
+        view.setModuleStatus(NSView())
+        XCTAssertNil(cloud.superview)
+    }
+
+    private static func field(in view: NSView, saying words: String) -> NSTextField? {
+        if let field = view as? NSTextField, field.stringValue == words { return field }
+        return view.subviews.lazy.compactMap { field(in: $0, saying: words) }.first
+    }
+
     /// The book at the head of the navigator shows and hides the description,
     /// the round button in its corner closes it, and the code comes back on the
     /// side it was left on, with the ASM/C switch.

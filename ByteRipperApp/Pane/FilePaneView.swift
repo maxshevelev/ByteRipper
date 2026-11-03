@@ -24,7 +24,6 @@ final class FilePaneView: NSView {
     private let header = PaneHeaderView()
     private let headerAccessory = NSStackView()
     private var headerAccessoryGap: NSLayoutConstraint?
-    private var headerAccessoryEdge: NSLayoutConstraint?
 
     /// Whether the header has been handed to a fragment panel
     /// (`hoistHeader()`) and no longer sits in this view.
@@ -36,7 +35,11 @@ final class FilePaneView: NSView {
     /// it: the window's own close control is the only one there, so the pane's
     /// ✕ is hidden.
     var hidesCloseButton = false {
-        didSet { updateHeader() }
+        didSet {
+            closeWidth?.isActive = hidesCloseButton
+            closeEdge?.constant = hidesCloseButton ? 0 : -6
+            updateHeader()
+        }
     }
 
     /// Takes the title bar out of the pane so a fragment panel — or a tab that
@@ -78,13 +81,12 @@ final class FilePaneView: NSView {
         needsLayout = true
     }
 
-    /// Sets what stands at the right end of the title bar for whoever reads this
-    /// pane — a code screen's help button — or takes it away.
+    /// Sets what stands before the panel's own buttons in the title bar for
+    /// whoever reads this pane — a code screen's help button — or takes it away.
     func setHeaderAccessory(_ accessory: NSView?) {
         headerAccessory.arrangedSubviews.forEach { $0.removeFromSuperview() }
         if let accessory { headerAccessory.addArrangedSubview(accessory) }
         headerAccessoryGap?.constant = accessory == nil ? 0 : -8
-        headerAccessoryEdge?.constant = accessory == nil ? -6 : -8
         needsLayout = true
     }
 
@@ -143,6 +145,10 @@ final class FilePaneView: NSView {
     private lazy var closeButton = HeaderButton.make(
         symbol: "xmark", describes: L("Close pane"), target: self, action: #selector(closeTapped)
     )
+    /// Taking no width while the ✕ is hidden, so what stands before it comes to
+    /// the header's end.
+    private var closeWidth: NSLayoutConstraint?
+    private var closeEdge: NSLayoutConstraint?
     /// Folds a fragment panel into its pill. Hidden — and taking no width —
     /// on the tab's own panes, which have no pill to fold into.
     ///
@@ -642,6 +648,8 @@ final class FilePaneView: NSView {
         self.collapseWidth = collapseWidth
         self.collapseGap = collapseTrailing
         collapseButton.isHidden = true
+        closeWidth = closeButton.widthAnchor.constraint(equalToConstant: 0)
+        closeWidth?.isActive = hidesCloseButton
         // The tab button the same way, before the fold.
         let tabTrailing = tabButton.trailingAnchor.constraint(equalTo: collapseButton.leadingAnchor, constant: 0)
         let tabWidth = tabButton.widthAnchor.constraint(equalToConstant: 0)
@@ -660,17 +668,17 @@ final class FilePaneView: NSView {
             linkButton.leadingAnchor.constraint(equalTo: codecBadge.trailingAnchor, constant: 6),
             updateButton.leadingAnchor.constraint(equalTo: linkButton.trailingAnchor, constant: 6),
             updateButton.trailingAnchor.constraint(lessThanOrEqualTo: lockLabel.leadingAnchor, constant: -6),
-            lockLabel.trailingAnchor.constraint(equalTo: tabButton.leadingAnchor, constant: -6),
-            tabTrailing,
-            collapseTrailing,
+            lockLabel.trailingAnchor.constraint(equalTo: headerAccessory.leadingAnchor, constant: -6),
             {
-                let gap = closeButton.trailingAnchor.constraint(equalTo: headerAccessory.leadingAnchor, constant: 0)
+                let gap = headerAccessory.trailingAnchor.constraint(equalTo: tabButton.leadingAnchor, constant: 0)
                 headerAccessoryGap = gap
                 return gap
             }(),
+            tabTrailing,
+            collapseTrailing,
             {
-                let edge = headerAccessory.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -6)
-                headerAccessoryEdge = edge
+                let edge = closeButton.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -6)
+                closeEdge = edge
                 return edge
             }(),
         ]

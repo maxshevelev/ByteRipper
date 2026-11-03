@@ -130,6 +130,14 @@ import ToolModuleKit
     /// bar, over the whole panel.
     public let titleBarHelp: NSView = HelpButton.greyCircle(for: .topic(.codePanel))
 
+    /// Whoever holds the pane puts a status of its own right after the revision
+    /// at the head of the navigator; the pane does not know what it says.
+    public func setModuleStatus(_ status: NSView?) {
+        moduleStatus?.removeFromSuperview()
+        moduleStatus = status
+        if let status { moduleLine?.addView(status, in: .leading) }
+    }
+
     private let descriptionView = CodeDescriptionView()
     private let diffView = CodeDiffView()
     /// The artifact this pane showed before a later revision of its reading
@@ -294,6 +302,8 @@ import ToolModuleKit
     /// function over the code, kept to follow the zoom. The versions line
     /// under the module follows with `recipeLine`.
     private var nameLabel: NSTextField?
+    private var moduleLine: NSStackView?
+    private var moduleStatus: NSView?
     private var revisionLabel: NSTextField?
     private let functionLabel = CodeTitleField(labelWithString: "")
     /// The function over the code; nothing while the description is on screen.
@@ -2869,10 +2879,19 @@ import ToolModuleKit
         revisionLabel.setContentHuggingPriority(.required, for: .horizontal)
         self.nameLabel = nameLabel
         self.revisionLabel = revisionLabel
-        let moduleLine = NSStackView(views: [nameLabel, revisionLabel])
+        let moduleWords = NSStackView(views: [nameLabel, revisionLabel])
+        moduleWords.orientation = .horizontal
+        moduleWords.alignment = .firstBaseline
+        moduleWords.spacing = 4
+        // As wide as its words, so that what follows them follows them; the
+        // room left over stays at the line's end.
+        moduleWords.setHuggingPriority(.defaultHigh, for: .horizontal)
+        // Words line up on their baseline; a status beside them has none.
+        let moduleLine = NSStackView(views: [moduleWords])
         moduleLine.orientation = .horizontal
-        moduleLine.alignment = .firstBaseline
-        moduleLine.spacing = 4
+        moduleLine.alignment = .centerY
+        moduleLine.spacing = 6
+        self.moduleLine = moduleLine
         // Where the store holds more than one analysis of the module, the
         // versions line is the menu that chooses among them, each named the
         // same way.

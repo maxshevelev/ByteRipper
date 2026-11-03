@@ -19,9 +19,8 @@ import Localization
 func wireCodeScreen(_ codePane: CodePaneView, to pane: PaneViewModel, owner: MainViewController?,
                     previous: (revision: Int, artifact: CodeArtifact)? = nil,
                     reveal: @escaping (Range<UInt64>) -> Void) {
-    let titleBar = NSStackView(views: [CodeServerIndicator(), codePane.titleBarHelp])
-    titleBar.spacing = 6
-    owner?.filePaneView(for: pane)?.setHeaderAccessory(titleBar)
+    owner?.filePaneView(for: pane)?.setHeaderAccessory(codePane.titleBarHelp)
+    codePane.setModuleStatus(CodeServerIndicator())
     // A note on the code is the person's as one on the dump is: the same
     // form, the same window.
     codePane.onAnnotate = { [weak owner, weak pane] location, name in

@@ -2,11 +2,11 @@ import Cocoa
 import HelpUI
 import Localization
 
-/// A code screen's title bar says whether the analysis server answers: a cloud,
-/// or a red cloud struck through. The sheets that report a failed read come
-/// only when something was asked of the server; this is its state at any
-/// moment. With the analyses kept on this Mac there is no server to speak of,
-/// and it shows nothing.
+/// The head of a code screen's navigator says whether the analysis server
+/// answers: a cloud, or a red cloud struck through. The sheets that report a
+/// failed read come only when something was asked of the server; this is its
+/// state at any moment. With the analyses kept on this Mac there is no server
+/// to speak of, and it shows nothing.
 // help: panel.code.server
 final class CodeServerIndicator: NSImageView {
     private let location: CodeAnalysisLocation

@@ -168,7 +168,7 @@ final class CodeAnalysisLocationTests: XCTestCase {
 
     /// A 403 names the rights the token lacks, in the tab's words and in the
     /// send button's line.
-    func testTheTitleBarCloudFollowsTheServer() async throws {
+    func testTheCloudFollowsTheServer() async throws {
         let cloud = CodeServerIndicator(location: location)
         XCTAssertTrue(cloud.isHidden, "on this Mac there is no server to speak of")
 
