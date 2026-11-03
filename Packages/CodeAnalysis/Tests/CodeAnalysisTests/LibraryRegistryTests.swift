@@ -404,4 +404,30 @@ final class LibraryRegistryTests: XCTestCase {
         try mirror.mirrorLibrary(served)
         XCTAssertEqual(try mirror.libraryIndex(), served)
     }
+
+    /// What the C still prints under a placeholder: locals and parameters, each
+    /// once, with no word of a comment or a type taken for one; and no gap.
+    func testTemporariesAreReadFromTheCAndAreNotAGap() throws {
+        let c = "/* uVar9 */ undefined4 f(int param_1) { int uVar1; in_ECX = uVar1 + Named + param_1 + uVar1; }"
+        func span(_ text: String, _ kind: String, from: Int = 0) -> [Any] {
+            let units = Array(c.utf16), wanted = Array(text.utf16)
+            let at = (from...(units.count - wanted.count)).first { Array(units[$0..<($0 + wanted.count)]) == wanted }!
+            return [at, wanted.count, kind]
+        }
+        let spans: [[Any]] = [
+            span("uVar9", "comment"), span("undefined4", "type"), span("param_1", "parameter"),
+            span("uVar1", "local"), span("in_ECX", "local"), span("Named", "local"),
+            span("uVar1", "local", from: c.utf16.count - 8)
+        ]
+        let function = try JSONSerialization.data(withJSONObject: [
+            "script_version": 9, "program": ["image_base": "0x0"],
+            "functions": [["entry": "0x10", "name": "F", "c": c, "c_spans": spans,
+                           "review_level": "library", "review_gaps": [String](), "instructions": [[String: String]]()],
+                          ["entry": "0x20", "name": "NoSpans", "c": "uVar1;", "instructions": [[String: String]]()]]
+        ])
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: function)
+        XCTAssertEqual(LibraryEntryReview.temporaries(in: artifact.functions[0]), ["param_1", "uVar1", "in_ECX"])
+        XCTAssertEqual(LibraryEntryReview.temporaries(in: artifact.functions[1]), [], "no spans, nothing claimed")
+        XCTAssertEqual(artifact.functions[0].reviewGaps, [])
+    }
 }

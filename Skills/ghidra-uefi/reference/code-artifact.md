@@ -114,7 +114,12 @@ exporter's output changes.
 
 Every function carries `review_level`, how far the review has got with it, and
 `review_gaps`, what still keeps it from `full`; both are written after
-`name_source` and `name_reason`, and before the C. The levels are:
+`name_source` and `name_reason`, and before the C. `code_query` also answers
+`temporaries` for a function: the placeholder names its C still prints
+(`uVar1`, `in_ECX`), read from `c_spans`, and `with_temporaries` in the `library`
+block. They are reported and bar nothing: a library function can hold them and
+still be its entry, and a value folded into an expression cannot be named. An
+empty list does not mean the C is clean of raw offsets. The levels are:
 
 - `full` — a plate comment; at least one step comment on an instruction; every
   parameter and local named and typed (a decompiler fragment of a register —

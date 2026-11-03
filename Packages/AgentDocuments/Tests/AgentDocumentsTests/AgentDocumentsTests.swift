@@ -265,6 +265,38 @@ final class CodeReadingsTests: XCTestCase {
         XCTAssertEqual(below["plate"], .int(0))
     }
 
+    /// A placeholder the C still prints is reported on the row and counted, and
+    /// the bar does not read it: the function stays clean of gaps.
+    func testAPlaceholderInTheCIsReportedAndIsNotAGap() async throws {
+        let artifact = """
+            {"script_version": 9, "ghidra": "12.1.2", "functions": [
+              {"entry": "0x1020", "name": "SetJump", "c": "uVar1 = Named;",
+               "c_spans": [[0, 5, "local"], [8, 5, "local"]],
+               "library_kind": "edk2", "review_level": "library", "review_gaps": [],
+               "instructions": [{"address": "0x1020", "text": "RET"}]},
+              {"entry": "0x1040", "name": "LongJump", "c": "Named = 1;",
+               "c_spans": [[0, 5, "local"]],
+               "library_kind": "edk2", "review_level": "library", "review_gaps": [],
+               "instructions": [{"address": "0x1040", "text": "RET"}]}
+            ]}
+            """
+        try ContentStore(root: directory).putAnalysis(module: module, recipe: recipe,
+                                                      artifact: Data(artifact.utf8))
+        let tool = try query(readings())
+        let answer = try await tool.run(AgentCall(tool: "code_query", arguments: AgentArguments([
+            "module": .string(module.sha256.hex), "what": .string("functions")])))
+        guard case .json(.object(let body)) = answer,
+              let library = body["library"]?.objectValue,
+              let below = library["below_bar"]?.objectValue,
+              let rows = body["functions"]?.arrayValue else {
+            return XCTFail("no library block: \(answer)")
+        }
+        XCTAssertEqual(rows.first?["temporaries"], .array([.string("uVar1")]))
+        XCTAssertEqual(rows.last?["temporaries"], .array([]))
+        XCTAssertEqual(library["with_temporaries"], .int(1))
+        XCTAssertEqual(below["locals"], .int(0), "reported, and bars nothing")
+    }
+
     /// `live` and `unpublished_writes`: the stored analysis is not the live
     /// program, and the answer says when an owner holds writes it has not
     /// got — the trap of reading a publish-old C after an apply.

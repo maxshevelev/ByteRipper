@@ -42,6 +42,24 @@ public enum LibraryEntryReview {
         return gaps
     }
 
+    /// The placeholder names the decompiled C prints for parameters and locals,
+    /// each once, in the order the C first prints them. This says what the C
+    /// reads like. It is not a review gap: a library function can hold them and
+    /// still be its entry, and some cannot be named at all, such as a value
+    /// folded into an expression. Empty for a function with no token spans.
+    public static func temporaries(in function: CodeArtifact.Function) -> [String] {
+        guard let c = function.c, !function.cSpans.isEmpty else { return [] }
+        let units = Array(c.utf16)
+        var seen: Set<String> = []
+        var names: [String] = []
+        for span in function.cSpans where span.kind == .local || span.kind == .parameter {
+            guard span.start >= 0, span.length > 0, span.start + span.length <= units.count else { continue }
+            let name = String(decoding: units[span.start..<(span.start + span.length)], as: UTF16.self)
+            if isPlaceholder(name), seen.insert(name).inserted { names.append(name) }
+        }
+        return names
+    }
+
     /// Ghidra's placeholders — the names that say a review has not passed:
     /// `param_1`, `local_8`, `uVar3`, `FUN_00001000`, `extraout_EAX`,
     /// `in_EAX`, `unaff_EBP`. The function's own name is judged by its symbol

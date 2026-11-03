@@ -54,14 +54,16 @@ final class AgentCodeTools {
             from: DEFAULT is Ghidra's FUN_ placeholder, ANALYSIS a name the UEFI pass read from the \
             module (`name_reason` says from what), IMPORTED the image's own. `review_level` is how far the review has got — full, partial, \
             decompiled, library or no_body; null in an analysis made before it was recorded — and \
-            `review_gaps` what keeps it from full: name, plate, comments, params, locals; a library \
+            `review_gaps` what keeps it from full: name, plate, comments, params, locals; `temporaries` \
+            the placeholder names its C still prints (uVar1, in_ECX), reported only: not a gap, and a library \
+            function can hold them, so a clean row does not mean the locals are named; a library \
             function's `library_kind` whose library it is — edk2, amd (AGESA) or intel (FSP/RC) — and \
             `library_entry`, the library registry entry it was matched with: `id`, `version`, and `state` — \
             entry (the function is it), edited (changed on it since), differs (its review keeps \
             `differences`) or conflict (its review was made on version `base`, not the current one). The answer to `what: "functions"` also carries `library`: the module's tagged library functions by \
             kind (`edk2`, `amd`, `intel`), how many carry a registry entry (`with_entry`) and in which `state`, \
             how many entries hold this module's current version (`installed`), how many moved on after it \
-            (`updated_since`), and `below_bar` — the tagged functions short of the bar, counted by the gap each \
+            (`updated_since`), how many still print a placeholder name (`with_temporaries`, reported only), and `below_bar` — the tagged functions short of the bar, counted by the gap each \
             keeps (name, plate, comments, params, locals, return) — with `too_short`, bodies Function ID cannot \
             hash, known only while the module's owner runs. `live` says whether an owner has this module's program open — the `ghidra_*` tools read that program, \
             `code_query` reads the stored analysis — and, while it does, `unpublished_writes` whether the program \

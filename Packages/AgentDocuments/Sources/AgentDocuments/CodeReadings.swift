@@ -558,6 +558,7 @@ public final class CodeReadings {
         var withEntry = 0
         var updated = 0
         var below: [String: Int] = [:]
+        var withTemporaries = 0
         for function in source.artifact.functions {
             if let kind = function.libraryKind { kinds[kind.rawValue, default: 0] += 1 }
             if let mark = function.libraryEntry {
@@ -566,6 +567,7 @@ public final class CodeReadings {
                 if let held = index.entries[mark.id], held.version > mark.version { updated += 1 }
             }
             guard function.libraryKind != nil else { continue }
+            if !LibraryEntryReview.temporaries(in: function).isEmpty { withTemporaries += 1 }
             for gap in function.reviewGaps { below[gap, default: 0] += 1 }
             if Self.hasPlaceholderReturn(function.signature) { below["return", default: 0] += 1 }
         }
@@ -579,7 +581,8 @@ public final class CodeReadings {
             "differs": .count(states["differs"] ?? 0),
             "conflict": .count(states["conflict"] ?? 0),
             "installed": .count(index.entries.values.filter { $0.source.module == module }.count),
-            "updated_since": .count(updated)
+            "updated_since": .count(updated),
+            "with_temporaries": .count(withTemporaries)
         ]
         if let unrecorded = states["unrecorded"], unrecorded > 0 {
             block["unrecorded"] = .count(unrecorded)
@@ -708,6 +711,7 @@ private func functionItem(_ function: CodeArtifact.Function,
     item["name_reason"] = text(function.nameReason)
     item["review_level"] = text(function.reviewLevel?.rawValue)
     item["review_gaps"] = .array(function.reviewGaps.map(JSONValue.string))
+    item["temporaries"] = .array(LibraryEntryReview.temporaries(in: function).map(JSONValue.string))
     item["library_kind"] = text(function.libraryKind?.rawValue)
     item["library_entry"] = libraryEntryItem(function.libraryEntry)
     item["callers"] = .array(function.callers.map { .string($0.description) })
