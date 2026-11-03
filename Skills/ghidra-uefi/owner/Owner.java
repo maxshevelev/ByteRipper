@@ -744,7 +744,14 @@ public class Owner {
             // A reference a body makes inside itself says nothing about the
             // span: only what points in from outside does.
             if (spans.get(index).contains(reference.getFromAddress())) continue;
+            // The image's headers say where its sections start: not a table
+            // that registers a body.
+            MemoryBlock from = program.getMemory().getBlock(reference.getFromAddress());
+            if (from != null && "Headers".equals(from.getName())) continue;
             all[index]++;
+            // Something reading a datum that already has its type: not a body.
+            if (reference.getReferenceType().isData()
+                && program.getListing().getDefinedDataContaining(reference.getToAddress()) != null) continue;
             if (reference.getReferenceType().isData()) {
                 data[index]++;
                 if (targets.get(index).size() < 8) targets.get(index).add(hex(reference.getToAddress()));
@@ -807,7 +814,7 @@ public class Owner {
         gap.addProperty("first_non_padding", hex(first));
         gap.addProperty("first_bytes", text.toString());
         gap.addProperty("instruction", program.getListing().getInstructionAt(first) != null);
-        gap.addProperty("defined_data", program.getListing().getDataAt(first) != null);
+        gap.addProperty("defined_data", program.getListing().getDefinedDataContaining(first) != null);
         JsonObject counts = new JsonObject();
         counts.addProperty("all", all);
         counts.addProperty("data", dataReferences);
@@ -825,6 +832,7 @@ public class Owner {
         gap.addProperty("preceded_by_body", runsInto);
         String verdict;
         if (dataReferences > 0) verdict = "body";
+        else if (all > 0 && codeReferences == 0) verdict = "data";
         else if (all == 0 && runsInto) verdict = "tail";
         else if (all == 0) verdict = "unclaimed";
         else verdict = "referenced";
@@ -4746,12 +4754,65 @@ public class Owner {
         return answer;
     }
 
+    /**
+     * Makes room for a datum where the analysis decoded instructions: refused
+     * unless asked, with what stands there; asked, the instructions go and
+     * the functions holding them give those bytes up. A function's entry in
+     * the range is never cleared: that is `ghidra_function_delete`'s.
+     */
+    private JsonObject clearCodeForDatum(Address address, DataType type, boolean clear) throws Exception {
+        if (type.getLength() <= 0) return null;
+        Address last = address.add(type.getLength() - 1);
+        Instruction before = program.getListing().getInstructionContaining(address);
+        Address from = before != null ? before.getMinAddress() : address;
+        java.util.List<Instruction> found = new java.util.ArrayList<>();
+        for (Instruction instruction : program.getListing().getInstructions(new AddressSet(from, last), true)) {
+            found.add(instruction);
+        }
+        if (found.isEmpty()) return null;
+        Address to = found.get(found.size() - 1).getMaxAddress();
+        if (to.compareTo(last) < 0) to = last;
+        AddressSet range = new AddressSet(from, to);
+        java.util.Set<Function> owners = new java.util.LinkedHashSet<>();
+        for (Instruction instruction : found) {
+            Function owner = program.getFunctionManager().getFunctionContaining(instruction.getMinAddress());
+            if (owner != null) owners.add(owner);
+        }
+        for (Function owner : owners) {
+            if (range.contains(owner.getEntryPoint())) {
+                throw new Failure(409, hex(address) + " holds the entry of " + owner.getName()
+                    + ": a function has to be deleted before its entry can be data");
+            }
+        }
+        if (!clear) {
+            Function owner = owners.isEmpty() ? null : owners.iterator().next();
+            throw new Failure(409, "the type covers " + found.size() + " instruction(s) from " + hex(found.get(0).getMinAddress())
+                + (owner == null ? "" : ", in the body of " + owner.getName())
+                + ": `clear_code: true` removes them and shortens the body");
+        }
+        JsonArray shortened = new JsonArray();
+        for (Function owner : owners) {
+            owner.setBody(owner.getBody().subtract(range));
+            shortened.add(owner.getName());
+        }
+        program.getListing().clearCodeUnits(from, to, false);
+        JsonObject cleared = new JsonObject();
+        cleared.addProperty("instructions", found.size());
+        cleared.add("functions_shortened", shortened);
+        return cleared;
+    }
+
     private JsonObject setData(JsonObject body) throws Exception {
+        JsonObject answerCleared = null;
         Address address = address(required(body, "address"));
         if (body.has("type") && !body.get("type").isJsonNull()) {
             DataType type = type(body.get("type").getAsString());
+            answerCleared = clearCodeForDatum(address, type, body.has("clear_code") && body.get("clear_code").getAsBoolean());
             DataUtilities.createData(program, address, type, -1,
                                      DataUtilities.ClearDataMode.CLEAR_ALL_CONFLICT_DATA);
+            if (program.getListing().getDefinedDataAt(address) == null) {
+                throw new Failure(409, "no datum was made at " + hex(address));
+            }
         }
         String name = string(body, "name", null);
         if (name != null && name.isEmpty()) {
@@ -4780,6 +4841,7 @@ public class Owner {
         if (datum != null) answer.addProperty("type", datum.getDataType().getDisplayName());
         Symbol named = program.getSymbolTable().getPrimarySymbol(address);
         answer.addProperty("name", named == null ? null : named.getName());
+        if (answerCleared != null) answer.add("code_cleared", answerCleared);
         return answer;
     }
 

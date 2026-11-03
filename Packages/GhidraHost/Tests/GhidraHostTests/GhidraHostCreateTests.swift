@@ -670,6 +670,44 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         XCTAssertEqual(whole, "# M\n\n## Purpose\n\nA.\n")
     }
 
+    /// A type over decoded code is refused until asked for, and asked for it
+    /// shortens the body instead of failing or answering ok with no datum.
+    func testADatumOverCodeIsRefusedThenShortensTheBody() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
+            throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostDatumTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraHostDatumTests"),
+                              writer: store)
+        let image = try Data(contentsOf: URL(fileURLWithPath: path))
+        let module = SHA256Digest(data: image)
+        _ = try await host.create(module: image, name: "Module")
+        let functions = try json(await host.read(module, "/v1/functions"))["functions"] as? [[String: Any]] ?? []
+        let function = try XCTUnwrap(functions.first { ($0["size"] as? Int ?? 0) >= 32 })
+        let entry = try XCTUnwrap(function["entry"] as? String)
+        let size = try XCTUnwrap(function["size"] as? Int)
+        let value = try XCTUnwrap(UInt64(entry.dropFirst(2), radix: 16))
+        let tail = "0x" + String(value + UInt64(size) - 4, radix: 16)
+
+        do {
+            _ = try await host.write(module, "/v1/set/data", body: try JSONSerialization.data(withJSONObject: ["address": entry, "type": "UINT32", "clear_code": true] as [String: Any]))
+            XCTFail("a function's entry cannot become data")
+        } catch {}
+        do {
+            _ = try await host.write(module, "/v1/set/data", body: try JSONSerialization.data(withJSONObject: ["address": tail, "type": "UINT32"] as [String: Any]))
+            XCTFail("code under a type is refused unless asked")
+        } catch {
+            XCTAssertTrue("\(error)".contains("clear_code"), "\(error)")
+        }
+        let answer = try json(await host.write(module, "/v1/set/data", body: try JSONSerialization.data(withJSONObject: ["address": tail, "type": "UINT32", "clear_code": true] as [String: Any])))
+        XCTAssertEqual(answer["type"] as? String, "UINT32")
+        XCTAssertNotNil(answer["code_cleared"])
+    }
+
     func testATypeNotTakenIsRefusedAndLeavesNothing() async throws {
         guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
             throw XCTSkip("GHIDRA_TYPE_MODULE is not set")

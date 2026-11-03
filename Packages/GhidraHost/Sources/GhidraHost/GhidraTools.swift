@@ -423,7 +423,8 @@ public enum GhidraTools {
                 `defined_data`; the `references` into it from outside — `all`, `data`, `code` — with \
                 up to eight `reference_targets` and, when something points in with data, `body_at`; \
                 whether a body `preceded_by_body` runs into it; \
-                and a `verdict`: `body` — a data reference lands in the gap, so something \
+                and a `verdict`: `data` — what refers in reads a datum that already has its type; \
+                `body` — a data reference lands in the gap outside any datum, so something \
                 registered it (a callback, a table slot) and `ghidra_function_create` at that \
                 target makes it a function, whatever its first bytes look like; `tail` — nothing \
                 refers to it and the body before it runs into it, so it is that body's tail and \
@@ -952,12 +953,15 @@ public enum GhidraTools {
             },
             write("ghidra_set_data", "set/data", "Name or type a datum",
                   "Names and/or types the datum at `address`, e.g. a GUID or a table. An empty `name` removes "
-                  + "the label there, a leftover under a type that now names the place.",
+                  + "the label there, a leftover under a type that now names the place. A type laid over decoded "
+                  + "instructions is refused, naming them, unless `clear_code: true`: they go, the function "
+                  + "holding them gives those bytes up, and `code_cleared` says so.",
                   ["address": AgentSchema.string("The address."),
+                   "clear_code": AgentSchema.boolean("Remove instructions the type covers and shorten the body."),
                    "name": AgentSchema.string("Its name; empty removes the label."),
                    "type": AgentSchema.string("Its C type, e.g. \"EFI_GUID\" or \"UINT32[4]\".")],
                   required: ["address"]) { arguments in
-                try optional(arguments, ["address", "name", "type"])
+                try optional(arguments, ["address", "name", "type", "clear_code"])
             },
             write("ghidra_describe", "set/description", "Write the module's description",
                   "Writes the module's description — Markdown, what the module is for, how it works and how "
