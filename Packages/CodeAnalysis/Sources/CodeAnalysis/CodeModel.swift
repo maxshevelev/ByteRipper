@@ -28,28 +28,34 @@ public struct CodeModel: Sendable {
         public let type: String
     }
 
-    public let artifact: CodeArtifact
+    public private(set) var artifact: CodeArtifact
     /// The original module's headers, when the module bytes were given and
     /// could be trusted. Without it no address has a module offset.
     public let layout: ModuleLayout?
     /// The module's bytes, when given: what a global holds in the image.
     public let moduleBytes: Data?
-    public let lines: [Line]
+    /// Every instruction read so far. A line keeps its place once it is here:
+    /// a function read later is added at the end, so what names a line by its
+    /// index stays true. Each function's lines are one run.
+    public private(set) var lines: [Line] = []
+    /// The functions whose code has yet to be read: the artifact has only what
+    /// the index says of them.
+    public private(set) var pendingFunctions: Set<Int> = []
 
     private let imageBase: UInt64?
-    private let functionByEntry: [CodeAddress: Int]
+    private var functionByEntry: [CodeAddress: Int] = [:]
     /// Each function's lines: instructions are appended function by function,
     /// so a function's lines are one run.
-    private let functionLines: [Range<Int>]
+    private var functionLines: [Range<Int>] = []
     /// Each line's module bytes, nil where the address has none.
-    private let lineRanges: [Range<UInt64>?]
+    private var lineRanges: [Range<UInt64>?] = []
     /// The lines that have bytes, ordered by where those bytes start.
-    private let byOffset: [Int]
+    private var byOffset: [Int] = []
     /// What a search matches a function against, lowered once.
-    private let functionText: [String]
-    private let uses: [CodeAddress: [Use]]
+    private var functionText: [String] = []
+    private var uses: [CodeAddress: [Use]] = [:]
     /// The instruction at each address.
-    private let lineByAddress: [CodeAddress: Int]
+    private var lineByAddress: [CodeAddress: Int] = [:]
     /// A function by its name, for the C lexer: the first of a repeated name.
     let functionsByName: [String: Int]
 
@@ -62,66 +68,117 @@ public struct CodeModel: Sendable {
         self.artifact = artifact
         self.layout = layout
         self.moduleBytes = layout == nil ? nil : moduleBytes
-        let base = artifact.program?.imageBase?.value
-        imageBase = base
+        imageBase = artifact.program?.imageBase?.value
 
-        var lines: [Line] = []
-        var functionLines: [Range<Int>] = []
-        var functionByEntry: [CodeAddress: Int] = [:]
-        var functionText: [String] = []
-        var uses: [CodeAddress: [Use]] = [:]
+        var functionsByName: [String: Int] = [:]
+        for (index, function) in artifact.functions.enumerated()
+        where !function.name.isEmpty && functionsByName[function.name] == nil {
+            functionsByName[function.name] = index
+        }
+        self.functionsByName = functionsByName
+
+        functionLines = Array(repeating: 0..<0, count: artifact.functions.count)
+        functionText = Array(repeating: "", count: artifact.functions.count)
         for (index, function) in artifact.functions.enumerated() {
             // The first function at an entry wins, as a list search would.
             if functionByEntry[function.entry] == nil {
                 functionByEntry[function.entry] = index
             }
-            let start = lines.count
-            var text = [function.name, function.entry.description, function.signature ?? ""]
-            for instruction in function.instructions {
-                let line = lines.count
-                lines.append(Line(global: line, function: index, instruction: instruction))
-                text.append(instruction.text)
-                if let mnemonic = instruction.mnemonic { text.append(mnemonic) }
-                for reference in instruction.references {
-                    uses[reference.to, default: []].append(Use(
-                        line: line, function: index,
-                        from: instruction.address, type: reference.type))
-                }
-            }
-            functionLines.append(start..<lines.count)
-            functionText.append(text.joined(separator: "\n").lowercased())
+            if function.codeIsPending { pendingFunctions.insert(index) }
+            add(function, at: index)
         }
+        sortLinesByOffset()
+    }
 
-        let lineRanges: [Range<UInt64>?] = lines.map { line in
-            layout?.fileRange(for: line.instruction.address,
-                              count: line.instruction.bytes.count, imageBase: base)
+    /// Takes in the code of functions read after the model was made. Lines
+    /// already here keep their places. A function no longer pending, or one
+    /// this artifact does not have at its entry, is left as it is.
+    public mutating func load(_ functions: [CodeArtifact.Function]) {
+        var loaded = false
+        for function in functions where !function.codeIsPending {
+            guard let index = pendingFunctions.first(where: { artifact.functions[$0].entry == function.entry }) else {
+                continue
+            }
+            pendingFunctions.remove(index)
+            artifact.functions[index] = function
+            add(function, at: index)
+            loaded = true
         }
-        let byOffset = lineRanges.indices
+        if loaded { sortLinesByOffset() }
+    }
+
+    private mutating func add(_ function: CodeArtifact.Function, at index: Int) {
+        let start = lines.count
+        var text = [function.name, function.entry.description, function.signature ?? ""]
+        for instruction in function.instructions {
+            let line = lines.count
+            lines.append(Line(global: line, function: index, instruction: instruction))
+            lineRanges.append(layout?.fileRange(for: instruction.address, count: instruction.bytes.count,
+                                                imageBase: imageBase))
+            if lineByAddress[instruction.address] == nil { lineByAddress[instruction.address] = line }
+            text.append(instruction.text)
+            if let mnemonic = instruction.mnemonic { text.append(mnemonic) }
+            for reference in instruction.references {
+                uses[reference.to, default: []].append(Use(
+                    line: line, function: index,
+                    from: instruction.address, type: reference.type))
+            }
+        }
+        functionLines[index] = start..<lines.count
+        functionText[index] = text.joined(separator: "\n").lowercased()
+    }
+
+    private mutating func sortLinesByOffset() {
+        let lineRanges = lineRanges
+        byOffset = lineRanges.indices
             .filter { lineRanges[$0] != nil }
             .sorted { left, right in
                 let leftStart = lineRanges[left]!.lowerBound
                 let rightStart = lineRanges[right]!.lowerBound
                 return leftStart == rightStart ? left < right : leftStart < rightStart
             }
+    }
 
-        var lineByAddress: [CodeAddress: Int] = [:]
-        for line in lines where lineByAddress[line.instruction.address] == nil {
-            lineByAddress[line.instruction.address] = line.global
+    /// Whether the function's code has yet to be read.
+    public func isPending(_ index: Int) -> Bool {
+        pendingFunctions.contains(index)
+    }
+
+    /// The function yet to be read that holds an address, by the size the
+    /// index gives it: a read of it may find the line `line(at:)` lacks.
+    public func pendingFunction(holding address: CodeAddress) -> Int? {
+        pendingFunctions.first { index in
+            let function = artifact.functions[index]
+            guard let size = function.size, size > 0 else { return function.entry == address }
+            return function.entry <= address && address.value < function.entry.value + UInt64(size)
         }
-        var functionsByName: [String: Int] = [:]
-        for (index, function) in artifact.functions.enumerated()
-        where !function.name.isEmpty && functionsByName[function.name] == nil {
-            functionsByName[function.name] = index
+    }
+
+    /// The same for a place in the module's bytes.
+    public func pendingFunction(forModuleRange range: Range<UInt64>) -> Int? {
+        pendingFunctions.first { index in
+            let function = artifact.functions[index]
+            guard let size = function.size, size > 0,
+                  let bytes = moduleRange(of: function.entry, count: size) else { return false }
+            return range.isEmpty ? bytes.contains(range.lowerBound) : bytes.overlaps(range)
         }
-        self.lineByAddress = lineByAddress
-        self.functionsByName = functionsByName
-        self.lines = lines
-        self.functionLines = functionLines
-        self.functionByEntry = functionByEntry
-        self.functionText = functionText
-        self.lineRanges = lineRanges
-        self.byOffset = byOffset
-        self.uses = uses
+    }
+
+    /// Where a location is in this model: its function, and its instruction
+    /// when that has been read. Lines are numbered as they were read, so this
+    /// and not the artifact says what the model's line is.
+    public func indices(of location: CodeLocation) -> (function: Int?, line: Int?) {
+        var function = location.function.flatMap(function(at:))
+        var line: Int?
+        if let address = location.address {
+            if location.function == nil {
+                line = self.line(at: address)
+                function = line.map { lines[$0].function } ?? pendingFunction(holding: address)
+            } else if let function {
+                line = lines(ofFunction: function).first { $0.instruction.address == address }?.global
+            }
+        }
+        return (function, line)
     }
 
     public var functions: [CodeArtifact.Function] { artifact.functions }
@@ -299,7 +356,8 @@ public struct CodeModel: Sendable {
     /// The instructions that refer to `address`, in listing order: who calls a
     /// function, jumps to a label, or reads and writes a global or a string.
     public func uses(of address: CodeAddress) -> [Use] {
-        uses[address] ?? []
+        // Functions read later lie later in `lines`; a list is in artifact order.
+        (uses[address] ?? []).sorted { ($0.function, $0.line) < ($1.function, $1.line) }
     }
 }
 

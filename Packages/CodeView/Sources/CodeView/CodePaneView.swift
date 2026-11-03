@@ -34,9 +34,20 @@ import ToolModuleKit
     }
 
     public let manifest: AnalysisManifest
-    public let artifact: CodeArtifact
+    public private(set) var artifact: CodeArtifact
     private var state: CodeReaderState
     private var model: CodeModel { state.model }
+    /// Reads functions' code from the store, by entry, or every function for
+    /// nil; nil when it could not. A pane opened on a cut artifact's index reads
+    /// a function's code when it is first shown.
+    public var onLoadFunctions: ((Set<CodeAddress>?) async -> [CodeArtifact.Function]?)? {
+        // The pane is drawn before it is given this.
+        didSet { readSelectedFunction() }
+    }
+    private var functionsBeingRead: Set<Int> = []
+    private var functionsNotRead: Set<Int> = []
+    private var lastFunctionAsked: Int?
+    private var waitingForFunctions: [(wanted: Set<Int>, then: @MainActor () -> Void)] = []
     /// The readable analyses of the same module, the chosen one first. One
     /// entry is the ordinary case; more makes the header offer the others.
     private let recipes: [AnalysisManifest]
@@ -915,10 +926,18 @@ import ToolModuleKit
         var function = function
         var instruction = instruction
         if let location, !location.isEmpty {
-            let found = artifact.indices(of: location)
+            let found = model.indices(of: location)
             if found.function != nil || found.line != nil {
                 function = found.function
                 instruction = found.line
+            }
+            // The instruction comes with its function's code, when that does.
+            if location.address != nil, let held = found.function, found.line == nil, model.isPending(held) {
+                whenRead([held]) { [weak self] in
+                    guard let self, self.state.function == held,
+                          let line = self.model.indices(of: location).line else { return }
+                    self.select(line: line)
+                }
             }
         }
         if let function {
@@ -1149,8 +1168,12 @@ import ToolModuleKit
         // nothing about the code: data is no instruction, and the nearest line
         // before it — a line of some other function — is not where the reader
         // is. Only a selection made in the hex view steers the code.
-        guard state.list == .functions, !syncingSelection, !selectingBytes,
-              let line = model.line(forModuleRange: range) else { return }
+        guard state.list == .functions, !syncingSelection, !selectingBytes else { return }
+        if let pending = model.pendingFunction(forModuleRange: range) {
+            whenRead([pending]) { [weak self] in self?.selectModuleRange(range) }
+            return
+        }
+        guard let line = model.line(forModuleRange: range) else { return }
         select(line: line)
     }
 
@@ -1170,6 +1193,10 @@ import ToolModuleKit
     /// the list it was chosen in: the instruction in the listing, the call in
     /// the C, its bytes in the hex view. A place Back returns from.
     private func showSite(_ address: CodeAddress) {
+        if model.line(at: address) == nil, let pending = model.pendingFunction(holding: address) {
+            whenRead([pending]) { [weak self] in self?.showSite(address) }
+            return
+        }
         guard let line = model.line(at: address) else {
             // An address the listing does not hold: its byte, as before.
             if let range = model.moduleRange(of: address, count: 1) { onSelectRange?(range) }
@@ -1424,10 +1451,13 @@ import ToolModuleKit
     /// badge, until the reader has opened one and moved off it; the artifact
     /// itself is kept, because it is what Diff shows the code against.
     public func markRevisionChange(from previous: CodeArtifact, revision: Int? = nil) {
-        revisionBaseline = previous
+        // An artifact shown from its index tells what changed, not what it
+        // was: that code is read from the revision when it is asked for.
+        let code = previous.functions.contains(where: \.codeIsPending) ? nil : previous
+        revisionBaseline = code
         revisionCount += 1
         drawnDiff = nil
-        previousRevision = revision.map { ($0, previous) }
+        previousRevision = code.flatMap { code in revision.map { ($0, code) } }
         var before: [CodeAddress: CodeArtifact.Function] = [:]
         for function in previous.functions where before[function.entry] == nil {
             before[function.entry] = function
@@ -1438,13 +1468,12 @@ import ToolModuleKit
                 changed.insert(index)
                 continue
             }
-            if old.name != function.name || old.signature != function.signature
-                || old.c != function.c {
+            if old.readingFingerprint != function.readingFingerprint {
                 changed.insert(index)
             }
         }
         for index in changed where unopenedChanges[index] == nil {
-            unopenedChanges[index] = NewMark.Baseline(revision: revision, artifact: previous)
+            unopenedChanges[index] = NewMark.Baseline(revision: revision, artifact: code)
             // New again: the comparison it was left with is about an older change.
             functionComparisons[artifact.functions[index].entry] = nil
         }
@@ -1786,8 +1815,7 @@ import ToolModuleKit
             unrecorded.removeAll { index in
                 let function = artifact.functions[index]
                 let then = old[function.entry]
-                if let then, then.name == function.name, then.signature == function.signature,
-                   then.c == function.c { return false }
+                if let then, then.readingFingerprint == function.readingFingerprint { return false }
                 marks.append(NewMark(entry: function.entry,
                                      baseline: .init(revision: revision, artifact: read, readFor: readFor)))
                 seen[function.entry.description] = SeenRecord(revision: revision,
@@ -1815,7 +1843,7 @@ import ToolModuleKit
     /// would have nothing to compare and nothing to explain.
     private static func holdsTheSame(_ function: CodeArtifact.Function, in revision: CodeArtifact) -> Bool {
         guard let old = revision.functions.first(where: { $0.entry == function.entry }) else { return false }
-        return old.name == function.name && old.signature == function.signature && old.c == function.c
+        return old.readingFingerprint == function.readingFingerprint
     }
 
     private static func seenRecords(of artifact: CodeArtifact, revision: Int) -> [String: SeenRecord] {
@@ -1828,7 +1856,7 @@ import ToolModuleKit
     }
 
     private static func fingerprint(of function: CodeArtifact.Function) -> String {
-        SeenRecord.fingerprint(name: function.name, signature: function.signature, c: function.c)
+        function.readingFingerprint
     }
 
     /// Notes that the reader has the function in front of them now: the next
@@ -1867,6 +1895,71 @@ import ToolModuleKit
         if wantsRevisionDiff { refreshDiffVisibility() }
         updateNewMarkBanner()
         updateReferences()
+        readSelectedFunction()
+    }
+
+    // MARK: - Code read as it is shown
+
+    /// Reads the function on screen when its code is not here yet. One whose
+    /// read failed is asked for again when the reader comes back to it.
+    private func readSelectedFunction() {
+        guard let index = state.function, model.isPending(index) else { return }
+        if lastFunctionAsked != index {
+            lastFunctionAsked = index
+            functionsNotRead.remove(index)
+        }
+        guard !functionsBeingRead.contains(index), !functionsNotRead.contains(index) else { return }
+        whenRead([index]) {}
+    }
+
+    /// Runs `then` once these functions' code is here, or every function's for
+    /// nil: at once when it is, and not at all when it cannot be read. What
+    /// needs the code of all of them asks only when the reader asks for it.
+    @discardableResult
+    func whenRead(_ functions: Set<Int>?, quietly: Bool = false,
+                  _ then: @escaping @MainActor () -> Void) -> Task<Void, Never>? {
+        let wanted = (functions ?? model.pendingFunctions).intersection(model.pendingFunctions)
+        guard !wanted.isEmpty else {
+            then()
+            return nil
+        }
+        guard let onLoadFunctions else { return nil }
+        waitingForFunctions.append((wanted, then))
+        let toRead = wanted.subtracting(functionsBeingRead)
+        guard !toRead.isEmpty else { return nil }
+        functionsBeingRead.formUnion(toRead)
+        let entries = functions == nil && toRead == model.pendingFunctions
+            ? nil : Set(toRead.map { model.functions[$0].entry })
+        let work = beginWork(entries == nil ? L("Reading all functions…") : L("Reading the function…"))
+        return Task { @MainActor [weak self] in
+            let read = await onLoadFunctions(entries)
+            guard let self else { return }
+            self.endWork(work)
+            self.functionsBeingRead.subtract(toRead)
+            if let read {
+                self.state.load(read)
+                self.artifact = self.state.model.artifact
+            }
+            let missing = toRead.intersection(self.model.pendingFunctions)
+            self.functionsNotRead.formUnion(missing)
+            // The function on screen says so itself.
+            if !missing.isEmpty, !quietly, self.state.function.map({ !missing.contains($0) }) ?? true {
+                NSSound.beep()
+            }
+            self.indexNotes()
+            if !self.searchField.stringValue.isEmpty { self.drawNavigator() }
+            if let shown = self.state.function, toRead.contains(shown) {
+                self.drawnC = nil
+                self.drawnFunction = nil
+                self.drawnDiff = nil
+                self.drawSelection()
+            }
+            let waiting = self.waitingForFunctions
+            self.waitingForFunctions = waiting.filter { !$0.wanted.isDisjoint(with: self.functionsBeingRead) }
+            for waiter in waiting where waiter.wanted.isDisjoint(with: self.functionsBeingRead) {
+                if waiter.wanted.isDisjoint(with: self.model.pendingFunctions) { waiter.then() }
+            }
+        }
     }
 
     // help: panel.code.new
@@ -1890,6 +1983,11 @@ import ToolModuleKit
         let read = mark.revision.flatMap { readRevisions[RevisionRead(revision: $0, function: function.entry)] }
         guard let baseline = mark.artifact ?? read else {
             newMarkBanner.hide()
+            layOutBanner(false)
+            return
+        }
+        // Said once the function's code is here.
+        guard !function.codeIsPending else {
             layOutBanner(false)
             return
         }
@@ -1972,6 +2070,14 @@ import ToolModuleKit
     @objc private func searchChanged() {
         state.search(searchField.stringValue)
         drawNavigator()
+        // A search looks through the instructions too, so it reads them all.
+        if !searchField.stringValue.isEmpty, !model.pendingFunctions.isEmpty {
+            whenRead(nil, quietly: true) { [weak self] in
+                guard let self else { return }
+                self.state.search(self.searchField.stringValue)
+                self.drawNavigator()
+            }
+        }
     }
 
     /// The selected function's name in the header, after the module's.
@@ -2044,6 +2150,11 @@ import ToolModuleKit
     @discardableResult
     func showCallers(of index: Int, at name: NSRange? = nil) -> CodeCallersPopover? {
         guard model.functions.indices.contains(index) else { return nil }
+        // Every call lies in some function's code.
+        guard model.pendingFunctions.isEmpty || onLoadFunctions == nil else {
+            whenRead(nil) { [weak self] in _ = self?.showCallers(of: index, at: name) }
+            return nil
+        }
         explanationPopover?.close()
         callersPopover?.close()
         // The name the callers were asked at is where Back returns: it is
@@ -2144,6 +2255,14 @@ import ToolModuleKit
             }
             flashArrival()
         case .bytes(let address):
+            // An address inside a function not read yet is an instruction, not data.
+            if let pending = model.pendingFunction(holding: address) {
+                whenRead([pending]) { [weak self] in
+                    guard let self, let link = self.model.link(to: address) else { return }
+                    self.follow(link, even: even)
+                }
+                return
+            }
             if let range = dataRange(at: address) {
                 selectingBytes = true
                 onSelectRange?(range)
@@ -2267,7 +2386,7 @@ import ToolModuleKit
         var adopted: [Place] = []
         var current = -1
         for (position, location) in carried.places.enumerated() {
-            let found = artifact.indices(of: location)
+            let found = model.indices(of: location)
             guard let function = found.function else { continue }
             if position == carried.index { current = adopted.count }
             var view = carried.views.indices.contains(position) ? carried.views[position] : CodeViewPosition()
@@ -2304,13 +2423,7 @@ import ToolModuleKit
     public func setNotes(_ notes: [CodeNote]) {
         guard notes != self.notes else { return }
         self.notes = notes
-        notesByFunction = [:]
-        notesByLine = [:]
-        for note in notes {
-            let place = artifact.indices(of: note.location)
-            if let function = place.function { notesByFunction[function, default: []].append(note) }
-            if let line = place.line { notesByLine[line, default: []].append(note) }
-        }
+        indexNotes()
         drawNavigator()
         let selected = table.selectedRow
         syncingSelection = true
@@ -2323,14 +2436,29 @@ import ToolModuleKit
         updateC()
     }
 
+    /// Places the notes in the functions and the lines read so far.
+    private func indexNotes() {
+        notesByFunction = [:]
+        notesByLine = [:]
+        for note in notes {
+            let place = model.indices(of: note.location)
+            if let function = place.function { notesByFunction[function, default: []].append(note) }
+            if let line = place.line { notesByLine[line, default: []].append(note) }
+        }
+    }
+
     /// Goes to a function, or to an instruction and the function holding it,
     /// as a click on a link would: a place Back returns from. What an
     /// annotation on code and an agent's `open_code` open at.
     public func go(to location: CodeLocation) {
-        let place = artifact.indices(of: location)
+        let place = model.indices(of: location)
         if let line = place.line {
             follow(.line(line))
         } else if let function = place.function {
+            if location.address != nil, model.isPending(function) {
+                whenRead([function]) { [weak self] in self?.go(to: location) }
+                return
+            }
             follow(.function(function))
         }
     }
@@ -2395,6 +2523,10 @@ import ToolModuleKit
     private func followFromDescription(_ address: CodeAddress, link: NSRange) {
         let function = model.function(at: address)
         let line = function == nil ? model.line(at: address) : nil
+        if function == nil, line == nil, let pending = model.pendingFunction(holding: address) {
+            whenRead([pending]) { [weak self] in self?.followFromDescription(address, link: link) }
+            return
+        }
         guard function != nil || line != nil else {
             NSSound.beep()
             return
@@ -2964,6 +3096,7 @@ import ToolModuleKit
         descriptionView.resolvesAddress = { [weak self] address in
             guard let self else { return false }
             return self.model.function(at: address) != nil || self.model.line(at: address) != nil
+                || self.model.pendingFunction(holding: address) != nil
         }
         // Until the app has read it: nothing, not "no description".
         descriptionView.show(nil, loaded: false)
@@ -3698,7 +3831,12 @@ import ToolModuleKit
         cLinks = []
         var tokensShown: [CodeToken] = []
         let text: NSAttributedString
-        if let index = state.function, let c = model.functions[index].c {
+        if let index = state.function, model.isPending(index) {
+            let words = functionsNotRead.contains(index)
+                ? L("The code of this function has not been read, and the analysis store cannot give it now.")
+                : L("Reading the function…")
+            text = NSAttributedString(string: words, attributes: [.font: font, .foregroundColor: NSColor.secondaryLabelColor])
+        } else if let index = state.function, let c = model.functions[index].c {
             // The function's annotations head its C, as comments in the note's
             // hue: what was found, over what it was found in.
             var header = ""
@@ -3810,6 +3948,8 @@ import ToolModuleKit
         if let drawnDiff, drawnDiff.function == index, drawnDiff.revision == revisionCount {
             return revisionHasChanges
         }
+        // Drawn again when the function's code comes.
+        if model.isPending(index) { return false }
         let function = model.functions[index]
         let old = baseline.functions.first { $0.entry == function.entry }?.c
         guard old != nil || function.c != nil else {
@@ -4393,16 +4533,20 @@ import ToolModuleKit
         guard model.functions.indices.contains(index) else { return }
         pendingFunctionPopover?.cancel()
         let work = DispatchWorkItem { [weak self] in
-            guard let self, let (rect, view) = place(), view.window != nil else { return }
-            self.explanationPopover?.close()
-            self.callersPopover?.close()
-            self.functionPopover?.close()
-            let popover = CodeFunctionPopover(function: self.artifact.functions[index],
-                                              mark: self.reviewMark(of: index),
-                                              signatureTokens: self.model.signatureTokens(ofFunction: index),
-                                              onGo: go)
-            popover.show(relativeTo: rect, of: view)
-            self.functionPopover = popover
+            guard let self else { return }
+            // The popover quotes the plate, which lies in the function's code.
+            self.whenRead([index]) { [weak self] in
+                guard let self, let (rect, view) = place(), view.window != nil else { return }
+                self.explanationPopover?.close()
+                self.callersPopover?.close()
+                self.functionPopover?.close()
+                let popover = CodeFunctionPopover(function: self.artifact.functions[index],
+                                                  mark: self.reviewMark(of: index),
+                                                  signatureTokens: self.model.signatureTokens(ofFunction: index),
+                                                  onGo: go)
+                popover.show(relativeTo: rect, of: view)
+                self.functionPopover = popover
+            }
         }
         pendingFunctionPopover = work
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.functionPopoverDelay, execute: work)
@@ -4558,6 +4702,17 @@ import ToolModuleKit
     private func showExplanation(_ explained: CodeExplanation, relativeTo rect: NSRect, of view: NSView,
                                  in read: CodeModel? = nil, onUse: ((Int) -> Void)? = nil) {
         guard view.window != nil else { return }
+        // Its list of uses covers the whole module, so it waits for all the code.
+        if read == nil, explained.listsUsesAcrossModule, !model.pendingFunctions.isEmpty, onLoadFunctions != nil {
+            whenRead(nil) { [weak self] in
+                guard let self else { return }
+                let clicked = self.explainedInC
+                self.showExplanation(self.model.explanationAgain(explained) ?? explained,
+                                     relativeTo: rect, of: view, onUse: onUse)
+                self.explainedInC = clicked
+            }
+            return
+        }
         explanationPopover?.close()
         explainedInC = nil
         let popover = CodeExplanationPopover(explanation: explained, model: read ?? model)

@@ -90,7 +90,13 @@ func presentCodeScreen(_ screen: CodeScreen, on codePane: CodePaneView) {
 @MainActor
 func wireCodeRevisions(_ codePane: CodePaneView,
                        previous: (revision: Int, artifact: CodeArtifact)? = nil) {
+    // An artifact shown from its index holds no code to compare with: that
+    // revision is read from the store like any other.
+    let previous = previous.flatMap { $0.artifact.functions.contains(where: \.codeIsPending) ? nil : $0 }
     let manifest = codePane.manifest
+    codePane.onLoadFunctions = { entries in
+        await CodeAnalysisStore.functions(entries, of: manifest.artifact.sha256)
+    }
     let module = manifest.module.sha256
     let recipe = manifest.recipe.id
     var digests: [Int: SHA256Digest] = [:]

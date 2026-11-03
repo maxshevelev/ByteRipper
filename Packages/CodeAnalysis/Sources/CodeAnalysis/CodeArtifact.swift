@@ -127,7 +127,7 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
     public let program: Program?
     public let blocks: [Block]
     public let strings: [StringEntry]
-    public let functions: [Function]
+    public internal(set) var functions: [Function]
     /// Before v5, every OUT instruction, as it reads; from v5, the writes to
     /// port 0x80 — and to a port the analysis could not tell — at the place
     /// that supplies the value.
@@ -259,6 +259,15 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
     /// One function, its callers and callees, its decompiled C if Ghidra
     /// produced any, and its instructions in address order.
     public struct Function: Decodable, Equatable, Sendable {
+        /// Whether this holds only what the index says of the function.
+        public var codeIsPending: Bool { fingerprint != nil }
+
+        /// What the function reads as, with or without its code at hand: two
+        /// functions that read alike have the same one.
+        public var readingFingerprint: String {
+            fingerprint ?? CodeArtifact.fingerprint(name: name, signature: signature, c: c)
+        }
+
         public let entry: CodeAddress
         public let name: String
         public let size: Int?
@@ -299,6 +308,9 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         /// The library registry entry the function was matched with (v9);
         /// nil for a function the registry does not hold.
         public let libraryEntry: LibraryEntry?
+        /// What the index of a cut artifact says the function reads as, when
+        /// this is that entry and not the function: its code has yet to be read.
+        public let fingerprint: String?
         public let instructions: [Instruction]
 
         /// Whether the name is Ghidra's placeholder rather than evidence.
@@ -331,6 +343,7 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             libraryKind = try container.decodeIfPresent(String.self, forKey: .libraryKind)
                 .flatMap(LibraryKind.init(rawValue:))
             libraryEntry = try container.decodeIfPresent(LibraryEntry.self, forKey: .libraryEntry)
+            fingerprint = try container.decodeIfPresent(String.self, forKey: .fingerprint)
             instructions = try container.decodeIfPresent(
                 [Instruction].self, forKey: .instructions) ?? []
         }
@@ -348,6 +361,7 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             case reviewGaps = "review_gaps"
             case libraryKind = "library_kind"
             case libraryEntry = "library_entry"
+            case fingerprint
         }
     }
 

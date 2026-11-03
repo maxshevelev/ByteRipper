@@ -50,6 +50,10 @@ extension CodeArtifact {
 
     /// The function an instruction belongs to.
     public func function(containing address: CodeAddress) -> Function? {
-        functions.first { $0.instructions.contains { $0.address == address } }
+        functions.first { function in
+            guard function.codeIsPending else { return function.instructions.contains { $0.address == address } }
+            guard let size = function.size, size > 0 else { return function.entry == address }
+            return function.entry <= address && address.value < function.entry.value + UInt64(size)
+        } ?? functions.first { $0.instructions.contains { $0.address == address } }
     }
 }

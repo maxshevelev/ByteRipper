@@ -90,7 +90,7 @@ public struct CodeReaderState: Sendable {
         case functions, strings, postCodes, statusCodes
     }
 
-    public let model: CodeModel
+    public private(set) var model: CodeModel
     public private(set) var list: List = .functions
     public private(set) var searchText = ""
     /// The selected function by its place in the artifact, not by a row: the
@@ -578,6 +578,14 @@ public struct CodeReaderState: Sendable {
             }
         }
         return changed
+    }
+
+    /// Takes in functions' code read after the model was made.
+    public mutating func load(_ functions: [CodeArtifact.Function]) {
+        model.load(functions)
+        if let function, line == nil { line = model.lines(ofFunction: function).first?.global }
+        // A search looks through the instructions, which are here now.
+        if !searchText.isEmpty { refilter() }
     }
 
     // MARK: - Selection

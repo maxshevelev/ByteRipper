@@ -41,7 +41,7 @@ public final class CodeReadings {
     /// The analysis a call is about, and where it was found.
     public struct Source {
         public let manifest: AnalysisManifest
-        public let artifact: CodeArtifact
+        public internal(set) var artifact: CodeArtifact
         /// The module's bytes, for module offsets; nil when read by SHA alone.
         public let bytes: Data?
         /// The document the agent named; nil for `module`.
@@ -243,13 +243,30 @@ public final class CodeReadings {
             return Source(manifest: manifest, artifact: artifact, bytes: nil, document: nil, node: nil)
         }
         let document = try documents.resolve(arguments.optionalString("document"))
-        if let code = screen(document) { return code }
+        if let code = screen(document) { return try await whole(code) }
         guard let node = try arguments.optionalString("node") else {
             throw AgentToolError(wording.missingNode(document.named))
         }
         let opening = try await opening(node, in: document)
-        return Source(manifest: opening.manifest, artifact: opening.artifact, bytes: Data(opening.bytes),
-                      document: document.id, node: node, disk: document.disk)
+        return try await whole(Source(manifest: opening.manifest, artifact: opening.artifact, bytes: Data(opening.bytes),
+                                      document: document.id, node: node, disk: document.disk))
+    }
+
+    /// A source with all its code: what a panel shows may be an artifact's index,
+    /// and an agent's question can be about any function.
+    private func whole(_ source: Source) async throws -> Source {
+        guard source.artifact.functions.contains(where: \.codeIsPending) else { return source }
+        let root = store()
+        let manifest = source.manifest
+        let artifact = await Task.detached(priority: .userInitiated) {
+            try? ContentStore(root: root, create: false).artifact(for: manifest)
+        }.value
+        guard let artifact else {
+            throw AgentToolError("The store cannot give the code of module \(manifest.module.sha256.hex).")
+        }
+        var source = source
+        source.artifact = artifact
+        return source
     }
 
     /// Node `text` of `document`'s tree, read and matched with the store.

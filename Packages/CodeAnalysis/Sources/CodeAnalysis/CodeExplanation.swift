@@ -33,6 +33,14 @@ public struct CodeExplanation: Equatable, Sendable {
     }
 
     public let subject: Subject
+
+    /// Whether `uses` is made from the code of every function.
+    public var listsUsesAcrossModule: Bool {
+        switch subject {
+        case .constant, .global: return true
+        default: return false
+        }
+    }
     /// The name as the code writes it: `PCI_CONFIG_ADDRESS`,
     /// `SEC_SERIAL_DEVICE_INFO`, `SEC_SERIAL_DEVICE_INFO.BaudRate`.
     public let name: String
@@ -163,6 +171,18 @@ extension CodeModel {
         return CodeExplanation(subject: .global(address), name: symbol.name, enumName: nil,
                                kind: symbol.type, size: 0, declaration: nil, text: words, c: nil,
                                uses: uses, value: value(of: symbol))
+    }
+
+    /// The same explanation, made from the code held now: a list of uses grows
+    /// as functions are read.
+    public func explanationAgain(_ explained: CodeExplanation) -> CodeExplanation? {
+        switch explained.subject {
+        case .constant(let name, let value):
+            return artifact.equates.first { $0.name == name && $0.value == value }.map(explanation(of:))
+                ?? memberExplanation(named: name)
+        case .global(let address): return explanation(ofGlobal: address)
+        default: return nil
+        }
     }
 
     /// How many bytes a datum of `type` takes: a GUID's 16, an integer's

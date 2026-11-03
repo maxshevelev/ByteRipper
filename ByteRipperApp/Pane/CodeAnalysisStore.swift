@@ -17,7 +17,17 @@ enum CodeAnalysisStore {
     static func artifact(for manifest: AnalysisManifest, root: URL? = nil) async -> CodeArtifact? {
         let root = root ?? self.root
         return await Task.detached(priority: .userInitiated) { () -> CodeArtifact? in
-            try? ContentStore(root: root, create: false).artifact(for: manifest)
+            try? ContentStore(root: root, create: false).artifactToShow(for: manifest)
+        }.value
+    }
+
+    /// Functions' code a pane shown from an artifact's index asks for, read off
+    /// the main actor: these entries, or every one for nil. Nil when it cannot.
+    static func functions(_ entries: Set<CodeAddress>?, of digest: SHA256Digest,
+                          root: URL? = nil) async -> [CodeArtifact.Function]? {
+        let root = root ?? self.root
+        return await Task.detached(priority: .userInitiated) { () -> [CodeArtifact.Function]? in
+            try? ContentStore(root: root, create: false).functions(entries, of: digest)
         }.value
     }
 

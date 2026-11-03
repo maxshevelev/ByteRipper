@@ -38,7 +38,7 @@ The line below the fields says whether the server is reached. A token the server
 ## Working with a server
 
 - **New analyses appear by themselves.** The server reports every change as it happens, so an analysis stored or a review published from any machine appears on every Mac within a second or two, and an open Code panel is drawn again from it at the same place.
-- **What has been read stays readable.** This Mac keeps a copy of what it has read from the server. Of an earlier revision compared with a function, only that function is read. When the server cannot be reached, the line in the settings says so, and the analyses already read are still shown; the ones not yet read are not. The connection is retried by itself.
+- **What has been read stays readable.** This Mac keeps a copy of what it has read from the server. A function's code is read when the function is shown; of an earlier revision compared with a function, only that function is read. The search, the list of a function's callers and the list of a name's uses go through all the code of the module, so they read the remaining functions first. When the server cannot be reached, the line in the settings says so. What has been read is still shown; a function not yet read is listed by name, and the panel states that its code cannot be obtained. The search and the lists of uses then cover only the functions already read. The connection is retried by itself.
 - **Projects use the server.** When a project is opened, the analyses it carries are sent to the server, which takes them by the usual rules (see [[topic:projects|Projects]]); the notice after opening reports the server's answer.
 
 ## A review by an agent

@@ -91,7 +91,11 @@ it lacks.
 
 A mirror keeps this form too, holding the root and only what something read: a
 read of one function (`ContentStore.artifact(_:function:)`) fetches that function
-and the sections, and a read of the whole fetches the rest. A bundle is written
+and the sections, and a read of the whole fetches the rest. The Code panel opens
+on `ContentStore.skeleton(of:)`, the root's index as an artifact whose functions
+carry `fingerprint` and no code (`codeIsPending`), and reads a function with
+`functions(_:of:)` when it is shown; search, callers and a name's uses read the
+remaining ones. An agent's tools read the whole. A bundle is written
 from what the store has and fetches nothing: an artifact short of parts goes as
 `roots/<sha>` and the parts it has. `importBundle` takes that when bundle and
 store make the whole; only `acceptingPartial`, as a project opened without a

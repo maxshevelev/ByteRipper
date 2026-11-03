@@ -149,7 +149,7 @@ extension MainViewController {
             let current = saved.key.flatMap { try? store.analysis(module: $0.module, recipe: $0.recipe) }
             var found: (AnalysisManifest, CodeArtifact)?
             for manifest in [current, saved].compactMap({ $0 }) {
-                if let artifact = try? store.artifact(for: manifest) {
+                if let artifact = try? store.artifactToShow(for: manifest) {
                     found = (manifest, artifact)
                     break
                 }
@@ -159,7 +159,7 @@ extension MainViewController {
             // A later revision published through a newer exporter sits under
             // another recipe; the screen follows its reading there.
             let latest = index.latestReading(of: manifest)
-            if latest != manifest, let later = try? store.artifact(for: latest) {
+            if latest != manifest, let later = try? store.artifactToShow(for: latest) {
                 (manifest, artifact) = (latest, later)
             }
             return (manifest, artifact, index.manifests(for: manifest.module.sha256))

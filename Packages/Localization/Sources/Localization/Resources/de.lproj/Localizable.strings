@@ -1861,3 +1861,6 @@
 "at +0x%1$@ in %2$@" = "bei +0x%1$@ in %2$@";
 "Go to Function" = "Zur Funktion";
 "The review has not described this function yet." = "Die Analyse hat diese Funktion noch nicht beschrieben.";
+"Reading the function…" = "Funktion wird gelesen…";
+"Reading all functions…" = "Alle Funktionen werden gelesen…";
+"The code of this function has not been read, and the analysis store cannot give it now." = "Der Code dieser Funktion wurde noch nicht gelesen, und der Analysespeicher kann ihn derzeit nicht liefern.";

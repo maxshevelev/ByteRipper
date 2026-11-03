@@ -189,16 +189,95 @@ extension ContentStore {
     /// `CodeArtifact.decoding(_:function:)` makes of the whole, for that part
     /// and the sections alone. A mirror fetches only what it lacks of those.
     public func artifact(_ digest: SHA256Digest, function entry: CodeAddress) throws -> CodeArtifact {
-        if !hasObject(digest) { _ = try fetchRoot(digest) }
-        guard let root = hasObject(digest) ? try objectRoot(digest) : nil,
-              let parts = PartedObject.root(of: root),
-              let functions = PartedObject.functions(ofRoot: root) else {
+        guard let (parts, functions) = try indexedRoot(of: digest) else {
             return try CodeArtifact.decoding(try object(digest), function: entry)
         }
         let wanted = Set(functions.filter { CodeAddress(hex: $0.entry) == entry }.map(\.part))
-        let others = Dictionary(functions.map { ($0.part, $0.json) }, uniquingKeysWith: { first, _ in first })
+        return try reduced(parts, functions, keeping: wanted, marked: false)
+    }
+
+    /// An artifact with every function as its index has it and no code at all:
+    /// what a Code panel opens on, to read a function's code when it is shown.
+    /// Nil for an artifact with no such index, to be read whole.
+    public func skeleton(of digest: SHA256Digest) throws -> CodeArtifact? {
+        guard let (parts, functions) = try indexedRoot(of: digest) else { return nil }
+        return try reduced(parts, functions, keeping: [], marked: true)
+    }
+
+    /// The artifact a Code panel shows for a manifest: the index when there is
+    /// one, or else the whole, read as `artifact(for:)` reads it.
+    public func artifactToShow(for manifest: AnalysisManifest) throws -> CodeArtifact {
+        if let skeleton = try skeleton(of: manifest.artifact.sha256) { return skeleton }
+        return try artifact(for: manifest)
+    }
+
+    /// Functions of a cut artifact, whole, by their entries, or every one for
+    /// nil; a mirror fetches what it lacks of them. Throws when the artifact
+    /// has no index, or a part is not to be had.
+    public func functions(_ entries: Set<CodeAddress>?, of digest: SHA256Digest) throws -> [CodeArtifact.Function] {
+        guard let (_, functions) = try indexedRoot(of: digest) else {
+            throw CodeAnalysisError.objectMissing(digest.hex)
+        }
+        let wanted = functions.filter { entry in
+            guard let entries else { return true }
+            return CodeAddress(hex: entry.entry).map(entries.contains) ?? false
+        }
+        let names = Array(Set(wanted.compactMap { SHA256Digest(hex: $0.part) }))
+        try fetchParts(names.filter { !hasObject($0) })
+        let store = self
+        let box = FunctionsBox(count: wanted.count)
+        DispatchQueue.concurrentPerform(iterations: wanted.count) { index in
+            box.set(index, Result {
+                guard let name = SHA256Digest(hex: wanted[index].part),
+                      let file = try? Data(contentsOf: store.objectURL(name)) else {
+                    throw CodeAnalysisError.objectMissing(wanted[index].part)
+                }
+                return try JSONDecoder().decode(CodeArtifact.Function.self, from: Gzip.decompress(file) ?? file)
+            })
+        }
+        return try box.results()
+    }
+
+    private final class FunctionsBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var all: [Result<CodeArtifact.Function, Error>?]
+
+        init(count: Int) { all = Array(repeating: nil, count: count) }
+
+        func set(_ index: Int, _ result: Result<CodeArtifact.Function, Error>) {
+            lock.lock()
+            all[index] = result
+            lock.unlock()
+        }
+
+        func results() throws -> [CodeArtifact.Function] {
+            lock.lock()
+            defer { lock.unlock() }
+            return try all.compactMap { try $0?.get() }
+        }
+    }
+
+    /// A cut artifact's root with its index, fetched when a mirror lacks it; nil
+    /// for an artifact with no index.
+    private func indexedRoot(of digest: SHA256Digest) throws
+        -> (parts: [PartedObject.Part], functions: [PartedObject.IndexEntry])? {
+        if !hasObject(digest) { _ = try fetchRoot(digest) }
+        guard hasObject(digest), let root = try objectRoot(digest),
+              let parts = PartedObject.root(of: root),
+              let functions = PartedObject.functions(ofRoot: root) else { return nil }
+        return (parts, functions)
+    }
+
+    /// The artifact's text with the functions outside `wanted` as the index has
+    /// them, `marked` saying so to whoever reads it, and the sections in place.
+    private func reduced(_ parts: [PartedObject.Part], _ functions: [PartedObject.IndexEntry],
+                         keeping wanted: Set<String>, marked: Bool) throws -> CodeArtifact {
+        var others: [String: Data] = [:]
+        for function in functions where others[function.part] == nil && !wanted.contains(function.part) {
+            others[function.part] = try function.json(marked: marked)
+        }
         let needed = parts.compactMap { part -> SHA256Digest? in
-            guard case .object(let hex) = part, wanted.contains(hex) || others[hex] == nil else { return nil }
+            guard case .object(let hex) = part, others[hex] == nil else { return nil }
             return SHA256Digest(hex: hex)
         }
         try fetchParts(Array(Set(needed)).filter { !hasObject($0) })
@@ -208,7 +287,7 @@ extension ContentStore {
             case .literal(let text):
                 reduced.append(contentsOf: text.utf8)
             case .object(let hex):
-                if !wanted.contains(hex), let json = others[hex] {
+                if let json = others[hex] {
                     reduced.append(json)
                 } else {
                     guard let name = SHA256Digest(hex: hex),
@@ -386,17 +465,35 @@ enum PartedObject {
 
     /// A root's index: each function's entry, its part, and its own text. Nil
     /// for a root with no usable index.
-    static func functions(ofRoot root: Data) -> [(entry: String, part: String, json: Data)]? {
+    static func functions(ofRoot root: Data) -> [IndexEntry]? {
         guard let object = try? JSONSerialization.jsonObject(with: root) as? [String: Any],
               let list = object["functions"] as? [[String: Any]] else { return nil }
-        var functions: [(entry: String, part: String, json: Data)] = []
+        var functions: [IndexEntry] = []
         functions.reserveCapacity(list.count)
         for function in list {
-            guard let entry = function["entry"] as? String, let part = function["part"] as? String,
-                  let json = try? JSONSerialization.data(withJSONObject: function) else { return nil }
-            functions.append((entry, part, json))
+            guard let entry = function["entry"] as? String, let part = function["part"] as? String else {
+                return nil
+            }
+            functions.append(IndexEntry(entry: entry, part: part, fields: function))
         }
         return functions
+    }
+
+    /// One function of a root's index.
+    struct IndexEntry {
+        let entry: String
+        let part: String
+        let fields: [String: Any]
+
+        /// The entry as the function's text. Unmarked, it reads as a function
+        /// cut down by `CodeArtifact.decoding(_:function:)`; marked, it says
+        /// its code has yet to come.
+        func json(marked: Bool) throws -> Data {
+            var fields = fields
+            if !marked { fields["fingerprint"] = nil }
+            fields["part"] = nil
+            return try JSONSerialization.data(withJSONObject: fields)
+        }
     }
 
     /// Whether a root says anything of an index, even that it has none.

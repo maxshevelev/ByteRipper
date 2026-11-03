@@ -246,7 +246,7 @@ final class AgentAnnotationTools {
                 for module in modules {
                     guard let digest = SHA256Digest(hex: module),
                           let manifest = try? store.analysis(module: digest),
-                          let artifact = try? store.artifact(for: manifest) else { continue }
+                          let artifact = try? store.artifactToShow(for: manifest) else { continue }
                     names[module] = Dictionary(artifact.functions.map { ($0.entry, $0.name) },
                                                uniquingKeysWith: { first, _ in first })
                 }

@@ -73,7 +73,7 @@ public struct UEFICodeOpening: Sendable {
                 index.manifests(for: digest).first { $0.recipe.id == preferred.recipe.id }
             } ?? index.newest(for: digest)
             guard let manifest else { return nil }
-            let artifact = try? ContentStore(root: root, create: false).artifact(for: manifest)
+            let artifact = try? ContentStore(root: root, create: false).artifactToShow(for: manifest)
             return (manifest, artifact, index.manifests(for: digest))
         }.value
         guard let loaded else {

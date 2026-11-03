@@ -1861,3 +1861,6 @@
 "at +0x%1$@ in %2$@" = "по смещению +0x%1$@ в %2$@";
 "Go to Function" = "Перейти к функции";
 "The review has not described this function yet." = "Разбор пока не описал эту функцию.";
+"Reading the function…" = "Чтение функции…";
+"Reading all functions…" = "Чтение всех функций…";
+"The code of this function has not been read, and the analysis store cannot give it now." = "Код этой функции ещё не прочитан, и хранилище анализа не может выдать его сейчас.";
