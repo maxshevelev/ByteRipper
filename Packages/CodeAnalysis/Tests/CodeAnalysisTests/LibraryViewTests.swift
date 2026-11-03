@@ -1,0 +1,181 @@
+import Foundation
+import XCTest
+@testable import CodeAnalysis
+
+/// A library function has one description: a reader gets it from the registry
+/// entry, whatever the module's own project still holds, and what is the
+/// module's stays the module's.
+final class LibraryViewTests: XCTestCase {
+    private var directory: URL!
+    private var store: ContentStore!
+    private let source = SHA256Digest(data: Data("source".utf8))
+    private let body = LibraryBody(size: 0x15, full: "00112233445566aa", specific: "0123456789abcdef")
+
+    override func setUpWithError() throws {
+        directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("LibraryViewTests-\(UUID().uuidString)", isDirectory: true)
+        store = try ContentStore(root: directory)
+    }
+
+    override func tearDownWithError() throws {
+        if let directory { try? FileManager.default.removeItem(at: directory) }
+    }
+
+    /// The entry's function: at 0x1000, it calls 0x2000, printed `Theirs`.
+    private func entryObject(plate: String = "EDK2 CopyMem") throws -> Data {
+        let c = "void CopyMem(void) {\n  Theirs(Count);\n}\n"
+        let at = (c as NSString).range(of: "Theirs").location
+        let local = (c as NSString).range(of: "Count").location
+        let function: [String: Any] = [
+            "entry": "0x1000", "name": "CopyMem", "signature": "void CopyMem(void)", "c": c,
+            "c_spans": [[at, 6, "function", "0x2000"], [local, 5, "local"]],
+            "c_sites": [[at, 6, "0x1004"]],
+            "instructions": [
+                ["address": "0x1000", "bytes": "90", "text": "NOP"],
+                ["address": "0x1004", "bytes": "e8", "text": "CALL 0x2000",
+                 "references": [["to": "0x2000", "type": "UNCONDITIONAL_CALL"]]]
+            ]
+        ]
+        return try JSONSerialization.data(withJSONObject: [
+            "schema": 1, "name": "CopyMem", "kind": "edk2", "plate": plate,
+            "signature": "void CopyMem(void)", "function": function
+        ], options: .sortedKeys)
+    }
+
+    private func register(_ object: Data) throws {
+        _ = try store.putLibraryEntries(module: source, rev: 1, by: "agent", proposals: [
+            LibraryProposal(body: body, name: "CopyMem", kind: "edk2", address: "0x1000", entry: object)
+        ])
+    }
+
+    /// The module's own copy: another name, other C, other addresses.
+    private func moduleArtifact(pending: Bool = false, bodyKey: String? = nil) throws -> CodeArtifact {
+        var function: [String: Any] = [
+            "entry": "0x9000", "name": "OwnName", "signature": "int OwnName(int param_1)",
+            "review_level": "full", "review_gaps": ["plate"],
+            "callers": ["0x9500"]
+        ]
+        if let key = bodyKey ?? Optional(body.key) { function["body"] = key }
+        if pending {
+            function["fingerprint"] = "pending"
+        } else {
+            function["c"] = "int OwnName(int param_1) { MyCallee(); uVar1 = 1; }"
+            function["instructions"] = [
+                ["address": "0x9000", "bytes": "90", "text": "NOP"],
+                ["address": "0x9004", "bytes": "e8", "text": "CALL 0xA000",
+                 "references": [["to": "0xA000", "type": "UNCONDITIONAL_CALL"]]]
+            ]
+        }
+        let data = try JSONSerialization.data(withJSONObject: [
+            "script_version": 10, "ghidra": "12.2", "functions": [
+                function, ["entry": "0xA000", "name": "MyCallee"]
+            ]
+        ])
+        return try JSONDecoder().decode(CodeArtifact.self, from: data)
+    }
+
+    func testAFunctionReadsAsItsEntryAndWhatIsTheModulesStays() throws {
+        try register(try entryObject())
+        let read = store.throughRegistry(try moduleArtifact()).functions[0]
+        XCTAssertEqual(read.name, "CopyMem")
+        XCTAssertEqual(read.signature, "void CopyMem(void)")
+        XCTAssertEqual(read.reviewLevel, .library)
+        XCTAssertEqual(read.reviewGaps, [])
+        XCTAssertEqual(read.libraryKind, .edk2)
+        XCTAssertEqual(read.libraryEntry?.id, body.key)
+        XCTAssertEqual(read.libraryEntry?.isEntry, true)
+        XCTAssertFalse(read.c?.contains("uVar1") ?? true, "nothing of the module's copy shows")
+        // Its place stays this module's.
+        XCTAssertEqual(read.entry, CodeAddress(0x9000))
+        XCTAssertEqual(read.callers, [CodeAddress(0x9500)])
+        XCTAssertEqual(read.instructions.first?.address, CodeAddress(0x9000))
+    }
+
+    /// What the C names is this module's: the callee's name and address, by
+    /// the reference of the same instruction, and every position follows.
+    func testTheEntrysCOfACalleeIsTheModules() throws {
+        try register(try entryObject())
+        let read = store.throughRegistry(try moduleArtifact()).functions[0]
+        let c = try XCTUnwrap(read.c)
+        XCTAssertTrue(c.contains("MyCallee(Count)"), c)
+        XCTAssertFalse(c.contains("Theirs"), c)
+        let span = try XCTUnwrap(read.cSpans.first { $0.kind == .function })
+        XCTAssertEqual(span.target, CodeAddress(0xA000))
+        let units = Array(c.utf16)
+        func text(_ start: Int, _ length: Int) -> String {
+            String(decoding: units[start..<(start + length)], as: UTF16.self)
+        }
+        XCTAssertEqual(text(span.start, span.length), "MyCallee")
+        let local = try XCTUnwrap(read.cSpans.first { $0.kind == .local })
+        XCTAssertEqual(text(local.start, local.length), "Count", "a span after the rename follows it")
+        XCTAssertEqual(read.cSites.first?.address, CodeAddress(0x9004))
+    }
+
+    /// A callee that is in the registry prints the registry's name.
+    func testACallerPrintsTheEntrysNameOfItsCallee() throws {
+        try register(try entryObject())
+        let data = try JSONSerialization.data(withJSONObject: [
+            "script_version": 10, "ghidra": "12.2", "functions": [
+                ["entry": "0x9000", "name": "OwnName", "body": body.key]
+            ]
+        ])
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: data)
+        XCTAssertEqual(store.throughRegistry(artifact).functions[0].name, "CopyMem")
+    }
+
+    /// A function shown from the index has no code yet: it still reads as the
+    /// entry, and its code stays to be read.
+    func testAFunctionWithItsCodePendingTakesTheNameOnly() throws {
+        try register(try entryObject())
+        let read = store.throughRegistry(try moduleArtifact(pending: true)).functions[0]
+        XCTAssertEqual(read.name, "CopyMem")
+        XCTAssertNil(read.c)
+        XCTAssertTrue(read.codeIsPending)
+    }
+
+    func testAFunctionTheRegistryDoesNotHoldStaysAsPublished() throws {
+        try register(try entryObject())
+        let read = store.throughRegistry(try moduleArtifact(bodyKey: "15-ffffffffffffffff-0000000000000000")).functions[0]
+        XCTAssertEqual(read.name, "OwnName")
+        XCTAssertEqual(read.reviewLevel, .full)
+    }
+
+    /// An entry from before entries held the function: its name and signature
+    /// are the registry's, and the C stays until the entry is completed.
+    func testAnEntryWithoutItsFunctionGivesWhatItHas() throws {
+        let object = try JSONSerialization.data(withJSONObject: [
+            "schema": 1, "name": "CopyMem", "kind": "edk2", "signature": "void CopyMem(void)"
+        ], options: .sortedKeys)
+        try register(object)
+        let read = store.throughRegistry(try moduleArtifact()).functions[0]
+        XCTAssertEqual(read.name, "CopyMem")
+        XCTAssertEqual(read.signature, "void CopyMem(void)")
+        XCTAssertEqual(read.c, "int OwnName(int param_1) { MyCallee(); uVar1 = 1; }")
+    }
+
+    /// Another module's C of the same review is no new version; the same
+    /// review completes an entry that lacks its function, and a different one
+    /// stays a conflict.
+    func testTheFunctionIsNotPartOfTheReview() throws {
+        let bare = try JSONSerialization.data(withJSONObject: ["schema": 1, "name": "CopyMem", "kind": "edk2",
+                                                               "plate": "EDK2 CopyMem",
+                                                               "signature": "void CopyMem(void)"], options: .sortedKeys)
+        try register(bare)
+        XCTAssertTrue(LibraryProposal.sameReview(bare, try entryObject()))
+        let other = SHA256Digest(data: Data("other".utf8))
+        let differing = try store.putLibraryEntries(module: other, rev: 1, by: "agent", proposals: [
+            LibraryProposal(body: body, name: "CopyMem", kind: "edk2", address: "0x1", entry: try entryObject(plate: "Mine"))
+        ])
+        XCTAssertEqual(differing.conflicts.map(\.id), [body.key])
+        let completed = try store.putLibraryEntries(module: other, rev: 1, by: "agent", proposals: [
+            LibraryProposal(body: body, name: "CopyMem", kind: "edk2", address: "0x1", entry: try entryObject())
+        ])
+        XCTAssertEqual(completed.updated.first?.version, 2)
+        let (_, held) = try XCTUnwrap(try store.libraryIndex().entry(for: body))
+        XCTAssertTrue(LibraryProposal.hasFunction(try store.object(held.entry)))
+        let again = try store.putLibraryEntries(module: source, rev: 2, by: "agent", proposals: [
+            LibraryProposal(body: body, name: "CopyMem", kind: "edk2", address: "0x2", entry: try entryObject())
+        ])
+        XCTAssertEqual(again.updated.count, 0)
+    }
+}

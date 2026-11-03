@@ -200,10 +200,14 @@ public struct LibraryProposal: Codable, Equatable, Sendable {
     /// The function's reason for its signature: not the review's text, so not
     /// in `entry`. The history keeps it for a version that changes the signature.
     public var signatureReason: String?
+    /// The function carries the entry's mark and was not edited since.
+    public var linked: Bool = false
 
     public init(body: LibraryBody, name: String, kind: String, address: String, entry: Data,
                 variantOf: String? = nil, codes: [String]? = nil, role: String? = nil,
-                basedOn: String? = nil, base: Int? = nil, signatureReason: String? = nil) {
+                basedOn: String? = nil, base: Int? = nil, signatureReason: String? = nil,
+                linked: Bool = false) {
+        self.linked = linked
         self.body = body
         self.name = name
         self.kind = kind
@@ -259,17 +263,24 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
 
 extension LibraryProposal {
     /// Whether two entry objects are the same review: equal but for the body
-    /// they were read from and its constants — what the variants of one
-    /// entry share.
+    /// they were read from, its constants, and the function as that module
+    /// published it — what the variants of one entry share, and what another
+    /// module's addresses and callee names would otherwise make a new version.
     public static func sameReview(_ left: Data, _ right: Data) -> Bool {
         func review(_ data: Data) -> NSDictionary? {
             guard var object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
             object["body"] = nil
             object["constants"] = nil
+            object["function"] = nil
             return object as NSDictionary
         }
         guard let left = review(left), let right = review(right) else { return false }
         return left.isEqual(right)
+    }
+
+    /// Whether the entry object holds the function a reader is shown.
+    static func hasFunction(_ data: Data) -> Bool {
+        ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])?["function"] != nil
     }
 
     /// Whether the entry object records the body's constants.
@@ -416,8 +427,12 @@ extension ContentStore {
                 // — is no change; so is it from the entry's own body, unless
                 // it records the constants the held object lacks.
                 let heldObject = try object(held.entry)
-                let completes = !LibraryProposal.hasConstants(heldObject) && LibraryProposal.hasConstants(proposal.entry)
-                    && proposal.body == held.variants.first?.body
+                // Only the same review completes an entry with its function: a
+                // review that differs is a change, and stays a conflict.
+                let lacksFunction = !LibraryProposal.hasFunction(heldObject) && LibraryProposal.hasFunction(proposal.entry)
+                    && LibraryProposal.sameReview(heldObject, proposal.entry)
+                let completes = lacksFunction || (!LibraryProposal.hasConstants(heldObject)
+                    && LibraryProposal.hasConstants(proposal.entry) && proposal.body == held.variants.first?.body)
                 if LibraryProposal.sameReview(heldObject, proposal.entry), !completes {
                     result.unchanged.append(.init(id: id, name: held.name, version: held.version))
                     settled[id] = "its review is the entry's own, at version \(held.version)"
@@ -448,7 +463,7 @@ extension ContentStore {
                 }
                 let signatureChanged = signature(heldObject) != signature(proposal.entry)
                 let why = current ? (signatureChanged ? proposal.signatureReason : nil)
-                    : completes ? "the body's constants recorded" : taken
+                    : completes ? (lacksFunction ? "the function's C recorded" : "the body's constants recorded") : taken
                 history.versions.append(LibraryVersion(version: next.version, entry: digest, source: source,
                                                        reason: why, recordedAt: now))
                 histories[id] = history

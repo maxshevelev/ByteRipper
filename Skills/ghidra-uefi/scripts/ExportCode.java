@@ -91,7 +91,7 @@ public class ExportCode extends GhidraScript {
         Listing listing = currentProgram.getListing();
         StringBuilder json = new StringBuilder(1 << 22);
         json.append("{\n");
-        json.append("  \"script_version\": 9,\n");
+        json.append("  \"script_version\": 10,\n");
         json.append("  \"ghidra\": ").append(quote(Application.getApplicationVersion())).append(",\n");
         json.append("  \"program\": {\n");
         json.append("    \"name\": ").append(quote(currentProgram.getName())).append(",\n");
@@ -566,6 +566,22 @@ public class ExportCode extends GhidraScript {
         return state == null || state.isBlank() ? null : state;
     }
 
+    private static ghidra.feature.fid.service.FidService fid;
+
+    /** The body's key, as the registry writes it; null where none can be made. */
+    static String bodyKey(Function function) {
+        if (function.isExternal() || function.isThunk()) return null;
+        try {
+            if (fid == null) fid = new ghidra.feature.fid.service.FidService();
+            ghidra.feature.fid.hash.FidHashQuad hash = fid.hashFunction(function);
+            if (hash == null) return null;
+            return Long.toHexString(hash.getCodeUnitSize()) + "-" + String.format("%016x", hash.getFullHash())
+                + "-" + String.format("%016x", hash.getSpecificHash());
+        } catch (Exception error) {
+            return null;
+        }
+    }
+
     /** The library kinds a tag can name, as `library.<kind>`. */
     static final List<String> LIBRARY_KINDS = Arrays.asList("edk2", "amd", "intel");
 
@@ -713,6 +729,10 @@ public class ExportCode extends GhidraScript {
         // the export: the entry, its version, and whether the function is it.
         String entry = libraryState(function);
         if (entry != null) json.append("      \"library_entry\": ").append(entry).append(",\n");
+        // The key the registry knows this body by: how a reader finds the one
+        // description of a library function, with no mark needed.
+        String body = bodyKey(function);
+        if (body != null) json.append("      \"body\": ").append(quote(body)).append(",\n");
         List<String> quoted = new ArrayList<>();
         for (String gap : gaps) quoted.add(quote(gap));
         json.append("      \"review_gaps\": [").append(String.join(", ", quoted)).append("],\n");

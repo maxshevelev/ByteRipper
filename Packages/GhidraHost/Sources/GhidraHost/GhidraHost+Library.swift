@@ -105,7 +105,9 @@ extension GhidraHost {
         public var entryName: String
         public var id: String
         public var version: Int
-        /// `whole`, `fill` or `variant`: how the entry would be applied.
+        /// `link` — the function takes the entry's name and signature and
+        /// refers to it for the rest — or, asked for by `replace`, `whole` or
+        /// `variant`: the entry's review as a working copy to change it on.
         public var mode: String?
         /// `unnamed`, `named`, `newer_version`, `assert_codes`, `applied`,
         /// `edited`, `candidate` or `declined`.
@@ -210,11 +212,11 @@ extension GhidraHost {
             if let id = match.exact, let held = index.entries[id] {
                 if (match.declined ?? []).contains(id) {
                     plan.declined.append(step(id, held, mode: nil, state: "declined"))
-                } else if marked(id, held, mode: "whole") {
+                } else if marked(id, held, mode: "link") {
                 } else if !match.named {
-                    plan.toApply.append(step(id, held, mode: "whole", state: "unnamed"))
+                    plan.toApply.append(step(id, held, mode: "link", state: "unnamed"))
                 } else {
-                    plan.toApply.append(step(id, held, mode: "fill", state: "named"))
+                    plan.toApply.append(step(id, held, mode: "link", state: "named"))
                 }
                 continue
             }
@@ -225,11 +227,11 @@ extension GhidraHost {
                     plan.declined.append(step(id, held, mode: nil, state: "declined"))
                     continue
                 }
-                if marked(id, held, mode: "variant") { applying = true; continue }
+                if marked(id, held, mode: "link") { applying = true; continue }
                 let comparison = comparisons["\(match.address) \(id)"]
                 if !applying, let comparison, comparison.comparable, comparison.assertCodesOnly == true {
                     applying = true
-                    plan.toApply.append(step(id, held, mode: "variant", state: "assert_codes",
+                    plan.toApply.append(step(id, held, mode: "link", state: "assert_codes",
                                              codes: comparison.differences?.map(\.value),
                                              differences: comparison.differences))
                 } else {
@@ -325,7 +327,7 @@ extension GhidraHost {
         }
         let reason = reason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if var step = at(plan.toApply) {
-            if replace, step.mode == "fill" { step.mode = "whole" }
+            if replace || !(fields ?? []).isEmpty { step.mode = step.codes == nil ? "whole" : "variant" }
             return [step]
         }
         if var step = at(plan.candidates) {

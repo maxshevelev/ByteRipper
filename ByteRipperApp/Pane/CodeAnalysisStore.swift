@@ -122,7 +122,8 @@ enum CodeAnalysisStore {
                     try fetched.get()
                 }
                 if let function { return .success(try store.artifact(digest, function: function)) }
-                return .success(try JSONDecoder().decode(CodeArtifact.self, from: store.object(digest)))
+                return .success(store.throughRegistry(
+                    try JSONDecoder().decode(CodeArtifact.self, from: store.object(digest))))
             } catch {
                 return .failure(error)
             }

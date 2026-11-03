@@ -64,9 +64,9 @@ final class ContentStoreArtifactTests: XCTestCase {
             module: identity,
             recipe: AnalysisRecipe(id: "code-v10-ghidra-12.1.2", exporter: 10,
                                    ghidra: "12.1.2", script: "ExportCode.java"),
-            artifact: Data(#"{"script_version":10}"#.utf8))
+            artifact: Data(#"{"script_version":11}"#.utf8))
         XCTAssertThrowsError(try store.artifact(for: unknown)) { error in
-            XCTAssertEqual(error as? CodeArtifactError, .unsupportedVersion(10))
+            XCTAssertEqual(error as? CodeArtifactError, .unsupportedVersion(11))
         }
     }
 }

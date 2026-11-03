@@ -2241,6 +2241,12 @@ public class Owner {
                 function, decompile(function), ExportCode.stepComments(function));
             java.util.List<String> gaps = new java.util.ArrayList<>(assessment.gaps);
             if (hash == null) gaps.add("too_short");
+            // Linked to an entry and not edited since: its description is the
+            // entry's, and what the project lacks is no gap of anyone's.
+            JsonObject linkedMark = libraryMark(function);
+            boolean linked = linkedMark != null && hash != null
+                && reviewDigest(function, hash).equals(string(linkedMark, "digest", ""));
+            if (linked && !gaps.isEmpty()) continue;
             if (!gaps.isEmpty()) {
                 JsonObject item = new JsonObject();
                 item.addProperty("address", hex(function.getEntryPoint()));
@@ -2262,6 +2268,7 @@ public class Owner {
             item.addProperty("kind", kind);
             item.add("body", body);
             item.add("entry", libraryEntry(function, kind, body));
+            if (linked) item.addProperty("linked", true);
             // Why its signature is what it is: not of the review's text, so it
             // goes beside the entry, for the history of the version it makes.
             StringPropertyMap signatureReasons =
@@ -2706,12 +2713,20 @@ public class Owner {
         JsonObject entry = item.getAsJsonObject("entry");
         if (entry == null) throw new Failure(400, "the item holds no entry");
         String mode = string(item, "mode", "fill");
+        // The function refers to the entry: it takes the name and the
+        // signature its callers print, and nothing else goes into the project.
+        boolean link = mode.equals("link");
         String reason = "library registry entry " + id + " v" + version;
         if (item.has("reason") && !item.get("reason").isJsonNull()) reason += ": " + item.get("reason").getAsString();
         // `fields`: take these parts of the entry and keep the review's for
         // the rest — a merge, not a replacement. None means the mode decides.
         JsonArray fields = item.has("fields") && !item.get("fields").isJsonNull()
             ? item.getAsJsonArray("fields") : null;
+        if (link) {
+            fields = new JsonArray();
+            fields.add("signature");
+            fields.add("names");
+        }
         boolean masked = fields != null;
         java.util.Set<String> wanted = new java.util.HashSet<>();
         if (masked) {
@@ -2730,8 +2745,8 @@ public class Owner {
         answer.addProperty("address", hex(function.getEntryPoint()));
         answer.addProperty("id", id);
         answer.addProperty("version", version);
-        answer.addProperty("mode", masked ? "fields" : mode);
-        if (masked) answer.add("fields", fields.deepCopy());
+        answer.addProperty("mode", link ? "link" : masked ? "fields" : mode);
+        if (masked && !link) answer.add("fields", fields.deepCopy());
         String oldName = function.getName();
         String name = required(entry, "name");
         // The review's own reason for a name it keeps stays: only a rename
@@ -2764,7 +2779,14 @@ public class Owner {
         for (Parameter parameter : function.getParameters()) {
             if (!placeholder(parameter.getName())) reviewedParameters = true;
         }
-        if (masked) {
+        if (link) {
+            // The whole signature with its storage: an unreviewed function
+            // has none of the entry's parameters to retype.
+            if (!sameSignature(function, entry)) {
+                applySignature(function, entry, why);
+                filled.add("signature");
+            }
+        } else if (masked) {
             if (takes.test("signature")) applySignatureShape(function, entry, filled, differences);
             if (takes.test("names")) applyParameterNames(function, entry, filled, differences);
         } else if (sameSignature(function, entry)) {
@@ -2803,7 +2825,7 @@ public class Owner {
         }
         String kind = string(entry, "kind", null);
         String ownKind = ExportCode.libraryKind(function);
-        if (kind != null && (whole || ownKind == null || ExportCode.libraryTag(function) == null)) {
+        if (kind != null && (whole || link || ownKind == null || ExportCode.libraryTag(function) == null)) {
             removeLibraryTags(function);
             function.addTag("library." + kind);
         } else if (kind != null && !kind.equals(ownKind)) {
@@ -2835,7 +2857,7 @@ public class Owner {
         // the entry's review is the function's.
         JsonObject now = hash == null ? null
             : libraryEntryListing(function, kind == null ? "" : kind, bodyObject(hash));
-        boolean equal = now != null && review(now).equals(review(entry));
+        boolean equal = now != null && (link || review(now).equals(review(entry)));
         StringPropertyMap issues = program.getUsrPropertyManager().getStringPropertyMap(LIBRARY_ISSUE);
         if (issues != null) issues.remove(function.getEntryPoint());
         if (equal) {

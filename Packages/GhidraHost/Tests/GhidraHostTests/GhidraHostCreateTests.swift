@@ -105,7 +105,7 @@ final class GhidraHostLibraryTests: XCTestCase {
             "address": theirs, "name": "GuidCopy", "by": "agent"]))
         let status = try json(await host.library(other, .init(action: .status)))
         let steps = status["to_apply"] as? [[String: Any]] ?? []
-        XCTAssertEqual(steps.first { $0["address"] as? String == theirs }?["mode"] as? String, "fill")
+        XCTAssertEqual(steps.first { $0["address"] as? String == theirs }?["mode"] as? String, "link")
 
         let applied = try json(await host.library(other, .init(action: .apply)))
         let result = try XCTUnwrap((applied["results"] as? [[String: Any]])?.first { $0["address"] as? String == theirs })

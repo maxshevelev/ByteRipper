@@ -120,7 +120,11 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
     /// 9 adds a function's `library_entry`: the library registry entry it was
     /// matched with, the entry's version, and whether the function is that
     /// entry. Optional: a function without it is not in the registry.
-    public static let supportedScriptVersions: Set<Int> = [2, 3, 4, 5, 6, 7, 8, 9]
+    ///
+    /// 10 adds a function's `body`, the key the library registry knows it by,
+    /// so a reader finds the one description of a library function from the
+    /// artifact alone. Optional: an older artifact finds it by `library_entry`.
+    public static let supportedScriptVersions: Set<Int> = [2, 3, 4, 5, 6, 7, 8, 9, 10]
 
     public let scriptVersion: Int
     public let ghidra: String
@@ -269,49 +273,53 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         }
 
         public let entry: CodeAddress
-        public let name: String
+        public internal(set) var name: String
         public let size: Int?
-        public let signature: String?
+        public internal(set) var signature: String?
         public let external: Bool
         public let thunk: Bool
         public let callers: [CodeAddress]
         public let callees: [CodeAddress]
-        public let c: String?
+        public internal(set) var c: String?
         /// What each token of `c` is, from v4 on; empty before.
-        public let cSpans: [CSpan]
+        public internal(set) var cSpans: [CSpan]
         /// Where each call is made, by the call's own address (v5): the place
         /// of an instruction of the listing in the C.
-        public let cSites: [CSite]
+        public internal(set) var cSites: [CSite]
         /// Where each structure field is named in `c`: the structure and the
         /// field's offset in it.
-        public let cFields: [CField]
+        public internal(set) var cFields: [CField]
         /// The one line of `c` that stands for the blocks the decompiler
         /// left out as unreachable, when there were two or more; nil
         /// otherwise.
-        public let cUnreachable: CUnreachable?
+        public internal(set) var cUnreachable: CUnreachable?
         /// Where the name came from (v4): `DEFAULT` for Ghidra's FUN_
         /// placeholder, `ANALYSIS` for the UEFI pass, `IMPORTED` for the
         /// image's own symbols, `USER_DEFINED` for a person's.
-        public let nameSource: String?
+        public internal(set) var nameSource: String?
         /// Why the UEFI pass gave the name, in the pass's words.
-        public let nameReason: String?
+        public internal(set) var nameReason: String?
         /// How far the review has got (v7); nil when the artifact predates
         /// it or names a level this reader does not know.
-        public let reviewLevel: ReviewLevel?
+        public internal(set) var reviewLevel: ReviewLevel?
         /// What keeps the function from `full` (v7): a subset of `name`,
         /// `plate`, `comments`, `params`, `locals`. Empty for a library
         /// function, for a `no_body` one, and before v7.
-        public let reviewGaps: [String]
+        public internal(set) var reviewGaps: [String]
         /// Whose library a `library` function is (v8); nil for any other
         /// level, and for a library function whose kind was not recorded.
-        public let libraryKind: LibraryKind?
+        public internal(set) var libraryKind: LibraryKind?
         /// The library registry entry the function was matched with (v9);
         /// nil for a function the registry does not hold.
-        public let libraryEntry: LibraryEntry?
+        public internal(set) var libraryEntry: LibraryEntry?
         /// What the index of a cut artifact says the function reads as, when
         /// this is that entry and not the function: its code has yet to be read.
         public let fingerprint: String?
         public let instructions: [Instruction]
+        /// The key the library registry knows this body by (v10):
+        /// `<size>-<full>-<specific>`. Nil for a body too short to key, an
+        /// external, a thunk, and before v10.
+        public let body: String?
 
         /// Whether the name is Ghidra's placeholder rather than evidence.
         public var hasPlaceholderName: Bool {
@@ -344,6 +352,7 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
                 .flatMap(LibraryKind.init(rawValue:))
             libraryEntry = try container.decodeIfPresent(LibraryEntry.self, forKey: .libraryEntry)
             fingerprint = try container.decodeIfPresent(String.self, forKey: .fingerprint)
+            body = try container.decodeIfPresent(String.self, forKey: .body)
             instructions = try container.decodeIfPresent(
                 [Instruction].self, forKey: .instructions) ?? []
         }
@@ -361,7 +370,7 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             case reviewGaps = "review_gaps"
             case libraryKind = "library_kind"
             case libraryEntry = "library_entry"
-            case fingerprint
+            case fingerprint, body
         }
     }
 
@@ -394,6 +403,16 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
 
         /// Whether the function is the entry's, as the panel's filled badge says.
         public var isEntry: Bool { state == .entry }
+
+        /// A function read through its registry entry.
+        init(id: String, version: Int, codes: [String]) {
+            self.id = id
+            self.version = version
+            self.state = .entry
+            self.codes = codes
+            self.differences = []
+            self.base = nil
+        }
 
         public init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)

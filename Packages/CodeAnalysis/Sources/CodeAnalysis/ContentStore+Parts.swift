@@ -95,10 +95,10 @@ extension ContentStore {
     /// and the sections alone. A mirror fetches only what it lacks of those.
     public func artifact(_ digest: SHA256Digest, function entry: CodeAddress) throws -> CodeArtifact {
         guard let (parts, functions) = try indexedRoot(of: digest) else {
-            return try CodeArtifact.decoding(try object(digest), function: entry)
+            return throughRegistry(try CodeArtifact.decoding(try object(digest), function: entry))
         }
         let wanted = Set(functions.filter { CodeAddress(hex: $0.entry) == entry }.map(\.part))
-        return try reduced(parts, functions, keeping: wanted, marked: false)
+        return throughRegistry(try reduced(parts, functions, keeping: wanted, marked: false))
     }
 
     /// Whether reading this object, or with `function` that function alone,
@@ -145,7 +145,7 @@ extension ContentStore {
     /// The artifact a Code panel shows for a manifest: the index when there is
     /// one, or else the whole, read as `artifact(for:)` reads it.
     public func artifactToShow(for manifest: AnalysisManifest) throws -> CodeArtifact {
-        if let skeleton = try skeleton(of: manifest.artifact.sha256) { return skeleton }
+        if let skeleton = try skeleton(of: manifest.artifact.sha256) { return throughRegistry(skeleton) }
         return try artifact(for: manifest)
     }
 
@@ -173,7 +173,11 @@ extension ContentStore {
                 return try JSONDecoder().decode(CodeArtifact.Function.self, from: try PartedObject.inflated(file, name: name))
             })
         }
-        return try box.results()
+        let read = try box.results()
+        guard let index = try? libraryIndex(), !index.entries.isEmpty, let names = try skeleton(of: digest) else {
+            return read
+        }
+        return throughRegistry(read, names: names, index: index)
     }
 
     private final class FunctionsBox: @unchecked Sendable {

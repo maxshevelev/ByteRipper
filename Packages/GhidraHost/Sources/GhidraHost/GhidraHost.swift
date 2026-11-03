@@ -302,11 +302,13 @@ public actor GhidraHost {
         var libraryError: String?
         if reviewed {
             do {
-                let offer = try Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data)
+                let offer = try Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data,
+                                                  artifact: raw)
                 shortfalls = offer.shortfalls
-                if !offer.proposals.isEmpty {
+                let offered = try await Self.withoutLinked(offer.proposals, writer: writer)
+                if !offered.isEmpty {
                     let written = try await writer.writeLibraryEntries(
-                        module: module, rev: reading?.rev, by: by, proposals: offer.proposals,
+                        module: module, rev: reading?.rev, by: by, proposals: offered,
                         take: options.takeLibrary)
                     library = written
                     // A store older than take_ids ignores them and answers with
@@ -322,7 +324,7 @@ public actor GhidraHost {
                     // registry — a function that became the entry's next
                     // version, one left in conflict: then it is exported
                     // again, and stored in place of the first.
-                    if try await markLibrary(module, proposals: offer.proposals, result: written) > 0 {
+                    if try await markLibrary(module, proposals: offered, result: written) > 0 {
                         let again = try await write(module, "/v1/export", body: Data())
                         if again != raw {
                             raw = again
@@ -426,17 +428,46 @@ public actor GhidraHost {
     /// The owner's `GET /v1/library`, as the registry takes it: each entry's
     /// object made canonical — sorted keys — so the same review stores the
     /// same object whichever owner wrote it.
-    static func libraryOffer(_ data: Data) throws -> (proposals: [LibraryProposal], shortfalls: [LibraryShortfall]) {
+    /// A function linked to an entry and not edited since has nothing to say
+    /// to the registry, whatever its project still holds: it is offered only
+    /// when it is the entry's own review, which completes an older entry.
+    static func withoutLinked(_ proposals: [LibraryProposal], writer: any AnalysisWriter) async throws -> [LibraryProposal] {
+        guard proposals.contains(where: \.linked) else { return proposals }
+        let index = try await writer.readLibraryIndex()
+        var kept: [LibraryProposal] = []
+        for proposal in proposals {
+            guard proposal.linked else { kept.append(proposal); continue }
+            guard let (_, held) = index.entry(for: proposal.body) else { continue }
+            if LibraryProposal.sameReview(try await writer.readObject(held.entry), proposal.entry) { kept.append(proposal) }
+        }
+        return kept
+    }
+
+    static let notOfTheDescription: Set<String> = ["callers", "callees", "library_entry", "library_kind",
+                                                   "review_level", "review_gaps", "body"]
+
+    static func libraryOffer(_ data: Data, artifact: Data? = nil) throws -> (proposals: [LibraryProposal], shortfalls: [LibraryShortfall]) {
         guard let answer = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw GhidraHostError(.owner, "the owner's library answer is not a JSON object")
+        }
+        var functions: [UInt64: [String: Any]] = [:]
+        if let artifact, let read = try JSONSerialization.jsonObject(with: artifact) as? [String: Any] {
+            for function in read["functions"] as? [[String: Any]] ?? [] {
+                if let text = function["entry"] as? String, let at = CodeAddress(hex: text) { functions[at.value] = function }
+            }
         }
         var proposals: [LibraryProposal] = []
         for item in answer["entries"] as? [[String: Any]] ?? [] {
             guard let body = item["body"] as? [String: Any], let size = body["size"] as? Int,
                   let full = body["full"] as? String, let specific = body["specific"] as? String,
                   let name = item["name"] as? String, let kind = item["kind"] as? String,
-                  let address = item["address"] as? String, let entry = item["entry"] as? [String: Any] else {
+                  let address = item["address"] as? String, var entry = item["entry"] as? [String: Any] else {
                 throw GhidraHostError(.owner, "the owner's library entry is not complete")
+            }
+            // The entry holds the function as it reads, so a reader needs no
+            // module's copy of it: only what describes it, nothing of its place.
+            if let function = functions[CodeAddress(hex: address)?.value ?? 0] {
+                entry["function"] = function.filter { !Self.notOfTheDescription.contains($0.key) }
             }
             let canonical = try JSONSerialization.data(withJSONObject: entry, options: [.sortedKeys])
             proposals.append(LibraryProposal(body: LibraryBody(size: size, full: full, specific: specific),
@@ -446,7 +477,8 @@ public actor GhidraHost {
                                              role: entry["assert"] as? Bool == true ? "assert" : nil,
                                              basedOn: item["based_on"] as? String,
                                              base: item["base"] as? Int,
-                                             signatureReason: item["signature_reason"] as? String))
+                                             signatureReason: item["signature_reason"] as? String,
+                                             linked: item["linked"] as? Bool ?? false))
         }
         let below = try JSONSerialization.data(withJSONObject: answer["below_bar"] ?? [])
         let shortfalls = try JSONDecoder().decode([LibraryShortfall].self, from: below)
@@ -527,7 +559,8 @@ public actor GhidraHost {
         // nothing.
         if reviewed {
             do {
-                let offer = try Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data)
+                let offer = try Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data,
+                                                  artifact: raw)
                 preview["library_below_bar"] = try Self.plain(offer.shortfalls)
                 if !offer.proposals.isEmpty {
                     let would = try await writer.previewLibraryEntries(
