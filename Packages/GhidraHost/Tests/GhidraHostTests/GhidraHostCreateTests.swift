@@ -706,6 +706,21 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         let answer = try json(await host.write(module, "/v1/set/data", body: try JSONSerialization.data(withJSONObject: ["address": tail, "type": "UINT32", "clear_code": true] as [String: Any])))
         XCTAssertEqual(answer["type"] as? String, "UINT32")
         XCTAssertNotNil(answer["code_cleared"])
+
+        // A merge is not refused for the overlap of the function it removes.
+        let pair = functions.filter { ($0["size"] as? Int ?? 0) > 0 }.suffix(2).compactMap { $0["entry"] as? String }
+        let merged = try json(await host.write(module, "/v1/merge/functions", body: try JSONSerialization.data(
+            withJSONObject: ["into": pair[0], "from": pair[1]] as [String: Any])))
+        XCTAssertEqual(merged["merged"] as? String, pair[1])
+
+        // A body cannot grow over another function.
+        do {
+            _ = try await host.write(module, "/v1/function/extend", body: try JSONSerialization.data(
+                withJSONObject: ["function": entry, "end": pair[1]] as [String: Any]))
+            XCTFail("an extension over other functions is refused")
+        } catch {
+            XCTAssertTrue("\(error)".contains("holds part"), "\(error)")
+        }
     }
 
     func testATypeNotTakenIsRefusedAndLeavesNothing() async throws {

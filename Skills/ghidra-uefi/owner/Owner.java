@@ -304,6 +304,7 @@ public class Owner {
                     case "/v1/set/description" -> write(exchange, this::setDescription);
                     case "/v1/set/code-mode" -> write(exchange, this::setCodeMode);
                     case "/v1/redecode" -> write(exchange, this::redecode);
+                    case "/v1/function/extend" -> write(exchange, this::extendFunction);
                     case "/v1/set/equate" -> write(exchange, this::setEquate);
                     case "/v1/tag/function" -> write(exchange, this::tagFunction);
                     case "/v1/library/decline" -> write(exchange, this::libraryDecline);
@@ -3858,19 +3859,74 @@ public class Owner {
         ghidra.program.model.address.AddressSet merged =
             new ghidra.program.model.address.AddressSet(into.getBody());
         merged.add(from.getBody());
+        // `from` goes first: while it stands, its own body is an overlap. A
+        // refusal after this rolls the removal back with the transaction.
+        Address gone = from.getEntryPoint();
+        String goneName = from.getName();
+        program.getFunctionManager().removeFunction(gone);
+        java.util.Iterator<Function> overlapping = program.getFunctionManager().getFunctionsOverlapping(merged);
+        while (overlapping.hasNext()) {
+            Function other = overlapping.next();
+            if (!other.getEntryPoint().equals(into.getEntryPoint())) {
+                throw new Failure(409, "the bodies of " + into.getName() + " and " + goneName
+                    + " cannot be merged: " + other.getName() + " at " + hex(other.getEntryPoint())
+                    + " holds part of them");
+            }
+        }
         try {
             into.setBody(merged);
         } catch (Exception error) {
             throw new Failure(409, "the bodies cannot be merged: " + error.getMessage());
         }
-        program.getFunctionManager().removeFunction(from.getEntryPoint());
         decompiled.remove(into.getEntryPoint());
-        decompiled.remove(from.getEntryPoint());
+        decompiled.remove(gone);
         JsonObject answer = identity();
         answer.addProperty("entry", hex(into.getEntryPoint()));
         answer.addProperty("name", into.getName());
         answer.addProperty("size", into.getBody().getNumAddresses());
-        answer.addProperty("merged", hex(from.getEntryPoint()));
+        answer.addProperty("merged", hex(gone));
+        return answer;
+    }
+
+    /**
+     * A body the analysis ended early, at an instruction it took for the end
+     * of the flow (INT1 in a simulator backdoor), runs on to `end`: the
+     * instruction is told it falls through and the bytes join the body. Only
+     * decoded instructions no function holds may join.
+     */
+    private JsonObject extendFunction(JsonObject body) throws Exception {
+        Function function = functionAt(required(body, "function"));
+        Address end = address(required(body, "end"));
+        Address start = function.getBody().getMaxAddress().next();
+        if (start == null || end.compareTo(start) <= 0) {
+            throw new Failure(400, hex(end) + " is not past the end of " + function.getName());
+        }
+        AddressSet range = new AddressSet(start, end.subtract(1));
+        java.util.Iterator<Function> overlapping = program.getFunctionManager().getFunctionsOverlapping(range);
+        if (overlapping.hasNext()) {
+            Function other = overlapping.next();
+            throw new Failure(409, other.getName() + " at " + hex(other.getEntryPoint()) + " holds part of the range");
+        }
+        Address cursor = start;
+        while (cursor.compareTo(end) < 0) {
+            Instruction instruction = program.getListing().getInstructionAt(cursor);
+            if (instruction == null) {
+                throw new Failure(409, "no instruction starts at " + hex(cursor) + ": decode it with ghidra_redecode first");
+            }
+            cursor = instruction.getMaxAddress().next();
+        }
+        if (cursor.compareTo(end) != 0) throw new Failure(409, "an instruction runs past " + hex(end));
+        Instruction last = program.getListing().getInstructionContaining(function.getBody().getMaxAddress());
+        if (last == null) throw new Failure(409, function.getName() + " does not end in an instruction");
+        if (last.getFallThrough() == null) last.setFallThrough(start);
+        AddressSet grown = new AddressSet(function.getBody());
+        grown.add(range);
+        function.setBody(grown);
+        decompiled.remove(function.getEntryPoint());
+        JsonObject answer = identity();
+        answer.addProperty("entry", hex(function.getEntryPoint()));
+        answer.addProperty("size", function.getBody().getNumAddresses());
+        answer.addProperty("falls_through", hex(last.getMinAddress()));
         return answer;
     }
 

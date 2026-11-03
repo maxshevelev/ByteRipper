@@ -862,6 +862,16 @@ public enum GhidraTools {
                 let payload = JSONValue.object(body).encoded()
                 return try await answer { try await backend.writeCall(module, "set/comment", body: payload) }
             },
+            write("ghidra_function_extend", "function/extend", "Extend a body cut short",
+                  "Extends the body of `function` to `end` (exclusive), for a body the analysis ended at an "
+                  + "instruction it took for the end of the flow, such as INT1: the last instruction is set "
+                  + "to fall through and the following instructions join the body. Refused when a function "
+                  + "holds part of the range or the range is not whole decoded instructions.",
+                  ["function": AgentSchema.string("The function, by entry or any address inside it."),
+                   "end": AgentSchema.string("The first address past the new body.")],
+                  required: ["function", "end"]) { arguments in
+                try optional(arguments, ["function", "end"])
+            },
             write("ghidra_redecode", "redecode", "Decode a range of code again",
                   "Decodes the instructions in [`start`, `end`) again from `start`, in the mode already "
                   + "there: the correction for a boundary the analysis got wrong, where it decoded from a "
