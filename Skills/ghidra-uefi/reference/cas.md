@@ -24,6 +24,7 @@ byteripper-cas [--store <root>] [--no-create] <command>
   hello | put-object | has-object | get-object | put-analysis | analysis
   recipes | list | conflicts | record-revision | review-history | set-ref
   refs | remove-ref | verify | gc | export | import
+  library-rebody <id> <body> --reason <why> [--apply]
 ```
 
 Every answer is JSON on standard output (an object's bytes are the

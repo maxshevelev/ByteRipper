@@ -246,6 +246,53 @@ final class LibraryRegistryTests: XCTestCase {
         XCTAssertNil(try store.libraryIndex().entry(for: other))
     }
 
+    /// The same review from a body of another shape — a function cut again
+    /// after it took the entry — is other code: a conflict, not a variant.
+    func testABodyOfAnotherShapeIsNotAVariant() throws {
+        let cut = LibraryBody(size: 8, full: "5b1411038663e4ad", specific: "5b1411038663e4ad")
+        try store.putLibraryEntries(module: first, rev: 1, by: "agent",
+                                    proposals: [review("ReadSmn", body: body, constants: ["0x10196"])])
+        let refused = try store.putLibraryEntries(module: first, rev: 2, by: "agent", proposals: [
+            review("ReadSmn", body: cut, constants: ["0x10196"], variantOf: body.key)])
+        XCTAssertEqual(refused.conflicts.map(\.id), [body.key])
+        XCTAssertNil(refused.variants)
+        XCTAssertNil(try store.libraryIndex().entry(for: cut))
+    }
+
+    /// An entry can be left with the one body it should have had: new id, the
+    /// review's body with it, the other body gone, the history carried over.
+    func testAnEntryIsRebodied() throws {
+        let cut = LibraryBody(size: 8, full: "5b1411038663e4ad", specific: "5b1411038663e4ad")
+        let other = LibraryBody(size: body.size, full: body.full, specific: "fedcba9876543210")
+        try store.putLibraryEntries(module: first, rev: 1, by: "agent",
+                                    proposals: [review("ReadSmn", body: body, constants: ["0x10196"])])
+        try store.putLibraryEntries(module: first, rev: 2, by: "agent", proposals: [
+            review("ReadSmn", body: other, constants: ["0x10199"], variantOf: body.key)])
+
+        XCTAssertThrowsError(try store.rebodyLibraryEntry(id: body.key, bodyKey: cut.key, reason: "absent"))
+        XCTAssertThrowsError(try store.rebodyLibraryEntry(id: body.key, bodyKey: other.key, reason: " "))
+        let before = try store.libraryIndex()
+        let preview = try store.rebodyLibraryEntry(id: body.key, bodyKey: other.key, reason: "why", dryRun: true)
+        XCTAssertEqual(preview.id, other.key)
+        XCTAssertEqual(try store.libraryIndex(), before, "a preview writes nothing")
+
+        try store.rebodyLibraryEntry(id: body.key, bodyKey: other.key, reason: "why")
+        let index = try store.libraryIndex()
+        XCTAssertNil(index.entries[body.key])
+        XCTAssertNil(index.entry(for: body))
+        let entry = try XCTUnwrap(index.entries[other.key])
+        XCTAssertEqual(entry.version, 2)
+        XCTAssertEqual(entry.variants.map(\.body), [other])
+        XCTAssertEqual(index.entry(for: other)?.id, other.key)
+        let review = try JSONSerialization.jsonObject(with: store.object(entry.entry)) as? [String: Any]
+        XCTAssertEqual((review?["body"] as? [String: Any])?["specific"] as? String, other.specific)
+        XCTAssertEqual(review?["name"] as? String, "ReadSmn")
+        XCTAssertNil(try store.libraryHistory(id: body.key))
+        let history = try XCTUnwrap(store.libraryHistory(id: other.key))
+        XCTAssertEqual(history.versions.map(\.version), [1, 2])
+        XCTAssertEqual(history.versions.last?.reason, "why")
+    }
+
     /// An entry written before entries held their constants takes them from
     /// whichever module offers the same review of its body — the holder's
     /// change in all but name, with a reason the history keeps.

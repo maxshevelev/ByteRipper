@@ -216,6 +216,19 @@ public enum CASCommand {
             let name = try parser.required("a reference name")
             try parser.end()
             output.stdout = try json(["removed": try store.removeRef(name)])
+        case "library-rebody":
+            let apply = parser.flag("--apply")
+            guard let reason = parser.option("--reason") else {
+                throw CodeAnalysisError.analysisMismatch("library-rebody needs --reason")
+            }
+            let id = try parser.required("an entry id")
+            let body = try parser.required("the body to keep")
+            try parser.end()
+            guard let local = store as? LocalOperations else {
+                throw CodeAnalysisError.analysisMismatch("library-rebody runs on a store directory, not on a server")
+            }
+            output.stdout = try encode(try ContentStore(root: local.root, create: local.create).rebodyLibraryEntry(id: id, bodyKey: body, reason: reason,
+                                                                    dryRun: !apply))
         case "verify":
             try parser.end()
             output.stdout = try json(["problems": try store.verify()])
