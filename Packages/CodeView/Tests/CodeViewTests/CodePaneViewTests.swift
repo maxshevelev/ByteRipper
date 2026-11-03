@@ -1850,6 +1850,103 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(view.selectedRevisionTitle, "r55 — the list")
     }
 
+    /// A revision's code comes when it comes: what the reader picked last is
+    /// what stays, and a read that fails says so and changes nothing.
+    func testAPickInTheBarIsNotOverwrittenByALaterAnswer() async throws {
+        func artifact(_ c: String) throws -> CodeArtifact {
+            let json: [String: Any] = [
+                "script_version": 2, "program": ["image_base": "0x0"],
+                "functions": [["entry": "0x220", "name": "F", "c": c,
+                               "instructions": [["address": "0x220", "bytes": "C3",
+                                                 "mnemonic": "RET", "text": "RET"]]]]
+            ]
+            return try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: json))
+        }
+        let view = CodePaneView(manifest: manifest(), artifact: try artifact("void F(void)\n{\n  B();\n}\n"),
+                                moduleBytes: teModule(), hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 900, height: 400)
+        view.layoutSubtreeIfNeeded()
+        view.setRevisionChoices([
+            .init(revision: 54, title: "r54", hasCode: true),
+            .init(revision: 53, title: "r53", hasCode: true)
+        ], current: 55)
+        view.selectFunction(at: 0)
+        var unreadable: [Int] = []
+        view.onRevisionUnreadable = { unreadable.append($0) }
+        let r54 = try artifact("void F(void)\n{\n  From54();\n}\n")
+        let r53 = try artifact("void F(void)\n{\n  From53();\n}\n")
+
+        // r54 is picked and takes long; r53 is picked and comes at once.
+        let (slow, answer) = AsyncStream.makeStream(of: CodeArtifact?.self)
+        let first = view.compareWithPickedRevision(54) {
+            for await artifact in slow { return artifact }
+            return nil
+        }
+        await view.compareWithPickedRevision(53) { r53 }.value
+        XCTAssertEqual(view.selectedRevisionTitle, "r53")
+        answer.yield(r54)
+        await first.value
+        XCTAssertEqual(view.selectedRevisionTitle, "r53", "the answer to the earlier pick came too late to count")
+        XCTAssertTrue(view.diffText.contains("From53"), view.diffText)
+
+        // A read that fails keeps the comparison there was, and says so.
+        await view.compareWithPickedRevision(54) { nil }.value
+        XCTAssertEqual(unreadable, [54])
+        XCTAssertEqual(view.selectedRevisionTitle, "r53")
+        XCTAssertTrue(view.diffText.contains("From53"), view.diffText)
+
+        // Reset while a read is under way: nothing comes back, nothing is reported.
+        let (pending, answerPending) = AsyncStream.makeStream(of: CodeArtifact?.self)
+        let unanswered = view.compareWithPickedRevision(54) {
+            for await artifact in pending { return artifact }
+            return nil
+        }
+        view.setComparisonRevision(nil, artifact: nil, pinned: true)
+        answerPending.yield(nil)
+        await unanswered.value
+        XCTAssertEqual(unreadable, [54], "a failure nobody is waiting for is not reported")
+        XCTAssertEqual(view.selectedRevisionTitle, "No comparison")
+
+        // A read over before the delay leaves the bar as it was.
+        await view.compareWithPickedRevision(53) { r53 }.value
+        XCTAssertNil(view.shownWork)
+
+        // A long one is named on the bar's left, the one begun last on top; a
+        // pick the reader has replaced is no longer what they are waiting for.
+        view.workShownAfter = 0
+        let (first54, answer54) = AsyncStream.makeStream(of: CodeArtifact?.self)
+        let waited = view.compareWithPickedRevision(54) {
+            for await artifact in first54 { return artifact }
+            return nil
+        }
+        XCTAssertEqual(view.shownWork, "Reading revision r54…")
+        let (next53, answer53) = AsyncStream.makeStream(of: CodeArtifact?.self)
+        let replacing = view.compareWithPickedRevision(53) {
+            for await artifact in next53 { return artifact }
+            return nil
+        }
+        XCTAssertEqual(view.shownWork, "Reading revision r53…")
+        answer53.yield(r53)
+        await replacing.value
+        XCTAssertNil(view.shownWork, "the earlier pick's read may run on, unasked for")
+        answer54.yield(r54)
+        await waited.value
+        XCTAssertNil(view.shownWork)
+
+        // Any read the app names: the bar stays for as long as it takes.
+        let (outer, finishOuter) = AsyncStream.makeStream(of: Void.self)
+        let working = Task { @MainActor in
+            await view.whileWorking("Outer…") {
+                for await _ in outer { return }
+            }
+        }
+        while view.shownWork == nil { await Task.yield() }
+        XCTAssertEqual(view.shownWork, "Outer…")
+        finishOuter.yield()
+        await working.value
+        XCTAssertNil(view.shownWork)
+    }
+
     /// The dump bar's picker lists the module's revisions the app read, says
     /// which one the code is compared against, and Reset clears it — as
     /// Xcode's bar does for a file's history.

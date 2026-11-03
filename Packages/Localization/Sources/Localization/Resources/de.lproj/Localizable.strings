@@ -401,6 +401,12 @@
 "Compare the code with a revision" = "Den Code mit einer Revision vergleichen";
 "Reset" = "Zurücksetzen";
 "No comparison" = "Kein Vergleich";
+"Reading revision r%1$@…" = "Revision r%1$@ wird gelesen…";
+"Reading the module's revisions…" = "Revisionen des Moduls werden gelesen…";
+"Reading the analysis…" = "Analyse wird gelesen…";
+"Cannot read revision r%1$@" = "Revision r%1$@ kann nicht gelesen werden";
+"The code of this revision could not be obtained from the analysis server. The comparison stays as it was. Check that the server is running and reachable, then choose the revision again." = "Der Code dieser Revision konnte nicht vom Analyseserver bezogen werden. Der Vergleich bleibt unverändert. Prüfen Sie, ob der Server läuft und erreichbar ist, und wählen Sie die Revision dann erneut.";
+"The analysis store could not give the code of this revision: the object is missing or damaged. The comparison stays as it was." = "Der Analysespeicher konnte den Code dieser Revision nicht liefern: Das Objekt fehlt oder ist beschädigt. Der Vergleich bleibt unverändert.";
 "This revision (r%1$@)" = "Diese Revision (r%1$@)";
 "This revision" = "Diese Revision";
 "No decompiled C for this function in either revision." = "In keiner der beiden Revisionen hat die Funktion dekompilierten C.";

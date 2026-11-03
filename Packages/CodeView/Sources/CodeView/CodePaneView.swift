@@ -184,6 +184,26 @@ import ToolModuleKit
     /// The app asks for a revision when the reader picks one — the artifact
     /// is loaded off the pane's hands — and for none when Reset is pressed.
     public var onChooseRevision: ((Int?) -> Void)?
+    /// The code of a revision the reader picked could not be read. The
+    /// comparison stays as it was; the app says why.
+    public var onRevisionUnreadable: ((Int) -> Void)?
+    /// The last pick in the bar each function is still waiting on the code of.
+    /// A later pick for the function replaces it, so what comes last from the
+    /// store cannot overwrite what the reader chose last.
+    private var picksBeingRead: [CodeAddress?: Int] = [:]
+    /// The dump bar's left: what the reader is waiting for, and that it moves.
+    /// It cannot say how much is left: a read of the store reports no progress.
+    private let workBar = NSProgressIndicator()
+    private let workLabel = NSTextField(labelWithString: "")
+    private var workLabelClearsComparison: NSLayoutConstraint?
+    /// What is under way, the last begun last: that one is what the bar names.
+    private var worksUnderWay: [(id: Int, words: String)] = []
+    private var worksBegun = 0
+    private var workReveal: DispatchWorkItem?
+    private var recipeWork: Int?
+    /// A read that ends sooner shows nothing: a bar that flashes explains no
+    /// delay.
+    var workShownAfter: TimeInterval = 0.3
     private let moduleHexView: NSView
     private var hexDumpVisible = true
     private static let hexDumpHeight: CGFloat = 220
@@ -548,10 +568,88 @@ import ToolModuleKit
         setComparisonRevision(revision, artifact: artifact, pinned: pinned, function: function, readFor: nil)
     }
 
+    /// The reader's pick in the bar, for the function on screen, whose code
+    /// has to be read first. It may take long: the reader may move on to another
+    /// function, which keeps the pick, or pick again, which replaces it. The
+    /// task is for a test to wait on.
+    // help: panel.code.diff
+    @discardableResult
+    public func compareWithPickedRevision(_ revision: Int,
+                                          read: @escaping @MainActor () async -> CodeArtifact?) -> Task<Void, Never> {
+        let function = openFunctionEntry
+        if let replaced = picksBeingRead[function] { endWork(replaced) }
+        let pick = beginWork(L("Reading revision r%1$@…", String(revision)))
+        picksBeingRead[function] = pick
+        return Task { @MainActor [weak self] in
+            let artifact = await read()
+            guard let self, self.picksBeingRead[function] == pick else { return }
+            self.picksBeingRead[function] = nil
+            self.endWork(pick)
+            if let artifact {
+                self.setComparisonRevision(revision, artifact: artifact, pinned: true, function: function)
+            } else {
+                if function == self.openFunctionEntry { self.selectRevisionItem(self.comparisonRevision) }
+                self.onRevisionUnreadable?(revision)
+            }
+        }
+    }
+
+    /// Names a long read in the dump bar for as long as `body` takes.
+    public func whileWorking<T>(_ words: String, _ body: @MainActor () async -> T) async -> T {
+        let work = beginWork(words)
+        defer { endWork(work) }
+        return await body()
+    }
+
+    private func beginWork(_ words: String) -> Int {
+        worksBegun += 1
+        worksUnderWay.append((worksBegun, words))
+        updateWorkLine()
+        return worksBegun
+    }
+
+    private func endWork(_ id: Int) {
+        worksUnderWay.removeAll { $0.id == id }
+        updateWorkLine()
+    }
+
+    private func updateWorkLine() {
+        guard let words = worksUnderWay.last?.words else {
+            workReveal?.cancel()
+            workReveal = nil
+            showWorkLine(false)
+            return
+        }
+        workLabel.stringValue = words
+        ControlHelp.describe(workBar, words)
+        guard workBar.isHidden, workReveal == nil else { return }
+        guard workShownAfter > 0 else {
+            showWorkLine(true)
+            return
+        }
+        let reveal = DispatchWorkItem { [weak self] in
+            self?.workReveal = nil
+            self?.showWorkLine(true)
+        }
+        workReveal = reveal
+        DispatchQueue.main.asyncAfter(deadline: .now() + workShownAfter, execute: reveal)
+    }
+
+    private func showWorkLine(_ shows: Bool) {
+        workBar.isHidden = !shows
+        workLabel.isHidden = !shows
+        workLabelClearsComparison?.isActive = shows
+        if shows { workBar.startAnimation(nil) } else { workBar.stopAnimation(nil) }
+    }
+
+    /// What the dump bar says is under way, for a test; nil while it shows nothing.
+    var shownWork: String? { workBar.isHidden ? nil : workLabel.stringValue }
+
     /// `readFor`: the one function `artifact` holds the code of, when it was
     /// read for that function alone.
     private func setComparisonRevision(_ revision: Int?, artifact: CodeArtifact?, pinned: Bool,
                                        function: CodeAddress?, readFor: CodeAddress?) {
+        if pinned, let pick = picksBeingRead.removeValue(forKey: function ?? openFunctionEntry) { endWork(pick) }
         if pinned, let entry = function ?? openFunctionEntry {
             if let revision, let artifact {
                 functionComparisons[entry] = .against(.init(revision: revision, artifact: artifact))
@@ -658,6 +756,7 @@ import ToolModuleKit
     private func drawComparisonFonts() {
         let font = Self.recipeFont()
         compareLabel.font = font
+        workLabel.font = font
         revisionLine.setFont(font)
         resetComparisonButton.font = font
     }
@@ -764,6 +863,7 @@ import ToolModuleKit
         recipeLine.isEnabled = false
         recipeSpinner.isHidden = false
         recipeSpinner.startAnimation(nil)
+        recipeWork = beginWork(L("Reading the analysis…"))
         onChooseRecipe?(recipes[index])
     }
 
@@ -776,6 +876,8 @@ import ToolModuleKit
         recipeSpinner.stopAnimation(nil)
         recipeSpinner.isHidden = true
         recipeLine.isEnabled = true
+        if let recipeWork { endWork(recipeWork) }
+        recipeWork = nil
     }
 
     /// Switches the navigator: Functions, Strings, POST writes, Status codes.
@@ -961,8 +1063,10 @@ import ToolModuleKit
         guard let onReadRevision, revisionsBeingRead.insert(wanted).inserted else { return }
         revisionReads += 1
         Task { @MainActor [weak self] in
-            let read = await onReadRevision(revision, function)
             guard let self else { return }
+            let read = await self.whileWorking(L("Reading revision r%1$@…", String(revision))) {
+                await onReadRevision(revision, function)
+            }
             self.revisionsBeingRead.remove(wanted)
             guard let read else { return }
             self.keepRead(read, wanted)
@@ -2953,6 +3057,24 @@ import ToolModuleKit
         for view in [compareLabel, compareArrows, revisionLine, resetComparisonButton] {
             hexDumpBar.addSubview(view)
         }
+        // help: panel.code.work
+        // What the reader is waiting for, on the bar's left; its words give way
+        // first where the bar is narrow.
+        workBar.style = .bar
+        workBar.isIndeterminate = true
+        workBar.controlSize = .small
+        workBar.isDisplayedWhenStopped = false
+        workBar.isHidden = true
+        workBar.translatesAutoresizingMaskIntoConstraints = false
+        workLabel.textColor = .secondaryLabelColor
+        workLabel.lineBreakMode = .byTruncatingTail
+        workLabel.isHidden = true
+        workLabel.setContentCompressionResistancePriority(.init(240), for: .horizontal)
+        workLabel.translatesAutoresizingMaskIntoConstraints = false
+        hexDumpBar.addSubview(workBar)
+        hexDumpBar.addSubview(workLabel)
+        workLabelClearsComparison = workLabel.trailingAnchor.constraint(lessThanOrEqualTo: compareLabel.leadingAnchor,
+                                                                        constant: -8)
         codeContent.addSubview(hexDumpBar)
         let barHeight = hexDumpBar.heightAnchor.constraint(equalToConstant: Self.dumpBarHeight)
         barHeight.priority = NSLayoutConstraint.Priority(999)
@@ -2996,7 +3118,12 @@ import ToolModuleKit
             compareArrows.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor),
             compareLabel.trailingAnchor.constraint(equalTo: compareArrows.leadingAnchor, constant: -6),
             compareLabel.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor),
-            compareLabel.leadingAnchor.constraint(greaterThanOrEqualTo: hexDumpBar.leadingAnchor, constant: 8)
+            compareLabel.leadingAnchor.constraint(greaterThanOrEqualTo: hexDumpBar.leadingAnchor, constant: 8),
+            workBar.leadingAnchor.constraint(equalTo: hexDumpBar.leadingAnchor, constant: 8),
+            workBar.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor),
+            workBar.widthAnchor.constraint(equalToConstant: 80),
+            workLabel.leadingAnchor.constraint(equalTo: workBar.trailingAnchor, constant: 6),
+            workLabel.centerYAnchor.constraint(equalTo: hexDumpBar.centerYAnchor)
         ])
         updateHexDumpButton()
         layOutComparison()

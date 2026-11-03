@@ -1,6 +1,8 @@
+import AppKit
 import CodeAnalysis
 import CodeView
 import Foundation
+import Localization
 
 /// Joins a code pane to the part it reads: an instruction selects its bytes, a
 /// byte selection shows the instruction that holds it, and the snapshot says
@@ -121,12 +123,25 @@ func wireCodeRevisions(_ codePane: CodePaneView,
             codePane.setComparisonRevision(nil, artifact: nil, pinned: true, function: function)
             return
         }
-        Task { @MainActor in
-            let artifact = await CodeAnalysisStore.artifact(forRevision: digest)
-            codePane.setComparisonRevision(revision, artifact: artifact, pinned: true, function: function)
+        codePane.compareWithPickedRevision(revision) {
+            await CodeAnalysisStore.artifact(forRevision: digest)
         }
     }
-    let history = Task { @MainActor in await CodeAnalysisStore.revisions(for: manifest) }
+    codePane.onRevisionUnreadable = { [weak codePane] revision in
+        guard let window = codePane?.window else { return }
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = L("Cannot read revision r%1$@", String(revision))
+        alert.informativeText = CodeAnalysisLocation.shared.remote != nil
+            ? L("The code of this revision could not be obtained from the analysis server. The comparison stays as it was. Check that the server is running and reachable, then choose the revision again.")
+            : L("The analysis store could not give the code of this revision: the object is missing or damaged. The comparison stays as it was.")
+        alert.beginSheetModal(for: window)
+    }
+    let history = Task { @MainActor in
+        await codePane.whileWorking(L("Reading the module's revisions…")) {
+            await CodeAnalysisStore.revisions(for: manifest)
+        }
+    }
     // What a New mark compares with is read when a function asks for it, and
     // for that function: a revision's code is the size of the whole analysis.
     codePane.onReadRevision = { revision, function in
@@ -171,7 +186,9 @@ func wireCodeRevisions(_ codePane: CodePaneView,
         while let revision = codePane.nextRevisionToSettle {
             let read: CodeArtifact?
             if let digest = digests[revision] {
-                read = await CodeAnalysisStore.artifact(forRevision: digest)
+                read = await codePane.whileWorking(L("Reading revision r%1$@…", String(revision))) {
+                    await CodeAnalysisStore.artifact(forRevision: digest)
+                }
             } else {
                 read = nil
             }

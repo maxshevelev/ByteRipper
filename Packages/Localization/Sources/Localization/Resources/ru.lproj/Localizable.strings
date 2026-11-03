@@ -401,6 +401,12 @@
 "Compare the code with a revision" = "Сравнить код с ревизией";
 "Reset" = "Сбросить";
 "No comparison" = "Без сравнения";
+"Reading revision r%1$@…" = "Чтение ревизии r%1$@…";
+"Reading the module's revisions…" = "Чтение ревизий модуля…";
+"Reading the analysis…" = "Чтение анализа…";
+"Cannot read revision r%1$@" = "Не удалось прочитать ревизию r%1$@";
+"The code of this revision could not be obtained from the analysis server. The comparison stays as it was. Check that the server is running and reachable, then choose the revision again." = "Код этой ревизии не удалось получить с сервера анализов. Сравнение осталось прежним. Проверьте, что сервер запущен и доступен, затем выберите ревизию ещё раз.";
+"The analysis store could not give the code of this revision: the object is missing or damaged. The comparison stays as it was." = "Хранилище анализов не смогло выдать код этой ревизии: объект отсутствует или повреждён. Сравнение осталось прежним.";
 "This revision (r%1$@)" = "Эта ревизия (r%1$@)";
 "This revision" = "Эта ревизия";
 "No decompiled C for this function in either revision." = "Ни в этой, ни в предыдущей ревизии у функции нет декомпилированного C.";
