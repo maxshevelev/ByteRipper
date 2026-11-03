@@ -406,6 +406,16 @@ extension ContentStore {
         return inflated
     }
 
+    /// A cut object's root as its gzip file, as `objectRoot` reads it; nil for
+    /// an object that is not cut.
+    public func gzippedObjectRoot(_ digest: SHA256Digest) throws -> Data? {
+        guard let stored = try? Data(contentsOf: objectURL(digest)) else {
+            throw CodeAnalysisError.objectMissing(digest.hex)
+        }
+        guard let inflated = Gzip.decompress(stored), PartedObject.root(of: inflated) != nil else { return nil }
+        return stored
+    }
+
     /// An object's whole bytes as a gzip file, from its own file when that is
     /// what it holds: what the server sends for a part, compressed only once.
     public func gzippedObject(_ digest: SHA256Digest) throws -> Data {

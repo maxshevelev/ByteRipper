@@ -20,6 +20,18 @@ public struct CASService: Sendable {
         self.feed = try ChangeFeed(store: store)
     }
 
+    /// Whether an `Accept-Encoding` header takes gzip: named, and not `q=0`.
+    static func acceptsGzip(_ header: String?) -> Bool {
+        guard let header else { return false }
+        return header.split(separator: ",").contains { item in
+            let fields = item.split(separator: ";").map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+            guard fields.first == "gzip" else { return false }
+            return !fields.dropFirst().contains { field in
+                field.hasPrefix("q=") && Double(field.dropFirst(2)) == 0
+            }
+        }
+    }
+
     /// Every route names its right (`Design/SERVER_HEADLESS_PLAN.md` §5):
     /// `cas.read` for what only reads — `export` among them, a POST only
     /// because it carries a list — and `cas.write` for what changes the store.
@@ -39,10 +51,19 @@ public struct CASService: Sendable {
         }
         router.add("GET", "\(prefix)/objects/:sha/root", access: .rights([.casRead])) { request in
             let digest = try Self.digest(request.parameters["sha"])
-            guard let root = try Self.answer({ try store.objectRoot(digest) }) else {
+            // The root's own file for a client that takes gzip, as URLSession
+            // does and inflates by itself: a large module's root is a third of
+            // the size that way, and is compressed only once.
+            let gzipped = Self.acceptsGzip(request.headers["accept-encoding"])
+            guard let root = try Self.answer({
+                gzipped ? try store.gzippedObjectRoot(digest) : try store.objectRoot(digest)
+            }) else {
                 throw HTTPError(.notFound, "object \(digest.hex) is not cut")
             }
-            return .bytes(root)
+            var response = HTTPResponse.bytes(root)
+            response.headers["vary"] = "accept-encoding"
+            if gzipped { response.headers["content-encoding"] = "gzip" }
+            return response
         }
         router.add("POST", "\(prefix)/objects/parts", access: .rights([.casRead])) { request in
             let names = try request.json(ServedStoreProtocol.Parts.self)

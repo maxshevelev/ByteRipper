@@ -12,6 +12,7 @@ final class CASServiceTests: XCTestCase {
     private var service: CASService!
     private var server: HTTPServer!
     private var remote: RemoteStore!
+    private var port = 0
 
     override func setUp() async throws {
         directory = FileManager.default.temporaryDirectory
@@ -19,7 +20,7 @@ final class CASServiceTests: XCTestCase {
         served = try ContentStore(root: directory.appendingPathComponent("served"))
         service = try CASService(store: served)
         server = HTTPServer(configuration: .init(port: 0, token: "token"), router: service.routes())
-        let port = try await server.start()
+        port = Int(try await server.start())
         remote = RemoteStore(base: URL(string: "http://127.0.0.1:\(port)")!, token: "token")
     }
 
@@ -115,6 +116,38 @@ final class CASServiceTests: XCTestCase {
 
     /// A client takes the root of a cut artifact and the parts it wants,
     /// instead of the whole.
+    /// A client that takes gzip gets the root's own file and URLSession inflates
+    /// it; one that does not, such as plain curl, gets the root inflated.
+    func testARootGoesGzippedOnlyToWhoTakesIt() async throws {
+        try served.enablePartedObjects()
+        let manifest = try await remote.putAnalysis(module: module("a"), recipe: recipe, artifact: artifact(3))
+        let digest = manifest.artifact.sha256
+        let root = try XCTUnwrap(try served.objectRoot(digest))
+        let path = "\(ServedStoreProtocol.prefix)/objects/\(digest.hex)/root"
+        func answer(_ encoding: String?) async throws -> (Data, HTTPURLResponse) {
+            var request = URLRequest(url: try XCTUnwrap(URL(string: "http://127.0.0.1:\(port)\(path)")))
+            request.setValue("Bearer token", forHTTPHeaderField: "Authorization")
+            if let encoding { request.setValue(encoding, forHTTPHeaderField: "Accept-Encoding") }
+            let (data, response) = try await URLSession(configuration: .ephemeral).data(for: request)
+            return (data, try XCTUnwrap(response as? HTTPURLResponse))
+        }
+
+        // The way RemoteStore's session asks: its own header, inflated by itself.
+        let (data, response) = try await answer(nil)
+        XCTAssertEqual(response.value(forHTTPHeaderField: "Content-Encoding"), "gzip")
+        XCTAssertEqual(data, root)
+
+        for refusing in ["identity", "deflate, br", "gzip;q=0", "gzip; q=0.0"] {
+            let (plain, response) = try await answer(refusing)
+            XCTAssertNil(response.value(forHTTPHeaderField: "Content-Encoding"), refusing)
+            XCTAssertEqual(plain, root, refusing)
+        }
+        XCTAssertFalse(CASService.acceptsGzip(nil))
+        XCTAssertTrue(CASService.acceptsGzip("deflate, GZIP;q=0.5"))
+        XCTAssertEqual(try served.gzippedObjectRoot(digest), try Data(contentsOf: served.objectURL(digest)))
+        XCTAssertNil(try served.gzippedObjectRoot(try served.putObject(Data("not an artifact".utf8))))
+    }
+
     func testAClientReadsARootAndOnlyThePartsItAsksFor() async throws {
         try served.enablePartedObjects()
         let whole = artifact(3)
