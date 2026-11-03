@@ -5,10 +5,13 @@
 > module it is in, and the description exists only in the registry. A module holds
 > the code at its addresses, and a link to the entry: the name and signature its
 > callers print, and nothing else. A reader takes the rest from the entry
-> (`LibraryView`). The entries of one function with several bodies are merged into
-> one that covers them all (`mergeLibraryEntries`), with the text a review makes of
-> them. A text true of one module only means the function is not a library function,
-> and it does not belong here. §1 and §4 still describe the copy this replaces where
+> (`LibraryView`). A different body is a different function: its own entry, its own
+> C, and its own name. A library function's name is unique in the registry: a body
+> offered under a name another entry holds is refused (`name_conflicts`), and the
+> review looks at what the function means and gives a narrower name. A module's own
+> function is in the module's scope and conflicts with nothing in other modules.
+> A text true of one module only means the function is not a library function, and
+> it does not belong here. §1 and §4 still describe the copy this replaces where
 > they speak of applying a review to a function; they are to be rewritten when the
 > change is finished. An open now links (`mode: link`); `whole` remains only as the
 > working copy `replace` asks for, to change an entry on.
