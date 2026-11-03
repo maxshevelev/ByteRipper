@@ -214,7 +214,7 @@ import Workspace
         // theirs, a document's whole content rebuilt.
         let names = Dictionary(contents.map { ($0.content.id, $0.name) }, uniquingKeysWith: { a, _ in a })
         await keeper.readBack(contents.map(\.content), progress: report.map { report in
-            { id, count in report(L("Reading the changes kept for “%1$@”", names[id] ?? ""), count) }
+            { @Sendable id, count in report(L("Reading the changes kept for “%1$@”", names[id] ?? ""), count) }
         })
 
         // The untitled documents, before any part: a part may come out of one.
@@ -237,7 +237,9 @@ import Workspace
             for (index, entry) in checks.enumerated() {
                 let check = entry.check
                 let name = L("Checking “%1$@”", check.url.lastPathComponent)
-                let fileReport: (@Sendable (Int) -> Void)? = report.map { report in { report(name, $0) } }
+                let fileReport: (@Sendable (Int) -> Void)? = report.map { report in
+                    { @Sendable count in report(name, count) }
+                }
                 group.addTask { (index, await check.isTheSameFile(progress: fileReport)) }
             }
             var same = [Bool](repeating: false, count: checks.count)

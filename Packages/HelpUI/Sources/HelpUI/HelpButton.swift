@@ -30,8 +30,9 @@ import Localization
         NSColor(white: appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? 0.42 : 0.74, alpha: 1)
     }
 
-    public static func apply(_ symbol: String, pointSize: CGFloat, circle: NSColor = GreyCircleSymbol.circle,
+    public static func apply(_ symbol: String, pointSize: CGFloat, circle: NSColor? = nil,
                              to button: NSButton) {
+        let circle = circle ?? Self.circle
         button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
             .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: pointSize, weight: .regular)
                 .applying(.init(paletteColors: [.labelColor, circle])))

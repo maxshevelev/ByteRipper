@@ -14,7 +14,8 @@ import Symbols
 final class CodeServerIndicator: NSImageView {
     private let location: CodeAnalysisLocation
 
-    init(location: CodeAnalysisLocation = .shared) {
+    init(location: CodeAnalysisLocation? = nil) {
+        let location = location ?? .shared
         self.location = location
         super.init(frame: .zero)
         setContentHuggingPriority(.required, for: .horizontal)

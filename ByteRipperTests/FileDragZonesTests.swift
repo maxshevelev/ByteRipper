@@ -62,7 +62,7 @@ final class FileDragZonesTests: XCTestCase {
         XCTAssertEqual(lit(bands(left)), [false, false, false], "unlit")
         XCTAssertEqual(lit(bands(right)), [false, true, false])
 
-        right.performDragOperation(FakeDraggingInfo(fileURLs: [], at: middle(of: right)))
+        _ = right.performDragOperation(FakeDraggingInfo(fileURLs: [], at: middle(of: right)))
         XCTAssertFalse(bands(left).contains { !$0.isHidden }, "a drop takes every zone down")
         XCTAssertFalse(bands(right).contains { !$0.isHidden })
     }

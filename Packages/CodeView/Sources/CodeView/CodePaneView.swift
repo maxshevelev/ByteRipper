@@ -2844,8 +2844,10 @@ import ToolModuleKit
             context.timingFunction = CAMediaTimingFunction(name: .easeIn)
             box.animator().alphaValue = 0
         } completionHandler: { [weak self, weak box] in
-            box?.removeFromSuperview()
-            if self?.flashView === box { self?.flashView = nil }
+            MainActor.assumeIsolated {
+                box?.removeFromSuperview()
+                if self?.flashView === box { self?.flashView = nil }
+            }
         }
     }
 
@@ -4109,14 +4111,14 @@ import ToolModuleKit
         } ?? []
         let lines: [CodeDiffLine] = diff.rows.map { row in
             switch row {
-            case let .same(old, new, _):
-                return CodeDiffLine(row: row, tokens: currentTokens[new - 1] ?? [],
+            case let .same(_, new, _):
+                return CodeDiffLine(row: row, tokens: currentTokens[new - 1],
                                     lineStart: currentLines[new - 1], currentSide: true)
             case let .added(new, _):
-                return CodeDiffLine(row: row, tokens: currentTokens[new - 1] ?? [],
+                return CodeDiffLine(row: row, tokens: currentTokens[new - 1],
                                     lineStart: currentLines[new - 1], currentSide: true)
             case let .removed(old, _):
-                return CodeDiffLine(row: row, tokens: baselineTokens[old - 1] ?? [],
+                return CodeDiffLine(row: row, tokens: baselineTokens[old - 1],
                                     lineStart: baselineLines[old - 1], currentSide: false)
             }
         }
@@ -4754,7 +4756,7 @@ import ToolModuleKit
 
     /// How far the pointer may move between press and release for the two to
     /// still be a click.
-    static let clickSlop: CGFloat = 3
+    nonisolated static let clickSlop: CGFloat = 3
 
     /// A click on a number of the listing that the review named: the same
     /// explanation as the name in the C.

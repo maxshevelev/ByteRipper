@@ -112,7 +112,7 @@ final class CodeAnalysisLocationTests: XCTestCase {
         try local.exportBundle([AnalysisKey(module: module("carried").sha256, recipe: recipe.id)!], to: bundle)
 
         try location.choose(.server, server: address, token: "secret")
-        try await wait("the connection") { location.remote != nil && location.state != .connecting }
+        await wait("the connection") { location.remote != nil && location.state != .connecting }
         let report = try await location.sendBundle(at: bundle)
         XCTAssertEqual(report?.imported.count, 1)
         XCTAssertNotNil(try served.analysis(module: module("carried").sha256))

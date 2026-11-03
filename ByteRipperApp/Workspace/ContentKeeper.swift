@@ -235,9 +235,8 @@ final class ContentKeeper {
         let key = ObjectIdentifier(document)
         let operation = BackgroundOperation(name: L("Copying the bytes of the changes")) {}
         let title = L("Moving the undo history of “%1$@” beside the workspace", pane.status.fileName)
-        weak var presenter = presenter
         // help: editing.journal-move
-        let sheet = Task { @MainActor in
+        let sheet = Task { @MainActor [weak presenter] in
             try? await Task.sleep(for: Self.moveSheetDelay)
             guard !Task.isCancelled, operation.isActive, let presenter, presenter.view.window != nil else { return }
             BlockingOperationSheet.present(operation, title: title, from: presenter, cancellable: false)
@@ -421,7 +420,7 @@ final class ContentKeeper {
         guard hashing.insert(key).inserted else { return nil }
         Task.detached(priority: .utility) { [weak self] in
             let digest = try? FileDigest.sha256(of: url)
-            await MainActor.run {
+            await MainActor.run { [weak self] in
                 guard let self else { return }
                 self.hashing.remove(key)
                 if let digest, Self.stillIs(key, url) { self.fileHashes[key] = digest.hex }

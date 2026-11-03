@@ -88,7 +88,7 @@ final class WorkspaceRecorder {
                 Task { try? await remote.removeRef(CodeAnalysisLocation.serverRefName(ref)) }
             } else {
                 let store = try? ContentStore(root: CodeAnalysisStore.root, create: false)
-                try? store?.removeRef(ref)
+                _ = try? store?.removeRef(ref)
             }
         }
         if self.project?.url != project?.url { bundledAnalyses = nil }
@@ -246,16 +246,16 @@ final class WorkspaceRecorder {
                 if let remote {
                     try? RemoteStore.blocking { try await remote.removeRef(serverRef) }
                 } else {
-                    try? store.removeRef(ref)
+                    _ = try? store.removeRef(ref)
                 }
             } else {
                 let ordered = keys.sorted()
                 if let remote {
                     _ = try? RemoteStore.blocking { try await remote.setRef(serverRef, analyses: ordered) }
                 } else {
-                    try? store.setRef(ref, analyses: ordered)
+                    _ = try? store.setRef(ref, analyses: ordered)
                 }
-                try? store.exportBundle(ordered, to: bundleURL)
+                _ = try? store.exportBundle(ordered, to: bundleURL)
             }
         }
     }
