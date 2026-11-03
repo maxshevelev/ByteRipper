@@ -356,4 +356,24 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertEqual(store.throughRegistry(try moduleArtifact()).functions[0].reviewLevel, .library)
         XCTAssertNil(LibraryIndex().readThrough)
     }
+
+    /// Recording the C brings nothing else of the module that offers it: the
+    /// constants the entry holds stay, whatever that module reads.
+    func testRecordingTheFunctionChangesNothingElse() throws {
+        let held = try JSONSerialization.data(withJSONObject: [
+            "schema": 1, "name": "CopyMem", "kind": "edk2", "plate": "EDK2 CopyMem",
+            "signature": "void CopyMem(void)", "constants": [["offset": "0x1", "operand": 1, "value": "0x10"]]
+        ], options: .sortedKeys)
+        try register(held)
+        var offered = try XCTUnwrap(try JSONSerialization.jsonObject(with: try entryObject()) as? [String: Any])
+        offered["constants"] = [[String: Any]]()
+        let data = try JSONSerialization.data(withJSONObject: offered, options: .sortedKeys)
+        XCTAssertEqual(try store.putLibraryEntries(module: source, rev: 2, by: "agent", proposals: [
+            LibraryProposal(body: body, name: "CopyMem", kind: "edk2", address: "0x2", entry: data)
+        ]).updated.count, 1)
+        let (_, entry) = try XCTUnwrap(try store.libraryIndex().entry(for: body))
+        let now = try XCTUnwrap(try JSONSerialization.jsonObject(with: try store.object(entry.entry)) as? [String: Any])
+        XCTAssertEqual((now["constants"] as? [Any])?.count, 1)
+        XCTAssertNotNil(now["function"])
+    }
 }

@@ -364,10 +364,12 @@ extension LibraryProposal {
         return left.isEqual(right)
     }
 
-    /// The entry object with its function saying which module's reading it is.
-    static func recordingOrigin(of data: Data, source: LibrarySource) throws -> Data {
-        guard var object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              var function = object["function"] as? [String: Any] else { return data }
+    /// The held entry object with the proposal's function added, saying which
+    /// module's reading it is; nothing else of the proposal comes with it.
+    static func recording(_ proposal: Data, in held: Data, source: LibrarySource) throws -> Data {
+        guard var object = try JSONSerialization.jsonObject(with: held) as? [String: Any],
+              let offered = try JSONSerialization.jsonObject(with: proposal) as? [String: Any],
+              var function = offered["function"] as? [String: Any] else { return proposal }
         var origin: [String: Any] = ["module": source.module.hex, "address": source.address]
         origin["rev"] = source.rev
         function["source"] = origin
@@ -575,10 +577,11 @@ extension ContentStore {
                 if !lacksFunction { next.version += 1 }
                 // Recording what the review lacked does not make the module
                 // that recorded it the review's author: `source` stays, and the
-                // C says where it came from in its own `function.source`.
+                // C says where it came from in its own `function.source`. Only
+                // the function goes in: all else of the object stays the entry's.
                 var recorded = digest
                 if lacksFunction {
-                    let object = try LibraryProposal.recordingOrigin(of: proposal.entry, source: source)
+                    let object = try LibraryProposal.recording(proposal.entry, in: heldObject, source: source)
                     recorded = dryRun ? SHA256Digest(data: object) : try putObject(object)
                 }
                 next.entry = recorded
@@ -594,7 +597,8 @@ extension ContentStore {
                 let signatureChanged = signature(heldObject) != signature(proposal.entry)
                 let why = current ? (signatureChanged ? proposal.signatureReason : nil)
                     : completes ? (lacksFunction ? "the function's C recorded" : "the body's constants recorded") : taken
-                let recordedWhy = lacksFunction ? "\(why ?? "") from \(source.module.hex) at \(source.address)" : why
+                let recordedWhy = lacksFunction
+                    ? "the function's C recorded from \(source.module.hex) at \(source.address)" : why
                 history.versions.append(LibraryVersion(version: next.version, entry: recorded,
                                                        source: completes ? held.source : source,
                                                        reason: recordedWhy, recordedAt: now))
