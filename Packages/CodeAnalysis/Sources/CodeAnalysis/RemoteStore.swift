@@ -210,7 +210,8 @@ public struct RemoteStore: Sendable {
     }
 
     public func verify() async throws -> [String] {
-        let answer: ServedStoreProtocol.Problems = try await json("GET", "verify")
+        // The server unpacks and hashes every object before it answers.
+        let answer: ServedStoreProtocol.Problems = try await json("GET", "verify", timeout: 3600)
         return answer.problems
     }
 

@@ -30,6 +30,11 @@ public final class DocumentRegistry: AgentDocumentSet {
         public fileprivate(set) var stamp: FileStamp?
         public fileprivate(set) var state: State
 
+        var isOpening: Bool {
+            if case .missing(.opening) = state { return true }
+            return false
+        }
+
         public var host: DocumentHost? {
             if case .open(let host) = state { return host }
             return nil
@@ -87,16 +92,16 @@ public final class DocumentRegistry: AgentDocumentSet {
 
     // MARK: - Restore
 
-    /// Reads `documents.json` and opens its rows in their stored order, each
-    /// checked against the roots, read, hashed and admitted if the limits
-    /// still allow; a row that is not keeps its id as a missing one. A file
-    /// that cannot be read is refused rather than started from empty — that
-    /// would hand its ids out again.
+    /// `load`, then `openLoaded`, for a caller with nothing to serve meanwhile.
     public func restore() async throws {
-        try await oneAtATime { try await self.restoreNow() }
+        try load()
+        try await openLoaded()
     }
 
-    private func restoreNow() async throws {
+    /// Reads `documents.json` and lists its rows, none of them read yet. A file
+    /// that cannot be read is refused rather than started from empty — that
+    /// would hand its ids out again.
+    public func load() throws {
         guard FileManager.default.fileExists(atPath: file.path) else { return }
         let saved: Saved
         do {
@@ -114,13 +119,28 @@ public final class DocumentRegistry: AgentDocumentSet {
         }
         let highest = ids.compactMap(Self.number(of:)).max() ?? 0
         nextID = max(saved.nextID, highest + 1)
-        rows = []
-        for entry in saved.documents {
-            var row = Row(id: entry.id, path: URL(fileURLWithPath: entry.path), name: entry.name,
-                          uploaded: entry.uploaded, sha256: entry.sha256, version: entry.version,
-                          stamp: entry.stamp, state: .missing(entry.missing ?? .gone))
+        rows = saved.documents.map { entry in
+            Row(id: entry.id, path: URL(fileURLWithPath: entry.path), name: entry.name,
+                uploaded: entry.uploaded, sha256: entry.sha256, version: entry.version,
+                stamp: entry.stamp, state: .missing(.opening))
+        }
+    }
+
+    /// Opens the rows `load` listed in their stored order, each checked against
+    /// the roots, read, hashed and admitted if the limits still allow; a row
+    /// that is not keeps its id as a missing one. A read may wait on the system
+    /// for as long as it likes, so a server serves while this runs. A row is
+    /// looked up again after its read: it may have been forgotten meanwhile.
+    public func openLoaded() async throws {
+        try await oneAtATime { try await self.openLoadedNow() }
+    }
+
+    private func openLoadedNow() async throws {
+        for id in rows.map(\.id) {
+            guard var row = rows.first(where: { $0.id == id }), row.isOpening else { continue }
             await admit(&row)
-            rows.append(row)
+            guard let index = rows.firstIndex(where: { $0.id == id }), rows[index].isOpening else { continue }
+            rows[index] = row
         }
         try save()
     }
@@ -462,7 +482,7 @@ public final class DocumentRegistry: AgentDocumentSet {
     private func save() throws {
         let saved = Saved(nextID: nextID, documents: rows.map { row in
             var missing: MissingReason?
-            if case .missing(let reason) = row.state { missing = reason }
+            if case .missing(let reason) = row.state, reason != .opening { missing = reason }
             return SavedRow(id: row.id, path: row.path.path, name: row.name, uploaded: row.uploaded,
                             sha256: row.sha256, version: row.version, stamp: row.stamp, missing: missing)
         })

@@ -26,6 +26,7 @@ public final class Server {
     public private(set) var ghidra: GhidraHost?
     /// The dumps the local MCP answers over (`Design/SERVER_HEADLESS_PLAN.md` §6).
     public private(set) var documents: DocumentRegistry?
+    private var opening: Task<Void, Never>?
     public private(set) var mcp: MCPSocket?
     /// The REST clients the console's Activity lists, per token.
     public let rest = RESTActivity()
@@ -101,15 +102,17 @@ public final class Server {
             log("projects \(configuration.projects.path); scripts \(sources.scripts.path); \(ghidraNote)")
         }
         // The documents and the local MCP: always on (decision 14), and it has
-        // the dumps and the store whether or not Ghidra is a role. The socket
-        // is served last, once the rows are restored: a client that connects
-        // finds the set the file had, not a half-filled one.
+        // the dumps and the store whether or not Ghidra is a role. The rows are
+        // listed before anything is served, so a client finds the set the file
+        // had; their files are read once the server is up (`openLoaded`), since
+        // one read can wait on a cloud drive or a macOS permission prompt for
+        // as long as nobody answers.
         let registry = DocumentRegistry(roots: configuration.dumpRoots,
                                         uploads: configuration.uploads,
                                         file: configuration.documentsFile,
                                         limits: configuration.limits)
         do {
-            try await registry.restore()
+            try registry.load()
         } catch {
             stop()
             throw error
@@ -123,7 +126,6 @@ public final class Server {
             log("dump root \(root.path) is not there; its documents stay missing until it is\(hint)")
         }
         documents = registry
-        log("documents: \(registry.rows.filter { $0.host != nil }.count) open of \(registry.rows.count)")
 
         let backend = ghidra.map { $0 as any GhidraBackend }
         let tools = ServerTools.all(documents: registry, store: configuration.store, ghidra: backend)
@@ -188,7 +190,21 @@ public final class Server {
             log("listening on \(listen.host)\(address):\(port), token required")
         }
         log("console at http://\(Self.hostForURL(configuration.listens[0].host)):\(first)/admin")
+        if !registry.rows.isEmpty { log("documents: opening \(registry.rows.count)") }
+        opening = Task { [log] in
+            do {
+                try await registry.openLoaded()
+            } catch {
+                log("documents: \(error)")
+            }
+            log("documents: \(registry.rows.filter { $0.host != nil }.count) open of \(registry.rows.count)")
+        }
         return first
+    }
+
+    /// Returns when the documents listed at start have been read.
+    public func documentsOpened() async {
+        await opening?.value
     }
 
     /// What the console's Status shows, read at each ask.

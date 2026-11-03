@@ -31,10 +31,15 @@ public enum MissingReason: Codable, Equatable, Sendable {
     case rootMissing(String)
     /// The limit, in words: `the limit of 8 open documents`.
     case limit(String)
+    /// Listed at start and not read yet: a file on a cloud drive, or one macOS
+    /// is asking permission for, can take as long as the answer does. Never
+    /// written to `documents.json`.
+    case opening
 
     public var message: String {
         switch self {
         case .gone: return "the file is gone"
+        case .opening: return "it is still being opened"
         case .outsideRoots: return "its path is outside the dump roots"
         case .rootMissing(let root): return "the dump root \(root) is not there"
         case .limit(let limit): return "opening it would pass \(limit)"

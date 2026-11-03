@@ -1,4 +1,5 @@
 import CodeAnalysis
+import DumpHost
 import Foundation
 import GhidraHost
 import HTTPService
@@ -301,6 +302,50 @@ final class ServerTests: XCTestCase {
         } catch RemoteStore.Failure.refused(let status, _, _) {
             XCTAssertEqual(status, 401)
         }
+    }
+
+    /// A saved document whose read does not return keeps nobody from the
+    /// server: here a FIFO no one writes, as a macOS permission prompt nobody
+    /// has answered holds a read of a cloud drive's file.
+    func testAServerAnswersWhileASavedDocumentCannotBeRead() async throws {
+        let tokens = try TokenStore.open(at: directory.appendingPathComponent("tokens.json"))
+        try tokens.add(name: "admin", rights: TokenPreset.admin.rights)
+        let (_, secret) = try tokens.add(name: "app", rights: TokenPreset.app.rights)
+        let dumps = directory.appendingPathComponent("dumps", isDirectory: true)
+        try FileManager.default.createDirectory(at: dumps, withIntermediateDirectories: true)
+        let dump = dumps.appendingPathComponent("held.bin")
+        try SyntheticDump.image().write(to: dump)
+        var configuration = ServerConfiguration()
+        configuration.roles = [.cas]
+        configuration.port = 0
+        configuration.dumpRoots = [dumps]
+        configuration.store = directory.appendingPathComponent("store")
+        configuration.tokensFile = directory.appendingPathComponent("tokens.json")
+        configuration.uploads = directory.appendingPathComponent("Uploads")
+        configuration.documentsFile = directory.appendingPathComponent("documents.json")
+        configuration.mcpSocket = URL(fileURLWithPath: "/tmp/br-\(UUID().uuidString.prefix(8)).sock")
+        configuration.clientTokenFile = directory.appendingPathComponent("token")
+        let saved = DocumentRegistry(roots: [dumps], uploads: configuration.uploads,
+                                     file: configuration.documentsFile)
+        try await saved.open(path: dump)
+        try FileManager.default.removeItem(at: dump)
+        XCTAssertEqual(mkfifo(dump.path, 0o600), 0)
+
+        let lines = Lines()
+        let server = Server(configuration: configuration, log: { lines.add($0) })
+        let port = try await server.start()
+        defer { server.stop() }
+        let remote = RemoteStore(base: URL(string: "http://127.0.0.1:\(port)")!, token: secret)
+        _ = try await remote.hello()
+        XCTAssertTrue(lines.all.contains("documents: opening 1"), "\(lines.all)")
+        XCTAssertEqual(server.documents?.rows.count, 1)
+        XCTAssertEqual(server.documents?.documents().count, 0)
+
+        // A writer that opens and closes ends the read.
+        let writer = open(dump.path, O_WRONLY | O_NONBLOCK)
+        close(writer)
+        await server.documentsOpened()
+        XCTAssertTrue(lines.all.contains { $0.hasPrefix("documents: ") && $0.contains(" of 1") }, "\(lines.all)")
     }
 
     /// The rights matrix over the wire (`Design/SERVER_HEADLESS_PLAN.md`

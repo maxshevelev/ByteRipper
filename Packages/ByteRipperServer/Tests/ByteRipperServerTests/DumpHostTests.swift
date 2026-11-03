@@ -303,6 +303,37 @@ final class DumpHostTests: XCTestCase {
         XCTAssertEqual(next, "d2", "next_id below the rows is raised past them")
     }
 
+    /// Listing the saved rows reads none of their files, so a read nobody
+    /// answers holds up neither the listing nor what is saved meanwhile.
+    func testLoadingListsTheRowsWithoutReadingThem() async throws {
+        let first = try await registry()
+        try await first.open(path: try dump("a.bin", marker: 1))
+        try await first.open(path: try dump("b.bin", marker: 2))
+        try await first.open(path: try dump("c.bin", marker: 3))
+
+        let registry = DocumentRegistry(roots: [roots], uploads: uploads, file: file)
+        let held = HeldReads()
+        registry.reader = { await held.read($0) }
+        try registry.load()
+        XCTAssertEqual(registry.rows.map(\.id), ["d1", "d2", "d3"])
+        XCTAssertEqual(state(registry, "d2"), MissingReason.opening.message)
+
+        let opening = Task { try await registry.openLoaded() }
+        await held.untilHeld()
+        XCTAssertThrowsError(try registry.resolve("d1")) {
+            XCTAssertTrue("\($0)".contains("still being opened"), "\($0)")
+        }
+        // The file an earlier build can still read holds no such reason, and a
+        // row forgotten during the read stays forgotten.
+        try registry.forget("d2")
+        XCTAssertFalse(try String(contentsOf: file, encoding: .utf8).contains("opening"))
+        held.release()
+        try await opening.value
+        XCTAssertEqual(registry.rows.map(\.id), ["d1", "d3"])
+        XCTAssertEqual(state(registry, "d1"), "open")
+        XCTAssertEqual(state(registry, "d3"), "open")
+    }
+
     /// A row closed or forgotten while its Reopen reads is looked up again
     /// by id afterwards: the Reopen is refused, and no other row is written
     /// over with what it read.
