@@ -79,6 +79,16 @@ read checks the whole against its name. Two revisions that differ in a few
 functions share the others. `verify` names a part that is missing, and `gc`
 keeps the parts of what it keeps.
 
+The root also holds `functions`: each function without its code, with `part`,
+the object that holds it, and `fingerprint`, what the reader compares it by. It
+is `null` when a function would not read as one. Older roots have no such key
+until `migrate-objects --apply` gives it to them. A server answers
+`GET /cas/v1/objects/<sha>/root` with the inflated root, 404 when the object is
+not cut or not there, and `POST /cas/v1/objects/parts` with up to 1024 objects:
+`{"sha256": […]}` in, and for each name in order the name in hex, its length in
+eight big-endian bytes and that many bytes of gzip file, length 0 for an object
+it lacks.
+
 `byteripper-cas migrate-objects` brings a store to this form. Without `--apply`
 it does the work in a scratch folder and reports what would come of it: the
 store is not touched. With `--apply` each file is replaced only after what will

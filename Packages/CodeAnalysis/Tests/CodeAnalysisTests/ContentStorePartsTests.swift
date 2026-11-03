@@ -36,6 +36,82 @@ final class ContentStorePartsTests: XCTestCase {
         """.utf8)
     }
 
+    /// The root names every function with its part and its fingerprint, and
+    /// holds no code; a section is not in it.
+    func testARootIndexesItsFunctionsWithoutTheirCode() throws {
+        let store = try store()
+        let data = artifact("second", extra: "")
+        let digest = try store.putObject(data)
+        let root = try XCTUnwrap(try store.objectRoot(digest))
+        let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: root) as? [String: Any])
+        let functions = try XCTUnwrap(object["functions"] as? [[String: Any]])
+        XCTAssertEqual(functions.map { $0["entry"] as? String }, ["0x10", "0x20"])
+        XCTAssertNil(functions[0]["c"])
+        XCTAssertEqual(functions[1]["fingerprint"] as? String,
+                       CodeArtifact.fingerprint(name: "", signature: nil, c: "second"))
+        for function in functions {
+            let part = try XCTUnwrap(SHA256Digest(hex: try XCTUnwrap(function["part"] as? String)))
+            XCTAssertTrue(String(decoding: try store.object(part), as: UTF8.self)
+                .contains("\"\(try XCTUnwrap(function["entry"] as? String))\""))
+        }
+        XCTAssertEqual(try store.object(digest), data)
+        XCTAssertNil(try store.objectRoot(try store.putObject(Data("not an artifact".utf8))))
+        XCTAssertThrowsError(try store.objectRoot(SHA256Digest(data: Data("absent".utf8))))
+    }
+
+    /// A function that does not read as one leaves the artifact readable, with
+    /// no index to mislead anyone.
+    func testAnUnreadableFunctionLeavesNoIndex() throws {
+        let store = try store()
+        let data = artifact("second", extra: ", 7")
+        let digest = try store.putObject(data)
+        XCTAssertEqual(try store.object(digest), data)
+        let root = try XCTUnwrap(try store.objectRoot(digest))
+        let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: root) as? [String: Any])
+        XCTAssertTrue(object["functions"] is NSNull)
+        XCTAssertEqual(try store.migrateToPartedObjects(dryRun: false).indexed, 0)
+    }
+
+    /// A root from before the index gets it from the migration, once, and a
+    /// dry run leaves the store as it was.
+    func testTheMigrationGivesAnOldRootItsIndex() throws {
+        let store = try store()
+        let data = artifact("second")
+        let digest = try store.putObject(data)
+        let url = store.objectURL(digest)
+        var old = try XCTUnwrap(try JSONSerialization.jsonObject(with: try XCTUnwrap(try store.objectRoot(digest)))
+            as? [String: Any])
+        old["functions"] = nil
+        let bare = try Gzip.compress(try JSONSerialization.data(withJSONObject: old, options: [.sortedKeys]))
+        try bare.write(to: url)
+        XCTAssertEqual(try store.object(digest), data, "an old root reads as it did")
+
+        XCTAssertEqual(try store.migrateToPartedObjects(dryRun: true).indexed, 1)
+        XCTAssertEqual(try Data(contentsOf: url), bare)
+
+        let report = try store.migrateToPartedObjects(dryRun: false)
+        XCTAssertEqual(report.indexed, 1)
+        XCTAssertEqual(report.problems, [])
+        XCTAssertEqual(try store.object(digest), data)
+        XCTAssertTrue(PartedObject.hasIndex(try XCTUnwrap(try store.objectRoot(digest))))
+        XCTAssertEqual(try store.migrateToPartedObjects(dryRun: false).indexed, 0)
+    }
+
+    /// What a server sends for an object is its gzip file, whatever form it
+    /// lies in: a part, a plain object, or the whole of a cut one.
+    func testAGzippedObjectIsTheWholeBytesInEveryForm() throws {
+        let store = try store()
+        let data = artifact("second")
+        let digest = try store.putObject(data)
+        XCTAssertEqual(Gzip.decompress(try store.gzippedObject(digest)), data)
+        let part = try XCTUnwrap(store.parts(of: digest).first)
+        XCTAssertEqual(try store.gzippedObject(part), try Data(contentsOf: store.objectURL(part)))
+        let plain = Data("plain".utf8)
+        let name = SHA256Digest(data: plain)
+        try plain.write(to: store.objectURL(name))
+        XCTAssertEqual(Gzip.decompress(try store.gzippedObject(name)), plain)
+    }
+
     private func store(parted: Bool = true) throws -> ContentStore {
         let store = try ContentStore(root: folder)
         if parted { try store.enablePartedObjects() }

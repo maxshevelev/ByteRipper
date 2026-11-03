@@ -99,6 +99,8 @@ carries `Authorization: Bearer <token>`.
 | `GET objects/<sha>` | the bytes; the client checks the hash |
 | `HEAD objects/<sha>` | 200 or 404 |
 | `PUT objects/<sha>` | stored; refused when the body's hash differs |
+| `GET objects/<sha>/root` | a cut artifact's parts and index of functions; 404 when not cut or not there |
+| `POST objects/parts` | up to 1024 named objects as gzip files, in frames (`ServedStoreProtocol.Parts`) |
 | `GET analyses` | every manifest (what `list` gives) |
 | `GET analyses/<module>` | the module's manifests by recipe |
 | `POST analyses` | `{module, recipe, artifact, source?, reading?, replace?, discard_reading?}` — `artifact` is the SHA of an object already put; the answer is `putAnalysis`'s, refusals included |

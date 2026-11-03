@@ -7,8 +7,10 @@ import Foundation
 /// still returns exactly those bytes; only the file differs. Every object is a
 /// gzip file. An artifact is cut along its JSON: each function and each large
 /// section is an object of its own, and the file under the artifact's name
-/// holds the text between them and the names of the parts. Two revisions that
-/// differ in a few functions then share all the others. Nothing in the JSON is
+/// holds the text between them, the names of the parts, and an index of the
+/// functions: each one without its code, and the part that holds it. Two
+/// revisions that differ in a few functions then share all the others, and a
+/// reader of one function needs its part and the root. Nothing in the JSON is
 /// reformatted: the parts put end to end are the original bytes, or the object
 /// is not cut at all.
 extension ContentStore {
@@ -38,13 +40,13 @@ extension ContentStore {
                 switch segment {
                 case .literal(let text):
                     names.append(.literal(text))
-                case .part(let bytes):
+                case .part(let bytes), .function(let bytes):
                     let name = SHA256Digest(data: bytes)
                     if !hasObject(name) { try atomicWrite(try Gzip.compress(bytes), to: objectURL(name)) }
                     names.append(.object(name.hex))
                 }
             }
-            return try Gzip.compress(try PartedObject.encodedRoot(names))
+            return try Gzip.compress(try PartedObject.encodedRoot(names, functions: PartedObject.index(of: segments)))
         }
         return try Gzip.compress(data)
     }
@@ -82,10 +84,20 @@ extension ContentStore {
                 }
                 report.objects += 1
                 guard SHA256Digest(data: stored) == digest else {
-                    // Not plain: parted by an earlier run, or damaged.
+                    // Not plain: parted by an earlier run, or damaged. A root
+                    // written before roots held the index of the functions gets it.
                     do {
-                        _ = try unpacked(stored, digest: digest)
+                        let whole = try unpacked(stored, digest: digest)
                         report.alreadyParted += 1
+                        if let inflated = Gzip.decompress(stored), PartedObject.root(of: inflated) != nil,
+                           !PartedObject.hasIndex(inflated) {
+                            let file = try target.packed(whole)
+                            guard try target.unpacked(file, digest: digest) == whole else {
+                                throw CodeAnalysisError.objectCorrupt(digest.hex)
+                            }
+                            try target.atomicWrite(file, to: target.objectURL(digest))
+                            report.indexed += 1
+                        }
                     } catch {
                         report.problems.append("objects/\(digest.hex): \(error)")
                     }
@@ -154,6 +166,30 @@ extension ContentStore {
         return inflated
     }
 
+    /// The file under a cut object's name, inflated: its parts and the index of
+    /// its functions, for a reader that wants less than the whole. Nil for an
+    /// object that is not cut; throws `objectMissing` for one not here.
+    public func objectRoot(_ digest: SHA256Digest) throws -> Data? {
+        guard let stored = try? Data(contentsOf: objectURL(digest)) else {
+            throw CodeAnalysisError.objectMissing(digest.hex)
+        }
+        guard let inflated = Gzip.decompress(stored), PartedObject.root(of: inflated) != nil else { return nil }
+        return inflated
+    }
+
+    /// An object's whole bytes as a gzip file, from its own file when that is
+    /// what it holds: what the server sends for a part, compressed only once.
+    public func gzippedObject(_ digest: SHA256Digest) throws -> Data {
+        guard let stored = try? Data(contentsOf: objectURL(digest)) else {
+            throw CodeAnalysisError.objectMissing(digest.hex)
+        }
+        if let inflated = Gzip.decompress(stored), PartedObject.root(of: inflated) == nil,
+           SHA256Digest(data: inflated) == digest {
+            return stored
+        }
+        return try Gzip.compress(try unpacked(stored, digest: digest))
+    }
+
     /// The objects a kept object needs besides itself; nothing for one that is
     /// not cut.
     func parts(of digest: SHA256Digest) -> [SHA256Digest] {
@@ -173,6 +209,8 @@ public struct PartedMigrationReport: Codable, Equatable, Sendable {
     public var objects = 0
     /// Brought to the parted form by this run.
     public var parted = 0
+    /// Roots an earlier run wrote without the index of the functions, given it.
+    public var indexed = 0
     /// Of those, the artifacts cut into parts.
     public var cut = 0
     public var alreadyParted = 0
@@ -198,6 +236,40 @@ enum PartedObject {
     enum Segment: Equatable {
         case literal(String)
         case part(Data)
+        case function(Data)
+    }
+
+    /// What a function holds beyond what the index repeats of it.
+    private static let code: Set<String> = ["c", "c_spans", "c_sites", "c_fields", "c_unreachable", "instructions"]
+
+    /// One entry per function: the function without its code, the part that
+    /// holds it (`part`), and what the reader compares a function by without
+    /// reading it (`fingerprint`). Nil when a function does not read as one, so
+    /// that no reader takes a short index for the whole list.
+    static func index(of segments: [Segment]) -> [Data]? {
+        var entries: [Data] = []
+        for segment in segments {
+            guard case .function(let bytes) = segment else { continue }
+            guard var function = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any],
+                  function["entry"] is String else {
+                return nil
+            }
+            let name = function["name"] as? String ?? ""
+            function["part"] = SHA256Digest(data: bytes).hex
+            function["fingerprint"] = CodeArtifact.fingerprint(name: name, signature: function["signature"] as? String,
+                                                               c: function["c"] as? String)
+            for key in code { function[key] = nil }
+            guard let entry = try? JSONSerialization.data(withJSONObject: function, options: [.sortedKeys]) else {
+                return nil
+            }
+            entries.append(entry)
+        }
+        return entries
+    }
+
+    /// Whether a root says anything of an index, even that it has none.
+    static func hasIndex(_ root: Data) -> Bool {
+        (try? JSONSerialization.jsonObject(with: root) as? [String: Any])?["functions"] != nil
     }
 
     /// What a root starts with. An artifact's own JSON cannot start so.
@@ -207,7 +279,9 @@ enum PartedObject {
     /// more than repeating it.
     private static let smallestSection = 1024
 
-    static func encodedRoot(_ parts: [Part]) throws -> Data {
+    /// `functions`, nil for an artifact with no usable index, comes after
+    /// `parts`, as a key a reader of parts alone does not look at.
+    static func encodedRoot(_ parts: [Part], functions: [Data]?) throws -> Data {
         var root = rootPrefix
         for (index, part) in parts.enumerated() {
             if index > 0 { root.append(UInt8(ascii: ",")) }
@@ -218,7 +292,18 @@ enum PartedObject {
                 root.append(Data(#"{"sha256":""#.utf8) + Data(hex.utf8) + Data(#""}"#.utf8))
             }
         }
-        root.append(Data("]}".utf8))
+        root.append(Data(#"],"functions":"#.utf8))
+        if let functions {
+            root.append(UInt8(ascii: "["))
+            for (index, entry) in functions.enumerated() {
+                if index > 0 { root.append(UInt8(ascii: ",")) }
+                root.append(entry)
+            }
+            root.append(UInt8(ascii: "]"))
+        } else {
+            root.append(Data("null".utf8))
+        }
+        root.append(UInt8(ascii: "}"))
         return root
     }
 
@@ -255,7 +340,8 @@ enum PartedObject {
                 guard let text = String(bytes: bytes[cursor..<span.lowerBound], encoding: .utf8) else { return nil }
                 segments.append(.literal(text))
             }
-            segments.append(.part(Data(bytes[span])))
+            let part = Data(bytes[span])
+            segments.append(scanner.functionSpans.contains(span.lowerBound) ? .function(part) : .part(part))
             cursor = span.upperBound
         }
         if cursor < bytes.count {
@@ -267,7 +353,7 @@ enum PartedObject {
         for segment in segments {
             switch segment {
             case .literal(let text): whole.append(contentsOf: text.utf8)
-            case .part(let part): whole.append(part)
+            case .part(let part), .function(let part): whole.append(part)
             }
         }
         return whole == data ? segments : nil
@@ -277,6 +363,8 @@ enum PartedObject {
     private struct Scanner {
         let bytes: [UInt8]
         var at = 0
+        /// Where the spans `artifactSpans` found for functions start.
+        var functionSpans: Set<Int> = []
 
         init(bytes: [UInt8]) { self.bytes = bytes }
 
@@ -365,6 +453,7 @@ enum PartedObject {
                         let start = at
                         guard skipValue() else { return nil }
                         spans.append(start..<at)
+                        functionSpans.insert(start)
                     }
                 } else {
                     let start = at

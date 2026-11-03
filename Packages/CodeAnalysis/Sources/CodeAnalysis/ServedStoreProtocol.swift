@@ -138,6 +138,20 @@ public enum ServedStoreProtocol {
         }
     }
 
+    /// The objects asked of `POST objects/parts`. The answer is a run of
+    /// frames, one per name in this order: the name in hex, its length as eight
+    /// big-endian bytes, then that many bytes of gzip file; length 0 for an
+    /// object the store does not have.
+    public struct Parts: Codable, Equatable, Sendable {
+        /// The most names one request may carry.
+        public static let limit = 1024
+        public var sha256: [SHA256Digest]
+
+        public init(sha256: [SHA256Digest]) {
+            self.sha256 = sha256
+        }
+    }
+
     public struct Export: Codable, Equatable, Sendable {
         public var keys: [AnalysisKey]
 

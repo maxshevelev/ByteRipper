@@ -57,6 +57,55 @@ public struct RemoteStore: Sendable {
         return data
     }
 
+    /// A cut object's root (`ContentStore.objectRoot`); nil when the object is
+    /// not cut, is not there, or the server is older than the call: all three
+    /// are read whole, or found missing, by `object`.
+    public func objectRoot(_ digest: SHA256Digest) async throws -> Data? {
+        do {
+            return try await call("GET", "objects/\(digest.hex)/root")
+        } catch Failure.refused(let status, _, _) where status == 404 {
+            return nil
+        }
+    }
+
+    /// Objects as gzip files, each checked against its name: as many requests
+    /// as it takes, and no entry for an object the server does not have. A
+    /// server older than the call refuses it with 404.
+    public func gzippedObjects(_ digests: [SHA256Digest]) async throws -> [SHA256Digest: Data] {
+        var files: [SHA256Digest: Data] = [:]
+        var start = 0
+        while start < digests.count {
+            let names = Array(digests[start..<min(start + ServedStoreProtocol.Parts.limit, digests.count)])
+            start += names.count
+            let answer = try await call("POST", "objects/parts",
+                                        body: try encoder.encode(ServedStoreProtocol.Parts(sha256: names)),
+                                        timeout: 300)
+            var at = answer.startIndex
+            for name in names {
+                guard answer.distance(from: at, to: answer.endIndex) >= 72,
+                      String(decoding: answer[at..<(at + 64)], as: UTF8.self) == name.hex else {
+                    throw Failure.unexpected("the answer does not name \(name.hex) where it should")
+                }
+                let length = answer[(at + 64)..<(at + 72)].reduce(UInt64(0)) { $0 << 8 | UInt64($1) }
+                at += 72
+                guard length <= UInt64(answer.distance(from: at, to: answer.endIndex)) else {
+                    throw Failure.unexpected("the answer ends inside \(name.hex)")
+                }
+                let end = at + Int(length)
+                if length > 0 {
+                    let file = Data(answer[at..<end])
+                    guard let bytes = Gzip.decompress(file), SHA256Digest(data: bytes) == name else {
+                        throw CodeAnalysisError.objectCorrupt(name.hex)
+                    }
+                    files[name] = file
+                }
+                at = end
+            }
+            guard at == answer.endIndex else { throw Failure.unexpected("the answer holds more than was asked") }
+        }
+        return files
+    }
+
     /// The same as `object`, for `ContentStore.objectSource`, which is called
     /// from synchronous code off the main actor — usually from inside a task,
     /// blocking a thread of the cooperative pool. So the wait needs no task:

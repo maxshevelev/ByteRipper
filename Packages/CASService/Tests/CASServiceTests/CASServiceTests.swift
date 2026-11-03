@@ -114,6 +114,53 @@ final class CASServiceTests: XCTestCase {
         XCTAssertEqual(problems, [])
     }
 
+    /// A client takes the root of a cut artifact and the parts it wants,
+    /// instead of the whole.
+    func testAClientReadsARootAndOnlyThePartsItAsksFor() async throws {
+        try served.enablePartedObjects()
+        let whole = artifact(3)
+        let manifest = try await remote.putAnalysis(module: module("a"), recipe: recipe, artifact: whole)
+        let digest = manifest.artifact.sha256
+
+        let root = try await remote.objectRoot(digest)
+        XCTAssertEqual(root, try served.objectRoot(digest))
+        let object = try JSONSerialization.jsonObject(with: try XCTUnwrap(root)) as? [String: Any]
+        let functions = try XCTUnwrap(object?["functions"] as? [[String: Any]])
+        XCTAssertEqual(functions.count, 3)
+
+        let wanted = try XCTUnwrap(SHA256Digest(hex: try XCTUnwrap(functions[1]["part"] as? String)))
+        let absent = SHA256Digest(data: Data("absent".utf8))
+        let files = try await remote.gzippedObjects([wanted, absent, digest])
+        XCTAssertEqual(Set(files.keys), [wanted, digest], "no entry for what the server lacks")
+        XCTAssertEqual(files[wanted], try Data(contentsOf: served.objectURL(wanted)))
+        XCTAssertEqual(try gunzipped(files[digest]), whole, "a root asked for comes whole")
+
+        let notCut = try await remote.putObject(Data("not an artifact".utf8))
+        let noRoot = try await remote.objectRoot(notCut)
+        XCTAssertNil(noRoot)
+        let missing = try await remote.objectRoot(absent)
+        XCTAssertNil(missing)
+
+        // More names than one request carries take more requests.
+        let many = (0..<(ServedStoreProtocol.Parts.limit + 2)).map { SHA256Digest(data: Data("\($0)".utf8)) }
+        let none = try await remote.gzippedObjects(many + [wanted])
+        XCTAssertEqual(Array(none.keys), [wanted])
+    }
+
+    private func gunzipped(_ file: Data?) throws -> Data {
+        let name = directory.appendingPathComponent("file.gz")
+        try XCTUnwrap(file).write(to: name)
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/gzip")
+        process.arguments = ["-dc", name.path]
+        let output = Pipe()
+        process.standardOutput = output
+        try process.run()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        return data
+    }
+
     func testAnObjectIsCheckedOnTheWayInAndOut() async throws {
         let digest = try await remote.putObject(Data("bytes".utf8))
         let fetched = try await remote.object(digest)

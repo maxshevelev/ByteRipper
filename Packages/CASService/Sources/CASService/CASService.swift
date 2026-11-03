@@ -37,6 +37,32 @@ public struct CASService: Sendable {
         router.add("GET", "\(prefix)/objects/:sha", access: .rights([.casRead])) { request in
             .bytes(try Self.answer { try store.object(try Self.digest(request.parameters["sha"])) })
         }
+        router.add("GET", "\(prefix)/objects/:sha/root", access: .rights([.casRead])) { request in
+            let digest = try Self.digest(request.parameters["sha"])
+            guard let root = try Self.answer({ try store.objectRoot(digest) }) else {
+                throw HTTPError(.notFound, "object \(digest.hex) is not cut")
+            }
+            return .bytes(root)
+        }
+        router.add("POST", "\(prefix)/objects/parts", access: .rights([.casRead])) { request in
+            let names = try request.json(ServedStoreProtocol.Parts.self)
+            guard names.sha256.count <= ServedStoreProtocol.Parts.limit else {
+                throw HTTPError(.unprocessable, "at most \(ServedStoreProtocol.Parts.limit) objects a request")
+            }
+            var answer = Data()
+            for name in names.sha256 {
+                var file = Data()
+                do {
+                    file = try store.gzippedObject(name)
+                } catch CodeAnalysisError.objectMissing {
+                    // Stays empty: the client knows what it lacks.
+                }
+                answer.append(Data(name.hex.utf8))
+                withUnsafeBytes(of: UInt64(file.count).bigEndian) { answer.append(contentsOf: $0) }
+                answer.append(file)
+            }
+            return .bytes(answer)
+        }
         router.add("PUT", "\(prefix)/objects/:sha", access: .rights([.casWrite])) { request in
             let digest = try Self.digest(request.parameters["sha"])
             guard SHA256Digest(data: request.body) == digest else {

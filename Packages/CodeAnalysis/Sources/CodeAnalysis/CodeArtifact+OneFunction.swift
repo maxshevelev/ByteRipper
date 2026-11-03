@@ -1,6 +1,13 @@
 import Foundation
 
 extension CodeArtifact {
+    /// What a function reads as: two readings with one fingerprint look alike
+    /// to a reader, whatever else differs. The app's record of what was seen
+    /// and a parted artifact's index both hold this.
+    public static func fingerprint(name: String, signature: String?, c: String?) -> String {
+        SHA256Digest(data: Data("\(name)\u{0}\(signature ?? "")\u{0}\(c ?? "")".utf8)).hex
+    }
+
     /// An artifact read for one function: that function whole, every other one
     /// without its code, and the tables of the analysis as they are. A diff
     /// opens one function, and decoding the code of all the others is most of

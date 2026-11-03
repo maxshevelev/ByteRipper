@@ -22,7 +22,7 @@ public struct SeenRecord: Codable, Equatable, Sendable {
 
     /// The digest that stands for a function's code in a record.
     public static func fingerprint(name: String, signature: String?, c: String?) -> String {
-        SHA256Digest(data: Data("\(name)\u{0}\(signature ?? "")\u{0}\(c ?? "")".utf8)).hex
+        CodeArtifact.fingerprint(name: name, signature: signature, c: c)
     }
 }
 
