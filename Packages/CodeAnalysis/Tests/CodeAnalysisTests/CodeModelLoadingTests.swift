@@ -29,7 +29,6 @@ final class CodeModelLoadingTests: XCTestCase {
 
     private func stored() throws -> (ContentStore, SHA256Digest, CodeArtifact) {
         let store = try ContentStore(root: folder)
-        try store.enablePartedObjects()
         let data = try JSONSerialization.data(withJSONObject: [
             "script_version": 9, "program": ["image_base": "0x0"],
             "functions": [function(0x100, "Alpha", calling: 0x300),
@@ -52,6 +51,8 @@ final class CodeModelLoadingTests: XCTestCase {
         XCTAssertEqual(model.pendingFunction(holding: CodeAddress(0x205)), 1)
         XCTAssertNil(model.pendingFunction(holding: CodeAddress(0x206)))
         XCTAssertEqual(model.function(at: CodeAddress(0x200)), 1)
+        XCTAssertEqual(skeleton.function(containing: CodeAddress(0x205))?.name, "Beta")
+        XCTAssertNil(skeleton.function(containing: CodeAddress(0x206)))
     }
 
     /// The order they are read in leaves the places already handed out alone,

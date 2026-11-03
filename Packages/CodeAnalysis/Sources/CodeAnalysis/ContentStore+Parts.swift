@@ -1,7 +1,6 @@
 import Foundation
 
-/// How an object lies on disk, once the store has been told to keep objects
-/// parted (`enablePartedObjects`).
+/// How an object lies on disk.
 ///
 /// An object is still named by the SHA-256 of its whole bytes, and `object`
 /// still returns exactly those bytes; only the file differs. Every object is a
@@ -14,18 +13,6 @@ import Foundation
 /// reformatted: the parts put end to end are the original bytes, or the object
 /// is not cut at all.
 extension ContentStore {
-    private var partedMarkerURL: URL { root.appendingPathComponent("parted-objects") }
-
-    /// Whether new objects are written parted. A build that cannot read parts
-    /// may still share an existing store, so this is the store's own switch.
-    public var writesPartedObjects: Bool {
-        FileManager.default.fileExists(atPath: partedMarkerURL.path)
-    }
-
-    public func enablePartedObjects() throws {
-        try atomicWrite(Data("1\n".utf8), to: partedMarkerURL)
-    }
-
     /// Writes `data`, named `digest`, in the parted form.
     func writeParted(_ data: Data, digest: SHA256Digest) throws {
         try atomicWrite(try packed(data), to: objectURL(digest))
@@ -51,90 +38,10 @@ extension ContentStore {
         return try Gzip.compress(data)
     }
 
-    /// Brings every object of the store to the parted form and switches the
-    /// store to write it. A dry run does the same in a scratch folder, so the
-    /// numbers and the check are the real ones and the store is not touched.
-    ///
-    /// An object's file is replaced only after what will stand there has been
-    /// read back as the same bytes, by one atomic rename, so a run that stops
-    /// leaves a store that reads, and a second run goes on from there. The
-    /// store is switched only when every object came through. Nothing else may
-    /// write the store meanwhile, and every build reading it must know parts.
-    public func migrateToPartedObjects(dryRun: Bool = true) throws -> PartedMigrationReport {
-        var report = PartedMigrationReport(dryRun: dryRun)
-        let scratch = dryRun
-            ? FileManager.default.temporaryDirectory
-                .appendingPathComponent("byteripper-cas-migrate-\(UUID().uuidString)", isDirectory: true)
-            : nil
-        defer { if let scratch { try? FileManager.default.removeItem(at: scratch) } }
-        let target = try scratch.map { try ContentStore(root: $0) } ?? self
-        // A dry run writes nothing here, so it keeps no publish waiting.
-        func exclusive(_ body: () throws -> Void) throws {
-            if dryRun { try body() } else { try withLock(body) }
-        }
-        try exclusive {
-            for url in contents(of: objectsURL) {
-                guard let digest = SHA256Digest(hex: url.lastPathComponent) else {
-                    report.problems.append("objects/\(url.lastPathComponent): not a SHA-256 name")
-                    continue
-                }
-                guard let stored = try? Data(contentsOf: url) else {
-                    report.problems.append("objects/\(digest.hex): cannot be read")
-                    continue
-                }
-                report.objects += 1
-                guard SHA256Digest(data: stored) == digest else {
-                    // Not plain: parted by an earlier run, or damaged. A root
-                    // written before roots held the index of the functions gets it.
-                    do {
-                        let whole = try unpacked(stored, digest: digest)
-                        report.alreadyParted += 1
-                        if let inflated = Gzip.decompress(stored), PartedObject.root(of: inflated) != nil,
-                           !PartedObject.hasIndex(inflated) {
-                            let file = try target.packed(whole)
-                            guard try target.unpacked(file, digest: digest) == whole else {
-                                throw CodeAnalysisError.objectCorrupt(digest.hex)
-                            }
-                            try target.atomicWrite(file, to: target.objectURL(digest))
-                            report.indexed += 1
-                        }
-                    } catch {
-                        report.problems.append("objects/\(digest.hex): \(error)")
-                    }
-                    continue
-                }
-                report.bytesBefore += stored.count
-                do {
-                    let file = try target.packed(stored)
-                    guard try target.unpacked(file, digest: digest) == stored else {
-                        throw CodeAnalysisError.objectCorrupt(digest.hex)
-                    }
-                    try target.atomicWrite(file, to: target.objectURL(digest))
-                    report.parted += 1
-                    if !target.parts(of: digest).isEmpty { report.cut += 1 }
-                } catch {
-                    report.problems.append("objects/\(digest.hex): \(error)")
-                }
-            }
-            for url in target.contents(of: target.objectsURL) {
-                let values = try? url.resourceValues(forKeys: [.fileSizeKey, .totalFileAllocatedSizeKey])
-                report.filesAfter += 1
-                report.bytesAfter += values?.fileSize ?? 0
-                report.bytesOnDiskAfter += values?.totalFileAllocatedSize ?? 0
-            }
-            if report.problems.isEmpty, !dryRun {
-                try enablePartedObjects()
-                report.switched = true
-            }
-        }
-        return report
-    }
-
-    /// The bytes named `digest`, from what its file holds, in any form the
-    /// store has written. Throws `objectCorrupt` for a file that is none of
-    /// them, and `objectMissing` naming a part that is gone.
+    /// The bytes named `digest`, from what its file holds. Throws
+    /// `objectCorrupt` for a file that is not what the store writes, and
+    /// `objectMissing` naming a part that is gone.
     func unpacked(_ stored: Data, digest: SHA256Digest) throws -> Data {
-        if SHA256Digest(data: stored) == digest { return stored }
         guard let inflated = Gzip.decompress(stored) else {
             throw CodeAnalysisError.objectCorrupt(digest.hex)
         }
@@ -150,9 +57,7 @@ extension ContentStore {
                         throw CodeAnalysisError.objectMissing(hex)
                     }
                     // Checked once, as a whole, below.
-                    // A part can be an object written plain before the store
-                    // was switched: the same bytes happened to exist.
-                    whole.append(Gzip.decompress(file) ?? file)
+                    whole.append(try PartedObject.inflated(file, name: name))
                 }
             }
             guard SHA256Digest(data: whole) == digest else {
@@ -265,7 +170,7 @@ extension ContentStore {
                       let file = try? Data(contentsOf: store.objectURL(name)) else {
                     throw CodeAnalysisError.objectMissing(wanted[index].part)
                 }
-                return try JSONDecoder().decode(CodeArtifact.Function.self, from: Gzip.decompress(file) ?? file)
+                return try JSONDecoder().decode(CodeArtifact.Function.self, from: try PartedObject.inflated(file, name: name))
             })
         }
         return try box.results()
@@ -327,7 +232,7 @@ extension ContentStore {
                           let file = try? Data(contentsOf: objectURL(name)) else {
                         throw CodeAnalysisError.objectMissing(hex)
                     }
-                    reduced.append(Gzip.decompress(file) ?? file)
+                    reduced.append(try PartedObject.inflated(file, name: name))
                 }
             }
         }
@@ -349,7 +254,7 @@ extension ContentStore {
                 entries["roots/\(digest.hex)"] = root
                 for name in names where hasObject(name) {
                     let file = try Data(contentsOf: objectURL(name))
-                    entries["objects/\(name.hex)"] = Gzip.decompress(file) ?? file
+                    entries["objects/\(name.hex)"] = try PartedObject.inflated(file, name: name)
                 }
                 return
             }
@@ -375,7 +280,7 @@ extension ContentStore {
                     carried[name] = bytes
                     whole.append(bytes)
                 } else if complete, let file = try? Data(contentsOf: objectURL(name)) {
-                    whole.append(Gzip.decompress(file) ?? file)
+                    whole.append(try PartedObject.inflated(file, name: name))
                 } else {
                     complete = false
                 }
@@ -422,8 +327,10 @@ extension ContentStore {
         guard let stored = try? Data(contentsOf: objectURL(digest)) else {
             throw CodeAnalysisError.objectMissing(digest.hex)
         }
-        if let inflated = Gzip.decompress(stored), PartedObject.root(of: inflated) == nil,
-           SHA256Digest(data: inflated) == digest {
+        if let inflated = Gzip.decompress(stored), PartedObject.root(of: inflated) == nil {
+            guard SHA256Digest(data: inflated) == digest else {
+                throw CodeAnalysisError.objectCorrupt(digest.hex)
+            }
             return stored
         }
         return try Gzip.compress(try unpacked(stored, digest: digest))
@@ -442,31 +349,14 @@ extension ContentStore {
     }
 }
 
-/// What `migrateToPartedObjects` did, or in a dry run would do.
-public struct PartedMigrationReport: Codable, Equatable, Sendable {
-    public var dryRun: Bool
-    public var objects = 0
-    /// Brought to the parted form by this run.
-    public var parted = 0
-    /// Roots an earlier run wrote without the index of the functions, given it.
-    public var indexed = 0
-    /// Of those, the artifacts cut into parts.
-    public var cut = 0
-    public var alreadyParted = 0
-    public var bytesBefore = 0
-    public var filesAfter = 0
-    /// What the object files hold, and what they take on the disk.
-    public var bytesAfter = 0
-    public var bytesOnDiskAfter = 0
-    public var problems: [String] = []
-    /// Whether the store now writes the parted form.
-    public var switched = false
-
-    public init(dryRun: Bool) { self.dryRun = dryRun }
-}
-
 /// The file under a cut artifact's name, and the cutting.
 enum PartedObject {
+    /// What a part's file holds; every object's file is gzip.
+    static func inflated(_ file: Data, name: SHA256Digest) throws -> Data {
+        guard let bytes = Gzip.decompress(file) else { throw CodeAnalysisError.objectCorrupt(name.hex) }
+        return bytes
+    }
+
     enum Part: Equatable {
         case literal(String)
         case object(String)
@@ -537,11 +427,6 @@ enum PartedObject {
             fields["part"] = nil
             return try JSONSerialization.data(withJSONObject: fields)
         }
-    }
-
-    /// Whether a root says anything of an index, even that it has none.
-    static func hasIndex(_ root: Data) -> Bool {
-        (try? JSONSerialization.jsonObject(with: root) as? [String: Any])?["functions"] != nil
     }
 
     /// What a root starts with. An artifact's own JSON cannot start so.

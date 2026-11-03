@@ -569,7 +569,6 @@ final class ContentStoreTests: XCTestCase {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: folder) }
         let server = try ContentStore(root: folder.appendingPathComponent("server"))
-        try server.enablePartedObjects()
         let artifact = try JSONSerialization.data(withJSONObject: [
             "script_version": 9, "program": ["image_base": "0x0"],
             "functions": [function(0x1000), function(0x2000)]

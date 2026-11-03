@@ -173,7 +173,6 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
             .appendingPathComponent("GhidraHostPartedTests-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let store = try ContentStore(root: directory.appendingPathComponent("store"))
-        try store.enablePartedObjects()
         let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
                                                    idle: 300, holder: "GhidraHostPartedTests"),
                               writer: store)

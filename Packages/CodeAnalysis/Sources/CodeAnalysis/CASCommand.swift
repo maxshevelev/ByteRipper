@@ -52,7 +52,6 @@ public enum CASCommand {
           remove-ref <name>
           verify
           gc [--apply] [--analyses]
-          migrate-objects [--apply]
           export --out <file> <module-sha>/<recipe>...
           import <file>
         """
@@ -239,14 +238,6 @@ public enum CASCommand {
             try parser.end()
             output.stdout = try encode(try store.collectGarbage(
                 dryRun: !apply, deleteUnreferencedAnalyses: analyses))
-        case "migrate-objects":
-            let apply = parser.flag("--apply")
-            try parser.end()
-            guard let local = store as? LocalOperations else {
-                throw CodeAnalysisError.analysisMismatch("migrate-objects runs on a store directory, not on a server")
-            }
-            output.stdout = try encode(try ContentStore(root: local.root, create: local.create)
-                .migrateToPartedObjects(dryRun: !apply))
         case "export":
             guard let out = parser.option("--out") else {
                 throw Usage(description: "export: --out is required")

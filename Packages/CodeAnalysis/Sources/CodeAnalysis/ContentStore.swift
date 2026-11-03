@@ -152,11 +152,7 @@ public struct ContentStore: Sendable {
         if FileManager.default.fileExists(atPath: url.path) {
             return digest
         }
-        if writesPartedObjects {
-            try writeParted(data, digest: digest)
-        } else {
-            try atomicWrite(data, to: url)
-        }
+        try writeParted(data, digest: digest)
         return digest
     }
 

@@ -82,12 +82,10 @@ final class CASServiceTests: XCTestCase {
 
     /// A client knows nothing of how the server keeps its objects: a publish,
     /// a read, a mirror and a bundle all see the whole bytes under the same name.
-    func testAServerKeepingPartedObjectsLooksTheSameToItsClients() async throws {
-        // Written before the switch, in the old form, then migrated.
+    func testAServerKeepingPartsLooksTheSameToItsClients() async throws {
         let before = artifact(3)
         let old = try await remote.putAnalysis(module: module("old"), recipe: recipe, artifact: before)
-        XCTAssertEqual(try served.migrateToPartedObjects(dryRun: false).problems, [])
-        XCTAssertNotEqual(try Data(contentsOf: served.objectURL(old.artifact.sha256)), before)
+        XCTAssertNotEqual(try Data(contentsOf: served.objectURL(old.artifact.sha256)), before, "kept parted")
 
         let after = artifact(4)
         let new = try await remote.putAnalysis(module: module("new"), recipe: recipe, artifact: after)
@@ -119,7 +117,6 @@ final class CASServiceTests: XCTestCase {
     /// A client that takes gzip gets the root's own file and URLSession inflates
     /// it; one that does not, such as plain curl, gets the root inflated.
     func testARootGoesGzippedOnlyToWhoTakesIt() async throws {
-        try served.enablePartedObjects()
         let manifest = try await remote.putAnalysis(module: module("a"), recipe: recipe, artifact: artifact(3))
         let digest = manifest.artifact.sha256
         let root = try XCTUnwrap(try served.objectRoot(digest))
@@ -149,7 +146,6 @@ final class CASServiceTests: XCTestCase {
     }
 
     func testAClientReadsARootAndOnlyThePartsItAsksFor() async throws {
-        try served.enablePartedObjects()
         let whole = artifact(3)
         let manifest = try await remote.putAnalysis(module: module("a"), recipe: recipe, artifact: whole)
         let digest = manifest.artifact.sha256
@@ -182,13 +178,11 @@ final class CASServiceTests: XCTestCase {
     /// What a function's diff costs a mirror: the root, the sections and that
     /// function; the next revision's read of it, what changed.
     func testAMirrorKeepsOnlyTheFunctionsAskedFor() async throws {
-        try served.enablePartedObjects()
         let first = try await remote.putAnalysis(module: module("a"), recipe: recipe, artifact: artifact(4))
         let digest = first.artifact.sha256
         let whole = try served.object(digest)
         let mirror = StoreMirror(remote: remote, mirrorsRoot: directory.appendingPathComponent("mirrors"))
         let store = try await mirror.connect()
-        XCTAssertTrue(store.writesPartedObjects)
 
         let functions = try JSONDecoder().decode(CodeArtifact.self, from: whole).functions
         let entry = functions[1].entry
@@ -208,7 +202,6 @@ final class CASServiceTests: XCTestCase {
     /// without a server as far as that goes; a server takes it only when the
     /// bundle and the server make the whole.
     func testAProjectBundleHoldsWhatTheMirrorHolds() async throws {
-        try served.enablePartedObjects()
         let manifest = try await remote.putAnalysis(module: module("a"), recipe: recipe, artifact: artifact(3))
         let digest = manifest.artifact.sha256
         let key = try XCTUnwrap(manifest.key)
@@ -260,37 +253,6 @@ final class CASServiceTests: XCTestCase {
         let other = try ContentStore(root: directory.appendingPathComponent("other"))
         XCTAssertEqual(try other.importBundle(from: full).imported.count, 1)
         XCTAssertEqual(try other.object(digest), whole)
-    }
-
-    /// A mirror written before it kept parts is brought along when it opens,
-    /// and a server with no parts to give is read whole, as before.
-    func testAMirrorFromBeforePartsAndAServerWithoutThem() async throws {
-        let whole = artifact(3)
-        let manifest = try await remote.putAnalysis(module: module("a"), recipe: recipe, artifact: whole)
-        let digest = manifest.artifact.sha256
-        let mirrors = directory.appendingPathComponent("mirrors")
-        let root = StoreMirror.root(of: try served.identity(), in: mirrors)
-        let earlier = try ContentStore(root: root)
-        let plain = Data("a document".utf8)
-        try earlier.putObject(plain)
-        try earlier.putObject(whole)
-        XCTAssertFalse(earlier.writesPartedObjects)
-
-        let store = try await StoreMirror(remote: remote, mirrorsRoot: mirrors).connect()
-        XCTAssertTrue(store.writesPartedObjects)
-        XCTAssertEqual(try store.object(SHA256Digest(data: plain)), plain)
-        XCTAssertEqual(try store.object(digest), whole)
-
-        // `served` is not cut: no root, so the whole comes, and is kept cut.
-        let second = artifact(5)
-        let next = try await remote.putAnalysis(module: module("b"), recipe: recipe, artifact: second)
-        let name = next.artifact.sha256
-        let noRoot = try await remote.objectRoot(name)
-        XCTAssertNil(noRoot)
-        let entry = try JSONDecoder().decode(CodeArtifact.self, from: second).functions[2].entry
-        let read = try await Task.detached { try store.artifact(name, function: entry) }.value
-        XCTAssertEqual(read, try CodeArtifact.decoding(second, function: entry))
-        XCTAssertNotNil(try store.objectRoot(name))
     }
 
     private func gunzipped(_ file: Data?) throws -> Data {

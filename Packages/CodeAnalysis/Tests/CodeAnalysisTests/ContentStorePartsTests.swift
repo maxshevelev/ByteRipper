@@ -69,53 +69,34 @@ final class ContentStorePartsTests: XCTestCase {
         let root = try XCTUnwrap(try store.objectRoot(digest))
         let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: root) as? [String: Any])
         XCTAssertTrue(object["functions"] is NSNull)
-        XCTAssertEqual(try store.migrateToPartedObjects(dryRun: false).indexed, 0)
-    }
-
-    /// A root from before the index gets it from the migration, once, and a
-    /// dry run leaves the store as it was.
-    func testTheMigrationGivesAnOldRootItsIndex() throws {
-        let store = try store()
-        let data = artifact("second")
-        let digest = try store.putObject(data)
-        let url = store.objectURL(digest)
-        var old = try XCTUnwrap(try JSONSerialization.jsonObject(with: try XCTUnwrap(try store.objectRoot(digest)))
-            as? [String: Any])
-        old["functions"] = nil
-        let bare = try Gzip.compress(try JSONSerialization.data(withJSONObject: old, options: [.sortedKeys]))
-        try bare.write(to: url)
-        XCTAssertEqual(try store.object(digest), data, "an old root reads as it did")
-
-        XCTAssertEqual(try store.migrateToPartedObjects(dryRun: true).indexed, 1)
-        XCTAssertEqual(try Data(contentsOf: url), bare)
-
-        let report = try store.migrateToPartedObjects(dryRun: false)
-        XCTAssertEqual(report.indexed, 1)
-        XCTAssertEqual(report.problems, [])
-        XCTAssertEqual(try store.object(digest), data)
-        XCTAssertTrue(PartedObject.hasIndex(try XCTUnwrap(try store.objectRoot(digest))))
-        XCTAssertEqual(try store.migrateToPartedObjects(dryRun: false).indexed, 0)
     }
 
     /// What a server sends for an object is its gzip file, whatever form it
     /// lies in: a part, a plain object, or the whole of a cut one.
-    func testAGzippedObjectIsTheWholeBytesInEveryForm() throws {
+    func testAGzippedObjectIsTheWholeBytes() throws {
         let store = try store()
         let data = artifact("second")
         let digest = try store.putObject(data)
         XCTAssertEqual(Gzip.decompress(try store.gzippedObject(digest)), data)
         let part = try XCTUnwrap(store.parts(of: digest).first)
         XCTAssertEqual(try store.gzippedObject(part), try Data(contentsOf: store.objectURL(part)))
+        XCTAssertEqual(Gzip.decompress(try store.gzippedObject(try store.putObject(Data("short".utf8)))),
+                       Data("short".utf8))
+    }
+
+    private func store() throws -> ContentStore { try ContentStore(root: folder) }
+
+    /// A file that is not what the store writes is corrupt, not read as it is:
+    /// plain bytes under their own name included.
+    func testAPlainFileIsNotAnObject() throws {
+        let store = try store()
         let plain = Data("plain".utf8)
         let name = SHA256Digest(data: plain)
         try plain.write(to: store.objectURL(name))
-        XCTAssertEqual(Gzip.decompress(try store.gzippedObject(name)), plain)
-    }
-
-    private func store(parted: Bool = true) throws -> ContentStore {
-        let store = try ContentStore(root: folder)
-        if parted { try store.enablePartedObjects() }
-        return store
+        XCTAssertThrowsError(try store.object(name)) {
+            guard case CodeAnalysisError.objectCorrupt = $0 else { return XCTFail("\($0)") }
+        }
+        XCTAssertFalse(store.verify().isEmpty)
     }
 
     private func objectFiles(_ store: ContentStore) -> Int { store.contents(of: store.objectsURL).count }
@@ -163,16 +144,6 @@ final class ContentStorePartsTests: XCTestCase {
         XCTAssertEqual(read, text)
     }
 
-    func testAnObjectWrittenBeforeThePartsStillReads() throws {
-        let plain = try store(parted: false)
-        let bytes = artifact("one")
-        let name = try plain.putObject(bytes)
-        XCTAssertEqual(try Data(contentsOf: plain.objectURL(name)), bytes, "off until the store is switched")
-        try plain.enablePartedObjects()
-        XCTAssertEqual(try plain.object(name), bytes)
-        XCTAssertEqual(try plain.verify(), [])
-    }
-
     func testAMissingPartAndADamagedPartAreSaid() throws {
         let store = try store()
         let bytes = artifact("one")
@@ -208,51 +179,7 @@ final class ContentStorePartsTests: XCTestCase {
         XCTAssertFalse(store.hasObject(lonePart))
     }
 
-    func testADryRunTouchesNothingAndAMigrationKeepsEveryByte() throws {
-        let store = try store(parted: false)
-        let text = Data("# A description\n".utf8)
-        let one = artifact("one"), two = artifact("two")
-        let names = try [one, two, text].map { try store.putObject($0) }
-        func file(_ index: Int) throws -> Data { try Data(contentsOf: store.objectURL(names[index])) }
-
-        let dry = try store.migrateToPartedObjects()
-        XCTAssertEqual(dry.parted, 3)
-        XCTAssertEqual(dry.cut, 2)
-        XCTAssertEqual(dry.filesAfter, 7, "two roots, three functions, the types, the text")
-        XCTAssertEqual(try file(0), one)
-        XCTAssertEqual(objectFiles(store), 3)
-        XCTAssertFalse(store.writesPartedObjects)
-
-        let real = try store.migrateToPartedObjects(dryRun: false)
-        XCTAssertEqual(real.problems, [])
-        XCTAssertTrue(real.switched)
-        XCTAssertTrue(store.writesPartedObjects)
-        XCTAssertEqual(objectFiles(store), 7)
-        XCTAssertNotEqual(try file(0), one)
-        XCTAssertEqual(try store.object(names[0]), one)
-        XCTAssertEqual(try store.object(names[1]), two)
-        XCTAssertEqual(try store.object(names[2]), text)
-        XCTAssertEqual(store.verify(), [])
-
-        let again = try store.migrateToPartedObjects(dryRun: false)
-        XCTAssertEqual(again.parted, 0, "a second run goes on from where the first stopped")
-        XCTAssertEqual(again.alreadyParted, 7)
-    }
-
-    func testADamagedObjectStopsTheSwitchAndIsLeftAlone() throws {
-        let store = try store(parted: false)
-        let good = try store.putObject(artifact("one"))
-        let bad = try store.putObject(Data("words".utf8))
-        try Data("damage".utf8).write(to: store.objectURL(bad))
-        let report = try store.migrateToPartedObjects(dryRun: false)
-        XCTAssertEqual(report.problems.count, 1, "\(report.problems)")
-        XCTAssertFalse(report.switched)
-        XCTAssertFalse(store.writesPartedObjects)
-        XCTAssertEqual(try Data(contentsOf: store.objectURL(bad)), Data("damage".utf8))
-        XCTAssertEqual(try store.object(good), artifact("one"))
-    }
-
-    func testABundleCarriesTheWholeBytesBetweenStoresOfEitherForm() throws {
+    func testABundleCarriesTheWholeBytesBetweenStores() throws {
         let parted = try store()
         let data = Data("m".utf8)
         let module = ModuleIdentity(sha256: SHA256Digest(data: data), size: data.count, name: "M", kind: "TE",
@@ -262,10 +189,9 @@ final class ContentStorePartsTests: XCTestCase {
         let manifest = try parted.putAnalysis(module: module, recipe: recipe, artifact: bytes)
         let bundle = folder.appendingPathComponent("bundle.zip")
         _ = try parted.exportBundle([try XCTUnwrap(manifest.key)], to: bundle)
-        let plain = try ContentStore(root: folder.appendingPathComponent("other"))
-        _ = try plain.importBundle(from: bundle)
-        XCTAssertEqual(try Data(contentsOf: plain.objectURL(SHA256Digest(data: bytes))), bytes)
-        XCTAssertEqual(try plain.object(SHA256Digest(data: bytes)), bytes)
+        let other = try ContentStore(root: folder.appendingPathComponent("other"))
+        _ = try other.importBundle(from: bundle)
+        XCTAssertEqual(try other.object(SHA256Digest(data: bytes)), bytes)
     }
 
     func testJSONThatCannotBeCutIsKeptWhole() throws {
@@ -274,9 +200,7 @@ final class ContentStorePartsTests: XCTestCase {
         }
     }
 
-    /// A store's real objects, each put into a parted store and read back.
-    /// Reads `PARTS_STORE`, never writes to it. Skipped unless it is set.
-    /// Against a migrated copy of a real store: a function read through the
+    /// Against a copy of a real store: a function read through the
     /// root is what reading it out of the whole gives. `PARTS_MIGRATED` names it.
     func testARealFunctionReadsAsFromTheWhole() throws {
         guard let path = ProcessInfo.processInfo.environment["PARTS_MIGRATED"] else {
@@ -304,34 +228,4 @@ final class ContentStorePartsTests: XCTestCase {
         XCTAssertGreaterThan(compared, 0)
     }
 
-    func testARealStoreRoundTrips() throws {
-        guard let path = ProcessInfo.processInfo.environment["PARTS_STORE"] else {
-            throw XCTSkip("PARTS_STORE is not set")
-        }
-        let store = try store()
-        let source = URL(fileURLWithPath: path)
-        let files = try FileManager.default.contentsOfDirectory(at: source.appendingPathComponent("objects"),
-                                                                includingPropertiesForKeys: nil)
-        var total = 0, cut = 0, slowestRead = 0.0, reading = 0.0
-        for file in files {
-            let bytes = try Data(contentsOf: file)
-            total += bytes.count
-            let name = try store.putObject(bytes)
-            XCTAssertEqual(name.hex, file.lastPathComponent)
-            let started = Date()
-            let back = try store.object(name)
-            let took = Date().timeIntervalSince(started)
-            reading += took
-            slowestRead = max(slowestRead, took)
-            XCTAssertEqual(back, bytes, file.lastPathComponent)
-            if !store.parts(of: name).isEmpty { cut += 1 }
-        }
-        var stored = 0
-        for file in store.contents(of: store.objectsURL) {
-            stored += (try file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-        }
-        print("PARTS objects \(files.count) cut \(cut) before \(total >> 20) MB after \(stored >> 20) MB",
-              "files \(objectFiles(store)) slowest read \(Int(slowestRead * 1000)) ms",
-              "mean read \(Int(reading / Double(max(files.count, 1)) * 1000)) ms")
-    }
 }

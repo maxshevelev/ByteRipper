@@ -23,7 +23,7 @@ builds it therefore needs Xcode or its command line tools; one that sets
 byteripper-cas [--store <root>] [--no-create] <command>
   hello | put-object | has-object | get-object | put-analysis | analysis
   recipes | list | conflicts | record-revision | review-history | set-ref
-  refs | remove-ref | verify | gc | migrate-objects | export | import
+  refs | remove-ref | verify | gc | export | import
   library-rebody <id> <body> --reason <why> [--apply]
 ```
 
@@ -64,11 +64,11 @@ object.
 
 ### Parted objects
 
-A store holding the file `parted-objects` writes new objects in a smaller form;
-one without it writes them as above, because a build that cannot read parts may
-share it. An object keeps its name, the SHA-256 of its whole bytes, and
-`get_object` returns exactly those bytes; a reader of the store through
-`ContentStore` sees no difference, and both forms read in either kind of store.
+An object keeps its name, the SHA-256 of its whole bytes, and `get_object`
+returns exactly those bytes; a reader of the store through `ContentStore` sees no
+difference. A file that is not in this form is reported as corrupt: a store of
+plain files from a build before it no longer reads. A file `parted-objects` left
+in a store by an earlier build means nothing now.
 
 Every file is gzip. An artifact is cut along its JSON: each function, and each
 top-level section of 1 KiB or more, is an object of its own, named by its own
@@ -81,8 +81,7 @@ keeps the parts of what it keeps.
 
 The root also holds `functions`: each function without its code, with `part`,
 the object that holds it, and `fingerprint`, what the reader compares it by. It
-is `null` when a function would not read as one. Older roots have no such key
-until `migrate-objects --apply` gives it to them. A server answers
+is `null` when a function would not read as one. A server answers
 `GET /cas/v1/objects/<sha>/root` with the root (its gzip file under
 `Content-Encoding: gzip` when the request's `Accept-Encoding` takes gzip, inflated
 otherwise), 404 when the object is
@@ -102,15 +101,6 @@ from what the store has and fetches nothing: an artifact short of parts goes as
 `roots/<sha>` and the parts it has. `importBundle` takes that when bundle and
 store make the whole; only `acceptingPartial`, as a project opened without a
 server, keeps less.
-
-`byteripper-cas migrate-objects` brings a store to this form. Without `--apply`
-it does the work in a scratch folder and reports what would come of it: the
-store is not touched. With `--apply` each file is replaced only after what will
-stand there has been read back as the same bytes, and the store is switched
-only when every object came through; a run that stops leaves a store that reads,
-and a second run goes on from there. Nothing else may write the store meanwhile.
-Every build reading it must know the form: an older one cannot read a migrated
-object, and going back means the backup, without what was published since.
 
 ### Analyses
 

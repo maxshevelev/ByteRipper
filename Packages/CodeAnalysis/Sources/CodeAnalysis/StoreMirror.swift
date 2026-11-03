@@ -112,9 +112,6 @@ public actor StoreMirror {
                                                 files: { try remote.gzippedObjectsBlocking($0) }),
                               forRoot: root)
         let store = try ContentStore(root: root)
-        // A mirror written before it kept parts; one that stops short reads as
-        // it is, and goes on at the next start.
-        if !store.writesPartedObjects { _ = try? store.migrateToPartedObjects(dryRun: false) }
         mirror = store
         storeID = id
         epoch = nil
