@@ -10,6 +10,15 @@ note() { echo "note  $1"; }
 
 [ -x "$dir/bin/byteripper-server" ] && ok "server binary" || no "bin/byteripper-server is missing"
 [ -x "$dir/bin/byteripper-cas" ] && ok "store tool" || no "bin/byteripper-cas is missing"
+# Without its resource bundles the server stops at its start or in the middle of a call.
+bundles="$(sed -n 's/^bundles: *//p' "$dir/VERSION" 2>/dev/null)"
+if [ -z "$bundles" ]; then
+    no "VERSION names no resource bundles: this package was made without them"
+else
+    for bundle in $bundles; do
+        [ -d "$dir/bin/$bundle" ] && ok "resource bundle: $bundle" || no "bin/$bundle is missing"
+    done
+fi
 [ -f "$dir/ghidra/owner/Owner.java" ] && ok "Ghidra scripts: owner/" || no "ghidra/owner/Owner.java is missing"
 [ -f "$dir/ghidra/scripts/ApplyUefi.java" ] && ok "Ghidra scripts: scripts/" || no "ghidra/scripts/ApplyUefi.java is missing"
 [ -f "$dir/skills/ghidra-uefi/SKILL.md" ] && ok "skill" || no "skills/ghidra-uefi/SKILL.md is missing"

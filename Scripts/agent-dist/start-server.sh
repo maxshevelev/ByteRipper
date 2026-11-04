@@ -55,7 +55,15 @@ if pid="$(server_pid)"; then
 fi
 # A server of this copy that keeps another folder is still one server: two of
 # them would write the same store and fight over the projects.
-if other="$(pgrep -f -- "$server" | head -1)" && [ -n "$other" ]; then
+other=""
+for candidate in $(pgrep -f -- "$server" 2>/dev/null); do
+    case " $(ps -p "$candidate" -o command= 2>/dev/null || true) " in
+        *" relay "*) continue ;;   # a client of the server: it reconnects by itself
+    esac
+    other="$candidate"
+    break
+done
+if [ -n "$other" ]; then
     echo "another server of this copy is running (pid $other) with other folders;" >&2
     echo "stop it first: $dir/scripts/stop-server.sh" >&2
     exit 1

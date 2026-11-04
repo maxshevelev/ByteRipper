@@ -27,7 +27,14 @@ mkdir -p "$stage"/{bin,ghidra/owner,ghidra/scripts,skills/ghidra-uefi/scripts,sc
 
 cp "$repo/Packages/ByteRipperServer/.build/release/byteripper-server" "$stage/bin/"
 cp "$repo/Packages/CodeAnalysis/.build/release/byteripper-cas" "$stage/bin/"
-chmod 755 "$stage"/bin/*
+# SwiftPM's resource bundles sit beside the binary that reads them: the only
+# other place it looks is the build folder it was compiled in.
+bundles=""
+for bundle in "$repo/Packages/ByteRipperServer/.build/release/"*.bundle; do
+    cp -R "$bundle" "$stage/bin/"
+    bundles="$bundles $(basename "$bundle")"
+done
+chmod 755 "$stage"/bin/byteripper-*
 
 # The Ghidra scripts the server compiles and runs — the layout OwnerSources
 # reads: owner/ with the owner's sources, scripts/ with the passes.
@@ -56,6 +63,7 @@ version: $version
 commit: $(git -C "$repo" rev-parse --short HEAD)
 branch: $(git -C "$repo" rev-parse --abbrev-ref HEAD)
 built: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+bundles:$bundles
 ghidra: 12.2 with language patch descriptor-tables-1 — the analyses' recipe; another version or patch is a second recipe
 EOF
 
