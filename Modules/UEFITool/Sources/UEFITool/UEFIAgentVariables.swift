@@ -56,7 +56,7 @@ public enum UEFIAgentVariables {
         description: """
             The NVRAM variables the image keeps, from every VSS, VSS2, NVAR, Dell DVAR and GPNV store — \
             those inside compressed sections too, so the first call on a large image takes a few seconds. \
-            `stores` lists the stores the rows are in, with how many variables each holds, those it no longer holds (`deleted`) among them. \
+            `stores` lists the stores the rows are in, with how many variables each holds (`variables`) and, apart from them, how many it no longer holds (`deleted`). \
             One row per variable: the copy that stands for it now. `copies` above 1 says the store still \
             keeps earlier values (`uefi_node` on the entry lists them); `deleted: true` is a variable the \
             store no longer holds, listed only with `deleted`. Each row: name, GUID, the store's and the \
@@ -102,7 +102,8 @@ public enum UEFIAgentVariables {
             for variable in rows { stores[variable.store.id] = variable.store }
             return .array(stores.values.sorted { $0.id.path.lexicographicallyPrecedes($1.id.path) }.map { store in
                 let held = all.filter { $0.store.id == store.id }
-                return .object(storeSummary(store, variables: held.count, deleted: held.filter(\.isDeleted).count))
+                return .object(storeSummary(store, variables: held.filter { !$0.isDeleted }.count,
+                                             deleted: held.filter(\.isDeleted).count))
             })
         }
         let candidates = chosen.dropFirst(paging.first).prefix(limit)

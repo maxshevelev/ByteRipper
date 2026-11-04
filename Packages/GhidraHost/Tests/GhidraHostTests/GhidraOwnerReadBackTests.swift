@@ -322,4 +322,138 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         lines += try await dumped(changed)
         try lines.joined(separator: "\n").write(toFile: dump, atomically: true, encoding: .utf8)
     }
+
+    // MARK: - Reproductions on copies of kept projects
+
+    private func openCopy(of name: String) async throws {
+        guard ProcessInfo.processInfo.environment["GHIDRA_COPY_KEPT"] != nil else { throw XCTSkip("GHIDRA_COPY_KEPT is not set") }
+        let source = GhidraHost.defaultProjectsRoot
+        guard let original = GhidraProject.all(in: source).first(where: { (try? $0.state().module.name) == name }) else {
+            throw XCTSkip("no kept \(name) project to copy")
+        }
+        directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraOwnerReadBack-\(UUID().uuidString)", isDirectory: true)
+        let projects = directory.appendingPathComponent("projects")
+        try FileManager.default.createDirectory(at: projects, withIntermediateDirectories: true)
+        let copy = projects.appendingPathComponent(original.module.hex)
+        try FileManager.default.copyItem(at: original.folder, to: copy)
+        try? FileManager.default.removeItem(at: copy.appendingPathComponent("owner.json"))
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        host = GhidraHost(configuration: .init(projectsRoot: projects, idle: 120, holder: "GhidraOwnerReadBackTests"),
+                          writer: store)
+        module = original.module
+    }
+
+    /// A temporary a review left does not make a function unfinished, and is found all the same.
+    func testFragmentsAreListedThoughTheyAreNotUnfinished() async throws {
+        try await openCopy(of: "CpuIoPei")
+        let unfinished = try await read("/v1/functions?filter=unfinished&limit=50")
+        let held = try XCTUnwrap((unfinished["summary"] as? [String: Any])?["fragments_only"] as? Int)
+        XCTAssertGreaterThan(held, 0, "\(unfinished)")
+        let listed = try await read("/v1/functions?filter=fragments&limit=50")
+        let rows = try XCTUnwrap(listed["functions"] as? [[String: Any]])
+        XCTAssertGreaterThanOrEqual(rows.count, held, "\(listed)")
+        for row in rows {
+            let leftovers = try XCTUnwrap(row["leftovers"] as? [String: Any])
+            let names = try XCTUnwrap(leftovers["fragment_names"] as? [String], "\(row)")
+            XCTAssertEqual(names.count, leftovers["fragments"] as? Int, "\(row)")
+            XCTAssertFalse(names.isEmpty, "\(row)")
+        }
+    }
+
+    /// Typing HASH locals: what the listing holds afterwards, to see a split.
+    func testReproItem5HashSplit() async throws {
+        try await openCopy(of: "SecureFlashPei")
+        let entry = "0x9A13622"
+        func locals() async throws -> [[String: Any]] {
+            try await read("/v1/function/\(entry)")["locals"] as? [[String: Any]] ?? []
+        }
+        func line(_ row: [String: Any]) -> String { "\(row["name"] ?? "") \(row["storage"] ?? "") \(row["first_use"] ?? "-") \(row["type"] ?? "")" }
+        for row in try await locals() where (row["storage"] as? String)?.hasPrefix("HASH") == true {
+            let name = try XCTUnwrap(row["name"] as? String)
+            let before = try await locals()
+            var request: [String: Any] = ["function": entry, "storage": row["storage"] as Any, "type": "int *"]
+            if let first = row["first_use"] { request["first_use"] = first }
+            do {
+                let answer = try await post("/v1/rename/variable", request)
+                print("REPRO5", name, "answer", answer["storage"] ?? "-", answer["first_use"] ?? "-", answer["split"] ?? "-")
+            } catch { print("REPRO5", name, "refused", error) }
+            let after = try await locals()
+            print("REPRO5", name, "count", before.count, "->", after.count, "same name", after.filter { $0["name"] as? String == name }.map(line))
+            print("REPRO5 now", after.map(line))
+        }
+    }
+
+    /// Undecoded bytes of a gap are read as code, and the program does not change.
+    func testAnUndecodedGapIsReadWithoutChangingTheProgram() async throws {
+        try await open(try image())
+        let gaps = try await read("/v1/gaps?limit=500")
+        let rows = try XCTUnwrap(gaps["gaps"] as? [[String: Any]])
+        guard let gap = rows.first(where: { $0["instruction"] as? Bool == false && ($0["defined_data"] as? Bool ?? false) == false && ($0["size"] as? Int ?? 0) > 8 }),
+              let start = gap["first_non_padding"] as? String else { throw XCTSkip("no undecoded gap: \(rows.prefix(3))") }
+        let before = try await read("/v1/hello")
+        let answer = try await read("/v1/disassembly/\(start)?limit=4")
+        XCTAssertEqual(answer["undecoded"] as? Bool, true, "\(answer)")
+        XCTAssertEqual(answer["gap"] as? String, start, "\(answer)")
+        let instructions = try XCTUnwrap(answer["instructions"] as? [[String: Any]])
+        print("UNDECODED", start, instructions.map { "\($0["address"] ?? "") \($0["bytes"] ?? "") \($0["text"] ?? "")" }, answer["stopped_by"] ?? "-", answer["next"] ?? "-")
+        if answer["stopped_by"] == nil { XCTAssertEqual(instructions.count, 4, "\(answer)") }
+        let after = try await read("/v1/hello")
+        XCTAssertEqual(before["modification"] as? Int, after["modification"] as? Int)
+        XCTAssertEqual(before["writes"] as? Int, after["writes"] as? Int)
+    }
+
+    /// A UINT64 on a 32-bit stack sits where the code reads it, and the answer says what moved.
+    func testAWideParameterHasNoHoleBeforeIt() async throws {
+        try await open(try image())
+        let all = try await entries()
+        let entry = try XCTUnwrap(all.first)
+        func places() async throws -> [String] {
+            (try await read("/v1/function/\(entry)")["parameters"] as? [[String: Any]] ?? []).compactMap { $0["storage"] as? String }
+        }
+        let signature = "EFI_STATUS PciRead(VOID * PeiServices, VOID * This, UINT32 Width, UINT64 Address, VOID * Buffer)"
+        let answer = try await post("/v1/set/signature", ["address": entry, "signature": signature])
+        let expected = ["Stack[0x4]:4", "Stack[0x8]:4", "Stack[0xc]:4", "Stack[0x10]:8", "Stack[0x18]:4"]
+        let now = try await places()
+        XCTAssertEqual(now, expected, "\(answer)")
+        let moved = try XCTUnwrap(answer["aligned"] as? [[String: Any]], "\(answer)")
+        XCTAssertEqual(moved.compactMap { $0["name"] as? String }, ["Address", "Buffer"])
+        XCTAssertEqual(moved.first?["convention"] as? String, "Stack[0x14]:8", "\(answer)")
+        // Set again, with nothing to move or something else: no storage of the last call stays.
+        let narrow = try await post("/v1/set/signature", ["address": entry, "signature": "EFI_STATUS PciRead(UINT32 One, UINT32 Two)"])
+        XCTAssertNil(narrow["aligned"], "\(narrow)")
+        let narrowed = try await places()
+        XCTAssertEqual(narrowed, ["Stack[0x4]:4", "Stack[0x8]:4"], "\(narrow)")
+        let wide = try await post("/v1/set/signature", ["address": entry, "signature": "EFI_STATUS PciRead(UINT32 One, UINT64 Two, UINT32 Three)"])
+        let widened = try await places()
+        XCTAssertEqual(widened, ["Stack[0x4]:4", "Stack[0x8]:8", "Stack[0x10]:4"], "\(wide)")
+        // Places the caller gives stay the caller's.
+        let given = try await post("/v1/set/signature", ["address": entry, "signature": signature,
+            "storage": ["Stack[0x4]:4", "Stack[0x8]:4", "Stack[0xc]:4", "Stack[0x14]:8", "Stack[0x1c]:4"]])
+        XCTAssertNil(given["aligned"], "\(given)")
+        let kept = try await places()
+        XCTAssertEqual(kept[3], "Stack[0x14]:8", "\(given)")
+    }
+
+    /// `ghidra_done` on writes that end where they began: the same revision, the same time.
+    func testAPublishLeavesTheStateUnmovedWhenNothingStoredChanges() async throws {
+        try await open(try image())
+        let all = try await entries()
+        let entry = try XCTUnwrap(all.first)
+        try await post("/v1/set/comment", ["address": entry, "kind": "plate", "text": "One."])
+        _ = try await host.publish(module, by: "agent")
+        func published() throws -> ProjectState.Published {
+            try XCTUnwrap(GhidraProject.all(in: directory.appendingPathComponent("projects")).first?.state().published)
+        }
+        let first = try published()
+        try await Task.sleep(nanoseconds: 1_100_000_000)
+        try await post("/v1/set/comment", ["address": entry, "kind": "plate", "text": "Two."])
+        try await post("/v1/set/comment", ["address": entry, "kind": "plate", "text": "One."])
+        _ = try await host.release(module, by: "agent")
+        let second = try published()
+        XCTAssertEqual(second.at, first.at, "a publish that stored nothing new keeps its time")
+        XCTAssertEqual(second.rev, first.rev)
+        XCTAssertEqual(second.artifact, first.artifact)
+        XCTAssertGreaterThan(second.writes ?? 0, first.writes ?? 0, "holdsUnpublishedWrites compares these")
+    }
 }

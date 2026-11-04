@@ -96,7 +96,7 @@ final class GhidraOwnerRemarksTests: XCTestCase {
         throw XCTSkip("no function printed the comment")
     }
 
-    /// A UINT64 a 32-bit convention moves is named in the answer.
+    /// A UINT64 a 32-bit convention moves is put back, and named in the answer.
     func testASignatureSaysWhatTheConventionAligned() async throws {
         let all = try await entries()
         let entry = try XCTUnwrap(all.first)

@@ -102,7 +102,10 @@ public enum GhidraTools {
             description: """
                 The modules that have a kept Ghidra project: `module` (SHA-256), `name`, whether an owner \
                 is `running`, whether the project holds a review (`reviewed`), and its last publish \
-                (`published`: artifact, recipe, revision).
+                (`published`: artifact, recipe, revision, and `at`, when what is stored last changed). \
+                `modification` and `writes` under `published` count this project's writes up to that \
+                publish, for telling what is still unpublished: they move at a publish that stores \
+                nothing new, and are no figure of the publish itself.
                 """
         ) { _ in
             try await answer { try await backend.listModules() }
@@ -540,14 +543,16 @@ public enum GhidraTools {
                     `leftovers`, and `summary` says how many of how many; that filter decompiles every \
                     function, so it is slow on a large module. `leftovers.fragments` counts the \
                     register and `unique:` pieces the decompiler splits off while a review types a \
-                    function — its own artefacts, which do not make a function unfinished. Paged by \
+                    function — its own artefacts, which do not make a function unfinished, though a \
+                    name like `uVar1` among them still prints in the C — and `fragment_names` names \
+                    them; `filter: "fragments"` lists every function that has them. Paged by \
                     `offset` and `limit`; `next` says where the next page starts.
                     """,
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,
                     "offset": AgentSchema.integer("How many to skip. Default 0."),
                     "limit": AgentSchema.limit(default: 200, maximum: 1000),
-                    "filter": AgentSchema.choice(["unfinished"], "Only the functions a review has not passed: a placeholder parameter or stored local, or no plate. A decompiler's temporary (`uVar1`) does not count, since some cannot be named; `summary.fragments_only` counts the functions it leaves out with only those left."),
+                    "filter": AgentSchema.choice(["unfinished", "fragments"], "Only the functions a review has not passed: a placeholder parameter or stored local, or no plate. A decompiler's temporary (`uVar1`) does not count, since some cannot be named; `summary.fragments_only` counts the functions it leaves out with only those left."),
                     "name_contains": AgentSchema.string("Only functions whose name holds this text."),
                     "name_source": AgentSchema.string(
                         "Only functions from this Ghidra source: DEFAULT, ANALYSIS, IMPORTED, USER_DEFINED."),
@@ -636,7 +641,9 @@ public enum GhidraTools {
                 description: "The instructions of the function at `address`, with their bytes, references and "
                     + "the names of their constants (`equates`). At an instruction no function holds, as "
                     + "`ghidra_gaps` lists them, the code from there to the next function, and `gap` in place of "
-                    + "`entry`. A large function comes in pages: `limit` "
+                    + "`entry`. At bytes nothing has decoded, a reading of them as code with the program left as "
+                    + "it was, `undecoded: true`, 64 rows unless `limit` says otherwise, and `stopped_by` for what "
+                    + "ended it: not a claim that they are code. A large function comes in pages: `limit` "
                     + "instructions from `from`; `next` is the address to pass as `from` for the rest.",
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,
@@ -958,9 +965,9 @@ public enum GhidraTools {
                 return try await answer { try await backend.writeCall(module, "rename/variable", body: payload) }
             },
             write("ghidra_signature", "set/signature", "Set a function's signature",
-                  "Sets the C signature of the function at `address`, the EDK2 way if wanted; `aligned` in the "
-                  + "answer lists the parameters a 32-bit convention moved to an aligned slot, which a UINT64 is, "
-                  + "and `storage` puts them back where the code reads them "
+                  "Sets the C signature of the function at `address`, the EDK2 way if wanted; with no `storage`, "
+                  + "a 32-bit stack keeps no hole for a UINT64, and `aligned` in the answer lists the parameters "
+                  + "that puts elsewhere than the convention did: `convention`, where it put them, `storage`, where they are "
                   + "(`EFI_STATUS EFIAPI Foo (IN CONST EFI_PEI_SERVICES **PeiServices)`). Types the module "
                   + "lacks come from the EDK2 archive or from types a review defined. For a function no "
                   + "calling convention fits — a linker's clone that takes an argument in EDX, or returns "

@@ -56,7 +56,7 @@ public enum LibraryView {
         function.name = entry.name
         function.signature = entry.function?.signature ?? entry.signature ?? local.signature
         function.nameSource = "USER_DEFINED"
-        function.nameReason = "library registry entry \(entry.id) v\(entry.version)"
+        function.nameReason = "library registry entry \(entry.id)"
         function.reviewLevel = .library
         function.reviewGaps = []
         function.libraryKind = entry.kind ?? local.libraryKind

@@ -117,6 +117,22 @@ final class AgentFirmwareToolsTests: XCTestCase {
         XCTAssertEqual(lang["total"], 1)
     }
 
+    /// `variables` is what the store holds and `deleted` what it no longer does:
+    /// the two are apart, so `variables` agrees with `total` without `deleted`.
+    func testAStoreCountsWhatItHoldsApartFromWhatItNoLongerHolds() async throws {
+        try open(NvramTestImage.vss([
+            .init("Gone", [9], state: NvramTestImage.superseded),
+            .init("Lang", Array("eng".utf8) + [0])
+        ]))
+        let held = try await client.answer("variables")
+        XCTAssertEqual(held["total"], 1)
+        XCTAssertEqual(held["stores"]?.arrayValue?.first?["variables"], 1)
+        XCTAssertEqual(held["stores"]?.arrayValue?.first?["deleted"], 1)
+        let all = try await client.answer("variables", ["deleted": true])
+        XCTAssertEqual(all["total"], 2)
+        XCTAssertEqual(all["stores"]?.arrayValue?.first?["variables"], 1)
+    }
+
     func testAnImageWithNoStoreSaysSo() async throws {
         try open(UEFITestImage.make())
         let answer = try await client.answer("variables")

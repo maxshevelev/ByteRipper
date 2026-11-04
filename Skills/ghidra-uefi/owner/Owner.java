@@ -386,6 +386,7 @@ public class Owner {
      */
     private JsonObject leftovers(Function function) {
         int parameters = 0, locals = 0, fragments = 0;
+        JsonArray fragmentNames = new JsonArray();
         for (Parameter parameter : function.getParameters()) {
             if (placeholder(parameter.getName()) || undefined(parameter.getDataType())) parameters++;
         }
@@ -401,7 +402,12 @@ public class Owner {
                 // A register or `unique:` piece with a name Ghidra made up is
                 // the decompiler splitting a value as a review types around
                 // it, not a name the review missed.
-                if (fragment(symbol.getStorage())) fragments++; else locals++;
+                if (fragment(symbol.getStorage())) {
+                    fragments++;
+                    fragmentNames.add(symbol.getName());
+                } else {
+                    locals++;
+                }
             }
         }
         String plate = function.getComment();
@@ -410,7 +416,10 @@ public class Owner {
         JsonObject answer = new JsonObject();
         if (parameters > 0) answer.addProperty("params", parameters);
         if (locals > 0) answer.addProperty("locals", locals);
-        if (fragments > 0) answer.addProperty("fragments", fragments);
+        if (fragments > 0) {
+            answer.addProperty("fragments", fragments);
+            answer.add("fragment_names", fragmentNames);
+        }
         if (noPlate) answer.addProperty("no_plate", true);
         return answer;
     }
@@ -453,17 +462,20 @@ public class Owner {
     /**
      * The functions, narrowed: `name_contains`, `address_from`/`address_to`
      * (their entries), `name_source` (a Ghidra `SourceType` such as
-     * `USER_DEFINED`), and `filter=unfinished` — the functions a review has
-     * not passed. That one decompiles every function to see its locals, and
-     * says how many it checked in `summary`.
+     * `USER_DEFINED`), `filter=unfinished` — the functions a review has not
+     * passed — and `filter=fragments` — those with a decompiler's temporary a
+     * review has not named or typed, which do not make a function unfinished
+     * but still print in its C. Both decompile every function to see its
+     * locals, and say how many they checked in `summary`.
      */
     private JsonObject functions(Map<String, String> query) throws Failure {
         int offset = integer(query, "offset", 0), limit = Math.min(integer(query, "limit", 500), 5000);
         String filter = query.getOrDefault("filter", "");
-        if (!filter.isEmpty() && !filter.equals("unfinished")) {
-            throw new Failure(400, "filter is \"unfinished\" or left out");
+        if (!filter.isEmpty() && !filter.equals("unfinished") && !filter.equals("fragments")) {
+            throw new Failure(400, "filter is \"unfinished\", \"fragments\" or left out");
         }
         boolean unfinished = filter.equals("unfinished");
+        boolean withFragments = filter.equals("fragments");
         int fragmentsOnly = 0;
         String contains = query.get("name_contains");
         String source = query.get("name_source");
@@ -479,9 +491,10 @@ public class Owner {
             long entry = function.getEntryPoint().getOffset();
             if (from != null && entry < from) continue;
             if (to != null && entry > to) continue;
-            JsonObject leftovers = unfinished ? leftovers(function) : null;
-            if (unfinished && leftovers != null && !unfinished(leftovers) && leftovers.has("fragments")) fragmentsOnly++;
+            JsonObject leftovers = unfinished || withFragments ? leftovers(function) : null;
+            if (leftovers != null && !unfinished(leftovers) && leftovers.has("fragments")) fragmentsOnly++;
             if (unfinished && (leftovers == null || !unfinished(leftovers))) continue;
+            if (withFragments && (leftovers == null || !leftovers.has("fragments"))) continue;
             JsonObject item = item(function);
             if (leftovers != null) item.add("leftovers", leftovers);
             matched.add(item);
@@ -493,10 +506,10 @@ public class Owner {
         JsonObject answer = identity();
         answer.add("functions", page);
         if (end < total) answer.addProperty("next", end);
-        if (unfinished) {
+        if (unfinished || withFragments) {
             JsonObject summary = new JsonObject();
             summary.addProperty("functions", scanned);
-            summary.addProperty("unfinished", total);
+            summary.addProperty(filter, total);
             summary.addProperty("fragments_only", fragmentsOnly);
             answer.add("summary", summary);
         }
@@ -1297,9 +1310,7 @@ public class Owner {
         // Code no function holds, as `ghidra_gaps` lists it: read to the next
         // function, which is what deciding what to make of a gap needs.
         Address gap = function == null ? address(text) : null;
-        if (gap != null && program.getListing().getInstructionAt(gap) == null) {
-            throw new Failure(404, "no function and no instruction at " + text);
-        }
+        boolean undecoded = gap != null && program.getListing().getInstructionAt(gap) == null;
         Address from = query.containsKey("from") ? address(query.get("from")) : null;
         int limit = Integer.MAX_VALUE;
         if (query.containsKey("limit")) {
@@ -1310,6 +1321,7 @@ public class Owner {
             }
             if (limit < 1) throw new Failure(400, "limit is at least 1");
         }
+        if (undecoded) return undecodedBytes(gap, from, limit);
         JsonArray instructions = new JsonArray();
         String next = null;
         InstructionIterator iterator = function != null
@@ -1361,6 +1373,68 @@ public class Owner {
         else answer.addProperty("gap", hex(gap));
         answer.add("instructions", instructions);
         if (next != null) answer.addProperty("next", next);
+        return answer;
+    }
+
+    /** How many rows an undecoded gap answers when `limit` leaves it open. */
+    private static final int UNDECODED_ROWS = 64;
+
+    /**
+     * Bytes no function and no instruction holds, decoded for reading only:
+     * the program stays as it was, so a row here is what these bytes would be
+     * if they were code, not a claim that they are. Stops at the first thing
+     * the program does hold there, or at what does not decode.
+     */
+    private JsonObject undecodedBytes(Address gap, Address from, int limit) throws Failure {
+        ghidra.program.model.listing.Listing listing = program.getListing();
+        AddressSetView bytes = program.getMemory().getLoadedAndInitializedAddressSet();
+        if (!bytes.contains(gap)) throw new Failure(404, "no function, no instruction and no bytes at " + hex(gap));
+        ghidra.program.model.listing.Data data = listing.getDefinedDataContaining(gap);
+        if (data != null) throw new Failure(404, hex(gap) + " is defined data (" + data.getDataType().getDisplayName() + "): ghidra_data reads it");
+        ghidra.app.util.PseudoDisassembler decoder = new ghidra.app.util.PseudoDisassembler(program);
+        JsonArray rows = new JsonArray();
+        int most = limit == Integer.MAX_VALUE ? UNDECODED_ROWS : limit;
+        Address at = from != null ? from : gap;
+        String next = null, stopped = null;
+        while (true) {
+            if (!bytes.contains(at)) { stopped = "the end of the bytes"; break; }
+            if (program.getFunctionManager().getFunctionContaining(at) != null) { stopped = "a function"; break; }
+            if (listing.getInstructionAt(at) != null) { stopped = "an instruction"; break; }
+            if (listing.getDefinedDataContaining(at) != null) { stopped = "defined data"; break; }
+            if (rows.size() == most) { next = hex(at); break; }
+            ghidra.app.util.PseudoInstruction instruction;
+            try {
+                instruction = decoder.disassemble(at);
+            } catch (Exception error) {
+                instruction = null;
+            }
+            if (instruction == null) { stopped = "bytes that do not decode"; break; }
+            JsonObject row = new JsonObject();
+            row.addProperty("address", hex(at));
+            try {
+                row.addProperty("bytes", hexBytes(instruction.getBytes()));
+            } catch (Exception ignored) {
+                row.addProperty("bytes", "");
+            }
+            row.addProperty("text", instruction.toString());
+            row.add("references", new JsonArray());
+            rows.add(row);
+            try {
+                at = at.addNoWrap(instruction.getLength());
+            } catch (Exception error) {
+                stopped = "the end of the bytes";
+                break;
+            }
+        }
+        JsonObject answer = identity();
+        answer.addProperty("gap", hex(gap));
+        answer.addProperty("undecoded", true);
+        answer.add("instructions", rows);
+        if (next != null) answer.addProperty("next", next);
+        if (stopped != null) {
+            answer.addProperty("stopped_at", hex(at));
+            answer.addProperty("stopped_by", stopped);
+        }
         return answer;
     }
 
@@ -2949,7 +3023,9 @@ public class Owner {
         // The function refers to the entry: it takes the name and the
         // signature its callers print, and nothing else goes into the project.
         boolean link = mode.equals("link");
-        String reason = "library registry entry " + id + " v" + version;
+        // The version is `library_entry`'s to say: written here too, the reason
+        // falls behind at the entry's next version with nothing to re-apply it.
+        String reason = "library registry entry " + id;
         if (item.has("reason") && !item.get("reason").isJsonNull()) reason += ": " + item.get("reason").getAsString();
         // `fields`: take these parts of the entry and keep the review's for
         // the rest — a merge, not a replacement. None means the mode decides.
@@ -5146,6 +5222,15 @@ public class Owner {
                 throw new Failure(409, error.getMessage());
             }
         }
+        // Nothing on a 32-bit UEFI stack is aligned past 4 bytes, whatever the
+        // convention's model says of a UINT64: left as it is, the value reads
+        // one slot too high and the C prints `Address._4_4_`. Places given by
+        // the caller are the caller's.
+        JsonArray aligned = new JsonArray();
+        if (!body.has("storage")) {
+            JsonArray packed = packedStack(function, aligned);
+            if (aligned.size() > 0) body.add("storage", packed);
+        }
         if (body.has("storage") || body.has("return_storage")) applyStorage(function, body);
         // Why the signature is what it is has a place of its own: the name's
         // reason says where the name came from, and a signature is not that. A
@@ -5160,8 +5245,7 @@ public class Owner {
         JsonObject answer = identity();
         answer.addProperty("entry", hex(function.getEntryPoint()));
         answer.addProperty("signature", function.getPrototypeString(false, false));
-        JsonArray shifted = alignedParameters(function);
-        if (shifted.size() > 0) answer.add("aligned", shifted);
+        if (aligned.size() > 0) answer.add("aligned", aligned);
         if (function.hasCustomVariableStorage()) {
             JsonArray storage = new JsonArray();
             for (Parameter parameter : function.getParameters()) storage.add(parameter.getVariableStorage().toString());
@@ -5172,29 +5256,34 @@ public class Owner {
     }
 
     /**
-     * The parameters a 32-bit convention moved past a slot to align them: a
-     * UINT64 goes to an 8-byte boundary, and what follows moves with it. The
-     * code may read them with no such hole, and only `storage` says so; nothing
-     * else in the answer shows it happened.
+     * Each parameter's place with the holes a 32-bit convention left closed.
+     * A parameter that moves goes in `moved` with the place the convention gave
+     * it, what follows a UINT64 moving with it.
      */
-    private JsonArray alignedParameters(Function function) {
-        JsonArray shifted = new JsonArray();
-        if (function.hasCustomVariableStorage() || program.getDefaultPointerSize() != 4) return shifted;
-        long expected = -1;
+    private JsonArray packedStack(Function function, JsonArray moved) {
+        JsonArray places = new JsonArray();
+        if (program.getDefaultPointerSize() != 4) return places;
+        long free = -1;
         for (Parameter parameter : function.getParameters()) {
             ghidra.program.model.listing.VariableStorage storage = parameter.getVariableStorage();
-            if (!storage.isStackStorage()) continue;
+            if (!storage.isStackStorage()) {
+                places.add(storage.toString());
+                continue;
+            }
             long at = storage.getStackOffset();
-            if (expected >= 0 && at > expected) {
+            long place = free >= 0 && at > free ? free : at;
+            String written = String.format("Stack[0x%X]:%d", place, parameter.getLength());
+            places.add(written);
+            if (place != at) {
                 JsonObject item = new JsonObject();
                 item.addProperty("name", parameter.getName());
-                item.addProperty("storage", storage.toString());
-                item.addProperty("expected", String.format("Stack[0x%X]", expected));
-                shifted.add(item);
+                item.addProperty("convention", storage.toString());
+                item.addProperty("storage", written);
+                moved.add(item);
             }
-            expected = (at + Math.max(parameter.getLength(), 4) + 3) & ~3L;
+            free = (place + Math.max(parameter.getLength(), 4) + 3) & ~3L;
         }
-        return shifted;
+        return places;
     }
 
     /**
