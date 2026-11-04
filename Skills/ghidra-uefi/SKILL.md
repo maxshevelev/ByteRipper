@@ -422,7 +422,7 @@ is in the module's scope: it is not offered here and conflicts with nothing else
 functions that call nothing first, then their callers.
 - It refers to no data, or only to a constant defined in its own library's source
   file. Compare the bytes with that source and cite the file and line with
-  `ghidra_library_cite`. A GUID never qualifies: its value lives in a package `.dec`
+  `ghidra_library_cite`, one citation per constant. A GUID never qualifies: its value lives in a package `.dec`
   and the variable is each module's. Code without sources in the tree cannot qualify
   through a constant.
 - It calls only functions the registry already holds.

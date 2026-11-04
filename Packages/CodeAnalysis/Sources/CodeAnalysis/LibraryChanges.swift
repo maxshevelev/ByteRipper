@@ -34,6 +34,41 @@ public struct LibraryCitation: Codable, Equatable, Sendable {
     public var note: String?
     public var by: String?
     public var at: String
+    /// The body's other citations: a body with two constants has two. Kept
+    /// inside the first so that a build that knows one citation reads the index.
+    public var also: [LibraryCitation]?
+
+    /// This citation and the others it holds, each alone.
+    public var all: [LibraryCitation] {
+        var head = self
+        head.also = nil
+        return [head] + (also ?? []).flatMap(\.all)
+    }
+
+    /// One citation holding the rest; nil when there are none.
+    static func holding(_ citations: [LibraryCitation]) -> LibraryCitation? {
+        guard var head = citations.first else { return nil }
+        head.also = citations.count > 1 ? Array(citations.dropFirst()) : nil
+        return head
+    }
+
+    func sameLine(as other: LibraryCitation) -> Bool { file == other.file && line == other.line }
+}
+
+/// A citation a later call replaced or removed: what it said, and who changed
+/// it. The index keeps these, since a citation is no version of an entry.
+public struct LibraryCitationChange: Codable, Equatable, Sendable {
+    public var action: String
+    public var old: LibraryCitation
+    public var by: String?
+    public var at: String
+}
+
+/// What a citation call did to one body. `old` is what it replaced or removed.
+public struct LibraryCitationResult: Codable, Equatable, Sendable {
+    public var body: String
+    public var action: String
+    public var old: LibraryCitation?
 }
 
 /// What a body refers to outside itself, as the owner reads it from the
@@ -67,9 +102,11 @@ public struct LibraryChange: Codable, Equatable, Sendable {
     public var file: String?
     public var line: Int?
     public var on: Bool?
+    /// With `cite`: take this file and line away rather than add it.
+    public var remove: Bool?
 
     public init(action: Action, id: String? = nil, body: String? = nil, name: String? = nil, reason: String? = nil,
-                file: String? = nil, line: Int? = nil, on: Bool? = nil) {
+                file: String? = nil, line: Int? = nil, on: Bool? = nil, remove: Bool? = nil) {
         self.action = action
         self.id = id
         self.body = body
@@ -78,6 +115,7 @@ public struct LibraryChange: Codable, Equatable, Sendable {
         self.file = file
         self.line = line
         self.on = on
+        self.remove = remove
     }
 }
 
@@ -330,12 +368,35 @@ extension ContentStore {
             }
             guard !keys.isEmpty else { throw CodeAnalysisError.analysisMismatch("name an `id` or a `body`") }
             var sources = index.sources ?? [:]
+            var changes = index.sourceChanges ?? [:]
+            var results: [LibraryCitationResult] = []
+            let now = Timestamps.now()
+            let cited = LibraryCitation(file: file, line: line, note: change.reason, by: by, at: now)
             for key in keys {
-                sources[key] = LibraryCitation(file: file, line: line, note: change.reason, by: by, at: Timestamps.now())
+                var held = sources[key]?.all ?? []
+                let at = held.firstIndex { $0.sameLine(as: cited) }
+                if change.remove == true {
+                    guard let at else {
+                        throw CodeAnalysisError.analysisMismatch("\(key) has no citation of \(file):\(line)")
+                    }
+                    changes[key, default: []].append(.init(action: "removed", old: held[at], by: by, at: now))
+                    results.append(.init(body: key, action: "removed", old: held[at]))
+                    held.remove(at: at)
+                } else if let at {
+                    changes[key, default: []].append(.init(action: "replaced", old: held[at], by: by, at: now))
+                    results.append(.init(body: key, action: "replaced", old: held[at]))
+                    held[at] = cited
+                } else {
+                    results.append(.init(body: key, action: "added", old: nil))
+                    held.append(cited)
+                }
+                sources[key] = LibraryCitation.holding(held)
             }
             index.sources = sources
+            index.sourceChanges = changes.isEmpty ? nil : changes
             var result = LibraryWriteResult()
             result.cited = keys
+            result.citations = results
             if !dryRun { try atomicWrite(try encoder.encode(index), to: libraryIndexURL) }
             return result
         }

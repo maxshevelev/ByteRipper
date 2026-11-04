@@ -107,6 +107,8 @@ public struct LibraryIndex: Codable, Equatable, Sendable {
     public var takenOut: [String: LibraryTakenOut]?
     /// Where a body's constant is defined in its library's source, by key.
     public var sources: [String: LibraryCitation]?
+    /// The citations later calls replaced or removed, by key. Nil while none.
+    public var sourceChanges: [String: [LibraryCitationChange]]?
     /// Readers see a marked function as its entry, and a module links to the
     /// entry rather than holding a copy. Off until the registry is in order:
     /// an entry that is not one function would read as one.
@@ -117,6 +119,7 @@ public struct LibraryIndex: Codable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case schema, entries, bodies, sources
         case takenOut = "taken_out"
+        case sourceChanges = "source_changes"
         case readThrough = "read_through"
     }
 
@@ -288,6 +291,7 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
     /// What a change on the registry itself did; nil otherwise.
     public var takenOut: [Change]?
     public var cited: [String]?
+    public var citations: [LibraryCitationResult]?
     public var readThrough: Bool?
 
     public struct NotLibrary: Codable, Equatable, Sendable {
@@ -339,7 +343,7 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case added, updated, unchanged, conflicts, variants
-        case cited
+        case cited, citations
         case nameConflicts = "name_conflicts"
         case notLibrary = "not_library"
         case takenOut = "taken_out"

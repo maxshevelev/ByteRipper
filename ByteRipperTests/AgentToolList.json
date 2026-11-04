@@ -2447,7 +2447,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "A body that refers to data enters the registry only if the data is a constant defined in its own library's source. Cite the file and line after comparing the bytes with that source; the registry cannot check it and keeps who said so. Give `id` for an entry's bodies, or `body` for one, also before its first publish: a publish's `library.not_library` names the key. A GUID never qualifies. `dry_run: true` answers the same and writes nothing.",
+    "description" : "A body that refers to data enters the registry only if the data is a constant defined in its own library's source. Cite the file and line after comparing the bytes with that source; the registry cannot check it and keeps who said so. Give `id` for an entry's bodies, or `body` for one, also before its first publish: a publish's `library.not_library` names the key. A GUID never qualifies. A body with two constants has two citations: another file or line adds one, the same file and line replaces it, `remove: true` takes it away. `citations` says which, with what was replaced; the registry keeps that. `dry_run: true` answers the same and writes nothing.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -2478,6 +2478,10 @@
         "note" : {
           "description" : "What was compared.",
           "type" : "string"
+        },
+        "remove" : {
+          "description" : "Take this file and line away.",
+          "type" : "boolean"
         }
       },
       "required" : [

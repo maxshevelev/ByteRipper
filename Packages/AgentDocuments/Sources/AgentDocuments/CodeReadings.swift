@@ -190,10 +190,23 @@ public final class CodeReadings {
                          "rev": source.rev.map { JSONValue.int(Int64($0)) } ?? .null,
                          "by": source.by.map(JSONValue.string) ?? .null])
             }
-            func citation(_ cited: LibraryCitation) -> JSONValue {
+            func oneCitation(_ cited: LibraryCitation) -> JSONValue {
                 .object(["file": .string(cited.file), "line": .int(Int64(cited.line)),
                          "note": cited.note.map(JSONValue.string) ?? .null,
                          "by": cited.by.map(JSONValue.string) ?? .null, "at": .string(cited.at)])
+            }
+            /// A body's citations, and those later calls replaced or removed.
+            func citations(_ body: String) -> [String: JSONValue] {
+                var row: [String: JSONValue] = [
+                    "citations": .array((index.sources?[body]?.all ?? []).map(oneCitation))
+                ]
+                if let changes = index.sourceChanges?[body] {
+                    row["citation_changes"] = .array(changes.map { change in
+                        .object(["action": .string(change.action), "old": oneCitation(change.old),
+                                 "by": change.by.map(JSONValue.string) ?? .null, "at": .string(change.at)])
+                    })
+                }
+                return row
             }
             func takenOut(_ body: String, _ out: LibraryTakenOut) -> JSONValue {
                 .object(["body": .string(body), "id": .string(out.id), "name": .string(out.name),
@@ -266,8 +279,8 @@ public final class CodeReadings {
                 answer["version"] = .int(Int64(entry.version))
                 answer["source"] = source(entry.source)
                 answer["variants"] = .array(entry.variants.map {
-                    .object(["body": .string($0.body.key), "module": .string($0.module.hex),
-                             "source": index.sources?[$0.body.key].map(citation) ?? .null])
+                    .object(citations($0.body.key).merging(
+                        ["body": .string($0.body.key), "module": .string($0.module.hex)]) { $1 })
                 })
                 put(review: entry.entry, in: &answer)
                 answer["history"] = try history(id)
@@ -290,10 +303,8 @@ public final class CodeReadings {
             switch show {
             case "taken_out": rows = takenOutRows.map { takenOut($0.key, $0.value) }
             case "sources":
-                rows = citationRows.map { body, cited in
-                    guard case .object(var row) = citation(cited) else { return .null }
-                    row["body"] = .string(body)
-                    return .object(row)
+                rows = citationRows.map { body, _ in
+                    .object(citations(body).merging(["body": .string(body)]) { $1 })
                 }
             default:
                 rows = matching.map { id, entry in

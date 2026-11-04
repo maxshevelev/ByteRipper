@@ -326,7 +326,10 @@ public enum GhidraTools {
                     its own library's source. Cite the file and line after comparing the bytes with that \
                     source; the registry cannot check it and keeps who said so. Give `id` for an entry's bodies, \
                     or `body` for one, also before its first publish: a publish's `library.not_library` names \
-                    the key. A GUID never qualifies. `dry_run: true` answers the same and writes nothing.
+                    the key. A GUID never qualifies. A body with two constants has two citations: another \
+                    file or line adds one, the same file and line replaces it, `remove: true` takes it away. \
+                    `citations` says which, with what was replaced; the registry keeps that. `dry_run: true` \
+                    answers the same and writes nothing.
                     """,
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,
@@ -335,6 +338,7 @@ public enum GhidraTools {
                     "file": AgentSchema.string("The source file, by its path in its tree."),
                     "line": AgentSchema.integer("The line that defines the constant."),
                     "note": AgentSchema.string("What was compared."),
+                    "remove": AgentSchema.boolean("Take this file and line away."),
                     "dry_run": AgentSchema.boolean("Answer what would be done and write nothing.")
                 ], required: ["module", "file", "line"]),
                 annotations: .edit
@@ -342,7 +346,8 @@ public enum GhidraTools {
                 try await change(call.arguments, backend, LibraryChange(
                     action: .cite, id: try call.arguments.optionalString("id"),
                     body: try call.arguments.optionalString("body"), reason: try call.arguments.optionalString("note"),
-                    file: try call.arguments.string("file"), line: Int(try call.arguments.integer("line"))))
+                    file: try call.arguments.string("file"), line: Int(try call.arguments.integer("line")),
+                    remove: try call.arguments.bool("remove", default: false) ? true : nil))
             },
             AgentTool(
                 name: "ghidra_library_read_through",

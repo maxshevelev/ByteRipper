@@ -281,6 +281,46 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertEqual(taken.added.map(\.name), ["Caller"])
     }
 
+    /// A body with two constants holds two citations; the same file and line
+    /// replaces, removing takes one away, and what went is kept with who did it.
+    func testABodyHoldsSeveralCitationsAndKeepsWhatWasReplaced() throws {
+        let body = LibraryBody(size: 0xd, full: "ffeeddccbbaa9988", specific: "7766554433221100")
+        func cite(_ line: Int, note: String? = nil, remove: Bool? = nil, dryRun: Bool = false) throws -> LibraryCitationResult? {
+            try store.changeLibrary(.init(action: .cite, body: body.key, reason: note, file: "Fpu.nasm", line: line, remove: remove),
+                                    by: "agent", dryRun: dryRun).citations?.first
+        }
+        XCTAssertEqual(try cite(15, note: "first")?.action, "added")
+        XCTAssertEqual(try cite(20, dryRun: true)?.action, "added")
+        XCTAssertEqual(try store.libraryIndex().sources?[body.key]?.all.map(\.line), [15], "a dry run wrote nothing")
+        XCTAssertEqual(try cite(20)?.action, "added")
+        XCTAssertEqual(try store.libraryIndex().sources?[body.key]?.all.map(\.line), [15, 20])
+
+        let replaced = try cite(15, note: "second")
+        XCTAssertEqual(replaced?.action, "replaced")
+        XCTAssertEqual(replaced?.old?.note, "first")
+        XCTAssertEqual(try store.libraryIndex().sources?[body.key]?.all.map(\.note), ["second", nil])
+
+        XCTAssertEqual(try cite(15, remove: true)?.action, "removed")
+        XCTAssertEqual(try store.libraryIndex().sources?[body.key]?.all.map(\.line), [20])
+        XCTAssertThrowsError(try cite(15, remove: true), "no such citation")
+        XCTAssertEqual(try cite(20, remove: true)?.action, "removed")
+        XCTAssertNil(try store.libraryIndex().sources?[body.key], "none left")
+        XCTAssertEqual(try store.libraryIndex().sourceChanges?[body.key]?.map(\.action), ["replaced", "removed", "removed"])
+        XCTAssertEqual(try store.libraryIndex().sourceChanges?[body.key]?.first?.old.note, "first")
+    }
+
+    /// An index written with one citation per body reads as it was, and one
+    /// with several still reads where a citation is one object.
+    func testACitationKeepsItsOldForm() throws {
+        let old = #"{"file":"a.c","line":3,"at":"t"}"#
+        let read = try JSONDecoder().decode(LibraryCitation.self, from: Data(old.utf8))
+        XCTAssertEqual(read.all.map(\.line), [3])
+        struct Earlier: Decodable { var file: String; var line: Int }
+        let two = LibraryCitation(file: "a.c", line: 3, note: nil, by: nil, at: "t",
+                                  also: [LibraryCitation(file: "a.c", line: 4, note: nil, by: nil, at: "t", also: nil)])
+        XCTAssertEqual(try JSONDecoder().decode(Earlier.self, from: JSONEncoder().encode(two)).line, 3)
+    }
+
     /// Taken out: gone from the index, its name free, refused at the next
     /// offer, its text kept for its modules, and the decision can be undone.
     func testATakenOutEntryStaysOutAndCanComeBack() throws {

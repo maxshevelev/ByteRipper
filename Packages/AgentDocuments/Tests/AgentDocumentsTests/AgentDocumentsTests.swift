@@ -488,7 +488,7 @@ final class CodeReadingsTests: XCTestCase {
         let out = try await run(["show": "taken_out"])
         XCTAssertEqual(out["taken_out"]?.arrayValue?.first?["reason"]?.stringValue, "reads module data")
         let cited = try await run(["show": "sources", "search": "kept"])
-        XCTAssertEqual(cited["sources"]?.arrayValue?.first?["line"], .int(7))
+        XCTAssertEqual(cited["sources"]?.arrayValue?.first?["citations"]?.arrayValue?.first?["line"], .int(7))
         let narrow = try await run(["search": "kept"])
         XCTAssertEqual(narrow["taken_out_total"], .int(0))
         let noCitation = try await run(["show": "sources", "search": "gone"])
