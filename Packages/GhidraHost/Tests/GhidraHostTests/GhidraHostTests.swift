@@ -310,13 +310,14 @@ final class GhidraHostLibraryPlanTests: XCTestCase {
         var held = index
         held.entries[setMem.key]?.variants[0].referenceBytes = "aaaa"
         func answer(_ bytes: String?) -> [String: Any] {
-            var row: [String: Any] = ["body_key": setMem.key, "library_entry": ["id": setMem.key, "version": 1, "state": "entry"]]
+            var row: [String: Any] = ["body_key": setMem.key, "library_entry": ["id": setMem.key, "version": 0, "state": "entry"]]
             row["reference_bytes"] = bytes
             return row
         }
         var same = answer("aaaa")
         XCTAssertNotNil(GhidraHost.heldEntry(&same, index: held))
         XCTAssertEqual((same["library_entry"] as? [String: Any])?["state"] as? String, "linked")
+        XCTAssertEqual((same["library_entry"] as? [String: Any])?["version"] as? Int, held.entries[setMem.key]?.version)
         for bytes in ["bbbb", nil] as [String?] {
             var other = answer(bytes)
             XCTAssertNil(GhidraHost.heldEntry(&other, index: held), "\(String(describing: bytes))")

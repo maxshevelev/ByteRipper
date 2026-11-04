@@ -43,6 +43,8 @@ extension GhidraHost {
         if answer["stored_copy"] == nil {
             var linked = mark
             linked["state"] = "linked"
+            // What it reads is the entry's current version, whatever it was linked at.
+            linked["version"] = row.version
             answer["library_entry"] = linked
         }
         return (id, row)
