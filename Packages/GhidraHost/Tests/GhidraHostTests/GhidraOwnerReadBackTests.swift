@@ -467,25 +467,73 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         XCTAssertFalse(after)
     }
 
-    /// A write the owner accepts and that changes nothing holds the lease, and a done publishes nothing for it.
+    /// A write can count and change nothing. Each of these holds the lease, and a done makes no revision for it.
     func testAWriteThatChangesNothingMakesNoRevision() async throws {
         try await openCopy(of: "FirmwareRevisionSyncPei")
         let before = try published()
-        let writes = try await read("/v1/hello")["writes"] as? Int
         let function = try await read("/v1/function/0x9A11A49")
         let name = try XCTUnwrap(function["name"] as? String)
+        let plate = try XCTUnwrap(function["plate"] as? String)
+        let described = try await read("/v1/description")
+        let description = try XCTUnwrap(described["text"] as? String)
+        let writes: [(String, [String: Any])] = [
+            ("/v1/rename/function", ["address": "0x9A11A49", "name": name]),
+            ("/v1/set/comment", ["address": "0x9A11A49", "kind": "plate", "text": plate]),
+            ("/v1/set/description", ["text": description]),
+        ]
+        for (path, body) in writes {
+            try await post(path, body)
+            let held = await leased()
+            XCTAssertTrue(held, path)
+            let done = try await host.release(module, by: "agent")
+            XCTAssertNil(done, path)
+            XCTAssertEqual(try published()?.rev, before?.rev, path)
+            XCTAssertEqual(try published()?.at, before?.at, path)
+            let after = await leased()
+            XCTAssertFalse(after, path)
+        }
+    }
+
+    /// The name it already has, with no reason given, keeps the reason it has; a new name does not.
+    func testARenameToTheSameNameKeepsItsReason() async throws {
+        try await openCopy(of: "FirmwareRevisionSyncPei")
+        let function = try await read("/v1/function/0x9A11A49")
+        let name = try XCTUnwrap(function["name"] as? String)
+        let reason = try XCTUnwrap(function["name_reason"] as? String)
+        let writes = try await read("/v1/hello")["writes"] as? Int
         try await post("/v1/rename/function", ["address": "0x9A11A49", "name": name])
+        let same = try await read("/v1/function/0x9A11A49")
+        XCTAssertEqual(same["name_reason"] as? String, reason)
         let now = try await read("/v1/hello")["writes"] as? Int
-        print("SAME-NAME writes \(writes ?? -1) -> \(now ?? -1)")
+        XCTAssertEqual(now, writes)
+        try await post("/v1/rename/function", ["address": "0x9A11A49", "name": name + "Renamed"])
+        let renamed = try await read("/v1/function/0x9A11A49")
+        XCTAssertNil(renamed["name_reason"], "\(renamed)")
+    }
+
+    /// A publish leaves the lease held and nothing written since: the done that follows has nothing to do.
+    func testADoneRightAfterAPublishMakesNoRevision() async throws {
+        try await openCopy(of: "FirmwareRevisionSyncPei")
+        try await post("/v1/set/comment", ["address": "0x9A11A49", "kind": "eol", "text": "probe"])
+        _ = try await host.publish(module, by: "agent")
+        let after = try published()
         let held = await leased()
         XCTAssertTrue(held)
         let done = try await host.release(module, by: "agent")
-        if now == writes {
-            XCTAssertNil(done)
-            XCTAssertEqual(try published()?.rev, before?.rev)
-        }
-        let after = await leased()
-        XCTAssertFalse(after)
+        XCTAssertNil(done)
+        XCTAssertEqual(try published()?.rev, after?.rev)
+        let released = await leased()
+        XCTAssertFalse(released)
+    }
+
+    /// What a real write leaves behind still reaches the store at a done.
+    func testADoneStillPublishesARealWrite() async throws {
+        try await openCopy(of: "FirmwareRevisionSyncPei")
+        let before = try published()
+        try await post("/v1/set/comment", ["address": "0x9A11A49", "kind": "eol", "text": "probe"])
+        let done = try await host.release(module, by: "agent")
+        XCTAssertNotNil(done)
+        XCTAssertEqual(try published()?.rev, (before?.rev ?? 0) + 1)
     }
 
     // MARK: - The patched language

@@ -132,6 +132,16 @@ public actor GhidraHost {
     let writer: AnalysisWriter
     private var install: GhidraInstall?
     private var leases: [SHA256Digest: String] = [:]
+    /// What a publish would store when a module's lease was taken, for a done to
+    /// compare: a write can count and change nothing, as a signature written
+    /// again does, and a new exporter's artifact is no reason for a revision.
+    private var leaseBaselines: [SHA256Digest: LeaseBaseline] = [:]
+
+    private struct LeaseBaseline: Equatable {
+        var artifact: SHA256Digest
+        var review: SHA256Digest
+        var description: SHA256Digest
+    }
     private var starting: [SHA256Digest: Task<OwnerRecord, Error>] = [:]
 
     public init(configuration: Configuration = Configuration(), writer: AnalysisWriter) {
@@ -236,6 +246,7 @@ public actor GhidraHost {
         let project = self.project(module)
         let record = try await owner(of: module)
         let held = leases[module] != nil
+        if !held { leaseBaselines[module] = await leaseBaseline(record) }
         var token = try await lease(module, record)
         let answer: Data
         do {
@@ -272,6 +283,17 @@ public actor GhidraHost {
         guard let data = try? await Self.call(record.port, "GET", "/v1/hello", timeout: 10).data,
               let hello = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return false }
         return Self.holdsUnpublishedWrites(hello: hello, published: try? project.state().published) == false
+    }
+
+    /// nil when the owner does not answer: a done then publishes as it would.
+    private func leaseBaseline(_ record: OwnerRecord) async -> LeaseBaseline? {
+        guard let artifact = try? await Self.call(record.port, "POST", "/v1/publish?dry_run=1", timeout: 3600).data,
+              let review = try? await Self.call(record.port, "GET", "/v1/review").data,
+              let description = try? await Self.call(record.port, "GET", "/v1/review/description").data else {
+            return nil
+        }
+        return LeaseBaseline(artifact: SHA256Digest(data: artifact), review: SHA256Digest(data: review),
+                             description: SHA256Digest(data: description))
     }
 
     private func lease(_ module: SHA256Digest, _ record: OwnerRecord) async throws -> String {
@@ -625,15 +647,22 @@ public actor GhidraHost {
     }
 
     /// Publish what the lease changed and give the lease back; nil when the
-    /// host holds no lease of the module, or the lease changed nothing: a new
-    /// exporter's different artifact is no reason for a revision nobody wrote.
+    /// host holds no lease of the module, or the lease changed nothing: nothing
+    /// counted since the last publish, or what would be stored is what would
+    /// have been when the lease was taken. A new exporter's different artifact is
+    /// no reason for a revision nobody wrote.
     public func release(_ module: SHA256Digest, by: String?) async throws -> Publication? {
         guard let token = leases[module], let record = await runningOwner(project(module)) else {
             leases[module] = nil
             return nil
         }
-        if await holdsNoWrites(project(module), record) {
+        var unchanged = await holdsNoWrites(project(module), record)
+        if !unchanged, let baseline = leaseBaselines[module], let now = await leaseBaseline(record) {
+            unchanged = now == baseline
+        }
+        if unchanged {
             leases[module] = nil
+            leaseBaselines[module] = nil
             _ = try? await Self.call(record.port, "DELETE", "/v1/lease", lease: token)
             return nil
         }

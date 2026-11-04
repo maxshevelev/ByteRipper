@@ -4122,12 +4122,16 @@ public class Owner {
                 throw new Failure(409, name + " already names " + hex(other.getAddress()));
             }
         }
+        // The name it already has, with no reason given, says nothing of the
+        // reason it already has: a new name's silence does, since that reason
+        // was for the old name.
+        boolean sameName = function.getName().equals(name);
         try {
             function.setName(name, SourceType.USER_DEFINED);
         } catch (Exception error) {
             throw new Failure(400, error.getMessage());
         }
-        why(function.getEntryPoint(), body);
+        if (!sameName || body.has("reason")) why(function.getEntryPoint(), body);
         JsonObject answer = identity();
         answer.addProperty("entry", hex(function.getEntryPoint()));
         answer.addProperty("name", function.getName());
@@ -4977,8 +4981,11 @@ public class Owner {
         String by = string(body, "by", "agent");
         if (!by.equals("agent") && !by.equals("person")) throw new Failure(400, "by is agent or person");
         StringPropertyMap reasons = propertyMap(Harvest.REASON);
-        if (reason != null) reasons.add(address, reason); else reasons.remove(address);
-        propertyMap(Harvest.BY).add(address, by);
+        if (!java.util.Objects.equals(reasons.getString(address), reason)) {
+            if (reason != null) reasons.add(address, reason); else reasons.remove(address);
+        }
+        StringPropertyMap authors = propertyMap(Harvest.BY);
+        if (!by.equals(authors.getString(address))) authors.add(address, by);
     }
 
     private StringPropertyMap propertyMap(String name) throws Exception {
