@@ -252,6 +252,9 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
         public var id: String
         public var name: String
         public var version: Int
+        /// For a publish's update: the review's fields it changes, so an entry
+        /// gaining its recorded function is told from one whose text moves.
+        public var changed: [String]?
     }
 
     /// The entry for this body holds another review, and this module's was
@@ -352,6 +355,15 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
 }
 
 extension LibraryProposal {
+    /// The top-level fields of a review that differ between two entry objects.
+    public static func changedFields(from old: Data, to new: Data) -> [String] {
+        func fields(_ data: Data) -> [String: NSObject] {
+            ((try? JSONSerialization.jsonObject(with: data)) as? [String: NSObject]) ?? [:]
+        }
+        let (before, after) = (fields(old), fields(new))
+        return Set(before.keys).union(after.keys).filter { before[$0] != after[$0] }.sorted()
+    }
+
     /// Whether two entry objects are the same review: equal but for the body
     /// they were read from, its constants, and the function as that module
     /// published it — what the variants of one entry share, and what another
@@ -585,9 +597,10 @@ extension ContentStore {
                 // C says where it came from in its own `function.source`. Only
                 // the function goes in: all else of the object stays the entry's.
                 var recorded = digest
+                var written = proposal.entry
                 if lacksFunction {
-                    let object = try LibraryProposal.recording(proposal.entry, in: heldObject, source: source)
-                    recorded = dryRun ? SHA256Digest(data: object) : try putObject(object)
+                    written = try LibraryProposal.recording(proposal.entry, in: heldObject, source: source)
+                    recorded = dryRun ? SHA256Digest(data: written) : try putObject(written)
                 }
                 next.entry = recorded
                 next.name = proposal.name
@@ -608,7 +621,8 @@ extension ContentStore {
                                                        source: completes ? held.source : source,
                                                        reason: recordedWhy, recordedAt: now))
                 histories[id] = history
-                result.updated.append(.init(id: id, name: proposal.name, version: next.version))
+                result.updated.append(.init(id: id, name: proposal.name, version: next.version,
+                                            changed: LibraryProposal.changedFields(from: heldObject, to: written)))
             }
             // A decision that names an entry already settled — the same review,
             // the current version — would read as taken and be nothing: say so,

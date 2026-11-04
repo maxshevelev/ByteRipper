@@ -49,6 +49,23 @@ final class LibraryRegistryTests: XCTestCase {
         XCTAssertEqual(try store.libraryIndex(), index)
     }
 
+    /// An update says what it changes, in a dry run too: a recorded function
+    /// reads apart from a change of the text.
+    func testAnUpdateNamesTheFieldsItChanges() throws {
+        try store.putLibraryEntries(module: first, rev: 33, by: "agent", proposals: [proposal("SetMem")])
+        let text = try store.putLibraryEntries(module: second, rev: 4, by: "agent",
+                                               proposals: [proposal("SetMem", plate: "better", base: 1)], dryRun: true)
+        XCTAssertEqual(text.updated.first?.changed, ["plate"])
+
+        var offered = proposal("SetMem")
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: offered.entry) as? [String: Any])
+        object["function"] = ["name": "SetMem", "c": "void SetMem(void) {}"]
+        offered.entry = try JSONSerialization.data(withJSONObject: object, options: .sortedKeys)
+        let recorded = try store.putLibraryEntries(module: second, rev: 4, by: "agent", proposals: [offered], dryRun: true)
+        XCTAssertEqual(recorded.updated.first?.changed, ["function"])
+        XCTAssertEqual(recorded.updated.first?.version, 1)
+    }
+
     /// No module holds an entry: a review made on its current version is the
     /// next version whichever module publishes it — and the module that
     /// published the first, now a version behind, is a conflict like any.
