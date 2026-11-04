@@ -41,11 +41,22 @@ public enum LibraryView {
     /// artifact from before functions recorded their bodies. A thunk and an
     /// external have no body to match.
     public static func entryID(of function: CodeArtifact.Function, in index: LibraryIndex) -> String? {
-        guard !function.external, !function.thunk else { return nil }
-        if let body = function.body, index.takenOut?[body] != nil { return nil }
-        if let body = function.body, let id = index.bodies[body] { return id }
-        if let id = function.libraryEntry?.id, index.entries[id] != nil { return id }
-        return nil
+        entryID(body: function.body, mark: function.libraryEntry?.id, external: function.external,
+                thunk: function.thunk, referenceBytes: function.referenceBytes, in: index)
+    }
+
+    /// The same, from what decides it. A body whose data references point at
+    /// other bytes than the entry's is another function, whatever its key: the
+    /// key masks the operand, so `PeiServicesLocatePpi` of one GUID and of
+    /// another have one. Either side not knowing its bytes decides nothing.
+    static func entryID(body: String?, mark: String?, external: Bool, thunk: Bool,
+                        referenceBytes: String?, in index: LibraryIndex) -> String? {
+        guard !external, !thunk else { return nil }
+        if let body, index.takenOut?[body] != nil { return nil }
+        let id = body.flatMap { index.bodies[$0] } ?? mark.flatMap { index.entries[$0] == nil ? nil : $0 }
+        guard let id else { return nil }
+        if let body, index.bytesDiffer(id: id, body: body, referenceBytes: referenceBytes) { return nil }
+        return id
     }
 
     /// The function as a reader sees it. `name` is this module's name for an
@@ -61,8 +72,10 @@ public enum LibraryView {
         function.reviewLevel = .library
         function.reviewGaps = []
         function.libraryKind = entry.kind ?? local.libraryKind
+        let held = local.libraryEntry?.state
+        function.storedCopy = !local.copyFree && (held == nil || held == .entry)
         function.libraryEntry = .init(id: entry.id, version: entry.version, codes: local.libraryEntry?.codes ?? [],
-                                      state: local.libraryEntry?.state, differences: local.libraryEntry?.differences ?? [],
+                                      state: local.copyFree ? .linked : held, differences: local.libraryEntry?.differences ?? [],
                                       base: local.libraryEntry?.base)
         guard let source = entry.function, source.c != nil, !local.codeIsPending else { return function }
         let carried = carriedOver(from: source, to: local)
@@ -268,7 +281,7 @@ extension ContentStore {
     /// as its entry. One with no registry, or an entry that cannot be read,
     /// stays as it was published.
     public func throughRegistry(_ artifact: CodeArtifact) -> CodeArtifact {
-        guard let index = try? libraryIndex(), index.readThrough == true, !index.entries.isEmpty else { return artifact }
+        guard let index = try? libraryIndex(), !index.entries.isEmpty else { return artifact }
         var artifact = artifact
         artifact.functions = throughRegistry(artifact.functions, names: artifact, index: index)
         return artifact
@@ -277,7 +290,6 @@ extension ContentStore {
     /// Functions as a reader sees them; `names` is the artifact they are from.
     func throughRegistry(_ functions: [CodeArtifact.Function], names artifact: CodeArtifact,
                          index: LibraryIndex) -> [CodeArtifact.Function] {
-        guard index.readThrough == true else { return functions }
         var named: [CodeAddress: String] = [:]
         for symbol in artifact.symbols { named[symbol.address] = symbol.name }
         // A function's own name, the entry's when the registry has it, so a

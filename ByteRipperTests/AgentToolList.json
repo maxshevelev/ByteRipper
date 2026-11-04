@@ -894,7 +894,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
-    "description" : "The shared registry of library functions: one entry per function body (its Function ID hashes), holding the review of an EDK2, AGESA (`amd`) or Intel FSP/RC (`intel`) library routine as one module published it, for every module whose function has the same body. Without `id`: the entries — `id`, `name`, `kind`, `version`, where the current version came from (`source`: module, address, revision) and how many bodies it covers (`variants`, which is not how many modules hold it) — narrowed by `search` (a part of the name) and `kind`, sorted by name. `show` lists instead `taken_out`, the bodies given back to their modules and why, or `sources`, the citations by body, narrowed the same way. Every list is paged by `limit` and `after`, and every answer says `total`, `taken_out_total`, `sources_total` and `read_through`, whether readers see entries. With `id`: that entry, or a taken-out one, its `review` (signature, parameters and locals by storage, plate, step comments by offset from the entry) and its `history` of versions, each with the module that published it and, for a version taken over another module's, the reason. A recorded function comes with its C but without `instructions`, `c_spans` and `c_fields`; `function_parts` says how large each is, and `part` reads one, paged. `review.body.size`, in hex at the head of the `id`, is Function ID's count of code units, not bytes: in practice the instructions without the calls. A name on a decompiler temporary (`HASH:`, `unique:` storage) stays the module's and does not reach `review.locals`. A publish offers the registry every function tagged `library.<kind>` whose review meets the bar of a finished function.",
+    "description" : "The shared registry of library functions: one entry per function body (its Function ID hashes), holding the review of an EDK2, AGESA (`amd`) or Intel FSP/RC (`intel`) library routine as one module published it, for every module whose function has the same body. Without `id`: the entries — `id`, `name`, `kind`, `version`, where the current version came from (`source`: module, address, revision) and how many bodies it covers (`variants`, which is not how many modules hold it) — narrowed by `search` (a part of the name) and `kind`, sorted by name. `show` lists instead `taken_out`, the bodies given back to their modules and why, or `sources`, the citations by body, narrowed the same way. Every list is paged by `limit` and `after`, and every answer says `total`, `taken_out_total` and `sources_total`. With `id`: that entry, or a taken-out one, its `review` (signature, parameters and locals by storage, plate, step comments by offset from the entry) and its `history` of versions, each with the module that published it and, for a version taken over another module's, the reason. A recorded function comes with its C but without `instructions`, `c_spans` and `c_fields`; `function_parts` says how large each is, and `part` reads one, paged. `review.body.size`, in hex at the head of the `id`, is Function ID's count of code units, not bytes: in practice the instructions without the calls. A name on a decompiler temporary (`HASH:`, `unique:` storage) stays the module's and does not reach `review.locals`. A publish offers the registry every function tagged `library.<kind>` whose review meets the bar of a finished function.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -2532,35 +2532,6 @@
     },
     "name" : "ghidra_library_cite",
     "title" : "Cite the source of a body's constant"
-  },
-  {
-    "annotations" : {
-      "destructiveHint" : false,
-      "idempotentHint" : false,
-      "openWorldHint" : false,
-      "readOnlyHint" : false
-    },
-    "description" : "On: a reader sees a registry function as its entry, and a module links to the entry instead of holding a copy. Off: modules hold and show their copies. Turn it on only when the registry is in order, or an entry that is not one function reads as one. No restart.",
-    "inputSchema" : {
-      "additionalProperties" : false,
-      "properties" : {
-        "module" : {
-          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
-          "type" : "string"
-        },
-        "on" : {
-          "description" : "On or off.",
-          "type" : "boolean"
-        }
-      },
-      "required" : [
-        "module",
-        "on"
-      ],
-      "type" : "object"
-    },
-    "name" : "ghidra_library_read_through",
-    "title" : "Turn reading through the registry on or off"
   },
   {
     "annotations" : {

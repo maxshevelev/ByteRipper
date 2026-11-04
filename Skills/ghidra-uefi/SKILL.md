@@ -475,8 +475,16 @@ publish enter together when each one's callees are held or among them, so a pair
 call each other enters as a pair; a citation can be given before a body's first publish. The owner reads data references from the instructions and treats
 a constant that lands in the image as one, so it errs towards refusing.
 
-**Reading through.** While `read_through` is on — a transitional switch, to go when every
-module is republished — a function at its entry reads as the entry wherever it is read:
+**What a module stores of a registry function.** Its own facts and the link: where it is, who
+calls it, its instructions, its body and its mark. Its name, signature, plate, comments and C are
+the entry's, and neither the artifact, the review document nor the project keeps them
+(`state: linked`, `copy_free`). `stored_copy` on a row says a copy is still stored there; a publish
+removes it. A write in a linked function first brings the entry's current text into the project,
+so it works on what the entry says; the publish takes it back out. The body's key masks an operand,
+so a function whose data references point at other bytes than the entry's (`reference_bytes`) is
+another function, however alike the instructions.
+
+**Reading through.** A function at its entry reads as the entry wherever it is read:
 `code_query` and `ghidra_function` give the entry's name, signature, plate, comments and C with
 `text: "registry"`, and addresses and names that are this module's own. `parameters` and
 `locals` stay the project's. Any write in the function makes it `edited`: it answers as Ghidra
@@ -504,8 +512,6 @@ their modules.
 - `ghidra_library_rename` narrows the name of a whole entry.
 - A text is corrected by editing the function in a module holding the body and
   publishing with `take_library_conflicts` and `library_reason`.
-- `ghidra_library_read_through` turns reading through the registry on, once the
-  registry is in order. Until then modules hold and show their copies.
 
 **Resolving a conflict.** `library.conflicts` means the registry holds another
 review of the same body than this module's, and neither side is right by

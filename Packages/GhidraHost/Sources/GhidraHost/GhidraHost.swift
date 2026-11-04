@@ -262,6 +262,7 @@ public actor GhidraHost {
         let record = try await owner(of: module)
         let held = leases[module] != nil
         if !held { await keepLeaseBaseline(module, record) }
+        try await bringEntryTextBefore(path, body: body, module: module, record: record)
         var token = try await lease(module, record)
         let answer: Data
         do {
@@ -410,11 +411,16 @@ public actor GhidraHost {
            let refusal = would.publishRefusal {
             throw GhidraHostError(.refused, refusal, status: 409)
         }
+        // What a module stores is its own facts: the text of a registry function
+        // is the entry's. The offer below is made from the export, which has it.
+        var plain = exported
+        let first = await Self.copyFree(exported, writer: writer)
+        raw = first.artifact
         var reading: AnalysisReading?
         var review: SHA256Digest?
         var described: SHA256Digest?
         if reviewed {
-            let stored = try await writer.writeObject(document)
+            let stored = try await writer.writeObject(LibraryCopyFree.stripReview(document, of: first))
             review = stored
             if !description.isEmpty { described = try await writer.writeObject(description) }
             let changed = last?.artifact != SHA256Digest(data: raw).hex || last?.review != stored.hex
@@ -436,9 +442,10 @@ public actor GhidraHost {
         if reviewed {
             do {
                 let offer = try Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data,
-                                                  artifact: raw)
+                                                  artifact: plain)
                 shortfalls = offer.shortfalls
                 let offered = try await Self.withoutLinked(offer.proposals, writer: writer)
+                var marked = false
                 if !offered.isEmpty {
                     let written = try await writer.writeLibraryEntries(
                         module: module, rev: reading?.rev, by: by, proposals: offered,
@@ -457,17 +464,28 @@ public actor GhidraHost {
                     // registry — a function that became the entry's next
                     // version, one left in conflict: then it is exported
                     // again, and stored in place of the first.
-                    if try await markLibrary(module, proposals: offered, result: written) > 0 {
-                        let again = try await write(module, "/v1/export", body: Data())
-                        if again != raw {
-                            raw = again
-                            let code = try await writer.writeObject(raw)
-                            if var current = reading, current.rev == last?.rev {
-                                current.rev += 1
-                                reading = current
-                                try await writer.writeRevision(module: module, reading: current,
-                                                               artifact: code, by: by)
-                            }
+                    marked = try await markLibrary(module, proposals: offered, result: written) > 0
+                }
+                // Whatever this publish left at an entry, the project keeps no
+                // text of: it is the entry's now.
+                if try await removeProjectCopies(module) { marked = true }
+                if marked {
+                    let again = try await write(module, "/v1/export", body: Data())
+                    if again != plain {
+                        plain = again
+                        let now = await Self.copyFree(again, writer: writer)
+                        raw = now.artifact
+                        let code = try await writer.writeObject(raw)
+                        // Functions this publish made the registry's leave the
+                        // review as they left the artifact.
+                        let kept = try await writer.writeObject(LibraryCopyFree.stripReview(document, of: now))
+                        review = kept
+                        reading?.review = kept
+                        if var current = reading, current.rev == last?.rev {
+                            current.rev += 1
+                            reading = current
+                            try await writer.writeRevision(module: module, reading: current,
+                                                           artifact: code, by: by)
                         }
                     }
                 }
@@ -561,6 +579,15 @@ public actor GhidraHost {
     /// The owner's `GET /v1/library`, as the registry takes it: each entry's
     /// object made canonical — sorted keys — so the same review stores the
     /// same object whichever owner wrote it.
+    /// The export with no text of a function the registry holds: readers take it
+    /// from there. No registry to read says nothing is stripped.
+    static func copyFree(_ raw: Data, writer: any AnalysisWriter) async -> LibraryCopyFree.Stripped {
+        guard let index = try? await writer.readLibraryIndex() else {
+            return LibraryCopyFree.strip(raw, index: LibraryIndex())
+        }
+        return LibraryCopyFree.strip(raw, index: index)
+    }
+
     /// A function linked to an entry and not edited since has nothing to say
     /// to the registry, whatever its project still holds: it is offered only
     /// when it is the entry's own review, which completes an older entry.
@@ -616,7 +643,8 @@ public actor GhidraHost {
                                              dataReferences: item["data_references"] as? [String],
                                              callees: (item["callees"] as? [[String: Any]])?.map {
                                                  LibraryCallee(name: $0["name"] as? String ?? "", body: $0["body"] as? String)
-                                             }))
+                                             },
+                                             referenceBytes: item["reference_bytes"] as? String))
         }
         let below = try JSONSerialization.data(withJSONObject: answer["below_bar"] ?? [])
         let shortfalls = try JSONDecoder().decode([LibraryShortfall].self, from: below)
@@ -654,8 +682,10 @@ public actor GhidraHost {
         }
         let reviewed = headers["x-owner-reviewed"] == "true"
         let conflicts = (headers["x-owner-type-conflicts"] ?? "").split(separator: ",").map(String.init)
-        let artifactDigest = SHA256Digest(data: raw).hex
-        let documentDigest = SHA256Digest(data: document).hex
+        let stored = await Self.copyFree(raw, writer: writer)
+        let storedDocument = LibraryCopyFree.stripReview(document, of: stored)
+        let artifactDigest = SHA256Digest(data: stored.artifact).hex
+        let documentDigest = SHA256Digest(data: storedDocument).hex
         let descriptionDigest: String? = description.isEmpty ? nil : SHA256Digest(data: description).hex
         let last = state.published
         let changed = last?.artifact != artifactDigest || last?.review != documentDigest
@@ -668,8 +698,9 @@ public actor GhidraHost {
             "changed": changed,
             // A publish writes the registry's states and marks into the artifact,
             // which a preview cannot: the review's hash holds, this one need not.
-            "artifact": ["sha256": artifactDigest, "size": raw.count, "before_library_marks": true],
-            "document": ["sha256": documentDigest, "size": document.count],
+            "artifact": ["sha256": artifactDigest, "size": stored.artifact.count, "before_library_marks": true],
+            "document": ["sha256": documentDigest, "size": storedDocument.count],
+            "copy_free_functions": stored.functions.count,
             "functions": functions.count,
             "instructions": instructions,
             "types": (artifact["types"] as? [Any])?.count ?? 0,

@@ -311,6 +311,7 @@ public class Owner {
                 // The registry's reads take a body (the keys) and write nothing.
                 if (path.equals("/v1/library/match")) { json(exchange, 200, libraryMatch(body(exchange))); return; }
                 if (path.equals("/v1/library/compare")) { json(exchange, 200, libraryCompare(body(exchange))); return; }
+                if (path.equals("/v1/library/text_free")) { json(exchange, 200, libraryTextFree(body(exchange))); return; }
                 if (path.equals("/v1/library/apply")) { json(exchange, 200, libraryApply(exchange)); return; }
                 if (path.equals("/v1/library/mark")) { json(exchange, 200, libraryMarkRequest(exchange)); return; }
                 if (path.equals("/v1/export")) { exportAgain(exchange); return; }
@@ -2529,6 +2530,8 @@ public class Owner {
             item.add("body", body);
             item.add("entry", libraryEntry(function, kind, body));
             if (linked) item.addProperty("linked", true);
+            String offeredBytes = ExportCode.referenceBytes(function);
+            if (offeredBytes != null) item.addProperty("reference_bytes", offeredBytes);
             libraryDependencies(function, fid, item);
             // Why its signature is what it is: not of the review's text, so it
             // goes beside the entry, for the history of the version it makes.
@@ -2881,6 +2884,9 @@ public class Owner {
             if (kind != null) item.addProperty("kind", kind);
             if (exact != null) item.add("exact", exact);
             if (near != null) item.add("near", near);
+            String bytes = ExportCode.referenceBytes(function);
+            if (bytes != null) item.addProperty("reference_bytes", bytes);
+            if (holdsText(function)) item.addProperty("holds_text", true);
             if (mark != null) {
                 JsonObject held = mark.deepCopy();
                 held.addProperty("edited", !atItsMark(function, hash, mark));
@@ -3200,6 +3206,10 @@ public class Owner {
         JsonObject now = hash == null ? null
             : libraryEntryListing(function, kind == null ? "" : kind, bodyObject(hash));
         boolean equal = now != null && (link || review(now).equals(review(entry)));
+        if (link) {
+            stripText(function);
+            now = hash == null ? null : libraryEntryListing(function, kind == null ? "" : kind, bodyObject(hash));
+        }
         StringPropertyMap issues = program.getUsrPropertyManager().getStringPropertyMap(LIBRARY_ISSUE);
         if (issues != null) issues.remove(function.getEntryPoint());
         if (equal) {
@@ -3583,9 +3593,35 @@ public class Owner {
         if (libraryMark(function) == null) return;
         try {
             answer.add("library_entry", JsonParser.parseString(libraryState(function)));
+            if (holdsText(function)) answer.addProperty("stored_copy", true);
         } catch (Exception error) {
             // A state that is not JSON says nothing a reader can act on.
         }
+    }
+
+    private static final ghidra.program.model.listing.CommentType[] COMMENT_KINDS = {
+        ghidra.program.model.listing.CommentType.PLATE, ghidra.program.model.listing.CommentType.PRE,
+        ghidra.program.model.listing.CommentType.POST, ghidra.program.model.listing.CommentType.EOL,
+        ghidra.program.model.listing.CommentType.REPEATABLE };
+
+    /** Whether the function's plate or a comment in its body is written in the project. */
+    private boolean holdsText(Function function) {
+        String plate = function.getComment();
+        if (plate != null && !plate.isBlank()) return true;
+        return program.getListing().getCommentAddressIterator(function.getBody(), true).hasNext();
+    }
+
+    /** The project keeps no text of a linked function: a reader takes it from the entry. */
+    private void stripText(Function function) {
+        ghidra.program.model.listing.Listing listing = program.getListing();
+        java.util.List<Address> places = new java.util.ArrayList<>();
+        ghidra.program.model.address.AddressIterator comments =
+            listing.getCommentAddressIterator(function.getBody(), true);
+        while (comments.hasNext()) places.add(comments.next());
+        for (Address place : places) {
+            for (ghidra.program.model.listing.CommentType kind : COMMENT_KINDS) listing.setComment(place, kind, null);
+        }
+        function.setComment(null);
     }
 
     /** Every function's `library_entry` written where the exporter reads it. */
@@ -4118,20 +4154,7 @@ public class Owner {
     private void noteWriteOnMarks(HttpExchange exchange, JsonObject body, long before) {
         if (program.getModificationNumber() == before) return;
         if (exchange.getRequestURI().getPath().startsWith("/v1/library/")) return;
-        java.util.List<String> places = new java.util.ArrayList<>();
-        for (String key : new String[] {"function", "address"}) {
-            if (body.has(key) && body.get(key).isJsonPrimitive()) places.add(body.get(key).getAsString());
-        }
-        for (String key : new String[] {"functions", "items"}) {
-            if (!body.has(key) || !body.get(key).isJsonArray()) continue;
-            for (JsonElement element : body.getAsJsonArray(key)) {
-                if (element.isJsonPrimitive()) places.add(element.getAsString());
-                else if (element.isJsonObject() && element.getAsJsonObject().has("address")) {
-                    places.add(element.getAsJsonObject().get("address").getAsString());
-                }
-            }
-        }
-        for (String place : places) {
+        for (String place : writePlaces(body)) {
             Address at;
             try {
                 at = address(place);
@@ -4148,6 +4171,56 @@ public class Owner {
                 System.out.println("OWNER MARK not noted " + place + " " + error);
             }
         }
+    }
+
+    /** The addresses a write's body names. */
+    private static java.util.List<String> writePlaces(JsonObject body) {
+        java.util.List<String> places = new java.util.ArrayList<>();
+        for (String key : new String[] {"function", "address"}) {
+            if (body.has(key) && body.get(key).isJsonPrimitive()) places.add(body.get(key).getAsString());
+        }
+        for (String key : new String[] {"functions", "items"}) {
+            if (!body.has(key) || !body.get(key).isJsonArray()) continue;
+            for (JsonElement element : body.getAsJsonArray(key)) {
+                if (element.isJsonPrimitive()) places.add(element.getAsString());
+                else if (element.isJsonObject() && element.getAsJsonObject().has("address")) {
+                    places.add(element.getAsJsonObject().get("address").getAsString());
+                }
+            }
+        }
+        return places;
+    }
+
+    /**
+     * The linked functions a write's body names that hold no text in the
+     * project: the host puts the entry's text there first, or the write would
+     * be on nothing and its publish would offer the entry without its comments.
+     * Writes nothing.
+     */
+    private JsonObject libraryTextFree(JsonObject body) throws Exception {
+        JsonArray items = new JsonArray();
+        java.util.Set<Address> seen = new java.util.HashSet<>();
+        ghidra.feature.fid.service.FidService fid = new ghidra.feature.fid.service.FidService();
+        for (String place : writePlaces(body)) {
+            Address at;
+            try {
+                at = address(place);
+            } catch (Exception error) {
+                continue;
+            }
+            Function function = program.getFunctionManager().getFunctionContaining(at);
+            JsonObject mark = function == null ? null : libraryMark(function);
+            if (mark == null || !seen.add(function.getEntryPoint()) || holdsText(function)
+                    || !atItsMark(function, fid.hashFunction(function), mark)) continue;
+            JsonObject item = new JsonObject();
+            item.addProperty("address", hex(function.getEntryPoint()));
+            item.add("id", mark.get("id"));
+            if (mark.has("codes")) item.add("codes", mark.get("codes"));
+            items.add(item);
+        }
+        JsonObject answer = identity();
+        answer.add("items", items);
+        return answer;
     }
 
     /** Whether a marked function is still what the mark says. */

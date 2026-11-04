@@ -167,6 +167,31 @@ final class LibraryRegistryTests: XCTestCase {
         }
     }
 
+    func testAPublishOfOtherBytesLeavesTheEntryAndARealHolderTeachesIt() throws {
+        func bytes(_ made: LibraryProposal, _ value: String?) -> LibraryProposal {
+            var made = made
+            made.referenceBytes = value
+            return made
+        }
+        // From before the exporter reported them.
+        try store.putLibraryEntries(module: first, rev: 1, by: "agent", proposals: [proposal("SetMem")])
+        XCTAssertNil(try store.libraryIndex().entries[body.key]?.variants.first?.referenceBytes)
+        // Another module does not teach it: it may be the one that differs.
+        try store.putLibraryEntries(module: second, rev: 1, by: "agent", proposals: [bytes(proposal("SetMem"), "bbbb")])
+        XCTAssertNil(try store.libraryIndex().entries[body.key]?.variants.first?.referenceBytes)
+        // The entry's own module does, with no version moving.
+        let taught = try store.putLibraryEntries(module: first, rev: 2, by: "agent", proposals: [bytes(proposal("SetMem"), "aaaa")])
+        XCTAssertEqual(taught.unchanged.map(\.version), [1])
+        XCTAssertEqual(try store.libraryIndex().entries[body.key]?.variants.first?.referenceBytes, "aaaa")
+        // Now a change from other bytes goes nowhere.
+        let other = try store.putLibraryEntries(module: second, rev: 2, by: "agent",
+                                                proposals: [bytes(proposal("SetMem", plate: "another GUID", base: 1), "bbbb")])
+        XCTAssertEqual(other.notLibrary?.map(\.why), ["reference_bytes"])
+        XCTAssertTrue(other.updated.isEmpty)
+        XCTAssertNil(other.needsReason)
+        XCTAssertEqual(try store.libraryIndex().entries[body.key]?.version, 1)
+    }
+
     func testTheEntryReasonsCrossTheServedStore() throws {
         let sent = ServedStoreProtocol.PutLibrary(module: first, rev: 1, by: "agent", proposals: [],
                                                   entryReasons: ["a": "why a"])

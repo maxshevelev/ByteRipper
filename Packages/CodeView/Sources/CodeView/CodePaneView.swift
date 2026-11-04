@@ -1517,7 +1517,7 @@ import ToolModuleKit
         let version = String(entry.version)
         var line: String
         switch entry.state {
-        case .entry?:
+        case .entry?, .linked?:
             line = L("Library registry entry, version %1$@", version)
         case .edited?:
             line = L("Library registry entry, version %1$@, changed since: the next publish makes the change its next version", version)

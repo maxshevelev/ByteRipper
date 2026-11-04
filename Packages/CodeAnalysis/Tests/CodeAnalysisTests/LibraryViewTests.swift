@@ -15,9 +15,6 @@ final class LibraryViewTests: XCTestCase {
         directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("LibraryViewTests-\(UUID().uuidString)", isDirectory: true)
         store = try ContentStore(root: directory)
-        var index = try store.libraryIndex()
-        index.readThrough = true
-        try store.mirrorLibrary(index)
     }
 
     override func tearDownWithError() throws {
@@ -423,16 +420,6 @@ final class LibraryViewTests: XCTestCase {
                        "split from \(body.key) (CopyMem): y")
     }
 
-    /// Off, the default: readers see what the module published.
-    func testReadThroughIsOffUntilTurnedOn() throws {
-        try register(try entryObject())
-        try store.changeLibrary(.init(action: .readThrough, on: false), by: "agent")
-        XCTAssertNotEqual(store.throughRegistry(try moduleArtifact()).functions[0].reviewLevel, .library)
-        try store.changeLibrary(.init(action: .readThrough, on: true), by: "agent")
-        XCTAssertEqual(store.throughRegistry(try moduleArtifact()).functions[0].reviewLevel, .library)
-        XCTAssertNil(LibraryIndex().readThrough)
-    }
-
     /// Recording the C brings nothing else of the module that offers it: the
     /// constants the entry holds stay, whatever that module reads.
     func testRecordingTheFunctionChangesNothingElse() throws {
@@ -642,10 +629,6 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertNil(read.libraryEntry)
         XCTAssertFalse(read.textFromRegistry)
 
-        var index = try store.libraryIndex()
-        index.readThrough = false
-        try store.mirrorLibrary(index)
-        XCTAssertEqual(store.throughRegistry(artifact).functions.first?.libraryEntry?.id, "99-gone-entry")
     }
 
     /// An entry that cannot be read leaves the published text; the row stays
@@ -679,19 +662,108 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertEqual(read.libraryEntry?.base, 1)
     }
 
-    /// On, then off: exactly what was read before.
-    func testTheSwitchOnThenOffRestoresTheReading() throws {
-        try register(try entryObject())
-        var index = try store.libraryIndex()
-        index.readThrough = false
-        try store.mirrorLibrary(index)
-        let artifact = try moduleArtifact()
-        let before = store.throughRegistry(artifact).functions
-        index.readThrough = true
-        try store.mirrorLibrary(index)
-        XCTAssertNotEqual(store.throughRegistry(artifact).functions, before)
-        index.readThrough = false
-        try store.mirrorLibrary(index)
-        XCTAssertEqual(store.throughRegistry(artifact).functions, before)
+    // MARK: - Stage 2: no copies, and other bytes are another function
+
+    private func exported(_ rows: [[String: Any]], symbols: [[String: Any]] = []) throws -> Data {
+        try JSONSerialization.data(withJSONObject: ["script_version": 10, "ghidra": "12.2", "functions": rows,
+                                                    "symbols": symbols, "strings": [], "blocks": [], "types": []],
+                                   options: .sortedKeys)
     }
+
+    private func row(_ entry: String, name: String, body: String?, mark: [String: Any]? = nil,
+                     bytes: String? = nil) -> [String: Any] {
+        var row: [String: Any] = [
+            "entry": entry, "name": name, "signature": "void \(name)(void)", "c": "void \(name)(void) {}",
+            "c_spans": [], "c_sites": [], "c_fields": [], "name_source": "USER_DEFINED", "name_reason": "the review's",
+            "signature_reason": "the review's", "library_kind": "edk2", "review_level": "library", "review_gaps": ["plate"],
+            "callers": ["0x100"], "callees": [], "instructions": [["address": entry, "bytes": "90", "text": "NOP"]]]
+        row["body"] = body
+        row["library_entry"] = mark
+        row["reference_bytes"] = bytes
+        return row
+    }
+
+    private func indexHolding(_ key: String, bytes: String? = nil) -> LibraryIndex {
+        var index = LibraryIndex()
+        let parts = key.split(separator: "-").map(String.init)
+        let body = LibraryBody(size: Int(parts[0], radix: 16) ?? 0, full: parts[1], specific: parts[2])
+        index.entries[key] = LibraryIndexEntry(
+            version: 3, entry: SHA256Digest(data: Data("entry".utf8)), name: "PeiServicesLocatePpi", kind: "edk2",
+            source: LibrarySource(module: SHA256Digest(data: Data("m".utf8)), address: "0x1", rev: 1, by: "agent"),
+            variants: [LibraryVariant(body: body, module: SHA256Digest(data: Data("m".utf8)), referenceBytes: bytes)])
+        index.bodies[key] = key
+        return index
+    }
+
+    func testAModuleStoresOnlyItsOwnFactsOfARegistryFunction() throws {
+        let key = "13-f8dd4aec64a3065c-ead22510a48e4aa9"
+        let index = indexHolding(key)
+        let raw = try exported([
+            row("0x1000", name: "ByMark", body: key, mark: ["id": key, "version": 3, "state": "entry"]),
+            row("0x2000", name: "BodyOnly", body: key),
+            row("0x3000", name: "Edited", body: key, mark: ["id": key, "version": 3, "state": "edited"]),
+            row("0x4000", name: "InConflict", body: key, mark: ["id": key, "version": 2, "state": "conflict"]),
+            row("0x5000", name: "ModulesOwn", body: "13-1111111111111111-2222222222222222")
+        ], symbols: [["address": "0x1000", "name": "ByMark"], ["address": "0x5000", "name": "ModulesOwn"],
+                     ["address": "0x9000", "name": "gGuid"]])
+        let stripped = LibraryCopyFree.strip(raw, index: index)
+        XCTAssertEqual(stripped.functions, ["0x1000", "0x2000"])
+        XCTAssertEqual(stripped.addresses, ["0x1000", "0x2000"])
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: stripped.artifact) as? [String: Any])
+        let rows = try XCTUnwrap(object["functions"] as? [[String: Any]])
+        for gone in rows.prefix(2) {
+            for key in ["signature", "c", "c_spans", "c_sites", "c_fields", "name_reason", "signature_reason", "library_kind"] {
+                XCTAssertNil(gone[key], key)
+            }
+            XCTAssertEqual(gone["copy_free"] as? Bool, true)
+            XCTAssertEqual(gone["name_source"] as? String, "DEFAULT")
+            XCTAssertTrue((gone["name"] as? String)?.hasPrefix("FUN_0000") == true, "\(gone["name"] ?? "")")
+            // What is the module's stays.
+            XCTAssertEqual(gone["callers"] as? [String], ["0x100"])
+            XCTAssertEqual((gone["instructions"] as? [Any])?.count, 1)
+            XCTAssertEqual(gone["body"] as? String, key)
+        }
+        XCTAssertEqual(rows[0]["library_entry"] as? [String: AnyHashable], ["id": key, "version": 3, "state": "entry"])
+        for kept in rows.suffix(3) {
+            XCTAssertNotNil(kept["c"], "\(kept["name"] ?? "")")
+            XCTAssertNil(kept["copy_free"])
+        }
+        XCTAssertEqual((object["symbols"] as? [[String: Any]])?.compactMap { $0["name"] as? String }, ["ModulesOwn", "gGuid"])
+        // A reader from before this still decodes it, and a reader now tells them apart.
+        let read = try JSONDecoder().decode(CodeArtifact.self, from: stripped.artifact)
+        XCTAssertEqual(read.functions.map(\.copyFree), [true, true, false, false, false])
+        XCTAssertNil(read.functions[0].c)
+        // Nothing to strip: byte for byte.
+        XCTAssertEqual(LibraryCopyFree.strip(raw, index: LibraryIndex()).artifact, raw)
+    }
+
+    func testAReviewDocumentKeepsNothingOfAStrippedFunction() throws {
+        let stripped = LibraryCopyFree.Stripped(artifact: Data(), functions: ["0x1000"], addresses: ["0x1000", "0x1002"])
+        let document = try JSONSerialization.data(withJSONObject: [
+            "functions": ["0x1000": ["name": "ByMark"], "0x5000": ["name": "Own"]],
+            "comments": [["address": "0x1002", "text": "a step"], ["address": "0x5000", "text": "own"]],
+            "data": [:]], options: .sortedKeys)
+        let out = try XCTUnwrap(JSONSerialization.jsonObject(with: LibraryCopyFree.stripReview(document, of: stripped)) as? [String: Any])
+        XCTAssertEqual((out["functions"] as? [String: Any])?.keys.sorted(), ["0x5000"])
+        XCTAssertEqual((out["comments"] as? [[String: Any]])?.compactMap { $0["text"] as? String }, ["own"])
+    }
+
+    /// `PeiServicesLocatePpi` of another GUID has the same key: it is another function.
+    func testOtherBytesAreAnotherFunctionWithOrWithoutAMark() throws {
+        let key = "13-f8dd4aec64a3065c-ead22510a48e4aa9"
+        let index = indexHolding(key, bytes: "aaaa")
+        func id(_ bytes: String?, mark: String? = nil, in index: LibraryIndex) -> String? {
+            LibraryView.entryID(body: key, mark: mark, external: false, thunk: false, referenceBytes: bytes, in: index)
+        }
+        XCTAssertEqual(id("aaaa", in: index), key)
+        XCTAssertNil(id("bbbb", in: index), "a body-only row of another GUID")
+        XCTAssertNil(id("bbbb", mark: key, in: index), "nor by a mark")
+        XCTAssertEqual(id(nil, in: index), key, "a row from before the exporter wrote it decides nothing")
+        XCTAssertEqual(id("bbbb", in: indexHolding(key)), key, "nor an entry that has not learned them")
+        // So it keeps its text.
+        let raw = try exported([row("0x2000", name: "OtherGuid", body: key, bytes: "bbbb"),
+                                row("0x3000", name: "SameGuid", body: key, bytes: "aaaa")])
+        XCTAssertEqual(LibraryCopyFree.strip(raw, index: index).functions, ["0x3000"])
+    }
+
 }

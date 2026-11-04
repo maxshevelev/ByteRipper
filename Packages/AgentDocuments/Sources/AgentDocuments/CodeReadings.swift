@@ -145,8 +145,7 @@ public final class CodeReadings {
                 narrowed by `search` (a part of the name) and `kind`, sorted by name. `show` lists instead \
                 `taken_out`, the bodies given back to their modules and why, or `sources`, the citations by \
                 body, narrowed the same way. Every list is paged by `limit` and `after`, and every answer \
-                says `total`, `taken_out_total`, `sources_total` and `read_through`, whether readers see \
-                entries. With `id`: that entry, or a taken-out one, its `review` (signature, parameters and \
+                says `total`, `taken_out_total` and `sources_total`. With `id`: that entry, or a taken-out one, its `review` (signature, parameters and \
                 locals by storage, plate, step comments by offset from the entry) and its `history` of \
                 versions, each with the module that published it and, for a version taken over another \
                 module's, the reason. A recorded function comes with its C but without `instructions`, \
@@ -321,8 +320,7 @@ public final class CodeReadings {
             }
             let page = try AgentPage(arguments, fingerprint: AgentPage.fingerprint([show, search, kind, rows.count]),
                                      changed: "The registry changed since that page, or the question did; ask again without `after`.")
-            return try page.answer(["read_through": .bool(index.readThrough == true),
-                                    "total": .int(Int64(matching.count)),
+            return try page.answer(["total": .int(Int64(matching.count)),
                                     "taken_out_total": .int(Int64(takenOutRows.count)),
                                     "sources_total": .int(Int64(citationRows.count))],
                                    key: show, items: Array(rows.dropFirst(page.first).prefix(limit)),
@@ -564,6 +562,7 @@ public final class CodeReadings {
             body["signature"] = function.signature.map(JSONValue.string) ?? .null
             body["c"] = function.c.map(JSONValue.string) ?? .null
             if function.textFromRegistry { body["text"] = .string("registry") }
+            if function.storedCopy { body["stored_copy"] = .bool(true) }
             if function.textUnavailable { body["text_unavailable"] = .string("the registry entry could not be read") }
             if !function.publisherAddresses.isEmpty {
                 body["publisher_addresses"] = .array(function.publisherAddresses.map(JSONValue.string))
@@ -857,6 +856,7 @@ private func functionItem(_ function: CodeArtifact.Function,
     item["library_kind"] = text(function.libraryKind?.rawValue)
     item["library_entry"] = libraryEntryItem(function.libraryEntry)
     if function.textFromRegistry { item["text"] = .string("registry") }
+    if function.storedCopy { item["stored_copy"] = .bool(true) }
     if function.textUnavailable { item["text_unavailable"] = .string("the registry entry could not be read") }
     if !function.publisherAddresses.isEmpty {
         item["publisher_addresses"] = .array(function.publisherAddresses.map(JSONValue.string))

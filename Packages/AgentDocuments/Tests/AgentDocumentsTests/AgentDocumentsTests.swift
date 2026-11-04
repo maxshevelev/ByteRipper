@@ -210,12 +210,17 @@ final class CodeReadingsTests: XCTestCase {
                "library_kind": "edk2", "review_level": "full",
                "library_entry": {"id": "\(body1.key)", "version": 1, "state": "entry"},
                "instructions": [{"address": "0x1000", "text": "RET"}]},
-              {"entry": "0x1020", "name": "LibAmdIoWrite", "signature": "undefined8 LibAmdIoWrite(void)",
+              {"entry": "0x1020", "name": "LibAmdIoWrite", "signature": "void LibAmdIoWrite(void)",
                "library_kind": "amd", "review_level": "partial", "review_gaps": ["plate", "locals"],
                "library_entry": {"id": "\(body2.key)", "version": 1, "state": "conflict", "base": 1},
                "instructions": [{"address": "0x1020", "text": "RET"}]},
               {"entry": "0x1040", "name": "AsmWriteTr", "library_kind": "amd",
-               "instructions": [{"address": "0x1040", "text": "RET"}]}
+               "instructions": [{"address": "0x1040", "text": "RET"}]},
+              {"entry": "0x1060", "name": "OwnFull", "signature": "void OwnFull(void)", "review_level": "full",
+               "instructions": [{"address": "0x1060", "text": "RET"}]},
+              {"entry": "0x1080", "name": "OwnTagged", "signature": "undefined8 OwnTagged(void)",
+               "library_kind": "amd", "review_level": "partial", "review_gaps": ["plate", "locals"],
+               "instructions": [{"address": "0x1080", "text": "RET"}]}
             ]}
             """
         try store.putAnalysis(module: module, recipe: recipe, artifact: Data(artifact.utf8))
@@ -229,17 +234,17 @@ final class CodeReadingsTests: XCTestCase {
         XCTAssertEqual(levels["full"], .int(1))
         XCTAssertEqual(levels["partial"], .int(1))
         XCTAssertEqual(levels["decompiled"], .int(0))
-        XCTAssertEqual(levels["library"], .int(0))
+        XCTAssertEqual(levels["library"], .int(2), "a marked function reads as its entry")
         XCTAssertEqual(levels["no_body"], .int(0))
         XCTAssertEqual(levels["unrecorded"], .int(1))
         let partial = try await tool.run(AgentCall(tool: "code_query", arguments: AgentArguments([
             "module": .string(module.sha256.hex), "what": .string("functions"), "level": .string("partial")])))
         guard case .json(.object(let only)) = partial else { return XCTFail("not an object: \(partial)") }
         XCTAssertEqual(only["total"], .int(1))
-        XCTAssertEqual(only["functions"]?.arrayValue?.first?["name"]?.stringValue, "LibAmdIoWrite")
+        XCTAssertEqual(only["functions"]?.arrayValue?.first?["name"]?.stringValue, "OwnTagged")
         XCTAssertEqual(only["review_levels"]?.objectValue?["full"], .int(1), "the counts stay whole")
         XCTAssertEqual(library["edk2"], .int(1))
-        XCTAssertEqual(library["amd"], .int(2))
+        XCTAssertEqual(library["amd"], .int(3))
         XCTAssertEqual(library["intel"], .int(0))
         XCTAssertEqual(library["with_entry"], .int(2))
         XCTAssertEqual(library["entry"], .int(1))
@@ -247,7 +252,7 @@ final class CodeReadingsTests: XCTestCase {
         XCTAssertEqual(library["edited"], .int(0))
         XCTAssertEqual(library["differs"], .int(0))
         XCTAssertEqual(library["installed"], .int(2), "both entries carry this module's current version")
-        XCTAssertEqual(library["updated_since"], .int(1), "the second entry moved on after the mark")
+        XCTAssertEqual(library["updated_since"], .int(0), "a function reads as the entry's current version")
         let below = try XCTUnwrap(library["below_bar"]?.objectValue)
         XCTAssertEqual(below["plate"], .int(1))
         XCTAssertEqual(below["locals"], .int(1))

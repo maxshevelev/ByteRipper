@@ -64,11 +64,21 @@ public struct LibraryVariant: Codable, Equatable, Sendable {
     /// The assert codes this body holds where the entry's first body holds
     /// others; nil for the first body.
     public var codes: [String]?
+    /// The digest of what this body's data references point at, as its module
+    /// reported it. Nil for a body with none, and until its module publishes
+    /// under an exporter that reports it.
+    public var referenceBytes: String?
 
-    public init(body: LibraryBody, module: SHA256Digest, codes: [String]? = nil) {
+    public init(body: LibraryBody, module: SHA256Digest, codes: [String]? = nil, referenceBytes: String? = nil) {
         self.body = body
         self.module = module
         self.codes = codes
+        self.referenceBytes = referenceBytes
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case body, module, codes
+        case referenceBytes = "reference_bytes"
     }
 }
 
@@ -109,18 +119,20 @@ public struct LibraryIndex: Codable, Equatable, Sendable {
     public var sources: [String: LibraryCitation]?
     /// The citations later calls replaced or removed, by key. Nil while none.
     public var sourceChanges: [String: [LibraryCitationChange]]?
-    /// Readers see a marked function as its entry, and a module links to the
-    /// entry rather than holding a copy. Off until the registry is in order:
-    /// an entry that is not one function would read as one.
-    public var readThrough: Bool?
-
     public init() {}
+
+    /// Whether a body's data references point at other bytes than the entry
+    /// holds for it. Either side not knowing says nothing.
+    public func bytesDiffer(id: String, body: String, referenceBytes: String?) -> Bool {
+        guard let referenceBytes,
+              let held = entries[id]?.variants.first(where: { $0.body.key == body })?.referenceBytes else { return false }
+        return held != referenceBytes
+    }
 
     private enum CodingKeys: String, CodingKey {
         case schema, entries, bodies, sources
         case takenOut = "taken_out"
         case sourceChanges = "source_changes"
-        case readThrough = "read_through"
     }
 
     /// The entry a body belongs to.
@@ -236,6 +248,8 @@ public struct LibraryProposal: Codable, Equatable, Sendable {
     public var nameReason: String?
     /// The function carries the entry's mark and was not edited since.
     public var linked: Bool = false
+    /// The digest of what the body's data references point at (`LibraryVariant`).
+    public var referenceBytes: String?
     /// What the body refers to, by offset from its entry, and what it calls:
     /// what decides whether it depends on a module. Nil from an owner that
     /// does not say. Beside the review, not part of it.
@@ -245,8 +259,10 @@ public struct LibraryProposal: Codable, Equatable, Sendable {
     public init(body: LibraryBody, name: String, kind: String, address: String, entry: Data,
                 variantOf: String? = nil, codes: [String]? = nil, role: String? = nil,
                 basedOn: String? = nil, base: Int? = nil, signatureReason: String? = nil, nameReason: String? = nil,
-                linked: Bool = false, dataReferences: [String]? = nil, callees: [LibraryCallee]? = nil) {
+                linked: Bool = false, dataReferences: [String]? = nil, callees: [LibraryCallee]? = nil,
+                referenceBytes: String? = nil) {
         self.linked = linked
+        self.referenceBytes = referenceBytes
         self.dataReferences = dataReferences
         self.callees = callees
         self.body = body
@@ -322,7 +338,6 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
     public var takenOut: [Change]?
     public var cited: [String]?
     public var citations: [LibraryCitationResult]?
-    public var readThrough: Bool?
 
     public struct NotLibrary: Codable, Equatable, Sendable {
         public var address: String
@@ -401,7 +416,6 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
         case nameConflicts = "name_conflicts"
         case notLibrary = "not_library"
         case takenOut = "taken_out"
-        case readThrough = "read_through"
     }
 }
 
@@ -629,7 +643,8 @@ extension ContentStore {
                     if proposal.body.shape == held.variants.first?.body.shape,
                        LibraryProposal.sameReview(try object(held.entry), proposal.entry) {
                         held.variants.append(LibraryVariant(body: proposal.body, module: module,
-                                                            codes: proposal.codes))
+                                                            codes: proposal.codes,
+                                                            referenceBytes: proposal.referenceBytes))
                         index.entries[id] = held
                         index.bodies[proposal.body.key] = id
                         let joined = "the body \(proposal.body.key) joins the entry as a variant"
@@ -659,7 +674,7 @@ extension ContentStore {
                     return .init(address: proposal.address, name: proposal.name, body: proposal.body.key,
                                  heldBy: other, heldVersion: entry.version)
                 }
-                guard let (id, held) = index.entry(for: proposal.body) else {
+                guard let (id, found) = index.entry(for: proposal.body) else {
                     if let conflict = namedOtherwise(than: nil) {
                         result.nameConflicts = (result.nameConflicts ?? []) + [conflict]
                         continue
@@ -667,7 +682,8 @@ extension ContentStore {
                     let id = proposal.body.key
                     index.entries[id] = LibraryIndexEntry(
                         version: 1, entry: digest, name: proposal.name, kind: proposal.kind, source: source,
-                        variants: [LibraryVariant(body: proposal.body, module: module)], role: proposal.role)
+                        variants: [LibraryVariant(body: proposal.body, module: module,
+                                                  referenceBytes: proposal.referenceBytes)], role: proposal.role)
                     index.bodies[proposal.body.key] = id
                     histories[id] = LibraryHistory(id: id, versions: [
                         LibraryVersion(version: 1, entry: digest, source: source, reason: nil, recordedAt: now)
@@ -676,6 +692,24 @@ extension ContentStore {
                     settled[id] = "this publish adds it as a new entry, version 1"
                     continue
                 }
+                // One key, other data: another function, which the entry does not
+                // take and whose review says nothing of it.
+                if index.bytesDiffer(id: id, body: proposal.body.key, referenceBytes: proposal.referenceBytes) {
+                    result.notLibrary = (result.notLibrary ?? []) + [.init(
+                        address: proposal.address, name: proposal.name, body: proposal.body.key, why: "reference_bytes",
+                        reason: "its data references point at other bytes than the entry \(id) holds for this body")]
+                    settled[id] = "this function's data references point at other bytes, so it is not this entry's"
+                    continue
+                }
+                // The module the body came from says what its bytes are: an entry
+                // from before this learns them, with no version moving.
+                if let bytes = proposal.referenceBytes,
+                   let position = found.variants.firstIndex(where: { $0.body.key == proposal.body.key }),
+                   found.variants[position].referenceBytes == nil, found.variants[position].module == module {
+                    index.entries[id]?.variants[position].referenceBytes = bytes
+                    changedIndex = true
+                }
+                let held = index.entries[id] ?? found
                 if held.entry == digest {
                     result.unchanged.append(.init(id: id, name: held.name, version: held.version))
                     settled[id] = "its review is the entry's own, at version \(held.version)"

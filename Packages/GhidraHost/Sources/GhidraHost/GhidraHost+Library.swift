@@ -76,6 +76,16 @@ extension GhidraHost {
         var near: [String]?
         var mark: Mark?
         var declined: [String]?
+        /// The digest of what the body's data references point at.
+        var referenceBytes: String?
+        /// A plate or a comment is written in the project.
+        var holdsText: Bool?
+
+        private enum CodingKeys: String, CodingKey {
+            case address, name, named, key, kind, exact, near, mark, declined
+            case referenceBytes = "reference_bytes"
+            case holdsText = "holds_text"
+        }
     }
 
     /// A constant where the function and an entry of its shape differ.
@@ -205,7 +215,7 @@ extension GhidraHost {
         var plan = LibraryPlan(entries: index.entries.count, hashed: hashed)
         // A module holds a copy until the registry reads through: linking
         // before that would leave its function with no text to show.
-        let linking = index.readThrough == true
+        let linking = true
         for match in matches {
             // The module's function again, if it ever took the entry or was
             // offered as one. Any other function of that body stays untouched:
@@ -241,20 +251,35 @@ extension GhidraHost {
                                             why: mark.version < held.version
                                                 ? "version \(held.version) is newer than the v\(mark.version) applied" : nil))
                 } else if mark.version >= held.version {
-                    plan.applied.append(step(id, held, mode: nil, state: "applied", codes: mark.codes))
+                    // At its mark, its text is the entry's: a copy, which goes.
+                    if linking, match.holdsText == true {
+                        plan.toApply.append(step(id, held, mode: "link", state: "copy", codes: mark.codes))
+                    } else {
+                        plan.applied.append(step(id, held, mode: nil, state: "applied", codes: mark.codes))
+                    }
                 } else {
                     plan.toApply.append(step(id, held, mode: mode, state: "newer_version", codes: mark.codes))
                 }
                 return true
             }
             if let id = match.exact, let held = index.entries[id] {
+                // One key, other data: another function, whatever it was before.
+                if index.bytesDiffer(id: id, body: match.key, referenceBytes: match.referenceBytes) {
+                    plan.candidates.append(step(id, held, mode: nil, state: "reference_bytes",
+                                                why: "its data references point at other bytes than the entry holds: "
+                                                    + "another function"))
+                    continue
+                }
                 if (match.declined ?? []).contains(id) {
                     plan.declined.append(step(id, held, mode: nil, state: "declined"))
                 } else if marked(id, held, mode: linking ? "link" : "whole") {
                 } else if !match.named {
-                    plan.toApply.append(step(id, held, mode: linking ? "link" : "whole", state: "unnamed"))
+                    // Text nobody compared with the entry is not stripped: `fill`
+                    // keeps it, and says when it differs.
+                    let free = linking && match.holdsText != true
+                    plan.toApply.append(step(id, held, mode: free ? "link" : linking ? "fill" : "whole", state: "unnamed"))
                 } else {
-                    plan.toApply.append(step(id, held, mode: linking ? "link" : "fill", state: "named"))
+                    plan.toApply.append(step(id, held, mode: linking && match.holdsText != true ? "link" : "fill", state: "named"))
                 }
                 continue
             }
@@ -269,7 +294,8 @@ extension GhidraHost {
                 let comparison = comparisons["\(match.address) \(id)"]
                 if !applying, let comparison, comparison.comparable, comparison.assertCodesOnly == true {
                     applying = true
-                    plan.toApply.append(step(id, held, mode: linking ? "link" : "variant", state: "assert_codes",
+                    plan.toApply.append(step(id, held, mode: linking && match.holdsText != true ? "link" : "variant",
+                                             state: "assert_codes",
                                              codes: comparison.differences?.map(\.value),
                                              differences: comparison.differences))
                 } else {
@@ -404,6 +430,58 @@ extension GhidraHost {
             answer["results"] = (applied as? [String: Any])?["items"] ?? []
             return try JSONSerialization.data(withJSONObject: answer, options: [.sortedKeys])
         }
+    }
+
+    /// A write in a linked function works on the entry's text: the project holds
+    /// none, and what the write leaves is what a publish offers as the entry.
+    /// Refused if the text cannot be brought, so nothing is written on nothing.
+    func bringEntryTextBefore(_ path: String, body: Data, module: SHA256Digest, record: OwnerRecord) async throws {
+        guard !path.hasPrefix("/v1/library/"), path != "/v1/export", !body.isEmpty,
+              (try? JSONSerialization.jsonObject(with: body)) is [String: Any],
+              let data = try? await Self.call(record.port, "POST", "/v1/library/text_free", body: body).data,
+              let found = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let rows = found["items"] as? [[String: Any]], !rows.isEmpty else { return }
+        let index = try await writer.readLibraryIndex()
+        var items: [[String: Any]] = []
+        for row in rows {
+            guard let id = row["id"] as? String, let held = index.entries[id] else { continue }
+            var item: [String: Any] = [
+                "address": row["address"] ?? "", "id": id, "version": held.version,
+                "entry": try JSONSerialization.jsonObject(with: try await writer.readObject(held.entry)),
+                "mode": row["codes"] == nil ? "whole" : "variant"
+            ]
+            item["codes"] = row["codes"]
+            items.append(item)
+        }
+        guard !items.isEmpty else { return }
+        let answer = try await write(module, "/v1/library/apply",
+                                     body: try JSONSerialization.data(withJSONObject: ["items": items]))
+        let results = ((try JSONSerialization.jsonObject(with: answer)) as? [String: Any])?["items"] as? [[String: Any]] ?? []
+        if let failed = results.first(where: { $0["ok"] as? Bool != true }) {
+            throw GhidraHostError(.refused, "the entry's text could not be brought to \(failed["address"] ?? "the function"): "
+                + "\(failed["error"] ?? "unknown"). Nothing was written.", status: 409)
+        }
+    }
+
+    /// Functions at their entry whose text is still written in the project lose
+    /// it. Says whether any did.
+    func removeProjectCopies(_ module: SHA256Digest) async throws -> Bool {
+        let (plan, index) = try await libraryPlan(module)
+        var items: [[String: Any]] = []
+        for step in plan.toApply where step.state == "copy" {
+            guard let held = index.entries[step.id] else { continue }
+            var item: [String: Any] = [
+                "address": step.address, "id": step.id, "version": held.version,
+                "entry": try JSONSerialization.jsonObject(with: try await writer.readObject(held.entry)),
+                "mode": "link"
+            ]
+            item["codes"] = step.codes
+            items.append(item)
+        }
+        guard !items.isEmpty else { return false }
+        _ = try await write(module, "/v1/library/apply",
+                            body: try JSONSerialization.data(withJSONObject: ["items": items]))
+        return true
     }
 
     /// The step `ghidra_library_apply` names by address: a match that

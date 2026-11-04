@@ -327,8 +327,8 @@ final class GhidraHostLibraryPlanTests: XCTestCase {
             "0x7000 \(id)": assertOnly, "0x8000 \(id)": otherConstants
         ])
         XCTAssertEqual(plan.toApply.map { "\($0.address) \($0.mode ?? "") \($0.state)" }, [
-            "0x1000 whole unnamed", "0x2000 fill named", "0x4000 whole newer_version",
-            "0x7000 variant assert_codes"
+            "0x1000 link unnamed", "0x2000 link named", "0x4000 link newer_version",
+            "0x7000 link assert_codes"
         ])
         XCTAssertEqual(plan.toApply.last?.codes, ["0x10199"])
         XCTAssertEqual(plan.applied.map(\.address), ["0x3000"])

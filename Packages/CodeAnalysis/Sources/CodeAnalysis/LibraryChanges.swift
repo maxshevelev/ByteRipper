@@ -91,7 +91,6 @@ public struct LibraryChange: Codable, Equatable, Sendable {
         case restore
         case split
         case cite
-        case readThrough = "read_through"
     }
 
     public var action: Action
@@ -101,12 +100,11 @@ public struct LibraryChange: Codable, Equatable, Sendable {
     public var reason: String?
     public var file: String?
     public var line: Int?
-    public var on: Bool?
     /// With `cite`: take this file and line away rather than add it.
     public var remove: Bool?
 
     public init(action: Action, id: String? = nil, body: String? = nil, name: String? = nil, reason: String? = nil,
-                file: String? = nil, line: Int? = nil, on: Bool? = nil, remove: Bool? = nil) {
+                file: String? = nil, line: Int? = nil, remove: Bool? = nil) {
         self.action = action
         self.id = id
         self.body = body
@@ -114,7 +112,6 @@ public struct LibraryChange: Codable, Equatable, Sendable {
         self.reason = reason
         self.file = file
         self.line = line
-        self.on = on
         self.remove = remove
     }
 }
@@ -175,18 +172,6 @@ extension ContentStore {
         case .restore: return try restoreToLibrary(change, by: by, changedFrom: changedFrom, dryRun: dryRun)
         case .split: return try splitLibraryEntry(change, by: by, changedFrom: changedFrom, dryRun: dryRun)
         case .cite: return try citeLibrarySource(change, by: by, dryRun: dryRun)
-        case .readThrough:
-            guard let on = change.on else {
-                throw CodeAnalysisError.analysisMismatch("turning read-through on or off takes `on`")
-            }
-            return try withLock {
-                var index = try libraryIndex()
-                index.readThrough = on
-                var result = LibraryWriteResult()
-                result.readThrough = on
-                if !dryRun { try atomicWrite(try encoder.encode(index), to: libraryIndexURL) }
-                return result
-            }
         }
     }
 

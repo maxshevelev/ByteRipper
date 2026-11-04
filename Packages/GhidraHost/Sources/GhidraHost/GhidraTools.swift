@@ -357,23 +357,6 @@ public enum GhidraTools {
                     remove: try call.arguments.bool("remove", default: false) ? true : nil))
             },
             AgentTool(
-                name: "ghidra_library_read_through",
-                title: "Turn reading through the registry on or off",
-                description: """
-                    On: a reader sees a registry function as its entry, and a module links to the entry instead \
-                    of holding a copy. Off: modules hold and show their copies. Turn it on only when the \
-                    registry is in order, or an entry that is not one function reads as one. No restart.
-                    """,
-                inputSchema: AgentSchema.object([
-                    "module": moduleProperty,
-                    "on": AgentSchema.boolean("On or off.")
-                ], required: ["module", "on"]),
-                annotations: .edit
-            ) { call in
-                try await change(call.arguments, backend, LibraryChange(
-                    action: .readThrough, on: try call.arguments.bool("on", default: false)))
-            },
-            AgentTool(
                 name: "ghidra_library_apply",
                 title: "Apply or decline a library registry entry",
                 description: """

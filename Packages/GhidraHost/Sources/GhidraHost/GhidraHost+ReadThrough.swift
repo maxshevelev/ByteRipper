@@ -12,7 +12,7 @@ extension GhidraHost {
     public func throughRegistry(_ data: Data, module: SHA256Digest, call: String) async -> Data {
         let oneFunction = call.hasPrefix("function/") && !call.dropFirst("function/".count).contains("/")
         guard call == "functions" || oneFunction,
-              let index = try? await writer.readLibraryIndex(), index.readThrough == true,
+              let index = try? await writer.readLibraryIndex(),
               var answer = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return data }
         if oneFunction {
             answer = await functionThroughRegistry(answer, module: module, index: index)
@@ -30,7 +30,14 @@ extension GhidraHost {
             answer["library_entry"] = nil
             return nil
         }
-        return mark["state"] as? String == "entry" ? (id, row) : nil
+        guard mark["state"] as? String == "entry" else { return nil }
+        // No text in the project: the link is all this module holds.
+        if answer["stored_copy"] == nil {
+            var linked = mark
+            linked["state"] = "linked"
+            answer["library_entry"] = linked
+        }
+        return (id, row)
     }
 
     private func rowThroughRegistry(_ row: [String: Any], index: LibraryIndex) async -> [String: Any] {

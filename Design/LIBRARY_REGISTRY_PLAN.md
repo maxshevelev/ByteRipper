@@ -14,11 +14,12 @@
 > function is in the module's scope and conflicts with nothing in other modules.
 > A text true of one module only means the function is not a library function, and
 > it does not belong here. An open links (`mode: link`); `whole` remains only as the
-> working copy `replace` asks for, to change an entry on. Linking and reading through
-> are off until `read_through` is set in the index (`ghidra_library_read_through`):
-> until the registry is in order an entry that is not one function would read as one.
-> That switch is to go: a function is in one place in the registry, and history is no
-> copy.
+> working copy `replace` asks for, to change an entry on. A module stores its own facts
+> and the link: no name, signature, plate, comment or C of a registry function, in the
+> artifact or the review (`LibraryCopyFree`); such a function has `state: linked`, a
+> stored copy shows as `stored_copy`. The key masks an operand, so a function whose data
+> references point at other bytes than the entry's is another function
+> (`reference_bytes`). A function is in one place in the registry, and history is no copy.
 >
 > **What a library function is (2026-11-03):** it depends on no module. It refers to
 > no data, or only to a constant defined in its own library's source file, cited by

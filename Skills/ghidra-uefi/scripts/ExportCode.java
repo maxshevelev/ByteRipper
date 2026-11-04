@@ -610,6 +610,69 @@ public class ExportCode extends GhidraScript {
         return state == null || state.isBlank() ? null : state;
     }
 
+    /**
+     * A digest of the bytes the function's data references point at, in the
+     * order of its instructions: the body's key masks the operand, so the same
+     * code about another GUID has the same key and is another function. A
+     * reference covers its defined datum, or 16 bytes where none is defined.
+     * Null for a function that refers to no data. Which references count is
+     * what Owner.libraryOutside counts as `data_references`.
+     */
+    static String referenceBytes(Function function) {
+        ghidra.program.model.listing.Program program = function.getProgram();
+        ghidra.program.model.listing.Listing listing = program.getListing();
+        Address entry = function.getEntryPoint();
+        boolean baseIsReal = program.getImageBase().getOffset() >= 0x10000;
+        java.security.MessageDigest digest;
+        try {
+            digest = java.security.MessageDigest.getInstance("SHA-256");
+        } catch (java.security.NoSuchAlgorithmException error) {
+            return null;
+        }
+        boolean any = false;
+        ghidra.program.model.listing.InstructionIterator instructions = listing.getInstructions(function.getBody(), true);
+        while (instructions.hasNext()) {
+            ghidra.program.model.listing.Instruction instruction = instructions.next();
+            java.util.TreeSet<Address> named = new java.util.TreeSet<>();
+            for (ghidra.program.model.symbol.Reference reference : instruction.getReferencesFrom()) {
+                if (reference.isStackReference() || reference.getReferenceType().isFlow()) continue;
+                named.add(reference.getToAddress());
+            }
+            if (baseIsReal) {
+                for (int operand = 0; operand < instruction.getNumOperands(); operand++) {
+                    for (Object part : instruction.getOpObjects(operand)) {
+                        if (!(part instanceof ghidra.program.model.scalar.Scalar scalar)) continue;
+                        try {
+                            named.add(entry.getNewAddress(scalar.getUnsignedValue()));
+                        } catch (Exception error) {
+                            // Not an address of this space.
+                        }
+                    }
+                }
+            }
+            for (Address to : named) {
+                if (!to.isMemoryAddress() || !program.getMemory().contains(to) || function.getBody().contains(to)
+                        || listing.getInstructionAt(to) != null) continue;
+                ghidra.program.model.listing.Data datum = listing.getDefinedDataAt(to);
+                byte[] bytes = new byte[datum != null ? Math.max(1, datum.getLength()) : 16];
+                int read;
+                try {
+                    read = program.getMemory().getBytes(to, bytes);
+                } catch (ghidra.program.model.mem.MemoryAccessException error) {
+                    read = 0;
+                }
+                digest.update(new byte[] { (byte) (read >> 8), (byte) read });
+                digest.update(bytes, 0, Math.max(0, read));
+                any = true;
+            }
+        }
+        if (!any) return null;
+        StringBuilder hex = new StringBuilder();
+        byte[] sum = digest.digest();
+        for (int at = 0; at < 16; at++) hex.append(String.format("%02x", sum[at]));
+        return hex.toString();
+    }
+
     private static ghidra.feature.fid.service.FidService fid;
 
     /** The body's key, as the registry writes it; null where none can be made. */
@@ -777,6 +840,8 @@ public class ExportCode extends GhidraScript {
         // description of a library function, with no mark needed.
         String body = bodyKey(function);
         if (body != null) json.append("      \"body\": ").append(quote(body)).append(",\n");
+        String bytes = body == null ? null : referenceBytes(function);
+        if (bytes != null) json.append("      \"reference_bytes\": ").append(quote(bytes)).append(",\n");
         List<String> quoted = new ArrayList<>();
         for (String gap : gaps) quoted.add(quote(gap));
         json.append("      \"review_gaps\": [").append(String.join(", ", quoted)).append("],\n");

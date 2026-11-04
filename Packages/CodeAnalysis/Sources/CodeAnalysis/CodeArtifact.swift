@@ -325,6 +325,9 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         /// Its registry entry could not be read, so this is the artifact's own
         /// text. Set by `LibraryView`, never stored.
         public internal(set) var textUnavailable = false
+        /// The module stores a copy of the entry's text for this function:
+        /// unfinished work, which a publish clears. Set by `LibraryView`, never stored.
+        public internal(set) var storedCopy = false
         /// What the index of a cut artifact says the function reads as, when
         /// this is that entry and not the function: its code has yet to be read.
         public let fingerprint: String?
@@ -333,6 +336,13 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         /// `<size>-<full>-<specific>`. Nil for a body too short to key, an
         /// external, a thunk, and before v10.
         public let body: String?
+        /// A digest of the bytes the body's data references point at: two bodies
+        /// with one key can differ here, since the key masks the operand. Nil
+        /// for a body with none, and before the exporter wrote it.
+        public let referenceBytes: String?
+        /// Holds no description of its own: the registry has it, and this is
+        /// the module's facts and the link.
+        public let copyFree: Bool
 
         /// Whether the name is Ghidra's placeholder rather than evidence.
         public var hasPlaceholderName: Bool {
@@ -368,6 +378,8 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             libraryEntry = try container.decodeIfPresent(LibraryEntry.self, forKey: .libraryEntry)
             fingerprint = try container.decodeIfPresent(String.self, forKey: .fingerprint)
             body = try container.decodeIfPresent(String.self, forKey: .body)
+            referenceBytes = try container.decodeIfPresent(String.self, forKey: .referenceBytes)
+            copyFree = try container.decodeIfPresent(Bool.self, forKey: .copyFree) ?? false
             instructions = try container.decodeIfPresent(
                 [Instruction].self, forKey: .instructions) ?? []
         }
@@ -388,6 +400,8 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             case libraryKind = "library_kind"
             case libraryEntry = "library_entry"
             case fingerprint, body
+            case referenceBytes = "reference_bytes"
+            case copyFree = "copy_free"
         }
     }
 
@@ -396,8 +410,11 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
     /// its body, and this is how this module's function stands to it.
     public struct LibraryEntry: Decodable, Equatable, Sendable {
         public enum State: String, Sendable {
-            /// The function is the entry's version.
+            /// The function is the entry's version, and the module stores a copy of it.
             case entry
+            /// The function is the entry's: the module stores only the link. Worked
+            /// out at a read, never stored, so an older reader does not meet it in a file.
+            case linked
             /// Changed on that version since; the next publish makes the change
             /// the entry's next version.
             case edited
@@ -419,7 +436,7 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         public let base: Int?
 
         /// Whether the function is the entry's, as the panel's filled badge says.
-        public var isEntry: Bool { state == .entry }
+        public var isEntry: Bool { state == .entry || state == .linked }
 
         /// A function read through its registry entry. What the function's own
         /// mark says of it stays said: `conflict`, `differs` or `edited` is not
