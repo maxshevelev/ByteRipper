@@ -693,7 +693,6 @@ public final class CodeReadings {
         var kinds: [String: Int] = [:]
         var states: [String: Int] = [:]
         var withEntry = 0
-        var updated = 0
         var below: [String: Int] = [:]
         var withTemporaries = 0
         for function in source.artifact.functions {
@@ -701,7 +700,6 @@ public final class CodeReadings {
             if let mark = function.libraryEntry {
                 withEntry += 1
                 states[mark.state?.rawValue ?? "unrecorded", default: 0] += 1
-                if let held = index.entries[mark.id], held.version > mark.version { updated += 1 }
             }
             guard function.libraryKind != nil else { continue }
             if !LibraryEntryReview.temporaries(in: function).isEmpty { withTemporaries += 1 }
@@ -718,7 +716,6 @@ public final class CodeReadings {
             "differs": .count(states["differs"] ?? 0),
             "conflict": .count(states["conflict"] ?? 0),
             "installed": .count(index.entries.values.filter { $0.source.module == module }.count),
-            "updated_since": .count(updated),
             "with_temporaries": .count(withTemporaries)
         ]
         if let unrecorded = states["unrecorded"], unrecorded > 0 {

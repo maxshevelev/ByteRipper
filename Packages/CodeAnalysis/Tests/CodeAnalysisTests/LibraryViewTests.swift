@@ -758,7 +758,7 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertEqual(id("aaaa", in: index), key)
         XCTAssertNil(id("bbbb", in: index), "a body-only row of another GUID")
         XCTAssertNil(id("bbbb", mark: key, in: index), "nor by a mark")
-        XCTAssertEqual(id(nil, in: index), key, "a row from before the exporter wrote it decides nothing")
+        XCTAssertNil(id(nil, in: index), "a row that says no bytes is in doubt: the module's")
         XCTAssertEqual(id("bbbb", in: indexHolding(key)), key, "nor an entry that has not learned them")
         // So it keeps its text.
         let raw = try exported([row("0x2000", name: "OtherGuid", body: key, bytes: "bbbb"),

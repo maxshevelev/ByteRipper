@@ -304,6 +304,26 @@ final class GhidraHostLibraryPlanTests: XCTestCase {
         XCTAssertEqual(GhidraHost.shape(of: setMem.key), setMem.shape)
     }
 
+    /// A live row marked as an entry, whose data is not the entry's, reads as the
+    /// project holds it: what the plan and a stored row already say.
+    func testAMarkedRowWithOtherBytesIsNotReadAsTheEntry() {
+        var held = index
+        held.entries[setMem.key]?.variants[0].referenceBytes = "aaaa"
+        func answer(_ bytes: String?) -> [String: Any] {
+            var row: [String: Any] = ["body_key": setMem.key, "library_entry": ["id": setMem.key, "version": 1, "state": "entry"]]
+            row["reference_bytes"] = bytes
+            return row
+        }
+        var same = answer("aaaa")
+        XCTAssertNotNil(GhidraHost.heldEntry(&same, index: held))
+        XCTAssertEqual((same["library_entry"] as? [String: Any])?["state"] as? String, "linked")
+        for bytes in ["bbbb", nil] as [String?] {
+            var other = answer(bytes)
+            XCTAssertNil(GhidraHost.heldEntry(&other, index: held), "\(String(describing: bytes))")
+            XCTAssertEqual((other["library_entry"] as? [String: Any])?["state"] as? String, "reference_bytes")
+        }
+    }
+
     func testEachMatchIsSortedByWhatItCallsFor() {
         let id = setMem.key
         let assertOnly = GhidraHost.LibraryComparison(comparable: true, why: nil, differences: [

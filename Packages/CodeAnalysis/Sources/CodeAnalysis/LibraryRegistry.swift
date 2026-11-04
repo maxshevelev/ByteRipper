@@ -124,8 +124,9 @@ public struct LibraryIndex: Codable, Equatable, Sendable {
     /// Whether a body's data references point at other bytes than the entry
     /// holds for it. Either side not knowing says nothing.
     public func bytesDiffer(id: String, body: String, referenceBytes: String?) -> Bool {
-        guard let referenceBytes,
-              let held = entries[id]?.variants.first(where: { $0.body.key == body })?.referenceBytes else { return false }
+        // An entry that has not learned them decides nothing yet; once it has, a
+        // function that says none is in doubt, and doubt stays the module's.
+        guard let held = entries[id]?.variants.first(where: { $0.body.key == body })?.referenceBytes else { return false }
         return held != referenceBytes
     }
 
@@ -250,6 +251,8 @@ public struct LibraryProposal: Codable, Equatable, Sendable {
     public var linked: Bool = false
     /// The digest of what the body's data references point at (`LibraryVariant`).
     public var referenceBytes: String?
+    /// A linked function has no review to offer: this says only what its bytes are.
+    public var teachesBytesOnly: Bool?
     /// What the body refers to, by offset from its entry, and what it calls:
     /// what decides whether it depends on a module. Nil from an owner that
     /// does not say. Beside the review, not part of it.
@@ -260,7 +263,8 @@ public struct LibraryProposal: Codable, Equatable, Sendable {
                 variantOf: String? = nil, codes: [String]? = nil, role: String? = nil,
                 basedOn: String? = nil, base: Int? = nil, signatureReason: String? = nil, nameReason: String? = nil,
                 linked: Bool = false, dataReferences: [String]? = nil, callees: [LibraryCallee]? = nil,
-                referenceBytes: String? = nil) {
+                referenceBytes: String? = nil, teachesBytesOnly: Bool? = nil) {
+        self.teachesBytesOnly = teachesBytesOnly
         self.linked = linked
         self.referenceBytes = referenceBytes
         self.dataReferences = dataReferences
@@ -708,6 +712,10 @@ extension ContentStore {
                    found.variants[position].referenceBytes == nil, found.variants[position].module == module {
                     index.entries[id]?.variants[position].referenceBytes = bytes
                     changedIndex = true
+                }
+                if proposal.teachesBytesOnly == true {
+                    settled[id] = "this publish only tells the entry what its data references point at"
+                    continue
                 }
                 let held = index.entries[id] ?? found
                 if held.entry == digest {

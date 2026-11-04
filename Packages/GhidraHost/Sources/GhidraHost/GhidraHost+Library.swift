@@ -484,6 +484,31 @@ extension GhidraHost {
         return true
     }
 
+    /// The entries this module is the source of learn what their data references
+    /// point at. A linked function offers no review, so nothing else tells them.
+    func teachEntryBytes(_ module: SHA256Digest, rev: Int?, by: String?) async throws {
+        let index = try await writer.readLibraryIndex()
+        var unlearned: [String: (id: String, name: String, kind: String?, body: LibraryBody)] = [:]
+        for (id, entry) in index.entries {
+            for variant in entry.variants where variant.module == module && variant.referenceBytes == nil {
+                unlearned[variant.body.key] = (id, entry.name, entry.kind, variant.body)
+            }
+        }
+        guard !unlearned.isEmpty else { return }
+        let record = try await owner(of: module)
+        let bodies = unlearned.mapValues(\.id)
+        let request = try JSONSerialization.data(withJSONObject: ["bodies": bodies, "shapes": [String: [String]]()])
+        let data = try await Self.call(record.port, "POST", "/v1/library/match", body: request, timeout: 600).data
+        struct Answer: Decodable { var matches: [LibraryMatch] }
+        let proposals = try JSONDecoder().decode(Answer.self, from: data).matches.compactMap { match -> LibraryProposal? in
+            guard let bytes = match.referenceBytes, let held = unlearned[match.key] else { return nil }
+            return LibraryProposal(body: held.body, name: held.name, kind: held.kind ?? "", address: match.address,
+                                   entry: Data("{}".utf8), referenceBytes: bytes, teachesBytesOnly: true)
+        }
+        guard !proposals.isEmpty else { return }
+        _ = try await writer.writeLibraryEntries(module: module, rev: rev, by: by, proposals: proposals, take: .none)
+    }
+
     /// The step `ghidra_library_apply` names by address: a match that
     /// applies by itself; a candidate, taken as a variant with a reason; or
     /// with `replace`, a function whose review differs or was edited since.

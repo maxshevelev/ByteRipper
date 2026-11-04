@@ -62,8 +62,7 @@ final class AgentCodeTools {
             entry (the function is it), edited (changed on it since), differs (its review keeps \
             `differences`) or conflict (its review was made on version `base`, not the current one). The answer to `what: "functions"` also carries `library`: the module's tagged library functions by \
             kind (`edk2`, `amd`, `intel`), how many carry a registry entry (`with_entry`) and in which `state`, \
-            how many entries hold this module's current version (`installed`), how many moved on after it \
-            (`updated_since`), how many still print a placeholder name (`with_temporaries`, reported only), and `below_bar` — the tagged functions short of the bar, counted by the gap each \
+            how many entries hold this module's current version (`installed`), how many still print a placeholder name (`with_temporaries`, reported only), and `below_bar` — the tagged functions short of the bar, counted by the gap each \
             keeps (name, plate, comments, params, locals, return, c) — with `too_short`, bodies Function ID cannot \
             hash, known only while the module's owner runs. `live` says whether an owner has this module's program open — the `ghidra_*` tools read that program, \
             `code_query` reads the stored analysis — and, while it does, `unpublished_writes` whether the program \

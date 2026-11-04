@@ -614,10 +614,11 @@ public class ExportCode extends GhidraScript {
      * A digest of the bytes the function's data references point at, in the
      * order of its instructions: the body's key masks the operand, so the same
      * code about another GUID has the same key and is another function. A
-     * reference covers up to 16 bytes and ends at the first zero, whatever Ghidra
-     * defined there: a short string's neighbour, or how far a table was typed in
-     * one module, is no difference. So a GUID is told apart by the bytes before
-     * its first zero byte, and a datum that starts with one decides nothing.
+     * reference covers 16 bytes, whatever Ghidra defined there: how far a table
+     * was typed in one module is no difference. A string ends at its terminator,
+     * since what a module keeps after a short one is none either. Anything else
+     * reads its 16 bytes, neighbours and all, so doubt reads as a difference and
+     * the function stays the module's.
      * Null for a function that refers to no data. Which references count is
      * what Owner.libraryOutside counts as `data_references`.
      */
@@ -663,9 +664,7 @@ public class ExportCode extends GhidraScript {
                 } catch (ghidra.program.model.mem.MemoryAccessException error) {
                     read = 0;
                 }
-                for (int at = 0; at < read; at++) {
-                    if (bytes[at] == 0) { read = at; break; }
-                }
+                read = textLength(bytes, read);
                 digest.update(new byte[] { (byte) (read >> 8), (byte) read });
                 digest.update(bytes, 0, Math.max(0, read));
                 any = true;
@@ -676,6 +675,21 @@ public class ExportCode extends GhidraScript {
         byte[] sum = digest.digest();
         for (int at = 0; at < 16; at++) hex.append(String.format("%02x", sum[at]));
         return hex.toString();
+    }
+
+    /** How many of the bytes count: a string's up to its terminator, else all of them. */
+    static int textLength(byte[] bytes, int read) {
+        int narrow = 0;
+        while (narrow < read && printable(bytes[narrow])) narrow++;
+        if (narrow > 1 && narrow < read && bytes[narrow] == 0) return narrow;
+        int wide = 0;
+        while (wide + 1 < read && printable(bytes[wide]) && bytes[wide + 1] == 0) wide += 2;
+        if (wide > 2 && wide + 1 < read && bytes[wide] == 0 && bytes[wide + 1] == 0) return wide;
+        return read;
+    }
+
+    private static boolean printable(byte value) {
+        return value >= 0x20 && value < 0x7F || value == '\t' || value == '\n' || value == '\r';
     }
 
     private static ghidra.feature.fid.service.FidService fid;

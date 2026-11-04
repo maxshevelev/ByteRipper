@@ -252,7 +252,6 @@ final class CodeReadingsTests: XCTestCase {
         XCTAssertEqual(library["edited"], .int(0))
         XCTAssertEqual(library["differs"], .int(0))
         XCTAssertEqual(library["installed"], .int(2), "both entries carry this module's current version")
-        XCTAssertEqual(library["updated_since"], .int(0), "a function reads as the entry's current version")
         let below = try XCTUnwrap(library["below_bar"]?.objectValue)
         XCTAssertEqual(below["plate"], .int(1))
         XCTAssertEqual(below["locals"], .int(1))

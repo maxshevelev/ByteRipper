@@ -183,6 +183,14 @@ final class LibraryRegistryTests: XCTestCase {
         let taught = try store.putLibraryEntries(module: first, rev: 2, by: "agent", proposals: [bytes(proposal("SetMem"), "aaaa")])
         XCTAssertEqual(taught.unchanged.map(\.version), [1])
         XCTAssertEqual(try store.libraryIndex().entries[body.key]?.variants.first?.referenceBytes, "aaaa")
+        // A linked function teaches with nothing else: no version, no review.
+        try store.putLibraryEntries(module: first, rev: 3, by: "agent", proposals: [{
+            var only = proposal("SetMem", plate: "not a review")
+            only.referenceBytes = "aaaa"
+            only.teachesBytesOnly = true
+            return only
+        }()])
+        XCTAssertEqual(try store.libraryIndex().entries[body.key]?.version, 1)
         // Now a change from other bytes goes nowhere.
         let other = try store.putLibraryEntries(module: second, rev: 2, by: "agent",
                                                 proposals: [bytes(proposal("SetMem", plate: "another GUID", base: 1), "bbbb")])

@@ -24,13 +24,21 @@ extension GhidraHost {
 
     /// The entry a function's mark holds it to; a mark on what the registry no
     /// longer holds is no mark, and comes off the answer.
-    private func heldEntry(_ answer: inout [String: Any], index: LibraryIndex) -> (id: String, row: LibraryIndexEntry)? {
+    static func heldEntry(_ answer: inout [String: Any], index: LibraryIndex) -> (id: String, row: LibraryIndexEntry)? {
         guard let mark = answer["library_entry"] as? [String: Any], let id = mark["id"] as? String else { return nil }
         guard let row = index.entries[id] else {
             answer["library_entry"] = nil
             return nil
         }
         guard mark["state"] as? String == "entry" else { return nil }
+        // Marked, and its data is not the entry's: another function, as in the plan.
+        if let key = answer["body_key"] as? String,
+           index.bytesDiffer(id: id, body: key, referenceBytes: answer["reference_bytes"] as? String) {
+            var other = mark
+            other["state"] = "reference_bytes"
+            answer["library_entry"] = other
+            return nil
+        }
         // No text in the project: the link is all this module holds.
         if answer["stored_copy"] == nil {
             var linked = mark
@@ -42,7 +50,7 @@ extension GhidraHost {
 
     private func rowThroughRegistry(_ row: [String: Any], index: LibraryIndex) async -> [String: Any] {
         var row = row
-        guard let held = heldEntry(&row, index: index) else { return row }
+        guard let held = Self.heldEntry(&row, index: index) else { return row }
         guard let object = try? await writer.readObject(held.row.entry),
               let entry = LibraryView.Entry(object: object, id: held.id, version: held.row.version) else {
             row["text_unavailable"] = Self.entryUnreadable
@@ -57,7 +65,7 @@ extension GhidraHost {
     private func functionThroughRegistry(_ answer: [String: Any], module: SHA256Digest,
                                          index: LibraryIndex) async -> [String: Any] {
         var answer = answer
-        guard let held = heldEntry(&answer, index: index),
+        guard let held = Self.heldEntry(&answer, index: index),
               let text = answer["entry"] as? String, let address = CodeAddress(hex: text) else { return answer }
         guard let read = try? await writer.functionAsRead(module: module, entry: address) else {
             answer["text_unavailable"] = "this store has no reading of the function to render the entry on: "

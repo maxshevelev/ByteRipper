@@ -469,6 +469,7 @@ public actor GhidraHost {
                 // Whatever this publish left at an entry, the project keeps no
                 // text of: it is the entry's now.
                 if try await removeProjectCopies(module) { marked = true }
+                try await teachEntryBytes(module, rev: reading?.rev, by: by)
                 if marked {
                     let again = try await write(module, "/v1/export", body: Data())
                     if again != plain {
