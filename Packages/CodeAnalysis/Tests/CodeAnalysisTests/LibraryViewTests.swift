@@ -489,4 +489,191 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertEqual(half.added.count, 0)
         XCTAssertEqual(half.notLibrary?.count, 2)
     }
+
+    // MARK: What is the publisher's, in a holder's reading
+
+    private func function(entry: String, c: String? = nil, spans: [[Any]] = [],
+                          instructions: [[String: Any]], extra: [String: Any] = [:]) throws -> CodeArtifact.Function {
+        var fields: [String: Any] = ["entry": entry, "name": "F", "instructions": instructions, "c_spans": spans]
+        if let c { fields["c"] = c }
+        fields.merge(extra) { _, new in new }
+        return try JSONDecoder().decode(CodeArtifact.Function.self, from: JSONSerialization.data(withJSONObject: fields))
+    }
+
+    private func instruction(_ address: String, _ references: [(String, String)] = []) -> [String: Any] {
+        ["address": address, "bytes": "90", "text": "NOP",
+         "references": references.map { ["to": $0.0, "type": $0.1] }]
+    }
+
+    private func span(_ token: String, in c: String, _ kind: String, _ target: String) -> [Any] {
+        [(c as NSString).range(of: token).location, (token as NSString).length, kind, target]
+    }
+
+    /// A stray reference on the publisher's side does not cost the call its target.
+    func testAStrayReferenceDoesNotLoseTheCallsTarget() throws {
+        let theirs = try function(entry: "0x1000", instructions: [
+            instruction("0x1000", [("0x2000", "UNCONDITIONAL_CALL"), ("0x0", "WRITE")])
+        ])
+        let ours = try function(entry: "0x9000", instructions: [
+            instruction("0x9000", [("0xA000", "UNCONDITIONAL_CALL")])
+        ])
+        let carried = LibraryView.carriedOver(from: theirs, to: ours)
+        XCTAssertEqual(carried[CodeAddress(hex: "0x2000")!], CodeAddress(hex: "0xA000")!)
+        XCTAssertNil(carried[CodeAddress(hex: "0x0")!], "no partner: not carried")
+    }
+
+    /// Counts that differ within a type cannot be paired honestly: nothing of
+    /// that type goes anywhere, rather than to the wrong place.
+    func testReferencesThatCannotBePairedAreNotCarried() throws {
+        let theirs = try function(entry: "0x1000", instructions: [
+            instruction("0x1000", [("0x5000", "READ"), ("0x5004", "READ"), ("0x2000", "UNCONDITIONAL_CALL")]),
+            instruction("0x1004", [("0x6000", "READ")])
+        ])
+        let ours = try function(entry: "0x9000", instructions: [
+            instruction("0x9000", [("0xD004", "READ"), ("0xA000", "UNCONDITIONAL_CALL")]),
+            instruction("0x9004", [("0xE000", "DATA")])
+        ])
+        let carried = LibraryView.carriedOver(from: theirs, to: ours)
+        XCTAssertNil(carried[CodeAddress(hex: "0x5000")!])
+        XCTAssertNil(carried[CodeAddress(hex: "0x5004")!])
+        XCTAssertNil(carried[CodeAddress(hex: "0x6000")!], "another type is no partner")
+        XCTAssertEqual(carried[CodeAddress(hex: "0x2000")!], CodeAddress(hex: "0xA000")!)
+    }
+
+    /// One address that would land in two places lands in neither.
+    func testAnAddressThatWouldLandInTwoPlacesLandsInNeither() throws {
+        let theirs = try function(entry: "0x1000", instructions: [
+            instruction("0x1000", [("0x5000", "READ")]), instruction("0x1004", [("0x5000", "READ")])
+        ])
+        let ours = try function(entry: "0x9000", instructions: [
+            instruction("0x9000", [("0xD000", "READ")]), instruction("0x9004", [("0xD008", "READ")])
+        ])
+        XCTAssertNil(LibraryView.carriedOver(from: theirs, to: ours)[CodeAddress(hex: "0x5000")!])
+    }
+
+    private let tableC = "x = s_Success_09dffb80; y = s_Warning_Stale_Data_09dffbfd; z = DAT_09dffb74;"
+
+    private func tableSource() throws -> CodeArtifact.Function {
+        try function(entry: "0x1000", c: tableC, spans: [
+            span("s_Success_09dffb80", in: tableC, "global", "0x9DFFB80"),
+            span("s_Warning_Stale_Data_09dffbfd", in: tableC, "global", "0x9DFFBFD"),
+            span("DAT_09dffb74", in: tableC, "global", "0x9DFFB74")
+        ], instructions: [instruction("0x1000", [("0x9DFFB80", "DATA"), ("0x9DFFB74", "READ")])])
+    }
+
+    private func tableHolder() throws -> CodeArtifact.Function {
+        try function(entry: "0x9A1210F", instructions: [
+            instruction("0x9A1210F", [("0x9A12D18", "DATA"), ("0x9A12D10", "READ")])
+        ])
+    }
+
+    /// `s_Warning_Stale_Data`: reached through a table, so no reference names
+    /// it. The nearest data before it, the same distance on, and a string there.
+    func testADatumOnlyATableReachesReadsTheHoldersAddress() throws {
+        let source = try tableSource()
+        let carried = LibraryView.carriedOver(from: source, to: try tableHolder())
+        let rendered = LibraryView.render(source, carried: carried, name: { _ in nil }, string: {
+            $0 == CodeAddress(hex: "0x9A12D95")! ? "Warning Stale Data" : nil
+        })
+        XCTAssertEqual(rendered.c, "x = s_Success_09a12d18; y = s_Warning_Stale_Data_09a12d95; z = DAT_09a12d10;")
+        XCTAssertEqual(rendered.publisherAddresses, [])
+        XCTAssertTrue(rendered.spans.contains { $0.target == CodeAddress(hex: "0x9A12D95")! })
+    }
+
+    /// A string there that does not read as the name, or none: the text stays,
+    /// the link goes, and the reading says so.
+    func testANameTheHolderDoesNotBearOutKeepsItsTextAndLosesItsLink() throws {
+        let source = try tableSource()
+        let carried = LibraryView.carriedOver(from: source, to: try tableHolder())
+        for held in ["Warning Bad Buffer Size", nil] as [String?] {
+            let rendered = LibraryView.render(source, carried: carried, name: { _ in nil }, string: { _ in held })
+            XCTAssertTrue(rendered.c.contains("s_Warning_Stale_Data_09dffbfd"))
+            XCTAssertEqual(rendered.publisherAddresses, ["s_Warning_Stale_Data_09dffbfd"])
+            let at = (rendered.c as NSString).range(of: "s_Warning").location
+            XCTAssertNil(rendered.spans.first { $0.start == at }?.target)
+        }
+    }
+
+    /// The holder's own symbol wins, as it always did.
+    func testAHoldersOwnNameIsPrintedForAddressName() throws {
+        let source = try tableSource()
+        let carried = LibraryView.carriedOver(from: source, to: try tableHolder())
+        let rendered = LibraryView.render(source, carried: carried, name: {
+            $0 == CodeAddress(hex: "0x9A12D18")! ? "gSuccessText" : nil
+        })
+        XCTAssertTrue(rendered.c.contains("x = gSuccessText;"))
+    }
+
+    /// Labels and removed blocks: the holder's address, same length, so no span
+    /// after them moves. One with no place here is reported.
+    func testLabelsAndRemovedBlocksReadTheHoldersAddress() throws {
+        let c = "/* Removing unreachable block (ram,0x00001004) */\ngoto LAB_00001000;\nLAB_00001000:\ngoto LAB_00001008;\nCallee();"
+        let source = try function(entry: "0x1000", c: c, spans: [span("Callee", in: c, "function", "0x2000")], instructions: [
+            instruction("0x1000", [("0x2000", "UNCONDITIONAL_CALL")]), instruction("0x1004")
+        ])
+        let ours = try function(entry: "0x9000", instructions: [
+            instruction("0x9000", [("0xA000", "UNCONDITIONAL_CALL")]), instruction("0x9004")
+        ])
+        let rendered = LibraryView.render(source, carried: LibraryView.carriedOver(from: source, to: ours),
+                                          name: { _ in nil })
+        XCTAssertEqual(rendered.c.utf16.count, c.utf16.count)
+        XCTAssertTrue(rendered.c.contains("(ram,0x00009004)"))
+        XCTAssertTrue(rendered.c.contains("goto LAB_00009000;\nLAB_00009000:"))
+        XCTAssertEqual(rendered.publisherAddresses, ["LAB_00001008"])
+        let callee = (rendered.c as NSString).range(of: "Callee").location
+        XCTAssertEqual(rendered.spans.first?.start, callee)
+    }
+
+    /// A mark whose id the registry no longer holds: the module's function, its
+    /// own text, no `entry` on its row. With the switch off nothing changes.
+    func testAGoneMarkReadsItsOwnTextWithNoEntry() throws {
+        try register(try entryObject())
+        let c = "int OwnName(void) { return 0; }"
+        let data = try JSONSerialization.data(withJSONObject: [
+            "script_version": 10, "ghidra": "12.2", "functions": [[
+                "entry": "0x9000", "name": "OwnName", "c": c, "body": "99-gone-body",
+                "library_entry": ["id": "99-gone-entry", "version": 3, "state": "entry"],
+                "instructions": [["address": "0x9000", "bytes": "90", "text": "NOP"]]
+            ] as [String: Any]]
+        ])
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: data)
+        let read = try XCTUnwrap(store.throughRegistry(artifact).functions.first)
+        XCTAssertEqual(read.c, c)
+        XCTAssertNil(read.libraryEntry)
+        XCTAssertFalse(read.textFromRegistry)
+
+        var index = try store.libraryIndex()
+        index.readThrough = false
+        try store.mirrorLibrary(index)
+        XCTAssertEqual(store.throughRegistry(artifact).functions.first?.libraryEntry?.id, "99-gone-entry")
+    }
+
+    /// An entry that cannot be read leaves the published text; the row stays
+    /// marked and has no `text`, which is how the failure shows.
+    func testAnEntryThatCannotBeReadShowsOnTheRow() throws {
+        try register(try entryObject())
+        let artifact = try moduleArtifact()
+        XCTAssertEqual(store.throughRegistry(artifact).functions.first?.textFromRegistry, true)
+        let (_, held) = try XCTUnwrap(try store.libraryIndex().entry(for: body))
+        try FileManager.default.removeItem(at: store.objectURL(held.entry))
+        let read = try XCTUnwrap(store.throughRegistry(artifact).functions.first)
+        XCTAssertFalse(read.textFromRegistry)
+        XCTAssertEqual(read.name, "OwnName")
+    }
+
+    /// On, then off: exactly what was read before.
+    func testTheSwitchOnThenOffRestoresTheReading() throws {
+        try register(try entryObject())
+        var index = try store.libraryIndex()
+        index.readThrough = false
+        try store.mirrorLibrary(index)
+        let artifact = try moduleArtifact()
+        let before = store.throughRegistry(artifact).functions
+        index.readThrough = true
+        try store.mirrorLibrary(index)
+        XCTAssertNotEqual(store.throughRegistry(artifact).functions, before)
+        index.readThrough = false
+        try store.mirrorLibrary(index)
+        XCTAssertEqual(store.throughRegistry(artifact).functions, before)
+    }
 }

@@ -549,7 +549,11 @@ public enum GhidraTools {
                     function — its own artefacts, which do not make a function unfinished, though a \
                     name like `uVar1` among them still prints in the C — and `fragment_names` names \
                     them; `filter: "fragments"` lists every function that has them. Paged by \
-                    `offset` and `limit`; `next` says where the next page starts.
+                    `offset` and `limit`; `next` says where the next page starts. `library_entry` is \
+                    the function's mark and whether it is still the entry (`state`: entry, edited). \
+                    While the registry reads through, a row at its entry has the entry's name and \
+                    signature and `text: "registry"`; `leftovers` stay the project's, which holds no \
+                    text of a linked function.
                     """,
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,
@@ -611,6 +615,13 @@ public enum GhidraTools {
                     `undefined` type — (`leftovers`, whose `fragments` are the decompiler's register \
                     pieces rather than missing names), and its decompiled C — \
                     fresh after every write, ahead of what the app shows until a publish. \
+                    While the registry reads through, a function at its entry answers the entry's name, \
+                    signature, plate, comments and C with `text: "registry"`, as the store reads it, and \
+                    `publisher_addresses` lists any name that still carries the address of the module \
+                    the entry came from; `parameters` and `locals` stay the project's. A write makes it \
+                    `edited` (`library_entry.state`): it then answers as Ghidra holds it, and the next \
+                    publish offers that as the entry's next version. A marked function with no `text` \
+                    whose state is `entry` is an entry that could not be read. \
                     `summary: true` leaves the C and the equates out, for walking a module without \
                     its text. A function the decompiler refuses answers `decompile_error` and \
                     `suspects`: the parameters, locals and referenced data whose applied type is a \

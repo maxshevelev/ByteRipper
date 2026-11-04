@@ -461,6 +461,16 @@ publish enter together when each one's callees are held or among them, so a pair
 call each other enters as a pair; a citation can be given before a body's first publish. The owner reads data references from the instructions and treats
 a constant that lands in the image as one, so it errs towards refusing.
 
+**Reading through.** While `read_through` is on — a transitional switch, to go when every
+module is republished — a function at its entry reads as the entry wherever it is read:
+`code_query` and `ghidra_function` give the entry's name, signature, plate, comments and C with
+`text: "registry"`, and addresses and names that are this module's own. `parameters` and
+`locals` stay the project's. A write makes the function `edited`: it answers as Ghidra holds it,
+and the next `ghidra_publish` offers it as the entry's next version. A review ends with
+`ghidra_publish`. A name that still carries the publisher's address is listed under
+`publisher_addresses`, without a link. A mark on an entry given back is no mark: the function
+reads its own text and shows no `library_entry`, and the next open releases it.
+
 A pair enters only whole, in one publish of one module. With its other half in another
 module, or with one half below the bar (that half is a `below_bar` item), the rest is
 refused under `callee`: its callee is neither held nor entering with it. Both stay in

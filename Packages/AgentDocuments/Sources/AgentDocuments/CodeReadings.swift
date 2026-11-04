@@ -560,6 +560,10 @@ public final class CodeReadings {
             body["entry"] = .string(function.entry.description)
             body["signature"] = function.signature.map(JSONValue.string) ?? .null
             body["c"] = function.c.map(JSONValue.string) ?? .null
+            if function.textFromRegistry { body["text"] = .string("registry") }
+            if !function.publisherAddresses.isEmpty {
+                body["publisher_addresses"] = .array(function.publisherAddresses.map(JSONValue.string))
+            }
             if function.c == nil {
                 body["note"] = .string("Ghidra left no C for this function: it is external, a thunk, or did not decompile.")
             }
@@ -848,6 +852,10 @@ private func functionItem(_ function: CodeArtifact.Function,
     item["body"] = text(function.body)
     item["library_kind"] = text(function.libraryKind?.rawValue)
     item["library_entry"] = libraryEntryItem(function.libraryEntry)
+    if function.textFromRegistry { item["text"] = .string("registry") }
+    if !function.publisherAddresses.isEmpty {
+        item["publisher_addresses"] = .array(function.publisherAddresses.map(JSONValue.string))
+    }
     item["callers"] = .array(function.callers.map { .string($0.description) })
     item["callees"] = .array(function.callees.map { .string($0.description) })
     return .object(item)

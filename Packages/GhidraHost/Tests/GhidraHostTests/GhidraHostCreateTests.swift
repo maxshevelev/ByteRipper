@@ -52,6 +52,100 @@ final class GhidraHostLibraryTests: XCTestCase {
         return try XCTUnwrap(list.first { $0["size"] as? Int == size }?["entry"] as? String)
     }
 
+    /// With the registry reading through, `ghidra_function` and `ghidra_functions`
+    /// answer a function at its entry with the entry's text, the same as the
+    /// store does; an edit is the review's own; what is taken out is the module's.
+    func testAFunctionAtItsEntryReadsTheRegistryThroughTheOwner() async throws {
+        guard let paths = ProcessInfo.processInfo.environment["GHIDRA_LIBRARY_MODULES"]?.split(separator: ":"),
+              paths.count == 2 else {
+            throw XCTSkip("GHIDRA_LIBRARY_MODULES is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostLibraryTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraHostLibraryTests"),
+                              writer: store)
+        let images = try paths.map { try Data(contentsOf: URL(fileURLWithPath: String($0))) }
+        let reviewed = SHA256Digest(data: images[0]), other = SHA256Digest(data: images[1])
+        _ = try await host.create(module: images[0], name: "Reviewed")
+        _ = try await host.create(module: images[1], name: "Other")
+        defer { Task { await host.stop(reviewed); await host.stop(other) } }
+        func switchTo(_ on: Bool) async throws {
+            _ = try await store.changeLibrary(.init(action: .readThrough, reason: "test", on: on), by: "test",
+                                        module: reviewed, dryRun: false)
+        }
+
+        let copyGuid = try await function(of: 25, in: reviewed, host: host)
+        _ = try await host.write(reviewed, "/v1/set/signature", body: body([
+            "address": copyGuid, "signature": "EFI_GUID * CopyGuid(EFI_GUID * DestinationGuid, EFI_GUID * SourceGuid)",
+            "storage": ["ECX:4", "EDX:4"], "by": "agent", "reason": "EDK2 BaseLib CopyGuid"]))
+        _ = try await host.write(reviewed, "/v1/set/comment", body: body([
+            "address": copyGuid, "kind": "plate", "text": "EDK2 BaseLib CopyGuid: the plate of the entry."]))
+        _ = try await host.write(reviewed, "/v1/set/comment", body: body([
+            "address": copyGuid, "kind": "eol", "text": "first dword of the GUID"]))
+        _ = try await host.write(reviewed, "/v1/tag/function", body: body(["address": copyGuid, "tag": "library.edk2"]))
+        let added = try await host.publish(reviewed, by: "agent").library?.added.first { $0.name == "CopyGuid" }
+        let id = try XCTUnwrap(added?.id)
+
+        let theirs = try await function(of: 25, in: other, host: host)
+        let at = try XCTUnwrap(CodeAddress(hex: theirs))
+        _ = try await host.library(other, .init(action: .apply))
+        _ = try await host.publish(other, by: "agent")
+        // Off: the project's answer, whatever it holds.
+        let off = try json(await host.readCall(other, "function/\(theirs)", query: [:]))
+        XCTAssertNil(off["text"])
+
+        try await switchTo(true)
+        let on = try json(await host.readCall(other, "function/\(theirs)", query: [:]))
+        XCTAssertEqual(on["text"] as? String, "registry", "\(on.keys.sorted())")
+        XCTAssertEqual(on["plate"] as? String, "EDK2 BaseLib CopyGuid: the plate of the entry.")
+        let asRead = try await store.functionAsRead(module: other, entry: at)
+        XCTAssertEqual(on["c"] as? String, asRead?.c, "the owner's answer is what the store reads")
+        XCTAssertEqual(on["signature"] as? String, asRead?.signature)
+        XCTAssertEqual((on["comments"] as? [[String: Any]])?.first?["text"] as? String, "first dword of the GUID")
+        let rows = try json(await host.readCall(other, "functions", query: [:]))["functions"] as? [[String: Any]]
+        XCTAssertEqual(rows?.first { $0["entry"] as? String == theirs }?["text"] as? String, "registry")
+
+        // Off again: exactly as before.
+        try await switchTo(false)
+        let back = try json(await host.readCall(other, "function/\(theirs)", query: [:]))
+        XCTAssertEqual(back["c"] as? String, off["c"] as? String)
+        XCTAssertEqual(back["plate"] as? String, off["plate"] as? String)
+        XCTAssertNil(back["text"])
+        try await switchTo(true)
+
+        // An edit is the review's own draft.
+        _ = try await host.write(other, "/v1/set/comment", body: body([
+            "address": theirs, "kind": "plate", "text": "An edit of this review."]))
+        let edited = try json(await host.readCall(other, "function/\(theirs)", query: [:]))
+        XCTAssertNil(edited["text"])
+        XCTAssertEqual(edited["plate"] as? String, "An edit of this review.")
+        XCTAssertEqual((edited["library_entry"] as? [String: Any])?["state"] as? String, "edited")
+        _ = try await host.write(other, "/v1/set/comment", body: body(["address": theirs, "kind": "plate",
+            "text": off["plate"] as? String ?? ""]))
+
+        // An entry that cannot be read: still marked, no `text`.
+        let object = try store.objectURL(XCTUnwrap(store.libraryIndex().entries[id]).entry)
+        let saved = try Data(contentsOf: object)
+        try FileManager.default.removeItem(at: object)
+        let unreadable = try json(await host.readCall(other, "function/\(theirs)", query: [:]))
+        XCTAssertNil(unreadable["text"])
+        XCTAssertNotNil(unreadable["library_entry"])
+        try saved.write(to: object)
+
+        // Taken out: the module's function, no `entry`, released at the next open.
+        _ = try await store.changeLibrary(.init(action: .takeOut, id: id, reason: "test"), by: "test", module: reviewed, dryRun: false)
+        let gone = try json(await host.readCall(other, "function/\(theirs)", query: [:]))
+        XCTAssertNil(gone["text"])
+        XCTAssertNil(gone["library_entry"], "\(gone.keys.sorted())")
+        let goneRows = try json(await host.readCall(other, "functions", query: [:]))["functions"] as? [[String: Any]]
+        XCTAssertNil(goneRows?.first { $0["entry"] as? String == theirs }?["library_entry"])
+        let status = try json(await host.library(other, .init(action: .status)))
+        XCTAssertEqual((status["released"] as? [[String: Any]])?.first?["address"] as? String, theirs, "\(status)")
+    }
+
     func testAnEntryReviewedInOneModuleIsAppliedInAnother() async throws {
         guard let paths = ProcessInfo.processInfo.environment["GHIDRA_LIBRARY_MODULES"]?.split(separator: ":"),
               paths.count == 2 else {

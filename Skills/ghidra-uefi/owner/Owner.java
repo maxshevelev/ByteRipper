@@ -546,6 +546,7 @@ public class Owner {
             if (unfinished && (leftovers == null || !unfinished(leftovers))) continue;
             if (withFragments && (leftovers == null || !leftovers.has("fragments"))) continue;
             JsonObject item = item(function);
+            addLibraryMark(item, function);
             if (leftovers != null) item.add("leftovers", leftovers);
             matched.add(item);
         }
@@ -977,6 +978,7 @@ public class Owner {
         answer.addProperty("entry", hex(function.getEntryPoint()));
         answer.addProperty("name", function.getName());
         answer.addProperty("name_source", function.getSymbol().getSource().toString());
+        addLibraryMark(answer, function);
         answer.addProperty("signature", function.getPrototypeString(false, false));
         addTags(answer, function);
         StringPropertyMap signatureReasons =
@@ -3574,6 +3576,16 @@ public class Owner {
         state.addProperty("state", same ? "entry" : "edited");
         if (mark.has("codes")) state.add("codes", mark.get("codes"));
         return COMPACT.toJson(state);
+    }
+
+    /** The function's mark and whether it is still the entry: what a reader is told to read. */
+    private void addLibraryMark(JsonObject answer, Function function) {
+        if (libraryMark(function) == null) return;
+        try {
+            answer.add("library_entry", JsonParser.parseString(libraryState(function)));
+        } catch (Exception error) {
+            // A state that is not JSON says nothing a reader can act on.
+        }
     }
 
     /** Every function's `library_entry` written where the exporter reads it. */

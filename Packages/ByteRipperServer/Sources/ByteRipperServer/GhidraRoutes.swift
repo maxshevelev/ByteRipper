@@ -61,7 +61,10 @@ enum GhidraRoutes {
             guard reads.contains(where: { $0.hasSuffix("/") ? call.hasPrefix($0) && call.count > $0.count : call == $0 }) else {
                 throw HTTPError(.notFound, "\(call) is not a read of the bridge")
             }
-            let data = try await answer { try await host.read(module, "/v1/\(call)" + query(request)) }
+            let data = try await answer {
+                await host.throughRegistry(try await host.read(module, "/v1/\(call)" + query(request)),
+                                           module: module, call: call)
+            }
             return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
         }
 

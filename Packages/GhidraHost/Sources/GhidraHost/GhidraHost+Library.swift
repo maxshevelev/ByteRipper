@@ -218,6 +218,14 @@ extension GhidraHost {
                 }
                 continue
             }
+            // A mark on an entry given back, from a body of its own: the same.
+            if let mark = match.mark, index.entries[mark.id] == nil,
+               let (key, out) = index.takenOut?.first(where: { $0.value.id == mark.id }) {
+                plan.released.append(LibraryStep(address: match.address, name: match.name, entryName: out.name,
+                                                 id: key, version: out.version, mode: "release",
+                                                 state: "taken_out", why: out.reason))
+                continue
+            }
             func step(_ id: String, _ held: LibraryIndexEntry, mode: String?, state: String,
                       codes: [String]? = nil, differences: [LibraryConstant]? = nil, why: String? = nil) -> LibraryStep {
                 LibraryStep(address: match.address, name: match.name, entryName: held.name, id: id,
@@ -451,7 +459,7 @@ extension GhidraHost {
 
     /// The module's matches and what each calls for, with the index they were made against.
     func libraryPlan(_ module: SHA256Digest) async throws -> (LibraryPlan, LibraryIndex) {        let index = try await writer.readLibraryIndex()
-        guard !index.entries.isEmpty else { return (LibraryPlan(entries: 0, hashed: 0), index) }
+        guard !index.entries.isEmpty || index.takenOut?.isEmpty == false else { return (LibraryPlan(entries: 0, hashed: 0), index) }
         let record = try await owner(of: module)
         let keys = Self.libraryKeys(index)
         let request = try JSONSerialization.data(withJSONObject: ["bodies": keys.bodies, "shapes": keys.shapes])

@@ -157,6 +157,9 @@ public protocol AnalysisWriter: Sendable {
     func readObject(_ digest: SHA256Digest) async throws -> Data
     /// Each module's newest analysis, for a question about all of them.
     func newestAnalyses() async throws -> [AnalysisManifest]
+    /// One function of the module's newest analysis as a reader of the store
+    /// sees it, nil when this store cannot say.
+    func functionAsRead(module: SHA256Digest, entry: CodeAddress) async throws -> CodeArtifact.Function?
 }
 
 extension ContentStore: AnalysisWriter {
@@ -216,6 +219,14 @@ extension ContentStore: AnalysisWriter {
     public func newestAnalyses() async throws -> [AnalysisManifest] {
         try Set(analyses().map(\.module.sha256)).compactMap { try analysis(module: $0) }
     }
+
+    public func functionAsRead(module: SHA256Digest, entry: CodeAddress) async throws -> CodeArtifact.Function? {
+        guard let manifest = try analysis(module: module) else { return nil }
+        if try skeleton(of: manifest.artifact.sha256) != nil {
+            return try functions([entry], of: manifest.artifact.sha256).first
+        }
+        return try artifact(for: manifest).functions.first { $0.entry == entry }
+    }
 }
 
 extension RemoteStore: AnalysisWriter {
@@ -260,6 +271,9 @@ extension RemoteStore: AnalysisWriter {
     public func readLibraryIndex() async throws -> LibraryIndex { try await libraryIndex() }
     public func readLibraryHistory(id: String) async throws -> LibraryHistory? { try await libraryHistory(id: id) }
     public func readObject(_ digest: SHA256Digest) async throws -> Data { try await object(digest) }
+    /// A served store renders on the server: this side cannot, and a marked
+    /// function then answers without `text`.
+    public func functionAsRead(module: SHA256Digest, entry: CodeAddress) async throws -> CodeArtifact.Function? { nil }
     public func newestAnalyses() async throws -> [AnalysisManifest] {
         try await modules().compactMap(\.manifests.first)
     }

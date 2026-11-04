@@ -316,6 +316,12 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         /// The library registry entry the function was matched with (v9);
         /// nil for a function the registry does not hold.
         public internal(set) var libraryEntry: LibraryEntry?
+        /// This reading's C is the registry entry's, not the artifact's own. Set
+        /// by `LibraryView`, never stored.
+        public internal(set) var textFromRegistry = false
+        /// Names in that C still carrying the publisher's address, no place for
+        /// them here being known. Set by `LibraryView`, never stored.
+        public internal(set) var publisherAddresses: [String] = []
         /// What the index of a cut artifact says the function reads as, when
         /// this is that entry and not the function: its code has yet to be read.
         public let fingerprint: String?

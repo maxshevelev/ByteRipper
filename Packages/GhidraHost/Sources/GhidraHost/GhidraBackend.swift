@@ -137,7 +137,7 @@ extension GhidraHost: GhidraBackend {
         var components = URLComponents()
         components.queryItems = query.keys.sorted().map { URLQueryItem(name: $0, value: query[$0]) }
         let suffix = query.isEmpty ? "" : "?" + (components.percentEncodedQuery ?? "")
-        return try await read(module, "/v1/\(call)\(suffix)")
+        return await throughRegistry(try await read(module, "/v1/\(call)\(suffix)"), module: module, call: call)
     }
 
     public func writeCall(_ module: SHA256Digest, _ call: String, body: Data) async throws -> Data {
