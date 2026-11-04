@@ -69,9 +69,11 @@ final class AgentFindTools {
                 page also stops before the answer passes the size bound and says `truncated: "size"`; pass \
                 `next` back as `after` until it is null. `show` "compact" answers each match as where it is \
                 and no more — `node` by its id and `node_offset`, or `start` — and "count" answers `total` \
-                alone. With `survey`, which dumps of a folder hold a string.
+                alone. `pattern_node`, `pattern_range` and `pattern_part` take the pattern from a node's bytes instead of \
+                `text` or `hex`, the place it came from among the matches; `any` marks bytes of it that may be \
+                anything, such as an operand that holds an address. With `survey`, which dumps of a folder hold a string.
                 """,
-            inputSchema: AgentSchema.object([
+            inputSchema: AgentSchema.object(UEFIAgentNodeData.patternProperties.merging([
                 "document": AgentSchema.string("The document's id from `documents`. Default: the focused one."),
                 "text": AgentSchema.string("A text to find. Give `text` or `hex`."),
                 "hex": AgentSchema.string("Bytes to find, as hex pairs; `??` for any byte: \"24 ?? 4D 49\"."),
@@ -86,7 +88,7 @@ final class AgentFindTools {
                 "show": AgentSchema.choice(UEFIAgentContentSearch.shows, UEFIAgentContentSearch.showHelp),
                 "limit": AgentSchema.limit(default: 100, maximum: 1000),
                 "after": AgentSchema.after
-            ]),
+            ]) { $1 }),
             annotations: .readOnly
         ) { call in
             try await self.find(call.arguments)
@@ -136,13 +138,14 @@ final class AgentFindTools {
 
     private func find(_ arguments: AgentArguments) async throws -> AgentAnswer {
         let place = try diff.resolve(arguments.optionalString("document"))
-        let wanted = try patterns(arguments)
+        let host = PaneToolHost(pane: place.pane, owner: place.controller, tools: nil)
+        let wanted = try await UEFIAgentNodeData.pattern(host, arguments)
+            .map { [Wanted(pattern: $0, encoding: "hex")] } ?? patterns(arguments)
         let overlapping = try arguments.bool("overlapping", default: false)
         let context = Int(max(0, min(Int64(Self.maxContext), try arguments.has("context") ? arguments.integer("context") : 0)))
         let show = try arguments.choice("show", from: UEFIAgentContentSearch.shows, default: "full")
         if show != "full", context > 0 { throw AgentToolError("`context` shows bytes around a match: it needs `show` \"full\".") }
         let limit = show == "count" ? 0 : try arguments.limit(default: 100, maximum: 1000)
-        let host = PaneToolHost(pane: place.pane, owner: place.controller, tools: nil)
 
         if let text = try arguments.optionalString("node") {
             return try await findInTree(arguments, place: place, host: host, wanted: wanted, node: text,

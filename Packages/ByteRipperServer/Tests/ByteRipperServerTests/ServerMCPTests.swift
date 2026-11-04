@@ -228,6 +228,24 @@ final class ServerMCPTests: XCTestCase {
         }
     }
 
+    /// A pattern from a node's bytes finds them where they are. A match's
+    /// `node_offset` counts from the node's start, header included: part "all".
+    func testFindBytesTakesItsPatternFromANode() async throws {
+        let find = try tool("find_bytes", tools())
+        let first = try await find.run(AgentCall(tool: "find_bytes", arguments: AgentArguments([
+            "document": "d1", "node": "root", "text": "MZ", "encoding": "ascii", "show": "compact"])))
+        guard case .json(let found) = first else { return XCTFail("\(first)") }
+        let row = try XCTUnwrap(found["matches"]?.arrayValue?.first)
+        let node = try XCTUnwrap(row["node"]?.stringValue)
+        let offset = try XCTUnwrap(row["node_offset"]?.stringValue)
+        let answer = try await find.run(AgentCall(tool: "find_bytes", arguments: AgentArguments([
+            "document": "d1", "pattern_node": .string(node), "pattern_part": "all",
+            "pattern_range": .string("\(offset)+2")])))
+        guard case .json(let matches) = answer else { return XCTFail("\(answer)") }
+        XCTAssertEqual(matches["total"], .count(1))
+        XCTAssertEqual(matches["matches"]?.arrayValue?.first?["start"]?.stringValue, "0x64")
+    }
+
     /// Paging loses nothing: a match a page stopped before is the next
     /// page's first, and the ASCII and UTF-16LE matches at one address are
     /// two matches, both listed.

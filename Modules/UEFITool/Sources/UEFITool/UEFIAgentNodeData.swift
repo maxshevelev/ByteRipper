@@ -1,4 +1,5 @@
 import AgentKit
+import BytePattern
 import Foundation
 import ToolModuleKit
 import UEFIImage
@@ -216,16 +217,77 @@ public enum UEFIAgentNodeData {
         guard texts.count <= 64 else { throw AgentToolError("Argument `ranges`: at most 64 in one read.") }
         var total: UInt64 = 0
         let ranges = try texts.map { text -> (offset: UInt64, length: UInt64) in
-            let parts = text.split(separator: "+", omittingEmptySubsequences: false)
-            guard parts.count == 2,
-                  let offset = try? AgentArguments(["n": .string(String(parts[0]))]).offset("n"),
-                  let length = try? AgentArguments(["n": .string(String(parts[1]))]).offset("n"), length > 0 else {
-                throw AgentToolError("Argument `ranges`: \"\(text)\" is not \"offset+length\", such as \"0x100+0x20\".")
-            }
+            let (offset, length) = try parsed(range: text, argument: "ranges")
             total += length
             return (offset, length)
         }
         guard total <= 4096 else { throw AgentToolError("Argument `ranges`: at most 4096 bytes in one read, in all.") }
         return ranges
+    }
+
+    /// "offset+length", as `ranges`, `pattern_range` and `any` write a place.
+    nonisolated private static func parsed(range text: String, argument: String) throws -> (offset: UInt64, length: UInt64) {
+        let parts = text.split(separator: "+", omittingEmptySubsequences: false)
+        guard parts.count == 2,
+              let offset = try? AgentArguments(["n": .string(String(parts[0]))]).offset("n"),
+              let length = try? AgentArguments(["n": .string(String(parts[1]))]).offset("n"), length > 0 else {
+            throw AgentToolError("Argument `\(argument)`: \"\(text)\" is not \"offset+length\", such as \"0x100+0x20\".")
+        }
+        return (offset, length)
+    }
+
+    // MARK: - A search pattern from a node's bytes
+
+    /// The most bytes a pattern takes from a node.
+    nonisolated static let maxPatternBytes: UInt64 = 1 << 20
+
+    /// `find_bytes`' words for the arguments that take its pattern from a node.
+    nonisolated public static let patternProperties: [String: JSONValue] = [
+        "pattern_node": AgentSchema.string("Take the pattern from this node's bytes instead of `text` or `hex`."),
+        "pattern_part": AgentSchema.choice(Part.allCases.map(\.rawValue), "Which bytes of `pattern_node`. Default \"body\"; a match's `node_offset` counts from the start of \"all\"."),
+        "pattern_range": AgentSchema.string("The stretch of the part to take, \"offset+length\": \"0x100+0x200\". Required with `pattern_node`; at most 1 MiB."),
+        "any": AgentSchema.strings("Bytes of that pattern that match anything, each \"offset+length\" from the pattern's start: [\"0x10+4\"].")
+    ]
+
+    /// The pattern `find_bytes` was asked to take from a node's bytes; nil when
+    /// it was not.
+    public static func pattern(_ host: any ToolReadHost, _ arguments: AgentArguments) async throws -> MaskedPattern? {
+        guard let node = try arguments.optionalString("pattern_node") else {
+            for name in ["pattern_part", "pattern_range", "any"] where arguments.has(name) {
+                throw AgentToolError("`\(name)` belongs to `pattern_node`, which was not given.")
+            }
+            return nil
+        }
+        guard !arguments.has("text"), !arguments.has("hex") else {
+            throw AgentToolError("Give `text`, `hex` or `pattern_node`, one of them.")
+        }
+        guard let text = try arguments.optionalString("pattern_range") else {
+            throw AgentToolError("`pattern_node` needs `pattern_range`, \"offset+length\".")
+        }
+        let (offset, length) = try parsed(range: text, argument: "pattern_range")
+        guard length <= maxPatternBytes else { throw AgentToolError("Argument `pattern_range`: at most 1 MiB.") }
+        let part = Part(rawValue: try arguments.choice("pattern_part", from: Part.allCases.map(\.rawValue), default: "body"))!
+        let found = try await bytes(host, node: node, part: part)
+        let size = UInt64(found.range.count)
+        guard offset <= size, length <= size - offset else {
+            throw AgentToolError("`pattern_range` \(text) does not fit the \(part.rawValue), "
+                + "which is \(UEFIAgentQueries.hex(size)) bytes long.")
+        }
+        let start = found.range.lowerBound + offset
+        guard let read = found.reader.bytes(start..<(start + length)), read.count == Int(length) else {
+            throw AgentToolError("Those bytes of node \(found.node.id) could not be read.")
+        }
+        var wild = [Bool](repeating: false, count: read.count)
+        for item in try arguments.strings("any") {
+            let (from, count) = try parsed(range: item, argument: "any")
+            guard from <= length, count <= length - from else {
+                throw AgentToolError("Argument `any`: \(item) is outside the pattern, which is \(UEFIAgentQueries.hex(length)) bytes long.")
+            }
+            for index in from..<(from + count) { wild[Int(index)] = true }
+        }
+        guard wild.contains(false) else {
+            throw AgentToolError("Argument `any` covers the whole pattern: it would match everywhere.")
+        }
+        return MaskedPattern(bytes: read, isWild: wild)
     }
 }

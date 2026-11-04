@@ -149,9 +149,11 @@ public enum ServerDocuments {
                 two, or three with it. Pages: `limit` is a ceiling — a page also stops before the answer \
                 passes the size bound and then says `truncated: "size"`; pass `next` back as `after` \
                 until it is null. `show` "compact" answers each match as where it is and no more — `node` by \
-                its id and `node_offset`, or `start` — and "count" answers `total` alone.
+                its id and `node_offset`, or `start` — and "count" answers `total` alone. `pattern_node`, `pattern_range` and `pattern_part` take the pattern from a node's bytes instead of \
+                `text` or `hex`, the place it came from among the matches; `any` marks bytes of it that may be \
+                anything, such as an operand that holds an address.
                 """,
-            inputSchema: AgentSchema.object([
+            inputSchema: AgentSchema.object(UEFIAgentNodeData.patternProperties.merging([
                 "document": AgentSchema.string(documentHelp),
                 "text": AgentSchema.string("A text to find. Give `text` or `hex`."),
                 "hex": AgentSchema.string("Bytes to find, as hex pairs; `??` for any byte: \"24 ?? 4D 49\"."),
@@ -166,7 +168,7 @@ public enum ServerDocuments {
                 "show": AgentSchema.choice(UEFIAgentContentSearch.shows, UEFIAgentContentSearch.showHelp),
                 "limit": AgentSchema.limit(default: 100, maximum: 1000),
                 "after": AgentSchema.after
-            ])
+            ]) { $1 })
         ) { call in
             try await find(call.arguments, documents)
         }
@@ -184,7 +186,8 @@ public enum ServerDocuments {
     static func find(_ arguments: AgentArguments, _ documents: DocumentRegistry) async throws -> AgentAnswer {
         let document = try documents.resolve(arguments.optionalString("document"))
         let host = document.readHost()
-        let wanted = try patterns(arguments)
+        let wanted = try await UEFIAgentNodeData.pattern(host, arguments)
+            .map { [Wanted(pattern: $0, encoding: "hex")] } ?? patterns(arguments)
         let overlapping = try arguments.bool("overlapping", default: false)
         let show = try arguments.choice("show", from: UEFIAgentContentSearch.shows, default: "full")
         let limit = show == "count" ? 0 : try arguments.limit(default: 100, maximum: 1000)

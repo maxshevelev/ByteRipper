@@ -211,6 +211,35 @@ final class AgentFindToolsTests: XCTestCase {
         XCTAssertTrue(refused.isError, "\(refused.answer)")
     }
 
+    /// A pattern taken from a node reads as the same bytes written out, holes
+    /// included, and finds what the tree holds decompressed.
+    func testAPatternComesFromANodesBytes() async throws {
+        try open(try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
+        let found = try await client.answer("find_bytes", ["node": "root", "text": "GH51G", "encoding": "ascii"])
+        let match = try XCTUnwrap(found["matches"]?.arrayValue?.first)
+        let section = try XCTUnwrap(match["section"]?.stringValue)
+        let at = try XCTUnwrap(match["buffer_start"]?.stringValue)
+        let place = "\(at)+5"
+        let exact = try await client.answer("find_bytes", ["node": "root", "pattern_node": .string(section),
+                                                           "pattern_part": "decompressed", "pattern_range": .string(place)])
+        XCTAssertEqual(exact["total"], 1, "\(exact)")
+        XCTAssertEqual(exact["matches"]?.arrayValue?.first?["encoding"], "hex")
+        let holes = try await client.answer("find_bytes", ["node": "root", "pattern_node": .string(section),
+                                                           "pattern_part": "decompressed", "pattern_range": .string(place),
+                                                           "any": ["0x2+1"], "show": "count"])
+        XCTAssertEqual(holes["total"], 1, "\(holes)")
+
+        for bad: JSONValue in [["pattern_node": .string(section)],
+                               ["pattern_range": "0x0+1"],
+                               ["pattern_node": .string(section), "pattern_part": "decompressed", "pattern_range": "0x0+1", "hex": "AA"],
+                               ["pattern_node": .string(section), "pattern_part": "decompressed", "pattern_range": "0x0+0x7FFFFFF"],
+                               ["pattern_node": .string(section), "pattern_part": "decompressed", "pattern_range": "0x0+2", "any": ["0x0+2"]],
+                               ["pattern_node": .string(section), "pattern_part": "decompressed", "pattern_range": "0x0+2", "any": ["0x1+2"]]] {
+            let answer = try await client.call("find_bytes", bad)
+            XCTAssertTrue(answer.isError, "\(bad): \(answer.answer)")
+        }
+    }
+
     /// Several places of a node in one call read as each alone does.
     func testRangesReadSeveralPlacesOfANode() async throws {
         try open(UEFITestImage.make())

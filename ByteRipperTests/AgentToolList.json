@@ -562,13 +562,20 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
-    "description" : "Every place a text or a byte pattern occurs, in one of two scopes. Without `node`: the document's bytes as they are stored, with unsaved edits — the find bar's own search — in address order, `offset`/`end` limiting the range. With `node` (an id from `uefi_tree`, `uefi_find` or `uefi_at`, or \"root\" for the whole image): what the UEFI tree holds at and under that node — every container opened, every compressed section searched in what it decompresses to (nested ones too), a BIOS Guard update in its assembled region, a Lenovo LENV block stored XOR-encoded decoded — and only so: a compressed stream or an encoded block as stored is not searched, nor is an ME region. Opening everything takes a few seconds on a large image the first time; the same search of unchanged bytes again — a next page — is answered from the last one. A text the file holds only compressed is found this way and not the other. `text` is looked for as ASCII, as UTF-16LE, or both (`encoding`, default both), any case with `ignore_case`; `hex` is bytes, with `??` for a byte that may be anything (\"24 ?? 4D 49\"). Each match: the `encoding` that matched; without `node`, `start`, `end` (half-open file addresses) and `where` it is, as `diff` places a run; with `node`, in tree order, the `node` that holds it whole (as `uefi_tree` gives it) with `node_offset`, its `volume` and `volume_offset`, and `start`/`end` in the file — or, inside a compressed section, `in_compressed: true`, the `section` (open it with `open_part` part \"decompressed\") and `buffer_start`/`buffer_end` in what it decompresses to, which `uefi_node_data` reads — and `decoded` (\"XOR 77\") in a LENV block decoded. With `context`, a `preview` of the bytes around it — none, and `redacted: true`, in an area the flash map names MSDM, Password or Key. `total` counts every match; with `node`, `unread` lists the compressed sections that would not decompress. Matches do not overlap unless `overlapping`: \"AA\" in \"AAAA\" is two, or three with it. Pages: `limit` is a ceiling — a page also stops before the answer passes the size bound and says `truncated: \"size\"`; pass `next` back as `after` until it is null. `show` \"compact\" answers each match as where it is and no more — `node` by its id and `node_offset`, or `start` — and \"count\" answers `total` alone. With `survey`, which dumps of a folder hold a string.",
+    "description" : "Every place a text or a byte pattern occurs, in one of two scopes. Without `node`: the document's bytes as they are stored, with unsaved edits — the find bar's own search — in address order, `offset`/`end` limiting the range. With `node` (an id from `uefi_tree`, `uefi_find` or `uefi_at`, or \"root\" for the whole image): what the UEFI tree holds at and under that node — every container opened, every compressed section searched in what it decompresses to (nested ones too), a BIOS Guard update in its assembled region, a Lenovo LENV block stored XOR-encoded decoded — and only so: a compressed stream or an encoded block as stored is not searched, nor is an ME region. Opening everything takes a few seconds on a large image the first time; the same search of unchanged bytes again — a next page — is answered from the last one. A text the file holds only compressed is found this way and not the other. `text` is looked for as ASCII, as UTF-16LE, or both (`encoding`, default both), any case with `ignore_case`; `hex` is bytes, with `??` for a byte that may be anything (\"24 ?? 4D 49\"). Each match: the `encoding` that matched; without `node`, `start`, `end` (half-open file addresses) and `where` it is, as `diff` places a run; with `node`, in tree order, the `node` that holds it whole (as `uefi_tree` gives it) with `node_offset`, its `volume` and `volume_offset`, and `start`/`end` in the file — or, inside a compressed section, `in_compressed: true`, the `section` (open it with `open_part` part \"decompressed\") and `buffer_start`/`buffer_end` in what it decompresses to, which `uefi_node_data` reads — and `decoded` (\"XOR 77\") in a LENV block decoded. With `context`, a `preview` of the bytes around it — none, and `redacted: true`, in an area the flash map names MSDM, Password or Key. `total` counts every match; with `node`, `unread` lists the compressed sections that would not decompress. Matches do not overlap unless `overlapping`: \"AA\" in \"AAAA\" is two, or three with it. Pages: `limit` is a ceiling — a page also stops before the answer passes the size bound and says `truncated: \"size\"`; pass `next` back as `after` until it is null. `show` \"compact\" answers each match as where it is and no more — `node` by its id and `node_offset`, or `start` — and \"count\" answers `total` alone. `pattern_node`, `pattern_range` and `pattern_part` take the pattern from a node's bytes instead of `text` or `hex`, the place it came from among the matches; `any` marks bytes of it that may be anything, such as an operand that holds an address. With `survey`, which dumps of a folder hold a string.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
         "after" : {
           "description" : "The `next` of the page before, to go on from where it stopped.",
           "type" : "string"
+        },
+        "any" : {
+          "description" : "Bytes of that pattern that match anything, each \"offset+length\" from the pattern's start: [\"0x10+4\"].",
+          "items" : {
+            "type" : "string"
+          },
+          "type" : "array"
         },
         "context" : {
           "description" : "Bytes before and after each match to show in `preview`. Default 0, at most 64.",
@@ -622,6 +629,24 @@
         "overlapping" : {
           "description" : "Count matches that overlap one another. Default false.",
           "type" : "boolean"
+        },
+        "pattern_node" : {
+          "description" : "Take the pattern from this node's bytes instead of `text` or `hex`.",
+          "type" : "string"
+        },
+        "pattern_part" : {
+          "description" : "Which bytes of `pattern_node`. Default \"body\"; a match's `node_offset` counts from the start of \"all\".",
+          "enum" : [
+            "body",
+            "header",
+            "all",
+            "decompressed"
+          ],
+          "type" : "string"
+        },
+        "pattern_range" : {
+          "description" : "The stretch of the part to take, \"offset+length\": \"0x100+0x200\". Required with `pattern_node`; at most 1 MiB.",
+          "type" : "string"
         },
         "show" : {
           "description" : "What to answer: \"full\" rows; \"compact\" rows, only where each match is; \"count\", `total` alone. Default \"full\".",
