@@ -614,7 +614,8 @@ public class ExportCode extends GhidraScript {
      * A digest of the bytes the function's data references point at, in the
      * order of its instructions: the body's key masks the operand, so the same
      * code about another GUID has the same key and is another function. A
-     * reference covers its defined datum, or 16 bytes where none is defined.
+     * reference covers its defined datum up to 16 bytes, or 16 where none is
+     * defined: how far a table was typed in one module is no difference.
      * Null for a function that refers to no data. Which references count is
      * what Owner.libraryOutside counts as `data_references`.
      */
@@ -654,7 +655,7 @@ public class ExportCode extends GhidraScript {
                 if (!to.isMemoryAddress() || !program.getMemory().contains(to) || function.getBody().contains(to)
                         || listing.getInstructionAt(to) != null) continue;
                 ghidra.program.model.listing.Data datum = listing.getDefinedDataAt(to);
-                byte[] bytes = new byte[datum != null ? Math.max(1, datum.getLength()) : 16];
+                byte[] bytes = new byte[datum != null ? Math.max(1, Math.min(16, datum.getLength())) : 16];
                 int read;
                 try {
                     read = program.getMemory().getBytes(to, bytes);
