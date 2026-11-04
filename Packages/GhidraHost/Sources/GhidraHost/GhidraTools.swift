@@ -127,7 +127,8 @@ public enum GhidraTools {
                 program, functions, whether there are unpublished changes. The owner saves the program \
                 when it idles out, is stopped or gets a signal, so work between publishes survives a \
                 server restart — only an owner killed outright or crashed loses it, and then `writes_lost` here and in \
-                `ghidra_modules` says so from the next open on. A module seen before is opened \
+                `ghidra_modules` says so from the next open on. It counts from this build's first open of the project: \
+                what was lost before that cannot be told, and its absence on a module not opened since says nothing. A module seen before is opened \
                 by `module`.\(byImage ? " A new one is sent as `image_base64` with a `name`: its project is made first — Ghidra's analysis and the UEFI pass, seconds for a PEIM, a minute for a large DXE driver." : "")
                 """,
             inputSchema: AgentSchema.object(properties),

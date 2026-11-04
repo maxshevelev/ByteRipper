@@ -13,12 +13,12 @@
 > entry that holds one too wide give it up. A module's own
 > function is in the module's scope and conflicts with nothing in other modules.
 > A text true of one module only means the function is not a library function, and
-> it does not belong here. §1 and §4 still describe the copy this replaces where
-> they speak of applying a review to a function; they are to be rewritten when the
-> change is finished. An open now links (`mode: link`); `whole` remains only as the
+> it does not belong here. An open links (`mode: link`); `whole` remains only as the
 > working copy `replace` asks for, to change an entry on. Linking and reading through
 > are off until `read_through` is set in the index (`ghidra_library_read_through`):
 > until the registry is in order an entry that is not one function would read as one.
+> That switch is to go: a function is in one place in the registry, and history is no
+> copy.
 >
 > **What a library function is (2026-11-03):** it depends on no module. It refers to
 > no data, or only to a constant defined in its own library's source file, cited by
@@ -74,27 +74,17 @@ review documents.
   so the registry holds one entry for it and every module converges on that
   entry's name. Two reviews that named the same body differently do not make
   two entries; they make one entry and a rename.
-- **Applying an exact match** when the module is opened:
-  - a function no review has named (`name_source` is not `USER_DEFINED`) takes
-    the whole entry: name, signature, variables, plate, comments and the
-    library tag, and carries the entry's key and version, with the digest of
-    what was applied (`ByteRipper.libraryEntry`) — a later version of the
-    entry re-applies itself at the next open unless the function was edited
-    since. Where it came from is in the mark, not in the plate: a plate line
-    naming the source would make the module's review differ from the entry,
-    and its next publish a conflict;
-  - a function a review has named takes the entry's name — renamed if its own
-    differs, the old name kept in the name's reason ("was `FindGuidHob`") — and
-    the entry fills only what the review left empty: a signature or variables
-    still `param_N`/`undefined`, a missing plate, a step comment at an offset
-    that has none, a missing tag. What the review made stays; where it differs
-    from the entry (another signature, a plate that says otherwise, another
-    library kind) the open's answer lists the difference, and the agent either
-    keeps the module's version, takes the entry's (`replace`), or improves the
-    entry with it. Such a function is part review, part registry: it carries
-    no `libraryEntry` mark, and a later version of the entry is offered to it,
-    not applied. A function the fill leaves equal to the entry carries the
-    mark like one that took the whole entry.
+- **An exact match is linked** when the module is opened. The function takes
+  the entry's name, signature and library tag, and carries the entry's key and
+  version, with the digest of the review (`ByteRipper.libraryEntry`). Nothing
+  else of the entry is written into the module: a reader takes the plate, the
+  comments, the variables and the C from the entry (`LibraryView`), which writes
+  this module's addresses and names into them. A later version reaches a linked
+  function at the next open, unless the function was edited since. A function
+  edited on the entry says so in its mark, and its next publish is a change to
+  the entry (below). A function whose review differs from the entry is not
+  overwritten: the open's answer lists it, and the agent either takes the
+  entry's (`replace`) or publishes its own as the entry's next version.
 - **Other constants are another function — except an assert code.** Two
   bodies with the same full hash and size but another specific hash differ
   only in operand values. An MSR number, a port, a mask or a size changes what
@@ -188,22 +178,27 @@ objects/<sha256>                   the entries, as review documents are
    answers the matches: exact and unnamed, exact and named by a review, or
    full-hash-only.
 3. For the exact matches the host sends the entries
-   (`POST /v1/library/apply`); the owner applies each in its own transaction,
-   as §1 says — the whole entry to an unnamed function; to a named one the
-   entry's name (the old one kept in the reason) and only what its review left
-   empty — and reports what it could not place (a storage the function does not
-   have, a type the archive does not hold) without failing the rest.
-4. The open's answer lists what was applied, what was renamed (old name → the
+   (`POST /v1/library/apply`, `mode: link`); the owner writes each in its own
+   transaction, as §1 says: the entry's name, its signature with its storage,
+   the tag and the mark, and reports what it could not place without failing
+   the rest. Only `replace` asks for `mode: whole`, the working copy of the
+   whole entry a review changes the entry on.
+4. The open's answer lists what was linked, what was renamed (old name → the
    entry's), the differences a review kept, and the candidates. The agent sees
-   them through `ghidra_library`, applies a candidate with
+   them through `ghidra_library`, links a candidate with
    `ghidra_library_apply` or declines it (remembered in the project, so it is
-   not offered again), and settles a difference by keeping the module's
-   version or publishing it as the entry's next version.
+   not offered again), and settles a difference by taking the entry's or
+   publishing its own as the entry's next version.
+5. A body the registry gave back (`taken_out`) is released at the next open:
+   the function becomes the module's, with the entry's last text as its own, no
+   mark and no tag.
 
-The applied functions are review work like any other: the next publish
-exports them, harvests them into the module's review document, and — since
-they carry the tag — offers them back to the registry, where the same content
-under the same key is no change.
+A linked function has nothing to say to the registry: the next publish offers it
+only when it is the entry's own review, which is no change. There is one
+exception that changes no version: the module the entry's C came from, at the
+same address, replaces the C when the text differs only in how the decompiler
+prints it (a zero pointer as `NULL`, line breaks, the warning of a convention
+nobody names). The review, the version and every module's mark stay.
 
 ## 5. Agents and the panel
 
