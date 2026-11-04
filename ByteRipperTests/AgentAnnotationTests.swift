@@ -1332,4 +1332,10 @@ final class AgentAnnotationTests: XCTestCase {
         }
         return condition()
     }
+
+    /// The catalogues are found in the built app, where `Localization` looks for them itself.
+    func testTheAppFindsItsTranslations() {
+        XCTAssertFalse(Localization.keys(in: .russian).isEmpty)
+        XCTAssertFalse(Localization.keys(in: .german).isEmpty)
+    }
 }

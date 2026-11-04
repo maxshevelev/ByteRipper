@@ -166,4 +166,16 @@ final class CatalogueTests: XCTestCase {
     func testABrokenFileIsEmpty() {
         XCTAssertTrue(StringsFile.parse("\"one\" = ").isEmpty)
     }
+
+    /// The tests' own bundle is found, so the words below it are really read.
+    func testTheResourcesAreFoundWithoutBundleModule() {
+        XCTAssertNotNil(Localization.resources)
+        XCTAssertFalse(Localization.keys(in: .russian).isEmpty)
+    }
+
+    /// No bundle is no translation, not a stopped process: the key is the English.
+    func testNoResourcesMeansTheEnglishKeys() {
+        let catalogue = Catalogue.load(language: .russian, bundle: nil)
+        XCTAssertEqual(catalogue.string("Some sentence"), "Some sentence")
+    }
 }

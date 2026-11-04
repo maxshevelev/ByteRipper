@@ -157,12 +157,30 @@ public enum Localization {
     /// first time a word is asked for in one (`L(_:in:)`).
     nonisolated(unsafe) private static var otherCatalogues: [AppLanguage: Catalogue] = [:]
 
+    /// This package's resources, found without `Bundle.module`, whose generated
+    /// accessor stops the process when it cannot find them. A word is not worth
+    /// that: with no bundle every key is its own correct English, and the one
+    /// line on stderr says why. Beside the app's resources, beside the binary
+    /// (an installed server), or beside a test bundle.
+    static let resources: Bundle? = {
+        let name = "Localization_Localization.bundle"
+        let code = Bundle(for: ResourcesToken.self)
+        let places = [Bundle.main.resourceURL, Bundle.main.bundleURL, code.resourceURL, code.bundleURL,
+                      code.bundleURL.deletingLastPathComponent()]
+        for case let place? in places {
+            if let found = Bundle(url: place.appendingPathComponent(name)) { return found }
+        }
+        FileHandle.standardError.write(Data("Localization: \(name) not found; speaking English\n".utf8))
+        return nil
+    }()
+    private final class ResourcesToken {}
+
     /// The app's catalogue, loading it on the first word asked for.
     static var current: Catalogue {
         lock.lock()
         defer { lock.unlock() }
         if !loaded {
-            catalogue = Catalogue.load(language: resolvedLanguage(), bundle: .module)
+            catalogue = Catalogue.load(language: resolvedLanguage(), bundle: resources)
             loaded = true
         }
         return catalogue
@@ -177,7 +195,7 @@ public enum Localization {
         lock.lock()
         defer { lock.unlock() }
         if let cached = otherCatalogues[language] { return cached }
-        let loaded = Catalogue.load(language: language, bundle: .module)
+        let loaded = Catalogue.load(language: language, bundle: resources)
         otherCatalogues[language] = loaded
         return loaded
     }
@@ -216,7 +234,7 @@ public enum Localization {
     /// by `set`, and by a test that changed the inputs behind it.
     public static func reload() {
         lock.lock()
-        catalogue = Catalogue.load(language: resolvedLanguage(), bundle: .module)
+        catalogue = Catalogue.load(language: resolvedLanguage(), bundle: resources)
         loaded = true
         lock.unlock()
     }
@@ -288,7 +306,7 @@ public enum Localization {
     /// Every key the catalogue of `language` holds — what the coverage script
     /// and its tests compare against the keys the code asks for.
     public static func keys(in language: AppLanguage) -> Set<String> {
-        Set(Catalogue.load(language: language, bundle: .module).entries.keys)
+        Set(Catalogue.load(language: language, bundle: resources).entries.keys)
     }
 }
 
@@ -305,12 +323,12 @@ struct Catalogue: Sendable {
         entries[key] ?? key
     }
 
-    static func load(language: AppLanguage, bundle: Bundle) -> Catalogue {
+    static func load(language: AppLanguage, bundle: Bundle?) -> Catalogue {
         // English is the keys themselves: shipping a file that maps every
         // string to itself would be a file nobody can ever get wrong, and
         // 1200 lines of it.
         guard language != .fallback else { return Catalogue(language: language, entries: [:]) }
-        guard let url = bundle.url(forResource: "Resources", withExtension: nil)?
+        guard let url = bundle?.url(forResource: "Resources", withExtension: nil)?
             .appendingPathComponent("\(language.rawValue).lproj/Localizable.strings"),
             let text = try? String(contentsOf: url, encoding: .utf8)
         else {
