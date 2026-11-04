@@ -1,0 +1,272 @@
+import CodeAnalysis
+import Foundation
+import XCTest
+@testable import GhidraHost
+
+/// What the owner says after a change, read back from the program: the C it
+/// decompiles, its reasons and its calls. Each test makes its own project from
+/// `GHIDRA_TYPE_MODULE`, a 32-bit PEI module, in a temporary folder.
+final class GhidraOwnerReadBackTests: XCTestCase {
+    private var directory: URL!
+    private var host: GhidraHost!
+    private var module: SHA256Digest!
+
+    private func open(_ image: Data) async throws {
+        directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraOwnerReadBack-\(UUID().uuidString)", isDirectory: true)
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                               idle: 300, holder: "GhidraOwnerReadBackTests"),
+                          writer: store)
+        module = SHA256Digest(data: image)
+        _ = try await host.create(module: image, name: "Module")
+    }
+
+    private func image() throws -> Data {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
+            throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
+        }
+        return try Data(contentsOf: URL(fileURLWithPath: path))
+    }
+
+    override func tearDown() async throws {
+        if let host, let module { await host.stop(module) }
+        if let directory { try? FileManager.default.removeItem(at: directory) }
+    }
+
+    private func read(_ path: String) async throws -> [String: Any] {
+        let data = try await host.read(module, path)
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+
+    @discardableResult
+    private func post(_ path: String, _ object: [String: Any]) async throws -> [String: Any] {
+        let body = try JSONSerialization.data(withJSONObject: object)
+        let data = try await host.write(module, path, body: body)
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+
+    private func entries() async throws -> [String] {
+        (try await read("/v1/functions")["functions"] as? [[String: Any]] ?? []).compactMap { $0["entry"] as? String }
+    }
+
+    private func c(_ entry: String) async throws -> String {
+        try await read("/v1/function/\(entry)")["c"] as? String ?? ""
+    }
+
+    /// The image with `MOV EAX,target; CALL EAX; RET` over the first function
+    /// that starts the usual way, and what it calls: the second such function.
+    /// The shape review found in SecCore at 0x9DFBDD0; no module at hand holds
+    /// one, and the bytes are all the disassembler sees.
+    private func imageWithAnIndirectCall() throws -> (image: Data, stub: UInt32, target: UInt32) {
+        var bytes = [UInt8](try image())
+        func u32(_ at: Int) -> UInt32 { (0..<4).reduce(0) { $0 | UInt32(bytes[at + $1]) << (8 * UInt32($1)) } }
+        func u16(_ at: Int) -> Int { Int(bytes[at]) | Int(bytes[at + 1]) << 8 }
+        let pe = Int(u32(0x3C))
+        let base = u32(pe + 0x34)
+        let table = pe + 0x18 + u16(pe + 0x14)
+        var starts: [UInt32] = []
+        var at: [UInt32: Int] = [:]
+        for index in 0..<u16(pe + 6) {
+            let section = table + index * 40
+            let rva = u32(section + 12), raw = Int(u32(section + 20)), size = Int(u32(section + 16))
+            guard u32(section + 36) & 0x20 != 0 else { continue }
+            for offset in raw..<max(raw, raw + size - 3)
+            where bytes[offset] == 0x55 && bytes[offset + 1] == 0x8B && bytes[offset + 2] == 0xEC
+                && offset > raw && bytes[offset - 1] == 0xC3 {
+                let address = base + rva + UInt32(offset - raw)
+                starts.append(address)
+                at[address] = offset
+            }
+        }
+        let stub = try XCTUnwrap(starts.first), target = try XCTUnwrap(starts.dropFirst().first)
+        let offset = try XCTUnwrap(at[stub])
+        let code: [UInt8] = [0xB8] + (0..<4).map { UInt8(truncatingIfNeeded: target >> (8 * UInt32($0))) } + [0xFF, 0xD0, 0xC3]
+        bytes.replaceSubrange(offset..<(offset + code.count), with: code)
+        return (Data(bytes), stub, target)
+    }
+
+    /// `function` lists every call with what it reaches. Analysis gave this one
+    /// a reference, as it does not always: the next test has the one it did not.
+    func testAnIndirectCallIsListedWithTheAddressItHolds() async throws {
+        let made = try imageWithAnIndirectCall()
+        try await open(made.image)
+        let stub = "0x" + String(made.stub, radix: 16, uppercase: true)
+        let target = "0x" + String(made.target, radix: 16, uppercase: true)
+        let all = try await entries()
+        XCTAssertTrue(all.contains(stub), "the stub is a function of the image")
+        let shown = try await read("/v1/disassembly/\(stub)")["instructions"] as? [[String: Any]] ?? []
+        print("READBACK xrefs disassembly", shown.prefix(3).map { $0["text"] as? String ?? "" })
+
+        let callees = try await read("/v1/xrefs?from=\(stub)")
+        print("READBACK xrefs from stub", callees["references"] ?? "none")
+        let held = try await read("/v1/xrefs?to=\(target)")
+        print("READBACK xrefs to target", held)
+        let calls = try await read("/v1/xrefs?function=\(stub)")
+        print("READBACK xrefs function", calls)
+        let rows = try XCTUnwrap(calls["calls"] as? [[String: Any]], "\(calls)")
+        XCTAssertEqual(rows.count, 1, "\(rows)")
+        XCTAssertEqual(rows.first?["text"] as? String, "CALL EAX")
+        XCTAssertEqual(rows.first?["kind"] as? String, "indirect")
+        XCTAssertEqual(rows.first?["target"] as? String, target)
+
+        // A plain call says so, an indirect one nothing traces says that, and a
+        // function that calls nothing answers an empty list.
+        var kinds: Set<String> = []
+        var leaf = false
+        for entry in all {
+            let list = try await read("/v1/xrefs?function=\(entry)")["calls"] as? [[String: Any]] ?? []
+            leaf = leaf || list.isEmpty
+            for row in list {
+                let kind = row["kind"] as? String ?? ""
+                kinds.insert(kind)
+                if kind == "direct" { XCTAssertNotNil(row["target"], "\(row)") }
+            }
+        }
+        XCTAssertTrue(kinds.contains("direct"), "\(kinds)")
+        XCTAssertTrue(leaf)
+    }
+
+    /// The forms review found in SecCore, on a copy of its kept project:
+    /// `MOV EAX,addr; CALL EAX` with no reference at all, and `MOV [EBX],addr`.
+    func testConstantsWithNoReferenceAreFoundInACopyOfSecCore() async throws {
+        guard ProcessInfo.processInfo.environment["GHIDRA_COPY_SECCORE"] != nil else {
+            throw XCTSkip("GHIDRA_COPY_SECCORE is not set")
+        }
+        let source = GhidraHost.defaultProjectsRoot
+        guard let original = GhidraProject.all(in: source).first(where: { (try? $0.state().module.name) == "SecCore" }) else {
+            throw XCTSkip("no kept SecCore project to copy")
+        }
+        directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraOwnerReadBack-\(UUID().uuidString)", isDirectory: true)
+        let projects = directory.appendingPathComponent("projects")
+        try FileManager.default.createDirectory(at: projects, withIntermediateDirectories: true)
+        let copy = projects.appendingPathComponent(original.module.hex)
+        try FileManager.default.copyItem(at: original.folder, to: copy)
+        try? FileManager.default.removeItem(at: copy.appendingPathComponent("owner.json"))
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        host = GhidraHost(configuration: .init(projectsRoot: projects, idle: 120, holder: "GhidraOwnerReadBackTests"),
+                          writer: store)
+        module = original.module
+
+        let shown = try await read("/v1/disassembly/0x9DFBDD0")["instructions"] as? [[String: Any]] ?? []
+        print("READBACK seccore stub", shown.prefix(3).map { $0["text"] as? String ?? "" })
+        let refs = try await read("/v1/xrefs?from=0x9DFBDD0")
+        print("READBACK seccore from", refs["references"] ?? "none")
+        let calls = try await read("/v1/xrefs?function=0x9DFBDD0")["calls"] as? [[String: Any]] ?? []
+        print("READBACK seccore calls", calls)
+        XCTAssertEqual(calls.first?["text"] as? String, "CALL EAX", "\(calls)")
+        XCTAssertEqual(calls.first?["kind"] as? String, "indirect", "\(calls)")
+        XCTAssertEqual(calls.first?["target"] as? String, "0x9DFBF90", "\(calls)")
+        XCTAssertEqual(calls.first?["held_at"] as? String, "0x9DFBDD3", "\(calls)")
+        let target = try await read("/v1/xrefs?to=0x9DFBF90")
+        print("READBACK seccore to", target["held_by"] ?? "none")
+        XCTAssertTrue((target["held_by"] as? [[String: Any]])?.contains { $0["from"] as? String == "0x9DFBDD3" } == true, "\(target)")
+        let tss = try await read("/v1/xrefs?to=0x9DFBDD1")
+        print("READBACK seccore tss", tss["held_by"] ?? "none")
+        XCTAssertTrue((tss["held_by"] as? [[String: Any]])?.contains { $0["from"] as? String == "0x9DFC170" } == true, "\(tss)")
+    }
+
+    /// An address held as an address operand is not named, and now the answer
+    /// says it was there rather than answering as if the value were not.
+    func testAnEquateSaysWhereTheValueIsHeldAsAnAddress() async throws {
+        try await open(try image())
+        var seen = false
+        for entry in try await entries() {
+            let shown = try await read("/v1/disassembly/\(entry)")["instructions"] as? [[String: Any]] ?? []
+            for instruction in shown {
+                let text = instruction["text"] as? String ?? ""
+                guard text.hasPrefix("MOV E"), let at = text.range(of: ",0x") else { continue }
+                let value = String(text[text.index(after: at.lowerBound)...])
+                guard let number = UInt64(value.dropFirst(2), radix: 16), number >= 0x10000 else { continue }
+                let answer = try await post("/v1/set/equate", ["functions": [entry], "value": value, "name": "NAMED_ADDRESS",
+                                                               "dry_run": true])
+                guard (answer["applied"] as? [Any])?.isEmpty == true else { continue }
+                print("READBACK equate", answer)
+                let rows = try XCTUnwrap(answer["not_immediate"] as? [[String: Any]], "\(answer)")
+                XCTAssertTrue(rows.contains { ($0["text"] as? String) == text }, "\(rows)")
+                XCTAssertNotNil(rows.first?["address"])
+                XCTAssertNotNil(rows.first?["operand"])
+                seen = true
+                break
+            }
+            if seen { break }
+        }
+        XCTAssertTrue(seen, "no address operand in the module")
+    }
+
+    /// A released function does not go on citing an entry as its reason; a
+    /// reason of the review's own stays as it is.
+    func testAReleaseLeavesNoReasonThatNamesAnEntryAsCurrent() async throws {
+        try await open(try image())
+        let all = try await entries()
+        let released = try XCTUnwrap(all.first), other = try XCTUnwrap(all.dropFirst().first)
+        let cited = "library registry entry 1a-test v7"
+        try await post("/v1/rename/function", ["address": released, "name": "ReleasedOne", "by": "agent",
+                                               "reason": "\(cited) (was Before)"])
+        try await post("/v1/set/signature", ["address": released, "signature": "void ReleasedOne(void)",
+                                             "by": "agent", "reason": cited])
+        try await post("/v1/set/comment", ["address": released, "kind": "plate", "text": "The module's own."])
+        try await post("/v1/rename/function", ["address": other, "name": "KeptOne", "by": "agent",
+                                               "reason": "the review's own reason"])
+        try await post("/v1/set/comment", ["address": other, "kind": "plate", "text": "The module's own."])
+        try await post("/v1/library/release", ["items": [
+            ["address": released, "id": "1a-test", "version": 7, "entry": [:] as [String: Any]],
+            ["address": other, "id": "1a-other", "version": 1, "entry": [:] as [String: Any]]
+        ]])
+        let read = try await read("/v1/function/\(released)")
+        print("READBACK release", read["name_reason"] ?? "none", "|", read["signature_reason"] ?? "none")
+        XCTAssertEqual(read["name_reason"] as? String, "no longer a library function: \(cited) (was Before)")
+        XCTAssertEqual(read["signature_reason"] as? String, "no longer a library function: \(cited)")
+        let kept = try await self.read("/v1/function/\(other)")
+        XCTAssertEqual(kept["name_reason"] as? String, "the review's own reason")
+    }
+
+    /// Explicit storage no convention gives leaves no convention in the C; the
+    /// storage stays, no warning takes its place, and a storage the convention
+    /// does give keeps it. A rename after it reaches the C and its callers.
+    func testExplicitStorageReadsBackInTheC() async throws {
+        try await open(try image())
+        var entry = "", caller = ""
+        for candidate in try await entries() {
+            let references = try await read("/v1/xrefs?to=\(candidate)")["references"] as? [[String: Any]] ?? []
+            if let row = references.first(where: { ($0["type"] as? String)?.contains("CALL") == true }),
+               let from = row["function"] as? String {
+                entry = candidate
+                caller = from
+                break
+            }
+        }
+        XCTAssertFalse(entry.isEmpty)
+        let before = try await c(caller)
+        try await post("/v1/set/signature", ["address": entry, "signature": "UINT32 __cdecl Probe(UINT32 First, UINT32 Second)",
+                                             "storage": ["ECX:4", "Stack[0x4]:4"], "by": "agent", "reason": "test"])
+        let read = try await read("/v1/function/\(entry)")
+        let text = read["c"] as? String ?? ""
+        let head = text.split(separator: "\n").filter { !$0.hasPrefix("/*") && !$0.isEmpty }.first.map(String.init) ?? ""
+        print("READBACK storage head:", head, "| convention:", read["calling_convention"] ?? "none",
+              "| warnings:", text.split(separator: "\n").filter { $0.contains("WARNING") })
+        print("READBACK storage caller before:", before.split(separator: "\n").filter { $0.contains("(") }.prefix(3))
+        XCTAssertFalse(head.contains("__cdecl"), head)
+        XCTAssertFalse(text.contains("Unknown calling convention"), text)
+        XCTAssertEqual((read["parameters"] as? [[String: Any]])?.map { $0["storage"] as? String }, ["ECX:4", "Stack[0x4]:4"])
+        let after = try await c(caller)
+        print("READBACK storage caller after:", after.split(separator: "\n").filter { $0.contains("Probe") }.prefix(3))
+        XCTAssertTrue(after.contains("Probe("), after)
+        XCTAssertFalse(after.contains("Unknown calling convention"), after)
+
+        try await post("/v1/rename/function", ["address": entry, "name": "ProbeRenamed", "by": "agent", "reason": "test"])
+        let renamed = try await c(entry), renamedCaller = try await c(caller)
+        print("READBACK rename:", renamed.split(separator: "\n").first { $0.contains("Probe") } ?? "", "|",
+              renamedCaller.split(separator: "\n").first { $0.contains("Probe") } ?? "")
+        XCTAssertTrue(renamed.contains("ProbeRenamed("))
+        XCTAssertFalse(renamed.contains("Probe("))
+        XCTAssertTrue(renamedCaller.contains("ProbeRenamed("))
+
+        try await post("/v1/set/signature", ["address": entry, "signature": "UINT32 __cdecl ProbeRenamed(UINT32 First, UINT32 Second)",
+                                             "storage": ["Stack[0x4]:4", "Stack[0x8]:4"], "by": "agent", "reason": "test"])
+        let fits = try await c(entry)
+        print("READBACK storage that fits:", fits.split(separator: "\n").first { $0.contains("ProbeRenamed") } ?? "")
+        XCTAssertTrue(fits.contains("__cdecl"), fits)
+    }
+}

@@ -218,6 +218,42 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertEqual(try store.libraryIndex().entries[other.key]?.name, "CopyMemForward")
     }
 
+    /// A rename reaches the stored C: its own name there, a recursive call, and
+    /// every place after them. A comment naming it is the review's and stays.
+    func testARenameReachesTheStoredC() throws {
+        let c = "/* CopyMem copies */\nvoid CopyMem(void) {\n  CopyMem(Count);\n  Theirs(Count);\n}\n"
+        let text = c as NSString
+        let own = text.range(of: "void CopyMem").location + 5
+        let again = text.range(of: "  CopyMem(").location + 2
+        let theirs = text.range(of: "Theirs").location
+        let count = text.range(of: "Theirs(Count").location + 7
+        let function: [String: Any] = [
+            "entry": "0x1000", "name": "CopyMem", "signature": "void CopyMem(void)", "c": c,
+            "c_spans": [[0, 20, "comment"], [own, 7, "function", "0x1000"], [again, 7, "function", "0x1000"],
+                        [theirs, 6, "function", "0x2000"], [count, 5, "local"]],
+            "c_sites": [[again, 7, "0x1000"], [theirs, 6, "0x1004"]],
+            "c_fields": [[count, 5, "T", 4]],
+            "c_unreachable": [[own, 12, ["0x1008"]]],
+            "instructions": [["address": "0x1000", "bytes": "90", "text": "NOP"]]
+        ]
+        try register(try JSONSerialization.data(withJSONObject: [
+            "schema": 1, "name": "CopyMem", "kind": "edk2", "plate": "EDK2 CopyMem",
+            "signature": "void CopyMem(void)", "function": function
+        ], options: .sortedKeys))
+        try store.renameLibraryEntry(id: body.key, name: "CopyMemForwardOnly", reason: "copies forward only", by: "agent")
+        let entry = try XCTUnwrap(try store.libraryIndex().entries[body.key])
+        let review = try XCTUnwrap(try JSONSerialization.jsonObject(with: try store.object(entry.entry)) as? [String: Any])
+        let stored = try XCTUnwrap(review["function"] as? [String: Any])
+        let now = try XCTUnwrap(stored["c"] as? String) as NSString
+        XCTAssertEqual(now, "/* CopyMem copies */\nvoid CopyMemForwardOnly(void) {\n  CopyMemForwardOnly(Count);\n  Theirs(Count);\n}\n")
+        func token(_ row: [Any]) -> String { now.substring(with: NSRange(location: row[0] as! Int, length: row[1] as! Int)) }
+        let spans = try XCTUnwrap(stored["c_spans"] as? [[Any]])
+        XCTAssertEqual(spans.map(token), ["/* CopyMem copies */", "CopyMemForwardOnly", "CopyMemForwardOnly", "Theirs", "Count"])
+        XCTAssertEqual(try XCTUnwrap(stored["c_sites"] as? [[Any]]).map(token), ["CopyMemForwardOnly", "Theirs"])
+        XCTAssertEqual(try XCTUnwrap(stored["c_fields"] as? [[Any]]).map(token), ["Count"])
+        XCTAssertEqual(try XCTUnwrap(stored["c_unreachable"] as? [[Any]]).map(token), ["CopyMemForwardOnly(void"])
+    }
+
     /// A name goes by what the functions mean: the entry holding one too wide
     /// gives it up, and a later function may take it or a narrower one.
     func testAnEntryWithAWideNameCanGiveItUp() throws {

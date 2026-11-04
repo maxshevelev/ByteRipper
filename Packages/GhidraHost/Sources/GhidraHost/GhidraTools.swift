@@ -225,7 +225,8 @@ public enum GhidraTools {
                 name: "ghidra_library_rename",
                 title: "Give a library registry entry a narrower name",
                 description: """
-                    A library function's name is unique in the registry, and it goes by what the functions \
+                    The name changes in the entry, its signatures and its stored C, not in comments or in \
+                    other entries' C. A library function's name is unique in the registry, and it goes by what the functions \
                     mean, not by who published first. When a publish answers `library.name_conflicts`, read \
                     the entry that holds the name (`library_registry` with its `id`) beside the new function. \
                     If the name fits the new function, or fits neither well, give the entry the narrower name \
@@ -654,11 +655,17 @@ public enum GhidraTools {
             AgentTool(
                 name: "ghidra_xrefs",
                 title: "Find references",
-                description: "The references `to` an address (who calls a function, reads a global) or `from` one.",
+                description: "The references `to` an address (who calls a function, reads a global) or `from` one. "
+                    + "`to` also answers `held_by`: instructions that hold the address as a constant and have no reference to it, "
+                    + "such as `MOV EAX,addr` before `CALL EAX`; in an image based at zero it is empty, a small constant being no address. "
+                    + "`function` answers `calls`: every call it makes and every jump that leaves it, in order, each with `at`, `text` and "
+                    + "`kind`, \"direct\" or \"indirect\", and `target` and `name` where known; an indirect one traced to its `MOV` gives "
+                    + "`held_at`, one with no `target` is not known from here. An empty list means no calls.",
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,
                     "to": AgentSchema.string("References to this address."),
-                    "from": AgentSchema.string("Or references from this address.")
+                    "from": AgentSchema.string("Or references from this address."),
+                    "function": AgentSchema.string("Or the calls this function makes.")
                 ], required: ["module"])
             ) { call in
                 let arguments = call.arguments
@@ -666,7 +673,8 @@ public enum GhidraTools {
                 var query: [String: String] = [:]
                 if let to = try arguments.optionalString("to") { query["to"] = to }
                 if let from = try arguments.optionalString("from") { query["from"] = from }
-                guard query.count == 1 else { throw AgentToolError("Give `to` or `from`, one of them.") }
+                if let function = try arguments.optionalString("function") { query["function"] = function }
+                guard query.count == 1 else { throw AgentToolError("Give `to`, `from` or `function`, one of them.") }
                 return try await answer { try await backend.readCall(module, "xrefs", query: query) }
             },
             paged("ghidra_equates_on_memory", "equates-on-memory", "List equates on memory operands",
@@ -959,7 +967,8 @@ public enum GhidraTools {
                   + "through a pointer in ECX — give `storage`, one place per parameter as `ghidra_function` "
                   + "lists storage (`[\"ECX:4\", \"Stack[0x4]:4\"]`), and `return_storage` if the result is "
                   + "not where the convention puts it (`EDX:4,EAX:4` for 64 bits, high part first, `void`). "
-                  + "Then no dummy parameter is needed for a register the function does not read.",
+                  + "Then no dummy parameter is needed for a register the function does not read. A convention "
+                  + "that does not give that storage is dropped, so the C prints none against it.",
                   ["address": AgentSchema.string("The function's entry address."),
                    "signature": AgentSchema.string("The C prototype."),
                    "storage": .object(["type": "array", "items": .object(["type": "string"]),
@@ -1089,7 +1098,7 @@ public enum GhidraTools {
                   + "module reviewed, so a name given once brings its comment along: later, `name` and "
                   + "`enum` are enough. One value has one name in an enum. Instead of `address`, `functions` with "
                   + "`value` names that value wherever those functions hold it as an immediate operand; the answer "
-                  + "lists `applied`, each address with its instruction, and `skipped` operands, which keep another name they already have. A small value is held by unrelated instructions too: "
+                  + "lists `applied`, each address with its instruction, `skipped` operands, which keep another name they already have, and `not_immediate`, where those functions hold the value as an address, which is not named. A small value is held by unrelated instructions too: "
                   + "`dry_run: true` answers the same and writes nothing, so read the instructions first and name by `address` where only some are meant. `items` takes several operands in one call, each `address` with its own `operand`, `value` or `name` over the call's own, all or none; that is the way to name a displacement in many places. `in_c` says whether the function's C now prints the name, `not_in_c` lists the names of `items` it does not: an equate stands on the instruction, and the C can print something else, such as an enum member the operand's type chose.",
                   ["address": AgentSchema.string("The instruction's address."),
                    "functions": .object(["type": "array", "items": .object(["type": "string"]),

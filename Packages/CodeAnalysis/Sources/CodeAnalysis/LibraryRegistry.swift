@@ -765,7 +765,45 @@ extension ContentStore {
         if var function = review["function"] as? [String: Any] {
             function["name"] = name
             if let signature = function["signature"] as? String { function["signature"] = renamed(signature) }
+            renameInC(&function, from: old, to: name)
             review["function"] = function
+        }
+    }
+
+    /// The stored C under the new name: the tokens that print the old one as a
+    /// function, and every place written after them moved by as much. A comment
+    /// that mentions the name is the review's text and stays.
+    private static func renameInC(_ function: inout [String: Any], from old: String, to name: String) {
+        guard let c = function["c"] as? String, let spans = function["c_spans"] as? [[Any]] else { return }
+        var units = Array(c.utf16)
+        let oldUnits = Array(old.utf16), newUnits = Array(name.utf16)
+        let delta = newUnits.count - oldUnits.count
+        // Old position → how far the text at or after it has moved.
+        var moves: [(at: Int, by: Int)] = []
+        let order = spans.indices.sorted { (spans[$0].first as? Int ?? 0) < (spans[$1].first as? Int ?? 0) }
+        for index in order.reversed() {
+            let span = spans[index]
+            guard span.count >= 3, let start = span[0] as? Int, let length = span[1] as? Int, span[2] as? String == "function",
+                  length == oldUnits.count, start + length <= units.count,
+                  Array(units[start..<(start + length)]) == oldUnits else { continue }
+            units.replaceSubrange(start..<(start + length), with: newUnits)
+            moves.append((at: start + length, by: delta))
+        }
+        guard !moves.isEmpty else { return }
+        func moved(_ position: Int) -> Int {
+            position + moves.reduce(0) { $0 + ($1.at <= position ? $1.by : 0) }
+        }
+        func place(_ row: [Any]) -> [Any] {
+            guard row.count >= 2, let start = row[0] as? Int, let length = row[1] as? Int else { return row }
+            var row = row
+            row[0] = moved(start)
+            row[1] = moved(start + length) - moved(start)
+            return row
+        }
+        function["c"] = String(decoding: units, as: UTF16.self)
+        function["c_spans"] = spans.map(place)
+        for key in ["c_sites", "c_fields", "c_unreachable"] {
+            if let rows = function[key] as? [[Any]] { function[key] = rows.map(place) }
         }
     }
 

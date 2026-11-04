@@ -20,7 +20,8 @@ CAS, and its project lock keeps the owner off the project.
 | the code between bodies the analysis never cut | `ghidra_gaps` — `verdict: body` (a data reference lands in it) to create, `tail` (nothing refers to it, the body before runs into it) to merge |
 | C, parameters, locals and their storage | `ghidra_function` |
 | instructions around an address | `ghidra_disassembly` (a large function in pages: `limit`, then `from` = `next`) |
-| who refers to an address | `ghidra_xrefs` |
+| who refers to an address | `ghidra_xrefs` with `to`; `held_by` lists instructions holding it with no reference |
+| what a function calls | `ghidra_xrefs` with `function`; an empty `calls` means it calls nothing |
 | where every module names a type | `ghidra_type_uses` — reads each module's last published analysis |
 | a shared type whose name turned out false | `ghidra_type` with `delete`, `shared` and a `reason`, then walk `ghidra_type_uses`: modules keep their copy, new ones do not get it, and a publish cannot bring it back |
 | data, strings | `ghidra_data`, `ghidra_strings` |

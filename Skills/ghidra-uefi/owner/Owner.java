@@ -602,7 +602,9 @@ public class Owner {
      * One name on a value wherever `functions` hold it as an immediate operand.
      * Only an immediate: a value by itself would also match a displacement or
      * an address. An operand that already has another name keeps it and is
-     * listed in `skipped`, since a value like 4 means different things.
+     * listed in `skipped`, since a value like 4 means different things. The
+     * value held another way, as an address, is listed in `not_immediate`: it
+     * is there, and it is not what this names.
      */
     private JsonObject setEquateInFunctions(JsonObject body) throws Exception {
         if (body.has("address")) throw new Failure(400, "give `functions` or `address`, not both");
@@ -624,16 +626,24 @@ public class Owner {
         boolean dryRun = body.has("dry_run") && body.get("dry_run").getAsBoolean();
         JsonArray applied = new JsonArray();
         JsonArray skipped = new JsonArray();
+        JsonArray notImmediate = new JsonArray();
         ghidra.program.model.symbol.EquateTable table = program.getEquateTable();
         for (Function function : functions) {
             InstructionIterator instructions = program.getListing().getInstructions(function.getBody(), true);
             while (instructions.hasNext()) {
                 Instruction instruction = instructions.next();
                 for (int index = 0; index < instruction.getNumOperands(); index++) {
-                    if (!isImmediate(instruction, index)) continue;
                     ghidra.program.model.scalar.Scalar scalar = instruction.getScalar(index);
                     if (scalar == null || (scalar.getUnsignedValue() != value && scalar.getSignedValue() != value)) continue;
                     Address at = instruction.getAddress();
+                    if (!isImmediate(instruction, index)) {
+                        JsonObject item = new JsonObject();
+                        item.addProperty("address", hex(at));
+                        item.addProperty("operand", index);
+                        item.addProperty("text", instruction.toString());
+                        notImmediate.add(item);
+                        continue;
+                    }
                     String held = null;
                     for (ghidra.program.model.symbol.Equate equate : table.getEquates(at, index)) {
                         if (!equate.getDisplayName().equals(name)) held = equate.getDisplayName();
@@ -666,6 +676,7 @@ public class Owner {
         if (dryRun) answer.addProperty("dry_run", true);
         answer.add("applied", applied);
         answer.add("skipped", skipped);
+        if (notImmediate.size() > 0) answer.add("not_immediate", notImmediate);
         return answer;
     }
 
@@ -909,6 +920,9 @@ public class Owner {
             program.getUsrPropertyManager().getStringPropertyMap(Harvest.SIGNATURE_REASON);
         String signatureReason = signatureReasons == null ? null : signatureReasons.getString(function.getEntryPoint());
         if (signatureReason != null) answer.addProperty("signature_reason", signatureReason);
+        StringPropertyMap nameReasons = program.getUsrPropertyManager().getStringPropertyMap(Harvest.REASON);
+        String nameReason = nameReasons == null ? null : nameReasons.getString(function.getEntryPoint());
+        if (nameReason != null) answer.addProperty("name_reason", nameReason);
         String plate = function.getComment();
         if (plate != null && !plate.isBlank()) answer.addProperty("plate", plate);
         answer.add("comments", commentsIn(function));
@@ -1352,18 +1366,159 @@ public class Owner {
     private JsonObject xrefs(Map<String, String> query) throws Failure {
         JsonArray list = new JsonArray();
         if (query.containsKey("to")) {
-            ReferenceIterator iterator = program.getReferenceManager().getReferencesTo(address(query.get("to")));
+            Address to = address(query.get("to"));
+            ReferenceIterator iterator = program.getReferenceManager().getReferencesTo(to);
             while (iterator.hasNext()) list.add(reference(iterator.next()));
+            JsonObject answer = identity();
+            answer.add("references", list);
+            answer.add("held_by", constantHolders(to));
+            return answer;
+        } else if (query.containsKey("function")) {
+            JsonObject answer = identity();
+            answer.add("calls", calls(functionAt(query.get("function"))));
+            return answer;
         } else if (query.containsKey("from")) {
             for (Reference reference : program.getReferenceManager().getReferencesFrom(address(query.get("from")))) {
                 if (reference.getToAddress().isMemoryAddress()) list.add(reference(reference));
             }
         } else {
-            throw new Failure(400, "xrefs needs to= or from=");
+            throw new Failure(400, "xrefs needs to=, from= or function=");
         }
         JsonObject answer = identity();
         answer.add("references", list);
         return answer;
+    }
+
+    /** Which instructions hold each address of the image as a constant, for the program as it was at `constantsAt`. */
+    private final java.util.Map<Long, java.util.List<Address>> constants = new java.util.HashMap<>();
+    private long constantsAt = -1;
+
+    /**
+     * The instructions that hold `to` as a constant and have no reference to
+     * it: `MOV EAX,imm` or `MOV [EBX],imm` carry none until something makes
+     * one. A small constant in an image based at zero is not taken for an
+     * address, as in `libraryOutside`.
+     */
+    private JsonArray constantHolders(Address to) {
+        if (constantsAt != program.getModificationNumber()) {
+            constants.clear();
+            constantsAt = program.getModificationNumber();
+            if (program.getImageBase().getOffset() >= 0x10000) {
+                InstructionIterator instructions = program.getListing().getInstructions(true);
+                while (instructions.hasNext()) {
+                    Instruction instruction = instructions.next();
+                    for (int operand = 0; operand < instruction.getNumOperands(); operand++) {
+                        for (Object part : instruction.getOpObjects(operand)) {
+                            if (!(part instanceof ghidra.program.model.scalar.Scalar scalar)) continue;
+                            long value = scalar.getUnsignedValue();
+                            Address held = imageAddress(value);
+                            if (held == null) continue;
+                            java.util.List<Address> holders = constants.computeIfAbsent(value, key -> new java.util.ArrayList<>());
+                            if (!holders.contains(instruction.getAddress())) holders.add(instruction.getAddress());
+                        }
+                    }
+                }
+            }
+        }
+        JsonArray list = new JsonArray();
+        for (Address at : constants.getOrDefault(to.getOffset(), java.util.List.of())) {
+            Instruction instruction = program.getListing().getInstructionAt(at);
+            if (instruction == null) continue;
+            boolean referred = false;
+            for (Reference reference : instruction.getReferencesFrom()) {
+                referred = referred || reference.getToAddress().equals(to);
+            }
+            if (referred) continue;
+            JsonObject item = new JsonObject();
+            item.addProperty("from", hex(at));
+            item.addProperty("text", instruction.toString());
+            Function holder = program.getFunctionManager().getFunctionContaining(at);
+            if (holder != null) item.addProperty("function", hex(holder.getEntryPoint()));
+            list.add(item);
+        }
+        return list;
+    }
+
+    /** The address `value` is, when it is one the image holds. */
+    private Address imageAddress(long value) {
+        try {
+            Address at = program.getImageBase().getNewAddress(value);
+            return program.getMemory().contains(at) ? at : null;
+        } catch (Exception error) {
+            return null;
+        }
+    }
+
+    /**
+     * Every call a function makes, in order, and every jump that leaves it, so
+     * that an empty list means no calls: `direct`, with its `target`; `indirect`,
+     * with the `target` where a reference or the register's `MOV` gives it
+     * (`held_at`), and without one where nothing here says where it goes.
+     */
+    private JsonArray calls(Function function) {
+        JsonArray list = new JsonArray();
+        InstructionIterator instructions = program.getListing().getInstructions(function.getBody(), true);
+        while (instructions.hasNext()) {
+            Instruction instruction = instructions.next();
+            ghidra.program.model.symbol.FlowType flow = instruction.getFlowType();
+            Address[] flows = instruction.getFlows();
+            boolean leaves = false;
+            for (Address to : flows) leaves = leaves || !function.getBody().contains(to);
+            boolean jump = flow.isJump();
+            if (!flow.isCall() && !(jump && (leaves || (flow.isComputed() && flows.length == 0)))) continue;
+            Address[] targets = flows.length == 0 ? new Address[] { null } : flows;
+            for (Address target : targets) {
+                if (jump && target != null && function.getBody().contains(target)) continue;
+                JsonObject item = new JsonObject();
+                item.addProperty("at", hex(instruction.getAddress()));
+                item.addProperty("text", instruction.toString());
+                item.addProperty("kind", flow.isComputed() ? "indirect" : "direct");
+                if (jump) item.addProperty("jump", true);
+                Address reached = target;
+                if (reached == null) {
+                    Instruction holder = constantInRegister(instruction, function);
+                    if (holder != null) {
+                        reached = imageAddress(((ghidra.program.model.scalar.Scalar) holder.getOpObjects(1)[0]).getUnsignedValue());
+                        if (reached != null) item.addProperty("held_at", hex(holder.getAddress()));
+                    }
+                }
+                if (reached != null) {
+                    item.addProperty("target", hex(reached));
+                    Function called = program.getFunctionManager().getFunctionAt(reached);
+                    if (called != null) item.addProperty("name", called.getName());
+                }
+                list.add(item);
+            }
+        }
+        return list;
+    }
+
+    /**
+     * The `MOV reg,imm` that gives a `CALL reg` or `JMP reg` its value, in the
+     * same straight run of instructions; nil when something else writes the
+     * register first, the run ends or nothing does.
+     */
+    private Instruction constantInRegister(Instruction call, Function function) {
+        Object[] operand = call.getNumOperands() == 1 ? call.getOpObjects(0) : new Object[0];
+        if (operand.length != 1 || !(operand[0] instanceof ghidra.program.model.lang.Register register)) return null;
+        if (ghidra.program.model.lang.OperandType.isDynamic(call.getOperandType(0))) return null;
+        Instruction current = call;
+        for (int step = 0; step < 16; step++) {
+            if (program.getReferenceManager().hasReferencesTo(current.getAddress())) return null;
+            Instruction before = program.getListing().getInstructionBefore(current.getAddress());
+            if (before == null || !function.getBody().contains(before.getAddress())
+                || !before.getFlowType().isFallthrough() || before.getFlowType().isCall()) return null;
+            for (Object written : before.getResultObjects()) {
+                if (!(written instanceof ghidra.program.model.lang.Register other)
+                    || other.getBaseRegister() != register.getBaseRegister()) continue;
+                boolean constant = before.getMnemonicString().equals("MOV") && before.getNumOperands() == 2
+                    && before.getOpObjects(1).length == 1
+                    && before.getOpObjects(1)[0] instanceof ghidra.program.model.scalar.Scalar;
+                return constant ? before : null;
+            }
+            current = before;
+        }
+        return null;
     }
 
     private JsonObject data(Map<String, String> query, boolean strings) throws Failure {
@@ -2998,7 +3153,11 @@ public class Owner {
     /** The function's signature, convention and parameter storage are the entry's already. */
     private static boolean sameSignature(Function function, JsonObject entry) {
         if (!function.getPrototypeString(false, false).equals(string(entry, "signature", null))) return false;
-        if (!function.getCallingConventionName().equals(string(entry, "calling_convention", ""))) return false;
+        // An entry recorded before a storage dropped the convention still names
+        // it: the storage below decides, and applying it again would change nothing.
+        boolean dropped = function.hasCustomVariableStorage()
+            && function.getCallingConventionName().equals(Function.DEFAULT_CALLING_CONVENTION_STRING);
+        if (!dropped && !function.getCallingConventionName().equals(string(entry, "calling_convention", ""))) return false;
         JsonArray params = entry.has("params") ? entry.getAsJsonArray("params") : new JsonArray();
         Parameter[] current = function.getParameters();
         if (params.size() != current.length) return false;
@@ -3374,11 +3533,22 @@ public class Owner {
             removeLibraryTags(function);
             StringPropertyMap marks = program.getUsrPropertyManager().getStringPropertyMap(LIBRARY_MARK);
             if (marks != null) marks.remove(function.getEntryPoint());
+            noLongerLibrary(Harvest.REASON, function.getEntryPoint());
+            noLongerLibrary(Harvest.SIGNATURE_REASON, function.getEntryPoint());
             list.add(answer);
         }
         JsonObject answer = identity();
         answer.add("items", list);
         return answer;
+    }
+
+    /** A reason that cites an entry says the function is no longer that entry's; a review's own stays as it is. */
+    private void noLongerLibrary(String property, Address at) throws Exception {
+        StringPropertyMap reasons = program.getUsrPropertyManager().getStringPropertyMap(property);
+        String reason = reasons == null ? null : reasons.getString(at);
+        if (reason != null && reason.startsWith("library registry entry ")) {
+            reasons.add(at, "no longer a library function: " + reason);
+        }
     }
 
     /** The review document harvested by the last publish. */
@@ -5057,12 +5227,33 @@ public class Owner {
             : result.getVariableStorage();
         ghidra.program.model.listing.ReturnParameterImpl returned =
             new ghidra.program.model.listing.ReturnParameterImpl(result.getDataType(), resultPlace, program);
+        // A convention that does not give this storage would print in the C
+        // against it; the default one prints nothing. "unknown" is no way out:
+        // the decompiler writes a warning into the C for it.
+        String convention = conventionGives(function.getCallingConventionName(), returned, parameters)
+            ? function.getCallingConventionName() : Function.DEFAULT_CALLING_CONVENTION_STRING;
         try {
-            function.updateFunction(function.getCallingConventionName(), returned, parameters,
+            function.updateFunction(convention, returned, parameters,
                 Function.FunctionUpdateType.CUSTOM_STORAGE, true, SourceType.USER_DEFINED);
         } catch (Exception error) {
             throw new Failure(400, "the storage does not fit: " + error.getMessage());
         }
+    }
+
+    /** Whether the named convention puts this return value and these parameters where they are. */
+    private boolean conventionGives(String name, ghidra.program.model.listing.ReturnParameterImpl returned,
+                                    java.util.List<ghidra.program.model.listing.Variable> parameters) {
+        ghidra.program.model.lang.PrototypeModel model = program.getCompilerSpec().getCallingConvention(name);
+        if (model == null) return false;
+        ghidra.program.model.data.DataType[] types = new ghidra.program.model.data.DataType[parameters.size() + 1];
+        types[0] = returned.getDataType();
+        for (int index = 0; index < parameters.size(); index++) types[index + 1] = parameters.get(index).getDataType();
+        ghidra.program.model.listing.VariableStorage[] places = model.getStorageLocations(program, types, false);
+        if (places.length != types.length || !places[0].toString().equals(returned.getVariableStorage().toString())) return false;
+        for (int index = 0; index < parameters.size(); index++) {
+            if (!places[index + 1].toString().equals(parameters.get(index).getVariableStorage().toString())) return false;
+        }
+        return true;
     }
 
     /** `EDX:4`, `Stack[0x4]:4`, `EDX:4,EAX:4` (high part first), or `void`. */

@@ -529,7 +529,7 @@ Reads:
 | `GET /v1/functions` | entries, names, sizes, signatures (paged) |
 | `GET /v1/function/{address}` | signature; parameters and locals with storage, first use and type; decompiled C |
 | `GET /v1/disassembly/{address}` | instructions with bytes and references |
-| `GET /v1/xrefs?to=/from=` | reference list |
+| `GET /v1/xrefs?to=/from=/function=` | reference list; `to` adds `held_by`, instructions holding the address with no reference; `function` answers `calls`, every call and every jump that leaves it |
 | `GET /v1/data`, `GET /v1/strings` | data items and strings |
 
 The lease (§7.3):
