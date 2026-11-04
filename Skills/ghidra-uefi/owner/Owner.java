@@ -172,6 +172,7 @@ public class Owner {
         if (file == null) throw new IllegalStateException("no program " + options.get("program") + " in the project");
         program = (Program) file.getDomainObject(this, true, false, TaskMonitor.DUMMY);
         decompiler = new DecompInterface();
+        decompiler.setOptions(ExportCode.decompileOptions(program));
         decompiler.openProgram(program);
         if (options.containsKey("types")) {
             archive = FileDataTypeManager.openFileArchive(new File(options.get("types")), false);
@@ -1097,6 +1098,7 @@ public class Owner {
     private boolean decompilesWithC(Function function) {
         ghidra.app.decompiler.DecompInterface probe = new ghidra.app.decompiler.DecompInterface();
         try {
+            probe.setOptions(ExportCode.decompileOptions(program));
             probe.toggleCCode(true);
             probe.toggleSyntaxTree(true);
             probe.openProgram(program);

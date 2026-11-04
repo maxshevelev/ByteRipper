@@ -53,6 +53,10 @@ what the agent talks to.
 - `uefi_tree` / `uefi_node` — the node's size, its file and section types, its
   place in the tree.
 
+A name here is the firmware's, as the panel shows it, not a review's: a file with
+no name of its own reads by its kind — the SEC core's as `Volume Top File` — and
+is found by its GUID. The name a review gave a module is in `ghidra_modules`.
+
 Do not guess offsets. The node id is the address of the thing in the tree, and
 `uefi_node_data` reads it even when it has no file address at all.
 

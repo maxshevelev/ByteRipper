@@ -137,6 +137,29 @@ final class LibraryRegistryTests: XCTestCase {
         XCTAssertEqual(try store.libraryHistory(id: id)?.versions.last?.reason, "this review is the right one")
     }
 
+    /// A module printing its C another way is no change of the review: the
+    /// entry keeps its version and its C until a review changes it.
+    func testTheFunctionsCAloneIsNoNewVersion() throws {
+        func printed(_ c: String) -> LibraryProposal {
+            var made = proposal("SetMem", plate: "p", base: 1)
+            var object = try! JSONSerialization.jsonObject(with: made.entry) as! [String: Any]
+            object["function"] = ["name": "SetMem", "c": c]
+            made.entry = try! JSONSerialization.data(withJSONObject: object, options: .sortedKeys)
+            return made
+        }
+        let module = SHA256Digest(data: Data("a".utf8))
+        var held = printed("if (Buffer == (void *)0x0) {}")
+        held.basedOn = nil
+        held.base = nil
+        let added = try store.putLibraryEntries(module: module, rev: 1, by: "agent", proposals: [held])
+        let id = try XCTUnwrap(added.added.first?.id)
+        let object = try XCTUnwrap(try store.libraryIndex().entries[id]?.entry)
+        let again = try store.putLibraryEntries(module: module, rev: 2, by: "agent", proposals: [printed("if (Buffer == NULL) {}")])
+        XCTAssertEqual(again.unchanged.map(\.version), [1])
+        XCTAssertTrue(again.updated.isEmpty)
+        XCTAssertEqual(try store.libraryIndex().entries[id]?.entry, object, "the entry keeps the C it held")
+    }
+
     /// An entry that holds no function gives nothing to compare with: no reason.
     func testAVersionOfAnEntryWithNoFunctionHasNoReason() throws {
         let module = SHA256Digest(data: Data("a".utf8))

@@ -323,6 +323,40 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         try lines.joined(separator: "\n").write(toFile: dump, atomically: true, encoding: .utf8)
     }
 
+    /// A pointer that is zero reads `NULL` in the C of a read and of a publish,
+    /// which agree, and the artifact still calls it a constant. A zero that is
+    /// no pointer stays a number.
+    func testAPointerThatIsZeroReadsNull() async throws {
+        try await open(try image())
+        let exported = try await host.preview(module, "/v1/publish?dry_run=1", body: Data())
+        let artifact = try XCTUnwrap(JSONSerialization.jsonObject(with: exported) as? [String: Any])
+        let functions = try XCTUnwrap(artifact["functions"] as? [[String: Any]])
+        let zeroPointer = try NSRegularExpression(pattern: #"\*\)0x0\b"#)
+        let number = try NSRegularExpression(pattern: #"[!=]= 0\b"#)
+        var nulls = 0
+        var numbers = 0
+        for function in functions {
+            let text = function["c"] as? String ?? ""
+            let whole = NSRange(text.startIndex..., in: text)
+            XCTAssertEqual(zeroPointer.numberOfMatches(in: text, range: whole), 0, text)
+            let units = Array(text.utf16)
+            for span in function["c_spans"] as? [[Any]] ?? [] {
+                guard let start = span[0] as? Int, let length = span[1] as? Int, start + length <= units.count,
+                      String(decoding: units[start..<(start + length)], as: UTF16.self) == "NULL" else { continue }
+                XCTAssertEqual(span[2] as? String, "constant", "\(function["entry"] ?? "")")
+                nulls += 1
+            }
+            numbers += number.numberOfMatches(in: text, range: whole)
+        }
+        XCTAssertGreaterThan(nulls, 0, "no zero pointer in the whole module")
+        XCTAssertGreaterThan(numbers, 0, "a zero that is no pointer must stay a number")
+        let reading = try XCTUnwrap(functions.first { ($0["c"] as? String)?.contains("NULL") == true })
+        let entry = try XCTUnwrap(reading["entry"] as? String)
+        let live = try await c(entry)
+        XCTAssertTrue(live.contains("NULL"), live)
+        XCTAssertEqual(zeroPointer.numberOfMatches(in: live, range: NSRange(live.startIndex..., in: live)), 0, live)
+    }
+
     // MARK: - Reproductions on copies of kept projects
 
     private func openCopy(of name: String) async throws {

@@ -206,6 +206,7 @@ public class ExportCode extends GhidraScript {
 
         // Functions, in address order, with their instructions and decompiled C.
         DecompInterface decompiler = new DecompInterface();
+        decompiler.setOptions(decompileOptions(currentProgram));
         decompiler.toggleCCode(true);
         decompiler.toggleSyntaxTree(true);
         decompiler.openProgram(currentProgram);
@@ -374,6 +375,23 @@ public class ExportCode extends GhidraScript {
         println("wrote " + functions.size() + " functions to " + out);
     }
 
+    /**
+     * What every decompiler that prints C here is set to: the program's own
+     * settings, and a pointer that is zero printed as `NULL`. The owner's
+     * read calls and the artifact go through this one place, so the C of a
+     * review and the C it publishes do not differ. An options object carries
+     * defaults of its own where the decompiler keeps others: read-only memory
+     * propagated as a constant is one, and it would print a global's value in
+     * place of its name, so it stays off as it was.
+     */
+    static ghidra.app.decompiler.DecompileOptions decompileOptions(ghidra.program.model.listing.Program program) {
+        ghidra.app.decompiler.DecompileOptions options = new ghidra.app.decompiler.DecompileOptions();
+        options.grabFromProgram(program);
+        options.setNullToken(true);
+        options.setRespectReadOnly(false);
+        return options;
+    }
+
     // The decompiled C, written from the decompiler's tokens so that every
     // token's place in the text is known, and the spans a reader colours and
     // follows: a called function with its entry, a global with its address,
@@ -464,7 +482,11 @@ public class ExportCode extends GhidraScript {
                     case ClangToken.TYPE_COLOR: kind = "type"; break;
                     case ClangToken.CONST_COLOR: kind = "constant"; break;
                     case ClangToken.PARAMETER_COLOR: kind = "parameter"; break;
-                    case ClangToken.VARIABLE_COLOR: kind = "local"; break;
+                    case ClangToken.VARIABLE_COLOR:
+                        // The decompiler prints a zero pointer in the colour of a
+                        // variable. It is the constant it was before it read `NULL`.
+                        kind = token.getVarnode() != null && token.getVarnode().isConstant() ? "constant" : "local";
+                        break;
                     case ClangToken.FUNCTION_COLOR:
                         // A call the processor model makes into a named p-code
                         // operation — x86's SIDT, SGDT — has no function behind
