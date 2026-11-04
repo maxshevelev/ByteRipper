@@ -1350,7 +1350,8 @@ public enum GhidraTools {
         AgentTool(
             name: "ghidra_done",
             title: "End the review session",
-            description: "Publishes what this session changed and gives the module's write lease back, so "
+            description: "Publishes what the project holds and the store has not got, this session's changes or "
+                + "an earlier session's, and gives the module's write lease back, so "
                 + "another session or a person can write. With nothing changed it publishes nothing. The "
                 + "module's owner stays up until it has been idle for a while, so a read or the next open "
                 + "costs no start; a later write takes a new lease.",

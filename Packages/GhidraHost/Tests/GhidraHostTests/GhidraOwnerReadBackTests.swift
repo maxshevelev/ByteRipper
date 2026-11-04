@@ -536,6 +536,144 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         XCTAssertEqual(try published()?.rev, (before?.rev ?? 0) + 1)
     }
 
+    /// A run of refused first writes pays for one export, and what follows it is judged as ever: a real write
+    /// publishes, and a baseline older than that write does not make the next session's no-op look like a change.
+    func testRefusedWritesShareABaselineAndARealWriteStillPublishes() async throws {
+        try await openCopy(of: "FirmwareRevisionSyncPei")
+        let before = try published()
+        let taken = await host.leaseBaselinesTaken
+        for _ in 0..<3 {
+            do { try await post("/v1/rename/function", ["address": "0x1", "name": "ProbeName"]) } catch {}
+        }
+        let afterRefusals = await host.leaseBaselinesTaken
+        XCTAssertEqual(afterRefusals, taken + 1)
+
+        try await post("/v1/set/comment", ["address": "0x9A11A49", "kind": "eol", "text": "probe"])
+        let afterWrite = await host.leaseBaselinesTaken
+        XCTAssertEqual(afterWrite, taken + 1)
+        let done = try await host.release(module, by: "agent")
+        XCTAssertNotNil(done)
+        XCTAssertEqual(try published()?.rev, (before?.rev ?? 0) + 1)
+
+        do { try await post("/v1/rename/function", ["address": "0x1", "name": "ProbeName"]) } catch {}
+        let afterPublish = await host.leaseBaselinesTaken
+        XCTAssertEqual(afterPublish, taken + 2)
+        try await post("/v1/set/comment", ["address": "0x9A11A49", "kind": "eol", "text": "probe"])
+        let noOp = try await host.release(module, by: "agent")
+        XCTAssertNil(noOp)
+        XCTAssertEqual(try published()?.rev, (before?.rev ?? 0) + 1)
+    }
+
+    /// A write the store has not got is what a done is for, whatever the session that finds it does first: the
+    /// owner stopped between them, and neither a refusal nor a no-op may make it look like nothing was written.
+    func testADoneInALaterSessionPublishesAnEarlierWrite() async throws {
+        try await openCopy(of: "FirmwareRevisionSyncPei")
+        let before = try published()
+        try await post("/v1/set/comment", ["address": "0x9A11A49", "kind": "eol", "text": "probe"])
+        await host.stop(module)
+
+        do { try await post("/v1/rename/function", ["address": "0x1", "name": "ProbeName"]) } catch {}
+        let refused = try await host.release(module, by: "agent")
+        XCTAssertNotNil(refused)
+        XCTAssertEqual(try published()?.rev, (before?.rev ?? 0) + 1)
+
+        try await post("/v1/set/comment", ["address": "0x9A11A49", "kind": "eol", "text": "probe two"])
+        await host.stop(module)
+        try await post("/v1/set/comment", ["address": "0x9A11A49", "kind": "eol", "text": "probe two"])
+        let noOp = try await host.release(module, by: "agent")
+        XCTAssertNotNil(noOp)
+        XCTAssertEqual(try published()?.rev, (before?.rev ?? 0) + 2)
+    }
+
+    /// A publish moves the count, so a baseline from before it says nothing about the next session's no-op.
+    func testABaselineFromBeforeAPublishIsNotKept() async throws {
+        try await openCopy(of: "FirmwareRevisionSyncPei")
+        let before = try published()
+        try await post("/v1/set/comment", ["address": "0x9A11A49", "kind": "eol", "text": "probe"])
+        _ = try await host.publish(module, by: "agent")
+        await host.stop(module)
+        try await post("/v1/set/comment", ["address": "0x9A11A49", "kind": "eol", "text": "probe"])
+        let noOp = try await host.release(module, by: "agent")
+        XCTAssertNil(noOp)
+        XCTAssertEqual(try published()?.rev, (before?.rev ?? 0) + 1)
+    }
+
+    /// A real write landing while a done compares a no-op is published, not recorded as nothing.
+    func testAWriteDuringADonesComparisonIsPublished() async throws {
+        try await openCopy(of: "FirmwareRevisionSyncPei")
+        let before = try published()
+        let function = try await read("/v1/function/0x9A11A49")
+        let plate = try XCTUnwrap(function["plate"] as? String)
+        try await post("/v1/set/comment", ["address": "0x9A11A49", "kind": "plate", "text": plate])
+        await landWrite(at: .compared)
+        let done = try await host.release(module, by: "agent")
+        XCTAssertNotNil(done)
+        XCTAssertEqual(try published()?.rev, (before?.rev ?? 0) + 1)
+    }
+
+    /// One landing just after a done gave the lease back holds its own lease, and the next done publishes it.
+    func testAWriteAfterADoneGaveTheLeaseBackIsPublishedByTheNext() async throws {
+        try await openCopy(of: "FirmwareRevisionSyncPei")
+        let before = try published()
+        let function = try await read("/v1/function/0x9A11A49")
+        let plate = try XCTUnwrap(function["plate"] as? String)
+        try await post("/v1/set/comment", ["address": "0x9A11A49", "kind": "plate", "text": plate])
+        await landWrite(at: .givenBack)
+        let first = try await host.release(module, by: "agent")
+        XCTAssertNil(first)
+        await host.setReleaseStep(nil)
+        let second = try await host.release(module, by: "agent")
+        XCTAssertNotNil(second)
+        XCTAssertEqual(try published()?.rev, (before?.rev ?? 0) + 1)
+    }
+
+    private func landWrite(at wanted: GhidraHost.ReleaseStep) async {
+        let (host, module) = (host!, module!)
+        let body = try! JSONSerialization.data(withJSONObject: ["address": "0x9A11A49", "kind": "eol", "text": "landed"])
+        await host.setReleaseStep { step in
+            guard step == wanted else { return }
+            await host.setReleaseStep(nil)
+            _ = try? await host.write(module, "/v1/set/comment", body: body)
+        }
+    }
+
+    private func restartHost() async {
+        let (configuration, writer) = (await host.configuration, await host.writer)
+        host = GhidraHost(configuration: configuration, writer: writer)
+    }
+
+    /// A restarted server holds no lease, and a done with no new write still publishes what the project holds.
+    func testADoneAfterARestartPublishesAnEarlierWrite() async throws {
+        try await openCopy(of: "FirmwareRevisionSyncPei")
+        let before = try published()
+        try await post("/v1/set/comment", ["address": "0x9A11A49", "kind": "eol", "text": "probe"])
+        await restartHost()
+        let done = try await host.release(module, by: "agent")
+        XCTAssertNotNil(done)
+        XCTAssertEqual(try published()?.rev, (before?.rev ?? 0) + 1)
+        let again = try await host.release(module, by: "agent")
+        XCTAssertNil(again)
+    }
+
+    /// The same with the owner gone as well: it starts to publish, and only for that.
+    func testADoneWithNoOwnerPublishesAnEarlierWriteAndStartsNoneForNothing() async throws {
+        try await openCopy(of: "FirmwareRevisionSyncPei")
+        let before = try published()
+        try await post("/v1/set/comment", ["address": "0x9A11A49", "kind": "eol", "text": "probe"])
+        await host.stop(module)
+        await restartHost()
+        let done = try await host.release(module, by: "agent")
+        XCTAssertNotNil(done)
+        XCTAssertEqual(try published()?.rev, (before?.rev ?? 0) + 1)
+
+        await host.stop(module)
+        let owner = await host.project(module).ownerURL
+        XCTAssertFalse(FileManager.default.fileExists(atPath: owner.path))
+        let nothing = try await host.release(module, by: "agent")
+        XCTAssertNil(nothing)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: owner.path))
+    }
+
     // MARK: - The patched language
 
     /// `GHIDRA_PATCHED_HOME` names a copy from Scripts/make-patched-ghidra.sh.

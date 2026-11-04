@@ -135,13 +135,25 @@ public actor GhidraHost {
     /// What a publish would store when a module's lease was taken, for a done to
     /// compare: a write can count and change nothing, as a signature written
     /// again does, and a new exporter's artifact is no reason for a revision.
-    private var leaseBaselines: [SHA256Digest: LeaseBaseline] = [:]
+    /// It holds while the owner's count of changes stands where it was, so a run
+    /// of refused writes, each giving its lease back, pays for one export.
+    private var leaseBaselines: [SHA256Digest: (writes: Int?, content: LeaseBaseline)] = [:]
+    /// How many exports a baseline has cost, for the tests.
+    private(set) var leaseBaselinesTaken = 0
 
     private struct LeaseBaseline: Equatable {
         var artifact: SHA256Digest
         var review: SHA256Digest
         var description: SHA256Digest
     }
+    /// Writes begun and writes still running, per module: a done's answers come
+    /// over several awaits, and a write can land between them.
+    private var writesBegun: [SHA256Digest: Int] = [:]
+    private var writesRunning: [SHA256Digest: Int] = [:]
+    /// Called at a done's two windows, for the tests that land a write in them.
+    private var releaseStep: (@Sendable (ReleaseStep) async -> Void)?
+    enum ReleaseStep { case compared, givenBack }
+    func setReleaseStep(_ step: (@Sendable (ReleaseStep) async -> Void)?) { releaseStep = step }
     private var starting: [SHA256Digest: Task<OwnerRecord, Error>] = [:]
 
     public init(configuration: Configuration = Configuration(), writer: AnalysisWriter) {
@@ -243,10 +255,13 @@ public actor GhidraHost {
 
     /// A write call of the bridge, under the host's lease of the module.
     public func write(_ module: SHA256Digest, _ path: String, body: Data) async throws -> Data {
+        writesBegun[module, default: 0] += 1
+        writesRunning[module, default: 0] += 1
+        defer { writesRunning[module, default: 1] -= 1 }
         let project = self.project(module)
         let record = try await owner(of: module)
         let held = leases[module] != nil
-        if !held { leaseBaselines[module] = await leaseBaseline(record) }
+        if !held { await keepLeaseBaseline(module, record) }
         var token = try await lease(module, record)
         let answer: Data
         do {
@@ -283,6 +298,49 @@ public actor GhidraHost {
         guard let data = try? await Self.call(record.port, "GET", "/v1/hello", timeout: 10).data,
               let hello = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return false }
         return Self.holdsUnpublishedWrites(hello: hello, published: try? project.state().published) == false
+    }
+
+    private func ownerWrites(_ record: OwnerRecord) async -> Int? {
+        guard let data = try? await Self.call(record.port, "GET", "/v1/hello", timeout: 10).data,
+              let hello = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return hello["writes"] as? Int
+    }
+
+    /// Writes a done found to have changed nothing are not the store's to get:
+    /// the next session must not take them for work still unpublished.
+    private func recordNoChange(_ project: GhidraProject, record writes: Int?) {
+        guard let writes, var state = try? project.state(), state.published != nil else { return }
+        state.published?.writes = writes
+        try? project.write(state)
+    }
+
+    /// The one kept stands while nothing has been counted since it was taken. A
+    /// project already holding writes the store has not got takes none: they are
+    /// what a done is there to publish, and comparing against them would hide them.
+    private func keepLeaseBaseline(_ module: SHA256Digest, _ record: OwnerRecord) async {
+        let data = try? await Self.call(record.port, "GET", "/v1/hello", timeout: 10).data
+        let hello = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+        if let hello, Self.holdsUnpublishedWrites(hello: hello, published: try? project(module).state().published) != false {
+            leaseBaselines[module] = nil
+            return
+        }
+        let writes = hello?["writes"] as? Int
+        if let writes, leaseBaselines[module]?.writes == writes { return }
+        leaseBaselinesTaken += 1
+        leaseBaselines[module] = await leaseBaseline(record).map { (writes, $0) }
+    }
+
+    /// Whether the project holds writes the store has not got, asked of its owner
+    /// or, with none up, of the count it left behind; no owner is started to ask.
+    private func holdsUnpublishedWrites(_ module: SHA256Digest) async -> Bool {
+        let project = self.project(module)
+        guard let state = try? project.state() else { return false }
+        if let record = await runningOwner(project) {
+            return await !holdsNoWrites(project, record)
+        }
+        guard let text = try? String(contentsOf: project.folder.appendingPathComponent("writes"), encoding: .utf8),
+              let writes = Int(text.trimmingCharacters(in: .whitespacesAndNewlines)) else { return false }
+        return Self.holdsUnpublishedWrites(hello: ["writes": writes], published: state.published) == true
     }
 
     /// nil when the owner does not answer: a done then publishes as it would.
@@ -654,20 +712,36 @@ public actor GhidraHost {
     public func release(_ module: SHA256Digest, by: String?) async throws -> Publication? {
         guard let token = leases[module], let record = await runningOwner(project(module)) else {
             leases[module] = nil
-            return nil
+            // No lease here, as after a restart of this server: a done still means
+            // the store gets what the project holds and it has not got.
+            guard await holdsUnpublishedWrites(module) else { return nil }
+            let publication = try await publish(module, by: by)
+            leaseBaselines[module] = nil
+            return publication
         }
-        var unchanged = await holdsNoWrites(project(module), record)
-        if !unchanged, let baseline = leaseBaselines[module], let now = await leaseBaseline(record) {
+        let begun = writesBegun[module, default: 0]
+        // A write that overlaps the comparison may not be in what it compared:
+        // an extra revision costs little, a lost publish does not.
+        func quiet() -> Bool { writesRunning[module, default: 0] == 0 && writesBegun[module, default: 0] == begun }
+        var unchanged = quiet()
+        if unchanged { unchanged = await holdsNoWrites(project(module), record) }
+        if !unchanged, quiet(), let baseline = leaseBaselines[module]?.content, let now = await leaseBaseline(record) {
             unchanged = now == baseline
         }
-        if unchanged {
+        await releaseStep?(.compared)
+        if unchanged, quiet() {
             leases[module] = nil
             leaseBaselines[module] = nil
             _ = try? await Self.call(record.port, "DELETE", "/v1/lease", lease: token)
+            await releaseStep?(.givenBack)
+            // After the lease: giving it back saves, and the count moves with that.
+            let writes = await ownerWrites(record)
+            if quiet() { recordNoChange(project(module), record: writes) }
             return nil
         }
         let publication = try await publish(module, by: by)
         leases[module] = nil
+        leaseBaselines[module] = nil
         _ = try? await Self.call(record.port, "DELETE", "/v1/lease", lease: token)
         return publication
     }

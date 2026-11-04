@@ -172,6 +172,9 @@ Names alone do not get there. Every review applies these rules:
    end-of-line comment what is kept below the base (in PEI, the PEI Services
    pointer at base − 4). A local typed as an array of words keeps printing pieces
    (`Idtr[0]._2_2_`): retype it.
+   Until a module's next publish, its live C differs from its stored C on every
+   function with such an instruction: `ghidra_function` prints the two reads,
+   `code_query` the stock form. That is expected, not drift.
    Likewise
    a record that arrives as `void *` from a lookup becomes its structure, and
    `*(int *)(FvRecord + 4)` becomes `FvRecord->VolumePpi`. A field that is a
