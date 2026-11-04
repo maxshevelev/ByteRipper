@@ -141,19 +141,26 @@ public final class CodeReadings {
                 routine as one module published it, for every module whose function has the same body. \
                 Without `id`: the entries — `id`, `name`, `kind`, `version`, where the current version came \
                 from (`source`: module, address, revision) and how many bodies it covers (`variants`) — \
-                narrowed by `search` (a part of the name) and `kind`, sorted by name. With `id`: that entry, \
-                its `review` (signature, parameters and locals by storage, plate, step comments by offset \
-                from the entry) and its `history` of versions, each with the module that published it and, \
-                for a version taken over another module's, the reason. A publish offers the registry every \
-                function tagged `library.<kind>` whose review meets the bar of a finished function. Beside \
-                the entries: `taken_out`, the bodies given back to their modules and why, readable by their \
-                `id`; `sources`, the citations by body; `read_through`, whether readers see entries.
+                narrowed by `search` (a part of the name) and `kind`, sorted by name. `show` lists instead \
+                `taken_out`, the bodies given back to their modules and why, or `sources`, the citations by \
+                body, narrowed the same way. Every list is paged by `limit` and `after`, and every answer \
+                says `total`, `taken_out_total`, `sources_total` and `read_through`, whether readers see \
+                entries. With `id`: that entry, or a taken-out one, its `review` (signature, parameters and \
+                locals by storage, plate, step comments by offset from the entry) and its `history` of \
+                versions, each with the module that published it and, for a version taken over another \
+                module's, the reason. A recorded function comes with its C but without `instructions`, \
+                `c_spans` and `c_fields`; `function_parts` says how large each is, and `part` reads one, \
+                paged. A publish offers the registry every function tagged `library.<kind>` whose review \
+                meets the bar of a finished function.
                 """,
             inputSchema: AgentSchema.object([
                 "id": AgentSchema.string("An entry's id, as the list gives it, for the entry itself."),
                 "search": AgentSchema.string("Only entries whose name holds this text, any case."),
                 "kind": AgentSchema.choice(["edk2", "amd", "intel"], "Only entries of this kind."),
-                "limit": AgentSchema.limit(default: 200, maximum: 1000)
+                "show": AgentSchema.choice(["entries", "taken_out", "sources"], "Which list. Default: entries."),
+                "part": AgentSchema.choice(LibraryEntryParts.names, "With `id`: one part of the recorded function."),
+                "limit": AgentSchema.limit(default: 200, maximum: 1000),
+                "after": AgentSchema.string("The `next` of the page before.")
             ])
         ) { call in
             .json(try await self.library(call.arguments))
@@ -166,6 +173,12 @@ public final class CodeReadings {
         let search = try arguments.optionalString("search")?.lowercased()
         let kind = try arguments.optionalString("kind")
         let limit = try arguments.limit(default: 200, maximum: 1000)
+        let show = try arguments.choice("show", from: ["entries", "taken_out", "sources"], default: "entries")
+        let part = try arguments.optionalString("part")
+        if let part, !LibraryEntryParts.names.contains(part) {
+            throw AgentToolError("`part` is one of \(LibraryEntryParts.names.joined(separator: ", ")).")
+        }
+        if part != nil, id == nil { throw AgentToolError("`part` reads one entry: give its `id`.") }
         return try await Task.detached(priority: .userInitiated) { () throws -> JSONValue in
             guard let store = try? ContentStore(root: root, create: false) else {
                 return .object(["entries": .array([]), "total": .int(0)])
@@ -187,26 +200,64 @@ public final class CodeReadings {
                          "reason": .string(out.reason), "by": out.by.map(JSONValue.string) ?? .null,
                          "at": .string(out.at)])
             }
+            func history(_ id: String) throws -> JSONValue? {
+                // A mirror copies the index only: the history is the server's.
+                try store.libraryHistory(id: id).map { history in
+                    .array(history.versions.map { version in
+                        .object(["version": .int(Int64(version.version)), "source": source(version.source),
+                                 "reason": version.reason.map(JSONValue.string) ?? .null,
+                                 "recorded_at": .string(version.recordedAt)])
+                    })
+                }
+            }
+            /// One page of a part of the recorded function.
+            func page(of part: String, id: String, version: Int, review: SHA256Digest) throws -> JSONValue {
+                let data = try store.object(review)
+                guard let text = LibraryEntryParts.part(part, of: data),
+                      case .array(let items) = try JSONDecoder().decode(JSONValue.self, from: text) else {
+                    throw AgentToolError("The entry \(id) has no `\(part)`: no function is recorded in it.")
+                }
+                let page = try AgentPage(arguments, fingerprint: AgentPage.fingerprint([id, version, part]),
+                                         changed: "The entry changed since that page; ask again without `after`.")
+                return try page.answer(["id": .string(id), "version": .int(Int64(version)),
+                                        "part": .string(part), "total": .int(Int64(items.count))],
+                                       key: "items", items: Array(items.dropFirst(page.first).prefix(limit)),
+                                       total: items.count, bound: arguments.answerBound)
+            }
+            /// The review for an entry's answer, and what was left out of it.
+            func put(review digest: SHA256Digest, in answer: inout [String: JSONValue]) {
+                guard let data = try? store.object(digest) else { return }
+                let (lighter, parts) = LibraryEntryParts.lighter(data)
+                if let review = try? JSONDecoder().decode(JSONValue.self, from: lighter) {
+                    answer["review"] = review
+                }
+                if !parts.isEmpty {
+                    answer["function_parts"] = .object(parts.mapValues {
+                        .object(["items": .int(Int64($0.items)), "bytes": .int(Int64($0.bytes))])
+                    })
+                }
+            }
             let allTakenOut = (index.takenOut ?? [:]).sorted { $0.key < $1.key }
             if let id, index.entries[id] == nil {
                 let bodies = allTakenOut.filter { $0.value.id == id }
                 guard let last = bodies.first?.value else {
                     throw AgentToolError("The registry has no entry \(id): `library_registry` without `id` lists them.")
                 }
+                if let part { return try page(of: part, id: id, version: last.version, review: last.entry) }
                 var answer: [String: JSONValue] = [
-                    "id": .string(id), "name": .string(last.name),
+                    "id": .string(id), "name": .string(last.name), "kind": .string(last.kind),
+                    "version": .int(Int64(last.version)),
                     "taken_out": .array(bodies.map { takenOut($0.key, $0.value) })
                 ]
-                if let data = try? store.object(last.entry),
-                   let review = try? JSONDecoder().decode(JSONValue.self, from: data) {
-                    answer["review"] = review
-                }
+                put(review: last.entry, in: &answer)
+                answer["history"] = try history(id)
                 return .object(answer)
             }
             if let id {
                 guard let entry = index.entries[id] else {
                     throw AgentToolError("The registry has no entry \(id): `library_registry` without `id` lists them.")
                 }
+                if let part { return try page(of: part, id: id, version: entry.version, review: entry.entry) }
                 var answer: [String: JSONValue] = [:]
                 answer["id"] = .string(id)
                 answer["name"] = .string(entry.name)
@@ -217,35 +268,47 @@ public final class CodeReadings {
                     .object(["body": .string($0.body.key), "module": .string($0.module.hex),
                              "source": index.sources?[$0.body.key].map(citation) ?? .null])
                 })
-                if let data = try? store.object(entry.entry),
-                   let review = try? JSONDecoder().decode(JSONValue.self, from: data) {
-                    answer["review"] = review
-                }
-                // A mirror copies the index only: the history is the server's.
-                if let history = try store.libraryHistory(id: id) {
-                    answer["history"] = .array(history.versions.map { version in
-                        .object(["version": .int(Int64(version.version)), "source": source(version.source),
-                                 "reason": version.reason.map(JSONValue.string) ?? .null,
-                                 "recorded_at": .string(version.recordedAt)])
-                    })
-                }
+                put(review: entry.entry, in: &answer)
+                answer["history"] = try history(id)
                 return .object(answer)
             }
+            func matches(name: String, kind held: String) -> Bool {
+                (kind == nil || held == kind) && (search == nil || name.lowercased().contains(search!))
+            }
             let matching = index.entries
-                .filter { kind == nil || $0.value.kind == kind }
-                .filter { search == nil || $0.value.name.lowercased().contains(search!) }
+                .filter { matches(name: $0.value.name, kind: $0.value.kind) }
                 .sorted { ($0.value.name, $0.key) < ($1.value.name, $1.key) }
-            return .object([
-                "taken_out": .array(allTakenOut.map { takenOut($0.key, $0.value) }),
-                "sources": .object((index.sources ?? [:]).mapValues(citation)),
-                "read_through": .bool(index.readThrough == true),
-                "total": .int(Int64(matching.count)),
-                "entries": .array(matching.prefix(limit).map { id, entry in
+            let takenOutRows = allTakenOut.filter { matches(name: $0.value.name, kind: $0.value.kind) }
+            // Narrowed, a citation goes with the body it is for; one for a body
+            // the registry has not met yet has no name to match.
+            let narrowed = search != nil || kind != nil
+            let bodies = Set(matching.flatMap { $0.value.variants.map(\.body.key) } + takenOutRows.map(\.key))
+            let citationRows = (index.sources ?? [:]).sorted { $0.key < $1.key }
+                .filter { !narrowed || bodies.contains($0.key) }
+            let rows: [JSONValue]
+            switch show {
+            case "taken_out": rows = takenOutRows.map { takenOut($0.key, $0.value) }
+            case "sources":
+                rows = citationRows.map { body, cited in
+                    guard case .object(var row) = citation(cited) else { return .null }
+                    row["body"] = .string(body)
+                    return .object(row)
+                }
+            default:
+                rows = matching.map { id, entry in
                     .object(["id": .string(id), "name": .string(entry.name), "kind": .string(entry.kind),
                              "version": .int(Int64(entry.version)), "source": source(entry.source),
                              "variants": .int(Int64(entry.variants.count))])
-                })
-            ])
+                }
+            }
+            let page = try AgentPage(arguments, fingerprint: AgentPage.fingerprint([show, search, kind, rows.count]),
+                                     changed: "The registry changed since that page, or the question did; ask again without `after`.")
+            return try page.answer(["read_through": .bool(index.readThrough == true),
+                                    "total": .int(Int64(matching.count)),
+                                    "taken_out_total": .int(Int64(takenOutRows.count)),
+                                    "sources_total": .int(Int64(citationRows.count))],
+                                   key: show, items: Array(rows.dropFirst(page.first).prefix(limit)),
+                                   total: rows.count, bound: arguments.answerBound)
         }.value
     }
 

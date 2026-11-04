@@ -204,7 +204,8 @@ public enum GhidraTools {
                     each difference listed (`value`, `entry_value`, `assert`): other functions unless a \
                     review says why the values make no difference. `declined`: entries a review refused \
                     for the function. With `id`: one entry — its index row, its review, its history and \
-                    `gaps`, what its review lacks, read from the review itself. A match's `gaps` are the \
+                    `gaps`, what its review lacks, read from the review itself; `library_registry` reads the \
+                    `function_parts` left out of the review. A match's `gaps` are the \
                     function's own missing parts as the last published analysis recorded them, and \
                     `entry_gaps` the entry's, so a decision to apply, replace or take can be made without \
                     opening either — and the two are read in the same words.

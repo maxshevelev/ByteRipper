@@ -303,9 +303,13 @@ extension GhidraHost {
                 throw GhidraHostError(.refused, "the registry holds no entry \(id)", status: 404)
             }
             let object = try await writer.readObject(held.entry)
-            let review = try JSONSerialization.jsonObject(with: object)
+            let (lighter, parts) = LibraryEntryParts.lighter(object)
+            let review = try JSONSerialization.jsonObject(with: lighter)
             var answer: [String: Any] = ["id": id, "index": try Self.plain(held), "review": review,
                                          "gaps": LibraryEntryReview.gaps(of: object)]
+            if !parts.isEmpty {
+                answer["function_parts"] = parts.mapValues { ["items": $0.items, "bytes": $0.bytes] }
+            }
             if let history = try await writer.readLibraryHistory(id: id) { answer["history"] = try Self.plain(history) }
             return try JSONSerialization.data(withJSONObject: answer, options: [.sortedKeys])
         case .status:

@@ -856,10 +856,14 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
-    "description" : "The shared registry of library functions: one entry per function body (its Function ID hashes), holding the review of an EDK2, AGESA (`amd`) or Intel FSP/RC (`intel`) library routine as one module published it, for every module whose function has the same body. Without `id`: the entries — `id`, `name`, `kind`, `version`, where the current version came from (`source`: module, address, revision) and how many bodies it covers (`variants`) — narrowed by `search` (a part of the name) and `kind`, sorted by name. With `id`: that entry, its `review` (signature, parameters and locals by storage, plate, step comments by offset from the entry) and its `history` of versions, each with the module that published it and, for a version taken over another module's, the reason. A publish offers the registry every function tagged `library.<kind>` whose review meets the bar of a finished function. Beside the entries: `taken_out`, the bodies given back to their modules and why, readable by their `id`; `sources`, the citations by body; `read_through`, whether readers see entries.",
+    "description" : "The shared registry of library functions: one entry per function body (its Function ID hashes), holding the review of an EDK2, AGESA (`amd`) or Intel FSP/RC (`intel`) library routine as one module published it, for every module whose function has the same body. Without `id`: the entries — `id`, `name`, `kind`, `version`, where the current version came from (`source`: module, address, revision) and how many bodies it covers (`variants`) — narrowed by `search` (a part of the name) and `kind`, sorted by name. `show` lists instead `taken_out`, the bodies given back to their modules and why, or `sources`, the citations by body, narrowed the same way. Every list is paged by `limit` and `after`, and every answer says `total`, `taken_out_total`, `sources_total` and `read_through`, whether readers see entries. With `id`: that entry, or a taken-out one, its `review` (signature, parameters and locals by storage, plate, step comments by offset from the entry) and its `history` of versions, each with the module that published it and, for a version taken over another module's, the reason. A recorded function comes with its C but without `instructions`, `c_spans` and `c_fields`; `function_parts` says how large each is, and `part` reads one, paged. A publish offers the registry every function tagged `library.<kind>` whose review meets the bar of a finished function.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
+        "after" : {
+          "description" : "The `next` of the page before.",
+          "type" : "string"
+        },
         "id" : {
           "description" : "An entry's id, as the list gives it, for the entry itself.",
           "type" : "string"
@@ -879,8 +883,26 @@
           "minimum" : 1,
           "type" : "integer"
         },
+        "part" : {
+          "description" : "With `id`: one part of the recorded function.",
+          "enum" : [
+            "instructions",
+            "c_spans",
+            "c_fields"
+          ],
+          "type" : "string"
+        },
         "search" : {
           "description" : "Only entries whose name holds this text, any case.",
+          "type" : "string"
+        },
+        "show" : {
+          "description" : "Which list. Default: entries.",
+          "enum" : [
+            "entries",
+            "taken_out",
+            "sources"
+          ],
           "type" : "string"
         }
       },
@@ -2222,7 +2244,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
-    "description" : "The module's functions against the shared registry of reviewed library functions, matched by body (Ghidra's Function ID: the code with relocated addresses masked, and its constants). `applied`: functions carrying the current version of their entry. `to_apply`: matches that apply by themselves — `ghidra_open` applies them, and `ghidra_library_apply` without `address` does: an unnamed function takes the whole entry (`whole`); one a review named takes the entry's name, its old name kept in the reason, and only what its review left empty (`fill`); a newer version replaces one applied and not edited since; a body that differs from an entry only in the codes an assert routine is called with is a `variant` of it. `edited`: applied, then edited — the review's now. `candidates`: bodies of an entry's shape with other constants, each difference listed (`value`, `entry_value`, `assert`): other functions unless a review says why the values make no difference. `declined`: entries a review refused for the function. With `id`: one entry — its index row, its review, its history and `gaps`, what its review lacks, read from the review itself. A match's `gaps` are the function's own missing parts as the last published analysis recorded them, and `entry_gaps` the entry's, so a decision to apply, replace or take can be made without opening either — and the two are read in the same words.",
+    "description" : "The module's functions against the shared registry of reviewed library functions, matched by body (Ghidra's Function ID: the code with relocated addresses masked, and its constants). `applied`: functions carrying the current version of their entry. `to_apply`: matches that apply by themselves — `ghidra_open` applies them, and `ghidra_library_apply` without `address` does: an unnamed function takes the whole entry (`whole`); one a review named takes the entry's name, its old name kept in the reason, and only what its review left empty (`fill`); a newer version replaces one applied and not edited since; a body that differs from an entry only in the codes an assert routine is called with is a `variant` of it. `edited`: applied, then edited — the review's now. `candidates`: bodies of an entry's shape with other constants, each difference listed (`value`, `entry_value`, `assert`): other functions unless a review says why the values make no difference. `declined`: entries a review refused for the function. With `id`: one entry — its index row, its review, its history and `gaps`, what its review lacks, read from the review itself; `library_registry` reads the `function_parts` left out of the review. A match's `gaps` are the function's own missing parts as the last published analysis recorded them, and `entry_gaps` the entry's, so a decision to apply, replace or take can be made without opening either — and the two are read in the same words.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {

@@ -212,6 +212,10 @@ under the same key is no change.
 - `ghidra_library_apply` (write): applies a candidate, or declines it.
 - `library_registry` (read, app and server): the index, by kind and name, with
   how many modules each entry was applied to.
+  The lists (entries, taken-out bodies, citations) are paged; one entry's answer
+  leaves out a recorded function's `instructions`, `c_spans` and `c_fields`,
+  which are read apart a page at a time, since they alone can pass the answer
+  bound.
 - The artifact's function gains `library_entry` (exporter v9): `id`,
   `version`, `state` — `entry` (the function is the entry's version), `edited`
   (changed on that version since; the next publish makes it the next version,

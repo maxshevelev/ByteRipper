@@ -383,6 +383,95 @@ final class CodeReadingsTests: XCTestCase {
         } catch is AgentToolError {}
     }
 
+    /// An entry with a recorded function stays readable: the answer has its C
+    /// and sizes for the bulk, which is read apart a page at a time, and the
+    /// lists are narrowed and paged beside it.
+    func testALargeRecordedFunctionIsReadInParts() async throws {
+        let store = try ContentStore(root: directory)
+        let instructions = (0..<500).map { ["address": "0x\(String($0, radix: 16))", "text": String(repeating: "x", count: 200)] }
+        let entry = try JSONSerialization.data(withJSONObject: [
+            "name": "LargeOne", "plate": "evidence",
+            "function": ["name": "LargeOne", "c": "void LargeOne(void) {}", "instructions": instructions,
+                         "c_spans": [[1, 2, "comment"]]]
+        ], options: .sortedKeys)
+        try store.putLibraryEntries(module: module.sha256, rev: 3, by: "agent", proposals: [
+            LibraryProposal(body: LibraryBody(size: 0x20, full: "00112233445566aa", specific: "0000000000000001"),
+                            name: "LargeOne", kind: "edk2", address: "0x1000", entry: entry)
+        ])
+        let tool = try XCTUnwrap(readings().tools().first { $0.name == "library_registry" })
+        func run(_ values: [String: JSONValue]) async throws -> JSONValue {
+            let answer = try await tool.run(AgentCall(tool: tool.name, arguments: AgentArguments(values, answerBound: 24 << 10)))
+            guard case .json(let json) = answer else { throw AgentToolError("not json") }
+            return json
+        }
+        let id = "20-00112233445566aa-0000000000000001"
+        let whole = try await run(["id": .string(id)])
+        XCTAssertLessThan(whole.encoded().count, 24 << 10)
+        XCTAssertEqual(whole["review"]?["function"]?["c"]?.stringValue, "void LargeOne(void) {}")
+        XCTAssertNil(whole["review"]?["function"]?["instructions"])
+        XCTAssertEqual(whole["function_parts"]?["instructions"]?["items"], .int(500))
+
+        var read = 0
+        var after: String?
+        repeat {
+            var values: [String: JSONValue] = ["id": .string(id), "part": "instructions", "limit": .int(1000)]
+            if let after { values["after"] = .string(after) }
+            let page = try await run(values)
+            XCTAssertLessThanOrEqual(page.encoded().count, 24 << 10)
+            read += page["items"]?.arrayValue?.count ?? 0
+            after = page["next"]?.stringValue
+        } while after != nil
+        XCTAssertEqual(read, 500)
+        do {
+            _ = try await run(["part": "instructions"])
+            XCTFail("read a part of no entry")
+        } catch is AgentToolError {}
+    }
+
+    /// A body taken out reads with its version and history, and a filtered
+    /// list carries only what it matches, the rest as totals.
+    func testTheRegistryListsNarrowAndATakenOutEntryKeepsItsHistory() async throws {
+        let store = try ContentStore(root: directory)
+        func proposal(_ name: String, _ specific: String) throws -> LibraryProposal {
+            LibraryProposal(body: LibraryBody(size: 0x20, full: "00112233445566aa", specific: specific), name: name,
+                            kind: "edk2", address: "0x1000",
+                            entry: try JSONSerialization.data(withJSONObject: ["name": name, "plate": "evidence"], options: .sortedKeys))
+        }
+        try store.putLibraryEntries(module: module.sha256, rev: 3, by: "agent", proposals: [
+            try proposal("GoneOne", "0000000000000001"), try proposal("KeptOne", "0000000000000002")
+        ])
+        let gone = "20-00112233445566aa-0000000000000001"
+        let kept = "20-00112233445566aa-0000000000000002"
+        _ = try store.changeLibrary(LibraryChange(action: .takeOut, id: gone, reason: "reads module data"), by: "agent")
+        _ = try store.changeLibrary(LibraryChange(action: .cite, id: kept, file: "a.c", line: 7), by: "agent")
+        let tool = try XCTUnwrap(readings().tools().first { $0.name == "library_registry" })
+        func run(_ values: [String: JSONValue]) async throws -> JSONValue {
+            guard case .json(let json) = try await tool.run(AgentCall(tool: tool.name, arguments: AgentArguments(values))) else {
+                throw AgentToolError("not json")
+            }
+            return json
+        }
+        let plain = try await run([:])
+        XCTAssertEqual(plain["entries"]?.arrayValue?.count, 1)
+        XCTAssertNil(plain["taken_out"])
+        XCTAssertEqual(plain["taken_out_total"], .int(1))
+        XCTAssertEqual(plain["sources_total"], .int(1))
+
+        let out = try await run(["show": "taken_out"])
+        XCTAssertEqual(out["taken_out"]?.arrayValue?.first?["reason"]?.stringValue, "reads module data")
+        let cited = try await run(["show": "sources", "search": "kept"])
+        XCTAssertEqual(cited["sources"]?.arrayValue?.first?["line"], .int(7))
+        let narrow = try await run(["search": "kept"])
+        XCTAssertEqual(narrow["taken_out_total"], .int(0))
+        let noCitation = try await run(["show": "sources", "search": "gone"])
+        XCTAssertEqual(noCitation["sources"]?.arrayValue?.count, 0)
+
+        let entry = try await run(["id": .string(gone)])
+        XCTAssertEqual(entry["name"]?.stringValue, "GoneOne")
+        XCTAssertNotNil(entry["version"])
+        XCTAssertGreaterThan(entry["history"]?.arrayValue?.count ?? 0, 0)
+    }
+
     /// A document that is not a module's code and has no `node` given is
     /// refused in the host's words — the app's name its Code panel, the
     /// server's name nothing.

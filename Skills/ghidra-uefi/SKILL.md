@@ -467,8 +467,11 @@ module's and decide in so many words:
   module wins and leaves the rest as conflicts, so none is left half-decided
   and no second apply is needed.
 
-`library_registry` reads the registry: its entries by name and kind, and one
-entry's review and history.
+`library_registry` reads the registry: its entries by name and kind, the
+taken-out bodies and the citations (`show`), and one entry's review and history,
+taken-out ones too. A recorded function's `instructions`, `c_spans` and
+`c_fields` are left out of that answer and read apart with `part`, a page at a
+time.
 
 **Applying the registry.** `ghidra_open` applies the registry to the module it
 opens and says what it did in `library`; `ghidra_library` lists the matches at
