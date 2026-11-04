@@ -141,7 +141,7 @@ public final class CodeReadings {
                 hashes), holding the review of an EDK2, AGESA (`amd`) or Intel FSP/RC (`intel`) library \
                 routine as one module published it, for every module whose function has the same body. \
                 Without `id`: the entries — `id`, `name`, `kind`, `version`, where the current version came \
-                from (`source`: module, address, revision) and how many bodies it covers (`variants`) — \
+                from (`source`: module, address, revision) and how many bodies it covers (`variants`, which is not how many modules hold it) — \
                 narrowed by `search` (a part of the name) and `kind`, sorted by name. `show` lists instead \
                 `taken_out`, the bodies given back to their modules and why, or `sources`, the citations by \
                 body, narrowed the same way. Every list is paged by `limit` and `after`, and every answer \
@@ -151,7 +151,10 @@ public final class CodeReadings {
                 versions, each with the module that published it and, for a version taken over another \
                 module's, the reason. A recorded function comes with its C but without `instructions`, \
                 `c_spans` and `c_fields`; `function_parts` says how large each is, and `part` reads one, \
-                paged. A publish offers the registry every function tagged `library.<kind>` whose review \
+                paged. `review.body.size`, in hex at the head of the `id`, is Function ID's count of code \
+                units, not bytes: in practice the instructions without the calls. A name on a decompiler \
+                temporary (`HASH:`, `unique:` storage) stays the module's and does not reach `review.locals`. \
+                A publish offers the registry every function tagged `library.<kind>` whose review \
                 meets the bar of a finished function.
                 """,
             inputSchema: AgentSchema.object([

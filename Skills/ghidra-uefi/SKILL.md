@@ -382,7 +382,9 @@ function's level is the tag's, and the exporter leaves it `library` however far
 its review is from the bar — but it writes the gaps the review still has, so
 the artifact, `code_query` and the owner's `below_bar` read one list. The
 registry, which copies the function into every module with the same body,
-takes it only when that list is empty. `ghidra_publish`
+takes it only when that list is empty. A name given to a decompiler temporary
+(`HASH:` or `unique:` storage) is the module's own: it is not in the entry, and
+another module's copy of the function does not get it. `ghidra_publish`
 answers what happened:
 
 - `library.added`, `library.updated`: the entries this publish made or moved
