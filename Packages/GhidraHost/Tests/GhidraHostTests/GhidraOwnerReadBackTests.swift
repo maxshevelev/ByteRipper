@@ -412,6 +412,20 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         XCTAssertTrue(callee.callers.contains { $0.description == stub }, "\(callee.callers)")
     }
 
+    /// The same on a real one, where analysis left no reference at the call:
+    /// SecCore's exception entry calls through EAX what the register was given.
+    func testAHeldCallAnalysisLeftNoReferenceForIsListedBothWays() async throws {
+        try await openCopy(of: "SecCore")
+        let exported = try await host.write(module, "/v1/publish?dry_run=1", body: Data())
+        let artifact = try XCTUnwrap(JSONSerialization.jsonObject(with: exported) as? [String: Any])
+        let functions = try XCTUnwrap(artifact["functions"] as? [[String: Any]])
+        func function(_ entry: String) throws -> [String: Any] {
+            try XCTUnwrap(functions.first { $0["entry"] as? String == entry })
+        }
+        XCTAssertTrue((try function("0x9DFBDD1")["callees"] as? [String])?.contains("0x9DFBF90") == true)
+        XCTAssertTrue((try function("0x9DFBF90")["callers"] as? [String])?.contains("0x9DFBDD1") == true)
+    }
+
     /// `ghidra_done` on a module only read holds no lease, so nothing is published.
     func testADoneAfterOnlyReadingPublishesNothing() async throws {
         try await open(try image())
