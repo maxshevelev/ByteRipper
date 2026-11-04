@@ -171,13 +171,15 @@ enum GhidraRoutes {
     /// `take_library_conflicts=1` with `library_reason` — takes every
     /// conflict, the body names the entries with their reasons.
     static func libraryTake(_ request: HTTPRequest) -> LibraryTake {
+        let asked = request.body.isEmpty ? nil : try? JSONDecoder().decode(PublishLibraryTake.self, from: request.body)
+        let entryReasons = asked?.entryReasons ?? [:]
         if request.query["take_library_conflicts"] == "1" {
-            return .all(request.query["library_reason"] ?? "")
+            return LibraryTake.all(request.query["library_reason"] ?? "").with(entryReasons: entryReasons)
         }
-        guard !request.body.isEmpty,
-              let asked = try? JSONDecoder().decode(PublishLibraryTake.self, from: request.body),
-              let ids = asked.takeLibraryConflicts, !ids.isEmpty else { return .none }
-        return .these(asked.libraryReasons ?? [:])
+        guard let ids = asked?.takeLibraryConflicts, !ids.isEmpty else {
+            return LibraryTake.none.with(entryReasons: entryReasons)
+        }
+        return LibraryTake.these(asked?.libraryReasons ?? [:]).with(entryReasons: entryReasons)
     }
 
     /// A publish's body: the library entries this review takes, each with the
@@ -186,9 +188,11 @@ enum GhidraRoutes {
     struct PublishLibraryTake: Decodable {
         var takeLibraryConflicts: [String]?
         var libraryReasons: [String: String]?
+        var entryReasons: [String: String]?
 
         private enum CodingKeys: String, CodingKey {
             case takeLibraryConflicts = "take_library_conflicts"
+            case entryReasons = "entry_reasons"
             case libraryReasons = "library_reasons"
         }
     }

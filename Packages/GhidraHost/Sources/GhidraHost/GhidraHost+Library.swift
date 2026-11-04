@@ -286,6 +286,25 @@ extension GhidraHost {
 
     // MARK: - Asking the owner
 
+    /// A write on the registry itself: the store's rows, naming the module the
+    /// write was asked from and the reason it was asked with.
+    private static func naming(_ result: LibraryWriteResult, module: SHA256Digest,
+                               reason: String?) -> LibraryWriteResult {
+        func named(_ rows: [LibraryWriteResult.Change]) -> [LibraryWriteResult.Change] {
+            rows.map { row in
+                var row = row
+                row.module = row.module ?? module
+                row.reason = row.reason ?? reason
+                return row
+            }
+        }
+        var result = result
+        result.added = named(result.added)
+        result.updated = named(result.updated)
+        result.takenOut = result.takenOut.map(named)
+        return result
+    }
+
     /// The registry against the module: an answer for `ghidra_library` and
     /// `ghidra_library_apply`, and what `ghidra_open` applies.
     public func library(_ module: SHA256Digest, _ request: LibraryRequest) async throws -> Data {
@@ -296,14 +315,16 @@ extension GhidraHost {
             }
             let result = try await writer.renameLibraryEntry(id: id, name: name, reason: reason, by: "agent",
                                                              module: module, dryRun: request.dryRun ?? false)
-            return try JSONSerialization.data(withJSONObject: try Self.plain(result), options: [.sortedKeys])
+            return try JSONSerialization.data(withJSONObject: try Self.plain(Self.naming(result, module: module, reason: reason)),
+                                              options: [.sortedKeys])
         case .change:
             guard let change = request.change else {
                 throw GhidraHostError(.refused, "no change named", status: 400)
             }
             let result = try await writer.changeLibrary(change, by: "agent", module: module,
                                                         dryRun: request.dryRun ?? false)
-            return try JSONSerialization.data(withJSONObject: try Self.plain(result), options: [.sortedKeys])
+            return try JSONSerialization.data(withJSONObject: try Self.plain(Self.naming(result, module: module, reason: change.reason)),
+                                              options: [.sortedKeys])
         case .entry:
             guard let id = request.id else { throw GhidraHostError(.refused, "name the entry by `id`", status: 400) }
             let index = try await writer.readLibraryIndex()

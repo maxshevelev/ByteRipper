@@ -236,13 +236,113 @@ final class GhidraHostLibraryTests: XCTestCase {
             "address": there, "kind": "plate", "text": "A holder's own plate."]))
         let editedOther = try await read(other, there)
         XCTAssertEqual(state(editedOther), "edited")
-        let moved = try await host.publish(other, by: "agent")
+        let moved = try await host.publish(other, by: "agent", options: .init(
+            takeLibrary: LibraryTake.none.with(entryReasons: [id: "the holder's plate says more"])))
         XCTAssertEqual(moved.library?.updated.map(\.version), [2])
         XCTAssertEqual(moved.library?.conflicts.count, 0)
         XCTAssertEqual(try store.libraryIndex().entries[id]?.version, 2)
         let theSource = try await read(source, at)
         XCTAssertEqual(theSource["text"] as? String, "registry")
         XCTAssertEqual(theSource["plate"] as? String, "A holder's own plate.", "the source reads the holder's review")
+    }
+
+    /// A publish that would move an entry with no reason stores nothing, from
+    /// the source and from another holder; the dry run and `ghidra_done` say the
+    /// same, and with a reason the row and the history name module and reason.
+    func testAPublishThatMovesAnEntryWithNoReasonIsRefusedWhole() async throws {
+        guard let paths = ProcessInfo.processInfo.environment["GHIDRA_LIBRARY_MODULES"]?.split(separator: ":"),
+              paths.count == 2 else {
+            throw XCTSkip("GHIDRA_LIBRARY_MODULES is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostLibraryTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraHostLibraryTests"),
+                              writer: store)
+        let images = try paths.map { try Data(contentsOf: URL(fileURLWithPath: String($0))) }
+        let source = SHA256Digest(data: images[0]), other = SHA256Digest(data: images[1])
+        _ = try await host.create(module: images[0], name: "Reviewed")
+        _ = try await host.create(module: images[1], name: "Other")
+        defer { Task { await host.stop(source); await host.stop(other) } }
+        let at = try await function(of: 43, in: source, host: host)
+        let there = try await function(of: 43, in: other, host: host)
+        _ = try await host.write(source, "/v1/set/signature", body: body([
+            "address": at, "signature": "void * GetHobList(void)", "by": "agent", "reason": "EDK2 HobLib GetHobList"]))
+        _ = try await host.write(source, "/v1/set/comment", body: body([
+            "address": at, "kind": "plate", "text": "EDK2 HobLib GetHobList: the plate."]))
+        _ = try await host.write(source, "/v1/set/comment", body: body([
+            "address": at, "kind": "eol", "text": "the first step."]))
+        var ordinal = 0
+        let locals = try json(await host.readCall(source, "function/\(at)", query: [:]))["locals"] as? [[String: Any]]
+        for local in locals ?? [] where (local["storage"] as? String)?.hasPrefix("HASH") != true {
+            ordinal += 1
+            var change: [String: Any] = ["function": at, "storage": local["storage"] ?? "", "name": "Named\(ordinal)",
+                                         "type": "ushort", "by": "agent"]
+            if let use = local["first_use"] { change["first_use"] = use }
+            _ = try await host.write(source, "/v1/rename/variable", body: body(change))
+        }
+        _ = try await host.write(source, "/v1/tag/function", body: body(["address": at, "tag": "library.edk2"]))
+        let first = try await host.publish(source, by: "agent")
+        let added = try XCTUnwrap(first.library?.added.first { $0.name == "GetHobList" })
+        XCTAssertEqual(added.module, source)
+        let id = added.id
+        _ = try await host.library(other, .init(action: .apply))
+        _ = try await host.publish(other, by: "agent")
+
+        var version = 1
+        for (module, address, plate) in [(source, at, "The source's plate."), (other, there, "A holder's plate.")] {
+            // On the entry's current version: a holder behind it gets a conflict, which is another rule.
+            _ = try await host.library(module, .init(action: .apply))
+            _ = try await host.write(module, "/v1/set/comment", body: body([
+                "address": address, "kind": "plate", "text": plate]))
+            let before = try store.analysis(module: module)?.artifact
+            let revisions = try store.reviewHistory(module: module)?.revisions.count
+
+            // The dry run names them and says the refusal.
+            let dry = try json(await host.preview(module))
+            let would = try XCTUnwrap(dry["library"] as? [String: Any])
+            let rows = try XCTUnwrap(would["needs_reason"] as? [[String: Any]])
+            XCTAssertEqual(rows.map { $0["id"] as? String }, [id])
+            XCTAssertEqual(rows.first?["version"] as? Int, version + 1)
+            XCTAssertEqual(rows.first?["module"] as? String, module.hex)
+            let refusal = try XCTUnwrap(dry["library_refused"] as? String)
+            XCTAssertTrue(refusal.contains(id), refusal)
+
+            // The publish and the done are refused with those words, and store nothing.
+            for attempt in ["publish", "done"] {
+                do {
+                    if attempt == "publish" { _ = try await host.publish(module, by: "agent") }
+                    else { _ = try await host.release(module, by: "agent") }
+                    XCTFail("\(attempt) took a change with no reason")
+                } catch {
+                    XCTAssertTrue("\(error)".contains(refusal), "\(attempt): \(error)")
+                }
+                XCTAssertEqual(try store.analysis(module: module)?.artifact, before, attempt)
+                XCTAssertEqual(try store.reviewHistory(module: module)?.revisions.count, revisions, attempt)
+                XCTAssertEqual(try store.libraryIndex().entries[id]?.version, version, attempt)
+            }
+
+            // A reason per entry: the row and the history name module and reason.
+            let reason = "why: \(plate)"
+            let take = LibraryTake.none.with(entryReasons: [id: reason])
+            let allowed = try json(await host.preview(module, takeLibrary: take))
+            XCTAssertNil(allowed["library_refused"])
+            let published = try await host.publish(module, by: "agent", options: .init(takeLibrary: take))
+            version += 1
+            XCTAssertEqual(published.library?.updated.map(\.id), [id])
+            XCTAssertEqual(published.library?.updated.first?.module, module)
+            XCTAssertEqual(published.library?.updated.first?.reason, reason)
+            let last = try XCTUnwrap(try store.libraryHistory(id: id)?.versions.last)
+            XCTAssertEqual(last.version, version)
+            XCTAssertEqual(last.source.module, module)
+            XCTAssertEqual(last.reason, reason)
+            XCTAssertNotEqual(try store.analysis(module: module)?.artifact, before)
+            // Nothing left to say: the done goes through.
+            _ = try await host.release(module, by: "agent")
+            XCTAssertEqual(try store.libraryIndex().entries[id]?.version, version)
+        }
     }
 
     func testAnEntryReviewedInOneModuleIsAppliedInAnother() async throws {
@@ -331,7 +431,8 @@ final class GhidraHostLibraryTests: XCTestCase {
 
         // That edit was made on the entry's current version: published, it is
         // the next version, from a module that did not write the first.
-        let improved = try await host.publish(other, by: "agent")
+        let improved = try await host.publish(other, by: "agent", options: .init(
+            takeLibrary: LibraryTake.none.with(entryReasons: [added.id: "the holder's edit is better"])))
         XCTAssertEqual(improved.library?.updated.map(\.version), [added.version + 1], "\(String(describing: improved.library))")
         XCTAssertEqual(improved.library?.conflicts, [])
         let improvedCode = try store.artifact(for: improved.manifest)

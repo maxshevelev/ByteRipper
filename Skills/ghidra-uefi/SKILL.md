@@ -409,9 +409,18 @@ answers what happened:
   conflicts: `library.conflicts` in the answer is what remains, each with the
   version it was based on.
 
-A dry publish (`dry_run: true`) with the same `take_library_conflicts` and
-`library_reason` answers what the registry offer would do and writes nothing:
+Every change to an entry names its module and its reason, on the answer's row
+and in the entry's history. A publish that would move an entry with no reason
+is refused whole and stores nothing, and the refusal names the entries; so is
+a `ghidra_done` that has to publish it, which keeps the lease. Give the reason
+in `entry_reasons`, an object of entry id to why this module changes it. A
+first version, an unchanged entry, a taken conflict with its `library_reason`
+and a function's own reason for a changed name or signature need nothing more.
+
+A dry publish (`dry_run: true`) with the same `take_library_conflicts`,
+`library_reason` and `entry_reasons` answers what the registry offer would do and writes nothing:
 `library` with the entries it would add or move, the conflicts it would leave,
+`library.needs_reason` with `library_refused` when a publish would be refused,
 and `library_error` when a named entry is not a conflict — read it before the
 publish when the decision is large.
 

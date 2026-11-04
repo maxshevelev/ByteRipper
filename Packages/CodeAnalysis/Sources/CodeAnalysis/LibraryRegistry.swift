@@ -164,6 +164,9 @@ public struct LibraryTake: Equatable, Sendable {
     public var reasons: [String: String]
     /// The reason a take of every conflict keeps.
     public var reason: String?
+    /// Why this publish changes an entry whose current version its review was
+    /// made on, by entry id. That change takes no decision, but it needs a reason.
+    public var entryReasons: [String: String] = [:]
 
     public static let none = LibraryTake()
 
@@ -180,6 +183,13 @@ public struct LibraryTake: Equatable, Sendable {
         self.all = all
         self.reason = reason
         self.reasons = reasons
+    }
+
+    /// This decision, with the reasons for the entries the publish moves.
+    public func with(entryReasons: [String: String]) -> LibraryTake {
+        var copy = self
+        copy.entryReasons = entryReasons
+        return copy
     }
 
     /// The ids this decision names.
@@ -258,6 +268,11 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
         /// For a publish's update: the review's fields it changes, so an entry
         /// gaining its recorded function is told from one whose text moves.
         public var changed: [String]?
+        /// The module whose publish or write made this change, and why it was
+        /// made: what a reader of the answer checks. Nil on a row that changes
+        /// nothing, and from a store that predates them.
+        public var module: SHA256Digest?
+        public var reason: String?
     }
 
     /// The entry for this body holds another review, and this module's was
@@ -285,6 +300,10 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
     public var updated: [Change] = []
     public var unchanged: [Change] = []
     public var conflicts: [Conflict] = []
+    /// Entries this publish would move with no reason given: a dry run names
+    /// them, a publish is refused. Each row says the version it would become.
+    /// Nil when there are none, and from a store that predates the rule.
+    public var needsReason: [Change]?
     /// Bodies added to an entry as variants; nil from a store that has none.
     public var variants: [Change]?
     /// Functions refused because another entry holds the name: a different
@@ -347,8 +366,17 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
 
     public init() {}
 
+    /// What a publish that would move entries with no reason is refused with.
+    public var reasonRefusal: String? {
+        guard let rows = needsReason, !rows.isEmpty else { return nil }
+        let named = rows.map { "\($0.id) (\($0.name), to version \($0.version))" }.joined(separator: ", ")
+        return "this publish would change library entries with no reason given: \(named). Nothing was stored. "
+            + "Publish again with `entry_reasons`, an object of entry id to why this module changes it."
+    }
+
     private enum CodingKeys: String, CodingKey {
         case added, updated, unchanged, conflicts, variants
+        case needsReason = "needs_reason"
         case cited, citations
         case nameConflicts = "name_conflicts"
         case notLibrary = "not_library"
@@ -515,6 +543,10 @@ extension ContentStore {
         for (id, reason) in reasons where reason.isEmpty {
             throw CodeAnalysisError.analysisMismatch("taking the library entry \(id) needs a reason")
         }
+        let entryReasons = take.entryReasons.mapValues { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        if let id = entryReasons.first(where: { $0.value.isEmpty })?.key {
+            throw CodeAnalysisError.analysisMismatch("the reason given for the library entry \(id) is empty")
+        }
         for proposal in proposals {
             guard proposal.body.isValid else {
                 throw CodeAnalysisError.analysisMismatch("\(proposal.name): \(proposal.body.key) is not a body key")
@@ -532,7 +564,8 @@ extension ContentStore {
             var index = try libraryIndex()
             // A decision that names an entry this publish does not offer is a
             // typo, not a take: refused before anything is written.
-            if let unknown = take.ids.subtracting(Self.offeredIds(proposals, index)).sorted().first {
+            let named = take.ids.union(entryReasons.keys)
+            if let unknown = named.subtracting(Self.offeredIds(proposals, index)).sorted().first {
                 throw CodeAnalysisError.analysisMismatch(
                     "no proposal in this publish carries the library entry \(unknown)")
             }
@@ -543,6 +576,9 @@ extension ContentStore {
             // already settled is not taken silently, and a variant's conflict
             // cannot be the entry's next version.
             var conflicting: Set<String> = []
+            // What this publish moves to a next version of its review: only
+            // these can be given a reason of their own.
+            var moving: Set<String> = []
             var variantConflicts: Set<String> = []
             var variantOf: [String: LibraryProposal] = [:]
             var settled: [String: String] = [:]
@@ -568,8 +604,9 @@ extension ContentStore {
                                                             codes: proposal.codes))
                         index.entries[id] = held
                         index.bodies[proposal.body.key] = id
-                        result.variants = (result.variants ?? []) + [.init(id: id, name: held.name,
-                                                                          version: held.version)]
+                        result.variants = (result.variants ?? []) + [.init(
+                            id: id, name: held.name, version: held.version, module: module,
+                            reason: "this module's body joins the entry as a variant")]
                         settled[id] = "this publish joins it as a variant of version \(held.version)"
                         changedIndex = true
                     } else {
@@ -603,7 +640,7 @@ extension ContentStore {
                     histories[id] = LibraryHistory(id: id, versions: [
                         LibraryVersion(version: 1, entry: digest, source: source, reason: nil, recordedAt: now)
                     ])
-                    result.added.append(.init(id: id, name: proposal.name, version: 1))
+                    result.added.append(.init(id: id, name: proposal.name, version: 1, module: module))
                     settled[id] = "this publish adds it as a new entry, version 1"
                     continue
                 }
@@ -631,11 +668,12 @@ extension ContentStore {
                         next.entry = dryRun ? SHA256Digest(data: reprinted) : try putObject(reprinted)
                         index.entries[id] = next
                         var history = try histories[id] ?? libraryHistory(id: id) ?? LibraryHistory(id: id, versions: [])
+                        let printed = "the function's C printed again by its module"
                         history.versions.append(LibraryVersion(version: held.version, entry: next.entry, source: held.source,
-                                                               reason: "the function's C printed again by its module",
-                                                               recordedAt: now))
+                                                               reason: printed, recordedAt: now))
                         histories[id] = history
-                        result.updated.append(.init(id: id, name: held.name, version: held.version, changed: ["function"]))
+                        result.updated.append(.init(id: id, name: held.name, version: held.version, changed: ["function"],
+                                                    module: module, reason: printed))
                         settled[id] = "its review is the entry's own, at version \(held.version)"
                         continue
                     }
@@ -656,6 +694,31 @@ extension ContentStore {
                 guard current || completes || taken != nil else {
                     result.conflicts.append(.init(id: id, name: held.name, proposedName: proposal.name,
                                                   heldBy: held.source, version: held.version, base: base))
+                    settled[id] = "this module's review was not made on its current version: "
+                        + "that is a conflict, taken with `take_library_conflicts`"
+                    continue
+                }
+                // Past here sameReview means only what the review lacked gets
+                // recorded. Anything else moves the review, and says why.
+                let recordsOnly = LibraryProposal.sameReview(heldObject, proposal.entry)
+                func signature(_ entry: Data) -> String? {
+                    ((try? JSONSerialization.jsonObject(with: entry)) as? [String: Any])?["signature"] as? String
+                }
+                let signatureChanged = signature(heldObject) != signature(proposal.entry)
+                let own = current ? proposal.reason(signatureChanged: signatureChanged, held: heldObject) : nil
+                let why: String?
+                if recordsOnly {
+                    settled[id] = "this publish only records what its review lacked, which asks no reason"
+                    why = own ?? (lacksFunction ? "the function's C recorded"
+                        : "the body's constants recorded from \(source.module.hex) at \(source.address)")
+                } else {
+                    moving.insert(id)
+                    why = entryReasons[id] ?? taken ?? own
+                }
+                guard recordsOnly || why != nil else {
+                    result.needsReason = (result.needsReason ?? []) + [.init(
+                        id: id, name: proposal.name, version: held.version + 1,
+                        changed: LibraryProposal.changedFields(from: heldObject, to: proposal.entry), module: module)]
                     continue
                 }
                 var next = held
@@ -680,12 +743,6 @@ extension ContentStore {
                 if !completes { next.source = source }
                 index.entries[id] = next
                 var history = try histories[id] ?? libraryHistory(id: id) ?? LibraryHistory(id: id, versions: [])
-                func signature(_ entry: Data) -> String? {
-                    ((try? JSONSerialization.jsonObject(with: entry)) as? [String: Any])?["signature"] as? String
-                }
-                let signatureChanged = signature(heldObject) != signature(proposal.entry)
-                let why = current ? proposal.reason(signatureChanged: signatureChanged, held: try object(held.entry))
-                    : completes ? (lacksFunction ? "the function's C recorded" : "the body's constants recorded") : taken
                 let recordedWhy = lacksFunction
                     ? "the function's C recorded from \(source.module.hex) at \(source.address)" : why
                 history.versions.append(LibraryVersion(version: next.version, entry: recorded,
@@ -693,7 +750,8 @@ extension ContentStore {
                                                        reason: recordedWhy, recordedAt: now))
                 histories[id] = history
                 result.updated.append(.init(id: id, name: proposal.name, version: next.version,
-                                            changed: LibraryProposal.changedFields(from: heldObject, to: written)))
+                                            changed: LibraryProposal.changedFields(from: heldObject, to: written),
+                                            module: module, reason: recordedWhy))
             }
             // A decision that names an entry already settled — the same review,
             // the current version — would read as taken and be nothing: say so,
@@ -715,6 +773,17 @@ extension ContentStore {
                     "the entry \(id) is the entry of another body, and \(function) is not a variant of it: "
                         + "a variant's review cannot become the entry's — adopt the entry with replace, "
                         + "or review the function on its own")
+            }
+            // A reason for an entry this publish does not move would read as
+            // kept, and be nothing: said as a take of a settled entry is.
+            if let id = Set(entryReasons.keys).subtracting(moving).sorted().first {
+                var text = "the reason given for the entry \(id) has nothing to apply to"
+                if let held = index.entries[id] { text += ": \(held.name) is at version \(held.version)" }
+                text += ", and " + (settled[id] ?? "this publish does not change it")
+                throw CodeAnalysisError.analysisMismatch(text)
+            }
+            if !dryRun, let refusal = result.reasonRefusal {
+                throw CodeAnalysisError.analysisMismatch(refusal)
             }
             guard !dryRun, !histories.isEmpty || changedIndex else { return result }
             for (id, history) in histories.sorted(by: { $0.key < $1.key }) {

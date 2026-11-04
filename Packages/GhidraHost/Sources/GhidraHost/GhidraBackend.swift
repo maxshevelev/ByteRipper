@@ -215,36 +215,32 @@ public struct GhidraRemote: GhidraBackend {
                               options: GhidraHost.PublishOptions) async throws -> Data {
         var query = ["by": by]
         if options.takeTypeConflicts { query["take_type_conflicts"] = "1" }
-        // A take of every conflict is the query the route has always read; a
-        // take of some entries carries the ids and their reasons in the body.
-        var body = Data()
-        if options.takeLibrary.all {
-            query["take_library_conflicts"] = "1"
-            query["library_reason"] = options.takeLibrary.reason
-        } else if !options.takeLibrary.ids.isEmpty {
-            body = try JSONSerialization.data(withJSONObject: [
-                "take_library_conflicts": options.takeLibrary.ids.sorted(),
-                "library_reasons": options.takeLibrary.reasons
-            ], options: [.sortedKeys])
-        }
+        let body = try Self.libraryDecision(options.takeLibrary, query: &query)
         return try await call("POST", "modules/\(module.hex)/publish", query: query, body: body,
                               timeout: 3600)
+    }
+
+    /// A publish's library decision on the wire. A take of every conflict is
+    /// the query the route has always read; entries named, and the reasons for
+    /// those it moves, go in the body.
+    private static func libraryDecision(_ take: LibraryTake, query: inout [String: String]) throws -> Data {
+        var body: [String: Any] = [:]
+        if take.all {
+            query["take_library_conflicts"] = "1"
+            query["library_reason"] = take.reason
+        } else if !take.ids.isEmpty {
+            body["take_library_conflicts"] = take.ids.sorted()
+            body["library_reasons"] = take.reasons
+        }
+        if !take.entryReasons.isEmpty { body["entry_reasons"] = take.entryReasons }
+        return body.isEmpty ? Data() : try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
     }
 
     public func publishPreview(_ module: SHA256Digest, takeTypeConflicts: Bool,
                                takeLibrary: LibraryTake) async throws -> Data {
         var query = ["dry_run": "1"]
         if takeTypeConflicts { query["take_type_conflicts"] = "1" }
-        var body = Data()
-        if takeLibrary.all {
-            query["take_library_conflicts"] = "1"
-            query["library_reason"] = takeLibrary.reason
-        } else if !takeLibrary.ids.isEmpty {
-            body = try JSONSerialization.data(withJSONObject: [
-                "take_library_conflicts": takeLibrary.ids.sorted(),
-                "library_reasons": takeLibrary.reasons
-            ], options: [.sortedKeys])
-        }
+        let body = try Self.libraryDecision(takeLibrary, query: &query)
         return try await call("POST", "modules/\(module.hex)/publish", query: query, body: body,
                               timeout: 3600)
     }

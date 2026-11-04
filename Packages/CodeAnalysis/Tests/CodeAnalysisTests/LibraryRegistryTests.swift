@@ -55,7 +55,11 @@ final class LibraryRegistryTests: XCTestCase {
         try store.putLibraryEntries(module: first, rev: 33, by: "agent", proposals: [proposal("SetMem")])
         let text = try store.putLibraryEntries(module: second, rev: 4, by: "agent",
                                                proposals: [proposal("SetMem", plate: "better", base: 1)], dryRun: true)
-        XCTAssertEqual(text.updated.first?.changed, ["plate"])
+        XCTAssertEqual(text.needsReason?.first?.changed, ["plate"])
+        let told = try store.putLibraryEntries(module: second, rev: 4, by: "agent",
+                                               proposals: [proposal("SetMem", plate: "better", base: 1)],
+                                               take: LibraryTake.none.with(entryReasons: [body.key: "better"]), dryRun: true)
+        XCTAssertEqual(told.updated.first?.changed, ["plate"])
 
         var offered = proposal("SetMem")
         var object = try XCTUnwrap(JSONSerialization.jsonObject(with: offered.entry) as? [String: Any])
@@ -72,13 +76,14 @@ final class LibraryRegistryTests: XCTestCase {
     func testAChangeOnTheCurrentVersionIsTheNextOneFromAnyModule() throws {
         try store.putLibraryEntries(module: first, rev: 33, by: "agent", proposals: [proposal("SetMem")])
         let result = try store.putLibraryEntries(module: second, rev: 4, by: "agent",
-                                                 proposals: [proposal("SetMem", plate: "better", base: 1)])
+                                                 proposals: [proposal("SetMem", plate: "better", base: 1)],
+                                                 take: LibraryTake.none.with(entryReasons: [body.key: "a better plate"]))
         XCTAssertEqual(result.updated.map(\.version), [2])
         XCTAssertTrue(result.conflicts.isEmpty)
         let history = try XCTUnwrap(try store.libraryHistory(id: body.key))
         XCTAssertEqual(history.versions.map(\.version), [1, 2])
         XCTAssertEqual(history.versions.last?.source.module, second)
-        XCTAssertNil(history.versions.last?.reason, "a change on the current version needs no reason")
+        XCTAssertEqual(history.versions.last?.reason, "a better plate")
 
         let behind = try store.putLibraryEntries(module: first, rev: 34, by: "agent",
                                                  proposals: [proposal("SetMem", plate: "other", base: 1)])
@@ -109,6 +114,107 @@ final class LibraryRegistryTests: XCTestCase {
     /// A version a review changed says why in the function's own words, and only
     /// words that changed with it: an older reason would read as this change's.
     /// Words the server generated are no reason; a taken conflict keeps its own.
+    func testAnEntryMovedWithNoReasonIsRefusedAndNamed() throws {
+        let source = SHA256Digest(data: Data("source".utf8)), other = SHA256Digest(data: Data("other".utf8))
+        let first = try store.putLibraryEntries(module: source, rev: 1, by: "agent", proposals: [
+            proposal("SetMem", plate: "p", base: nil)])
+        let id = try XCTUnwrap(first.added.first?.id)
+        // A first version needs none, and says whose it is.
+        XCTAssertEqual(first.added.first?.module, source)
+        XCTAssertNil(first.added.first?.reason)
+        XCTAssertEqual(try store.putLibraryEntries(module: source, rev: 2, by: "agent", proposals: [
+            proposal("SetMem", plate: "p", base: 1)]).unchanged.map(\.id), [id], "an unchanged entry needs none")
+
+        for (module, plate, rev) in [(source, "from the source", 3), (other, "from another holder", 4)] {
+            let moved = proposal("SetMem", plate: plate, base: rev - 2)
+            let versions = try store.libraryHistory(id: id)?.versions.count
+            let index = try store.libraryIndex()
+
+            // The dry run names what the publish would be refused for.
+            let dry = try store.putLibraryEntries(module: module, rev: rev, by: "agent", proposals: [moved], dryRun: true)
+            XCTAssertEqual(dry.needsReason?.map(\.id), [id])
+            XCTAssertEqual(dry.needsReason?.first?.version, rev - 1)
+            XCTAssertEqual(dry.needsReason?.first?.module, module)
+            XCTAssertTrue(dry.updated.isEmpty)
+            let refusal = try XCTUnwrap(dry.reasonRefusal)
+            XCTAssertTrue(refusal.contains(id) && refusal.contains("entry_reasons"), refusal)
+
+            // The publish is refused with the same words and writes nothing.
+            XCTAssertThrowsError(try store.putLibraryEntries(module: module, rev: rev, by: "agent", proposals: [moved])) {
+                XCTAssertTrue("\($0)".contains(refusal), "\($0)")
+            }
+            XCTAssertEqual(try store.libraryIndex().entries[id]?.version, index.entries[id]?.version)
+            XCTAssertEqual(try store.libraryIndex().entries[id]?.entry, index.entries[id]?.entry)
+            XCTAssertEqual(try store.libraryHistory(id: id)?.versions.count, versions)
+
+            // A dry run with the reason answers the row the publish will.
+            let reason = "why \(plate)"
+            let take = LibraryTake.none.with(entryReasons: [id: reason])
+            let wouldBe = try store.putLibraryEntries(module: module, rev: rev, by: "agent", proposals: [moved],
+                                                      take: take, dryRun: true)
+            XCTAssertNil(wouldBe.needsReason)
+            let done = try store.putLibraryEntries(module: module, rev: rev, by: "agent", proposals: [moved], take: take)
+            XCTAssertNil(done.needsReason)
+            XCTAssertEqual(done.updated.map(\.module), [module])
+            XCTAssertEqual(done.updated.map(\.reason), [reason])
+            XCTAssertEqual(done.updated, wouldBe.updated)
+
+            // The history reads back the module and the reason.
+            let last = try XCTUnwrap(try store.libraryHistory(id: id)?.versions.last)
+            XCTAssertEqual(last.version, rev - 1)
+            XCTAssertEqual(last.source.module, module)
+            XCTAssertEqual(last.reason, reason)
+        }
+    }
+
+    func testTheEntryReasonsCrossTheServedStore() throws {
+        let sent = ServedStoreProtocol.PutLibrary(module: first, rev: 1, by: "agent", proposals: [],
+                                                  entryReasons: ["a": "why a"])
+        let text = try XCTUnwrap(String(data: try JSONEncoder().encode(sent), encoding: .utf8))
+        XCTAssertTrue(text.contains("entry_reasons"), text)
+        let read = try JSONDecoder().decode(ServedStoreProtocol.PutLibrary.self, from: try JSONEncoder().encode(sent))
+        XCTAssertEqual(read.decision, LibraryTake.none.with(entryReasons: ["a": "why a"]))
+    }
+
+    func testAReasonIsForAnEntryThePublishMoves() throws {
+        let module = SHA256Digest(data: Data("a".utf8))
+        let first = try store.putLibraryEntries(module: module, rev: 1, by: "agent", proposals: [
+            proposal("SetMem", plate: "p", base: nil)])
+        let id = try XCTUnwrap(first.added.first?.id)
+        func put(_ plate: String, base: Int?, _ reasons: [String: String]) throws {
+            try store.putLibraryEntries(module: module, rev: 2, by: "agent",
+                                        proposals: [proposal("SetMem", plate: plate, base: base)],
+                                        take: LibraryTake.none.with(entryReasons: reasons))
+        }
+        XCTAssertThrowsError(try put("p", base: 1, [id: "nothing moves"])) {
+            XCTAssertTrue("\($0)".contains("has nothing to apply to"), "\($0)")
+        }
+        XCTAssertThrowsError(try put("q", base: 1, [id: "  "])) { XCTAssertTrue("\($0)".contains("is empty"), "\($0)") }
+        XCTAssertThrowsError(try put("q", base: 1, ["11-none": "typo"])) {
+            XCTAssertTrue("\($0)".contains("no proposal in this publish"), "\($0)")
+        }
+        // A conflict is not moved by a reason: it stays a conflict, and says so.
+        XCTAssertThrowsError(try put("q", base: nil, [id: "not a take"])) {
+            XCTAssertTrue("\($0)".contains("take_library_conflicts"), "\($0)")
+        }
+        XCTAssertEqual(try store.libraryIndex().entries[id]?.version, 1)
+    }
+
+    func testATakenConflictAndAFunctionsOwnReasonNeedNoOtherReason() throws {
+        let module = SHA256Digest(data: Data("a".utf8))
+        let first = try store.putLibraryEntries(module: module, rev: 1, by: "agent", proposals: [
+            withReasons(proposal("SetMem", plate: "p", base: nil), name: "first name", signature: nil)])
+        let id = try XCTUnwrap(first.added.first?.id)
+        let named = try store.putLibraryEntries(module: module, rev: 2, by: "agent", proposals: [
+            withReasons(proposal("SetMem", plate: "q", base: 1), name: "named for what it does", signature: nil)])
+        XCTAssertEqual(named.updated.map(\.reason), ["named for what it does"])
+        let taken = try store.putLibraryEntries(module: module, rev: 3, by: "agent",
+                                                proposals: [proposal("SetMem", plate: "r", base: nil)],
+                                                take: .all("this one is fuller"))
+        XCTAssertEqual(taken.updated.map(\.reason), ["this one is fuller"])
+        XCTAssertEqual(try store.libraryHistory(id: id)?.versions.last?.reason, "this one is fuller")
+    }
+
     func testAChangedVersionTakesAReasonOnlyWhenTheReasonChanged() throws {
         func proposed(_ plate: String, name: String?, signature: String? = nil, signed: String? = nil, base: Int?) -> LibraryProposal {
             withReasons(proposal("SetMem", plate: plate, base: base), name: name, signature: signature, signed: signed)
@@ -125,11 +231,16 @@ final class LibraryRegistryTests: XCTestCase {
             proposed("t", name: "library registry entry \(id) v3", signature: "the byte reaches AL", signed: "void SetMem(UINT8 v)", base: 5),
             proposed("t", name: "library registry entry \(id) v3", signature: "takes the width too", signed: "void SetMem(UINT8 v, UINT8 w)", base: 6)
         ]
+        // Steps 1, 2 and 4 say nothing new of their own, so each has to be told.
+        let told: Set<Int> = [1, 2, 4]
         for (index, step) in steps.enumerated() {
-            try store.putLibraryEntries(module: module, rev: index + 2, by: "agent", proposals: [step])
+            let asked = try store.putLibraryEntries(module: module, rev: index + 2, by: "agent", proposals: [step], dryRun: true)
+            XCTAssertEqual(asked.needsReason?.map(\.id), told.contains(index) ? [id] : nil, "step \(index)")
+            let take = told.contains(index) ? LibraryTake.none.with(entryReasons: [id: "told"]) : .none
+            try store.putLibraryEntries(module: module, rev: index + 2, by: "agent", proposals: [step], take: take)
         }
         XCTAssertEqual(try store.libraryHistory(id: id)?.versions.map(\.reason),
-                       [nil, "named for what it does", nil, nil, "the byte reaches AL", nil, "takes the width too"])
+                       [nil, "named for what it does", "told", "told", "the byte reaches AL", "told", "takes the width too"])
         // A conflict taken says why it was taken, whatever the function says.
         let other = SHA256Digest(data: Data("b".utf8))
         try store.putLibraryEntries(module: other, rev: 1, by: "agent", proposals: [
@@ -196,14 +307,14 @@ final class LibraryRegistryTests: XCTestCase {
     }
 
     /// An entry that holds no function gives nothing to compare with: no reason.
-    func testAVersionOfAnEntryWithNoFunctionHasNoReason() throws {
+    func testAnEntryWithNoFunctionTakesNoReasonFromTheFunction() throws {
         let module = SHA256Digest(data: Data("a".utf8))
         let first = try store.putLibraryEntries(module: module, rev: 1, by: "agent", proposals: [proposal("SetMem", plate: "p")])
         let id = try XCTUnwrap(first.added.first?.id)
         var next = proposal("SetMem", plate: "q", base: 1)
         next.nameReason = "named for what it does"
-        try store.putLibraryEntries(module: module, rev: 2, by: "agent", proposals: [next])
-        XCTAssertEqual(try store.libraryHistory(id: id)?.versions.map(\.reason), [nil, nil])
+        XCTAssertThrowsError(try store.putLibraryEntries(module: module, rev: 2, by: "agent", proposals: [next]))
+        XCTAssertEqual(try store.libraryHistory(id: id)?.versions.map(\.reason), [nil])
     }
 
     func testAnotherModulesReviewIsAConflictTakenOnlyWithAReason() throws {
@@ -278,7 +389,8 @@ final class LibraryRegistryTests: XCTestCase {
         // A variant's review is the entry's only when it is the same review:
         // a differing one cannot be made the entry's next version.
         try store.putLibraryEntries(module: first, rev: 1, by: "agent",
-                                    proposals: [review("ReadSmn", body: body, constants: ["0x10196"])])
+                                    proposals: [review("ReadSmn", body: body, constants: ["0x10196"])],
+                                    take: LibraryTake.none.with(entryReasons: [body.key: "reviewed as ReadSmn"]))
         let variantConflict = try store.putLibraryEntries(module: second, rev: 1, by: "agent", proposals: [
             review("ReadSmnOther", body: other, constants: ["0x10199"], variantOf: body.key)])
         XCTAssertEqual(variantConflict.conflicts.map(\.id), [body.key])
@@ -435,7 +547,9 @@ final class LibraryRegistryTests: XCTestCase {
         let completed = try store.putLibraryEntries(module: second, rev: 1, by: "agent",
                                                     proposals: [review("ReadSmn", body: body, constants: ["0x1"])])
         XCTAssertEqual(completed.updated.map(\.version), [2])
-        XCTAssertEqual(try store.libraryHistory(id: body.key)?.versions.last?.reason, "the body's constants recorded")
+        XCTAssertEqual(try store.libraryHistory(id: body.key)?.versions.last?.reason,
+                       "the body's constants recorded from \(second.hex) at 0x9A90000")
+        XCTAssertEqual(completed.updated.first?.module, second)
         let same = try store.putLibraryEntries(module: first, rev: 2, by: "agent",
                                                proposals: [review("ReadSmn", body: body, constants: ["0x1"])])
         XCTAssertEqual(same.unchanged.count, 1)
@@ -523,7 +637,8 @@ final class LibraryRegistryTests: XCTestCase {
     func testCollectionKeepsEveryVersion() throws {
         try store.putLibraryEntries(module: first, rev: 33, by: "agent", proposals: [proposal("SetMem")])
         try store.putLibraryEntries(module: first, rev: 34, by: "agent",
-                                    proposals: [proposal("SetMem", plate: "v2", base: 1)])
+                                    proposals: [proposal("SetMem", plate: "v2", base: 1)],
+                                    take: LibraryTake.none.with(entryReasons: [body.key: "v2"]))
         let versions = try XCTUnwrap(try store.libraryHistory(id: body.key)).versions.map(\.entry)
         _ = try store.collectGarbage(dryRun: false)
         for object in versions { XCTAssertTrue(store.hasObject(object)) }

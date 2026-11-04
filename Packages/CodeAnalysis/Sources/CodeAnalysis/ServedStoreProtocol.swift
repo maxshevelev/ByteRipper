@@ -95,6 +95,9 @@ public enum ServedStoreProtocol {
         /// which a server that predates it ignores. Nil for a take of all.
         public var takeIDs: [String]?
         public var reasons: [String: String]?
+        /// Why this offer changes the entries it moves, by id. A server that
+        /// predates it ignores them, and takes the change with no reason.
+        public var entryReasons: [String: String]?
         /// Answer what the offer would do and write nothing.
         public var dryRun: Bool?
         /// Give the entry `renameID` the name `renameTo`, for `reason`, instead
@@ -107,7 +110,9 @@ public enum ServedStoreProtocol {
         public init(module: SHA256Digest, rev: Int?, by: String?, proposals: [LibraryProposal],
                     take: Bool? = nil, reason: String? = nil,
                     takeIDs: [String]? = nil, reasons: [String: String]? = nil,
-                    dryRun: Bool? = nil, renameID: String? = nil, renameTo: String? = nil, change: LibraryChange? = nil) {
+                    dryRun: Bool? = nil, renameID: String? = nil, renameTo: String? = nil, change: LibraryChange? = nil,
+                    entryReasons: [String: String]? = nil) {
+            self.entryReasons = entryReasons
             self.change = change
             self.renameID = renameID
             self.renameTo = renameTo
@@ -124,17 +129,19 @@ public enum ServedStoreProtocol {
 
         /// The decision this offer carries, as the store takes it.
         public var decision: LibraryTake {
+            var decided = take == true ? LibraryTake.all(reason ?? "") : .none
             if let ids = takeIDs {
                 var reasons = reasons ?? [:]
                 for id in ids { reasons[id] = reasons[id] ?? "" }
-                return .these(reasons)
+                decided = .these(reasons)
             }
-            return take == true ? .all(reason ?? "") : .none
+            return decided.with(entryReasons: entryReasons ?? [:])
         }
 
         private enum CodingKeys: String, CodingKey {
             case module, rev, by, proposals, take, reason, reasons
             case takeIDs = "take_ids"
+            case entryReasons = "entry_reasons"
             case dryRun = "dry_run"
             case renameID = "rename_id"
             case renameTo = "rename_to"

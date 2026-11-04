@@ -406,6 +406,14 @@ final class GhidraHostLibraryPlanTests: XCTestCase {
         // refuses by naming the entry.
         let untyped = try GhidraTools.libraryTake(AgentArguments(["take_library_conflicts": ["a"]]))
         XCTAssertEqual(untyped.reason(for: "a"), "")
+
+        let told = try GhidraTools.libraryTake(AgentArguments(["entry_reasons": ["a": "first"]]))
+        XCTAssertEqual(told, LibraryTake.none.with(entryReasons: ["a": "first"]))
+        let both = try GhidraTools.libraryTake(AgentArguments([
+            "take_library_conflicts": ["b"], "library_reason": ["b": "second"], "entry_reasons": ["a": "first"]]))
+        XCTAssertEqual(both, LibraryTake.these(["b": "second"]).with(entryReasons: ["a": "first"]))
+        XCTAssertThrowsError(try GhidraTools.libraryTake(AgentArguments(["entry_reasons": "not an object"])))
+        XCTAssertThrowsError(try GhidraTools.libraryTake(AgentArguments(["entry_reasons": ["a": 1]])))
     }
 
     /// A publish answers what it changed: the entries it left as they were

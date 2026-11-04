@@ -466,6 +466,22 @@ public enum GhidraTools {
     /// with the one `library_reason` — or a list of entry ids, each with its
     /// reason from `library_reason` given as an object of id to text.
     static func libraryTake(_ arguments: AgentArguments) throws -> LibraryTake {
+        var entryReasons: [String: String] = [:]
+        if let given = arguments["entry_reasons"] {
+            guard let map = given.objectValue else {
+                throw AgentToolError("Argument `entry_reasons`: an object of entry id to reason.")
+            }
+            for (id, text) in map {
+                guard let reason = text.stringValue else {
+                    throw AgentToolError("Argument `entry_reasons`: an object of entry id to reason.")
+                }
+                entryReasons[id] = reason
+            }
+        }
+        return try libraryConflictsTake(arguments).with(entryReasons: entryReasons)
+    }
+
+    private static func libraryConflictsTake(_ arguments: AgentArguments) throws -> LibraryTake {
         guard let value = arguments["take_library_conflicts"] else { return .none }
         if let all = value.boolValue {
             guard all else { return .none }
@@ -1308,13 +1324,20 @@ public enum GhidraTools {
                 of every conflicting body the entry's next version; a list of entry ids takes those alone, \
                 each with its own reason in `library_reason` given as an object — a reason is required for \
                 each and kept in the entry's history. The conflicts not taken come back in `conflicts`, \
-                with the version this review was based on as `base`. By default the answer carries only \
+                with the version this review was based on as `base`. A change names its `module` and \
+                `reason` on its row and in the entry's history, so a publish that would move an entry with \
+                no reason is refused and stores nothing, naming the entries in the refusal. Give each one \
+                in `entry_reasons`, an object of entry id to why this module changes it. A first version, \
+                an unchanged entry and a taken conflict with its reason need none; a function's own \
+                reason for a changed name or signature also counts as one. By default the answer carries only \
                 what the publish changed; `full: true` adds the list of entries it left as they were. \
                 `dry_run: true` answers the same without storing (its artifact hash is taken before the registry's states and marks, so a publish that touches the registry stores another): the artifact's counts, the revision \
                 it would become, the description's size, the type conflicts, and — with the library \
                 decision given as it would be to the publish — `library`, what the registry offer would \
                 do: the entries it would add or move to their next version, the conflicts it would leave, \
-                and the same refusal a take of an entry that is not in conflict gets, in `library_error`. \
+                the entries that need a reason in `library.needs_reason` with the refusal in \
+                `library_refused`, and the same refusal a take of an entry that is not in conflict gets, \
+                in `library_error`. \
                 The export is done, so it costs what a publish costs. Publishing is the point another host sees the work; the \
                 owner also writes the program out when it idles out, is stopped or gets a signal — not \
                 after every change — so only an owner killed outright or crashed loses what came after \
@@ -1337,6 +1360,12 @@ public enum GhidraTools {
                     "additionalProperties": ["type": "string"],
                     "description": .string("Why this module's review is the better one: one text for "
                         + "take_library_conflicts: true, or an object of entry id to reason for a list.")
+                ]),
+                "entry_reasons": .object([
+                    "type": "object",
+                    "additionalProperties": ["type": "string"],
+                    "description": .string("Why this module changes each entry this publish moves: an object "
+                        + "of entry id to reason, kept in the entry's history.")
                 ]),
                 "full": AgentSchema.boolean(
                     "Answer with every entry the publish left as it was; by default only what changed.")
@@ -1370,7 +1399,8 @@ public enum GhidraTools {
                 + "an earlier session's, and gives the module's write lease back, so "
                 + "another session or a person can write. With nothing changed it publishes nothing. The "
                 + "module's owner stays up until it has been idle for a while, so a read or the next open "
-                + "costs no start; a later write takes a new lease.",
+                + "costs no start; a later write takes a new lease. A publish that would move a library entry "
+                + "with no reason is refused and the lease stays: give `entry_reasons` to `ghidra_publish` first.",
             inputSchema: AgentSchema.object(["module": moduleProperty], required: ["module"]),
             annotations: .edit
         ) { call in

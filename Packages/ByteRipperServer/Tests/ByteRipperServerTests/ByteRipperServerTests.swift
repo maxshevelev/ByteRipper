@@ -8,6 +8,27 @@ import XCTest
 @testable import ByteRipperServer
 
 final class ServerCommandTests: XCTestCase {
+    /// The route reads the reasons for the entries a publish moves from the
+    /// body, whichever way the conflicts are decided.
+    func testAPublishRouteReadsTheEntryReasons() throws {
+        func request(_ query: [String: String], _ body: [String: Any]?) throws -> HTTPRequest {
+            var request = HTTPRequest(method: "POST", path: "/x", query: query, headers: [:],
+                                      body: try body.map { try JSONSerialization.data(withJSONObject: $0) } ?? Data())
+            request.parameters = [:]
+            return request
+        }
+        let reasons = ["a": "why a"]
+        XCTAssertEqual(GhidraRoutes.libraryTake(try request([:], nil)), .none)
+        XCTAssertEqual(GhidraRoutes.libraryTake(try request([:], ["entry_reasons": reasons])),
+                       LibraryTake.none.with(entryReasons: reasons))
+        XCTAssertEqual(GhidraRoutes.libraryTake(try request(
+            ["take_library_conflicts": "1", "library_reason": "all"], ["entry_reasons": reasons])),
+                       LibraryTake.all("all").with(entryReasons: reasons))
+        XCTAssertEqual(GhidraRoutes.libraryTake(try request([:], [
+            "take_library_conflicts": ["b"], "library_reasons": ["b": "why b"], "entry_reasons": reasons])),
+                       LibraryTake.these(["b": "why b"]).with(entryReasons: reasons))
+    }
+
     /// A home no configuration file is in, so the defaults are the defaults.
     private func emptyHome() -> URL {
         let home = FileManager.default.temporaryDirectory
@@ -462,4 +483,5 @@ private final class Lines: @unchecked Sendable {
     private var lines: [String] = []
     func add(_ line: String) { lock.lock(); lines.append(line); lock.unlock() }
     var all: [String] { lock.lock(); defer { lock.unlock() }; return lines }
+
 }
