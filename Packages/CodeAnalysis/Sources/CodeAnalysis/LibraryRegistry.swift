@@ -403,6 +403,38 @@ extension LibraryProposal {
         return left.isEqual(right)
     }
 
+    /// The held entry with its function's C as its own module prints it now,
+    /// or nil when that is no mere printing. Only the module the C came from,
+    /// at the same address, reprints it, so every address in it stays that
+    /// module's; and the text must read the same but for a zero pointer's
+    /// `NULL`, line breaks, and the warning of a convention nobody names. Any
+    /// other difference is a review's, and goes as one. All else of the
+    /// function stays the entry's, its reasons with it.
+    static func reprinting(_ proposal: Data, in held: Data, heldSource: LibrarySource, source: LibrarySource) -> Data? {
+        guard var object = (try? JSONSerialization.jsonObject(with: held)) as? [String: Any],
+              var function = object["function"] as? [String: Any], let old = function["c"] as? String,
+              let offered = ((try? JSONSerialization.jsonObject(with: proposal)) as? [String: Any])?["function"] as? [String: Any],
+              let new = offered["c"] as? String, old != new else { return nil }
+        let origin = function["source"] as? [String: Any]
+        guard (origin?["module"] as? String ?? heldSource.module.hex) == source.module.hex,
+              (origin?["address"] as? String ?? heldSource.address) == source.address,
+              samePrinting(old, new) else { return nil }
+        for key in ["c", "c_spans", "c_sites", "c_fields", "c_unreachable"] { function[key] = offered[key] }
+        object["function"] = function
+        return try? JSONSerialization.data(withJSONObject: object, options: .sortedKeys)
+    }
+
+    /// Whether two prints of one function differ only as `reprinting` allows.
+    static func samePrinting(_ old: String, _ new: String) -> Bool {
+        func read(_ text: String) -> String {
+            text.replacingOccurrences(of: #"/\*\s*WARNING: Unknown calling convention.*?\*/"#, with: "",
+                                      options: .regularExpression)
+                .replacingOccurrences(of: #"\([^()]*\)0x0\b"#, with: "NULL", options: .regularExpression)
+                .replacingOccurrences(of: #"\s+"#, with: "", options: .regularExpression)
+        }
+        return read(old) == read(new)
+    }
+
     /// The held entry object with the proposal's function added, saying which
     /// module's reading it is; nothing else of the proposal comes with it.
     static func recording(_ proposal: Data, in held: Data, source: LibrarySource) throws -> Data {
@@ -591,6 +623,22 @@ extension ContentStore {
                 let completes = lacksFunction || (!LibraryProposal.hasConstants(heldObject)
                     && LibraryProposal.hasConstants(proposal.entry) && proposal.body == held.variants.first?.body)
                 if LibraryProposal.sameReview(heldObject, proposal.entry), !completes {
+                    // Its C printed anew by the module it came from is no change
+                    // of the review: no version moves, and no copy is behind.
+                    if let reprinted = LibraryProposal.reprinting(proposal.entry, in: heldObject,
+                                                                  heldSource: held.source, source: source) {
+                        var next = held
+                        next.entry = dryRun ? SHA256Digest(data: reprinted) : try putObject(reprinted)
+                        index.entries[id] = next
+                        var history = try histories[id] ?? libraryHistory(id: id) ?? LibraryHistory(id: id, versions: [])
+                        history.versions.append(LibraryVersion(version: held.version, entry: next.entry, source: held.source,
+                                                               reason: "the function's C printed again by its module",
+                                                               recordedAt: now))
+                        histories[id] = history
+                        result.updated.append(.init(id: id, name: held.name, version: held.version, changed: ["function"]))
+                        settled[id] = "its review is the entry's own, at version \(held.version)"
+                        continue
+                    }
                     result.unchanged.append(.init(id: id, name: held.name, version: held.version))
                     settled[id] = "its review is the entry's own, at version \(held.version)"
                     continue

@@ -137,27 +137,62 @@ final class LibraryRegistryTests: XCTestCase {
         XCTAssertEqual(try store.libraryHistory(id: id)?.versions.last?.reason, "this review is the right one")
     }
 
-    /// A module printing its C another way is no change of the review: the
-    /// entry keeps its version and its C until a review changes it.
-    func testTheFunctionsCAloneIsNoNewVersion() throws {
-        func printed(_ c: String) -> LibraryProposal {
-            var made = proposal("SetMem", plate: "p", base: 1)
-            var object = try! JSONSerialization.jsonObject(with: made.entry) as! [String: Any]
-            object["function"] = ["name": "SetMem", "c": c]
-            made.entry = try! JSONSerialization.data(withJSONObject: object, options: .sortedKeys)
-            return made
-        }
+    private func printed(_ c: String, base: Int?, address: String = "0x9A91116") -> LibraryProposal {
+        var made = proposal("SetMem", plate: "p", address: address, base: base)
+        var object = try! JSONSerialization.jsonObject(with: made.entry) as! [String: Any]
+        object["function"] = ["name": "SetMem", "c": c, "name_reason": "offered"]
+        made.entry = try! JSONSerialization.data(withJSONObject: object, options: .sortedKeys)
+        return made
+    }
+
+    /// The module an entry's C came from prints it anew, and nothing moves but
+    /// the text: not the version, not the function's other fields, and the
+    /// version before it stays in the history.
+    func testTheEntrysModulePrintsItsCAgainWithNoNewVersion() throws {
         let module = SHA256Digest(data: Data("a".utf8))
-        var held = printed("if (Buffer == (void *)0x0) {}")
-        held.basedOn = nil
-        held.base = nil
-        let added = try store.putLibraryEntries(module: module, rev: 1, by: "agent", proposals: [held])
+        let added = try store.putLibraryEntries(module: module, rev: 1, by: "agent", proposals: [
+            printed("/* WARNING: Unknown calling convention -- yet parameter storage is locked */\nif (Buffer == (void *)0x0 && H == (EFI_HANDLE)0x0) {\n}", base: nil)])
         let id = try XCTUnwrap(added.added.first?.id)
-        let object = try XCTUnwrap(try store.libraryIndex().entries[id]?.entry)
-        let again = try store.putLibraryEntries(module: module, rev: 2, by: "agent", proposals: [printed("if (Buffer == NULL) {}")])
-        XCTAssertEqual(again.unchanged.map(\.version), [1])
-        XCTAssertTrue(again.updated.isEmpty)
-        XCTAssertEqual(try store.libraryIndex().entries[id]?.entry, object, "the entry keeps the C it held")
+        let before = try XCTUnwrap(try store.libraryIndex().entries[id]?.entry)
+        let new = printed("if (Buffer == NULL && H == NULL) {\n}", base: 1)
+
+        let dry = try store.putLibraryEntries(module: module, rev: 2, by: "agent", proposals: [new], dryRun: true)
+        XCTAssertEqual(dry.updated.first?.changed, ["function"])
+        XCTAssertEqual(try store.libraryIndex().entries[id]?.entry, before, "a dry run writes nothing")
+
+        let again = try store.putLibraryEntries(module: module, rev: 2, by: "agent", proposals: [new])
+        XCTAssertEqual(again.updated.map(\.version), [1])
+        XCTAssertEqual(again.updated.first?.changed, ["function"])
+        let entry = try XCTUnwrap(try store.libraryIndex().entries[id])
+        XCTAssertEqual(entry.version, 1)
+        XCTAssertNotEqual(entry.entry, before)
+        XCTAssertEqual(try store.libraryHistory(id: id)?.versions.map(\.entry).first, before)
+        XCTAssertEqual(try store.libraryHistory(id: id)?.versions.map(\.version), [1, 1])
+
+        let settled = try store.putLibraryEntries(module: module, rev: 3, by: "agent", proposals: [new])
+        XCTAssertEqual(settled.unchanged.map(\.version), [1], "printed once, it is the same")
+        XCTAssertTrue(settled.updated.isEmpty)
+    }
+
+    /// Another module, another place, or text that differs by more than the
+    /// printing leaves the entry's C as it is.
+    func testOnlyItsModuleAndOnlyThePrintingChangeAnEntrysC() throws {
+        let module = SHA256Digest(data: Data("a".utf8))
+        let c = "if (Buffer == (void *)0x0) {\n}"
+        let added = try store.putLibraryEntries(module: module, rev: 1, by: "agent", proposals: [printed(c, base: nil)])
+        let id = try XCTUnwrap(added.added.first?.id)
+        let held = try XCTUnwrap(try store.libraryIndex().entries[id]?.entry)
+        let cases: [(SHA256Digest, LibraryProposal)] = [
+            (SHA256Digest(data: Data("b".utf8)), printed("if (Buffer == NULL) {\n}", base: 1)),
+            (module, printed("if (Buffer == NULL) {\n}", base: 1, address: "0x9A91200")),
+            (module, printed("if (Buffer != NULL) {\n}", base: 1)),
+            (module, printed("if (Buffer == (void *)0x1) {\n}", base: 1))
+        ]
+        for (from, offered) in cases {
+            let answer = try store.putLibraryEntries(module: from, rev: 2, by: "agent", proposals: [offered])
+            XCTAssertTrue(answer.updated.isEmpty, "\(offered.address)")
+            XCTAssertEqual(try store.libraryIndex().entries[id]?.entry, held)
+        }
     }
 
     /// An entry that holds no function gives nothing to compare with: no reason.
