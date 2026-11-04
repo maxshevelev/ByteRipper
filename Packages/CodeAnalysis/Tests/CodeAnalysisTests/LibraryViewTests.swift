@@ -658,7 +658,25 @@ final class LibraryViewTests: XCTestCase {
         try FileManager.default.removeItem(at: store.objectURL(held.entry))
         let read = try XCTUnwrap(store.throughRegistry(artifact).functions.first)
         XCTAssertFalse(read.textFromRegistry)
+        XCTAssertTrue(read.textUnavailable)
         XCTAssertEqual(read.name, "OwnName")
+    }
+
+    /// A function's own state is not made `entry` by being read as the entry.
+    func testAConflictOnAMarkShowsThroughTheRegistry() throws {
+        try register(try entryObject())
+        let c = "int OwnName(void) { return 0; }"
+        let data = try JSONSerialization.data(withJSONObject: [
+            "script_version": 10, "ghidra": "12.2", "functions": [[
+                "entry": "0x9000", "name": "OwnName", "c": c, "body": body.key,
+                "library_entry": ["id": "x", "version": 1, "state": "conflict", "base": 1],
+                "instructions": [["address": "0x9000", "bytes": "90", "text": "NOP"]]
+            ] as [String: Any]]
+        ])
+        let read = try XCTUnwrap(store.throughRegistry(try JSONDecoder().decode(CodeArtifact.self, from: data)).functions.first)
+        XCTAssertTrue(read.textFromRegistry)
+        XCTAssertEqual(read.libraryEntry?.state, .conflict)
+        XCTAssertEqual(read.libraryEntry?.base, 1)
     }
 
     /// On, then off: exactly what was read before.

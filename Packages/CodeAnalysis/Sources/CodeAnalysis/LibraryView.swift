@@ -61,7 +61,9 @@ public enum LibraryView {
         function.reviewLevel = .library
         function.reviewGaps = []
         function.libraryKind = entry.kind ?? local.libraryKind
-        function.libraryEntry = .init(id: entry.id, version: entry.version, codes: local.libraryEntry?.codes ?? [])
+        function.libraryEntry = .init(id: entry.id, version: entry.version, codes: local.libraryEntry?.codes ?? [],
+                                      state: local.libraryEntry?.state, differences: local.libraryEntry?.differences ?? [],
+                                      base: local.libraryEntry?.base)
         guard let source = entry.function, source.c != nil, !local.codeIsPending else { return function }
         let carried = carriedOver(from: source, to: local)
         let rendered = render(source, carried: carried, name: name, string: string)
@@ -304,7 +306,11 @@ extension ContentStore {
             }
             // An entry that cannot be read leaves the row marked and without
             // `text`, which is how it shows.
-            guard let read = entry(id) else { return function }
+            guard let read = entry(id) else {
+                var own = function
+                own.textUnavailable = true
+                return own
+            }
             return LibraryView.function(function, entry: read, name: { named[$0] }, string: { strings[$0] })
         }
     }

@@ -465,9 +465,12 @@ a constant that lands in the image as one, so it errs towards refusing.
 module is republished — a function at its entry reads as the entry wherever it is read:
 `code_query` and `ghidra_function` give the entry's name, signature, plate, comments and C with
 `text: "registry"`, and addresses and names that are this module's own. `parameters` and
-`locals` stay the project's. A write makes the function `edited`: it answers as Ghidra holds it,
-and the next `ghidra_publish` offers it as the entry's next version. A review ends with
-`ghidra_publish`. A name that still carries the publisher's address is listed under
+`locals` stay the project's. Any write in the function makes it `edited`: it answers as Ghidra
+holds it. A `ghidra_publish` that changes its review makes that the entry's next version, for
+every module that holds it, from any holder. One that does not — a temporary's name, a label,
+an equate alone — leaves the entry as it is, and the function reads as the entry again;
+`project_names` lists the temporary's name the C does not print. A review ends with
+`ghidra_publish`. `text_unavailable` says why a marked function has no `text`. A name that still carries the publisher's address is listed under
 `publisher_addresses`, without a link. A mark on an entry given back is no mark: the function
 reads its own text and shows no `library_entry`, and the next open releases it.
 

@@ -146,6 +146,105 @@ final class GhidraHostLibraryTests: XCTestCase {
         XCTAssertEqual((status["released"] as? [[String: Any]])?.first?["address"] as? String, theirs, "\(status)")
     }
 
+    /// `read_through` on, two modules holding one body: any write in a marked
+    /// function reads back as the review wrote it, on the entry's source and on
+    /// another holder. A publish that does not change the review leaves the
+    /// entry, and says what the C does not print; one that does moves the entry
+    /// for every holder.
+    func testAWriteInAMarkedFunctionIsNeverHidden() async throws {
+        guard let paths = ProcessInfo.processInfo.environment["GHIDRA_LIBRARY_MODULES"]?.split(separator: ":"),
+              paths.count == 2 else {
+            throw XCTSkip("GHIDRA_LIBRARY_MODULES is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostLibraryTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraHostLibraryTests"),
+                              writer: store)
+        let images = try paths.map { try Data(contentsOf: URL(fileURLWithPath: String($0))) }
+        let source = SHA256Digest(data: images[0]), other = SHA256Digest(data: images[1])
+        _ = try await host.create(module: images[0], name: "Reviewed")
+        _ = try await host.create(module: images[1], name: "Other")
+        defer { Task { await host.stop(source); await host.stop(other) } }
+        // GetHobList in both Fp6 modules: 43 bytes, with temporaries.
+        let at = try await function(of: 43, in: source, host: host)
+        let there = try await function(of: 43, in: other, host: host)
+        func read(_ m: SHA256Digest, _ a: String) async throws -> [String: Any] {
+            try json(await host.readCall(m, "function/\(a)", query: [:]))
+        }
+        func row(_ m: SHA256Digest, _ a: String) async throws -> [String: Any]? {
+            let rows = try json(await host.readCall(m, "functions", query: [:]))["functions"] as? [[String: Any]]
+            return rows?.first { $0["entry"] as? String == a }
+        }
+        func state(_ answer: [String: Any]?) -> String? { (answer?["library_entry"] as? [String: Any])?["state"] as? String }
+
+        _ = try await host.write(source, "/v1/set/signature", body: body([
+            "address": at, "signature": "void * GetHobList(void)", "by": "agent", "reason": "EDK2 HobLib GetHobList"]))
+        _ = try await host.write(source, "/v1/set/comment", body: body([
+            "address": at, "kind": "plate", "text": "EDK2 HobLib GetHobList: the plate."]))
+        _ = try await host.write(source, "/v1/set/comment", body: body([
+            "address": at, "kind": "eol", "text": "the first step."]))
+        var ordinal = 0
+        for local in (try await read(source, at)["locals"] as? [[String: Any]]) ?? []
+        where (local["storage"] as? String)?.hasPrefix("HASH") != true {
+            ordinal += 1
+            var change: [String: Any] = ["function": at, "storage": local["storage"] ?? "", "name": "Named\(ordinal)",
+                                         "type": "ushort", "by": "agent"]
+            if let use = local["first_use"] { change["first_use"] = use }
+            _ = try await host.write(source, "/v1/rename/variable", body: body(change))
+        }
+        _ = try await host.write(source, "/v1/tag/function", body: body(["address": at, "tag": "library.edk2"]))
+        let first = try await host.publish(source, by: "agent")
+        let id = try XCTUnwrap(first.library?.added.first { $0.name == "GetHobList" }?.id)
+        _ = try await host.library(other, .init(action: .apply))
+        _ = try await host.publish(other, by: "agent")
+        _ = try await store.changeLibrary(.init(action: .readThrough, reason: "test", on: true), by: "test",
+                                          module: source, dryRun: false)
+
+        for (module, address, name) in [(other, there, "OtherBase"), (source, at, "HobBase")] {
+            var answer = try await read(module, address)
+            XCTAssertEqual(answer["text"] as? String, "registry")
+            let locals = answer["locals"] as? [[String: Any]] ?? []
+            let temporary = try XCTUnwrap(locals.first { ($0["storage"] as? String)?.hasPrefix("HASH") == true })
+            _ = try await host.write(module, "/v1/rename/variable", body: body([
+                "function": address, "storage": temporary["storage"] ?? "", "first_use": temporary["first_use"] ?? "",
+                "name": name, "by": "agent"]))
+
+            answer = try await read(module, address)
+            XCTAssertNil(answer["text"], "a rename reads back")
+            XCTAssertEqual(state(answer), "edited")
+            XCTAssertEqual((answer["c"] as? String)?.contains(name), true)
+            let edited = try await row(module, address)
+            XCTAssertNil(edited?["text"])
+            XCTAssertEqual(state(edited), "edited")
+
+            // A rename alone is no change to the review: the entry stays.
+            let published = try await host.publish(module, by: "agent")
+            XCTAssertEqual(published.library?.unchanged.map(\.name).contains("GetHobList"), true)
+            XCTAssertEqual(try store.libraryIndex().entries[id]?.version, 1)
+            answer = try await read(module, address)
+            XCTAssertEqual(answer["text"] as? String, "registry")
+            XCTAssertEqual(state(answer), "entry")
+            XCTAssertEqual((answer["c"] as? String)?.contains(name), false)
+            XCTAssertEqual(answer["project_names"] as? [String], [name], "says what the C does not print")
+        }
+
+        // A change to the review, from a holder that is not the source.
+        _ = try await host.write(other, "/v1/set/comment", body: body([
+            "address": there, "kind": "plate", "text": "A holder's own plate."]))
+        let editedOther = try await read(other, there)
+        XCTAssertEqual(state(editedOther), "edited")
+        let moved = try await host.publish(other, by: "agent")
+        XCTAssertEqual(moved.library?.updated.map(\.version), [2])
+        XCTAssertEqual(moved.library?.conflicts.count, 0)
+        XCTAssertEqual(try store.libraryIndex().entries[id]?.version, 2)
+        let theSource = try await read(source, at)
+        XCTAssertEqual(theSource["text"] as? String, "registry")
+        XCTAssertEqual(theSource["plate"] as? String, "A holder's own plate.", "the source reads the holder's review")
+    }
+
     func testAnEntryReviewedInOneModuleIsAppliedInAnother() async throws {
         guard let paths = ProcessInfo.processInfo.environment["GHIDRA_LIBRARY_MODULES"]?.split(separator: ":"),
               paths.count == 2 else {

@@ -7,6 +7,8 @@ import Foundation
 /// answers as Ghidra holds it. Parameters, locals and their storage stay the
 /// project's: they are what a write names them by. Nothing here is stored.
 extension GhidraHost {
+    private static let entryUnreadable = "the registry entry could not be read: this is the project's text"
+
     public func throughRegistry(_ data: Data, module: SHA256Digest, call: String) async -> Data {
         let oneFunction = call.hasPrefix("function/") && !call.dropFirst("function/".count).contains("/")
         guard call == "functions" || oneFunction,
@@ -33,9 +35,12 @@ extension GhidraHost {
 
     private func rowThroughRegistry(_ row: [String: Any], index: LibraryIndex) async -> [String: Any] {
         var row = row
-        guard let held = heldEntry(&row, index: index),
-              let object = try? await writer.readObject(held.row.entry),
-              let entry = LibraryView.Entry(object: object, id: held.id, version: held.row.version) else { return row }
+        guard let held = heldEntry(&row, index: index) else { return row }
+        guard let object = try? await writer.readObject(held.row.entry),
+              let entry = LibraryView.Entry(object: object, id: held.id, version: held.row.version) else {
+            row["text_unavailable"] = Self.entryUnreadable
+            return row
+        }
         row["name"] = entry.name
         if let signature = entry.function?.signature ?? entry.signature { row["signature"] = signature }
         row["text"] = "registry"
@@ -46,16 +51,36 @@ extension GhidraHost {
                                          index: LibraryIndex) async -> [String: Any] {
         var answer = answer
         guard let held = heldEntry(&answer, index: index),
-              let text = answer["entry"] as? String, let address = CodeAddress(hex: text),
-              let read = try? await writer.functionAsRead(module: module, entry: address) else { return answer }
+              let text = answer["entry"] as? String, let address = CodeAddress(hex: text) else { return answer }
+        guard let read = try? await writer.functionAsRead(module: module, entry: address) else {
+            answer["text_unavailable"] = "this store has no reading of the function to render the entry on: "
+                + "this is the project's text"
+            return answer
+        }
         guard read.textFromRegistry else {
             // What the registry gave back by body, the mark's id still held.
-            if read.libraryEntry == nil { answer["library_entry"] = nil }
+            if read.libraryEntry == nil {
+                answer["library_entry"] = nil
+            } else {
+                answer["text_unavailable"] = Self.entryUnreadable
+            }
             return answer
         }
         answer["name"] = read.name
         if let signature = read.signature { answer["signature"] = signature }
         if answer["c"] != nil, let c = read.c { answer["c"] = c }
+        // A name the project holds and the entry's C does not print: a
+        // temporary is not of the description, so a publish did not carry it.
+        let names = (answer["locals"] as? [[String: Any]] ?? []).compactMap { local -> String? in
+            guard (local["storage"] as? String)?.hasPrefix("HASH") == true, local["named"] as? Bool == true,
+                  let name = local["name"] as? String, read.c?.contains(name) != true else { return nil }
+            return name
+        }
+        if !names.isEmpty {
+            answer["project_names"] = names
+            answer["project_names_note"] = "named in this project, not printed here: the C is the entry's, and a name on "
+                + "a temporary reaches it only with a change to the review"
+        }
         answer["text"] = "registry"
         if !read.publisherAddresses.isEmpty { answer["publisher_addresses"] = read.publisherAddresses }
         if let object = try? await writer.readObject(held.row.entry),

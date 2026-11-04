@@ -322,6 +322,9 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         /// Names in that C still carrying the publisher's address, no place for
         /// them here being known. Set by `LibraryView`, never stored.
         public internal(set) var publisherAddresses: [String] = []
+        /// Its registry entry could not be read, so this is the artifact's own
+        /// text. Set by `LibraryView`, never stored.
+        public internal(set) var textUnavailable = false
         /// What the index of a cut artifact says the function reads as, when
         /// this is that entry and not the function: its code has yet to be read.
         public let fingerprint: String?
@@ -418,14 +421,16 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         /// Whether the function is the entry's, as the panel's filled badge says.
         public var isEntry: Bool { state == .entry }
 
-        /// A function read through its registry entry.
-        init(id: String, version: Int, codes: [String]) {
+        /// A function read through its registry entry. What the function's own
+        /// mark says of it stays said: `conflict`, `differs` or `edited` is not
+        /// made `entry` by the reading.
+        init(id: String, version: Int, codes: [String], state: State? = nil, differences: [String] = [], base: Int? = nil) {
             self.id = id
             self.version = version
-            self.state = .entry
+            self.state = state ?? .entry
             self.codes = codes
-            self.differences = []
-            self.base = nil
+            self.differences = differences
+            self.base = base
         }
 
         public init(from decoder: Decoder) throws {

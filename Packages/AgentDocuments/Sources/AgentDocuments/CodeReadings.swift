@@ -561,6 +561,7 @@ public final class CodeReadings {
             body["signature"] = function.signature.map(JSONValue.string) ?? .null
             body["c"] = function.c.map(JSONValue.string) ?? .null
             if function.textFromRegistry { body["text"] = .string("registry") }
+            if function.textUnavailable { body["text_unavailable"] = .string("the registry entry could not be read") }
             if !function.publisherAddresses.isEmpty {
                 body["publisher_addresses"] = .array(function.publisherAddresses.map(JSONValue.string))
             }
@@ -853,6 +854,7 @@ private func functionItem(_ function: CodeArtifact.Function,
     item["library_kind"] = text(function.libraryKind?.rawValue)
     item["library_entry"] = libraryEntryItem(function.libraryEntry)
     if function.textFromRegistry { item["text"] = .string("registry") }
+    if function.textUnavailable { item["text_unavailable"] = .string("the registry entry could not be read") }
     if !function.publisherAddresses.isEmpty {
         item["publisher_addresses"] = .array(function.publisherAddresses.map(JSONValue.string))
     }

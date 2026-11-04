@@ -552,8 +552,9 @@ public enum GhidraTools {
                     `offset` and `limit`; `next` says where the next page starts. `library_entry` is \
                     the function's mark and whether it is still the entry (`state`: entry, edited). \
                     While the registry reads through, a row at its entry has the entry's name and \
-                    signature and `text: "registry"`; `leftovers` stay the project's, which holds no \
-                    text of a linked function.
+                    signature and `text: "registry"`, or `text_unavailable` saying why not; `leftovers`, \
+                    and so `filter: "unfinished"`, stay the project's, and can list a function that \
+                    reads as its entry.
                     """,
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,
@@ -618,10 +619,14 @@ public enum GhidraTools {
                     While the registry reads through, a function at its entry answers the entry's name, \
                     signature, plate, comments and C with `text: "registry"`, as the store reads it, and \
                     `publisher_addresses` lists any name that still carries the address of the module \
-                    the entry came from; `parameters` and `locals` stay the project's. A write makes it \
-                    `edited` (`library_entry.state`): it then answers as Ghidra holds it, and the next \
-                    publish offers that as the entry's next version. A marked function with no `text` \
-                    whose state is `entry` is an entry that could not be read. \
+                    the entry came from; `parameters` and `locals` stay the project's. Any write in it \
+                    makes it `edited` (`library_entry.state`): it then answers as Ghidra holds it. A \
+                    publish that changes its review makes that the entry's next version, for every \
+                    module that holds it, from any holder; one that does not — a name on a temporary, \
+                    a label, an equate alone — leaves the entry as it is, the function reads as the \
+                    entry again, and `project_names` lists a temporary's name the C does not print. \
+                    `text_unavailable` says why a marked function has no `text`: the entry could not \
+                    be read, or this store has no reading of the function. \
                     `summary: true` leaves the C and the equates out, for walking a module without \
                     its text. A function the decompiler refuses answers `decompile_error` and \
                     `suspects`: the parameters, locals and referenced data whose applied type is a \

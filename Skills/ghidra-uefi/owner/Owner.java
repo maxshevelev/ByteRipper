@@ -2504,8 +2504,7 @@ public class Owner {
             // Linked to an entry and not edited since: its description is the
             // entry's, and what the project lacks is no gap of anyone's.
             JsonObject linkedMark = libraryMark(function);
-            boolean linked = linkedMark != null && hash != null
-                && reviewDigest(function, hash).equals(string(linkedMark, "digest", ""));
+            boolean linked = linkedMark != null && atItsMark(function, hash, linkedMark);
             if (linked && !gaps.isEmpty()) continue;
             if (!gaps.isEmpty()) {
                 JsonObject item = new JsonObject();
@@ -2884,7 +2883,8 @@ public class Owner {
             if (near != null) item.add("near", near);
             if (mark != null) {
                 JsonObject held = mark.deepCopy();
-                held.addProperty("edited", !reviewDigest(function, hash).equals(string(mark, "digest", "")));
+                held.addProperty("edited", !atItsMark(function, hash, mark));
+                held.remove("written");
                 held.remove("digest");
                 item.add("mark", held);
             }
@@ -3566,7 +3566,7 @@ public class Owner {
         boolean same;
         try {
             ghidra.feature.fid.hash.FidHashQuad hash = new ghidra.feature.fid.service.FidService().hashFunction(function);
-            same = hash != null && reviewDigest(function, hash).equals(string(mark, "digest", ""));
+            same = atItsMark(function, hash, mark);
         } catch (Exception error) {
             same = false;
         }
@@ -4045,6 +4045,7 @@ public class Owner {
         boolean done = false;
         try {
             JsonObject answer = change.apply(body);
+            noteWriteOnMarks(exchange, body, before);
             done = true;
             System.out.println("OWNER CHANGE " + leaseHolder + " " + exchange.getRequestURI().getPath()
                                + " " + body);
@@ -4081,6 +4082,7 @@ public class Owner {
             boolean done = false;
             try {
                 JsonObject answer = change.apply(element.getAsJsonObject()).deepCopy();
+                noteWriteOnMarks(exchange, element.getAsJsonObject(), before);
                 answer.addProperty("ok", true);
                 answers.add(answer);
                 done = true;
@@ -4104,6 +4106,53 @@ public class Owner {
         JsonObject answer = identity();
         answer.add("items", answers);
         return answer;
+    }
+
+    /**
+     * A write inside a marked function is the review's own from then on, also
+     * when what it changed is not of the entry's description: a temporary's
+     * name, a label, an equate leave the digest as it was, and the function
+     * would go on reading as the entry, hiding the write. A publish marks it
+     * afresh.
+     */
+    private void noteWriteOnMarks(HttpExchange exchange, JsonObject body, long before) {
+        if (program.getModificationNumber() == before) return;
+        if (exchange.getRequestURI().getPath().startsWith("/v1/library/")) return;
+        java.util.List<String> places = new java.util.ArrayList<>();
+        for (String key : new String[] {"function", "address"}) {
+            if (body.has(key) && body.get(key).isJsonPrimitive()) places.add(body.get(key).getAsString());
+        }
+        for (String key : new String[] {"functions", "items"}) {
+            if (!body.has(key) || !body.get(key).isJsonArray()) continue;
+            for (JsonElement element : body.getAsJsonArray(key)) {
+                if (element.isJsonPrimitive()) places.add(element.getAsString());
+                else if (element.isJsonObject() && element.getAsJsonObject().has("address")) {
+                    places.add(element.getAsJsonObject().get("address").getAsString());
+                }
+            }
+        }
+        for (String place : places) {
+            Address at;
+            try {
+                at = address(place);
+            } catch (Exception error) {
+                continue;
+            }
+            Function function = program.getFunctionManager().getFunctionContaining(at);
+            JsonObject mark = function == null ? null : libraryMark(function);
+            if (mark == null || mark.has("written")) continue;
+            mark.addProperty("written", true);
+            try {
+                propertyMap(LIBRARY_MARK).add(function.getEntryPoint(), COMPACT.toJson(mark));
+            } catch (Exception error) {
+                System.out.println("OWNER MARK not noted " + place + " " + error);
+            }
+        }
+    }
+
+    /** Whether a marked function is still what the mark says. */
+    private boolean atItsMark(Function function, ghidra.feature.fid.hash.FidHashQuad hash, JsonObject mark) throws Exception {
+        return hash != null && !mark.has("written") && reviewDigest(function, hash).equals(string(mark, "digest", ""));
     }
 
     private JsonObject renameFunction(JsonObject body) throws Exception {
