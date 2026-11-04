@@ -202,6 +202,32 @@ final class ServerMCPTests: XCTestCase {
         }
     }
 
+    /// `show` asks for less of the same search, in both scopes.
+    func testFindBytesAnswersACountAndACompactRow() async throws {
+        let find = try tool("find_bytes", tools())
+        func run(_ values: [String: JSONValue]) async throws -> JSONValue {
+            let answer = try await find.run(AgentCall(tool: "find_bytes", arguments: AgentArguments(values)))
+            guard case .json(let value) = answer else { throw AgentToolError("not json") }
+            return value
+        }
+        for scope: [String: JSONValue] in [["document": "d1"], ["document": "d1", "node": "root"]] {
+            let asked = scope.merging(["text": "MZ", "encoding": "ascii"]) { $1 }
+            let count = try await run(asked.merging(["show": "count"]) { $1 })
+            XCTAssertEqual(count["total"], .count(1))
+            XCTAssertEqual(count["matches"]?.arrayValue?.count, 0)
+            let compact = try await run(asked.merging(["show": "compact"]) { $1 })
+            let row = try XCTUnwrap(compact["matches"]?.arrayValue?.first)
+            XCTAssertNil(row["encoding"], "one encoding searched")
+            XCTAssertNil(row["volume"])
+            if scope["node"] != nil {
+                XCTAssertNotNil(row["node"]?.stringValue, "\(row)")
+                XCTAssertEqual(row["node_offset"]?.stringValue, "0x4")
+            } else {
+                XCTAssertEqual(row["start"]?.stringValue, "0x64")
+            }
+        }
+    }
+
     /// Paging loses nothing: a match a page stopped before is the next
     /// page's first, and the ASCII and UTF-16LE matches at one address are
     /// two matches, both listed.

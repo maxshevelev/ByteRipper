@@ -69,7 +69,9 @@ public enum ServerToolText {
             which `read` cannot reach: its bytes are what the tree decompressed it to, and `source` says \
             which compressed section in the file they came out of. For a compressed section itself, part \
             `decompressed` is what it decompresses to — the buffer its children are in. `size` is the \
-            whole part's, to read on by `offset`; at most 4096 bytes at a time. A node of the file gives \
+            whole part's, to read on by `offset`; at most 4096 bytes at a time. `ranges` reads several \
+            places of the part in one call, each as its own row of the answer's `ranges`, 4096 bytes in \
+            all. A node of the file gives \
             `file_start` as well: its bytes are the snapshot's at that address, which `read` and \
             `find_bytes` reach too.
             """,

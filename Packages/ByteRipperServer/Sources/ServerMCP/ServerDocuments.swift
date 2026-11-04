@@ -148,7 +148,8 @@ public enum ServerDocuments {
                 that would not decompress. Matches do not overlap unless `overlapping`: "AA" in "AAAA" is \
                 two, or three with it. Pages: `limit` is a ceiling — a page also stops before the answer \
                 passes the size bound and then says `truncated: "size"`; pass `next` back as `after` \
-                until it is null.
+                until it is null. `show` "compact" answers each match as where it is and no more — `node` by \
+                its id and `node_offset`, or `start` — and "count" answers `total` alone.
                 """,
             inputSchema: AgentSchema.object([
                 "document": AgentSchema.string(documentHelp),
@@ -162,6 +163,7 @@ public enum ServerDocuments {
                 "end": AgentSchema.offset("The first byte after the searched range. Default: the end. Not with `node`."),
                 "node": AgentSchema.string("Search what the UEFI tree holds at and under this node, decompressed "
                                            + "and decoded; \"root\" for the whole image."),
+                "show": AgentSchema.choice(UEFIAgentContentSearch.shows, UEFIAgentContentSearch.showHelp),
                 "limit": AgentSchema.limit(default: 100, maximum: 1000),
                 "after": AgentSchema.after
             ])
@@ -184,10 +186,11 @@ public enum ServerDocuments {
         let host = document.readHost()
         let wanted = try patterns(arguments)
         let overlapping = try arguments.bool("overlapping", default: false)
-        let limit = try arguments.limit(default: 100, maximum: 1000)
+        let show = try arguments.choice("show", from: UEFIAgentContentSearch.shows, default: "full")
+        let limit = show == "count" ? 0 : try arguments.limit(default: 100, maximum: 1000)
         if let node = try arguments.optionalString("node") {
             return try await findInTree(arguments, document: document, host: host, wanted: wanted,
-                                        node: node, overlapping: overlapping, limit: limit)
+                                        node: node, overlapping: overlapping, limit: limit, show: show)
         }
         let reader = try host.snapshot()
         let size = reader.size
@@ -214,12 +217,18 @@ public enum ServerDocuments {
             return (total, page)
         }.value
 
+        if show == "count" {
+            return ToolQueryTools.stamped(.json(.object(["total": .count(total), "matches": .array([]), "next": .null])),
+                                          with: document)
+        }
         let items: [JSONValue] = page.map { match in
-            .object([
+            let item: JSONValue = .object([
                 "start": hex(match.range.lowerBound),
                 "end": hex(match.range.upperBound),
                 "encoding": .string(wanted[match.pattern].encoding)
             ])
+            return show == "compact"
+                ? UEFIAgentContentSearch.compact(item, keepingEncoding: wanted.count > 1) : item
         }
         let answer = try paging.answer(["total": .count(total)], key: "matches", items: items, total: total,
                                        bound: arguments.answerBound)
@@ -231,7 +240,7 @@ public enum ServerDocuments {
     /// own tree search (`UEFIContentSearch`), read off the server's tree.
     static func findInTree(_ arguments: AgentArguments, document: any AgentDocument,
                            host: any ToolReadHost, wanted: [Wanted], node text: String,
-                           overlapping: Bool, limit: Int) async throws -> AgentAnswer {
+                           overlapping: Bool, limit: Int, show: String) async throws -> AgentAnswer {
         guard !arguments.has("offset"), !arguments.has("end") else {
             throw AgentToolError("`offset` and `end` are the document's: with `node` the search covers what the "
                 + "tree holds under it, decompressed and decoded, which is no one range of addresses. Leave them "
@@ -268,8 +277,16 @@ public enum ServerDocuments {
             envelope["note"] = .string("Too many matches to place them all in tree order; these are the first "
                 + "\(result.matches.count). Search from a deeper `node` to narrow it.")
         }
+        if show == "count" {
+            envelope["matches"] = .array([])
+            envelope["next"] = .null
+            envelope["note"] = nil
+            return ToolQueryTools.stamped(.json(.object(envelope)), with: document)
+        }
         let items: [JSONValue] = result.matches.dropFirst(paging.first).prefix(limit).map { match in
-            UEFIAgentContentSearch.entry(for: match, encoding: wanted[match.pattern].encoding, in: tree)
+            let item = UEFIAgentContentSearch.entry(for: match, encoding: wanted[match.pattern].encoding, in: tree)
+            return show == "compact"
+                ? UEFIAgentContentSearch.compact(item, keepingEncoding: wanted.count > 1) : item
         }
         let answer = try paging.answer(envelope, key: "matches", items: items, total: result.total,
                                        bound: arguments.answerBound)

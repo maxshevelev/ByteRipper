@@ -131,7 +131,8 @@ public enum UEFIAgentNodeData {
             which `read` cannot reach: its bytes are what the tree decompressed it to, and `source` says \
             which compressed section in the file they came out of. For a compressed section itself, \
             part `decompressed` is what it decompresses to — the buffer its children are in. `size` is the whole part's, to read \
-            on by `offset`; at most 4096 bytes at a time. A node of the file gives `file_start` as well: \
+            on by `offset`; at most 4096 bytes at a time. `ranges` reads several places of the part in one \
+            call, each as its own row of the answer's `ranges`, 4096 bytes in all. A node of the file gives `file_start` as well: \
             its bytes are the document's at that address, unsaved edits included, and `read`, `reveal` \
             and `write` work there. `find_bytes` with `node` searches the node and everything decompressed or decoded under it.
             """,
@@ -140,6 +141,7 @@ public enum UEFIAgentNodeData {
             "part": AgentSchema.choice(Part.allCases.map(\.rawValue), "Which bytes of the node. Default \"body\"."),
             "offset": AgentSchema.offset("Where to start inside the part. Default 0x0."),
             "length": AgentSchema.offset("How many bytes. Default 256, at most 4096."),
+            "ranges": AgentSchema.strings("Instead of `offset` and `length`: several places, each \"offset+length\", such as \"0x100+0x20\"; at most 64."),
             "format": AgentSchema.choice(AgentBytes.formats, "How to show them. Default \"hex\"."),
             "endian": AgentSchema.choice(["little", "big"], "For u16, u32 and u64. Default \"little\".")
         ],
@@ -150,10 +152,43 @@ public enum UEFIAgentNodeData {
         let asked = try arguments.optionalOffset("length") ?? 256
         let format = try arguments.choice("format", from: AgentBytes.formats, default: "hex")
         let bigEndian = try arguments.choice("endian", from: ["little", "big"], default: "little") == "big"
+        let ranges = try parsed(ranges: arguments)
         guard asked > 0 else { throw AgentToolError("Argument `length` must be at least 1.") }
         guard asked <= 4096 else { throw AgentToolError("Argument `length`: at most 4096 bytes in one read.") }
         let found = try await bytes(host, node: arguments.string("node"), part: part)
         let size = UInt64(found.range.count)
+        @MainActor func stamped(_ answer: inout [String: JSONValue]) {
+            answer["node"] = .string(found.node.id.description)
+            answer["part"] = .string(part.rawValue)
+            answer["size"] = .string(UEFIAgentQueries.hex(size))
+            answer["in_compressed"] = .bool(found.isCompressed)
+            if let fileRange = found.fileRange { answer["file_start"] = .string(UEFIAgentQueries.hex(fileRange.lowerBound)) }
+            if let source = source(of: found.node, in: found.tree, including: part == .decompressed) {
+                answer["source"] = source
+            }
+        }
+        if !ranges.isEmpty {
+            var rows: [JSONValue] = []
+            for range in ranges {
+                guard range.offset < size else {
+                    throw AgentToolError("Range \(UEFIAgentQueries.hex(range.offset))+\(UEFIAgentQueries.hex(range.length)) "
+                        + "starts past the end of the \(part.rawValue), which is \(UEFIAgentQueries.hex(size)) bytes long.")
+                }
+                let length = min(range.length, size - range.offset)
+                let start = found.range.lowerBound + range.offset
+                guard let read = found.reader.bytes(start..<(start + length)), read.count == Int(length) else {
+                    throw AgentToolError("Those bytes of node \(found.node.id) could not be read.")
+                }
+                var row = AgentBytes.shown(read, at: range.offset, format: format, bigEndian: bigEndian)
+                row["offset"] = .string(UEFIAgentQueries.hex(range.offset))
+                row["length"] = .string(UEFIAgentQueries.hex(length))
+                if length < range.length { row["cut_at_end_of_part"] = true }
+                rows.append(.object(row))
+            }
+            var answer: [String: JSONValue] = ["ranges": .array(rows)]
+            stamped(&answer)
+            return .json(.object(answer))
+        }
         guard offset < size else {
             throw AgentToolError("Offset \(UEFIAgentQueries.hex(offset)) is past the end of the \(part.rawValue), "
                 + "which is \(UEFIAgentQueries.hex(size)) bytes long.")
@@ -164,17 +199,33 @@ public enum UEFIAgentNodeData {
             throw AgentToolError("Those bytes of node \(found.node.id) could not be read.")
         }
         var answer = AgentBytes.shown(read, at: offset, format: format, bigEndian: bigEndian)
-        answer["node"] = .string(found.node.id.description)
-        answer["part"] = .string(part.rawValue)
+        stamped(&answer)
         answer["offset"] = .string(UEFIAgentQueries.hex(offset))
         answer["length"] = .string(UEFIAgentQueries.hex(length))
-        answer["size"] = .string(UEFIAgentQueries.hex(size))
-        answer["in_compressed"] = .bool(found.isCompressed)
-        if let fileRange = found.fileRange { answer["file_start"] = .string(UEFIAgentQueries.hex(fileRange.lowerBound)) }
-        if let source = source(of: found.node, in: found.tree, including: part == .decompressed) {
-            answer["source"] = source
-        }
         if length < asked { answer["cut_at_end_of_part"] = true }
         return .json(.object(answer))
+    }
+
+    /// `ranges`, read and bounded before any node is opened. Empty when not given.
+    nonisolated private static func parsed(ranges arguments: AgentArguments) throws -> [(offset: UInt64, length: UInt64)] {
+        let texts = try arguments.strings("ranges")
+        guard !texts.isEmpty else { return [] }
+        guard !arguments.has("offset"), !arguments.has("length") else {
+            throw AgentToolError("Give `ranges`, or `offset` and `length`, not both.")
+        }
+        guard texts.count <= 64 else { throw AgentToolError("Argument `ranges`: at most 64 in one read.") }
+        var total: UInt64 = 0
+        let ranges = try texts.map { text -> (offset: UInt64, length: UInt64) in
+            let parts = text.split(separator: "+", omittingEmptySubsequences: false)
+            guard parts.count == 2,
+                  let offset = try? AgentArguments(["n": .string(String(parts[0]))]).offset("n"),
+                  let length = try? AgentArguments(["n": .string(String(parts[1]))]).offset("n"), length > 0 else {
+                throw AgentToolError("Argument `ranges`: \"\(text)\" is not \"offset+length\", such as \"0x100+0x20\".")
+            }
+            total += length
+            return (offset, length)
+        }
+        guard total <= 4096 else { throw AgentToolError("Argument `ranges`: at most 4096 bytes in one read, in all.") }
+        return ranges
     }
 }

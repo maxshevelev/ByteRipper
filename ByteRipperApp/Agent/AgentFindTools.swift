@@ -67,8 +67,9 @@ final class AgentFindTools {
                 compressed sections that would not decompress. Matches do not overlap unless \
                 `overlapping`: "AA" in "AAAA" is two, or three with it. Pages: `limit` is a ceiling — a \
                 page also stops before the answer passes the size bound and says `truncated: "size"`; pass \
-                `next` back as `after` until it is null. With `survey`, which dumps of a folder hold a \
-                string.
+                `next` back as `after` until it is null. `show` "compact" answers each match as where it is \
+                and no more — `node` by its id and `node_offset`, or `start` — and "count" answers `total` \
+                alone. With `survey`, which dumps of a folder hold a string.
                 """,
             inputSchema: AgentSchema.object([
                 "document": AgentSchema.string("The document's id from `documents`. Default: the focused one."),
@@ -82,6 +83,7 @@ final class AgentFindTools {
                 "end": AgentSchema.offset("The first byte after the searched range. Default: the end. Not with `node`."),
                 "node": AgentSchema.string("Search what the UEFI tree holds at and under this node, decompressed and decoded; \"root\" for the whole image."),
                 "context": AgentSchema.integer("Bytes before and after each match to show in `preview`. Default 0, at most 64."),
+                "show": AgentSchema.choice(UEFIAgentContentSearch.shows, UEFIAgentContentSearch.showHelp),
                 "limit": AgentSchema.limit(default: 100, maximum: 1000),
                 "after": AgentSchema.after
             ]),
@@ -137,12 +139,14 @@ final class AgentFindTools {
         let wanted = try patterns(arguments)
         let overlapping = try arguments.bool("overlapping", default: false)
         let context = Int(max(0, min(Int64(Self.maxContext), try arguments.has("context") ? arguments.integer("context") : 0)))
-        let limit = try arguments.limit(default: 100, maximum: 1000)
+        let show = try arguments.choice("show", from: UEFIAgentContentSearch.shows, default: "full")
+        if show != "full", context > 0 { throw AgentToolError("`context` shows bytes around a match: it needs `show` \"full\".") }
+        let limit = show == "count" ? 0 : try arguments.limit(default: 100, maximum: 1000)
         let host = PaneToolHost(pane: place.pane, owner: place.controller, tools: nil)
 
         if let text = try arguments.optionalString("node") {
             return try await findInTree(arguments, place: place, host: host, wanted: wanted, node: text,
-                                        overlapping: overlapping, context: context, limit: limit)
+                                        overlapping: overlapping, context: context, limit: limit, show: show)
         }
         let storage: any ByteStorage = try diff.snapshot(place)
         let scope: Range<UInt64> = 0..<storage.size
@@ -175,6 +179,19 @@ final class AgentFindTools {
             return (total, page)
         }.value
         envelope["total"] = .count(total)
+        if show == "count" {
+            envelope["matches"] = .array([])
+            envelope["next"] = .null
+            return .json(.object(envelope))
+        }
+        if show == "compact" {
+            let rows = page.map { match in
+                UEFIAgentContentSearch.compact(.object(["start": AgentHostTools.hex(match.range.lowerBound),
+                                                        "encoding": .string(wanted[match.pattern].encoding)]),
+                                               keepingEncoding: wanted.count > 1)
+            }
+            return .json(try paging.answer(envelope, key: "matches", items: rows, total: total, bound: arguments.answerBound))
+        }
 
         // Where each match is: the firmware's areas it lies in.
         let places = await diff.locate(host, page.map(\.range)).map { $0.map(AgentDiffTools.placeJSON) }
@@ -218,7 +235,7 @@ final class AgentFindTools {
     /// Contents search), each match placed at its node and in its volume.
     private func findInTree(_ arguments: AgentArguments, place: AgentDesk.Place, host: PaneToolHost,
                             wanted: [Wanted], node text: String, overlapping: Bool, context: Int,
-                            limit: Int) async throws -> AgentAnswer {
+                            limit: Int, show: String) async throws -> AgentAnswer {
         guard !arguments.has("offset"), !arguments.has("end") else {
             throw AgentToolError("`offset` and `end` are the document's: with `node` the search covers what the tree holds "
                 + "under it, decompressed and decoded, which is no one range of addresses. Leave them out, or search the "
@@ -254,9 +271,16 @@ final class AgentFindTools {
             envelope["note"] = .string("Too many matches to place them all in tree order; these are the first "
                 + "\(result.matches.count). Search from a deeper `node` to narrow it.")
         }
+        if show == "count" {
+            envelope["matches"] = .array([])
+            envelope["next"] = .null
+            envelope["note"] = nil
+            return .json(.object(envelope))
+        }
         let items: [JSONValue] = result.matches.dropFirst(paging.first).prefix(limit).map { match in
-            guard case .object(var members) = UEFIAgentContentSearch.entry(
-                for: match, encoding: wanted[match.pattern].encoding, in: tree) else { return .null }
+            let entry = UEFIAgentContentSearch.entry(for: match, encoding: wanted[match.pattern].encoding, in: tree)
+            if show == "compact" { return UEFIAgentContentSearch.compact(entry, keepingEncoding: wanted.count > 1) }
+            guard case .object(var members) = entry else { return .null }
             guard context > 0 else { return .object(members) }
             // An area the flash map names for a secret gives its matches but
             // not the bytes around them.

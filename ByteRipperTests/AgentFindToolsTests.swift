@@ -109,7 +109,7 @@ final class AgentFindToolsTests: XCTestCase {
         let plain = try await client.answer("find_bytes", ["hex": "FF FF", "limit": 1000])
         XCTAssertEqual(plain["total"], 0x1000)
         XCTAssertEqual(plain["truncated"], "size")
-        XCTAssertLessThanOrEqual(plain.encoded().count, 24 << 10)
+        XCTAssertLessThanOrEqual(plain.encoded().count, service.server.limits.maxAnswerBytes)
         let overlapping = try await client.answer("find_bytes", ["hex": "FF FF", "overlapping": true, "limit": 1])
         XCTAssertEqual(overlapping["total"], 0x1FFF)
 
@@ -180,6 +180,59 @@ final class AgentFindToolsTests: XCTestCase {
         XCTAssertTrue(bad.answer.stringValue?.hasPrefix("No node 9.9") == true, "\(bad.answer)")
         let ranged = try await client.call("find_bytes", ["text": "x", "node": "root", "offset": "0x10"])
         XCTAssertTrue(ranged.isError, "a range is the document's, not the tree's")
+    }
+
+    /// `show` asks for less of the same search: the same total, and rows that
+    /// only say where.
+    func testACountAndACompactRowAnswerTheSameSearch() async throws {
+        try open(try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
+        let full = try await client.answer("find_bytes", ["node": "root", "text": "GH51G"])
+        let count = try await client.answer("find_bytes", ["node": "root", "text": "GH51G", "show": "count"])
+        XCTAssertEqual(count["total"], full["total"])
+        XCTAssertEqual(count["matches"]?.arrayValue?.count, 0)
+        XCTAssertEqual(count["next"], .null)
+
+        let compact = try await client.answer("find_bytes", ["node": "root", "text": "GH51G", "show": "compact"])
+        let row = try XCTUnwrap(compact["matches"]?.arrayValue?.first)
+        let whole = try XCTUnwrap(full["matches"]?.arrayValue?.first)
+        XCTAssertEqual(row["node"], whole["node"]?["id"])
+        XCTAssertEqual(row["node_offset"], whole["node_offset"])
+        XCTAssertEqual(row["encoding"], whole["encoding"], "text searches two encodings: \(row)")
+        XCTAssertNil(row["volume"])
+
+        let hex = try await client.answer("find_bytes", ["node": "root", "hex": "47 48 35 31 47", "show": "compact"])
+        XCTAssertNil(hex["matches"]?.arrayValue?.first?["encoding"], "one pattern, nothing to tell apart")
+
+        try open(UEFITestImage.make())
+        let plain = try await client.answer("find_bytes", ["hex": "5F 46 56 48", "show": "compact"])
+        XCTAssertNotNil(plain["matches"]?.arrayValue?.first?["start"], "\(plain)")
+        XCTAssertNil(plain["matches"]?.arrayValue?.first?["where"])
+        let refused = try await client.call("find_bytes", ["text": "x", "show": "count", "context": 4])
+        XCTAssertTrue(refused.isError, "\(refused.answer)")
+    }
+
+    /// Several places of a node in one call read as each alone does.
+    func testRangesReadSeveralPlacesOfANode() async throws {
+        try open(UEFITestImage.make())
+        let first = try await client.answer("uefi_node_data", ["node": "0", "part": "all", "offset": "0x10", "length": 16])
+        let second = try await client.answer("uefi_node_data", ["node": "0", "part": "all", "offset": "0x28", "length": 8])
+        let both = try await client.answer("uefi_node_data", ["node": "0", "part": "all",
+                                                             "ranges": ["0x10+0x10", "0x28+8"]])
+        let rows = try XCTUnwrap(both["ranges"]?.arrayValue)
+        XCTAssertEqual(rows.first?["rows"], first["rows"])
+        XCTAssertEqual(rows.last?["rows"], second["rows"])
+        XCTAssertEqual(rows.last?["offset"], "0x28")
+        XCTAssertEqual(both["size"], first["size"])
+
+        let size = try XCTUnwrap(first["size"]?.stringValue)
+        let past = try await client.call("uefi_node_data", ["node": "0", "part": "all", "ranges": .array([.string("\(size)+1")])])
+        XCTAssertTrue(past.isError, "\(past.answer)")
+        for bad: [String] in [["10"], ["0x0+0"], ["0x0+0x1001"]] {
+            let answer = try await client.call("uefi_node_data", ["node": "0", "ranges": .array(bad.map { .string($0) })])
+            XCTAssertTrue(answer.isError, "\(bad): \(answer.answer)")
+        }
+        let mixed = try await client.call("uefi_node_data", ["node": "0", "offset": "0x0", "ranges": ["0x0+1"]])
+        XCTAssertTrue(mixed.isError, "\(mixed.answer)")
     }
 
     func testTheOldTreeSearchToolIsGone() {
