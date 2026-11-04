@@ -56,6 +56,11 @@ what the agent talks to.
 Do not guess offsets. The node id is the address of the thing in the tree, and
 `uefi_node_data` reads it even when it has no file address at all.
 
+A match from `find_bytes` in a node carries two offsets. `body_offset` counts
+from the body, which is what `uefi_node_data` reads by default; `node_offset`
+counts from the node's first byte, its part `all`. A `node_offset` given to a
+read of the body returns other bytes and no error.
+
 Example, from a 32 MiB SPI dump with a BIOS region:
 
 ```

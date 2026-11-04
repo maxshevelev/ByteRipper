@@ -3209,13 +3209,24 @@ public class Owner {
     }
 
     /** The function's signature, convention and parameter storage are the entry's already. */
+    /**
+     * The convention an entry names, if it names one. An entry whose function
+     * analysis left at `unknown` says nothing about the convention, and writing
+     * that onto another module's function would put the decompiler's warning there.
+     */
+    private static String namedConvention(JsonObject entry) {
+        String convention = string(entry, "calling_convention", null);
+        return "unknown".equals(convention) ? null : convention;
+    }
+
     private static boolean sameSignature(Function function, JsonObject entry) {
         if (!function.getPrototypeString(false, false).equals(string(entry, "signature", null))) return false;
         // An entry recorded before a storage dropped the convention still names
         // it: the storage below decides, and applying it again would change nothing.
         boolean dropped = function.hasCustomVariableStorage()
             && function.getCallingConventionName().equals(Function.DEFAULT_CALLING_CONVENTION_STRING);
-        if (!dropped && !function.getCallingConventionName().equals(string(entry, "calling_convention", ""))) return false;
+        String wanted = namedConvention(entry);
+        if (!dropped && wanted != null && !function.getCallingConventionName().equals(wanted)) return false;
         JsonArray params = entry.has("params") ? entry.getAsJsonArray("params") : new JsonArray();
         Parameter[] current = function.getParameters();
         if (params.size() != current.length) return false;
@@ -3231,7 +3242,7 @@ public class Owner {
         request.addProperty("address", hex(function.getEntryPoint()));
         request.addProperty("signature", required(entry, "signature"));
         setSignature(request);
-        String convention = string(entry, "calling_convention", null);
+        String convention = namedConvention(entry);
         if (convention != null && !convention.equals(function.getCallingConventionName())) {
             function.setCallingConvention(convention);
         }
@@ -3263,7 +3274,7 @@ public class Owner {
             function.setReturnType(type(returned), SourceType.USER_DEFINED);
             filled.add("return type");
         }
-        String convention = string(entry, "calling_convention", null);
+        String convention = namedConvention(entry);
         if (convention != null && !convention.equals(function.getCallingConventionName())) {
             function.setCallingConvention(convention);
             filled.add("calling convention");
@@ -5250,6 +5261,7 @@ public class Owner {
             if (aligned.size() > 0) body.add("storage", packed);
         }
         if (body.has("storage") || body.has("return_storage")) applyStorage(function, body);
+        String unsettled = settleConvention(function);
         // Why the signature is what it is has a place of its own: the name's
         // reason says where the name came from, and a signature is not that. A
         // signature that changes the name says so there, and what it replaced.
@@ -5264,6 +5276,7 @@ public class Owner {
         answer.addProperty("entry", hex(function.getEntryPoint()));
         answer.addProperty("signature", function.getPrototypeString(false, false));
         if (aligned.size() > 0) answer.add("aligned", aligned);
+        if (unsettled != null) answer.addProperty("convention_stays_unknown", unsettled);
         if (function.hasCustomVariableStorage()) {
             JsonArray storage = new JsonArray();
             for (Parameter parameter : function.getParameters()) storage.add(parameter.getVariableStorage().toString());
@@ -5271,6 +5284,28 @@ public class Owner {
             answer.addProperty("return_storage", function.getReturn().getVariableStorage().toString());
         }
         return answer;
+    }
+
+    /**
+     * A signature someone wrote, on a function analysis left at `unknown`: the
+     * decompiler would put a warning in its C for as long as it stays so. `default`
+     * names no convention and prints nothing, and is taken only if it leaves every
+     * place where it was. Answers why not, or null.
+     */
+    private String settleConvention(Function function) throws Exception {
+        if (!Function.UNKNOWN_CALLING_CONVENTION_STRING.equals(function.getCallingConventionName())) return null;
+        String before = placesOf(function);
+        function.setCallingConvention(Function.DEFAULT_CALLING_CONVENTION_STRING);
+        String after = placesOf(function);
+        if (before.equals(after)) return null;
+        function.setCallingConvention(Function.UNKNOWN_CALLING_CONVENTION_STRING);
+        return "the default convention would move it: " + before + " to " + after;
+    }
+
+    private static String placesOf(Function function) {
+        StringBuilder places = new StringBuilder(function.getReturn().getVariableStorage().toString());
+        for (Parameter parameter : function.getParameters()) places.append(", ").append(parameter.getVariableStorage());
+        return places.toString() + ", purge " + function.getStackPurgeSize();
     }
 
     /**

@@ -378,6 +378,16 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         XCTAssertTrue(callee.callers.contains { $0.description == stub }, "\(callee.callers)")
     }
 
+    /// `ghidra_done` on a module only read holds no lease, so nothing is published.
+    func testADoneAfterOnlyReadingPublishesNothing() async throws {
+        try await open(try image())
+        _ = try await entries()
+        let done = try await host.release(module, by: "agent")
+        XCTAssertNil(done)
+        let state = try GhidraProject.all(in: directory.appendingPathComponent("projects")).first?.state()
+        XCTAssertNil(state?.published?.rev, "\(String(describing: state?.published))")
+    }
+
     /// Asking what an equate would do takes no lease and writes nothing.
     func testAnEquateDryRunTakesNoLease() async throws {
         try await open(try image())
@@ -393,27 +403,87 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         XCTAssertEqual(leased, false)
     }
 
-    /// Typing HASH locals: what the listing holds afterwards, to see a split.
-    func testReproItem5HashSplit() async throws {
-        try await openCopy(of: "SecureFlashPei")
-        let entry = "0x9A13622"
-        func locals() async throws -> [[String: Any]] {
-            try await read("/v1/function/\(entry)")["locals"] as? [[String: Any]] ?? []
+    /// An owner left alone exits, and what its last lease wrote is there when it opens again.
+    func testAnIdleOwnerExitsAndKeepsWhatWasWritten() async throws {
+        let image = try image()
+        directory = FileManager.default.temporaryDirectory.appendingPathComponent("GhidraOwnerReadBack-\(UUID().uuidString)", isDirectory: true)
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"), idle: 10,
+                                               holder: "GhidraOwnerReadBackTests"), writer: store)
+        module = SHA256Digest(data: image)
+        _ = try await host.create(module: image, name: "Module")
+        let all = try await entries()
+        let entry = try XCTUnwrap(all.first)
+        try await post("/v1/rename/function", ["address": entry, "name": "SavedWhenIdle", "by": "agent", "reason": "test"])
+        let record = try await host.owner(of: module)
+        // A child that has exited still answers kill(0), and a request would keep it alive.
+        func running() throws -> Bool {
+            let ps = Process(), pipe = Pipe()
+            ps.executableURL = URL(fileURLWithPath: "/bin/ps")
+            ps.arguments = ["-o", "stat=", "-p", String(record.pid)]
+            ps.standardOutput = pipe
+            try ps.run()
+            ps.waitUntilExit()
+            let stat = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return !stat.isEmpty && !stat.hasPrefix("Z")
         }
-        func line(_ row: [String: Any]) -> String { "\(row["name"] ?? "") \(row["storage"] ?? "") \(row["first_use"] ?? "-") \(row["type"] ?? "")" }
-        for row in try await locals() where (row["storage"] as? String)?.hasPrefix("HASH") == true {
-            let name = try XCTUnwrap(row["name"] as? String)
-            let before = try await locals()
-            var request: [String: Any] = ["function": entry, "storage": row["storage"] as Any, "type": "int *"]
-            if let first = row["first_use"] { request["first_use"] = first }
-            do {
-                let answer = try await post("/v1/rename/variable", request)
-                print("REPRO5", name, "answer", answer["storage"] ?? "-", answer["first_use"] ?? "-", answer["split"] ?? "-")
-            } catch { print("REPRO5", name, "refused", error) }
-            let after = try await locals()
-            print("REPRO5", name, "count", before.count, "->", after.count, "same name", after.filter { $0["name"] as? String == name }.map(line))
-            print("REPRO5 now", after.map(line))
+        var waited = 0
+        while try running(), waited < 60 {
+            try await Task.sleep(nanoseconds: 2_000_000_000)
+            waited += 2
         }
+        XCTAssertFalse(try running(), "still up after \(waited) s")
+        let name = try await read("/v1/function/\(entry)")["name"] as? String
+        XCTAssertEqual(name, "SavedWhenIdle")
+    }
+
+    /// A signature written on a function analysis left at `unknown` clears the
+    /// decompiler's warning, and only that: the places and the rest of the C stay.
+    func testASignatureOnAnUnknownFunctionClearsTheWarningOnly() async throws {
+        try await openCopy(of: "InitPortConfigPei")
+        let entry = "0x9A00548"
+        let held = try await read("/v1/function/\(entry)")
+        XCTAssertEqual(held["calling_convention"] as? String, "unknown")
+        let before = try await c(entry)
+        XCTAssertTrue(before.contains("WARNING: Unknown calling convention"), before)
+        func places(_ function: [String: Any]) -> [String] {
+            (function["parameters"] as? [[String: Any]])?.map { $0["storage"] as? String ?? "?" } ?? []
+        }
+        let answer = try await post("/v1/set/signature", ["address": entry, "signature": try XCTUnwrap(held["signature"] as? String),
+                                                          "by": "agent", "reason": "test"])
+        XCTAssertNil(answer["convention_stays_unknown"], "\(answer)")
+        let now = try await read("/v1/function/\(entry)")
+        XCTAssertEqual(now["calling_convention"] as? String, "default")
+        XCTAssertEqual(places(now), places(held))
+        let after = try await c(entry)
+        let unwarned = before.split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.contains("WARNING: Unknown calling") }.joined(separator: "\n")
+        XCTAssertEqual(after, unwarned)
+    }
+
+    /// An entry whose function was left at `unknown` says nothing about the
+    /// convention: applying it does not take away the one a function has.
+    func testAnEntrysUnknownConventionIsNotWrittenOnAFunction() async throws {
+        try await openCopy(of: "InitPortConfigPei")
+        let rows = try await read("/v1/functions?limit=50")["functions"] as? [[String: Any]] ?? []
+        var named: [String: Any]?
+        for row in rows {
+            let function = try await read("/v1/function/\(row["entry"] as? String ?? "")")
+            if function["calling_convention"] as? String == "__cdecl" { named = function; break }
+        }
+        let function = try XCTUnwrap(named)
+        let entry = try XCTUnwrap(function["entry"] as? String)
+        let parameters = (function["parameters"] as? [[String: Any]] ?? []).map { ["name": $0["name"] ?? "", "type": $0["type"] ?? "", "storage": $0["storage"] ?? ""] }
+        let applied = try await post("/v1/library/apply", ["items": [[
+            "address": entry, "id": "1a-test", "version": 1, "mode": "link",
+            "entry": ["name": function["name"] ?? "", "signature": function["signature"] ?? "",
+                      "calling_convention": "unknown", "params": parameters] as [String: Any]
+        ] as [String: Any]]])
+        let results = try XCTUnwrap(applied["items"] as? [[String: Any]])
+        XCTAssertEqual(results.first?["ok"] as? Int, 1, "\(results)")
+        let now = try await read("/v1/function/\(entry)")
+        XCTAssertEqual(now["calling_convention"] as? String, "__cdecl")
     }
 
     /// Undecoded bytes of a gap are read as code, and the program does not change.
@@ -488,4 +558,45 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         XCTAssertEqual(second.artifact, first.artifact)
         XCTAssertGreaterThan(second.writes ?? 0, first.writes ?? 0, "holdsUnpublishedWrites compares these")
     }
+
+    // MARK: - Reproductions of the queue, printing what they find
+
+    /// A `###` is no section: naming one changes nothing and says where it is.
+    func testASubsectionIsRefusedAsASection() async throws {
+        try await open(try image())
+        let text = "Summary.\n\n## Flow\n\nBody.\n\n### Sub\n\nSubtext.\n"
+        try await post("/v1/set/description", ["text": text])
+        await assertRefused("is a `###` subsection of `## Flow`") { _ = try await self.post("/v1/set/description", ["section": "Sub", "text": "New."]) }
+        await assertRefused("section names a `## ` heading") { _ = try await self.post("/v1/set/description", ["section": "### Sub", "text": "New."]) }
+        let now = try await read("/v1/description")["text"] as? String
+        XCTAssertEqual(now, text)
+    }
+
+    /// The conflict Ghidra blames on concurrency says what holds the name.
+    func testASignatureSaysWhichLocalHoldsAName() async throws {
+        try await open(try image())
+        let rows = try await read("/v1/functions?limit=500")["functions"] as? [[String: Any]] ?? []
+        for row in rows {
+            let entry = try XCTUnwrap(row["entry"] as? String)
+            let stored = (try await read("/v1/function/\(entry)")["locals"] as? [[String: Any]] ?? [])
+                .first { ($0["storage"] as? String)?.hasPrefix("Stack[-") == true }
+            guard let stored else { continue }
+            try await post("/v1/rename/variable", ["function": entry, "storage": stored["storage"] as Any, "name": "TakenName"])
+            await assertRefused("is held by a local") {
+                _ = try await self.post("/v1/set/signature", ["address": entry, "signature": "void QFn(UINT32 TakenName)"])
+            }
+            return
+        }
+        throw XCTSkip("no function with a local on the stack")
+    }
+
+    private func assertRefused(_ words: String, _ call: () async throws -> Void, line: UInt = #line) async {
+        do {
+            try await call()
+            XCTFail("not refused", line: line)
+        } catch {
+            XCTAssertTrue("\(error)".contains(words), "\(error)", line: line)
+        }
+    }
+
 }

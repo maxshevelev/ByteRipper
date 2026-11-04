@@ -273,6 +273,22 @@ final class CodeReadingsTests: XCTestCase {
 
     /// Every list goes by pages; `function` takes an address inside a body, and
     /// `search` narrows instructions as it does the other lists.
+    /// A row says which body it is, so a function matched to the registry with no mark can be counted.
+    func testACodeQueryRowNamesItsBody() async throws {
+        let store = try ContentStore(root: directory)
+        let functions = #"{"entry": "0x1000", "name": "Keyed", "body": "5-aa-bb"}, {"entry": "0x1010", "name": "Unkeyed"}"#
+        try store.putAnalysis(module: module, recipe: recipe, artifact: Data((#"{"script_version": 10, "ghidra": "12.1.2", "functions": ["# + functions + "]}").utf8))
+        let tool = try query(readings())
+        guard case .json(.object(let body)) = try await tool.run(AgentCall(tool: "code_query", arguments: AgentArguments([
+            "module": .string(module.sha256.hex), "what": "functions"]))),
+              case .array(let rows)? = body["functions"] else { return XCTFail("no rows") }
+        let keys = rows.map { row -> JSONValue? in
+            guard case .object(let fields) = row else { return nil }
+            return fields["body"]
+        }
+        XCTAssertEqual(keys, [.string("5-aa-bb"), JSONValue.null])
+    }
+
     func testCodeQueryListsGoByPages() async throws {
         let store = try ContentStore(root: directory)
         let functions = (0..<5).map { index in

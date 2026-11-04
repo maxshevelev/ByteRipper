@@ -981,7 +981,10 @@ public enum GhidraTools {
                   + "lists storage (`[\"ECX:4\", \"Stack[0x4]:4\"]`), and `return_storage` if the result is "
                   + "not where the convention puts it (`EDX:4,EAX:4` for 64 bits, high part first, `void`). "
                   + "Then no dummy parameter is needed for a register the function does not read. A convention "
-                  + "that does not give that storage is dropped, so the C prints none against it.",
+                  + "that does not give that storage is dropped, so the C prints none against it. "
+                  + "A function analysis left at `unknown`, for which the decompiler writes a warning into its C, moves to "
+                  + "`default`, which names no convention and does not say the function follows one; "
+                  + "`convention_stays_unknown` in the answer says why not, when that would move a parameter.",
                   ["address": AgentSchema.string("The function's entry address."),
                    "signature": AgentSchema.string("The C prototype."),
                    "storage": .object(["type": "array", "items": .object(["type": "string"]),
@@ -1343,7 +1346,9 @@ public enum GhidraTools {
             name: "ghidra_done",
             title: "End the review session",
             description: "Publishes what this session changed and gives the module's write lease back, so "
-                + "another session or a person can write.",
+                + "another session or a person can write. With nothing changed it publishes nothing. The "
+                + "module's owner stays up until it has been idle for a while, so a read or the next open "
+                + "costs no start; a later write takes a new lease.",
             inputSchema: AgentSchema.object(["module": moduleProperty], required: ["module"]),
             annotations: .edit
         ) { call in

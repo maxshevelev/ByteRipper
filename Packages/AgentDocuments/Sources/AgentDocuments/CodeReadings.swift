@@ -842,6 +842,7 @@ private func functionItem(_ function: CodeArtifact.Function,
     item["review_level"] = text(function.reviewLevel?.rawValue)
     item["review_gaps"] = .array(function.reviewGaps.map(JSONValue.string))
     item["temporaries"] = .array(LibraryEntryReview.temporaries(in: function).map(JSONValue.string))
+    item["body"] = text(function.body)
     item["library_kind"] = text(function.libraryKind?.rawValue)
     item["library_entry"] = libraryEntryItem(function.libraryEntry)
     item["callers"] = .array(function.callers.map { .string($0.description) })

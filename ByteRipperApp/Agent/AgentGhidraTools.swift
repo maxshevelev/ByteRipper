@@ -84,6 +84,9 @@ struct CurrentGhidraBackend: GhidraBackend {
     func writeCall(_ module: SHA256Digest, _ call: String, body: Data) async throws -> Data {
         try await resolve().writeCall(module, call, body: body)
     }
+    func previewCall(_ module: SHA256Digest, _ call: String, body: Data) async throws -> Data {
+        try await resolve().previewCall(module, call, body: body)
+    }
     func publishModule(_ module: SHA256Digest, by: String,
                        options: GhidraHost.PublishOptions) async throws -> Data {
         try await resolve().publishModule(module, by: by, options: options)

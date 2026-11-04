@@ -414,7 +414,8 @@ final class ServerMCPTests: XCTestCase {
             return XCTFail("not a relay")
         }
         XCTAssertEqual(path, "/tmp/x.sock")
-        guard case .relay(let fallback) = try ServerCommand.parse(["relay"]) else { return XCTFail() }
+        // `--no-config`: the default is the code's, not this Mac's ~/.byteripper-server.json.
+        guard case .relay(let fallback) = try ServerCommand.parse(["relay", "--no-config"]) else { return XCTFail() }
         XCTAssertEqual(fallback, ServerPaths.defaultSocket.path)
     }
 
