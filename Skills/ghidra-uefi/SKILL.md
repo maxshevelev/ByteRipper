@@ -414,8 +414,13 @@ and in the entry's history. A publish that would move an entry with no reason
 is refused whole and stores nothing, and the refusal names the entries; so is
 a `ghidra_done` that has to publish it, which keeps the lease. Give the reason
 in `entry_reasons`, an object of entry id to why this module changes it. A
-first version, an unchanged entry, a taken conflict with its `library_reason`
-and a function's own reason for a changed name or signature need nothing more.
+first version, an unchanged entry and a taken conflict with its
+`library_reason` need nothing more. A `take_library_conflicts` that names the
+entry also speaks for a change on its current version; `true` does not. A
+function's own reason counts only when its name or signature is all that moved.
+A publish to a store that predates this rule is refused. A history row's
+`changed_from` is the module a change came from where `source` still names the
+review's author: a rename, a take-out, a restore, a split, a recorded part.
 
 A dry publish (`dry_run: true`) with the same `take_library_conflicts`,
 `library_reason` and `entry_reasons` answers what the registry offer would do and writes nothing:

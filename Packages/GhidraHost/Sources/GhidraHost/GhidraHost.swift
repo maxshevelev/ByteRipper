@@ -407,7 +407,7 @@ public actor GhidraHost {
            let offered = try? await Self.withoutLinked(offer.proposals, writer: writer), !offered.isEmpty,
            let would = try? await writer.previewLibraryEntries(module: module, rev: last?.rev, by: by, proposals: offered,
                                                                take: options.takeLibrary),
-           let refusal = would.reasonRefusal {
+           let refusal = would.publishRefusal {
             throw GhidraHostError(.refused, refusal, status: 409)
         }
         var reading: AnalysisReading?
@@ -706,7 +706,7 @@ public actor GhidraHost {
                         module: module, rev: revision, by: nil, proposals: offered,
                         take: takeLibrary)
                     preview["library"] = try Self.plain(would)
-                    if let refusal = would.reasonRefusal { preview["library_refused"] = refusal }
+                    if let refusal = would.publishRefusal { preview["library_refused"] = refusal }
                 }
             } catch {
                 preview["library_error"] = "\(error)"

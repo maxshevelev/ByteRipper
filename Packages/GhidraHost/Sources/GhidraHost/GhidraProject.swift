@@ -197,13 +197,13 @@ extension ContentStore: AnalysisWriter {
     public func renameLibraryEntry(id: String, name: String, reason: String, by: String?, module: SHA256Digest,
                                    dryRun: Bool) async throws -> LibraryWriteResult {
         var result = LibraryWriteResult()
-        result.updated = [try renameLibraryEntry(id: id, name: name, reason: reason, by: by, dryRun: dryRun)]
+        result.updated = [try renameLibraryEntry(id: id, name: name, reason: reason, by: by, changedFrom: module, dryRun: dryRun)]
         return result
     }
 
     public func changeLibrary(_ change: LibraryChange, by: String?, module: SHA256Digest,
                               dryRun: Bool) async throws -> LibraryWriteResult {
-        try changeLibrary(change, by: by, dryRun: dryRun)
+        try changeLibrary(change, by: by, changedFrom: module, dryRun: dryRun)
     }
 
     public func reviewGaps(module: SHA256Digest) async throws -> [String: [String]]? {

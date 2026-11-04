@@ -168,11 +168,12 @@ extension LibraryProposal {
 extension ContentStore {
     /// Apply one change. `dryRun` answers the same and writes nothing.
     @discardableResult
-    public func changeLibrary(_ change: LibraryChange, by: String?, dryRun: Bool = false) throws -> LibraryWriteResult {
+    public func changeLibrary(_ change: LibraryChange, by: String?, changedFrom: SHA256Digest? = nil,
+                              dryRun: Bool = false) throws -> LibraryWriteResult {
         switch change.action {
-        case .takeOut: return try takeOutOfLibrary(change, by: by, dryRun: dryRun)
-        case .restore: return try restoreToLibrary(change, by: by, dryRun: dryRun)
-        case .split: return try splitLibraryEntry(change, by: by, dryRun: dryRun)
+        case .takeOut: return try takeOutOfLibrary(change, by: by, changedFrom: changedFrom, dryRun: dryRun)
+        case .restore: return try restoreToLibrary(change, by: by, changedFrom: changedFrom, dryRun: dryRun)
+        case .split: return try splitLibraryEntry(change, by: by, changedFrom: changedFrom, dryRun: dryRun)
         case .cite: return try citeLibrarySource(change, by: by, dryRun: dryRun)
         case .readThrough:
             guard let on = change.on else {
@@ -197,7 +198,7 @@ extension ContentStore {
 
     /// The bodies named leave the registry; with none named, the whole entry
     /// does, and its name is free. The history stays under the entry's id.
-    private func takeOutOfLibrary(_ change: LibraryChange, by: String?, dryRun: Bool) throws -> LibraryWriteResult {
+    private func takeOutOfLibrary(_ change: LibraryChange, by: String?, changedFrom: SHA256Digest?, dryRun: Bool) throws -> LibraryWriteResult {
         let why = try required(change.reason, "taking a body out of the registry")
         guard let id = change.id else { throw CodeAnalysisError.analysisMismatch("name the entry by `id`") }
         return try withLock {
@@ -214,7 +215,7 @@ extension ContentStore {
             var history = try libraryHistory(id: id) ?? LibraryHistory(id: id, versions: [])
             let what = change.body.map { "body \($0) taken out" } ?? "taken out"
             history.versions.append(LibraryVersion(version: entry.version, entry: entry.entry, source: entry.source,
-                                                   reason: "\(what): \(why)", recordedAt: now))
+                                                   reason: "\(what): \(why)", recordedAt: now, changedFrom: changedFrom))
             var out = index.takenOut ?? [:]
             for variant in leaving {
                 let key = variant.body.key
@@ -236,7 +237,7 @@ extension ContentStore {
     }
 
     /// A body taken out by a wrong decision comes back to its entry.
-    private func restoreToLibrary(_ change: LibraryChange, by: String?, dryRun: Bool) throws -> LibraryWriteResult {
+    private func restoreToLibrary(_ change: LibraryChange, by: String?, changedFrom: SHA256Digest?, dryRun: Bool) throws -> LibraryWriteResult {
         let why = try required(change.reason, "restoring a body to the registry")
         guard let body = change.body else { throw CodeAnalysisError.analysisMismatch("name the `body` to restore") }
         return try withLock {
@@ -262,7 +263,7 @@ extension ContentStore {
             index.takenOut?[body] = nil
             var history = try libraryHistory(id: out.id) ?? LibraryHistory(id: out.id, versions: [])
             history.versions.append(LibraryVersion(version: entry.version, entry: entry.entry, source: entry.source,
-                                                   reason: "body \(body) restored: \(why)", recordedAt: Timestamps.now()))
+                                                   reason: "body \(body) restored: \(why)", recordedAt: Timestamps.now(), changedFrom: changedFrom))
             var result = LibraryWriteResult()
             result.updated = [.init(id: out.id, name: entry.name, version: entry.version)]
             if dryRun { return result }
@@ -276,7 +277,7 @@ extension ContentStore {
     /// becomes an entry of its own, under the name its code earns, starting
     /// from the review they shared. The body the entry is keyed by stays: give
     /// it its narrower name with a rename, and split the others off.
-    private func splitLibraryEntry(_ change: LibraryChange, by: String?, dryRun: Bool) throws -> LibraryWriteResult {
+    private func splitLibraryEntry(_ change: LibraryChange, by: String?, changedFrom: SHA256Digest?, dryRun: Bool) throws -> LibraryWriteResult {
         let why = try required(change.reason, "splitting a library entry")
         guard let id = change.id, let key = change.body, let wanted = change.name else {
             throw CodeAnalysisError.analysisMismatch("splitting takes `id`, `body` and `name`")
@@ -318,13 +319,13 @@ extension ContentStore {
                                         role: entry.role)
             let newHistory = LibraryHistory(id: key, versions: [
                 LibraryVersion(version: 1, entry: digest, source: entry.source,
-                               reason: "split from \(id) (\(entry.name)): \(why)", recordedAt: now)
+                               reason: "split from \(id) (\(entry.name)): \(why)", recordedAt: now, changedFrom: changedFrom)
             ])
             entry.version += 1
             entry.variants.removeAll { $0.body.key == key }
             var history = try libraryHistory(id: id) ?? LibraryHistory(id: id, versions: [])
             history.versions.append(LibraryVersion(version: entry.version, entry: entry.entry, source: entry.source,
-                                                   reason: "body \(key) split off as \(name): \(why)", recordedAt: now))
+                                                   reason: "body \(key) split off as \(name): \(why)", recordedAt: now, changedFrom: changedFrom))
             var result = LibraryWriteResult()
             result.added = [.init(id: key, name: name, version: 1)]
             result.updated = [.init(id: id, name: entry.name, version: entry.version)]

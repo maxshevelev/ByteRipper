@@ -221,9 +221,12 @@ public final class CodeReadings {
                 // A mirror copies the index only: the history is the server's.
                 try store.libraryHistory(id: id).map { history in
                     .array(history.versions.map { version in
-                        .object(["version": .int(Int64(version.version)), "source": source(version.source),
-                                 "reason": version.reason.map(JSONValue.string) ?? .null,
-                                 "recorded_at": .string(version.recordedAt)])
+                        var row: [String: JSONValue] = [
+                            "version": .int(Int64(version.version)), "source": source(version.source),
+                            "reason": version.reason.map(JSONValue.string) ?? .null,
+                            "recorded_at": .string(version.recordedAt)]
+                        if let module = version.changedFrom { row["changed_from"] = .string(module.hex) }
+                        return .object(row)
                     })
                 }
             }

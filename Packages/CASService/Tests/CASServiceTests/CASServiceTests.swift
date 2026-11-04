@@ -469,7 +469,8 @@ final class CASServiceTests: XCTestCase {
         better.basedOn = better.body.key
         better.base = 1
         try await remote.putLibraryEntries(module: module("czn").sha256, rev: 34, by: "agent",
-                                           proposals: [better])
+                                           proposals: [better],
+                                           take: LibraryTake.none.with(entryReasons: [better.body.key: "a better name"]))
         _ = try await following.value
         XCTAssertEqual(try store.libraryIndex().entries.values.first?.name, "SetMemBetter")
     }

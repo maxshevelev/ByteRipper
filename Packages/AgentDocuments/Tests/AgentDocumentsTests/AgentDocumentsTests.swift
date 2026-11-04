@@ -203,7 +203,7 @@ final class CodeReadingsTests: XCTestCase {
         // The second entry moves on: the module's mark is a version behind.
         try store.putLibraryEntries(module: module.sha256, rev: 2, by: "agent", proposals: [
             try proposal("LibAmdIoWrite", body2, "amd", "v2", base: 1)
-        ])
+        ], take: LibraryTake.none.with(entryReasons: [body2.key: "the second version"]))
         let artifact = """
             {"script_version": 9, "ghidra": "12.1.2", "functions": [
               {"entry": "0x1000", "name": "SetMem", "signature": "void SetMem(void)",

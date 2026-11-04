@@ -141,10 +141,15 @@ public struct LibraryVersion: Codable, Equatable, Sendable {
     /// nobody gave a reason for.
     public var reason: String?
     public var recordedAt: String
+    /// The module this row's change was asked from, when `source` still names
+    /// the review's author and so is not it. Nil from a build that predates it,
+    /// and on a row whose `source` is the module that made the change.
+    public var changedFrom: SHA256Digest? = nil
 
     private enum CodingKeys: String, CodingKey {
         case version, entry, source, reason
         case recordedAt = "recorded_at"
+        case changedFrom = "changed_from"
     }
 }
 
@@ -374,6 +379,21 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
             + "Publish again with `entry_reasons`, an object of entry id to why this module changes it."
     }
 
+    /// A store that predates the rule leaves its rows without a module, and
+    /// would take a change with no reason, whatever `entry_reasons` says.
+    public var fromAStoreBeforeReasons: Bool {
+        (added + updated + (variants ?? [])).contains { $0.module == nil }
+    }
+
+    /// What a publish is refused with before it is sent, nil when it goes.
+    public var publishRefusal: String? {
+        if fromAStoreBeforeReasons {
+            return "the store predates the rule that a change to a library entry names its module and reason: "
+                + "it would take this publish with no reason. Nothing was stored. Update the store's server first."
+        }
+        return reasonRefusal
+    }
+
     private enum CodingKeys: String, CodingKey {
         case added, updated, unchanged, conflicts, variants
         case needsReason = "needs_reason"
@@ -393,6 +413,14 @@ extension LibraryProposal {
         }
         let (before, after) = (fields(old), fields(new))
         return Set(before.keys).union(after.keys).filter { before[$0] != after[$0] }.sorted()
+    }
+
+    /// Whether all a review moved is the function's name or signature: all the
+    /// function's own reasons speak for. The recorded function is not the review.
+    static func movedOnlyNameOrSignature(from held: Data, to offered: Data) -> Bool {
+        let notTheReview: Set<String> = ["body", "constants", "function"]
+        let nameOrSignature: Set<String> = ["name", "signature", "return_type", "calling_convention", "params"]
+        return Set(changedFields(from: held, to: offered)).subtracting(notTheReview).isSubset(of: nameOrSignature)
     }
 
     /// What the history says of a version this review changed: the function's
@@ -604,9 +632,13 @@ extension ContentStore {
                                                             codes: proposal.codes))
                         index.entries[id] = held
                         index.bodies[proposal.body.key] = id
+                        let joined = "the body \(proposal.body.key) joins the entry as a variant"
                         result.variants = (result.variants ?? []) + [.init(
-                            id: id, name: held.name, version: held.version, module: module,
-                            reason: "this module's body joins the entry as a variant")]
+                            id: id, name: held.name, version: held.version, module: module, reason: joined)]
+                        var history = try histories[id] ?? libraryHistory(id: id) ?? LibraryHistory(id: id, versions: [])
+                        history.versions.append(LibraryVersion(version: held.version, entry: held.entry, source: source,
+                                                               reason: joined, recordedAt: now))
+                        histories[id] = history
                         settled[id] = "this publish joins it as a variant of version \(held.version)"
                         changedIndex = true
                     } else {
@@ -670,7 +702,8 @@ extension ContentStore {
                         var history = try histories[id] ?? libraryHistory(id: id) ?? LibraryHistory(id: id, versions: [])
                         let printed = "the function's C printed again by its module"
                         history.versions.append(LibraryVersion(version: held.version, entry: next.entry, source: held.source,
-                                                               reason: printed, recordedAt: now))
+                                                               reason: printed, recordedAt: now,
+                                                               changedFrom: module))
                         histories[id] = history
                         result.updated.append(.init(id: id, name: held.name, version: held.version, changed: ["function"],
                                                     module: module, reason: printed))
@@ -709,11 +742,14 @@ extension ContentStore {
                 let why: String?
                 if recordsOnly {
                     settled[id] = "this publish only records what its review lacked, which asks no reason"
-                    why = own ?? (lacksFunction ? "the function's C recorded"
-                        : "the body's constants recorded from \(source.module.hex) at \(source.address)")
+                    why = own ?? (lacksFunction ? "the function's C recorded" : "the body's constants recorded")
                 } else {
                     moving.insert(id)
-                    why = entryReasons[id] ?? taken ?? own
+                    // A take speaks for a change on the current version only by
+                    // naming the entry; the function's reason only for what it explains.
+                    let decided = current ? reasons[id] : taken
+                    let explained = LibraryProposal.movedOnlyNameOrSignature(from: heldObject, to: proposal.entry) ? own : nil
+                    why = entryReasons[id] ?? decided ?? explained
                 }
                 guard recordsOnly || why != nil else {
                     result.needsReason = (result.needsReason ?? []) + [.init(
@@ -747,7 +783,8 @@ extension ContentStore {
                     ? "the function's C recorded from \(source.module.hex) at \(source.address)" : why
                 history.versions.append(LibraryVersion(version: next.version, entry: recorded,
                                                        source: completes ? held.source : source,
-                                                       reason: recordedWhy, recordedAt: now))
+                                                       reason: recordedWhy, recordedAt: now,
+                                                       changedFrom: completes ? module : nil))
                 histories[id] = history
                 result.updated.append(.init(id: id, name: proposal.name, version: next.version,
                                             changed: LibraryProposal.changedFields(from: heldObject, to: written),
@@ -852,7 +889,7 @@ extension ContentStore {
     /// up. The reason is the history's, and every module takes the new name at
     /// its next open. `dryRun` answers the same and writes nothing.
     @discardableResult
-    public func renameLibraryEntry(id: String, name: String, reason: String, by: String?,
+    public func renameLibraryEntry(id: String, name: String, reason: String, by: String?, changedFrom: SHA256Digest? = nil,
                                    dryRun: Bool = false) throws -> LibraryWriteResult.Change {
         let why = reason.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !why.isEmpty else { throw CodeAnalysisError.analysisMismatch("renaming a library entry needs a reason") }
@@ -883,7 +920,8 @@ extension ContentStore {
             entry.entry = SHA256Digest(data: data)
             entry.name = name
             history.versions.append(LibraryVersion(version: entry.version, entry: entry.entry, source: entry.source,
-                                                   reason: "\(why) (was \(old))", recordedAt: Timestamps.now()))
+                                                   reason: "\(why) (was \(old))", recordedAt: Timestamps.now(),
+                                                   changedFrom: changedFrom))
             let change = LibraryWriteResult.Change(id: id, name: name, version: entry.version)
             if dryRun { return change }
             _ = try putObject(data)

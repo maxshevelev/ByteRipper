@@ -1328,8 +1328,10 @@ public enum GhidraTools {
                 `reason` on its row and in the entry's history, so a publish that would move an entry with \
                 no reason is refused and stores nothing, naming the entries in the refusal. Give each one \
                 in `entry_reasons`, an object of entry id to why this module changes it. A first version, \
-                an unchanged entry and a taken conflict with its reason need none; a function's own \
-                reason for a changed name or signature also counts as one. By default the answer carries only \
+                an unchanged entry and a taken conflict with its reason need none; a take that names the \
+                entry also speaks for a change on its current version, and a function's own reason does \
+                only when its name or signature is all that moved. A store that predates this rule is \
+                refused, since it would take the change with no reason. By default the answer carries only \
                 what the publish changed; `full: true` adds the list of entries it left as they were. \
                 `dry_run: true` answers the same without storing (its artifact hash is taken before the registry's states and marks, so a publish that touches the registry stores another): the artifact's counts, the revision \
                 it would become, the description's size, the type conflicts, and — with the library \
