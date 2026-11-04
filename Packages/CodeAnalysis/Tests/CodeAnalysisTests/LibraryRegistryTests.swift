@@ -92,55 +92,60 @@ final class LibraryRegistryTests: XCTestCase {
     /// entry; taking it needs a reason.
     /// A version made on the current one that changes the signature says why,
     /// in the function's own words.
-    /// A version a review changed says why in the function's own words; words
-    /// the server generated are no reason, and a taken conflict keeps its own.
-    func testAChangedVersionTakesTheFunctionsOwnReason() throws {
-        func proposed(plate: String, name: String? = nil, signature: String? = nil, base: Int?) -> LibraryProposal {
-            var made = proposal("SetMem", plate: plate, base: base)
-            made.nameReason = name
-            made.signatureReason = signature
-            return made
+    private func withReasons(_ made: LibraryProposal, name: String?, signature: String?, signed: String? = nil) -> LibraryProposal {
+        var made = made
+        var object = try! JSONSerialization.jsonObject(with: made.entry) as! [String: Any]
+        var function: [String: Any] = [:]
+        function["name_reason"] = name
+        function["signature_reason"] = signature
+        object["function"] = function
+        if let signed { object["signature"] = signed }
+        made.entry = try! JSONSerialization.data(withJSONObject: object, options: .sortedKeys)
+        made.nameReason = name
+        made.signatureReason = signature
+        return made
+    }
+
+    /// A version a review changed says why in the function's own words, and only
+    /// words that changed with it: an older reason would read as this change's.
+    /// Words the server generated are no reason; a taken conflict keeps its own.
+    func testAChangedVersionTakesAReasonOnlyWhenTheReasonChanged() throws {
+        func proposed(_ plate: String, name: String?, signature: String? = nil, signed: String? = nil, base: Int?) -> LibraryProposal {
+            withReasons(proposal("SetMem", plate: plate, base: base), name: name, signature: signature, signed: signed)
         }
         let module = SHA256Digest(data: Data("a".utf8))
         let first = try store.putLibraryEntries(module: module, rev: 1, by: "agent", proposals: [
-            proposed(plate: "p", name: "first name", base: nil)])
+            proposed("p", name: "first name", base: nil)])
         let id = try XCTUnwrap(first.added.first?.id)
-        try store.putLibraryEntries(module: module, rev: 2, by: "agent", proposals: [
-            proposed(plate: "q", name: "named for what it does", base: 1)])
-        try store.putLibraryEntries(module: module, rev: 3, by: "agent", proposals: [
-            proposed(plate: "r", name: "library registry entry \(id)", signature: "no longer a library function: x", base: 2)])
-        try store.putLibraryEntries(module: module, rev: 4, by: "agent", proposals: [
-            proposed(plate: "s", name: "library registry entry \(id) v3", signature: "the byte reaches AL", base: 3)])
-        let versions = try XCTUnwrap(store.libraryHistory(id: id)?.versions)
-        XCTAssertEqual(versions.map(\.reason), [nil, "named for what it does", nil, "the byte reaches AL"])
+        let steps = [
+            proposed("q", name: "named for what it does", base: 1),
+            proposed("r", name: "named for what it does", base: 2),
+            proposed("s", name: "library registry entry \(id)", signature: "no longer a library function: x", base: 3),
+            proposed("t", name: "library registry entry \(id) v3", signature: "the byte reaches AL", base: 4),
+            proposed("t", name: "library registry entry \(id) v3", signature: "the byte reaches AL", signed: "void SetMem(UINT8 v)", base: 5),
+            proposed("t", name: "library registry entry \(id) v3", signature: "takes the width too", signed: "void SetMem(UINT8 v, UINT8 w)", base: 6)
+        ]
+        for (index, step) in steps.enumerated() {
+            try store.putLibraryEntries(module: module, rev: index + 2, by: "agent", proposals: [step])
+        }
+        XCTAssertEqual(try store.libraryHistory(id: id)?.versions.map(\.reason),
+                       [nil, "named for what it does", nil, nil, "the byte reaches AL", nil, "takes the width too"])
         // A conflict taken says why it was taken, whatever the function says.
         let other = SHA256Digest(data: Data("b".utf8))
         try store.putLibraryEntries(module: other, rev: 1, by: "agent", proposals: [
-            proposed(plate: "other", name: "its own", base: 1)],
-            take: .all("this review is the right one"))
+            proposed("other", name: "its own", base: 1)], take: .all("this review is the right one"))
         XCTAssertEqual(try store.libraryHistory(id: id)?.versions.last?.reason, "this review is the right one")
     }
 
-    func testASignatureChangeKeepsItsReasonInTheHistory() throws {
-        func proposed(signature: String, plate: String, reason: String?, base: Int?) -> LibraryProposal {
-            var made = proposal("SetMem", plate: plate, base: base)
-            var object = try! JSONSerialization.jsonObject(with: made.entry) as! [String: Any]
-            object["signature"] = signature
-            made.entry = try! JSONSerialization.data(withJSONObject: object, options: .sortedKeys)
-            made.signatureReason = reason
-            return made
-        }
+    /// An entry that holds no function gives nothing to compare with: no reason.
+    func testAVersionOfAnEntryWithNoFunctionHasNoReason() throws {
         let module = SHA256Digest(data: Data("a".utf8))
-        let first = try store.putLibraryEntries(module: module, rev: 1, by: "agent", proposals: [
-            proposed(signature: "void SetMem(void)", plate: "p", reason: nil, base: nil)])
+        let first = try store.putLibraryEntries(module: module, rev: 1, by: "agent", proposals: [proposal("SetMem", plate: "p")])
         let id = try XCTUnwrap(first.added.first?.id)
-        try store.putLibraryEntries(module: module, rev: 2, by: "agent", proposals: [
-            proposed(signature: "void SetMem(UINT8 v)", plate: "p", reason: "the byte reaches AL", base: 1)])
-        try store.putLibraryEntries(module: module, rev: 3, by: "agent", proposals: [
-            proposed(signature: "void SetMem(UINT8 v)", plate: "q", reason: "the byte reaches AL", base: 2)])
-        let versions = try XCTUnwrap(store.libraryHistory(id: id)).versions
-        XCTAssertEqual(versions.map(\.reason), [nil, "the byte reaches AL", "the byte reaches AL"],
-                       "a change of the text says the function's reason too: the person's decision of 2026-11-04")
+        var next = proposal("SetMem", plate: "q", base: 1)
+        next.nameReason = "named for what it does"
+        try store.putLibraryEntries(module: module, rev: 2, by: "agent", proposals: [next])
+        XCTAssertEqual(try store.libraryHistory(id: id)?.versions.map(\.reason), [nil, nil])
     }
 
     func testAnotherModulesReviewIsAConflictTakenOnlyWithAReason() throws {

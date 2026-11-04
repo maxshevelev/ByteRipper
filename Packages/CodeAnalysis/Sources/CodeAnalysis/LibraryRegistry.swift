@@ -368,14 +368,21 @@ extension LibraryProposal {
     }
 
     /// What the history says of a version this review changed: the function's
-    /// own reason, the one for what changed first. Words the server wrote say
-    /// nothing a reader can use, and no reason is better than those.
-    func reason(signatureChanged: Bool) -> String? {
-        func own(_ reason: String?) -> String? {
-            guard let reason, !Self.generatedReasons.contains(where: reason.hasPrefix) else { return nil }
+    /// own reason, and only one that changed against the function the entry
+    /// held, the one for what changed first. An older reason here would read
+    /// as the explanation of this change, which is worse than none. So are the
+    /// words the server wrote. A held entry with no function gives nothing to
+    /// compare with, and no reason comes of it.
+    func reason(signatureChanged: Bool, held: Data) -> String? {
+        guard let object = (try? JSONSerialization.jsonObject(with: held)) as? [String: Any],
+              let function = object["function"] as? [String: Any] else { return nil }
+        func own(_ reason: String?, _ key: String) -> String? {
+            guard let reason, reason != function[key] as? String,
+                  !Self.generatedReasons.contains(where: reason.hasPrefix) else { return nil }
             return reason
         }
-        return signatureChanged ? own(signatureReason) ?? own(nameReason) : own(nameReason) ?? own(signatureReason)
+        let name = own(nameReason, "name_reason"), signature = own(signatureReason, "signature_reason")
+        return signatureChanged ? signature ?? name : name ?? signature
     }
 
     private static let generatedReasons = ["library registry entry ", "no longer a library function: ", "named in its signature"]
@@ -629,7 +636,7 @@ extension ContentStore {
                     ((try? JSONSerialization.jsonObject(with: entry)) as? [String: Any])?["signature"] as? String
                 }
                 let signatureChanged = signature(heldObject) != signature(proposal.entry)
-                let why = current ? proposal.reason(signatureChanged: signatureChanged)
+                let why = current ? proposal.reason(signatureChanged: signatureChanged, held: try object(held.entry))
                     : completes ? (lacksFunction ? "the function's C recorded" : "the body's constants recorded") : taken
                 let recordedWhy = lacksFunction
                     ? "the function's C recorded from \(source.module.hex) at \(source.address)" : why
