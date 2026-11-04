@@ -153,6 +153,14 @@ store can tell a right name or type from a wrong one: a sweep of BdsDxe's `full`
 rows found two size locals swapped, an inverted flag's name and a `uint[2]`
 under a single dword's name. Only reading the instructions finds those.
 
+`full` is a mechanical bar: the function's name, plate, step comments,
+parameters and stack locals. It does not reach three things. A comment on data
+belongs to no function's row, so a stale one on a PPI list keeps nothing from
+`full`. A placeholder on a register or `HASH` is reported as `temporaries`, not
+as a gap. An index typed as a pointer is a judgement no check makes. A function
+given back from the registry reads by the same bar and carries no mark of its
+own.
+
 `review_gaps` is always written, empty when there are none. A v2–v6 artifact
 has neither field, and the panel shows its functions as "Review level not
 recorded".

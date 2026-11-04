@@ -461,6 +461,11 @@ publish enter together when each one's callees are held or among them, so a pair
 call each other enters as a pair; a citation can be given before a body's first publish. The owner reads data references from the instructions and treats
 a constant that lands in the image as one, so it errs towards refusing.
 
+A pair enters only whole, in one publish of one module. With its other half in another
+module, or with one half below the bar (that half is a `below_bar` item), the rest is
+refused under `callee`: its callee is neither held nor entering with it. Both stay in
+their modules.
+
 **Putting the registry in order.** These change the registry itself; each needs a
 `reason` and takes `dry_run`, and the history keeps it.
 - `ghidra_library_take_out` gives an entry, or one `body` of it, back to its modules.
