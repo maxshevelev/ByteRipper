@@ -99,6 +99,10 @@ exporter's output changes.
 
 ### Versions
 
+An artifact from a Ghidra with a patched language carries `language_patch`, the
+patch's name, beside `ghidra`, and its recipe id ends in `-lang-<name>`; a stock
+Ghidra's has neither (`language-patch/README.md`).
+
 | `script_version` | What changed |
 | --- | --- |
 | 2 | The first artifact the Code panel reads. |

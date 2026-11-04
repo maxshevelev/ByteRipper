@@ -16,7 +16,11 @@ own data.
 - **Ghidra 12.2 or newer**, unzipped anywhere. 12.2 is the oldest this build
   runs on and is refused by name below it; the version is part of an
   analysis's key, so another version reads the old analyses and writes new
-  ones beside them;
+  ones beside them. The server runs on a copy of it with the x86 language
+  patched, made once by `scripts/make-patched-ghidra.sh <stock home> <new
+  folder>` and named in `ghidraHome`; the stock install stays as it was. Keep
+  the copy outside the folder that holds the stock install, since the newest
+  `ghidra_*` found there is the default;
 - **a JDK 25 or newer** — the one `/usr/libexec/java_home -v 25+` answers, or
   `JAVA_HOME`. Ghidra 12.2 runs on no older one, and it compiles the owner;
 - **network access once**: on the first module opened, EDK2's headers (about

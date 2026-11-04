@@ -235,15 +235,28 @@ public actor GhidraHost {
     public func write(_ module: SHA256Digest, _ path: String, body: Data) async throws -> Data {
         let project = self.project(module)
         let record = try await owner(of: module)
+        let held = leases[module] != nil
         var token = try await lease(module, record)
         let answer: Data
         do {
-            answer = try await Self.call(record.port, "POST", path, body: body, lease: token).data
-        } catch let error as GhidraHostError where error.status == 403 {
-            // The lease lapsed between two writes: take it again, once.
-            leases[module] = nil
-            token = try await lease(module, record)
-            answer = try await Self.call(record.port, "POST", path, body: body, lease: token).data
+            do {
+                answer = try await Self.call(record.port, "POST", path, body: body, lease: token).data
+            } catch let error as GhidraHostError where error.status == 403 {
+                // The lease lapsed between two writes: take it again, once.
+                leases[module] = nil
+                token = try await lease(module, record)
+                answer = try await Self.call(record.port, "POST", path, body: body, lease: token).data
+            }
+        } catch {
+            // A refused write wrote nothing, so the lease it took goes back: a
+            // module left leased stops a deploy, and a `ghidra_done` would
+            // publish it. One an earlier write holds stays, as does one a batch
+            // that stopped part way has written under.
+            if !held, await holdsNoWrites(project, record) {
+                leases[module] = nil
+                _ = try? await Self.call(record.port, "DELETE", "/v1/lease", lease: token)
+            }
+            throw error
         }
         var state = try project.state()
         if !state.reviewed {
@@ -251,6 +264,14 @@ public actor GhidraHost {
             try project.write(state)
         }
         return answer
+    }
+
+    /// Whether the owner's count of changes stands where the last publish left
+    /// it. An owner that does not answer has not said so.
+    private func holdsNoWrites(_ project: GhidraProject, _ record: OwnerRecord) async -> Bool {
+        guard let data = try? await Self.call(record.port, "GET", "/v1/hello", timeout: 10).data,
+              let hello = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return false }
+        return Self.holdsUnpublishedWrites(hello: hello, published: try? project.state().published) == false
     }
 
     private func lease(_ module: SHA256Digest, _ record: OwnerRecord) async throws -> String {
@@ -294,6 +315,11 @@ public actor GhidraHost {
         let taken = (headers["x-owner-type-taken"] ?? "").split(separator: ",").map(String.init)
         let origins = Self.typeOrigins(headers["x-owner-type-origins"])
         let last = state.published
+        if let refusal = Self.languagePatchRefusal(
+            publishing: Self.recipe(for: artifact, types: state.madeWith.types, passes: state.madeWith.passes).id,
+            over: last?.recipe) {
+            throw GhidraHostError(.refused, refusal, status: 409)
+        }
         var reading: AnalysisReading?
         var review: SHA256Digest?
         var described: SHA256Digest?
@@ -599,10 +625,16 @@ public actor GhidraHost {
     }
 
     /// Publish what the lease changed and give the lease back; nil when the
-    /// host holds no lease of the module.
+    /// host holds no lease of the module, or the lease changed nothing: a new
+    /// exporter's different artifact is no reason for a revision nobody wrote.
     public func release(_ module: SHA256Digest, by: String?) async throws -> Publication? {
         guard let token = leases[module], let record = await runningOwner(project(module)) else {
             leases[module] = nil
+            return nil
+        }
+        if await holdsNoWrites(project(module), record) {
+            leases[module] = nil
+            _ = try? await Self.call(record.port, "DELETE", "/v1/lease", lease: token)
             return nil
         }
         let publication = try await publish(module, by: by)
@@ -794,6 +826,8 @@ public actor GhidraHost {
         let exporter = artifact["script_version"] as? Int ?? 0
         let ghidra = artifact["ghidra"] as? String
         var id = "code-v\(exporter)-ghidra-\(safeRecipe(ghidra ?? "unknown"))"
+        // A patched language prints other C from the same Ghidra.
+        if let patch = artifact["language_patch"] as? String { id += "-lang-\(safeRecipe(patch))" }
         if let types {
             if let dash = types.range(of: "-r", options: .backwards),
                let revision = Int(types[dash.upperBound...]) {
@@ -804,6 +838,15 @@ public actor GhidraHost {
         }
         return AnalysisRecipe(id: id, exporter: exporter, ghidra: ghidra ?? "unknown", script: "ExportCode.java",
                               types: types, passes: types == nil ? nil : (passes.isEmpty ? ["ApplyUefi.java"] : passes))
+    }
+
+    /// Why a publish from a stock Ghidra may not follow one from a patched
+    /// language: the module's C would go back to what the patch corrected. nil
+    /// when it may.
+    static func languagePatchRefusal(publishing recipe: String, over last: String?) -> String? {
+        guard let last, last.contains("-lang-"), !recipe.contains("-lang-") else { return nil }
+        return "this module was published as \(last), from a Ghidra with a patched language, and this Ghidra has none: "
+            + "name the patched copy in `ghidraHome` (Scripts/make-patched-ghidra.sh)"
     }
 
     /// `cas._safe_recipe`: runs of anything but letters, digits, `.`, `_`

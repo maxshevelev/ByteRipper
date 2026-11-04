@@ -7,10 +7,13 @@ anywhere and start an agent session in it.
 ## What you need
 
 - macOS 14 or later;
-- Ghidra 12.2 and JDK 25 (12.2 runs on no older JDK) — `GHIDRA_HOME` names
-  the install, or the newest `~/Projects/ghidra/ghidra_*` is used; the Ghidra
-  version is part of every analysis's recipe, so a new one makes new analyses
-  beside the old;
+- Ghidra 12.2 and JDK 25 (12.2 runs on no older JDK) — `GHIDRA_HOME` or
+  `ghidraHome` names the install, or the newest `~/Projects/ghidra/ghidra_*` is
+  used; the Ghidra version is part of every analysis's recipe, so a new one
+  makes new analyses beside the old;
+- a copy of that Ghidra with the x86 language patched, made once by
+  `scripts/make-patched-ghidra.sh <stock home> <new folder>` and named in
+  `ghidraHome`; the doctor checks it;
 - network access on the first module opened: EDK2's headers are fetched once
   into `~/Library/Application Support/ByteRipper/Ghidra`.
 
@@ -50,7 +53,7 @@ so nothing in the file stands in the way of what you type.
 
 ```json
 {
-  "ghidraHome": "~/Projects/ghidra/ghidra_12.2_PUBLIC",
+  "ghidraHome": "~/Projects/ghidra-patched/ghidra_12.2_PUBLIC",
   "dumpRoots": ["~/Dumps"],
   "listen": ["127.0.0.1:8765"],
   "idle": 1800

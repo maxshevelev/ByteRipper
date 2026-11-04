@@ -378,6 +378,165 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         module = original.module
     }
 
+    // MARK: - The lease of a write that wrote nothing
+
+    /// Each kind of write the owner refuses, with an address that holds nothing.
+    private static let refusedWrites: [(String, [String: Any])] = [
+        ("/v1/rename/function", ["address": "0x1", "name": "ProbeName"]),
+        ("/v1/rename/label", ["address": "0x1", "name": "ProbeLabel"]),
+        ("/v1/create/function", ["address": "0x1", "name": "ProbeFunction"]),
+        ("/v1/delete/function", ["address": "0x1"]),
+        ("/v1/clear/locals", ["address": "0x1"]),
+        ("/v1/merge/functions", ["from": "0x1", "into": "0x2"]),
+        ("/v1/rename/variable", ["function": "0x1", "name": "ProbeVariable", "ordinal": 0]),
+        ("/v1/set/signature", ["address": "0x1", "signature": "void Probe(void)"]),
+        ("/v1/set/comment", ["address": "0x1", "kind": "plate", "text": "probe"]),
+        ("/v1/function/extend", ["function": "0x1", "end": "0x2"]),
+        ("/v1/redecode", ["start": "0x1", "end": "0x2"]),
+        ("/v1/set/code-mode", ["start": "0x1", "end": "0x2", "bits": 16]),
+        ("/v1/set/equate", ["address": "0x1", "name": "PROBE", "value": "0x1", "enum": "PROBE_ENUM"]),
+        ("/v1/tag/function", ["address": "0x1", "tag": "probe"]),
+        ("/v1/set/description", ["section": "### Probe", "text": "x"]),
+        ("/v1/type", ["c": "this is not C"]),
+        ("/v1/set/data", ["address": "0x1", "type": "UINT32"]),
+    ]
+
+    private func leased() async -> Bool { await host.summaries().first?.leased ?? false }
+
+    private func published() throws -> ProjectState.Published? {
+        try GhidraProject.all(in: directory.appendingPathComponent("projects")).first?.state().published
+    }
+
+    /// A refused write wrote nothing, so it leaves no lease to stop a deploy or to publish at a done.
+    func testEachRefusedWriteGivesBackTheLeaseItTook() async throws {
+        try await openCopy(of: "FirmwareRevisionSyncPei")
+        let writes = try await read("/v1/hello")["writes"] as? Int
+        for (path, body) in Self.refusedWrites {
+            do {
+                try await post(path, body)
+                XCTFail("\(path) answered")
+            } catch let error as GhidraHostError {
+                XCTAssertEqual(error.kind, .refused, "\(path): \(error)")
+            }
+            let held = await leased()
+            XCTAssertFalse(held, path)
+            let now = try await read("/v1/hello")["writes"] as? Int
+            XCTAssertEqual(now, writes, path)
+        }
+    }
+
+    /// A name outside the image is a review's way to name an MMIO register, and the answer says where it landed.
+    func testANameOutsideTheImageIsKeptAndSaidToBeThere() async throws {
+        try await open(try image())
+        let answer = try await post("/v1/set/data", ["address": "0xFED81730", "name": "ProbeRegister"])
+        XCTAssertEqual(answer["outside_memory"] as? Bool, true, "\(answer)")
+        let inside = try await entries().first
+        let named = try await post("/v1/set/data", ["address": try XCTUnwrap(inside), "name": "ProbeInside"])
+        XCTAssertNil(named["outside_memory"], "\(named)")
+        let removed = try await post("/v1/set/data", ["address": "0xFED81730", "name": ""])
+        XCTAssertEqual(removed["outside_memory"] as? Bool, true, "\(removed)")
+    }
+
+    /// A kept module differs from this exporter's artifact, and that alone makes no revision.
+    func testADoneMakesNoRevisionWhereNothingWasWritten() async throws {
+        try await openCopy(of: "FirmwareRevisionSyncPei")
+        let before = try published()
+        _ = try await read("/v1/functions?limit=5")
+        let afterReading = try await host.release(module, by: "agent")
+        XCTAssertNil(afterReading)
+        do { try await post("/v1/set/description", ["section": "### Probe", "text": "x"]) } catch {}
+        let afterRefusal = try await host.release(module, by: "agent")
+        XCTAssertNil(afterRefusal)
+        XCTAssertEqual(try published()?.rev, before?.rev)
+        XCTAssertEqual(try published()?.artifact, before?.artifact)
+        XCTAssertEqual(try published()?.at, before?.at)
+    }
+
+    /// A refusal takes back only what it took: an earlier write's lease stays and publishes at the done.
+    func testARefusalKeepsTheLeaseOfAnEarlierWrite() async throws {
+        try await openCopy(of: "FirmwareRevisionSyncPei")
+        let before = try published()
+        try await post("/v1/set/comment", ["address": "0x9A11A49", "kind": "eol", "text": "probe"])
+        do { try await post("/v1/rename/function", ["address": "0x1", "name": "ProbeName"]) } catch {}
+        let held = await leased()
+        XCTAssertTrue(held)
+        let done = try await host.release(module, by: "agent")
+        XCTAssertNotNil(done)
+        XCTAssertEqual(try published()?.rev, (before?.rev ?? 0) + 1)
+        let after = await leased()
+        XCTAssertFalse(after)
+    }
+
+    /// A write the owner accepts and that changes nothing holds the lease, and a done publishes nothing for it.
+    func testAWriteThatChangesNothingMakesNoRevision() async throws {
+        try await openCopy(of: "FirmwareRevisionSyncPei")
+        let before = try published()
+        let writes = try await read("/v1/hello")["writes"] as? Int
+        let function = try await read("/v1/function/0x9A11A49")
+        let name = try XCTUnwrap(function["name"] as? String)
+        try await post("/v1/rename/function", ["address": "0x9A11A49", "name": name])
+        let now = try await read("/v1/hello")["writes"] as? Int
+        print("SAME-NAME writes \(writes ?? -1) -> \(now ?? -1)")
+        let held = await leased()
+        XCTAssertTrue(held)
+        let done = try await host.release(module, by: "agent")
+        if now == writes {
+            XCTAssertNil(done)
+            XCTAssertEqual(try published()?.rev, before?.rev)
+        }
+        let after = await leased()
+        XCTAssertFalse(after)
+    }
+
+    // MARK: - The patched language
+
+    /// `GHIDRA_PATCHED_HOME` names a copy from Scripts/make-patched-ghidra.sh.
+    func testAPatchedGhidraSaysSoAndItsSIDTReadsLimitAndBase() async throws {
+        guard let patched = ProcessInfo.processInfo.environment["GHIDRA_PATCHED_HOME"] else {
+            throw XCTSkip("GHIDRA_PATCHED_HOME is not set")
+        }
+        let image = try image()
+        directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraOwnerReadBack-\(UUID().uuidString)", isDirectory: true)
+        let projects = directory.appendingPathComponent("projects")
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        host = GhidraHost(configuration: .init(projectsRoot: projects, ghidraHome: URL(fileURLWithPath: patched),
+                                               idle: 300, holder: "GhidraOwnerReadBackTests"), writer: store)
+        module = SHA256Digest(data: image)
+        _ = try await host.create(module: image, name: "Module")
+        let hello = try await read("/v1/hello")
+        XCTAssertEqual(hello["language_patch"] as? String, "descriptor-tables-1")
+
+        let preview = try await host.preview(module, "/v1/publish?dry_run=1", body: Data())
+        let artifact = try XCTUnwrap(JSONSerialization.jsonObject(with: preview) as? [String: Any])
+        XCTAssertEqual(artifact["language_patch"] as? String, "descriptor-tables-1")
+        let functions = try XCTUnwrap(artifact["functions"] as? [[String: Any]])
+        let readers = functions.filter { (($0["instructions"] as? [[String: Any]]) ?? []).contains { $0["mnemonic"] as? String == "SIDT" } }
+        XCTAssertFalse(readers.isEmpty)
+        for function in readers {
+            let c = try XCTUnwrap(function["c"] as? String, "\(function["entry"] ?? "")")
+            XCTAssertTrue(c.contains("InterruptDescriptorTableBase()"), c)
+            XCTAssertFalse(c.contains("InterruptDescriptorTableRegister()"), c)
+        }
+
+        try await post("/v1/set/comment", ["address": try XCTUnwrap(readers[0]["entry"] as? String), "kind": "plate", "text": "probe"])
+        let published = try await host.publish(module, by: "t")
+        XCTAssertTrue(published.manifest.recipe.id.contains("-ghidra-12.2-lang-descriptor-tables-1"), published.manifest.recipe.id)
+        await host.stop(module)
+
+        // The same project on a stock Ghidra opens, reads old C, and may not publish over it.
+        let stock = GhidraHost(configuration: .init(projectsRoot: projects, idle: 300, holder: "GhidraOwnerReadBackTests"), writer: store)
+        let plain = try JSONSerialization.jsonObject(with: await stock.read(module, "/v1/hello")) as? [String: Any]
+        XCTAssertNil(plain?["language_patch"])
+        do {
+            _ = try await stock.publish(module, by: "t")
+            XCTFail("a stock Ghidra published over a patched recipe")
+        } catch let error as GhidraHostError {
+            XCTAssertEqual(error.status, 409, "\(error)")
+        }
+        await stock.stop(module)
+    }
+
     /// A temporary a review left does not make a function unfinished, and is found all the same.
     func testFragmentsAreListedThoughTheyAreNotUnfinished() async throws {
         try await openCopy(of: "CpuIoPei")

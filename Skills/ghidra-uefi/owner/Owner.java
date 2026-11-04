@@ -362,11 +362,27 @@ public class Owner {
         }
     }
 
+    /**
+     * The language patch this Ghidra was compiled with, from the marker
+     * Scripts/make-patched-ghidra.sh leaves in it; null on a stock install. The
+     * folder's name and the jar do not tell: the patched copy shares both.
+     */
+    private static String languagePatch() {
+        try {
+            File marker = new File(Application.getInstallationDirectory().getFile(false), "byteripper-language-patch");
+            return marker.isFile() ? Files.readAllLines(marker.toPath()).get(0).trim() : null;
+        } catch (Exception unreadable) {
+            return null;
+        }
+    }
+
     private JsonObject hello() {
         JsonObject answer = identity();
         answer.addProperty("protocol", PROTOCOL);
         answer.addProperty("build", BUILD);
         answer.addProperty("ghidra", Application.getApplicationVersion());
+        String languagePatch = languagePatch();
+        if (languagePatch != null) answer.addProperty("language_patch", languagePatch);
         answer.addProperty("functions", program.getFunctionManager().getFunctionCount());
         answer.addProperty("changed", program.isChanged());
         answer.addProperty("modification", modification());
@@ -5628,6 +5644,9 @@ public class Owner {
         }
         JsonObject answer = identity();
         answer.addProperty("address", hex(address));
+        // A name outside the image is how a review names an MMIO register, and
+        // the C prints it where the code uses that address; nothing else lists it.
+        if (!program.getMemory().contains(address)) answer.addProperty("outside_memory", true);
         Data datum = program.getListing().getDefinedDataAt(address);
         if (datum != null) answer.addProperty("type", datum.getDataType().getDisplayName());
         Symbol named = program.getSymbolTable().getPrimarySymbol(address);

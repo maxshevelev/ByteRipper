@@ -33,6 +33,8 @@ chmod 755 "$stage"/bin/*
 # reads: owner/ with the owner's sources, scripts/ with the passes.
 cp "$repo/Skills/ghidra-uefi/owner/"*.java "$stage/ghidra/owner/"
 cp "$repo/Skills/ghidra-uefi/scripts/"*.java "$stage/ghidra/scripts/"
+mkdir -p "$stage/ghidra/language-patch"
+cp "$repo/Skills/ghidra-uefi/language-patch/"* "$stage/ghidra/language-patch/"
 
 # What the agent reads: the skill, its reference, and the store's client.
 cp "$repo/Skills/ghidra-uefi/SKILL.md" "$stage/skills/ghidra-uefi/"
@@ -44,7 +46,8 @@ cp -R "$repo/Skills/ghidra-uefi/tests" "$stage/skills/ghidra-uefi/"
 cp "$repo/Scripts/agent-dist/"*.sh "$stage/scripts/"
 cp "$repo/Scripts/agent-dist/README.md" "$repo/Scripts/agent-dist/CLAUDE.md" "$stage/"
 cp "$repo/INSTALL.md" "$stage/"
-chmod 755 "$stage"/scripts/{start-server,stop-server,restart-server,agent,doctor}.sh
+cp "$repo/Scripts/make-patched-ghidra.sh" "$stage/scripts/"
+chmod 755 "$stage"/scripts/{start-server,stop-server,restart-server,agent,doctor,make-patched-ghidra}.sh
 
 ln -s ../../skills/ghidra-uefi "$stage/.claude/skills/ghidra-uefi"
 
@@ -53,7 +56,7 @@ version: $version
 commit: $(git -C "$repo" rev-parse --short HEAD)
 branch: $(git -C "$repo" rev-parse --abbrev-ref HEAD)
 built: $(date -u +%Y-%m-%dT%H:%M:%SZ)
-ghidra: 12.2 — the analyses' recipe; another version is a second recipe
+ghidra: 12.2 with language patch descriptor-tables-1 — the analyses' recipe; another version or patch is a second recipe
 EOF
 
 tar -C "$out" -czf "$out/$name.tar.gz" "$name"

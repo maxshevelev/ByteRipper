@@ -128,7 +128,8 @@ public enum GhidraTools {
                 when it idles out, is stopped or gets a signal, so work between publishes survives a \
                 server restart — only an owner killed outright or crashed loses it, and then `writes_lost` here and in \
                 `ghidra_modules` says so from the next open on. It counts from this build's first open of the project: \
-                what was lost before that cannot be told, and its absence on a module not opened since says nothing. A module seen before is opened \
+                what was lost before that cannot be told, and its absence on a module not opened since says nothing. \
+                `language_patch` names the patch of the x86 language this Ghidra was compiled with; a stock Ghidra answers none. A module seen before is opened \
                 by `module`.\(byImage ? " A new one is sent as `image_base64` with a `name`: its project is made first — Ghidra's analysis and the UEFI pass, seconds for a PEIM, a minute for a large DXE driver." : "")
                 """,
             inputSchema: AgentSchema.object(properties),
@@ -1160,7 +1161,9 @@ public enum GhidraTools {
                   "Names and/or types the datum at `address`, e.g. a GUID or a table. An empty `name` removes "
                   + "the label there, a leftover under a type that now names the place. A type laid over decoded "
                   + "instructions is refused, naming them, unless `clear_code: true`: they go, the function "
-                  + "holding them gives those bytes up, and `code_cleared` says so.",
+                  + "holding them gives those bytes up, and `code_cleared` says so. An address outside the image, such as "
+                  + "an MMIO register, takes a name and `outside_memory` says so: the C prints it where the code uses "
+                  + "that address, and `ghidra_data` and the artifact's symbols do not list it.",
                   ["address": AgentSchema.string("The address."),
                    "clear_code": AgentSchema.boolean("Remove instructions the type covers and shorten the body."),
                    "name": AgentSchema.string("Its name; empty removes the label."),

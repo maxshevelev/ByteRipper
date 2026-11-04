@@ -150,12 +150,16 @@ public struct AnalysisRecipe: Codable, Equatable, Sendable {
     }
 
     /// The recipe as a path-safe name, e.g. `code-v2-ghidra-12.1.2`.
-    public static func identifier(exporter: Int, ghidra: String?) -> String {
+    public static func identifier(exporter: Int, ghidra: String?, languagePatch: String? = nil) -> String {
         let raw = ghidra ?? "unknown"
         let cleaned = raw
             .replacingOccurrences(of: "[^A-Za-z0-9._-]+", with: "-", options: .regularExpression)
             .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
-        return "code-v\(exporter)-ghidra-\(cleaned.isEmpty ? "unknown" : cleaned)"
+        let id = "code-v\(exporter)-ghidra-\(cleaned.isEmpty ? "unknown" : cleaned)"
+        guard let languagePatch else { return id }
+        return id + "-lang-" + languagePatch
+            .replacingOccurrences(of: "[^A-Za-z0-9._-]+", with: "-", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
     }
 }
 

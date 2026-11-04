@@ -57,14 +57,16 @@ def _safe_recipe(text: str) -> str:
     return cleaned or "unknown"
 
 
-def recipe_id(exporter: int, ghidra: str | None) -> str:
+def recipe_id(exporter: int, ghidra: str | None, language_patch: str | None = None) -> str:
     """The analysis recipe as a path-safe name.
 
     The exporter version is the one in `ExportCode.java`; the Ghidra version is
     the one that produced the program. A different Ghidra may find different
-    functions, so it is part of the key rather than a note under it.
+    functions, so it is part of the key rather than a note under it, and so is
+    a patched language, which prints other C from the same Ghidra.
     """
-    return f"code-v{exporter}-ghidra-{_safe_recipe(ghidra or 'unknown')}"
+    recipe = f"code-v{exporter}-ghidra-{_safe_recipe(ghidra or 'unknown')}"
+    return f"{recipe}-lang-{_safe_recipe(language_patch)}" if language_patch else recipe
 
 
 # -- the tool -------------------------------------------------------------

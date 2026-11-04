@@ -54,9 +54,20 @@ if [ -f "$dir/var/log/server.log" ]; then
     elif [ -n "$resolved" ]; then
         no "the server reads the Ghidra scripts from $resolved, not $physical"
     fi
-    grep -o 'Ghidra [0-9.]* at [^;]*' "$dir/var/log/server.log" | tail -1 | while read -r line; do
-        note "server: $line"
-    done
+    server_ghidra="$(grep -o 'Ghidra [0-9.]* at [^;]*' "$dir/var/log/server.log" | tail -1 || true)"
+    if [ -n "$server_ghidra" ]; then
+        note "server: $server_ghidra"
+        # Neither the folder's name nor the owner's jar tell a patched Ghidra from
+        # a stock one, and a stock one prints other C: the compiled files do.
+        server_home="${server_ghidra#* at }"
+        if [ ! -f "$server_home/byteripper-language-patch" ]; then
+            no "the server's Ghidra has no language patch: make a copy with scripts/make-patched-ghidra.sh and name it in ghidraHome"
+        elif (cd "$server_home" && sed -n '2,$p' byteripper-language-patch | shasum -a 256 -c --status); then
+            ok "language patch: $(head -1 "$server_home/byteripper-language-patch")"
+        else
+            no "the server's Ghidra was changed after its language patch: its compiled language no longer matches the marker"
+        fi
+    fi
 fi
 source "$dir/scripts/common.sh"
 note "tokens: $tokens_file"

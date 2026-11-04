@@ -5,6 +5,28 @@ import XCTest
 @testable import GhidraHost
 
 final class GhidraHostUnitTests: XCTestCase {
+    /// A patched language prints other C, so it is in the recipe's key; a stock artifact's id is what it was.
+    func testARecipeNamesTheLanguagePatch() {
+        let stock = GhidraHost.recipe(for: ["script_version": 10, "ghidra": "12.2"], types: "edk2-stable202608-r2", passes: [])
+        XCTAssertEqual(stock.id, "code-v10-types2-ghidra-12.2")
+        let patched = GhidraHost.recipe(for: ["script_version": 10, "ghidra": "12.2", "language_patch": "descriptor-tables-1"],
+                                        types: "edk2-stable202608-r2", passes: [])
+        XCTAssertEqual(patched.id, "code-v10-types2-ghidra-12.2-lang-descriptor-tables-1")
+        XCTAssertEqual(AnalysisRecipe.identifier(exporter: 10, ghidra: "12.2", languagePatch: "descriptor-tables-1"),
+                       "code-v10-ghidra-12.2-lang-descriptor-tables-1")
+    }
+
+    /// Only a publish that would take a patch away is refused.
+    func testAStockPublishMayNotFollowAPatchedOne() {
+        let patched = "code-v10-types2-ghidra-12.2-lang-descriptor-tables-1"
+        let stock = "code-v10-types2-ghidra-12.2"
+        XCTAssertNotNil(GhidraHost.languagePatchRefusal(publishing: stock, over: patched))
+        XCTAssertNil(GhidraHost.languagePatchRefusal(publishing: patched, over: stock))
+        XCTAssertNil(GhidraHost.languagePatchRefusal(publishing: patched, over: patched))
+        XCTAssertNil(GhidraHost.languagePatchRefusal(publishing: stock, over: stock))
+        XCTAssertNil(GhidraHost.languagePatchRefusal(publishing: stock, over: nil))
+    }
+
     func testTheRecipeIsTheOnePythonNames() {
         let artifact: [String: Any] = ["script_version": 4, "ghidra": "12.1.2"]
         let typed = GhidraHost.recipe(for: artifact, types: "edk2-stable202608", passes: ["ApplyUefi.java"])

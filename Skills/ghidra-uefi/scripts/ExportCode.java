@@ -93,6 +93,8 @@ public class ExportCode extends GhidraScript {
         json.append("{\n");
         json.append("  \"script_version\": 10,\n");
         json.append("  \"ghidra\": ").append(quote(Application.getApplicationVersion())).append(",\n");
+        String languagePatch = languagePatch();
+        if (languagePatch != null) json.append("  \"language_patch\": ").append(quote(languagePatch)).append(",\n");
         json.append("  \"program\": {\n");
         json.append("    \"name\": ").append(quote(currentProgram.getName())).append(",\n");
         json.append("    \"language\": ").append(quote(currentProgram.getLanguageID().toString())).append(",\n");
@@ -413,6 +415,20 @@ public class ExportCode extends GhidraScript {
             text.append('\n');
         }
         return text.toString();
+    }
+
+    /**
+     * The language patch this Ghidra was compiled with, from the marker
+     * Scripts/make-patched-ghidra.sh leaves in it; null on a stock install.
+     */
+    private static String languagePatch() {
+        try {
+            java.io.File marker = new java.io.File(Application.getInstallationDirectory().getFile(false),
+                                                   "byteripper-language-patch");
+            return marker.isFile() ? java.nio.file.Files.readAllLines(marker.toPath()).get(0).trim() : null;
+        } catch (Exception unreadable) {
+            return null;
+        }
     }
 
     private void appendC(StringBuilder json, Function function, DecompileResults results) {
