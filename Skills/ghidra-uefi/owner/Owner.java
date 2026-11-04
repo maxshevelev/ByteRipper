@@ -3677,6 +3677,21 @@ public class Owner {
      * `old_text` and `new_text` change one string inside a section, so one line
      * is changed without sending the rest; it must occur exactly once.
      */
+    /** The `## ` section holding a `### ` subsection of this name when no `## ` section has it; else null. */
+    private static String subsectionHolder(String description, String heading) {
+        if (description == null) return null;
+        String holder = null, found = null;
+        for (String line : description.split("\n")) {
+            if (line.startsWith("## ")) {
+                holder = line.substring(3).trim();
+                if (holder.equals(heading)) return null;
+            } else if (line.startsWith("### ") && line.substring(4).trim().equals(heading) && found == null) {
+                found = holder == null ? "(before any section)" : holder;
+            }
+        }
+        return found;
+    }
+
     private JsonObject setDescription(JsonObject body) throws Exception {
         if (body.has("old_text") || body.has("new_text")) replaceInSection(body);
         boolean delete = body.has("delete") && body.get("delete").getAsBoolean();
@@ -3702,6 +3717,17 @@ public class Owner {
             next = delete ? null : Harvest.normalized(text);
         } else {
             String heading = section.startsWith("## ") ? section.substring(3).trim() : section.trim();
+            // A section is a `## ` heading. A `###` given here would land as a
+            // new `## ` section beside the one it was meant to change.
+            if (heading.startsWith("#")) {
+                throw new Failure(400, "section names a `## ` heading; a `###` subsection is changed through the `## ` "
+                    + "section that holds it, or with `old_text` and `new_text`");
+            }
+            String holder = subsectionHolder(Harvest.description(program), heading);
+            if (holder != null) {
+                throw new Failure(409, "\"" + heading + "\" is a `###` subsection of `## " + holder + "`, not a section: "
+                    + "change it through that section, or with `old_text` and `new_text`");
+            }
             if (heading.isEmpty() || heading.contains("\n")) throw new Failure(400, "section is one heading's words");
             String now = Harvest.description(program);
             if (placed) {
@@ -5201,7 +5227,10 @@ public class Owner {
         signature.setName(name);
         ApplyFunctionSignatureCmd command =
             new ApplyFunctionSignatureCmd(function.getEntryPoint(), signature, SourceType.USER_DEFINED);
-        if (!command.applyTo(program)) throw new Failure(400, command.getStatusMsg());
+        if (!command.applyTo(program)) {
+            String held = nameInTheWay(function, signature);
+            throw new Failure(held == null ? 400 : 409, held != null ? held : command.getStatusMsg());
+        }
         // The command renames only a function Ghidra named; a signature's name
         // is the reviewer's either way.
         if (!function.getName().equals(name)) {
@@ -5242,6 +5271,23 @@ public class Owner {
             answer.addProperty("return_storage", function.getReturn().getVariableStorage().toString());
         }
         return answer;
+    }
+
+    /**
+     * What Ghidra calls a "Parameter name conflict, likely due to concurrent
+     * operation", which no concurrency caused: a local of this function
+     * already holds the name a new parameter asks for.
+     */
+    private String nameInTheWay(Function function, FunctionDefinitionDataType signature) {
+        for (ghidra.program.model.data.ParameterDefinition asked : signature.getArguments()) {
+            for (ghidra.program.model.listing.Variable local : function.getLocalVariables()) {
+                if (local.getName().equals(asked.getName())) {
+                    return "the parameter name " + asked.getName() + " is held by a local of this function ("
+                        + local.getVariableStorage() + "): rename that local first, or name the parameter otherwise";
+                }
+            }
+        }
+        return null;
     }
 
     /**
