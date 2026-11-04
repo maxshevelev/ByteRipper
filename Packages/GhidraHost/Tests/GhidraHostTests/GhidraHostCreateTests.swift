@@ -95,7 +95,11 @@ final class GhidraHostLibraryTests: XCTestCase {
         let republished = try await host.publish(reviewed, by: "agent")
         let code = try store.artifact(for: republished.manifest)
         let stored = try XCTUnwrap(code.functions.first { $0.entry == CodeAddress(hex: copyGuid) })
-        XCTAssertEqual(stored.nameReason, "EDK2 BaseLib CopyGuid")
+        // The name's reason says where the name came from; why the signature
+        // is what it is has a place of its own.
+        XCTAssertEqual(stored.nameReason?.hasPrefix("named in its signature (was "), true, "\(stored.nameReason ?? "nil")")
+        let live = try json(await host.read(reviewed, "/v1/function/\(copyGuid)"))
+        XCTAssertEqual(live["signature_reason"] as? String, "EDK2 BaseLib CopyGuid", "\(live.keys.sorted())")
         XCTAssertEqual(stored.libraryEntry?.state, .entry, "the artifact says the function is the entry")
         XCTAssertEqual(stored.libraryEntry?.version, added.version)
 
