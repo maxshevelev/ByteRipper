@@ -135,6 +135,8 @@ public class Owner {
     private File writesFile;
     private long writesCarried;
     private long modificationAtOpen;
+    private File savedFile;
+    private File lostFile;
     private long writesWritten;
     private volatile long lastRequest = System.currentTimeMillis();
     // The write lease (§7.3): one holder at a time, renewed by every write.
@@ -194,12 +196,15 @@ public class Owner {
         } finally {
             program.endTransaction(transaction, recorded);
         }
-        if (recorded) program.save("baseline", TaskMonitor.DUMMY);
+        if (recorded) saveProgram("baseline");
         // From here a change counts; the count goes on from the last session's.
         writesFile = new File(options.get("project-dir"), "writes");
         writesCarried = readWrites();
         writesWritten = writesCarried;
         modificationAtOpen = program.getModificationNumber();
+        lostFile = new File(options.get("project-dir"), "writes-lost");
+        savedFile = new File(options.get("project-dir"), "writes-saved");
+        noteLostWrites();
 
         int port = Integer.parseInt(options.getOrDefault("port", "0"));
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
@@ -209,12 +214,18 @@ public class Owner {
         server.createContext("/", this::handle);
         server.start();
         Runtime.getRuntime().addShutdownHook(new Thread(this::close));
+        for (String name : new String[] { "TERM", "INT", "HUP" }) {
+            sun.misc.Signal.handle(new sun.misc.Signal(name), signal -> {
+                System.out.println("OWNER SIGNAL " + signal.getName());
+                closeAndExit(server);
+            });
+        }
         long idle = Long.parseLong(options.getOrDefault("idle", "0"));
         if (idle > 0) {
             Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(() -> {
                 if (System.currentTimeMillis() - lastRequest > idle * 1000) {
                     System.out.println("OWNER IDLE");
-                    System.exit(0);
+                    closeAndExit(server);
                 }
             }, idle, Math.max(1, idle / 4), TimeUnit.SECONDS);
         }
@@ -228,12 +239,26 @@ public class Owner {
         System.out.flush();
     }
 
+    /**
+     * Save first, exit after. Ghidra closes its files in a shutdown hook of its
+     * own, and hooks run together: left to ours, the save lost that race about
+     * every other time and the writes since the last save were gone. On the
+     * server's thread, so it never lands in the middle of a change.
+     */
+    private void closeAndExit(HttpServer server) {
+        server.getExecutor().execute(() -> {
+            close();
+            System.exit(0);
+        });
+    }
+
     /** Save what changed and let the program go: on stop, idle and a signal. */
     private synchronized void close() {
         try {
             if (program == null) return;
-            if (program.isChanged()) program.save("owner", TaskMonitor.DUMMY);
+            if (program.isChanged()) saveProgram("owner");
             keepWrites();
+            keepSaved();
             if (decompiler != null) decompiler.dispose();
             if (archive != null) archive.close();
             if (reviewArchive != null) reviewArchive.close();
@@ -312,7 +337,7 @@ public class Owner {
                     case "/v1/library/release" -> write(exchange, this::libraryRelease);
                     case "/v1/type" -> write(exchange, this::addType);
                     case "/v1/save" -> write(exchange, body -> {
-                        if (program.isChanged()) program.save("save", TaskMonitor.DUMMY);
+                        if (program.isChanged()) saveProgram("save");
                         JsonObject answer = identity();
                         answer.addProperty("saved", true);
                         return answer;
@@ -345,6 +370,13 @@ public class Owner {
         answer.addProperty("changed", program.isChanged());
         answer.addProperty("modification", modification());
         answer.addProperty("writes", writes());
+        if (lostFile != null && lostFile.isFile()) {
+            try {
+                answer.addProperty("writes_lost", Files.readString(lostFile.toPath()).trim());
+            } catch (Exception error) {
+                System.err.println("OWNER lost: " + error);
+            }
+        }
         if (leaseToken != null) {
             answer.addProperty("lease_holder", leaseHolder);
             answer.addProperty("lease_expires_in", Math.max(0, (leaseExpires - System.currentTimeMillis()) / 1000));
@@ -1632,7 +1664,7 @@ public class Owner {
         } finally {
             if (!dryRun) endTransaction(transaction, named, before);
         }
-        if (!dryRun && program.isChanged()) program.save("publish", TaskMonitor.DUMMY);
+        if (!dryRun && program.isChanged()) saveProgram("publish");
         try {
             byte[] artifact = exportArtifact();
             published = Harvest.of(program, options.get("module"), options.get("project-id"));
@@ -1704,7 +1736,7 @@ public class Owner {
     private void exportAgain(HttpExchange exchange) throws Exception {
         requireLease(exchange);
         writeLibraryStates();
-        if (program.isChanged()) program.save("library states", TaskMonitor.DUMMY);
+        if (program.isChanged()) saveProgram("library states");
         byte[] artifact = exportArtifact();
         exchange.getResponseHeaders().set("Content-Type", "application/json");
         exchange.sendResponseHeaders(200, artifact.length);
@@ -3554,7 +3586,7 @@ public class Owner {
         } finally {
             endTransaction(transaction, done, before);
         }
-        if (program.isChanged()) program.save("library marks", TaskMonitor.DUMMY);
+        if (program.isChanged()) saveProgram("library marks");
         return answer;
     }
 
@@ -3800,7 +3832,7 @@ public class Owner {
         // server restarted while this owner ran on: it takes the lease over.
         if (leaseToken != null && leaseToken.length() > 0 && holder.equals(leaseHolder)) {
             System.out.println("OWNER LEASE TAKEN OVER by " + holder);
-            if (program.isChanged()) program.save("lease taken over by " + holder, TaskMonitor.DUMMY);
+            if (program.isChanged()) saveProgram("lease taken over by " + holder);
             leaseToken = null;
         }
         if (leaseToken != null) {
@@ -3824,7 +3856,7 @@ public class Owner {
 
     private JsonObject release(HttpExchange exchange) throws Exception {
         requireLease(exchange);
-        if (program.isChanged()) program.save("lease released by " + leaseHolder, TaskMonitor.DUMMY);
+        if (program.isChanged()) saveProgram("lease released by " + leaseHolder);
         System.out.println("OWNER RELEASE " + leaseHolder);
         leaseToken = null;
         leaseHolder = null;
@@ -3837,7 +3869,7 @@ public class Owner {
         if (leaseToken == null || System.currentTimeMillis() < leaseExpires) return;
         System.out.println("OWNER EXPIRED " + leaseHolder);
         try {
-            if (program.isChanged()) program.save("lease of " + leaseHolder + " expired", TaskMonitor.DUMMY);
+            if (program.isChanged()) saveProgram("lease of " + leaseHolder + " expired");
         } catch (Exception error) {
             System.err.println("OWNER save on expiry: " + error);
         }
@@ -3891,6 +3923,50 @@ public class Owner {
      * reads as work to publish, which a publish clears; the reverse would hide
      * work.
      */
+    /** Every save goes here: what the count stood at when the program last reached the disk. */
+    private void saveProgram(String why) throws Exception {
+        program.save(why, TaskMonitor.DUMMY);
+        keepWrites();
+        keepSaved();
+    }
+
+    private void keepSaved() {
+        if (savedFile == null) return;
+        try {
+            File next = new File(savedFile.getPath() + ".new");
+            Files.writeString(next.toPath(), Long.toString(writes()));
+            Files.move(next.toPath(), savedFile.toPath(), StandardCopyOption.REPLACE_EXISTING,
+                       StandardCopyOption.ATOMIC_MOVE);
+        } catch (Exception error) {
+            System.err.println("OWNER saved: " + error);
+        }
+    }
+
+    /**
+     * A count ahead of the last save means an owner went away with writes it had
+     * not saved: a kill, or a save that failed. They cannot be had back, and
+     * the count alone reads only as work to publish, so it is said once here
+     * and stays in a file beside the project. A project from before the file
+     * has no last save to compare with, and says nothing.
+     */
+    private void noteLostWrites() {
+        try {
+            if (savedFile.isFile()) {
+                long saved = Long.parseLong(Files.readString(savedFile.toPath()).trim());
+                if (writesCarried > saved) {
+                    String line = java.time.Instant.now() + ": at least " + (writesCarried - saved)
+                        + " writes were not saved when the last owner ended\n";
+                    System.out.print("OWNER LOST " + line);
+                    Files.writeString(lostFile.toPath(), line, java.nio.file.StandardOpenOption.CREATE,
+                                      java.nio.file.StandardOpenOption.APPEND);
+                }
+            }
+        } catch (Exception error) {
+            System.err.println("OWNER lost: " + error);
+        }
+        keepSaved();
+    }
+
     private void keepWrites() {
         long now = writes();
         if (now == writesWritten || writesFile == null) return;

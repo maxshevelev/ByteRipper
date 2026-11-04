@@ -118,6 +118,14 @@ public actor GhidraHost {
         public var reviewed: Bool
         public var published: ProjectState.Published?
         public var leased: Bool
+        /// What an earlier owner of this project ended without saving, as the
+        /// next open wrote it down. Absent when nothing was.
+        public var writesLost: String?
+
+        enum CodingKeys: String, CodingKey {
+            case module, name, running, reviewed, published, leased
+            case writesLost = "writes_lost"
+        }
     }
 
     public let configuration: Configuration
@@ -150,7 +158,9 @@ public actor GhidraHost {
             guard let state = try? project.state() else { continue }
             rows.append(Summary(module: project.module.hex, name: state.module.name,
                                 running: await runningOwner(project) != nil, reviewed: state.reviewed,
-                                published: state.published, leased: leases[project.module] != nil))
+                                published: state.published, leased: leases[project.module] != nil,
+                                writesLost: try? String(contentsOf: project.folder.appendingPathComponent("writes-lost"),
+                                                        encoding: .utf8)))
         }
         return rows
     }

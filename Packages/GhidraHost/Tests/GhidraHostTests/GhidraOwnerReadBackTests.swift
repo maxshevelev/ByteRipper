@@ -438,6 +438,47 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         XCTAssertEqual(name, "SavedWhenIdle")
     }
 
+    /// A signal to the owner keeps what was written too: the save is not left to race
+    /// Ghidra's own shutdown hook.
+    func testASignaledOwnerKeepsWhatWasWritten() async throws {
+        try await open(try image())
+        let all = try await entries()
+        let entry = try XCTUnwrap(all.first)
+        try await post("/v1/rename/function", ["address": entry, "name": "SavedOnSignal", "by": "agent", "reason": "test"])
+        let record = try await host.owner(of: module)
+        kill(pid_t(record.pid), SIGTERM)
+        for _ in 0..<30 where (try? await GhidraHost.call(record.port, "GET", "/v1/hello", timeout: 1)) != nil {
+            try await Task.sleep(nanoseconds: 500_000_000)
+        }
+        let name = try await read("/v1/function/\(entry)")["name"] as? String
+        XCTAssertEqual(name, "SavedOnSignal")
+    }
+
+    /// A kill loses what was not saved, and the next open says so; an orderly end says nothing.
+    func testAKilledOwnersLostWritesAreSaidAtTheNextOpen() async throws {
+        try await open(try image())
+        let all = try await entries()
+        let entry = try XCTUnwrap(all.first)
+        try await post("/v1/rename/function", ["address": entry, "name": "SavedByPublish", "by": "agent", "reason": "test"])
+        _ = try await host.publish(module, by: "agent")
+        await host.stop(module)
+        let orderly = try await read("/v1/hello")
+        XCTAssertNil(orderly["writes_lost"], "\(orderly)")
+        try await post("/v1/rename/function", ["address": entry, "name": "NeverSaved", "by": "agent", "reason": "test"])
+        let record = try await host.owner(of: module)
+        kill(pid_t(record.pid), SIGKILL)
+        for _ in 0..<30 where (try? await GhidraHost.call(record.port, "GET", "/v1/hello", timeout: 1)) != nil {
+            try await Task.sleep(nanoseconds: 500_000_000)
+        }
+        let after = try await read("/v1/hello")
+        let said = try XCTUnwrap(after["writes_lost"] as? String, "\(after)")
+        XCTAssertTrue(said.contains("were not saved"), said)
+        let row = await host.summaries().first { $0.module == module.hex }
+        XCTAssertEqual(row?.writesLost?.contains("were not saved"), true)
+        let name = try await read("/v1/function/\(entry)")["name"] as? String
+        XCTAssertEqual(name, "SavedByPublish")
+    }
+
     /// A signature written on a function analysis left at `unknown` clears the
     /// decompiler's warning, and only that: the places and the rest of the C stay.
     func testASignatureOnAnUnknownFunctionClearsTheWarningOnly() async throws {
