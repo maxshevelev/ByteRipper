@@ -165,7 +165,17 @@ Names alone do not get there. Every review applies these rules:
    says whether the three agree. Type the variables with it, the decompiler's
    synthetic pieces included: the 6-byte IDTR a `SIDT` writes comes out as a
    2-byte local and a 4-byte one, and giving the 2-byte one `IA32_DESCRIPTOR`
-   resizes its storage to six bytes and turns `IdtrBase` into `Idtr.Base`;
+   resizes its storage to six bytes and turns `IdtrBase` into `Idtr.Base`.
+   Since Ghidra 12.2 the C of a `SIDT` still reads in pieces after that:
+   `uVar1 = InterruptDescriptorTableRegister();`,
+   `Idtr.Base._0_2_ = (undefined2)((uint)uVar1 >> 0x10);`,
+   `CONCAT22(Idtr.Base._2_2_,(undefined2)Idtr.Base)`. The model gives the
+   operation four bytes where the instruction writes six, so these are not
+   arithmetic on a value and no type removes them. Name the temporaries for what
+   they hold, and say in an end-of-line comment at the `SIDT` that the pieces are
+   the IDT base, and at the read below it what is kept there (in PEI, the PEI
+   Services pointer at base − 4).
+   Likewise
    a record that arrives as `void *` from a lookup becomes its structure, and
    `*(int *)(FvRecord + 4)` becomes `FvRecord->VolumePpi`. A field that is a
    function pointer pays twice: the call reads `VolumePpi->FindSectionByType2`,
