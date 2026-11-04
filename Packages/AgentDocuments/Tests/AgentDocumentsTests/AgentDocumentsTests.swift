@@ -152,6 +152,34 @@ final class CodeReadingsTests: XCTestCase {
         XCTAssertNil(members["disk"])
     }
 
+    /// A function longer than one page is read to its end, page by page.
+    func testALongFunctionsInstructionsAreReadToTheEnd() async throws {
+        let lines = (0..<1200).map { #"{"address": "0x\#(String(0x1000 + $0, radix: 16))", "text": "NOP"}"# }
+        let artifact = """
+            {"script_version": 4, "ghidra": "12.1.2", "functions": [
+              {"entry": "0x1000", "name": "entry", "size": 1200, "signature": "void entry(void)",
+               "instructions": [\(lines.joined(separator: ","))]}
+            ], "strings": [], "post_codes": [], "status_code_calls": []}
+            """
+        try ContentStore(root: directory).putAnalysis(module: module, recipe: recipe, artifact: Data(artifact.utf8))
+        let tool = try query(readings())
+        var seen: [String] = []
+        var after: String?
+        repeat {
+            var values: [String: JSONValue] = ["module": .string(module.sha256.hex), "what": "instructions",
+                                               "function": "entry", "limit": .int(500)]
+            if let after { values["after"] = .string(after) }
+            let answer = try await tool.run(AgentCall(tool: "code_query", arguments: AgentArguments(values)))
+            guard case .json(let page) = answer else { return XCTFail("not json: \(answer)") }
+            XCTAssertEqual(page["total"], .int(1200))
+            XCTAssertLessThanOrEqual(page["instructions"]?.arrayValue?.count ?? 0, 500)
+            seen += page["instructions"]?.arrayValue?.compactMap { $0["address"]?.stringValue } ?? []
+            after = page["next"]?.stringValue
+        } while after != nil
+        XCTAssertEqual(seen.count, 1200)
+        XCTAssertEqual(Set(seen).count, 1200)
+    }
+
     /// `code_query`'s library block: the numbers a Review status is written
     /// from — kinds, entries by state, the entries this module installed, the
     /// ones that moved on after it, and the tagged functions short of the

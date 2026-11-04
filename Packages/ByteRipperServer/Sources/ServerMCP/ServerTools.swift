@@ -63,7 +63,7 @@ public enum ServerTools {
             Read a module's stored code analysis. The module is a PE32/TE image `node` of a dump — \
             `code_modules` lists the ones with an analysis — its bytes hashed to find the analysis; or a \
             `module` SHA-256, read from the store alone. `what` picks the list (default "functions"): \
-            "functions"; one function's "instructions" or decompiled "c", or with `search` and no `function` the lines of "c" holding that text across the module (`matches`: function, entry, line, text; `total` lines, `functions_matched`); a function's callers and \
+            "functions"; one function's "instructions" (paged: `limit`, then `next` as `after`, until it is null) or decompiled "c", or with `search` and no `function` the lines of "c" holding that text across the module (`matches`: function, entry, line, text; `total` lines, `functions_matched`); a function's callers and \
             callees ("references"); the instructions that "uses" an address — who calls a function, \
             jumps to a label, or reads a global or a string; "strings"; "symbols", the named data — \
             GUIDs, service tables, interfaces; or "post_codes", the values written to port 0x80 (what a \

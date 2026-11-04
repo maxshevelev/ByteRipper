@@ -106,6 +106,7 @@ public final class CodeReadings {
                                                  "With `what: \"functions\"`: only functions at this review level.")
         properties["search"] = AgentSchema.string("A word to narrow functions, strings or symbols by; with `what: \"c\"` and no `function`, text to find in every function's stored C, any case, as written.")
         properties["limit"] = AgentSchema.limit(default: 200, maximum: 500)
+        properties["after"] = AgentSchema.string("With `what: \"instructions\"`: the `next` of the page before.")
         return AgentTool(
             name: "code_query",
             title: "Read a module's code analysis",
@@ -443,6 +444,7 @@ public final class CodeReadings {
             return model.functions[index]
         }
 
+        var instructions: (page: AgentPage, total: Int, items: [JSONValue])?
         var body: [String: JSONValue] = [
             "what": .string(what),
             "module": .string(source.manifest.module.name),
@@ -480,7 +482,11 @@ public final class CodeReadings {
             let function = try namedFunction()
             body["function"] = .string(function.name)
             body["total"] = .int(Int64(function.instructions.count))
-            body["instructions"] = .array(function.instructions.prefix(limit).map { instruction in
+            let page = try AgentPage(arguments, fingerprint: AgentPage.fingerprint([
+                source.manifest.artifact.sha256.hex, function.entry.description
+            ]), changed: "The analysis changed since that page, or the function did; ask again without `after`.")
+            instructions = (page, function.instructions.count,
+                            function.instructions.dropFirst(page.first).prefix(limit).map { instruction in
                 .object([
                     "address": .string(instruction.address.description),
                     "offset": offsetText(instruction.address),
@@ -633,6 +639,10 @@ public final class CodeReadings {
             } else {
                 body["live"] = .bool(false)
             }
+        }
+        if let instructions {
+            return .json(try instructions.page.answer(body, key: "instructions", items: instructions.items,
+                                                      total: instructions.total, bound: arguments.answerBound))
         }
         return .json(.object(body))
     }
