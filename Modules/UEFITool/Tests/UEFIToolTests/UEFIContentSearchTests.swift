@@ -56,6 +56,7 @@ final class UEFIContentSearchTests: XCTestCase {
         XCTAssertEqual(node.kind, .section)
         XCTAssertEqual(node.subtype, 0x19, "the raw section that holds it, not the compressed one")
         XCTAssertEqual(match.nodeOffset, UInt64(node.header.count) + 2)
+        XCTAssertEqual(match.bodyOffset, 2)
         let section = try XCTUnwrap(match.section.flatMap(tree.node))
         XCTAssertNotNil(section.compression, "said which compressed section it came out of")
         XCTAssertEqual(match.volume.flatMap(tree.node)?.kind, .volume)

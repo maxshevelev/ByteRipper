@@ -45,8 +45,12 @@ public enum UEFIContentSearch {
         /// From the volume's first byte, when the volume is in the same bytes
         /// as the match.
         public var volumeOffset: UInt64?
-        /// From `node`'s first byte.
+        /// From `node`'s first byte, its header included.
         public var nodeOffset: UInt64?
+        /// From the first byte of `node`'s body, when the match lies whole in
+        /// the body: what reads the body back counts from there, not from
+        /// `nodeOffset`'s zero.
+        public var bodyOffset: UInt64?
         /// The innermost compressed section whose decompressed bytes hold the
         /// match; nil for a match in the file.
         public var section: NodeID?
@@ -397,7 +401,12 @@ public enum UEFIContentSearch {
         }
         guard let node = current else { return match }
         match.node = node.id
-        if node.space == scope.space { match.nodeOffset = range.lowerBound - node.range.lowerBound }
+        if node.space == scope.space {
+            match.nodeOffset = range.lowerBound - node.range.lowerBound
+            if node.body.lowerBound <= range.lowerBound, range.upperBound <= node.body.upperBound {
+                match.bodyOffset = range.lowerBound - node.body.lowerBound
+            }
+        }
         var path = node.id.path
         while !path.isEmpty {
             if let above = tree.node(NodeID(path)), above.kind == .volume {

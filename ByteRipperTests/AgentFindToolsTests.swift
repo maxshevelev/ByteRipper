@@ -213,6 +213,23 @@ final class AgentFindToolsTests: XCTestCase {
 
     /// A pattern taken from a node reads as the same bytes written out, holes
     /// included, and finds what the tree holds decompressed.
+    /// Each offset of a match, given to the part it goes with, reads the
+    /// match's own bytes, here in a node inside a compressed section.
+    func testAMatchsOffsetsReadItInTheirOwnParts() async throws {
+        try open(try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
+        let found = try await client.answer("find_bytes", ["node": "root", "text": "GH51G", "encoding": "ascii"])
+        let match = try XCTUnwrap(found["matches"]?.arrayValue?.first)
+        let node = try XCTUnwrap(match["node"]?["id"]?.stringValue)
+        let all = try XCTUnwrap(match["node_offset"])
+        let body = try XCTUnwrap(match["body_offset"])
+        XCTAssertNotEqual(all, body, "the node has a header: \(match)")
+        for (part, offset): (String, JSONValue) in [("all", all), ("body", body)] {
+            let read = try await client.answer("uefi_node_data", ["node": .string(node), "part": .string(part),
+                                                                  "offset": offset, "length": "0x5", "format": "ascii"])
+            XCTAssertEqual(read["text"]?.stringValue, "GH51G", "\(part): \(read)")
+        }
+    }
+
     func testAPatternComesFromANodesBytes() async throws {
         try open(try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
         let found = try await client.answer("find_bytes", ["node": "root", "text": "GH51G", "encoding": "ascii"])

@@ -16,7 +16,7 @@ public enum UEFIAgentContentSearch {
         + "\"count\", `total` alone. Default \"full\"."
 
     /// `compact`: a match as the place to read it. The node by its id and the
-    /// offset in it; a match no node holds keeps its address. The encoding only
+    /// offsets in it; a match no node holds keeps its address. The encoding only
     /// when more than one was searched.
     nonisolated public static func compact(_ item: JSONValue, keepingEncoding: Bool) -> JSONValue {
         guard case .object(let members) = item else { return item }
@@ -24,6 +24,7 @@ public enum UEFIAgentContentSearch {
         if let id = members["node"]?["id"], let offset = members["node_offset"] {
             row["node"] = id
             row["node_offset"] = offset
+            row["body_offset"] = members["body_offset"]
         } else {
             for key in ["start", "section", "buffer_start"] where members[key] != nil { row[key] = members[key] }
         }
@@ -31,7 +32,8 @@ public enum UEFIAgentContentSearch {
         return .object(row)
     }
 
-    /// One match: `node` (as `uefi_tree` gives it) and `node_offset`,
+    /// One match: `node` (as `uefi_tree` gives it), `node_offset` from its
+    /// first byte and `body_offset` from its body's, when it lies there,
     /// `volume` and `volume_offset`, `start`/`end` in the file — or
     /// `in_compressed`, `buffer_start`/`buffer_end` and the `section` whose
     /// decompressed bytes hold it — and `decoded` for a LENV block decoded.
@@ -41,6 +43,7 @@ public enum UEFIAgentContentSearch {
             members["node"] = UEFIAgentQueries.summary(of: node, in: tree)
         }
         if let offset = match.nodeOffset { members["node_offset"] = .string(UEFIAgentQueries.hex(offset)) }
+        if let offset = match.bodyOffset { members["body_offset"] = .string(UEFIAgentQueries.hex(offset)) }
         if let volume = match.volume.flatMap(tree.node) {
             members["volume"] = ["id": .string(volume.id.description),
                                  "label": .string(UEFIAgentQueries.label(of: volume, in: tree))]

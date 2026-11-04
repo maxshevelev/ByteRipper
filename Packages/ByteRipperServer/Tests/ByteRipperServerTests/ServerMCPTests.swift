@@ -183,7 +183,8 @@ final class ServerMCPTests: XCTestCase {
         let match = try XCTUnwrap(members["matches"]?.arrayValue?.first)
         XCTAssertEqual(match["start"]?.stringValue, "0x64")
         XCTAssertEqual(match["encoding"]?.stringValue, "ascii")
-        XCTAssertEqual(match["node_offset"]?.stringValue, "0x4", "the PE32 section's body, past its header")
+        XCTAssertEqual(match["node_offset"]?.stringValue, "0x4", "from the PE32 section's first byte, its header")
+        XCTAssertEqual(match["body_offset"]?.stringValue, "0x0", "from the section's body")
         XCTAssertNotNil(match["node"], "the node that holds it whole: \(match)")
 
         let plain = try await find.run(AgentCall(tool: "find_bytes", arguments: AgentArguments([
@@ -230,6 +231,41 @@ final class ServerMCPTests: XCTestCase {
 
     /// A pattern from a node's bytes finds them where they are. A match's
     /// `node_offset` counts from the node's start, header included: part "all".
+    /// Each offset of a match, given to the part it goes with, reads the
+    /// match's own bytes; one that reaches into the header has no `body_offset`.
+    func testFindBytesOffsetsReadTheMatchInTheirOwnParts() async throws {
+        let tools = self.tools()
+        let find = try tool("find_bytes", tools)
+        let data = try tool("uefi_node_data", tools)
+        let first = try await find.run(AgentCall(tool: "find_bytes", arguments: AgentArguments([
+            "document": "d1", "node": "root", "text": "MZ", "encoding": "ascii", "show": "compact"])))
+        guard case .json(let found) = first else { return XCTFail("\(first)") }
+        let row = try XCTUnwrap(found["matches"]?.arrayValue?.first)
+        let node = try XCTUnwrap(row["node"]?.stringValue)
+        let places: [(part: String, offset: String)] = [
+            ("all", try XCTUnwrap(row["node_offset"]?.stringValue)),
+            ("body", try XCTUnwrap(row["body_offset"]?.stringValue))]
+        for place in places {
+            let read = try await data.run(AgentCall(tool: "uefi_node_data", arguments: AgentArguments([
+                "document": "d1", "node": .string(node), "part": .string(place.part),
+                "offset": .string(place.offset), "length": "0x2", "format": "ascii"])))
+            guard case .json(let bytes) = read else { return XCTFail("\(read)") }
+            XCTAssertEqual(bytes["text"]?.stringValue, "MZ", "\(place): \(bytes)")
+            let again = try await find.run(AgentCall(tool: "find_bytes", arguments: AgentArguments([
+                "document": "d1", "pattern_node": .string(node), "pattern_part": .string(place.part),
+                "pattern_range": .string("\(place.offset)+2")])))
+            guard case .json(let matches) = again else { return XCTFail("\(again)") }
+            XCTAssertEqual(matches["matches"]?.arrayValue?.first?["start"]?.stringValue, "0x64", "\(place)")
+        }
+
+        let across = try await find.run(AgentCall(tool: "find_bytes", arguments: AgentArguments([
+            "document": "d1", "node": "root", "hex": "?? ?? ?? ?? 4D 5A"])))
+        guard case .json(let straddling) = across else { return XCTFail("\(across)") }
+        let match = try XCTUnwrap(straddling["matches"]?.arrayValue?.first)
+        XCTAssertEqual(match["node_offset"]?.stringValue, "0x0", "\(match)")
+        XCTAssertNil(match["body_offset"], "it starts in the header: \(match)")
+    }
+
     func testFindBytesTakesItsPatternFromANode() async throws {
         let find = try tool("find_bytes", tools())
         let first = try await find.run(AgentCall(tool: "find_bytes", arguments: AgentArguments([

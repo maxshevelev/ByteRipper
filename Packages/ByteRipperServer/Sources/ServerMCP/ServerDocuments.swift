@@ -141,7 +141,9 @@ public enum ServerDocuments {
                 `ignore_case`; `hex` is bytes, with `??` for a byte that may be anything ("24 ?? 4D 49"). \
                 Each match: the `encoding` that matched; without `node`, `start` and `end`, half-open file \
                 addresses; with `node`, in tree order, the `node` that holds it whole with `node_offset`, \
-                its `volume` and `volume_offset`, and `start`/`end` in the file — or, inside a compressed \
+                from its first byte (its part "all"), and `body_offset`, from its body's, when the match \
+                lies in the body (its part "body", what `uefi_node_data` and `pattern_part` read by \
+                default), its `volume` and `volume_offset`, and `start`/`end` in the file — or, inside a compressed \
                 section, `in_compressed: true`, the `section`, and `buffer_start`/`buffer_end` in what it \
                 decompresses to, which `uefi_node_data` reads — and `decoded` ("XOR 77") in a LENV block \
                 decoded. `total` counts every match; with `node`, `unread` lists the compressed sections \
@@ -149,7 +151,7 @@ public enum ServerDocuments {
                 two, or three with it. Pages: `limit` is a ceiling — a page also stops before the answer \
                 passes the size bound and then says `truncated: "size"`; pass `next` back as `after` \
                 until it is null. `show` "compact" answers each match as where it is and no more — `node` by \
-                its id and `node_offset`, or `start` — and "count" answers `total` alone. `pattern_node`, `pattern_range` and `pattern_part` take the pattern from a node's bytes instead of \
+                its id with `node_offset` and `body_offset`, or `start` — and "count" answers `total` alone. `pattern_node`, `pattern_range` and `pattern_part` take the pattern from a node's bytes instead of \
                 `text` or `hex`, the place it came from among the matches; `any` marks bytes of it that may be \
                 anything, such as an operand that holds an address.
                 """,

@@ -139,7 +139,7 @@ public enum UEFIAgentNodeData {
             """,
         properties: [
             "node": AgentSchema.string("The node's id, e.g. \"0.2.5.0.0.1.0.530.2\"."),
-            "part": AgentSchema.choice(Part.allCases.map(\.rawValue), "Which bytes of the node. Default \"body\"."),
+            "part": AgentSchema.choice(Part.allCases.map(\.rawValue), "Which bytes of the node. Default \"body\". `offset` counts from this part's start: a `find_bytes` match's `body_offset` goes with \"body\", its `node_offset` with \"all\"."),
             "offset": AgentSchema.offset("Where to start inside the part. Default 0x0."),
             "length": AgentSchema.offset("How many bytes. Default 256, at most 4096."),
             "ranges": AgentSchema.strings("Instead of `offset` and `length`: several places, each \"offset+length\", such as \"0x100+0x20\"; at most 64."),
@@ -244,7 +244,7 @@ public enum UEFIAgentNodeData {
     /// `find_bytes`' words for the arguments that take its pattern from a node.
     nonisolated public static let patternProperties: [String: JSONValue] = [
         "pattern_node": AgentSchema.string("Take the pattern from this node's bytes instead of `text` or `hex`."),
-        "pattern_part": AgentSchema.choice(Part.allCases.map(\.rawValue), "Which bytes of `pattern_node`. Default \"body\"; a match's `node_offset` counts from the start of \"all\"."),
+        "pattern_part": AgentSchema.choice(Part.allCases.map(\.rawValue), "Which bytes of `pattern_node`. Default \"body\". `pattern_range` counts from this part's start: a match's `body_offset` goes with \"body\", its `node_offset` with \"all\"."),
         "pattern_range": AgentSchema.string("The stretch of the part to take, \"offset+length\": \"0x100+0x200\". Required with `pattern_node`; at most 1 MiB."),
         "any": AgentSchema.strings("Bytes of that pattern that match anything, each \"offset+length\" from the pattern's start: [\"0x10+4\"].")
     ]
