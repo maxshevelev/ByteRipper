@@ -344,7 +344,10 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
             for instruction in shown["instructions"] as? [[String: Any]] ?? [] {
                 let text = instruction["text"] as? String ?? ""
                 if text.hasPrefix("PUSH 0x") || (text.hasPrefix("MOV E") && text.contains(",0x")) {
-                    value = String(text[text.range(of: "0x")!.lowerBound...])
+                    let found = String(text[text.range(of: "0x")!.lowerBound...])
+                    // A value this high is an address in the image: an equate names constants.
+                    guard let number = UInt64(found.dropFirst(2), radix: 16), number < 0x10000 else { continue }
+                    value = found
                     entry = at
                     break search
                 }
