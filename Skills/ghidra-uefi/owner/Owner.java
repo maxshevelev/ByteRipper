@@ -923,6 +923,7 @@ public class Owner {
         StringPropertyMap nameReasons = program.getUsrPropertyManager().getStringPropertyMap(Harvest.REASON);
         String nameReason = nameReasons == null ? null : nameReasons.getString(function.getEntryPoint());
         if (nameReason != null) answer.addProperty("name_reason", nameReason);
+        answer.addProperty("calling_convention", function.getCallingConventionName());
         String plate = function.getComment();
         if (plate != null && !plate.isBlank()) answer.addProperty("plate", plate);
         answer.add("comments", commentsIn(function));

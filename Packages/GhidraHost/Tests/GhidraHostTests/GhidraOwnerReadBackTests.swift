@@ -248,6 +248,7 @@ final class GhidraOwnerReadBackTests: XCTestCase {
               "| warnings:", text.split(separator: "\n").filter { $0.contains("WARNING") })
         print("READBACK storage caller before:", before.split(separator: "\n").filter { $0.contains("(") }.prefix(3))
         XCTAssertFalse(head.contains("__cdecl"), head)
+        XCTAssertEqual(read["calling_convention"] as? String, "default")
         XCTAssertFalse(text.contains("Unknown calling convention"), text)
         XCTAssertEqual((read["parameters"] as? [[String: Any]])?.map { $0["storage"] as? String }, ["ECX:4", "Stack[0x4]:4"])
         let after = try await c(caller)
@@ -268,5 +269,57 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         let fits = try await c(entry)
         print("READBACK storage that fits:", fits.split(separator: "\n").first { $0.contains("ProbeRenamed") } ?? "")
         XCTAssertTrue(fits.contains("__cdecl"), fits)
+        let kept = try await self.read("/v1/function/\(entry)")
+        XCTAssertEqual(kept["calling_convention"] as? String, "__cdecl")
+    }
+
+    /// Not a check: the whole C of the module after the same explicit storage on
+    /// the same functions, written to `GHIDRA_C_DUMP`, to compare one build of
+    /// the owner with another.
+    func testDumpTheModulesCAfterExplicitStorage() async throws {
+        guard let dump = ProcessInfo.processInfo.environment["GHIDRA_C_DUMP"] else {
+            throw XCTSkip("GHIDRA_C_DUMP is not set")
+        }
+        try await open(try image())
+        let all = try await entries()
+        func dumped(_ marked: [String]) async throws -> [String] {
+            var lines: [String] = []
+            for entry in all {
+                let function = try await read("/v1/function/\(entry)")
+                lines.append("=== \(entry) \(marked.contains(entry) ? "CHANGED" : "") convention=\(function["calling_convention"] ?? "unread")")
+                lines.append(function["c"] as? String ?? "")
+            }
+            return lines
+        }
+        // The C before any write: what the decompiler answers with nothing changed.
+        try (try await dumped([])).joined(separator: "\n").write(toFile: dump + ".pre", atomically: true, encoding: .utf8)
+        var changed: [String] = []
+        var unused: [String] = []
+        for entry in all where changed.count < 20 {
+            let callers = try await read("/v1/xrefs?to=\(entry)")["references"] as? [[String: Any]] ?? []
+            guard callers.contains(where: { ($0["type"] as? String)?.contains("CALL") == true }) else {
+                unused.append("\(entry) no caller")
+                continue
+            }
+            let function = try await read("/v1/function/\(entry)")
+            let parameters = function["parameters"] as? [[String: Any]] ?? []
+            let places = parameters.compactMap { $0["storage"] as? String }
+            guard places.count >= 2, places.count == parameters.count, places.allSatisfy({ $0.hasPrefix("Stack") && $0.hasSuffix(":4") }),
+                  let signature = function["signature"] as? String else {
+                unused.append("\(entry) parameters \(places)")
+                continue
+            }
+            let storage = ["ECX:4"] + places.dropFirst()
+            do {
+                try await post("/v1/set/signature", ["address": entry, "signature": signature, "storage": storage,
+                                                     "by": "agent", "reason": "comparing builds"])
+                changed.append(entry)
+            } catch {
+                unused.append("\(entry) refused \(error)")
+            }
+        }
+        var lines = ["changed \(changed)", "unused \(unused)", "project \(directory.path)"]
+        lines += try await dumped(changed)
+        try lines.joined(separator: "\n").write(toFile: dump, atomically: true, encoding: .utf8)
     }
 }
