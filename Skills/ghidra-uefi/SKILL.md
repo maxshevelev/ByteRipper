@@ -231,6 +231,12 @@ Names alone do not get there. Every review applies these rules:
 5. **Read it again.** After a publish, read the function and its callers once
    more: a name or a type that reads wrong in a caller is not done. What still
    reads as a constant, a cast or `local_` is the next round.
+   Read a rename back at once, without waiting for the publish: list the
+   function again after `ghidra_rename` or `ghidra_rename_variable` and look
+   for the name in its C. Reviews have reported names and types answered `ok`
+   that did not hold. Those reports could not be reproduced and are not
+   explained, so `ok` alone does not show the name took. If the name is
+   missing, report the call and its answer rather than writing it again.
 6. **Findings are reported, not hidden.** A defect the review finds — an
    unbounded buffer, a wrong format, an unused parameter — goes in a comment
    at its place and in the report to the person. It never shapes a name: the
