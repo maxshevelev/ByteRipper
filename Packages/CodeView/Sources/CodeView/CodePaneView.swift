@@ -284,6 +284,8 @@ import ToolModuleKit
     private static let navigatorLevels: Int = 10
     /// Where the Functions list's order is kept, like the navigator's width.
     static let navigatorOrderKey = "CodeNavigatorFunctionOrder"
+    /// Whether the call tree keeps to the open way, kept the same way.
+    static let onlyOpenWayKey = "CodeNavigatorCallTreeOnlyOpenWay"
     private let navigatorBar = CodeNavigatorBar()
     /// The three function-view buttons, kept apart rather than joined into one
     /// segmented control: each is a flat symbol, and the one whose layout is
@@ -370,6 +372,7 @@ import ToolModuleKit
         if let stored = FunctionOrder(rawValue: Self.defaults.integer(forKey: Self.navigatorOrderKey)) {
             self.state.show(stored)
         }
+        self.state.showOnlyOpenWay(Self.defaults.bool(forKey: Self.onlyOpenWayKey))
         self.moduleHexView = hexView
         // Every analysis newest first, as the agent lists them — the recipe
         // id breaking a tie. The one shown keeps its place: a line where it
@@ -1068,6 +1071,7 @@ import ToolModuleKit
         // show Functions, with the filter cleared, before selecting it.
         revealInNavigator(index)
         state.selectFunction(index)
+        redrawCallTree(leaving: previous)
         noteSeen(index)
         // Arriving at a function a revision changed does not take its New
         // mark: the reader sees which function changed while reading it, and
@@ -1309,8 +1313,36 @@ import ToolModuleKit
     /// Shows the function holding `line` and selects that instruction.
     private func select(line: Int) {
         revealInNavigator(model.lines[line].function)
+        let previous = state.function
         state.selectLine(line)
+        redrawCallTree(leaving: previous)
         drawSelection()
+    }
+
+    /// The call tree stands around the selected function, so another selection
+    /// redraws it.
+    private func redrawCallTree(leaving previous: Int?) {
+        guard state.function != previous, state.functionOrder == .calls,
+              state.list == .functions, state.searchText.isEmpty else { return }
+        // A table with no empty selection chooses its first row as it takes its
+        // data, while the pane is still being built: the first draw comes after.
+        guard searchToOrder != nil else { return }
+        keepingChosenRow { drawNavigator() }
+    }
+
+    /// Keeps the row chosen where it is on screen while `change` moves the rows
+    /// around it, so a click does not move the row under the pointer.
+    private func keepingChosenRow(_ change: () -> Void) {
+        let clip = functionTable.enclosingScrollView?.contentView
+        let chosen = functionTable.selectedRow
+        let offset = chosen >= 0 ? clip.map { functionTable.rect(ofRow: chosen).minY - $0.bounds.minY } : nil
+        change()
+        guard let clip, let offset, offset >= 0, offset < clip.bounds.height,
+              let function = state.function, let row = state.row(ofFunction: function) else { return }
+        let lowest = max(0, functionTable.bounds.height - clip.bounds.height)
+        clip.scroll(to: NSPoint(x: clip.bounds.minX,
+                                y: min(max(0, functionTable.rect(ofRow: row).minY - offset), lowest)))
+        functionTable.enclosingScrollView?.reflectScrolledClipView(clip)
     }
 
     /// Brings a function into the navigator, redrawing the list when the
@@ -1354,7 +1386,7 @@ import ToolModuleKit
         functionTable.reloadData()
         if state.list == .functions, let function = state.function,
            let row = state.row(ofFunction: function) {
-            functionTable.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+            functionTable.selectRowIndexes(state.selectedFunctionRows, byExtendingSelection: false)
             functionTable.scrollRowToVisible(row)
         } else {
             functionTable.deselectAll(nil)
@@ -1390,7 +1422,53 @@ import ToolModuleKit
 
     @objc private func orderChosen(_ sender: NSButton) {
         guard let order = FunctionOrder(rawValue: sender.tag) else { return }
+        // The call tree's button, pressed again, goes round its two forms.
+        if order == .calls, state.functionOrder == .calls {
+            markChosenOrder(order)
+            setShowsOnlyOpenWay(!state.showsOnlyOpenWay)
+            return
+        }
         setFunctionOrder(order)
+    }
+
+    /// Keeps the call tree to the way down to the place being read, or shows
+    /// every way again, and keeps the choice for the next code panel.
+    func setShowsOnlyOpenWay(_ only: Bool) {
+        Self.defaults.set(only, forKey: Self.onlyOpenWayKey)
+        state.showOnlyOpenWay(only)
+        drawCallTreeButton()
+        guard state.functionOrder == .calls else { return }
+        keepingChosenRow { drawNavigator() }
+    }
+
+    /// The right-click's way to the same two forms: every way shown, the row's
+    /// place is made the one read, and the tree keeps to the way down to it.
+    func showOnlyWay(atRow row: Int) {
+        guard let index = state.function(atRow: row) else { return }
+        state.chooseCallPlace(atRow: row)
+        guard index != state.function else {
+            setShowsOnlyOpenWay(true)
+            return
+        }
+        Self.defaults.set(true, forKey: Self.onlyOpenWayKey)
+        state.showOnlyOpenWay(true)
+        drawCallTreeButton()
+        jump { selectFunction(at: index) }
+    }
+
+    /// The call tree's button says which form the tree is in, and what another
+    /// press does: its symbol and its words go with the form.
+    private func drawCallTreeButton() {
+        guard orderButtonViews.indices.contains(FunctionOrder.calls.rawValue) else { return }
+        let button = orderButtonViews[FunctionOrder.calls.rawValue]
+        let only = state.showsOnlyOpenWay
+        button.image = NSImage(systemSymbolName: only ? "point.topleft.down.curvedto.point.bottomright.up"
+                                                      : Self.orderSymbol(.calls),
+                               accessibilityDescription: nil)
+        // help: panel.code.function-view
+        ControlHelp.describe(button, name: L("Call tree"), tooltip: only
+            ? L("Show the way down to the open function alone and what it calls. Press again for every way")
+            : L("Show every way down to the selected function and what it calls. Press again for the open way alone"))
     }
 
     /// Gives the button whose layout is in front the accent colour and takes
@@ -1632,10 +1710,14 @@ import ToolModuleKit
         functionTable.endUpdates()
         // The function the reader is in keeps its row where the list still
         // shows it.
-        if let function = state.function, let row = state.row(ofFunction: function) {
-            functionTable.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        if !state.selectedFunctionRows.isEmpty {
+            functionTable.selectRowIndexes(state.selectedFunctionRows, byExtendingSelection: false)
         }
         syncingSelection = false
+        // The rows that stayed keep their views: the open place may have moved.
+        functionTable.enumerateAvailableRowViews { rowView, row in
+            (rowView as? CodeNavigatorRowView)?.isOpenPlace = state.isOpenPlace(atRow: row)
+        }
         drawEmptyList()
     }
 
@@ -1963,8 +2045,9 @@ import ToolModuleKit
     private func drawSelection() {
         syncingSelection = true
         if state.list == .functions, let function = state.function,
-           let row = state.row(ofFunction: function), functionTable.selectedRow != row {
-            functionTable.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+           let row = state.row(ofFunction: function),
+           functionTable.selectedRowIndexes != state.selectedFunctionRows {
+            functionTable.selectRowIndexes(state.selectedFunctionRows, byExtendingSelection: false)
             functionTable.scrollRowToVisible(row)
         }
         if drawnFunction != state.function || table.numberOfRows != state.lines.count {
@@ -2885,6 +2968,19 @@ import ToolModuleKit
         switch state.list {
         case .functions:
             guard let index = state.function(atRow: row) else { return }
+            // Another place of the function in front: nothing to read anew and
+            // nowhere to go back from. Its calls move there, and that is all.
+            if state.function == index, state.functionOrder == .calls, state.searchText.isEmpty {
+                let wayBefore = (0..<state.rowCount).filter { state.isOnChosenWay(atRow: $0) }
+                    .compactMap { state.callPath(atRow: $0) }
+                keepingChosenRow { foldRows { $0.chooseCallPlace(atRow: row) } }
+                // A row kept its cell, and the bold has moved with the way.
+                var changed = IndexSet(wayBefore.compactMap { state.row(ofCallPath: $0) })
+                changed.formUnion(IndexSet((0..<state.rowCount).filter { state.isOnChosenWay(atRow: $0) }))
+                functionTable.reloadData(forRowIndexes: changed,
+                                         columnIndexes: IndexSet(functionTable.tableColumns.indices))
+                return
+            }
             state.chooseCallPlace(atRow: row)
             jump { selectFunction(at: index) }
             return
@@ -2981,6 +3077,7 @@ import ToolModuleKit
         searchField.translatesAutoresizingMaskIntoConstraints = false
 
         configure(functionTable, identifier: "function")
+        functionTable.allowsMultipleSelection = true
         functionTable.rowHeight = Self.navigatorRowHeight
         functionTable.menu = rowMenu()
         functionScroll.documentView = functionTable
@@ -3019,7 +3116,7 @@ import ToolModuleKit
         orderButtons.setAccessibilityLabel(L("Function order"))
         let orderPhrases: [(name: String, tooltip: String)] = [
             (L("By address"), L("List the functions in the order they lie in the module")),
-            (L("Call tree"), L("Hang each function under the one that calls it")),
+            (L("Call tree"), ""),
             (L("Grouped by review state"), L("Gather the functions by how far the review has got with each"))
         ]
         // help: panel.code.function-view
@@ -3047,6 +3144,7 @@ import ToolModuleKit
             orderButtons.addArrangedSubview(button)
             orderButtonViews.append(button)
         }
+        drawCallTreeButton()
         markChosenOrder(state.functionOrder)
         navigatorBar.translatesAutoresizingMaskIntoConstraints = false
         navigatorBar.addSubview(searchField)
@@ -3475,12 +3573,15 @@ import ToolModuleKit
         // top of each list and of the C is at the top again, at the new size.
         syncingSelection = true
         for table in [functionTable, table] {
-            let selected = table.selectedRow
+            // Every row selected: the call tree selects a function at each of
+            // its places.
+            let selected = table.selectedRowIndexes
             let top = topRow(of: table)
             table.rowHeight = table === functionTable ? Self.navigatorRowHeight : Self.codeLineHeight
             table.reloadData()
-            if selected >= 0, selected < table.numberOfRows {
-                table.selectRowIndexes(IndexSet(integer: selected), byExtendingSelection: false)
+            let kept = selected.filteredIndexSet { $0 < table.numberOfRows }
+            if !kept.isEmpty {
+                table.selectRowIndexes(kept, byExtendingSelection: false)
             }
             if let top { scroll(table, toTop: top) }
         }
@@ -4989,6 +5090,25 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
             && state.functionRow(at: row)?.isHeading == true)
     }
 
+    /// The list selects every place of the function in the call tree, which only
+    /// the pane does: the reader's click, key or drag still chooses one row, and
+    /// a heading none. With this answered the table asks nothing about one row.
+    public func tableView(_ tableView: NSTableView,
+                          selectionIndexesForProposedSelection proposed: IndexSet) -> IndexSet {
+        guard tableView === functionTable else { return proposed }
+        let rows = proposed.filteredIndexSet { self.tableView(tableView, shouldSelectRow: $0) }
+        return rows.count == 1 ? rows : tableView.selectedRowIndexes
+    }
+
+    public func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        guard tableView === functionTable else { return nil }
+        let reused = tableView.makeView(withIdentifier: CodeNavigatorRowView.identifier, owner: nil)
+        let rowView = reused as? CodeNavigatorRowView ?? CodeNavigatorRowView()
+        rowView.marksNode = state.list == .functions && state.functionOrder == .calls && state.searchText.isEmpty
+        rowView.isOpenPlace = state.isOpenPlace(atRow: row)
+        return rowView
+    }
+
     public func tableView(_ tableView: NSTableView,
                           viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         if tableView === functionTable {
@@ -4999,6 +5119,19 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
             }
             if let section = functionRow?.section {
                 return sectionCell(in: tableView, section: section, row: row)
+            }
+            if functionRow == .callsCut {
+                let cell = cell(in: tableView, identifier: .init("code-calls-cut"), monospaced: false)
+                cell.textField?.font = Self.navigatorFont()
+                cell.textField?.textColor = .secondaryLabelColor
+                cell.textField?.stringValue = L("Too many ways lead here: the list stops at this point")
+                cell.showsDisclosure(false)
+                cell.showsIcon(nil)
+                cell.showsBadge(false)
+                cell.onToggle = nil
+                cell.indent = 0
+                cell.toolTip = nil
+                return cell
             }
             // The by-address table's first column: where the function is.
             if state.list == .functions, tableColumn?.identifier.rawValue == FunctionColumn.address.rawValue,
@@ -5095,6 +5228,9 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
                 // calls it would open say nothing about a find.
                 if state.functionOrder == .calls, state.searchText.isEmpty,
                    let path = state.callPath(atRow: row) {
+                    // The place being read and the way down to it read bold; the
+                    // function's other places have only their mark.
+                    if state.isOnChosenWay(atRow: row) { cell.textField?.font = Self.navigatorBoldFont() }
                     let expandable = state.hasCalls(path: path)
                     let expanded = state.isExpanded(path: path)
                     cell.showsDisclosure(true)
@@ -5102,6 +5238,11 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
                     ControlHelp.describe(cell.disclosure,
                                          expanded ? L("Hide calls") : L("Show calls"))
                     cell.onToggle = { [weak self] in self?.toggleCalls(at: path) }
+                    if state.isRecursiveCall(path: path) {
+                        cell.textField?.stringValue += "  ↺"
+                        reason = [reason, L("Recursive call: this function is already on the way here")]
+                            .compactMap { $0 }.joined(separator: "\n")
+                    }
                 }
             }
             if state.list == .postCodes {
@@ -5342,6 +5483,53 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
 
 }
 
+/// A navigator row. The call tree selects a function at each of its places, and
+/// that many full-width bands would bury the tree: there the selection marks the
+/// node alone, its mark and name. The place being read has the colour the code
+/// selects text in, the function's other places a light grey. Every other list
+/// keeps the table's own band.
+final class CodeNavigatorRowView: NSTableRowView {
+    static let identifier = NSUserInterfaceItemIdentifier("code-navigator-row")
+
+    var marksNode = false {
+        didSet { needsDisplay = true }
+    }
+
+    var isOpenPlace = false {
+        didSet {
+            if isOpenPlace != oldValue { needsDisplay = true }
+        }
+    }
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        identifier = Self.identifier
+    }
+
+    /// A node's mark and name stay as they read on the page: the colour behind
+    /// them is the text selection's, which takes ordinary ink.
+    override var isEmphasized: Bool {
+        get { marksNode ? false : super.isEmphasized }
+        set { super.isEmphasized = newValue }
+    }
+
+    override func drawSelection(in dirtyRect: NSRect) {
+        guard marksNode else {
+            super.drawSelection(in: dirtyRect)
+            return
+        }
+        guard let cell = subviews.lazy.compactMap({ $0 as? CodeNavigatorCell }).first else { return }
+        let color: NSColor = !isOpenPlace ? .unemphasizedSelectedContentBackgroundColor
+            : window?.isKeyWindow == true ? .selectedTextBackgroundColor
+            : .unemphasizedSelectedTextBackgroundColor
+        color.setFill()
+        NSBezierPath(roundedRect: convert(cell.nodeFrame, from: cell), xRadius: 4, yRadius: 4).fill()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+}
+
 /// A navigator row's cell. A call tree's function starts further in the deeper
 /// it is — the indent is the row's, so a reused cell takes the next row's —
 /// and one whose calls the tree holds carries the triangle that opens them.
@@ -5451,6 +5639,25 @@ final class CodeNavigatorCell: NSTableCellView {
         }
     }
 
+    /// What a selected node of the call tree is marked over, in the cell's own
+    /// terms: from the mark to the end of the name or the badge after it, no
+    /// further than the room the name has.
+    var nodeFrame: NSRect {
+        guard let field = textField else { return bounds }
+        let start = icon.isHidden ? field.frame.minX : icon.frame.minX
+        let end = badge.isHidden
+            ? field.frame.minX + min(field.intrinsicContentSize.width, field.frame.width)
+            : badge.frame.maxX
+        let left = start - 3
+        return NSRect(x: left, y: bounds.minY + 1, width: min(end + 8, bounds.maxX) - left, height: bounds.height - 2)
+    }
+
+    /// The row draws the mark under the cell, from the frames set here.
+    override func layout() {
+        super.layout()
+        superview?.needsDisplay = true
+    }
+
     /// The room the chevron and its gap take before a row's mark.
     static let disclosureRoom: CGFloat = 13 + 4
 
@@ -5548,8 +5755,10 @@ final class CodeOrderButton: NSButton {
     /// follows it, which is what a screen reader reads as selected.
     var isChosen: Bool = false {
         didSet {
-            guard isChosen != oldValue else { return }
+            // Before the guard: a press on the chosen button has flipped the
+            // state, and it is chosen still.
             state = isChosen ? .on : .off
+            guard isChosen != oldValue else { return }
             contentTintColor = isChosen ? .controlAccentColor : .secondaryLabelColor
             needsDisplay = true
         }
@@ -5689,6 +5898,14 @@ extension CodePaneView: NSMenuDelegate {
                                     keyEquivalent: "")
             copy.target = self
             copy.representedObject = place.name
+            if state.functionOrder == .calls, state.searchText.isEmpty {
+                // help: panel.code.function-view
+                let only = state.showsOnlyOpenWay
+                let ways = menu.addItem(withTitle: only ? L("Show All Paths") : L("Show Only This Path"),
+                                        action: #selector(callWaysChosen(_:)), keyEquivalent: "")
+                ways.target = self
+                ways.representedObject = NSNumber(value: tableView.clickedRow)
+            }
             menu.addItem(.separator())
         }
         for note in place.notes {
@@ -5744,6 +5961,14 @@ extension CodePaneView: NSMenuDelegate {
         menu.addItem(withTitle: L("Copy"), action: #selector(NSText.copy(_:)), keyEquivalent: "")
             .target = cTextView
         return menu
+    }
+
+    @objc private func callWaysChosen(_ sender: NSMenuItem) {
+        if state.showsOnlyOpenWay {
+            setShowsOnlyOpenWay(false)
+        } else if let row = (sender.representedObject as? NSNumber)?.intValue {
+            showOnlyWay(atRow: row)
+        }
     }
 
     @objc private func jumpToDefinitionChosen(_ sender: NSMenuItem) {
