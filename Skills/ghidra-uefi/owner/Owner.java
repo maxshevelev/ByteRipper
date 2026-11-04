@@ -306,6 +306,7 @@ public class Owner {
                     case "/v1/redecode" -> write(exchange, this::redecode);
                     case "/v1/function/extend" -> write(exchange, this::extendFunction);
                     case "/v1/set/equate" -> write(exchange, this::setEquate);
+                    case "/v1/preview/equate" -> setEquateInFunctions(previewBody(exchange));
                     case "/v1/tag/function" -> write(exchange, this::tagFunction);
                     case "/v1/library/decline" -> write(exchange, this::libraryDecline);
                     case "/v1/library/release" -> write(exchange, this::libraryRelease);
@@ -1568,32 +1569,8 @@ public class Owner {
         return list;
     }
 
-    /**
-     * The `MOV reg,imm` that gives a `CALL reg` or `JMP reg` its value, in the
-     * same straight run of instructions; nil when something else writes the
-     * register first, the run ends or nothing does.
-     */
     private Instruction constantInRegister(Instruction call, Function function) {
-        Object[] operand = call.getNumOperands() == 1 ? call.getOpObjects(0) : new Object[0];
-        if (operand.length != 1 || !(operand[0] instanceof ghidra.program.model.lang.Register register)) return null;
-        if (ghidra.program.model.lang.OperandType.isDynamic(call.getOperandType(0))) return null;
-        Instruction current = call;
-        for (int step = 0; step < 16; step++) {
-            if (program.getReferenceManager().hasReferencesTo(current.getAddress())) return null;
-            Instruction before = program.getListing().getInstructionBefore(current.getAddress());
-            if (before == null || !function.getBody().contains(before.getAddress())
-                || !before.getFlowType().isFallthrough() || before.getFlowType().isCall()) return null;
-            for (Object written : before.getResultObjects()) {
-                if (!(written instanceof ghidra.program.model.lang.Register other)
-                    || other.getBaseRegister() != register.getBaseRegister()) continue;
-                boolean constant = before.getMnemonicString().equals("MOV") && before.getNumOperands() == 2
-                    && before.getOpObjects(1).length == 1
-                    && before.getOpObjects(1)[0] instanceof ghidra.program.model.scalar.Scalar;
-                return constant ? before : null;
-            }
-            current = before;
-        }
-        return null;
+        return ExportCode.constantInRegister(program, call, function);
     }
 
     private JsonObject data(Map<String, String> query, boolean strings) throws Failure {
@@ -2508,6 +2485,10 @@ public class Owner {
                 program.getUsrPropertyManager().getStringPropertyMap(Harvest.SIGNATURE_REASON);
             String signatureReason = signatureReasons == null ? null : signatureReasons.getString(function.getEntryPoint());
             if (signatureReason != null) item.addProperty("signature_reason", signatureReason);
+            StringPropertyMap nameReasons =
+                program.getUsrPropertyManager().getStringPropertyMap(Harvest.REASON);
+            String nameReason = nameReasons == null ? null : nameReasons.getString(function.getEntryPoint());
+            if (nameReason != null) item.addProperty("name_reason", nameReason);
             // A body applied as a variant of another entry says which, and
             // the assert codes that made it one.
             JsonObject mark = libraryMark(function);
@@ -3903,6 +3884,14 @@ public class Owner {
      */
     private long modification() {
         return program.getModificationNumber() - rolledBack;
+    }
+
+    /** The body of a call that asks what a write would do: no lease, no transaction, `dry_run` whatever it says. */
+    private JsonObject previewBody(HttpExchange exchange) throws Exception {
+        JsonObject body = body(exchange);
+        if (!body.has("functions")) throw new Failure(400, "a dry run takes `functions`");
+        body.addProperty("dry_run", true);
+        return body;
     }
 
     private JsonObject write(HttpExchange exchange, Change change) throws Exception {

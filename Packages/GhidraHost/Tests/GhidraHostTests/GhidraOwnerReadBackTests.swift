@@ -361,6 +361,38 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         }
     }
 
+    /// A call through a register holding a constant is in the stored call graph, both ways.
+    func testAStoredAnalysisListsAHeldCallBothWays() async throws {
+        let made = try imageWithAnIndirectCall()
+        try await open(made.image)
+        let stub = "0x" + String(made.stub, radix: 16, uppercase: true)
+        let target = "0x" + String(made.target, radix: 16, uppercase: true)
+        let all = try await entries()
+        try await post("/v1/set/comment", ["address": try XCTUnwrap(all.first), "kind": "plate", "text": "One."])
+        let done = try await host.publish(module, by: "agent")
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let code = try store.artifact(for: done.manifest)
+        let caller = try XCTUnwrap(code.functions.first { $0.entry.description == stub })
+        let callee = try XCTUnwrap(code.functions.first { $0.entry.description == target })
+        XCTAssertTrue(caller.callees.contains { $0.description == target }, "\(caller.callees)")
+        XCTAssertTrue(callee.callers.contains { $0.description == stub }, "\(callee.callers)")
+    }
+
+    /// Asking what an equate would do takes no lease and writes nothing.
+    func testAnEquateDryRunTakesNoLease() async throws {
+        try await open(try image())
+        let all = try await entries()
+        let before = try await read("/v1/hello")
+        let body = try JSONSerialization.data(withJSONObject: ["functions": all, "name": "PreviewName", "value": "0x10"])
+        let answer = try JSONSerialization.jsonObject(with: await host.preview(module, "/v1/preview/equate", body: body)) as? [String: Any]
+        XCTAssertEqual(answer?["dry_run"] as? Bool, true, "\(answer ?? [:])")
+        XCTAssertNotNil(answer?["applied"], "\(answer ?? [:])")
+        let after = try await read("/v1/hello")
+        XCTAssertEqual(before["modification"] as? Int, after["modification"] as? Int)
+        let leased = await host.summaries().first?.leased
+        XCTAssertEqual(leased, false)
+    }
+
     /// Typing HASH locals: what the listing holds afterwards, to see a split.
     func testReproItem5HashSplit() async throws {
         try await openCopy(of: "SecureFlashPei")

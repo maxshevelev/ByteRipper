@@ -235,10 +235,16 @@ public class ExportCode extends GhidraScript {
             // Ghidra answers with sets; sorted by entry, the same program
             // always exports the same bytes, which is what lets a publish of
             // an unchanged program be recognised as one.
-            List<String> callers = entries(function.getCallingFunctions(monitor));
-            List<String> callees = entries(function.getCalledFunctions(monitor));
+            java.util.Set<Function> calling = new java.util.HashSet<>(function.getCallingFunctions(monitor));
+            java.util.Set<Function> called = new java.util.HashSet<>(function.getCalledFunctions(monitor));
+            calling.addAll(heldCalls(currentProgram).callers.getOrDefault(function, java.util.Set.of()));
+            called.addAll(heldCalls(currentProgram).callees.getOrDefault(function, java.util.Set.of()));
+            List<String> callers = entries(calling);
+            List<String> callees = entries(called);
             json.append("      \"callers\": [").append(String.join(", ", callers)).append("],\n");
             json.append("      \"callees\": [").append(String.join(", ", callees)).append("],\n");
+
+            if (function.hasCustomVariableStorage()) json.append("      \"custom_storage\": true,\n");
 
             // Where the name came from: Ghidra's FUN_ placeholder (DEFAULT),
             // the UEFI pass (ANALYSIS, with its reason), the image's own
@@ -1004,6 +1010,74 @@ public class ExportCode extends GhidraScript {
         Varnode varnode = token.getVarnode();
         if (varnode != null && varnode.isAddress() && varnode.getAddress().isMemoryAddress()) {
             return hex(varnode.getAddress());
+        }
+        return null;
+    }
+
+    /** The calls Ghidra's own call graph leaves out: `MOV reg,imm` then `CALL reg`. */
+    private static final class HeldCalls {
+        final java.util.Map<Function, java.util.Set<Function>> callers = new java.util.HashMap<>();
+        final java.util.Map<Function, java.util.Set<Function>> callees = new java.util.HashMap<>();
+    }
+
+    private HeldCalls heldCallsOfProgram;
+
+    private HeldCalls heldCalls(ghidra.program.model.listing.Program program) {
+        if (heldCallsOfProgram != null) return heldCallsOfProgram;
+        HeldCalls calls = new HeldCalls();
+        for (Function function : program.getFunctionManager().getFunctions(true)) {
+            for (ghidra.program.model.listing.Instruction instruction
+                     : program.getListing().getInstructions(function.getBody(), true)) {
+                if (!instruction.getFlowType().isCall() || instruction.getFlows().length != 0) continue;
+                ghidra.program.model.listing.Instruction holder = constantInRegister(program, instruction, function);
+                if (holder == null) continue;
+                Address held = imageAddress(program,
+                    ((ghidra.program.model.scalar.Scalar) holder.getOpObjects(1)[0]).getUnsignedValue());
+                Function target = held == null ? null : program.getFunctionManager().getFunctionAt(held);
+                if (target == null) continue;
+                calls.callees.computeIfAbsent(function, ignored -> new java.util.HashSet<>()).add(target);
+                calls.callers.computeIfAbsent(target, ignored -> new java.util.HashSet<>()).add(function);
+            }
+        }
+        heldCallsOfProgram = calls;
+        return calls;
+    }
+
+    /** An address of this image, nil when the value is not one. */
+    static Address imageAddress(ghidra.program.model.listing.Program program, long value) {
+        try {
+            Address at = program.getImageBase().getNewAddress(value);
+            return program.getMemory().contains(at) ? at : null;
+        } catch (Exception error) {
+            return null;
+        }
+    }
+
+    /**
+     * The `MOV reg,imm` that gives a `CALL reg` or `JMP reg` its value, in the
+     * same straight run of instructions; nil when something else writes the
+     * register first, the run ends or nothing does.
+     */
+    static ghidra.program.model.listing.Instruction constantInRegister(ghidra.program.model.listing.Program program,
+            ghidra.program.model.listing.Instruction call, Function function) {
+        Object[] operand = call.getNumOperands() == 1 ? call.getOpObjects(0) : new Object[0];
+        if (operand.length != 1 || !(operand[0] instanceof ghidra.program.model.lang.Register register)) return null;
+        if (ghidra.program.model.lang.OperandType.isDynamic(call.getOperandType(0))) return null;
+        ghidra.program.model.listing.Instruction current = call;
+        for (int step = 0; step < 16; step++) {
+            if (program.getReferenceManager().hasReferencesTo(current.getAddress())) return null;
+            ghidra.program.model.listing.Instruction before = program.getListing().getInstructionBefore(current.getAddress());
+            if (before == null || !function.getBody().contains(before.getAddress())
+                || !before.getFlowType().isFallthrough() || before.getFlowType().isCall()) return null;
+            for (Object written : before.getResultObjects()) {
+                if (!(written instanceof ghidra.program.model.lang.Register other)
+                    || other.getBaseRegister() != register.getBaseRegister()) continue;
+                boolean constant = before.getMnemonicString().equals("MOV") && before.getNumOperands() == 2
+                    && before.getOpObjects(1).length == 1
+                    && before.getOpObjects(1)[0] instanceof ghidra.program.model.scalar.Scalar;
+                return constant ? before : null;
+            }
+            current = before;
         }
         return null;
     }

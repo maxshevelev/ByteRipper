@@ -73,6 +73,14 @@ enum GhidraRoutes {
             return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
         }
 
+        router.add("POST", "\(prefix)/modules/:module/preview/*call", access: .rights([.ghidraUse])) { request in
+            let module = try digest(request.parameters["module"])
+            let call = request.parameters["call"] ?? ""
+            guard call == "preview/equate" else { throw HTTPError(.notFound, "\(call) is not a preview of the bridge") }
+            let data = try await answer { try await host.preview(module, "/v1/\(call)", body: request.body) }
+            return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
+        }
+
         router.add("POST", "\(prefix)/modules/:module/publish", access: .rights([.ghidraUse, .casWrite])) { request in
             let module = try digest(request.parameters["module"])
             // `dry_run`: what the publish would store, exported and answered —

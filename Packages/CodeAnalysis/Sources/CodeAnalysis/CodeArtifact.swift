@@ -299,6 +299,10 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         public internal(set) var nameSource: String?
         /// Why the UEFI pass gave the name, in the pass's words.
         public internal(set) var nameReason: String?
+        /// Why the signature is what it is, apart from the name's reason.
+        public internal(set) var signatureReason: String?
+        /// A review placed the parameters itself, past what a calling convention gives.
+        public internal(set) var customStorage: Bool?
         /// How far the review has got (v7); nil when the artifact predates
         /// it or names a level this reader does not know.
         public internal(set) var reviewLevel: ReviewLevel?
@@ -343,6 +347,8 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             cUnreachable = try container.decodeIfPresent(CUnreachable.self, forKey: .cUnreachable)
             nameSource = try container.decodeIfPresent(String.self, forKey: .nameSource)
             nameReason = try container.decodeIfPresent(String.self, forKey: .nameReason)
+            signatureReason = try container.decodeIfPresent(String.self, forKey: .signatureReason)
+            customStorage = try container.decodeIfPresent(Bool.self, forKey: .customStorage)
             // Decoded as the raw string so an unknown level is nil, not a
             // refusal of the whole artifact: a later exporter may add one.
             reviewLevel = try container.decodeIfPresent(String.self, forKey: .reviewLevel)
@@ -366,6 +372,8 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             case cUnreachable = "c_unreachable"
             case nameSource = "name_source"
             case nameReason = "name_reason"
+            case signatureReason = "signature_reason"
+            case customStorage = "custom_storage"
             case reviewLevel = "review_level"
             case reviewGaps = "review_gaps"
             case libraryKind = "library_kind"

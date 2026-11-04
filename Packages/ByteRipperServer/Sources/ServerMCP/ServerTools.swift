@@ -74,6 +74,7 @@ public enum ServerTools {
             says from what), IMPORTED the image's own. `review_level` is how far the review has got — full, partial, \
             decompiled, library or no_body; null in an analysis made before it was recorded — and \
             `level` lists one level; `review_levels` in the `functions` answer counts them over every match of `search`, whatever the `limit` or `level`, with `unrecorded` for a null one; \
+            `signature_reason` says why the signature is what it is, and `custom_storage` that a review placed its parameters itself; \
             `review_gaps` what keeps it from full: name, plate, comments, params, locals, c (a body that did not decompile); `temporaries` \
             the placeholder names its C still prints (uVar1, in_ECX), reported only: not a gap, and a library \
             function can hold them, so a clean row does not mean the locals are named; a library \

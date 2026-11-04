@@ -270,6 +270,51 @@ final class CodeReadingsTests: XCTestCase {
     /// A library function is graded like any other: its level is the tag's,
     /// but the gaps the bar reads are written into the artifact, so the
     /// counters here and the owner's `below_bar` describe the same reading.
+
+    /// Every list goes by pages; `function` takes an address inside a body, and
+    /// `search` narrows instructions as it does the other lists.
+    func testCodeQueryListsGoByPages() async throws {
+        let store = try ContentStore(root: directory)
+        let functions = (0..<5).map { index in
+            """
+            {"entry": "0x\(1000 + index * 10)", "name": "Fn\(index)", "signature_reason": "why \(index)",
+             "instructions": [{"address": "0x\(1000 + index * 10)", "text": "PUSH EBP"},
+                              {"address": "0x\(1001 + index * 10)", "text": "RET"}]}
+            """
+        }.joined(separator: ",")
+        try store.putAnalysis(module: module, recipe: recipe, artifact: Data((#"{"script_version": 9, "ghidra": "12.1.2", "functions": ["# + functions + "]}").utf8))
+        let tool = try query(readings())
+        func ask(_ arguments: [String: JSONValue]) async throws -> [String: JSONValue] {
+            var all = arguments
+            all["module"] = .string(module.sha256.hex)
+            guard case .json(.object(let body)) = try await tool.run(AgentCall(tool: "code_query", arguments: AgentArguments(all))) else {
+                throw CocoaError(.fileReadUnknown)
+            }
+            return body
+        }
+        var names: [String] = []
+        var after: String?
+        repeat {
+            var question: [String: JSONValue] = ["what": "functions", "limit": 2]
+            if let after { question["after"] = .string(after) }
+            let page = try await ask(question)
+            XCTAssertEqual(page["total"], 5)
+            names += page["functions"]?.arrayValue?.compactMap { $0["name"]?.stringValue } ?? []
+            after = page["next"]?.stringValue
+        } while after != nil
+        XCTAssertEqual(names, ["Fn0", "Fn1", "Fn2", "Fn3", "Fn4"])
+
+        let middle = try await ask(["what": "instructions", "function": "0x1011"])
+        XCTAssertEqual(middle["function"]?.stringValue, "Fn1", "an address inside a body")
+        XCTAssertEqual(middle["entry"]?.stringValue, "0x1010")
+        let found = try await ask(["what": "instructions", "function": "Fn1", "search": "ret"])
+        XCTAssertEqual(found["total"], 1)
+        XCTAssertEqual(found["instructions"]?.arrayValue?.first?["text"]?.stringValue, "RET")
+        XCTAssertEqual(found["instructions_in_function"], 2)
+        let row = try await ask(["what": "functions", "search": "Fn3"])
+        XCTAssertEqual(row["functions"]?.arrayValue?.first?["signature_reason"]?.stringValue, "why 3")
+    }
+
     func testALibraryFunctionShortOfTheBarCountsInTheArtifactToo() async throws {
         let artifact = """
             {"script_version": 9, "ghidra": "12.1.2", "functions": [
@@ -553,6 +598,7 @@ private struct NoGhidra: GhidraBackend {
     func openImage(_ image: Data, name: String, document: String?, node: String?) async throws -> Data { Data() }
     func openModule(_ module: SHA256Digest) async throws -> Data { Data() }
     func readCall(_ module: SHA256Digest, _ call: String, query: [String: String]) async throws -> Data { Data() }
+    func previewCall(_ module: SHA256Digest, _ call: String, body: Data) async throws -> Data { Data() }
     func writeCall(_ module: SHA256Digest, _ call: String, body: Data) async throws -> Data { Data() }
     func publishModule(_ module: SHA256Digest, by: String, options: GhidraHost.PublishOptions) async throws -> Data { Data() }
     func publishPreview(_ module: SHA256Digest, takeTypeConflicts: Bool) async throws -> Data { Data() }

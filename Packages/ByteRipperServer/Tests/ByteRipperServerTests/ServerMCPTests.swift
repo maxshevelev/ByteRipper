@@ -446,6 +446,7 @@ private struct NoGhidra: GhidraBackend {
     func openImage(_ image: Data, name: String, document: String?, node: String?) async throws -> Data { Data() }
     func openModule(_ module: SHA256Digest) async throws -> Data { Data() }
     func readCall(_ module: SHA256Digest, _ call: String, query: [String: String]) async throws -> Data { Data() }
+    func previewCall(_ module: SHA256Digest, _ call: String, body: Data) async throws -> Data { Data() }
     func writeCall(_ module: SHA256Digest, _ call: String, body: Data) async throws -> Data { Data() }
     func publishModule(_ module: SHA256Digest, by: String, options: GhidraHost.PublishOptions) async throws -> Data { Data() }
     func publishPreview(_ module: SHA256Digest, takeTypeConflicts: Bool) async throws -> Data { Data() }

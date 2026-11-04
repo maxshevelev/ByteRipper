@@ -214,6 +214,13 @@ public actor GhidraHost {
         return try await Self.call(record.port, "GET", path).data
     }
 
+    /// A call that asks what a write would do: the owner must be up, and no
+    /// lease is taken.
+    public func preview(_ module: SHA256Digest, _ path: String, body: Data) async throws -> Data {
+        let record = try await owner(of: module)
+        return try await Self.call(record.port, "POST", path, body: body).data
+    }
+
     /// A write call of the bridge, under the host's lease of the module.
     public func write(_ module: SHA256Digest, _ path: String, body: Data) async throws -> Data {
         let project = self.project(module)
@@ -478,6 +485,7 @@ public actor GhidraHost {
                                              basedOn: item["based_on"] as? String,
                                              base: item["base"] as? Int,
                                              signatureReason: item["signature_reason"] as? String,
+                                             nameReason: item["name_reason"] as? String,
                                              linked: item["linked"] as? Bool ?? false,
                                              dataReferences: item["data_references"] as? [String],
                                              callees: (item["callees"] as? [[String: Any]])?.map {

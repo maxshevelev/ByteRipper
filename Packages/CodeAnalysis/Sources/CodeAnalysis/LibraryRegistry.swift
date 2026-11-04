@@ -217,6 +217,8 @@ public struct LibraryProposal: Codable, Equatable, Sendable {
     /// The function's reason for its signature: not the review's text, so not
     /// in `entry`. The history keeps it for a version that changes the signature.
     public var signatureReason: String?
+    /// Why the function has its name, as the review wrote it.
+    public var nameReason: String?
     /// The function carries the entry's mark and was not edited since.
     public var linked: Bool = false
     /// What the body refers to, by offset from its entry, and what it calls:
@@ -227,7 +229,7 @@ public struct LibraryProposal: Codable, Equatable, Sendable {
 
     public init(body: LibraryBody, name: String, kind: String, address: String, entry: Data,
                 variantOf: String? = nil, codes: [String]? = nil, role: String? = nil,
-                basedOn: String? = nil, base: Int? = nil, signatureReason: String? = nil,
+                basedOn: String? = nil, base: Int? = nil, signatureReason: String? = nil, nameReason: String? = nil,
                 linked: Bool = false, dataReferences: [String]? = nil, callees: [LibraryCallee]? = nil) {
         self.linked = linked
         self.dataReferences = dataReferences
@@ -242,6 +244,7 @@ public struct LibraryProposal: Codable, Equatable, Sendable {
         self.role = role
         self.basedOn = basedOn
         self.signatureReason = signatureReason
+        self.nameReason = nameReason
         self.base = base
     }
 }
@@ -363,6 +366,19 @@ extension LibraryProposal {
         let (before, after) = (fields(old), fields(new))
         return Set(before.keys).union(after.keys).filter { before[$0] != after[$0] }.sorted()
     }
+
+    /// What the history says of a version this review changed: the function's
+    /// own reason, the one for what changed first. Words the server wrote say
+    /// nothing a reader can use, and no reason is better than those.
+    func reason(signatureChanged: Bool) -> String? {
+        func own(_ reason: String?) -> String? {
+            guard let reason, !Self.generatedReasons.contains(where: reason.hasPrefix) else { return nil }
+            return reason
+        }
+        return signatureChanged ? own(signatureReason) ?? own(nameReason) : own(nameReason) ?? own(signatureReason)
+    }
+
+    private static let generatedReasons = ["library registry entry ", "no longer a library function: ", "named in its signature"]
 
     /// Whether two entry objects are the same review: equal but for the body
     /// they were read from, its constants, and the function as that module
@@ -613,7 +629,7 @@ extension ContentStore {
                     ((try? JSONSerialization.jsonObject(with: entry)) as? [String: Any])?["signature"] as? String
                 }
                 let signatureChanged = signature(heldObject) != signature(proposal.entry)
-                let why = current ? (signatureChanged ? proposal.signatureReason : nil)
+                let why = current ? proposal.reason(signatureChanged: signatureChanged)
                     : completes ? (lacksFunction ? "the function's C recorded" : "the body's constants recorded") : taken
                 let recordedWhy = lacksFunction
                     ? "the function's C recorded from \(source.module.hex) at \(source.address)" : why

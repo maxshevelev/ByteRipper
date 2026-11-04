@@ -791,7 +791,13 @@ public enum GhidraTools {
                              annotations: .edit) { call_ in
                 let arguments = call_.arguments
                 let module = try module(arguments)
-                let payload = JSONValue.object(try body(arguments)).encoded()
+                let fields = try body(arguments)
+                let payload = JSONValue.object(fields).encoded()
+                // A question about a write is no write: it takes no lease, so a
+                // later `ghidra_done` has nothing to give back for it.
+                if call == "set/equate", fields["dry_run"] == .bool(true) {
+                    return try await answer { try await backend.previewCall(module, "preview/equate", body: payload) }
+                }
                 return try await answer { try await backend.writeCall(module, call, body: payload) }
             }
         }

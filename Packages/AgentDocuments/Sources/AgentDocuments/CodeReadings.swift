@@ -106,7 +106,7 @@ public final class CodeReadings {
                                                  "With `what: \"functions\"`: only functions at this review level.")
         properties["search"] = AgentSchema.string("A word to narrow functions, strings or symbols by; with `what: \"c\"` and no `function`, text to find in every function's stored C, any case, as written.")
         properties["limit"] = AgentSchema.limit(default: 200, maximum: 500)
-        properties["after"] = AgentSchema.string("With `what: \"instructions\"`: the `next` of the page before.")
+        properties["after"] = AgentSchema.string("The `next` of the page before; a list too long for one answer says one.")
         return AgentTool(
             name: "code_query",
             title: "Read a module's code analysis",
@@ -449,13 +449,24 @@ public final class CodeReadings {
             guard let name = try arguments.optionalString("function") else {
                 throw AgentToolError("Argument `function` is required for this `what`.")
             }
-            guard let index = model.function(named: name) else {
-                throw AgentToolError("No function \"\(name)\" in this analysis.")
+            if let index = model.function(named: name) { return model.functions[index] }
+            // An address inside a body means the function around it, as `ghidra_function` takes it.
+            if let address = CodeAddress(hex: name.trimmingCharacters(in: .whitespacesAndNewlines)),
+               let holder = model.functions.first(where: { $0.instructions.contains { $0.address == address } }) {
+                return holder
             }
-            return model.functions[index]
+            throw AgentToolError("No function \"\(name)\" in this analysis.")
         }
 
-        var instructions: (page: AgentPage, total: Int, items: [JSONValue])?
+        /// Every list goes by pages: one too long for an answer says `next`
+        /// instead of being refused, and a `limit` short of `total` too.
+        func page(_ key: String, _ items: [JSONValue], _ question: [AnyHashable?]) throws -> (key: String, page: AgentPage, total: Int, items: [JSONValue]) {
+            let page = try AgentPage(arguments, fingerprint: AgentPage.fingerprint(
+                [source.manifest.artifact.sha256.hex, what] + question),
+                changed: "The analysis changed since that page, or the question did; ask again without `after`.")
+            return (key, page, items.count, Array(items.dropFirst(page.first).prefix(limit)))
+        }
+        var listed: (key: String, page: AgentPage, total: Int, items: [JSONValue])?
         var body: [String: JSONValue] = [
             "what": .string(what),
             "module": .string(source.manifest.module.name),
@@ -487,17 +498,22 @@ public final class CodeReadings {
             }
             if unrecorded > 0 { levels["unrecorded"] = unrecorded }
             body["review_levels"] = .object(levels.mapValues(JSONValue.int))
-            body["functions"] = .array(functions.prefix(limit).map { functionItem($0, offsetText) })
+            let level = try arguments.optionalString("level")
+            let items: [JSONValue] = functions.map { functionItem($0, offsetText) }
+            listed = try page("functions", items, [search, level])
 
         case "instructions":
             let function = try namedFunction()
             body["function"] = .string(function.name)
-            body["total"] = .int(Int64(function.instructions.count))
-            let page = try AgentPage(arguments, fingerprint: AgentPage.fingerprint([
-                source.manifest.artifact.sha256.hex, function.entry.description
-            ]), changed: "The analysis changed since that page, or the function did; ask again without `after`.")
-            instructions = (page, function.instructions.count,
-                            function.instructions.dropFirst(page.first).prefix(limit).map { instruction in
+            body["entry"] = .string(function.entry.description)
+            // `search`, as the other lists take it: the text of the instruction, any case.
+            var held = function.instructions
+            if let search, !search.isEmpty {
+                held = held.filter { $0.text.lowercased().contains(search) }
+                body["search"] = .string(search)
+                body["instructions_in_function"] = .int(Int64(function.instructions.count))
+            }
+            let items: [JSONValue] = held.map { instruction in
                 .object([
                     "address": .string(instruction.address.description),
                     "offset": offsetText(instruction.address),
@@ -508,13 +524,13 @@ public final class CodeReadings {
                         .object(["to": .string($0.to.description), "type": .string($0.type)])
                     })
                 ])
-            })
+            }
+            listed = try page("instructions", items, [function.entry.description, search])
 
         case "c":
             // Across the module: the lines of stored C holding the text.
             if let search, !search.isEmpty, try arguments.optionalString("function") == nil {
                 var matches: [JSONValue] = []
-                var total = 0
                 var holding = 0
                 for function in model.functions {
                     guard let c = function.c else { continue }
@@ -522,8 +538,6 @@ public final class CodeReadings {
                     for (number, line) in c.split(separator: "\n", omittingEmptySubsequences: false).enumerated()
                     where line.lowercased().contains(search) {
                         held = true
-                        total += 1
-                        guard matches.count < limit else { continue }
                         matches.append(.object([
                             "function": .string(function.name),
                             "entry": .string(function.entry.description),
@@ -534,9 +548,8 @@ public final class CodeReadings {
                     if held { holding += 1 }
                 }
                 body["search"] = .string(search)
-                body["total"] = .int(Int64(total))
                 body["functions_matched"] = .int(Int64(holding))
-                body["matches"] = .array(matches)
+                listed = try page("matches", matches, [search])
                 break
             }
             let function = try namedFunction()
@@ -556,8 +569,7 @@ public final class CodeReadings {
             let uses = model.uses(of: address)
             body["address"] = .string(address.description)
             body["offset"] = offsetText(address)
-            body["total"] = .int(Int64(uses.count))
-            body["uses"] = .array(uses.prefix(limit).map { use in
+            listed = try page("uses", uses.map { use in
                 .object([
                     "from": .string(use.from.description),
                     "offset": offsetText(use.from),
@@ -565,7 +577,7 @@ public final class CodeReadings {
                     "function": .string(model.functions[use.function].name),
                     "text": .string(model.lines[use.line].instruction.text)
                 ])
-            })
+            }, [address.description])
 
         case "symbols":
             let symbols = source.artifact.symbols.filter { symbol in
@@ -573,8 +585,7 @@ public final class CodeReadings {
                 return symbol.name.lowercased().contains(search)
                     || (symbol.type?.lowercased().contains(search) ?? false)
             }
-            body["total"] = .int(Int64(symbols.count))
-            body["symbols"] = .array(symbols.prefix(limit).map { symbol in
+            listed = try page("symbols", symbols.map { symbol in
                 .object([
                     "address": .string(symbol.address.description),
                     "offset": offsetText(symbol.address),
@@ -584,7 +595,7 @@ public final class CodeReadings {
                     "reason": symbol.reason.map(JSONValue.string) ?? .null,
                     "comment": symbol.comment.map(JSONValue.string) ?? .null
                 ])
-            })
+            }, [search])
 
         case "strings":
             let strings = source.artifact.strings.filter { entry in
@@ -593,15 +604,14 @@ public final class CodeReadings {
                     || entry.type.lowercased().contains(search)
                     || entry.address.description.lowercased().contains(search)
             }
-            body["total"] = .int(Int64(strings.count))
-            body["strings"] = .array(strings.prefix(limit).map { entry in
+            listed = try page("strings", strings.map { entry in
                 .object([
                     "address": .string(entry.address.description),
                     "offset": offsetText(entry.address),
                     "type": .string(entry.type),
                     "value": .string(entry.value)
                 ])
-            })
+            }, [search])
 
         case "post_codes":
             // By value, the places that send one together, what could not
@@ -610,8 +620,7 @@ public final class CodeReadings {
             let codes = source.artifact.postCodes
                 .filter { wanted == nil || $0.value == wanted }
                 .sorted { ($0.value ?? .max, $0.address.value) < ($1.value ?? .max, $1.address.value) }
-            body["total"] = .int(Int64(codes.count))
-            body["post_codes"] = .array(codes.prefix(limit).map { code in
+            listed = try page("post_codes", codes.map { code in
                 var entry: [String: JSONValue] = [
                     "address": .string(code.address.description),
                     "offset": offsetText(code.address),
@@ -624,7 +633,7 @@ public final class CodeReadings {
                 if let width = code.width { entry["width"] = .int(Int64(width)) }
                 if let unresolved = code.unresolved { entry["unresolved"] = .string(unresolved.rawValue) }
                 return .object(entry)
-            })
+            }, [search])
 
         default:
             let function = try namedFunction()
@@ -651,9 +660,10 @@ public final class CodeReadings {
                 body["live"] = .bool(false)
             }
         }
-        if let instructions {
-            return .json(try instructions.page.answer(body, key: "instructions", items: instructions.items,
-                                                      total: instructions.total, bound: arguments.answerBound))
+        if let listed {
+            body["total"] = .int(Int64(listed.total))
+            return .json(try listed.page.answer(body, key: listed.key, items: listed.items,
+                                                total: listed.total, bound: arguments.answerBound))
         }
         return .json(.object(body))
     }
@@ -827,6 +837,8 @@ private func functionItem(_ function: CodeArtifact.Function,
     item["signature"] = text(function.signature)
     item["name_source"] = text(function.nameSource)
     item["name_reason"] = text(function.nameReason)
+    item["signature_reason"] = text(function.signatureReason)
+    if function.customStorage == true { item["custom_storage"] = .bool(true) }
     item["review_level"] = text(function.reviewLevel?.rawValue)
     item["review_gaps"] = .array(function.reviewGaps.map(JSONValue.string))
     item["temporaries"] = .array(LibraryEntryReview.temporaries(in: function).map(JSONValue.string))

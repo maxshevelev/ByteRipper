@@ -12,6 +12,8 @@ public protocol GhidraBackend: Sendable {
     func openModule(_ module: SHA256Digest) async throws -> Data
     func readCall(_ module: SHA256Digest, _ call: String, query: [String: String]) async throws -> Data
     func writeCall(_ module: SHA256Digest, _ call: String, body: Data) async throws -> Data
+    /// Asks what a write would do: the owner runs, no lease is taken.
+    func previewCall(_ module: SHA256Digest, _ call: String, body: Data) async throws -> Data
     /// `options` decide what this review's version replaces: a conflicting
     /// type's shared copy (a layout published wrong) or a library registry
     /// entry for the same body (with the reason the history keeps).
@@ -142,6 +144,10 @@ extension GhidraHost: GhidraBackend {
         try await write(module, "/v1/\(call)", body: body)
     }
 
+    public func previewCall(_ module: SHA256Digest, _ call: String, body: Data) async throws -> Data {
+        try await preview(module, "/v1/\(call)", body: body)
+    }
+
     public func publishModule(_ module: SHA256Digest, by: String,
                               options: GhidraHost.PublishOptions) async throws -> Data {
         try Self.encode(PublishAnswer(try await publish(module, by: by, options: options)))
@@ -191,6 +197,10 @@ public struct GhidraRemote: GhidraBackend {
 
     public func writeCall(_ module: SHA256Digest, _ call: String, body: Data) async throws -> Data {
         try await self.call("POST", "modules/\(module.hex)/write/\(call)", body: body)
+    }
+
+    public func previewCall(_ module: SHA256Digest, _ call: String, body: Data) async throws -> Data {
+        try await self.call("POST", "modules/\(module.hex)/preview/\(call)", body: body)
     }
 
     public func forgetModule(_ module: SHA256Digest) async throws -> Data {
