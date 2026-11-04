@@ -274,6 +274,21 @@ final class ContentStoreTests: XCTestCase {
         XCTAssertEqual(other.reading, reading(5))
     }
 
+    /// A later revision that printed the artifact a recipe already holds is the
+    /// module's newest, though another recipe was written since that artifact was.
+    func testARevisionOfTheSameArtifactIsTheNewestOverAnotherRecipe() throws {
+        let first = recipe("code-v2-ghidra-12.1.2"), second = recipe("code-v2-ghidra-12.2")
+        try store.putAnalysis(module: module(), recipe: first, artifact: artifact(), reading: reading(1))
+        Thread.sleep(forTimeInterval: 1.1)
+        try store.putAnalysis(module: module(), recipe: second, artifact: artifact(), reading: reading(2))
+        XCTAssertEqual(try store.analysis(module: module().sha256)?.recipe.id, second.id)
+        Thread.sleep(forTimeInterval: 1.1)
+        try store.putAnalysis(module: module(), recipe: first, artifact: artifact(), reading: reading(3))
+        let newest = try store.analysis(module: module().sha256)
+        XCTAssertEqual(newest?.recipe.id, first.id)
+        XCTAssertEqual(newest?.reading, reading(3))
+    }
+
     /// The table of `Design/GHIDRA_SHARED_PLAN.md` §5.6, at bundle import.
     func testABundleImportTakesEachAnalysisByItsReading() throws {
         let other = try ContentStore(root: directory.appendingPathComponent("other", isDirectory: true))

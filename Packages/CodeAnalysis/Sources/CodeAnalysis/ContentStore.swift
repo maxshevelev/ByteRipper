@@ -264,6 +264,10 @@ public struct ContentStore: Sendable {
                     if let reading, reading != existing.reading,
                        ReadingOrder(incoming: reading, stored: existing.reading) == .newer {
                         updated.reading = reading
+                        // The module's newest analysis goes by this time: a
+                        // revision that printed the same artifact is still the
+                        // last publish, whatever recipe stands beside it.
+                        updated.analyzedAt = manifest.analyzedAt
                         rebound = true
                     }
                     guard rebound else { return existing }
