@@ -180,7 +180,12 @@
 "Grouped by review state" = "По уровню разбора";
 "Function order" = "Порядок функций";
 "List the functions in the order they lie in the module" = "Перечислить функции в порядке их расположения в модуле";
-"Hang each function under the one that calls it" = "Показать каждую функцию под той, что её вызывает";
+"Show every way down to the selected function and what it calls. Press again for the open way alone" = "Показать все пути к выбранной функции и то, что она вызывает. Повторное нажатие оставит только открытый путь";
+"Show the way down to the open function alone and what it calls. Press again for every way" = "Показать только путь к открытой функции и то, что она вызывает. Повторное нажатие покажет все пути";
+"Show All Paths" = "Показать все пути";
+"Show Only This Path" = "Показать только этот путь";
+"Recursive call: this function is already on the way here" = "Рекурсивный вызов: эта функция уже есть на пути сюда";
+"Too many ways lead here: the list stops at this point" = "Слишком много путей: список обрывается здесь";
 "Gather the functions by how far the review has got with each" = "Сгруппировать функции по степени готовности разбора";
 "Fully reviewed" = "Разобрана полностью";
 "Partly reviewed" = "Разобрана частично";

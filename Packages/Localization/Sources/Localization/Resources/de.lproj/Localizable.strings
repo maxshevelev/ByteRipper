@@ -180,7 +180,12 @@
 "Grouped by review state" = "Nach Analysestand";
 "Function order" = "Reihenfolge der Funktionen";
 "List the functions in the order they lie in the module" = "Die Funktionen in der Reihenfolge auflisten, in der sie im Modul liegen";
-"Hang each function under the one that calls it" = "Jede Funktion unter der Funktion anzeigen, die sie aufruft";
+"Show every way down to the selected function and what it calls. Press again for the open way alone" = "Alle Wege zur gewählten Funktion und ihre Aufrufe anzeigen. Erneutes Drücken zeigt nur den geöffneten Weg";
+"Show the way down to the open function alone and what it calls. Press again for every way" = "Nur den Weg zur geöffneten Funktion und ihre Aufrufe anzeigen. Erneutes Drücken zeigt alle Wege";
+"Show All Paths" = "Alle Wege anzeigen";
+"Show Only This Path" = "Nur diesen Weg anzeigen";
+"Recursive call: this function is already on the way here" = "Rekursiver Aufruf: Diese Funktion liegt bereits auf dem Weg hierher";
+"Too many ways lead here: the list stops at this point" = "Zu viele Wege: Die Liste endet an dieser Stelle";
 "Gather the functions by how far the review has got with each" = "Die Funktionen nach dem Stand ihrer Analyse gruppieren";
 "Fully reviewed" = "Vollständig analysiert";
 "Partly reviewed" = "Teilweise analysiert";

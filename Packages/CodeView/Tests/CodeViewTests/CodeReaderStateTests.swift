@@ -73,15 +73,16 @@ final class CodeReaderStateTests: XCTestCase {
     /// A module of four functions: `entry` calls two, one of them calls the
     /// other again, and one is called by nothing the artifact shows.
     /// Opens every place the tree can open, down to the bottom.
-    private func openEverything(_ state: inout CodeReaderState) {
-        var row = 0
-        while row < state.rowCount {
-            if let path = state.callPath(atRow: row), state.hasCalls(path: path),
-               !state.isExpanded(path: path) {
-                state.toggleExpanded(path: path)
-            }
-            row += 1
-        }
+    private func sharedState() throws -> CodeReaderState {
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        {"script_version":4,
+         "functions":[
+          {"entry":"0x100","name":"A","callers":[],"callees":["0x300"],"instructions":[]},
+          {"entry":"0x200","name":"B","callers":[],"callees":["0x300"],"instructions":[]},
+          {"entry":"0x300","name":"Shared","callers":["0x100","0x200"],"callees":["0x400"],"instructions":[]},
+          {"entry":"0x400","name":"Leaf","callers":["0x300"],"callees":[],"instructions":[]}]}
+        """.utf8))
+        return CodeReaderState(model: CodeModel(artifact: artifact, moduleBytes: nil))
     }
 
     private func calledState() throws -> CodeReaderState {
@@ -213,10 +214,9 @@ final class CodeReaderStateTests: XCTestCase {
         XCTAssertTrue(state.isSectionExpanded(.edk2), "revealing a hidden function opens its kind")
     }
 
-    /// The call tree starts at what nothing calls, and every function a call
-    /// reaches hangs under that call — a module whose first function is a
-    /// helper the entry calls is not a flat list.
-    func testTheTreeHangsEveryCalledFunctionUnderItsCaller() throws {
+    /// The call tree holds the ways down to the selected function and what it
+    /// calls, and no other function: each way starts at what nothing calls.
+    func testTheTreeHoldsTheWaysDownToTheSelectedFunction() throws {
         let artifact = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
         {"script_version":4,
          "functions":[
@@ -232,17 +232,22 @@ final class CodeReaderStateTests: XCTestCase {
         """.utf8))
         var state = CodeReaderState(model: CodeModel(artifact: artifact, moduleBytes: nil))
         state.show(.calls)
-        XCTAssertEqual(state.functionRows, [.function(3, level: 0), .function(1, level: 0)],
-                       "every place starts closed")
-        openEverything(&state)
+        XCTAssertEqual(state.functionRows, [.function(1, level: 0), .function(0, level: 1)],
+                       "the first function is the caller's helper; OnNotify leads nowhere near it")
+        state.selectFunction(2)
         XCTAssertEqual(state.functionRows, [
             .function(3, level: 0),
             .function(2, level: 1),
             .function(1, level: 0),
+            .function(2, level: 1)
+        ], "both callers of ApplyTable, each set of ways reading alphabetically")
+        XCTAssertEqual(state.listedFunctions, [3, 2, 1, 2])
+        state.selectFunction(1)
+        XCTAssertEqual(state.functionRows, [
+            .function(1, level: 0),
             .function(2, level: 1),
             .function(0, level: 1)
-        ], "the first function is a caller's, not a root; each set of trees reads alphabetically")
-        XCTAssertEqual(state.listedFunctions, [3, 2, 1, 2, 0])
+        ], "a root with what it calls")
     }
 
     /// The module's entry is the one the headers name, even when a review
@@ -291,7 +296,6 @@ final class CodeReaderStateTests: XCTestCase {
         """.utf8))
         var state = CodeReaderState(model: CodeModel(artifact: artifact, moduleBytes: module))
         state.show(.calls)
-        openEverything(&state)
         XCTAssertEqual(state.functionRows, [
             .function(1, level: 0),
             .function(0, level: 1),
@@ -328,7 +332,6 @@ final class CodeReaderStateTests: XCTestCase {
         ], "Alpha, Middle, Zebra, Zulu")
 
         state.show(.calls)
-        openEverything(&state)
         XCTAssertEqual(state.functionRows, [
             .function(3, level: 0),
             .function(0, level: 1),
@@ -337,84 +340,173 @@ final class CodeReaderStateTests: XCTestCase {
         ], "the trees read Zulu before Zebra — no entry is named — and the calls beneath Zebra read Alpha before Middle")
     }
 
-    /// A tree's rows fold: every place starts closed, opening one brings its
-    /// calls, closing it hides them, and revealing a hidden function opens the
-    /// way down to it.
-    func testTheTreeFoldsItsCalls() throws {
+    /// Every place on the way down starts open and can be folded; a new
+    /// selection opens every way down to it again.
+    func testTheTreeFoldsAndASelectionOpensItAgain() throws {
         var state = try calledState()
         state.show(.calls)
-        XCTAssertEqual(state.functionRows, [.function(1, level: 0), .function(3, level: 0)],
-                       "closed until opened")
-        XCTAssertTrue(state.hasCalls(path: [1]))
-        XCTAssertFalse(state.isExpanded(path: [1]))
-
-        state.toggleExpanded(path: [1])
-        XCTAssertTrue(state.isExpanded(path: [1]))
-        XCTAssertEqual(state.functionRows.count, 4)
-        state.toggleExpanded(path: [1])
-        XCTAssertEqual(state.functionRows, [.function(1, level: 0), .function(3, level: 0)])
-
-        XCTAssertTrue(state.reveal(function: 0), "revealing a hidden function opens the way to it")
-        XCTAssertTrue(state.isExpanded(path: [1]))
-        XCTAssertNotNil(state.row(ofFunction: 0))
-
-        XCTAssertFalse(state.hasCalls(path: [3]), "a function with no calls has nothing to fold")
-        state.toggleExpanded(path: [3])
-        XCTAssertFalse(state.isExpanded(path: [3]))
-    }
-
-    /// A function is under every function that calls it, so a row's calls are
-    /// all of its calls; a function nothing calls starts its own tree.
-    func testAFunctionIsUnderEveryCaller() throws {
-        var state = try calledState()
-        XCTAssertTrue(state.show(.calls))
-        openEverything(&state)
         XCTAssertEqual(state.functionRows, [
-            .function(1, level: 0),
-            .function(0, level: 1),
-            .function(2, level: 2),
-            .function(2, level: 1),
-            .function(3, level: 0)
-        ], "FUN_00000240 under FUN_00000220 and under entry both")
-        XCTAssertEqual(state.listedFunctions, [1, 0, 2, 2, 3])
+            .function(1, level: 0), .function(0, level: 1), .function(2, level: 2)
+        ], "open without being asked; FUN_00000250 is on no way and is not listed")
+        XCTAssertTrue(state.isExpanded(path: [1]))
+        XCTAssertTrue(state.isExpanded(path: [1, 0]))
+
+        state.toggleExpanded(path: [1, 0])
+        XCTAssertEqual(state.functionRows, [.function(1, level: 0), .function(0, level: 1)])
+        state.toggleExpanded(path: [1])
+        XCTAssertEqual(state.functionRows, [.function(1, level: 0)])
+
+        state.selectFunction(2)
+        XCTAssertEqual(state.functionRows, [
+            .function(1, level: 0), .function(0, level: 1), .function(2, level: 2), .function(2, level: 1)
+        ], "every way to FUN_00000240 is open")
+        XCTAssertFalse(state.hasCalls(path: [1, 2]), "a function with no calls has nothing to fold")
+        state.toggleExpanded(path: [1, 2])
+        XCTAssertFalse(state.isExpanded(path: [1, 2]))
+
+        XCTAssertFalse(state.reveal(function: 3), "a selection lays the tree out; the reveal opens nothing")
+        state.selectFunction(3)
+        XCTAssertEqual(state.functionRows, [.function(3, level: 0)])
     }
 
-    /// Each place opens by itself: the same function under another caller
-    /// stays as it is.
-    func testEachPlaceOpensByItself() throws {
-        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
-        {"script_version":4,
-         "functions":[
-          {"entry":"0x100","name":"A","callers":[],"callees":["0x300"],"instructions":[]},
-          {"entry":"0x200","name":"B","callers":[],"callees":["0x300"],"instructions":[]},
-          {"entry":"0x300","name":"Shared","callers":["0x100","0x200"],"callees":["0x400"],"instructions":[]},
-          {"entry":"0x400","name":"Leaf","callers":["0x300"],"callees":[],"instructions":[]}]}
-        """.utf8))
-        var state = CodeReaderState(model: CodeModel(artifact: artifact, moduleBytes: nil))
+    /// The selected function's calls open under the place it was chosen at; its
+    /// other places keep theirs behind the arrow, and each opens by itself.
+    func testTheCallsOpenUnderTheChosenPlace() throws {
+        var state = try sharedState()
+        state.selectFunction(2)
         state.show(.calls)
-        state.toggleExpanded(path: [0])
-        state.toggleExpanded(path: [1])
-        state.toggleExpanded(path: [0, 2])
         XCTAssertEqual(state.functionRows, [
             .function(0, level: 0), .function(2, level: 1), .function(3, level: 2),
             .function(1, level: 0), .function(2, level: 1)
-        ], "Shared is open under A and closed under B")
+        ], "Shared is open under A, the first place, and closed under B")
+        XCTAssertEqual(state.row(ofFunction: 2), 1)
+        XCTAssertFalse(state.isExpanded(path: [1, 2]))
+        XCTAssertTrue(state.hasCalls(path: [1, 2]))
+
+        state.toggleExpanded(path: [1, 2])
+        XCTAssertEqual(state.rowCount, 6)
+        state.toggleExpanded(path: [1, 2])
+
+        state.chooseCallPlace(atRow: 4)
+        XCTAssertEqual(state.functionRows, [
+            .function(0, level: 0), .function(2, level: 1),
+            .function(1, level: 0), .function(2, level: 1), .function(3, level: 2)
+        ], "the place clicked has the calls now")
+        XCTAssertEqual(state.row(ofFunction: 2), 3, "and the selection")
+    }
+
+    /// The selected function answers for all its places in the tree, a recursive
+    /// call among them; a search and the other layouts have one row for it.
+    func testEveryPlaceOfTheSelectedFunctionIsItsRow() throws {
+        var state = try sharedState()
+        state.selectFunction(2)
+        XCTAssertEqual(Array(state.selectedFunctionRows), [state.row(ofFunction: 2)].compactMap { $0 })
+        state.show(.calls)
+        XCTAssertEqual(Array(state.selectedFunctionRows), [1, 4])
+        state.search("Shared")
+        XCTAssertEqual(Array(state.selectedFunctionRows), [0])
+        state.search("")
+        state.toggleExpanded(path: [0])
+        XCTAssertEqual(Array(state.selectedFunctionRows), [2], "a folded place is not on screen")
+
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        {"script_version":4,
+         "functions":[
+          {"entry":"0x100","name":"A","callers":["0x200"],"callees":["0x200"],"instructions":[]},
+          {"entry":"0x200","name":"B","callers":["0x100"],"callees":["0x100"],"instructions":[]}]}
+        """.utf8))
+        var circle = CodeReaderState(model: CodeModel(artifact: artifact, moduleBytes: nil))
+        circle.show(.calls)
+        XCTAssertEqual(Array(circle.selectedFunctionRows), [0, 2], "the call that closes the circle too")
+    }
+
+    /// Another place of the selected function takes the calls over: they close
+    /// at the place before, even one opened by hand, and nothing else moves.
+    func testAnotherPlaceTakesTheCallsAndLeavesTheRestAsItWas() throws {
+        var state = try sharedState()
+        state.selectFunction(2)
+        state.show(.calls)
+        state.toggleExpanded(path: [1, 2])
+        XCTAssertTrue(state.isExpanded(path: [1, 2]), "open by hand under B, and open under A by itself")
+        XCTAssertTrue(state.isExpanded(path: [0, 2]))
+        state.toggleExpanded(path: [1, 2])
+
+        state.toggleExpanded(path: [0, 2])
+        XCTAssertFalse(state.isExpanded(path: [0, 2]), "folded where its calls were")
+        state.chooseCallPlace(atRow: state.row(ofCallPath: [1, 2]) ?? -1)
+        XCTAssertTrue(state.isExpanded(path: [1, 2]))
+        XCTAssertFalse(state.isExpanded(path: [0, 2]))
+        state.chooseCallPlace(atRow: state.row(ofCallPath: [0, 2]) ?? -1)
+        XCTAssertTrue(state.isExpanded(path: [0, 2]), "a place chosen opens, whatever was folded there")
         XCTAssertFalse(state.isExpanded(path: [1, 2]))
     }
 
-    /// A function chosen at one of its places keeps its selection there, and a
-    /// row out of sight falls back on the first place that shows.
-    func testAChosenPlaceKeepsTheSelection() throws {
-        var state = try calledState()
+    /// Keeping to the open way leaves the function's other ways out and its calls
+    /// in; a new selection keeps to its own way, and the form can be left again.
+    func testTheTreeCanKeepToTheOpenWay() throws {
+        var state = try sharedState()
+        state.selectFunction(2)
         state.show(.calls)
-        openEverything(&state)
-        XCTAssertEqual(state.row(ofFunction: 2), 2, "the first place answers for the function")
-        state.chooseCallPlace(atRow: 3)
-        XCTAssertEqual(state.row(ofFunction: 2), 3, "the place clicked")
+        state.chooseCallPlace(atRow: 4)
+        state.showOnlyOpenWay(true)
+        XCTAssertEqual(state.functionRows, [
+            .function(1, level: 0), .function(2, level: 1), .function(3, level: 2)
+        ], "B, the Shared chosen under it, and Leaf")
+        XCTAssertEqual(Array(state.selectedFunctionRows), [1])
+        state.selectFunction(3)
+        XCTAssertEqual(state.functionRows, [
+            .function(0, level: 0), .function(2, level: 1), .function(3, level: 2)
+        ], "the first way to a function arrived at from elsewhere")
+        state.selectFunction(2)
+        state.showOnlyOpenWay(false)
+        XCTAssertEqual(state.rowCount, 5)
+    }
+
+    /// The way that reads bold is the one down to the place the calls are open
+    /// at, that place too, and it moves with them.
+    func testTheWayDownFollowsTheOpenPlace() throws {
+        var state = try sharedState()
+        state.selectFunction(2)
+        state.show(.calls)
+        func marked() -> [Int] { (0..<state.rowCount).filter { state.isOnChosenWay(atRow: $0) } }
+        XCTAssertEqual(marked(), [0, 1], "A and Shared under it; Leaf, B and the other Shared are not on it")
+        state.chooseCallPlace(atRow: 4)
+        XCTAssertEqual(marked(), [2, 3], "B and Shared under it now")
+        state.selectFunction(3)
+        XCTAssertEqual(marked(), [0, 1, 2], "down to Leaf through A")
+        state.search("Leaf")
+        XCTAssertEqual(marked(), [], "a search's list has no way down")
+    }
+
+    /// The call that closes a circle is a row of the function, not a place to
+    /// read it from: choosing it moves nothing.
+    func testChoosingTheCallThatClosesACircleMovesNothing() throws {
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        {"script_version":4,
+         "functions":[
+          {"entry":"0x100","name":"A","callers":["0x200"],"callees":["0x200"],"instructions":[]},
+          {"entry":"0x200","name":"B","callers":["0x100"],"callees":["0x100"],"instructions":[]}]}
+        """.utf8))
+        var state = CodeReaderState(model: CodeModel(artifact: artifact, moduleBytes: nil))
+        state.show(.calls)
+        let rows = state.functionRows
         state.chooseCallPlace(atRow: 2)
-        state.toggleExpanded(path: [1, 0])
-        XCTAssertEqual(state.row(ofFunction: 2), state.row(ofCallPath: [1, 2]),
-                       "that place closed; another still shows")
+        XCTAssertEqual(state.functionRows, rows)
+        XCTAssertEqual(state.row(ofFunction: 0), 0)
+    }
+
+    /// A row clicked in the tree stays the place the next tree is about.
+    func testAFunctionChosenInTheTreeKeepsItsPlace() throws {
+        var state = try sharedState()
+        state.selectFunction(2)
+        state.show(.calls)
+        state.chooseCallPlace(atRow: 2)
+        state.selectFunction(3)
+        XCTAssertEqual(state.functionRows, [
+            .function(0, level: 0), .function(2, level: 1), .function(3, level: 2),
+            .function(1, level: 0), .function(2, level: 1), .function(3, level: 2)
+        ], "Leaf by both ways")
+        XCTAssertEqual(state.row(ofFunction: 3), 2)
     }
 
     /// A recursive call shows, and goes no deeper: the tree has a bottom.
@@ -427,25 +519,68 @@ final class CodeReaderStateTests: XCTestCase {
         """.utf8))
         var state = CodeReaderState(model: CodeModel(artifact: artifact, moduleBytes: nil))
         state.show(.calls)
-        XCTAssertEqual(state.functionRows, [.function(0, level: 0)], "a circle starts at its first")
-        openEverything(&state)
+        XCTAssertEqual(state.functionRows, [
+            .function(0, level: 0), .function(1, level: 1), .function(0, level: 2)
+        ], "a circle starts at its first and ends where it closes")
+        XCTAssertFalse(state.hasCalls(path: [0, 1, 0]))
+        XCTAssertTrue(state.isRecursiveCall(path: [0, 1, 0]))
+        XCTAssertFalse(state.isRecursiveCall(path: [0, 1]))
+        state.selectFunction(1)
         XCTAssertEqual(state.functionRows, [
             .function(0, level: 0), .function(1, level: 1), .function(0, level: 2)
         ])
-        XCTAssertFalse(state.hasCalls(path: [0, 1, 0]))
-        XCTAssertTrue(state.reveal(function: 1) == false, "B already shows")
     }
 
-    /// The places open go across a revision by their entries, since a
+    /// A way down never passes a function twice, and a walk that a circle sends
+    /// back leaves no row behind: every row above the function leads to it.
+    func testACircleLeavesNoDeadWayBehind() throws {
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        {"script_version":4,
+         "functions":[
+          {"entry":"0x100","name":"Focus","callers":["0x300"],"callees":[],"instructions":[]},
+          {"entry":"0x200","name":"Root","callers":[],"callees":["0x300","0x400"],"instructions":[]},
+          {"entry":"0x300","name":"A","callers":["0x200","0x400"],"callees":["0x100","0x400"],"instructions":[]},
+          {"entry":"0x400","name":"B","callers":["0x200","0x300"],"callees":["0x300"],"instructions":[]}]}
+        """.utf8))
+        var state = CodeReaderState(model: CodeModel(artifact: artifact, moduleBytes: nil))
+        state.show(.calls)
+        XCTAssertEqual(state.functionRows, [
+            .function(1, level: 0),
+            .function(2, level: 1), .function(0, level: 2),
+            .function(3, level: 1), .function(2, level: 2), .function(0, level: 3)
+        ], "Root → A → B comes back to A and is not listed; Root → B → A arrives")
+    }
+
+    /// Thirty levels of two functions each are 2^30 ways down: the list stops
+    /// and says so instead of walking them.
+    func testTooManyWaysStopTheListAndSaySo() throws {
+        var functions = ["{\"entry\":\"0x10\",\"name\":\"Focus\",\"callers\":[],\"callees\":[],\"instructions\":[]}"]
+        for level in 1...30 {
+            let next = level == 1 ? "\"0x10\"" : "\"0x\(String((level - 1) * 256, radix: 16))\",\"0x\(String((level - 1) * 256 + 1, radix: 16))\""
+            for side in 0...1 {
+                functions.append("{\"entry\":\"0x\(String(level * 256 + side, radix: 16))\",\"name\":\"L\(level)_\(side)\",\"callers\":[],\"callees\":[\(next)],\"instructions\":[]}")
+            }
+        }
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: Data(
+            "{\"script_version\":4,\"functions\":[\(functions.joined(separator: ","))]}".utf8))
+        var state = CodeReaderState(model: CodeModel(artifact: artifact, moduleBytes: nil))
+        state.show(.calls)
+        XCTAssertEqual(state.functionRows.last, .callsCut)
+        XCTAssertLessThan(state.rowCount, 2_100)
+        XCTAssertNotNil(state.row(ofFunction: 0), "the function itself is reached")
+    }
+
+    /// The places opened by hand go across a revision by their entries, since a
     /// function's index does not last; one with a function gone is let go.
     func testOpenPlacesCrossARevision() throws {
-        var state = try calledState()
+        var state = try sharedState()
+        state.selectFunction(2)
         state.show(.calls)
-        state.toggleExpanded(path: [1])
-        state.toggleExpanded(path: [1, 0])
+        state.toggleExpanded(path: [1, 2])
         let carried = state.openCallEntries
 
-        var next = try calledState()
+        var next = try sharedState()
+        next.selectFunction(2)
         next.show(.calls)
         next.openCallPlaces(carried + [[CodeAddress(0x999)]])
         XCTAssertEqual(next.functionRows, state.functionRows)

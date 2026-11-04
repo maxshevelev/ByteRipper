@@ -805,7 +805,7 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(buttons.map(\.isChosen), [true, false, false])
         XCTAssertEqual(buttons.map(\.toolTip), [
             "List the functions in the order they lie in the module",
-            "Hang each function under the one that calls it",
+            "Show every way down to the selected function and what it calls. Press again for the open way alone",
             "Gather the functions by how far the review has got with each"
         ])
         for button in buttons {
@@ -908,7 +908,6 @@ final class CodePaneViewTests: XCTestCase {
         view.layoutSubtreeIfNeeded()
         XCTAssertEqual(try cell(list, 0, 0).textField?.stringValue, "Root")
         XCTAssertEqual(try cell(list, 0, 0).iconName, code)
-        try XCTUnwrap(all(NSButton.self, in: try cell(list, 0, 0)).first).performClick(nil)
         XCTAssertEqual(try cell(list, 0, 1).textField?.stringValue, "Leaf")
         XCTAssertEqual(try cell(list, 0, 1).iconName, code, "a call is a function too")
 
@@ -2914,6 +2913,217 @@ final class CodePaneViewTests: XCTestCase {
         view.shownExplanationClose()
     }
 
+    /// A panel opened with the call tree as the stored order is built without
+    /// drawing a list it has no bar for yet, and opens on the list's first row.
+    func testAPanelOpensInTheCallTreeOnItsFirstRow() throws {
+        let suiteName = "CodePaneViewTests.\(UUID().uuidString)"
+        let suite = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        suite.set(CodePaneView.FunctionOrder.calls.rawValue, forKey: CodePaneView.navigatorOrderKey)
+        CodePaneView.defaults = suite
+        defer {
+            suite.removePersistentDomain(forName: suiteName)
+            CodePaneView.defaults = .standard
+        }
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        {"script_version":4,"program":{"image_base":"0x0"},
+         "functions":[
+          {"entry":"0x100","name":"Leaf","callers":["0x200"],"callees":[],
+           "instructions":[{"address":"0x100","bytes":"C3","text":"RET"}]},
+          {"entry":"0x200","name":"Root","callers":[],"callees":["0x100"],
+           "instructions":[{"address":"0x200","bytes":"C3","text":"RET"}]}]}
+        """.utf8))
+        let view = CodePaneView(manifest: manifest(), artifact: artifact,
+                                moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 480, height: 400)
+        view.layoutSubtreeIfNeeded()
+        let list = try XCTUnwrap(all(NSTableView.self, in: view).first {
+            $0.tableColumns.contains { $0.identifier.rawValue == "function" }
+        })
+        XCTAssertEqual(list.numberOfRows, 2, "Root and what it calls")
+        XCTAssertEqual(list.selectedRow, 0)
+        XCTAssertEqual(view.selectedFunction?.name, "Root")
+    }
+
+    /// Every place of the selected function is selected in the call tree; a click
+    /// on a row chooses that one function, and the proposal of several rows, a
+    /// reader's Shift or Command, is not taken.
+    func testTheCallTreeSelectsEveryPlaceOfTheFunction() throws {
+        let suiteName = "CodePaneViewTests.\(UUID().uuidString)"
+        let suite = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        CodePaneView.defaults = suite
+        defer {
+            suite.removePersistentDomain(forName: suiteName)
+            CodePaneView.defaults = .standard
+        }
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        {"script_version":4,"program":{"image_base":"0x0"},
+         "functions":[
+          {"entry":"0x100","name":"A","callers":[],"callees":["0x300"],
+           "instructions":[{"address":"0x100","bytes":"C3","text":"RET"}]},
+          {"entry":"0x200","name":"B","callers":[],"callees":["0x300"],
+           "instructions":[{"address":"0x200","bytes":"C3","text":"RET"}]},
+          {"entry":"0x300","name":"Shared","callers":["0x100","0x200"],"callees":[],
+           "instructions":[{"address":"0x300","bytes":"C3","text":"RET"}]}]}
+        """.utf8))
+        let view = CodePaneView(manifest: manifest(), artifact: artifact,
+                                moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 480, height: 400)
+        view.layoutSubtreeIfNeeded()
+        let list = try XCTUnwrap(all(NSTableView.self, in: view).first {
+            $0.tableColumns.contains { $0.identifier.rawValue == "function" }
+        })
+        view.setFunctionOrder(.calls)
+        view.selectFunction(at: 2)
+        XCTAssertEqual(Array(list.selectedRowIndexes), [1, 3], "Shared under A and under B")
+        func font(_ row: Int) -> NSFont? {
+            (list.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView)?.textField?.font
+        }
+        XCTAssertTrue(font(1)?.fontDescriptor.symbolicTraits.contains(.bold) == true, "the place being read")
+        XCTAssertTrue(font(0)?.fontDescriptor.symbolicTraits.contains(.bold) == true, "and the way to it")
+        XCTAssertFalse(font(3)?.fontDescriptor.symbolicTraits.contains(.bold) == true, "not its other place")
+
+        let proposed = view.tableView(list, selectionIndexesForProposedSelection: [0, 1, 3])
+        XCTAssertEqual(Array(proposed), [1, 3], "several rows at once are not the reader's to choose")
+        XCTAssertEqual(Array(view.tableView(list, selectionIndexesForProposedSelection: [0])), [0])
+
+        // A zoom draws the list again at the new size, every place still selected.
+        NotificationCenter.default.post(name: ToolPanelFont.zoomDidChangeNotification, object: nil)
+        XCTAssertEqual(Array(list.selectedRowIndexes), [1, 3], "after a zoom too")
+
+        view.selectFunction(at: 0)
+        XCTAssertEqual(Array(list.selectedRowIndexes), [0])
+        view.layoutSubtreeIfNeeded()
+        let rowView = try XCTUnwrap(list.rowView(atRow: 0, makeIfNecessary: true) as? CodeNavigatorRowView)
+        XCTAssertTrue(rowView.marksNode, "the tree marks the node, not the row")
+        XCTAssertFalse(rowView.isEmphasized, "and leaves its mark and name uninverted")
+        let cell = try XCTUnwrap(list.view(atColumn: 0, row: 0, makeIfNecessary: true) as? CodeNavigatorCell)
+        XCTAssertGreaterThan(cell.nodeFrame.minX, cell.disclosure.frame.maxX - 4, "past the chevron")
+        XCTAssertLessThan(cell.nodeFrame.maxX, cell.bounds.maxX, "and only as far as the name")
+
+        view.setFunctionOrder(.address)
+        let band = try XCTUnwrap(list.rowView(atRow: 0, makeIfNecessary: true) as? CodeNavigatorRowView)
+        XCTAssertFalse(band.marksNode, "another layout keeps the table's band")
+        view.setFunctionOrder(.calls)
+        view.filter(by: "Shared")
+        let found = try XCTUnwrap(list.rowView(atRow: 0, makeIfNecessary: true) as? CodeNavigatorRowView)
+        XCTAssertFalse(found.marksNode, "as does a search's flat list")
+    }
+
+    /// The tree's button goes round its two forms, saying which it is in, and the
+    /// row's menu leads to the same place; the other buttons only choose.
+    func testTheTreeButtonCyclesTheFormsOfTheTree() throws {
+        let suiteName = "CodePaneViewTests.\(UUID().uuidString)"
+        let suite = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        CodePaneView.defaults = suite
+        defer {
+            suite.removePersistentDomain(forName: suiteName)
+            CodePaneView.defaults = .standard
+        }
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        {"script_version":4,"program":{"image_base":"0x0"},
+         "functions":[
+          {"entry":"0x100","name":"A","callers":[],"callees":["0x300"],
+           "instructions":[{"address":"0x100","bytes":"C3","text":"RET"}]},
+          {"entry":"0x200","name":"B","callers":[],"callees":["0x300"],
+           "instructions":[{"address":"0x200","bytes":"C3","text":"RET"}]},
+          {"entry":"0x300","name":"Shared","callers":["0x100","0x200"],"callees":[],
+           "instructions":[{"address":"0x300","bytes":"C3","text":"RET"}]}]}
+        """.utf8))
+        let view = CodePaneView(manifest: manifest(), artifact: artifact,
+                                moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 480, height: 400)
+        view.layoutSubtreeIfNeeded()
+        let list = try XCTUnwrap(all(NSTableView.self, in: view).first {
+            $0.tableColumns.contains { $0.identifier.rawValue == "function" }
+        })
+        let tree = view.navigatorOrderButtons[CodePaneView.FunctionOrder.calls.rawValue]
+        let allWays = tree.toolTip
+
+        tree.performClick(nil)
+        view.selectFunction(at: 2)
+        XCTAssertEqual(view.functionOrder, .calls)
+        XCTAssertEqual(list.numberOfRows, 4, "the first press chooses the tree, every way shown")
+        XCTAssertEqual(tree.state, .on)
+
+        tree.performClick(nil)
+        XCTAssertEqual(list.numberOfRows, 2, "the second keeps to the open way")
+        XCTAssertEqual(tree.state, .on, "and the button stays the chosen one")
+        XCTAssertNotNil(tree.image, "the form's symbol exists")
+        XCTAssertNotEqual(tree.toolTip, allWays, "and it says which form it is in")
+        XCTAssertTrue(suite.bool(forKey: CodePaneView.onlyOpenWayKey))
+
+        tree.performClick(nil)
+        XCTAssertEqual(list.numberOfRows, 4, "the third goes back")
+        XCTAssertEqual(tree.toolTip, allWays)
+        XCTAssertFalse(suite.bool(forKey: CodePaneView.onlyOpenWayKey))
+
+        view.showOnlyWay(atRow: 3)
+        XCTAssertEqual(list.numberOfRows, 2, "the menu keeps to the way of the row it was on")
+        XCTAssertEqual(try XCTUnwrap((list.view(atColumn: 0, row: 0, makeIfNecessary: true)
+            as? NSTableCellView)?.textField?.stringValue), "B")
+        view.setShowsOnlyOpenWay(false)
+        view.showOnlyWay(atRow: 0)
+        XCTAssertEqual(view.selectedFunction?.name, "A", "a row of another function opens that function")
+        XCTAssertEqual(list.numberOfRows, 2)
+    }
+
+    /// A click on another place of the selected function moves its calls there
+    /// and goes nowhere: the same function, selected at every place.
+    func testAnotherPlaceOfTheFunctionOnlyMovesItsCalls() throws {
+        let suiteName = "CodePaneViewTests.\(UUID().uuidString)"
+        let suite = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        CodePaneView.defaults = suite
+        defer {
+            suite.removePersistentDomain(forName: suiteName)
+            CodePaneView.defaults = .standard
+        }
+        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        {"script_version":4,"program":{"image_base":"0x0"},
+         "functions":[
+          {"entry":"0x100","name":"A","callers":[],"callees":["0x300"],
+           "instructions":[{"address":"0x100","bytes":"C3","text":"RET"}]},
+          {"entry":"0x200","name":"B","callers":[],"callees":["0x300"],
+           "instructions":[{"address":"0x200","bytes":"C3","text":"RET"}]},
+          {"entry":"0x300","name":"Shared","callers":["0x100","0x200"],"callees":["0x400"],
+           "instructions":[{"address":"0x300","bytes":"90","text":"NOP"},
+                           {"address":"0x301","bytes":"C3","text":"RET"}]},
+          {"entry":"0x400","name":"Leaf","callers":["0x300"],"callees":[],
+           "instructions":[{"address":"0x400","bytes":"C3","text":"RET"}]}]}
+        """.utf8))
+        let view = CodePaneView(manifest: manifest(), artifact: artifact,
+                                moduleBytes: moduleBytes, hexView: NSView())
+        view.frame = NSRect(x: 0, y: 0, width: 480, height: 400)
+        view.layoutSubtreeIfNeeded()
+        let list = try XCTUnwrap(all(NSTableView.self, in: view).first {
+            $0.tableColumns.contains { $0.identifier.rawValue == "function" }
+        })
+        view.setFunctionOrder(.calls)
+        view.selectFunction(at: 2)
+        func names() throws -> [String] {
+            try (0..<list.numberOfRows).map {
+                try XCTUnwrap((list.view(atColumn: 0, row: $0, makeIfNecessary: true)
+                    as? NSTableCellView)?.textField?.stringValue)
+            }
+        }
+        XCTAssertEqual(try names(), ["A", "Shared", "Leaf", "B", "Shared"])
+        func bold(_ row: Int) -> Bool {
+            let cell = list.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView
+            return cell?.textField?.font?.fontDescriptor.symbolicTraits.contains(.bold) == true
+        }
+        XCTAssertEqual((0..<5).map(bold), [true, true, false, false, false], "A and the open Shared")
+
+        list.selectRowIndexes(IndexSet(integer: 4), byExtendingSelection: false)
+        XCTAssertEqual(try names(), ["A", "Shared", "B", "Shared", "Leaf"])
+        XCTAssertEqual((0..<5).map(bold), [false, false, true, true, false], "the bold moved with the calls")
+        func isOpen(_ row: Int) throws -> Bool {
+            try XCTUnwrap(list.rowView(atRow: row, makeIfNecessary: true) as? CodeNavigatorRowView).isOpenPlace
+        }
+        XCTAssertTrue(try isOpen(3), "and the blue")
+        XCTAssertFalse(try isOpen(1), "the place before is grey now")
+        XCTAssertEqual(view.selectedFunction?.name, "Shared")
+        XCTAssertEqual(Array(list.selectedRowIndexes), [1, 3], "still every place")
+    }
+
     /// The call tree's rows open and close with the triangle in front of them.
     func testTheTreeOpensAndClosesItsCalls() throws {
         let suiteName = "CodePaneViewTests.treeFolds"
@@ -2946,21 +3156,26 @@ final class CodePaneViewTests: XCTestCase {
         func cell(_ row: Int) throws -> NSTableCellView {
             try XCTUnwrap(list.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView)
         }
-        XCTAssertEqual(list.numberOfRows, 2, "every place starts closed: the two roots")
-        XCTAssertEqual(try cell(0).textField?.stringValue, "Root", "the roots read alphabetically")
+        XCTAssertEqual(list.numberOfRows, 2, "the way down to Leaf, open; ZOther is on no way")
+        XCTAssertEqual(try cell(0).textField?.stringValue, "Root")
+        XCTAssertEqual(try cell(1).textField?.stringValue, "Leaf")
 
         let triangle = try XCTUnwrap(all(NSButton.self, in: try cell(0)).first)
         triangle.performClick(nil)
-        XCTAssertEqual(list.numberOfRows, 3, "Root, its call, and the other root")
-        XCTAssertEqual(try cell(1).textField?.stringValue, "Leaf")
-
-        let closing = try XCTUnwrap(all(NSButton.self, in: try cell(0)).first)
-        closing.performClick(nil)
-        XCTAssertEqual(list.numberOfRows, 2, "a closed row keeps its place and hides what it calls")
+        XCTAssertEqual(list.numberOfRows, 1, "a closed row keeps its place and hides what is under it")
 
         let reopened = try XCTUnwrap(all(NSButton.self, in: try cell(0)).first)
         reopened.performClick(nil)
-        XCTAssertEqual(list.numberOfRows, 3)
+        XCTAssertEqual(list.numberOfRows, 2)
+
+        // Another selection lays the tree out around it.
+        view.selectFunction(at: 2)
+        XCTAssertEqual(list.numberOfRows, 1)
+        XCTAssertEqual(try cell(0).textField?.stringValue, "ZOther")
+        XCTAssertEqual(list.selectedRow, 0)
+        view.selectFunction(at: 0)
+        XCTAssertEqual(list.numberOfRows, 2)
+        XCTAssertEqual(list.selectedRow, 1)
 
         // A search result is one alphabetical row, not a tree to open.
         view.filter(by: "Leaf")
