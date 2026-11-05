@@ -482,7 +482,8 @@ the entry's, and neither the artifact, the review document nor the project keeps
 parameter storage, which its callers' decompile reads; its plate, comments, local names and name
 and signature reasons go. Labels and equates stay: the entry holds neither, so an edit would lose
 them. `stored_copy` on a row says a copy is still stored there; a publish
-removes it. A write in a linked function first brings the entry's current text into the project,
+removes it. A caller's own C prints a callee's name as it stood at that module's last publish: after
+an entry is renamed, the caller shows the old name until its module publishes again. A write in a linked function first brings the entry's current text into the project,
 so it works on what the entry says; the publish takes it back out. The body's key masks an operand,
 so a function whose data references point at other bytes than the entry's (`reference_bytes`) is
 another function, however alike the instructions.

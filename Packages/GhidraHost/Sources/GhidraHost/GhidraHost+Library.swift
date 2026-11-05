@@ -464,11 +464,12 @@ extension GhidraHost {
     }
 
     /// Functions at their entry whose text is still written in the project lose
-    /// it. Says whether any did.
+    /// it, and those behind it catch up. Says whether any changed.
     func removeProjectCopies(_ module: SHA256Digest) async throws -> Bool {
         let (plan, index) = try await libraryPlan(module)
         var items: [[String: Any]] = []
-        for step in plan.toApply where step.state == "copy" {
+        // One behind takes the name and signature its callers print, too.
+        for step in plan.toApply where step.state == "copy" || step.state == "newer_version" {
             guard let held = index.entries[step.id] else { continue }
             var item: [String: Any] = [
                 "address": step.address, "id": step.id, "version": held.version,
