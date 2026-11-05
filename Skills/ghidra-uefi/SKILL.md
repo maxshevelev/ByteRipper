@@ -492,6 +492,17 @@ is printable and whose second is zero reads as a one-character string, so two su
 same first byte read alike. An entry learns its bytes when its source module publishes; until
 then it decides nothing and lets a holder through, so a source module publishes first.
 
+An entry's C is its text, so what a printed name means is the entry's: the entry records each equate
+its C prints, with value and comment, and a holder's C reads the entry's. A linked function's own
+equate is never printed: `ghidra_function` lists the entry's under `equates`, and an equate the
+project holds beside them under `project_equates`. An edit in a linked function brings the entry's
+equates with its text, except on an operand the project already names; that name is then the one the
+publish offers. Any equate or named label the offered C prints differently from the entry's moves the
+entry's version, so it needs a reason, whatever else was edited: the row names it in `names`. An
+equate is not one module's fact once it is offered: name a value in a shared function only for what
+it means in every holder. Named labels are not brought by an edit: another holder's edit drops one,
+and the row says `label -NAME`.
+
 **Reading through.** A function at its entry reads as the entry wherever it is read:
 `code_query` and `ghidra_function` give the entry's name, signature, plate, comments and C with
 `text: "registry"`, and addresses and names that are this module's own. `parameters` and

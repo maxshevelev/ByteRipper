@@ -562,6 +562,14 @@ public final class CodeReadings {
             body["signature"] = function.signature.map(JSONValue.string) ?? .null
             body["c"] = function.c.map(JSONValue.string) ?? .null
             if function.textFromRegistry { body["text"] = .string("registry") }
+            if !function.entryEquates.isEmpty {
+                body["equates"] = .array(function.entryEquates.map { equate in
+                    var row: [String: JSONValue] = ["name": .string(equate.name), "value": .string(CodeAddress(equate.value).description)]
+                    if let name = equate.enumName { row["enum"] = .string(name) }
+                    if let comment = equate.comment { row["comment"] = .string(comment) }
+                    return .object(row)
+                })
+            }
             if function.storedCopy { body["stored_copy"] = .bool(true) }
             if function.textUnavailable { body["text_unavailable"] = .string("the registry entry could not be read") }
             if !function.publisherAddresses.isEmpty {

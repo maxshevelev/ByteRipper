@@ -21,6 +21,8 @@ public enum LibraryView {
         /// The function as the entry's own version was published; nil for an
         /// entry from before the entries held it.
         public let function: CodeArtifact.Function?
+        /// The equates its C prints, with their places by offset from its start.
+        public let equates: [(equate: CodeArtifact.Equate, offsets: [(offset: UInt64, operand: Int)])]
 
         public init?(object: Data, id: String, version: Int) {
             guard let fields = (try? JSONSerialization.jsonObject(with: object)) as? [String: Any],
@@ -30,6 +32,17 @@ public enum LibraryView {
             self.name = name
             kind = (fields["kind"] as? String).flatMap(LibraryKind.init(rawValue:))
             signature = fields["signature"] as? String
+            equates = (fields["equates"] as? [[String: Any]] ?? []).compactMap { row in
+                guard let name = row["name"] as? String,
+                      let value = (row["value"] as? String).flatMap({ CodeAddress(hex: $0) }) else { return nil }
+                let uses = (row["uses"] as? [[Any]] ?? []).compactMap { use -> (offset: UInt64, operand: Int)? in
+                    guard use.count == 2, let offset = (use[0] as? String).flatMap({ CodeAddress(hex: $0) }),
+                          let operand = use[1] as? Int else { return nil }
+                    return (offset.value, operand)
+                }
+                return (CodeArtifact.Equate(name: name, value: value.value, enumName: row["enum"] as? String,
+                                            comment: row["comment"] as? String, references: []), uses)
+            }
             function = fields["function"].flatMap { value -> CodeArtifact.Function? in
                 guard let data = try? JSONSerialization.data(withJSONObject: value) else { return nil }
                 return try? JSONDecoder().decode(CodeArtifact.Function.self, from: data)
@@ -87,6 +100,12 @@ public enum LibraryView {
         function.cUnreachable = rendered.unreachable
         function.textFromRegistry = true
         function.publisherAddresses = rendered.publisherAddresses
+        function.entryEquates = entry.equates.map { row in
+            CodeArtifact.Equate(name: row.equate.name, value: row.equate.value, enumName: row.equate.enumName,
+                                comment: row.equate.comment, references: row.offsets.map {
+                .init(address: CodeAddress(local.entry.value &+ $0.offset), operand: $0.operand)
+            })
+        }
         return function
     }
 

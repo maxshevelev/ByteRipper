@@ -22,7 +22,10 @@
 > (`reference_bytes`). A reference reads 16 bytes, a string only up to its terminator, and
 > doubt counts as a difference. One limit: a GUID whose first byte is printable and whose second
 > is zero reads as a one-character string. An entry learns its bytes at its source module's
-> publish and decides nothing until then, so a source module publishes first. A function is in one
+> publish and decides nothing until then, so a source module publishes first. An entry records the
+> equates its C prints (name, value, comment, places): their meaning is the entry's, and an equate or
+> named label the offered C prints differently needs a reason and is named in the row's `names`. A
+> project's own equate on a linked function is not printed and is reported as `project_equates`. A function is in one
 > place in the registry, and history is no copy.
 >
 > **What a library function is (2026-11-03):** it depends on no module. It refers to

@@ -322,6 +322,9 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         /// Names in that C still carrying the publisher's address, no place for
         /// them here being known. Set by `LibraryView`, never stored.
         public internal(set) var publisherAddresses: [String] = []
+        /// The equates the registry's C prints, at this module's addresses: what
+        /// a printed name means is the entry's. Set by `LibraryView`, never stored.
+        public internal(set) var entryEquates: [Equate] = []
         /// Its registry entry could not be read, so this is the artifact's own
         /// text. Set by `LibraryView`, never stored.
         public internal(set) var textUnavailable = false
@@ -582,6 +585,14 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         public let enumName: String?
         public let comment: String?
         public let references: [Use]
+
+        init(name: String, value: UInt64, enumName: String?, comment: String?, references: [Use]) {
+            self.name = name
+            self.value = value
+            self.enumName = enumName
+            self.comment = comment
+            self.references = references
+        }
 
         public init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)

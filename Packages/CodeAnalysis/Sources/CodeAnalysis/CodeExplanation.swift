@@ -103,6 +103,10 @@ extension CodeModel {
             guard let first = text.unicodeScalars.first, first == "_" || CharacterSet.letters.contains(first) else {
                 return nil
             }
+            // The C is the registry's: what it prints means what the entry says.
+            if let equate = functions[index].entryEquates.first(where: { $0.name == text }) {
+                return explanation(of: equate)
+            }
             let held = Set(functions[index].instructions.map(\.address))
             let candidates = artifact.equates.filter { $0.name == text }
             // A name in two enums with two values: the one this function holds.

@@ -91,6 +91,23 @@ extension GhidraHost {
         if let object = try? await writer.readObject(held.row.entry),
            let fields = (try? JSONSerialization.jsonObject(with: object)) as? [String: Any] {
             answer["plate"] = fields["plate"]
+            // What the C prints is the entry's. What this project holds on the
+            // same function is reported, and offered only by a change with a reason.
+            if let own = answer["equates"] as? [[String: Any]] {
+                let printed = (fields["equates"] as? [[String: Any]] ?? []).map { row -> [String: Any] in
+                    var shown = row
+                    shown["uses"] = nil
+                    shown["at"] = (row["uses"] as? [[Any]] ?? []).compactMap { use -> String? in
+                        guard let offset = (use.first as? String).flatMap({ CodeAddress(hex: $0) }) else { return nil }
+                        return CodeAddress(address.value &+ offset.value).description
+                    }
+                    return shown
+                }
+                let names = Set(printed.compactMap { $0["name"] as? String })
+                answer["equates"] = printed
+                let others = own.filter { !names.contains($0["name"] as? String ?? "") }
+                if !others.isEmpty { answer["project_equates"] = others }
+            }
             // The project keeps no local's name: the C prints the entry's.
             if let locals = fields["locals"] as? [[String: Any]] {
                 let held = answer["locals"] as? [[String: Any]] ?? []

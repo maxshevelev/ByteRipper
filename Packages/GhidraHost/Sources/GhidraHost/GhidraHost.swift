@@ -604,6 +604,35 @@ public actor GhidraHost {
         return kept
     }
 
+    /// The equates a function's C prints, by name, with their places as offsets
+    /// from its start: what a holder needs to read the name, nothing of the
+    /// module. Nil where it prints none, so an entry without any is unchanged.
+    static func printedEquates(of function: [String: Any], in equates: [[String: Any]]) -> [[String: Any]]? {
+        guard let c = function["c"] as? String, let text = function["entry"] as? String,
+              let start = CodeAddress(hex: text) else { return nil }
+        let held = Set((function["instructions"] as? [[String: Any]] ?? []).compactMap {
+            ($0["address"] as? String).flatMap { CodeAddress(hex: $0)?.value }
+        })
+        var rows: [[String: Any]] = []
+        for equate in equates {
+            guard let name = equate["name"] as? String,
+                  c.range(of: "\\b\(NSRegularExpression.escapedPattern(for: name))\\b", options: .regularExpression) != nil
+            else { continue }
+            let uses = (equate["references"] as? [[Any]] ?? []).compactMap { use -> [Any]? in
+                guard use.count == 2, let at = (use[0] as? String).flatMap({ CodeAddress(hex: $0) }),
+                      held.contains(at.value), let operand = use[1] as? Int else { return nil }
+                return [CodeAddress(at.value &- start.value).description, operand]
+            }
+            guard !uses.isEmpty else { continue }
+            var row: [String: Any] = ["name": name, "value": equate["value"] ?? "", "uses": uses]
+            row["enum"] = equate["enum"] is NSNull ? nil : equate["enum"]
+            row["comment"] = equate["comment"] is NSNull ? nil : equate["comment"]
+            rows.append(row)
+        }
+        guard !rows.isEmpty else { return nil }
+        return rows.sorted { ($0["name"] as? String ?? "") < ($1["name"] as? String ?? "") }
+    }
+
     static let notOfTheDescription: Set<String> = ["callers", "callees", "library_entry", "library_kind",
                                                    "review_level", "review_gaps", "body"]
 
@@ -612,7 +641,9 @@ public actor GhidraHost {
             throw GhidraHostError(.owner, "the owner's library answer is not a JSON object")
         }
         var functions: [UInt64: [String: Any]] = [:]
+        var equates: [[String: Any]] = []
         if let artifact, let read = try JSONSerialization.jsonObject(with: artifact) as? [String: Any] {
+            equates = read["equates"] as? [[String: Any]] ?? []
             for function in read["functions"] as? [[String: Any]] ?? [] {
                 if let text = function["entry"] as? String, let at = CodeAddress(hex: text) { functions[at.value] = function }
             }
@@ -629,6 +660,7 @@ public actor GhidraHost {
             // module's copy of it: only what describes it, nothing of its place.
             if let function = functions[CodeAddress(hex: address)?.value ?? 0] {
                 entry["function"] = function.filter { !Self.notOfTheDescription.contains($0.key) }
+                if let printed = Self.printedEquates(of: function, in: equates) { entry["equates"] = printed }
             }
             let canonical = try JSONSerialization.data(withJSONObject: entry, options: [.sortedKeys])
             proposals.append(LibraryProposal(body: LibraryBody(size: size, full: full, specific: specific),

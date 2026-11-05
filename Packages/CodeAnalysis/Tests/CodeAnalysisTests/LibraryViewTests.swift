@@ -615,6 +615,131 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertTrue(rendered.c.contains("x = gSuccessText;"))
     }
 
+    private func offering(c: String, equates: [[String: Any]]? = nil) throws -> Data {
+        let function: [String: Any] = [
+            "entry": "0x1000", "name": "CopyMem", "signature": "void CopyMem(void)", "c": c,
+            "instructions": [
+                ["address": "0x1000", "bytes": "90", "text": "NOP"],
+                ["address": "0x1004", "bytes": "e8", "text": "CALL 0x2000",
+                 "references": [["to": "0x2000", "type": "UNCONDITIONAL_CALL"]]]
+            ]
+        ]
+        var object: [String: Any] = ["schema": 1, "name": "CopyMem", "kind": "edk2", "plate": "EDK2 CopyMem",
+                                     "signature": "void CopyMem(void)", "function": function]
+        object["equates"] = equates
+        return try JSONSerialization.data(withJSONObject: object, options: .sortedKeys)
+    }
+
+    private func offer(_ object: Data, from module: SHA256Digest, base: Int, why: String? = nil) throws -> LibraryWriteResult {
+        var id = ""
+        if let found = try store.libraryIndex().entry(for: body) { id = found.0 }
+        return try store.putLibraryEntries(module: module, rev: 1, by: "agent", proposals: [
+            LibraryProposal(body: body, name: "CopyMem", kind: "edk2", address: "0x1000", entry: object,
+                            basedOn: id, base: base)
+        ], take: why.map { LibraryTake.none.with(entryReasons: [id: $0]) } ?? .none,
+           dryRun: why == nil)
+    }
+
+    /// A name the C prints is the entry's: the reason answers for it by name, a
+    /// holder reads what it means from the entry, and the holder's own equate on
+    /// the value is neither printed nor what a click finds. Nothing of a
+    /// holder's tag, mark or symbol enters the text.
+    func testAnEquateInTheCIsAnsweredForAndMeansWhatTheEntrySays() throws {
+        try register(try offering(c: "void CopyMem(void) {\n  cpuid(0xbaccd00b);\n}\n"))
+        let named: [[String: Any]] = [["name": "ONE_NAME", "value": "0xBACCD00B", "enum": "LEAF",
+                                       "comment": "What the entry says.", "uses": [["0x4", 1]]]]
+        let printing = try offering(c: "void CopyMem(void) {\n  cpuid(ONE_NAME);\n}\n", equates: named)
+
+        let refused = try offer(printing, from: source, base: 1)
+        XCTAssertEqual(refused.needsReason?.first?.names, ["equate +ONE_NAME"])
+        XCTAssertTrue(refused.needsReason?.first?.changed?.contains("equates") == true)
+        XCTAssertTrue(refused.reasonRefusal?.contains("printing equate +ONE_NAME") == true)
+        XCTAssertEqual(try store.libraryIndex().entry(for: body)?.1.version, 1, "nothing stored")
+
+        let taken = try offer(printing, from: source, base: 1, why: "the leaf is AGESA's")
+        XCTAssertEqual(taken.updated.first?.names, ["equate +ONE_NAME"])
+        XCTAssertEqual(taken.updated.first?.version, 2)
+
+        // The same names again: no change.
+        XCTAssertEqual(try offer(printing, from: source, base: 2).unchanged.count, 1)
+        // Another module's text prints another name: both are said.
+        let other = SHA256Digest(data: Data("other".utf8))
+        let otherName = try offering(c: "void CopyMem(void) {\n  cpuid(OTHER_NAME);\n}\n", equates: [
+            ["name": "OTHER_NAME", "value": "0xBACCD00B", "uses": [["0x4", 1]]]
+        ])
+        XCTAssertEqual(try offer(otherName, from: other, base: 2).needsReason?.first?.names,
+                       ["equate +OTHER_NAME", "equate -ONE_NAME"])
+        // Its text printing the number drops the name, and says so.
+        let number = try offering(c: "void CopyMem(void) {\n  cpuid(0xbaccd00b);\n}\n")
+        XCTAssertEqual(try offer(number, from: other, base: 2).needsReason?.first?.names, ["equate -ONE_NAME"])
+        // The comment moved: the name stays, and its meaning is another.
+        var moved = named[0]
+        moved["comment"] = "Another meaning."
+        XCTAssertEqual(try offer(try offering(c: "void CopyMem(void) {\n  cpuid(ONE_NAME);\n}\n", equates: [moved]),
+                                 from: other, base: 2).needsReason?.first?.names, ["equate ~ONE_NAME"])
+
+        // A holder with its own equate on the value, its own tag and symbol.
+        let (id, row) = try XCTUnwrap(try store.libraryIndex().entry(for: body))
+        let entry = try XCTUnwrap(LibraryView.Entry(object: try store.object(row.entry), id: id, version: row.version))
+        let holder = try JSONDecoder().decode(CodeArtifact.self, from: JSONSerialization.data(withJSONObject: [
+            "script_version": 10, "ghidra": "12.2", "program": ["image_base": "0x0"],
+            "functions": [[
+                "entry": "0x9000", "name": "OwnSymbol", "signature": "int OwnSymbol(void)", "body": body.key,
+                "library_kind": "amd", "library_entry": ["id": id, "version": 1, "state": "entry"],
+                "c": "int OwnSymbol(void) { cpuid(HOLDERS_NAME); }",
+                "instructions": [
+                    ["address": "0x9000", "bytes": "90", "text": "NOP"],
+                    ["address": "0x9004", "bytes": "e8", "text": "CALL 0xA000",
+                     "references": [["to": "0xA000", "type": "UNCONDITIONAL_CALL"]]]
+                ]
+            ]],
+            "equates": [["name": "HOLDERS_NAME", "value": "0xBACCD00B", "enum": "HOLDERS", "comment": "The holder's.",
+                         "references": [["0x9004", 1]]],
+                        ["name": "ONE_NAME", "value": "0x1", "enum": "HOLDERS", "comment": "The holder's other.",
+                         "references": [["0x9000", 0]]]]
+        ]))
+        let local = try XCTUnwrap(holder.functions.first)
+        let read = LibraryView.function(local, entry: entry, name: { _ in nil })
+        let c = try XCTUnwrap(read.c)
+        XCTAssertTrue(c.contains("cpuid(ONE_NAME)"))
+        for own in ["HOLDERS_NAME", "OwnSymbol", "amd", "library"] { XCTAssertFalse(c.contains(own), own) }
+        XCTAssertEqual(read.entryEquates.first?.references.first?.address.value, 0x9004)
+        XCTAssertEqual(read.entryEquates.first?.comment, "What the entry says.")
+
+        var artifact = holder
+        artifact.functions[0] = read
+        let model = CodeModel(artifact: artifact, moduleBytes: nil)
+        let at = (c as NSString).range(of: "ONE_NAME").location
+        let token = CodeToken(start: at, length: 8, kind: .constant)
+        XCTAssertEqual(model.explanation(ofC: token, inFunction: 0)?.text, "What the entry says.",
+                       "the entry's meaning, not the holder's equate of that name")
+    }
+
+    /// An entry from before entries recorded their equates, already printing
+    /// the name, has not changed by now saying so.
+    func testAnOlderEntryPrintingTheNameHasNotChanged() throws {
+        let c = "void CopyMem(void) {\n  cpuid(ONE_NAME);\n}\n"
+        try register(try offering(c: c))
+        let said = try offering(c: c, equates: [["name": "ONE_NAME", "value": "0x1", "uses": [["0x4", 1]]]])
+        XCTAssertEqual(try offer(said, from: source, base: 1).unchanged.count, 1)
+    }
+
+    /// A named label in the offered C is the review's, answered for like an
+    /// equate; the decompiler's own `LAB_` is no name.
+    func testANamedLabelInTheCIsAnsweredFor() throws {
+        try register(try offering(c: "void CopyMem(void) {\n  goto LAB_00001004;\nLAB_00001004:\n}\n"))
+        let named = try offering(c: "void CopyMem(void) {\n  goto ErrorExit;\nErrorExit:\n}\n")
+        let refused = try offer(named, from: source, base: 1)
+        XCTAssertEqual(refused.needsReason?.first?.names, ["label +ErrorExit"])
+        let taken = try offer(named, from: source, base: 1, why: "the exit path")
+        XCTAssertEqual(taken.updated.first?.names, ["label +ErrorExit"])
+        let other = SHA256Digest(data: Data("other".utf8))
+        XCTAssertEqual(try offer(try offering(c: "void CopyMem(void) {\n  goto LAB_09001004;\nLAB_09001004:\n}\n"),
+                                 from: other, base: 2).needsReason?.first?.names, ["label -ErrorExit"])
+        XCTAssertTrue(LibraryProposal.sameReview(try offering(c: "goto LAB_00001000;"), try offering(c: "goto LAB_00009000;")),
+                      "two modules' decompiler labels are no change")
+    }
+
     /// Labels and removed blocks: the holder's address, same length, so no span
     /// after them moves. One with no place here is reported.
     func testLabelsAndRemovedBlocksReadTheHoldersAddress() throws {

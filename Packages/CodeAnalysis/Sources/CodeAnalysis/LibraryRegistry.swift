@@ -293,6 +293,10 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
         /// For a publish's update: the review's fields it changes, so an entry
         /// gaining its recorded function is told from one whose text moves.
         public var changed: [String]?
+        /// The names its C prints that this changes, each a reason answers for:
+        /// `equate +NAME`, `equate -NAME`, `equate ~NAME` (its value or comment
+        /// moved), `label +NAME`, `label -NAME`. Nil where there are none.
+        public var names: [String]?
         /// The module whose publish or write made this change, and why it was
         /// made: what a reader of the answer checks. Nil on a row that changes
         /// nothing, and from a store that predates them.
@@ -393,7 +397,10 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
     /// What a publish that would move entries with no reason is refused with.
     public var reasonRefusal: String? {
         guard let rows = needsReason, !rows.isEmpty else { return nil }
-        let named = rows.map { "\($0.id) (\($0.name), to version \($0.version))" }.joined(separator: ", ")
+        let named = rows.map { row -> String in
+            let printed = row.names.map { ", printing \($0.joined(separator: " "))" } ?? ""
+            return "\(row.id) (\(row.name), to version \(row.version)\(printed))"
+        }.joined(separator: ", ")
         return "this publish would change library entries with no reason given: \(named). Nothing was stored. "
             + "Publish again with `entry_reasons`, an object of entry id to why this module changes it."
     }
@@ -433,9 +440,58 @@ extension LibraryProposal {
         return Set(before.keys).union(after.keys).filter { before[$0] != after[$0] }.sorted()
     }
 
+    /// The named labels a C prints. `LAB_<address>` is the decompiler's, no name.
+    private static func labels(in c: String) -> Set<String> {
+        guard let pattern = try? NSRegularExpression(pattern: #"\bgoto\s+([A-Za-z_][A-Za-z0-9_]*)\s*;"#) else { return [] }
+        let text = c as NSString
+        let found = pattern.matches(in: c, range: NSRange(location: 0, length: text.length))
+            .map { text.substring(with: $0.range(at: 1)) }
+        return Set(found.filter { !$0.hasPrefix("LAB_") })
+    }
+
+    private static func prints(_ name: String, in c: String) -> Bool {
+        c.range(of: "\\b\(NSRegularExpression.escapedPattern(for: name))\\b", options: .regularExpression) != nil
+    }
+
+    /// The names an entry's C prints that an offer changes. Where either side
+    /// holds no C there is nothing to compare. An entry from before entries
+    /// recorded their equates, printing the name, has not changed by saying so.
+    static func nameChanges(from held: Data, to offered: Data) -> [String] {
+        func read(_ data: Data) -> (object: [String: Any], c: String)? {
+            guard let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                  let c = (object["function"] as? [String: Any])?["c"] as? String else { return nil }
+            return (object, c)
+        }
+        guard let old = read(held), let new = read(offered) else { return [] }
+        func facts(_ object: [String: Any]) -> [String: String] {
+            var found: [String: String] = [:]
+            for row in object["equates"] as? [[String: Any]] ?? [] {
+                guard let name = row["name"] as? String else { continue }
+                found[name] = "\(row["value"] ?? "")\u{0}\(row["comment"] ?? "")"
+            }
+            return found
+        }
+        let before = facts(old.object), after = facts(new.object)
+        let recorded = old.object["equates"] != nil
+        var rows: [String] = []
+        for (name, fact) in after.sorted(by: { $0.key < $1.key }) {
+            if let was = before[name] {
+                if was != fact { rows.append("equate ~\(name)") }
+            } else if recorded || !prints(name, in: old.c) {
+                rows.append("equate +\(name)")
+            }
+        }
+        for name in before.keys.sorted() where after[name] == nil { rows.append("equate -\(name)") }
+        let (was, now) = (labels(in: old.c), labels(in: new.c))
+        rows += now.subtracting(was).sorted().map { "label +\($0)" }
+        rows += was.subtracting(now).sorted().map { "label -\($0)" }
+        return rows
+    }
+
     /// Whether all a review moved is the function's name or signature: all the
     /// function's own reasons speak for. The recorded function is not the review.
     static func movedOnlyNameOrSignature(from held: Data, to offered: Data) -> Bool {
+        guard nameChanges(from: held, to: offered).isEmpty else { return false }
         let notTheReview: Set<String> = ["body", "constants", "function"]
         let nameOrSignature: Set<String> = ["name", "signature", "return_type", "calling_convention", "params"]
         return Set(changedFields(from: held, to: offered)).subtracting(notTheReview).isSubset(of: nameOrSignature)
@@ -465,16 +521,19 @@ extension LibraryProposal {
     /// they were read from, its constants, and the function as that module
     /// published it — what the variants of one entry share, and what another
     /// module's addresses and callee names would otherwise make a new version.
+    /// A name the C prints is the review's: an equate or a named label that
+    /// differs is another review, whatever else stands equal.
     public static func sameReview(_ left: Data, _ right: Data) -> Bool {
         func review(_ data: Data) -> NSDictionary? {
             guard var object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
             object["body"] = nil
             object["constants"] = nil
             object["function"] = nil
+            object["equates"] = nil
             return object as NSDictionary
         }
-        guard let left = review(left), let right = review(right) else { return false }
-        return left.isEqual(right)
+        guard let reviewed = review(left), let other = review(right) else { return false }
+        return reviewed.isEqual(other) && nameChanges(from: left, to: right).isEmpty
     }
 
     /// The held entry with its function's C as its own module prints it now,
@@ -519,6 +578,7 @@ extension LibraryProposal {
         origin["rev"] = source.rev
         function["source"] = origin
         object["function"] = function
+        object["equates"] = offered["equates"]
         return try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes])
     }
 
@@ -796,7 +856,9 @@ extension ContentStore {
                 guard recordsOnly || why != nil else {
                     result.needsReason = (result.needsReason ?? []) + [.init(
                         id: id, name: proposal.name, version: held.version + 1,
-                        changed: LibraryProposal.changedFields(from: heldObject, to: proposal.entry), module: module)]
+                        changed: LibraryProposal.changedFields(from: heldObject, to: proposal.entry),
+                        names: Optional(LibraryProposal.nameChanges(from: heldObject, to: proposal.entry)).flatMap { $0.isEmpty ? nil : $0 },
+                        module: module)]
                     continue
                 }
                 var next = held
@@ -830,6 +892,7 @@ extension ContentStore {
                 histories[id] = history
                 result.updated.append(.init(id: id, name: proposal.name, version: next.version,
                                             changed: LibraryProposal.changedFields(from: heldObject, to: written),
+                                            names: Optional(LibraryProposal.nameChanges(from: heldObject, to: written)).flatMap { $0.isEmpty ? nil : $0 },
                                             module: module, reason: recordedWhy))
             }
             // A decision that names an entry already settled — the same review,

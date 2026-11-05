@@ -3173,6 +3173,7 @@ public class Owner {
         if (!masked || takes.test("comments")) {
             applyComments(function, entry, masked || whole, filled, differences, unplaced);
         }
+        if (!masked && whole) applyEntryEquates(function, entry, differences);
         String kind = string(entry, "kind", null);
         String ownKind = ExportCode.libraryKind(function);
         if (kind != null && (whole || link || ownKind == null || ExportCode.libraryTag(function) == null)) {
@@ -3239,6 +3240,36 @@ public class Owner {
         return answer;
     }
 
+    /**
+     * The names the entry's C prints, so an edit made on its text does not drop
+     * them. An operand this project already names keeps its own name: that one
+     * is what its next change offers, and the reason answers for it.
+     */
+    private void applyEntryEquates(Function function, JsonObject entry, JsonArray differences) {
+        if (!entry.has("equates")) return;
+        ghidra.program.model.symbol.EquateTable table = program.getEquateTable();
+        for (JsonElement element : entry.getAsJsonArray("equates")) {
+            JsonObject equate = element.getAsJsonObject();
+            for (JsonElement place : equate.getAsJsonArray("uses")) {
+                JsonArray use = place.getAsJsonArray();
+                try {
+                    Address at = function.getEntryPoint().add(Long.decode(use.get(0).getAsString()));
+                    int operand = use.get(1).getAsInt();
+                    boolean named = false;
+                    for (ghidra.program.model.symbol.Equate own : table.getEquates(at, operand)) named = true;
+                    if (named) continue;
+                    JsonObject one = equate.deepCopy();
+                    one.remove("uses");
+                    one.addProperty("address", hex(at));
+                    one.addProperty("operand", operand);
+                    applyEquate(one);
+                } catch (Exception error) {
+                    differences.add("equate " + string(equate, "name", "") + ": " + error.getMessage());
+                }
+            }
+        }
+    }
+
     /** An entry's review without its body: what two variants share. */
     private static JsonObject review(JsonObject entry) {
         JsonObject copy = entry.deepCopy();
@@ -3246,6 +3277,8 @@ public class Owner {
         copy.remove("constants");
         // The function as it read when it was recorded: no part of the review.
         copy.remove("function");
+        // What its C prints, recorded with it from the same reading.
+        copy.remove("equates");
         return copy;
     }
 

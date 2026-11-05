@@ -1314,7 +1314,9 @@ public enum GhidraTools {
                 in `entry_reasons`, an object of entry id to why this module changes it. A first version, \
                 an unchanged entry and a taken conflict with its reason need none; a take that names the \
                 entry also speaks for a change on its current version, and a function's own reason does \
-                only when its name or signature is all that moved. A store that predates this rule is \
+                only when its name or signature is all that moved. An equate or a named label the offered C \
+                prints differently is a change, named on the row in `names` (`equate +NAME`, `equate -NAME`, \
+                `equate ~NAME`, `label +NAME`, `label -NAME`), and the reason answers for it. A store that predates this rule is \
                 refused, since it would take the change with no reason. By default the answer carries only \
                 what the publish changed; `full: true` adds the list of entries it left as they were. \
                 `dry_run: true` answers the same without storing (its artifact hash is taken before the registry's states and marks, so a publish that touches the registry stores another): the artifact's counts, the revision \

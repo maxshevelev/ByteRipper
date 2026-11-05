@@ -260,6 +260,18 @@ final class GhidraHostOwnerTests: XCTestCase {
         let offer = try GhidraHost.libraryOffer(answer)
         XCTAssertEqual(offer.proposals.count, 1)
         let proposal = try XCTUnwrap(offer.proposals.first)
+        let c: [String: Any] = ["entry": "0x1000", "c": "cpuid(PRINTED); return 0;",
+                                "instructions": [["address": "0x1000"], ["address": "0x1004"]]]
+        let printed = try XCTUnwrap(GhidraHost.printedEquates(of: c, in: [
+            ["name": "PRINTED", "value": "0xBA", "enum": "LEAF", "comment": "why", "references": [["0x1004", 1], ["0x9999", 0]]],
+            ["name": "NOT_PRINTED", "value": "0x1", "references": [["0x1000", 1]]],
+            ["name": "ELSEWHERE", "value": "0x2", "references": [["0x9999", 1]]]
+        ]))
+        XCTAssertEqual(printed.count, 1)
+        XCTAssertEqual(printed[0]["name"] as? String, "PRINTED")
+        XCTAssertEqual((printed[0]["uses"] as? [[Any]])?.count, 1, "only its places in this function")
+        XCTAssertEqual((printed[0]["uses"] as? [[Any]])?.first?.first as? String, "0x4")
+        XCTAssertNil(GhidraHost.printedEquates(of: c, in: []), "an entry that prints none does not change")
         XCTAssertEqual(proposal.body.key, "16-00112233445566aa-0123456789abcdef")
         XCTAssertEqual(String(decoding: proposal.entry, as: UTF8.self),
                        #"{"name":"SetMem","plate":"EDK2 BaseMemoryLib SetMem","schema":1}"#)
