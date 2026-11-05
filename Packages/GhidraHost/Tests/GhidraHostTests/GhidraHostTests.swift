@@ -272,6 +272,20 @@ final class GhidraHostOwnerTests: XCTestCase {
         XCTAssertEqual((printed[0]["uses"] as? [[Any]])?.count, 1, "only its places in this function")
         XCTAssertEqual((printed[0]["uses"] as? [[Any]])?.first?.first as? String, "0x4")
         XCTAssertNil(GhidraHost.printedEquates(of: c, in: []), "an entry that prints none does not change")
+        // An older entry learns only what its own C already prints.
+        let older = try JSONSerialization.data(withJSONObject: ["name": "F", "function": ["c": "cpuid(PRINTED);"]])
+        let twoPrinted: [String: Any] = ["entry": "0x1000", "c": "cpuid(PRINTED); f(ONLY_HERE);",
+                                         "instructions": [["address": "0x1000"]]]
+        let learned = try XCTUnwrap(GhidraHost.withEquatesItPrints(older, of: twoPrinted, in: [
+            ["name": "PRINTED", "value": "0x1", "references": [["0x1000", 1]]],
+            ["name": "ONLY_HERE", "value": "0x2", "references": [["0x1000", 0]]]
+        ]))
+        let names = ((try JSONSerialization.jsonObject(with: learned) as? [String: Any])?["equates"] as? [[String: Any]])?
+            .compactMap { $0["name"] as? String }
+        XCTAssertEqual(names, ["PRINTED"])
+        XCTAssertNil(GhidraHost.withEquatesItPrints(older, of: twoPrinted, in: [
+            ["name": "ONLY_HERE", "value": "0x2", "references": [["0x1000", 0]]]
+        ]))
         XCTAssertEqual(proposal.body.key, "16-00112233445566aa-0123456789abcdef")
         XCTAssertEqual(String(decoding: proposal.entry, as: UTF8.self),
                        #"{"name":"SetMem","plate":"EDK2 BaseMemoryLib SetMem","schema":1}"#)

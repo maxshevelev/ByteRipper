@@ -721,7 +721,33 @@ final class LibraryViewTests: XCTestCase {
         let c = "void CopyMem(void) {\n  cpuid(ONE_NAME);\n}\n"
         try register(try offering(c: c))
         let said = try offering(c: c, equates: [["name": "ONE_NAME", "value": "0x1", "uses": [["0x4", 1]]]])
-        XCTAssertEqual(try offer(said, from: source, base: 1).unchanged.count, 1)
+        // Another module says so: nothing moves, and it records nothing.
+        let other = SHA256Digest(data: Data("other".utf8))
+        let id = try XCTUnwrap(try store.libraryIndex().entry(for: body)?.0)
+        XCTAssertEqual(try store.putLibraryEntries(module: other, rev: 1, by: "agent", proposals: [
+            LibraryProposal(body: body, name: "CopyMem", kind: "edk2", address: "0x1000", entry: said, basedOn: id, base: 1)
+        ]).unchanged.count, 1)
+        XCTAssertNil(LibraryView.Entry(object: try store.object(try XCTUnwrap(store.libraryIndex().entries[id]).entry),
+                                       id: id, version: 1)?.equates.first)
+        // The module its C came from fills them in: no version moves, history says so.
+        let filled = try store.putLibraryEntries(module: source, rev: 2, by: "agent", proposals: [
+            LibraryProposal(body: body, name: "CopyMem", kind: "edk2", address: "0x1000", entry: said, basedOn: id, base: 1)
+        ])
+        XCTAssertEqual(filled.updated.first?.version, 1)
+        XCTAssertEqual(filled.updated.first?.changed, ["equates"])
+        let row = try XCTUnwrap(store.libraryIndex().entries[id])
+        XCTAssertEqual(row.version, 1)
+        XCTAssertEqual(LibraryView.Entry(object: try store.object(row.entry), id: id, version: 1)?.equates.first?.equate.name, "ONE_NAME")
+        XCTAssertEqual(try store.libraryHistory(id: id)?.versions.last?.reason, "the equates its C prints recorded by its module")
+    }
+
+    /// A conflict says which names taking it would change, as a change does.
+    func testAConflictNamesWhatItPrints() throws {
+        try register(try offering(c: "void CopyMem(void) {\n  cpuid(0x1);\n}\n"))
+        let printing = try offering(c: "void CopyMem(void) {\n  cpuid(ONE_NAME);\n}\n", equates: [
+            ["name": "ONE_NAME", "value": "0x1", "uses": [["0x4", 1]]]
+        ])
+        XCTAssertEqual(try offer(printing, from: source, base: 0).conflicts.first?.names, ["equate +ONE_NAME"])
     }
 
     /// A named label in the offered C is the review's, answered for like an

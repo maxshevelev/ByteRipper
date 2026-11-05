@@ -3628,7 +3628,10 @@ public class Owner {
         if (libraryMark(function) == null) return;
         try {
             answer.add("library_entry", JsonParser.parseString(libraryState(function)));
-            if (holdsText(function)) answer.addProperty("stored_copy", true);
+            // A copy is text at the entry: an edit's text is a draft of the review.
+            String state = answer.getAsJsonObject("library_entry").has("state")
+                ? answer.getAsJsonObject("library_entry").get("state").getAsString() : "";
+            if (state.equals("entry") && holdsText(function)) answer.addProperty("stored_copy", true);
             ghidra.feature.fid.hash.FidHashQuad hash = new ghidra.feature.fid.service.FidService().hashFunction(function);
             if (hash != null) answer.addProperty("body_key", bodyKey(hash));
             String bytes = ExportCode.referenceBytes(function);

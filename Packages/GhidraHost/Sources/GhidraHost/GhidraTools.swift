@@ -1285,7 +1285,7 @@ public enum GhidraTools {
             description: """
                 Saves the module's program and stores its artifact and review document as the next \
                 revision: every ByteRipper reading this store shows the new names. Publishing an unchanged \
-                program is the same revision. `stale_links` lists links in comments and the description whose \
+                program is the same revision. `link_failures` lists functions it could not link to their entries, each with its entry and why: they keep what they held, and the module is not closed. `stale_links` lists links in comments and the description whose \
                 text is a default name (`FUN_…`) while the target now has a real one: `at` and `kind` say \
                 where, `name` is what the text should read; they are reported, not rewritten. `type_conflicts` names types another review defines \
                 differently, which stay in this module only: `ghidra_type_definition` shows both, and \

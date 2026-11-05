@@ -70,11 +70,15 @@ public actor GhidraHost {
         public var libraryError: String?
         /// Links whose text is a default name while the target has a real one.
         public var staleLinks: [StaleLink]
+        /// Functions this publish should have linked to their entries and could
+        /// not: they keep what they held, and the module is not closed.
+        public var linkFailures: [LinkFailure]
 
         public init(manifest: AnalysisManifest, typeConflicts: [String], typeConflictsTaken: [String] = [],
                     typeConflictOrigins: [String: String] = [:], library: LibraryWriteResult? = nil,
                     libraryBelowBar: [LibraryShortfall] = [], libraryError: String? = nil,
-                    staleLinks: [StaleLink] = []) {
+                    staleLinks: [StaleLink] = [], linkFailures: [LinkFailure] = []) {
+            self.linkFailures = linkFailures
             self.manifest = manifest
             self.typeConflicts = typeConflicts
             self.typeConflictsTaken = typeConflictsTaken
@@ -84,6 +88,13 @@ public actor GhidraHost {
             self.libraryError = libraryError
             self.staleLinks = staleLinks
         }
+    }
+
+    /// A function a publish could not link to its entry, and why.
+    public struct LinkFailure: Codable, Equatable, Sendable {
+        public var address: String
+        public var id: String
+        public var error: String
     }
 
     /// What a publish may decide beyond storing the review.
@@ -439,6 +450,7 @@ public actor GhidraHost {
         var library: LibraryWriteResult?
         var shortfalls: [LibraryShortfall] = []
         var libraryError: String?
+        var linkFailures: [LinkFailure] = []
         if reviewed {
             do {
                 let offer = try Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data,
@@ -468,8 +480,11 @@ public actor GhidraHost {
                 }
                 // Whatever this publish left at an entry, the project keeps no
                 // text of: it is the entry's now.
-                if try await removeProjectCopies(module) { marked = true }
+                let copies = try await removeProjectCopies(module)
+                if copies.changed { marked = true }
+                linkFailures = copies.failures
                 try await teachEntryBytes(module, rev: reading?.rev, by: by)
+                try await teachEntryEquates(module, artifact: plain, rev: reading?.rev, by: by)
                 if marked {
                     let again = try await write(module, "/v1/export", body: Data())
                     if again != plain {
@@ -530,7 +545,8 @@ public actor GhidraHost {
         try project.write(state)
         return Publication(manifest: manifest, typeConflicts: conflicts, typeConflictsTaken: taken,
                            typeConflictOrigins: origins, library: library, libraryBelowBar: shortfalls,
-                           libraryError: libraryError, staleLinks: await staleLinks(port: record.port))
+                           libraryError: libraryError, staleLinks: await staleLinks(port: record.port),
+                           linkFailures: linkFailures)
     }
 
     /// A report beside a stored publish: failing to read it never fails that.

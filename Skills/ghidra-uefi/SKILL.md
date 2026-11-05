@@ -480,9 +480,14 @@ calls it, its instructions, its body and its mark. Its name, signature, plate, c
 the entry's, and neither the artifact, the review document nor the project keeps them
 (`state: linked`, `copy_free`). The project keeps its name, signature, calling convention and
 parameter storage, which its callers' decompile reads; its plate, comments, local names and name
-and signature reasons go. Labels and equates stay: the entry holds neither, so an edit would lose
-them. `stored_copy` on a row says a copy is still stored there; a publish
-removes it. A caller's own C prints a callee's name as it stood at that module's last publish: after
+and signature reasons go. Labels and equates stay; the entry records the equates its C prints, and
+holds no labels. `stored_copy` on a row, in `ghidra_function` and `code_query` alike, says the
+entry's text is still stored there, unedited; a publish removes it. An edited function is
+`library_entry.state: edited`, its text a draft. A link a publish cannot make, because another
+function of the module holds the entry's name for one, is listed in `link_failures` on its answer: the
+function keeps what it held, and the module is not closed until that is resolved. An entry from before
+entries recorded equates learns them at the next publish of the module its C came from, with no
+new version, and a history row says so. A caller's own C prints a callee's name as it stood at that module's last publish: after
 an entry is renamed, the caller shows the old name until its module publishes again. A write in a linked function first brings the entry's current text into the project,
 so it works on what the entry says; the publish takes it back out. The body's key masks an operand,
 so a function whose data references point at other bytes than the entry's (`reference_bytes`) is

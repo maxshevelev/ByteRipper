@@ -317,9 +317,11 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
         /// The version this module's review was made on; nil when the
         /// function never carried the entry.
         public var base: Int?
+        /// The names its C prints that taking this would change (`Change.names`).
+        public var names: [String]?
 
         private enum CodingKeys: String, CodingKey {
-            case id, name, version, base
+            case id, name, version, base, names
             case proposedName = "proposed_name"
             case heldBy = "held_by"
         }
@@ -554,6 +556,19 @@ extension LibraryProposal {
               samePrinting(old, new) else { return nil }
         for key in ["c", "c_spans", "c_sites", "c_fields", "c_unreachable"] { function[key] = offered[key] }
         object["function"] = function
+        return try? JSONSerialization.data(withJSONObject: object, options: .sortedKeys)
+    }
+
+    /// The held entry with the equates its C prints, or nil when it has them
+    /// already, or this is not the module its C came from. All else stays.
+    static func fillingEquates(_ proposal: Data, in held: Data, heldSource: LibrarySource, source: LibrarySource) -> Data? {
+        guard var object = (try? JSONSerialization.jsonObject(with: held)) as? [String: Any], object["equates"] == nil,
+              let function = object["function"] as? [String: Any],
+              let equates = ((try? JSONSerialization.jsonObject(with: proposal)) as? [String: Any])?["equates"] else { return nil }
+        let origin = function["source"] as? [String: Any]
+        guard (origin?["module"] as? String ?? heldSource.module.hex) == source.module.hex,
+              (origin?["address"] as? String ?? heldSource.address) == source.address else { return nil }
+        object["equates"] = equates
         return try? JSONSerialization.data(withJSONObject: object, options: .sortedKeys)
     }
 
@@ -794,6 +809,24 @@ extension ContentStore {
                 let completes = lacksFunction || (!LibraryProposal.hasConstants(heldObject)
                     && LibraryProposal.hasConstants(proposal.entry) && proposal.body == held.variants.first?.body)
                 if LibraryProposal.sameReview(heldObject, proposal.entry), !completes {
+                    // An entry from before entries recorded their equates learns
+                    // them from the module its C came from: no version moves.
+                    if let filled = LibraryProposal.fillingEquates(proposal.entry, in: heldObject,
+                                                                   heldSource: held.source, source: source) {
+                        var next = held
+                        next.entry = dryRun ? SHA256Digest(data: filled) : try putObject(filled)
+                        index.entries[id] = next
+                        var history = try histories[id] ?? libraryHistory(id: id) ?? LibraryHistory(id: id, versions: [])
+                        let recorded = "the equates its C prints recorded by its module"
+                        history.versions.append(LibraryVersion(version: held.version, entry: next.entry, source: held.source,
+                                                               reason: recorded, recordedAt: now,
+                                                               changedFrom: module))
+                        histories[id] = history
+                        result.updated.append(.init(id: id, name: held.name, version: held.version, changed: ["equates"],
+                                                    module: module, reason: recorded))
+                        settled[id] = "its review is the entry's own, at version \(held.version)"
+                        continue
+                    }
                     // Its C printed anew by the module it came from is no change
                     // of the review: no version moves, and no copy is behind.
                     if let reprinted = LibraryProposal.reprinting(proposal.entry, in: heldObject,
@@ -827,8 +860,10 @@ extension ContentStore {
                 conflicting.insert(id)
                 let taken = take.all ? allReason : reasons[id]
                 guard current || completes || taken != nil else {
+                    let printed = LibraryProposal.nameChanges(from: heldObject, to: proposal.entry)
                     result.conflicts.append(.init(id: id, name: held.name, proposedName: proposal.name,
-                                                  heldBy: held.source, version: held.version, base: base))
+                                                  heldBy: held.source, version: held.version, base: base,
+                                                  names: printed.isEmpty ? nil : printed))
                     settled[id] = "this module's review was not made on its current version: "
                         + "that is a conflict, taken with `take_library_conflicts`"
                     continue

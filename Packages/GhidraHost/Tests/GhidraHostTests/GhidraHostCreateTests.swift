@@ -52,6 +52,59 @@ final class GhidraHostLibraryTests: XCTestCase {
         return try XCTUnwrap(list.first { $0["size"] as? Int == size }?["entry"] as? String)
     }
 
+    /// A link a publish cannot make is on its answer, not lost: another function
+    /// of the module holds the name the entry moved to.
+    func testALinkAPublishCouldNotMakeIsOnItsAnswer() async throws {
+        guard let paths = ProcessInfo.processInfo.environment["GHIDRA_LIBRARY_MODULES"]?.split(separator: ":"),
+              paths.count == 2 else {
+            throw XCTSkip("GHIDRA_LIBRARY_MODULES is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostLibraryTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
+                                                   idle: 300, holder: "GhidraHostLibraryTests"),
+                              writer: store)
+        let images = try paths.map { try Data(contentsOf: URL(fileURLWithPath: String($0))) }
+        let reviewed = SHA256Digest(data: images[0]), other = SHA256Digest(data: images[1])
+        _ = try await host.create(module: images[0], name: "Reviewed")
+        _ = try await host.create(module: images[1], name: "Other")
+        defer { Task { await host.stop(reviewed); await host.stop(other) } }
+
+        let copyGuid = try await function(of: 25, in: reviewed, host: host)
+        _ = try await host.write(reviewed, "/v1/set/signature", body: body([
+            "address": copyGuid, "signature": "EFI_GUID * CopyGuid(EFI_GUID * DestinationGuid, EFI_GUID * SourceGuid)",
+            "storage": ["ECX:4", "EDX:4"], "by": "agent", "reason": "EDK2 BaseLib CopyGuid"]))
+        _ = try await host.write(reviewed, "/v1/set/comment", body: body([
+            "address": copyGuid, "kind": "plate", "text": "EDK2 BaseLib CopyGuid: the plate of the entry."]))
+        _ = try await host.write(reviewed, "/v1/set/comment", body: body([
+            "address": copyGuid, "kind": "eol", "text": "first dword of the GUID"]))
+        _ = try await host.write(reviewed, "/v1/tag/function", body: body(["address": copyGuid, "tag": "library.edk2"]))
+        let first = try await host.publish(reviewed, by: "agent")
+        let id = try XCTUnwrap(first.library?.added.first { $0.name == "CopyGuid" }?.id)
+
+        let theirs = try await function(of: 25, in: other, host: host)
+        _ = try await host.library(other, .init(action: .apply))
+        let linked = try await host.publish(other, by: "agent")
+        XCTAssertEqual(linked.linkFailures, [])
+
+        // The entry moves to a name another function of the holder has by then.
+        let list = try json(await host.read(other, "/v1/functions"))["functions"] as? [[String: Any]] ?? []
+        let neighbour = try XCTUnwrap(list.first { $0["entry"] as? String != theirs }?["entry"] as? String)
+        _ = try await host.write(other, "/v1/rename/function", body: body([
+            "address": neighbour, "name": "TakenName", "by": "agent", "reason": "this module's own"]))
+        _ = try await host.write(reviewed, "/v1/rename/function", body: body([
+            "address": copyGuid, "name": "TakenName", "by": "agent", "reason": "the entry's new name"]))
+        let renamed = try await host.publish(reviewed, by: "agent")
+        XCTAssertEqual(renamed.library?.updated.first?.name, "TakenName")
+
+        let published = try await host.publish(other, by: "agent")
+        XCTAssertEqual(published.linkFailures.map(\.id), [id])
+        XCTAssertEqual(published.linkFailures.first?.address, theirs)
+        XCTAssertTrue(published.linkFailures.first?.error.contains("TakenName") == true, "\(published.linkFailures)")
+    }
+
     /// With the registry reading through, `ghidra_function` and `ghidra_functions`
     /// answer a function at its entry with the entry's text, the same as the
     /// store does; an edit is the review's own; what is taken out is the module's.
@@ -114,6 +167,9 @@ final class GhidraHostLibraryTests: XCTestCase {
         // An edit is the review's own draft.
         _ = try await host.write(other, "/v1/set/comment", body: body([
             "address": theirs, "kind": "plate", "text": "An edit of this review."]))
+        // Its text is a draft, not a copy: both readers say the same.
+        let draft = try json(await host.readCall(other, "function/\(theirs)", query: [:]))
+        XCTAssertNil(draft["stored_copy"])
         let edited = try json(await host.readCall(other, "function/\(theirs)", query: [:]))
         XCTAssertNil(edited["text"])
         XCTAssertEqual(edited["plate"] as? String, "An edit of this review.")

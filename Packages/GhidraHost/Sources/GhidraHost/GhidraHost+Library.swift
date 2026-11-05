@@ -464,8 +464,9 @@ extension GhidraHost {
     }
 
     /// Functions at their entry whose text is still written in the project lose
-    /// it, and those behind it catch up. Says whether any changed.
-    func removeProjectCopies(_ module: SHA256Digest) async throws -> Bool {
+    /// it, and those behind it catch up. Says whether any changed, and which
+    /// could not: a name another function of the module holds refuses the link.
+    func removeProjectCopies(_ module: SHA256Digest) async throws -> (changed: Bool, failures: [LinkFailure]) {
         let (plan, index) = try await libraryPlan(module)
         var items: [[String: Any]] = []
         // One behind takes the name and signature its callers print, too.
@@ -479,10 +480,15 @@ extension GhidraHost {
             item["codes"] = step.codes
             items.append(item)
         }
-        guard !items.isEmpty else { return false }
-        _ = try await write(module, "/v1/library/apply",
-                            body: try JSONSerialization.data(withJSONObject: ["items": items]))
-        return true
+        guard !items.isEmpty else { return (false, []) }
+        let answer = try await write(module, "/v1/library/apply",
+                                     body: try JSONSerialization.data(withJSONObject: ["items": items]))
+        let results = ((try JSONSerialization.jsonObject(with: answer)) as? [String: Any])?["items"] as? [[String: Any]] ?? []
+        let failures = results.filter { $0["ok"] as? Bool != true }.map {
+            LinkFailure(address: $0["address"] as? String ?? "", id: $0["id"] as? String ?? "",
+                        error: $0["error"] as? String ?? "unknown")
+        }
+        return (failures.count < items.count, failures)
     }
 
     /// The entries this module is the source of learn what their data references
@@ -508,6 +514,53 @@ extension GhidraHost {
         }
         guard !proposals.isEmpty else { return }
         _ = try await writer.writeLibraryEntries(module: module, rev: rev, by: by, proposals: proposals, take: .none)
+    }
+
+    /// The entries this module is the source of, from before entries recorded
+    /// their equates, learn the ones their C already prints. A linked function
+    /// offers no review, so nothing else tells them. The project still holds
+    /// its equates, and its C prints them.
+    func teachEntryEquates(_ module: SHA256Digest, artifact: Data, rev: Int?, by: String?) async throws {
+        let index = try await writer.readLibraryIndex()
+        var unlearned: [(id: String, row: LibraryIndexEntry, body: LibraryBody, object: Data)] = []
+        for (id, entry) in index.entries {
+            guard let body = entry.variants.first(where: { $0.module == module })?.body,
+                  let object = try? await writer.readObject(entry.entry),
+                  let fields = (try? JSONSerialization.jsonObject(with: object)) as? [String: Any],
+                  fields["equates"] == nil, fields["function"] != nil else { continue }
+            unlearned.append((id, entry, body, object))
+        }
+        guard !unlearned.isEmpty,
+              let read = (try? JSONSerialization.jsonObject(with: artifact)) as? [String: Any] else { return }
+        let equates = read["equates"] as? [[String: Any]] ?? []
+        guard !equates.isEmpty else { return }
+        var byBody: [String: [String: Any]] = [:]
+        for function in read["functions"] as? [[String: Any]] ?? [] {
+            if let key = function["body"] as? String { byBody[key] = function }
+        }
+        let proposals = unlearned.compactMap { held -> LibraryProposal? in
+            guard let function = byBody[held.body.key], let address = function["entry"] as? String,
+                  let entry = Self.withEquatesItPrints(held.object, of: function, in: equates) else { return nil }
+            return LibraryProposal(body: held.body, name: held.row.name, kind: held.row.kind ?? "", address: address,
+                                   entry: entry, basedOn: held.id, base: held.row.version)
+        }
+        guard !proposals.isEmpty else { return }
+        _ = try await writer.writeLibraryEntries(module: module, rev: rev, by: by, proposals: proposals, take: .none)
+    }
+
+    /// The held entry with the equates both its C and the project's print, nil
+    /// if none. A name only the project prints is a change, and asks a reason.
+    static func withEquatesItPrints(_ held: Data, of function: [String: Any], in equates: [[String: Any]]) -> Data? {
+        guard var object = (try? JSONSerialization.jsonObject(with: held)) as? [String: Any],
+              let c = (object["function"] as? [String: Any])?["c"] as? String,
+              let printed = printedEquates(of: function, in: equates) else { return nil }
+        let both = printed.filter { row in
+            guard let name = row["name"] as? String else { return false }
+            return c.range(of: "\\b\(NSRegularExpression.escapedPattern(for: name))\\b", options: .regularExpression) != nil
+        }
+        guard !both.isEmpty else { return nil }
+        object["equates"] = both
+        return try? JSONSerialization.data(withJSONObject: object, options: .sortedKeys)
     }
 
     /// The step `ghidra_library_apply` names by address: a match that
