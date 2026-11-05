@@ -695,6 +695,11 @@ extension LibraryProposal {
         ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])?["function"] != nil
     }
 
+    /// Whether an entry object holds the function with its C.
+    public static func hasFunctionText(_ data: Data) -> Bool {
+        (((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])?["function"] as? [String: Any])?["c"] is String
+    }
+
     /// Whether the entry object records the body's constants.
     static func hasConstants(_ data: Data) -> Bool {
         ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])?["constants"] != nil

@@ -73,6 +73,8 @@ public enum ModuleFormat {
         public var functions: Set<String>
         /// Every instruction address in them, for what a review wrote there.
         public var addresses: Set<String>
+        /// The entry each link reads from, by the function's entry address.
+        public var entries: [String: String] = [:]
     }
 
     /// The working export with what a publish's registry decision said of its
@@ -205,7 +207,7 @@ public enum ModuleFormat {
                 }
             }
         }
-        var links = Set<String>(), addresses = Set<String>(), changed = false
+        var links = Set<String>(), addresses = Set<String>(), entries: [String: String] = [:], changed = false
         for position in functions.indices {
             var function = functions[position]
             guard let entry = function["entry"] as? String, let at = LibraryCode.address(entry) else { continue }
@@ -218,6 +220,7 @@ public enum ModuleFormat {
                 function["registry"] = number
                 if let bound, !bound.isEmpty { function["targets"] = bound }
                 links.insert(entry)
+                entries[entry] = number
             } else {
                 let wasLink = function["registry"] != nil || function["library_entry"] != nil || function["copy_free"] != nil
                 for key in notStored { function[key] = nil }
@@ -274,13 +277,13 @@ public enum ModuleFormat {
                 object["equates"] = kept
             }
         }
-        guard changed else { return Stored(artifact: raw, functions: links, addresses: addresses) }
+        guard changed else { return Stored(artifact: raw, functions: links, addresses: addresses, entries: entries) }
         object["functions"] = functions
         if let symbols { object["symbols"] = symbols }
         guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes]) else {
             return same
         }
-        return Stored(artifact: data, functions: links, addresses: addresses)
+        return Stored(artifact: data, functions: links, addresses: addresses, entries: entries)
     }
 
     /// The review document without what it says of the links: their decisions,

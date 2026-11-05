@@ -489,6 +489,69 @@ extension GhidraHost {
         _ = try await writer.writeLibraryEntries(module: module, rev: rev, by: by, proposals: proposals, take: .none)
     }
 
+    /// What a publish must tell the registry so that no link reads an entry with
+    /// no text. A function that becomes a link to an entry holding no function
+    /// records its C there when its review in this module is the entry's — the
+    /// owner's offer of a linked function that `withoutLinked` keeps, so nothing
+    /// is added here — or only adds to it, or when an administrator takes this
+    /// module's review of it; those two are the entry's next version. Any other is a
+    /// refusal of the whole publish: a library function's text is never kept in
+    /// a module, a link with none reads as nothing, and a C whose review differs
+    /// from the entry's would carry a replacement nobody took.
+    static func completions(_ raw: Data, offer: [LibraryProposal], offered: [LibraryProposal], reviewed: Bool,
+                            take: LibraryTake, writer: any AnalysisWriter) async throws
+        -> (proposals: [LibraryProposal], refused: [LibraryRefusal.Row]) {
+        let index = try await writer.readLibraryIndex()
+        let links = await Self.stored(raw, writer: writer).entries
+        guard !links.isEmpty else { return ([], []) }
+        var names: [UInt64: String] = [:]
+        if let read = (try? JSONSerialization.jsonObject(with: raw)) as? [String: Any] {
+            for function in read["functions"] as? [[String: Any]] ?? [] {
+                if let text = function["entry"] as? String, let at = Self.addressValue(text) {
+                    names[at] = function["name"] as? String
+                }
+            }
+        }
+        let offeredAt = Set(offered.compactMap { Self.addressValue($0.address) })
+        var proposals: [LibraryProposal] = [], refused: [LibraryRefusal.Row] = []
+        for (address, id) in links.sorted(by: { $0.key < $1.key }) {
+            guard let at = Self.addressValue(address), !offeredAt.contains(at), let held = index.entries[id] else { continue }
+            let object = try await writer.readObject(held.entry)
+            guard let fields = (try? JSONSerialization.jsonObject(with: object)) as? [String: Any],
+                  fields["function"] == nil else { continue }
+            let name = names[at] ?? held.name
+            let lacks = "it would link to the entry \(id), which holds no C"
+            guard reviewed else {
+                refused.append(.init(address: address, name: name, why: lacks + ", and a publish with no review cannot record it"))
+                continue
+            }
+            guard let own = offer.first(where: { Self.addressValue($0.address) == at }),
+                  LibraryProposal.hasFunctionText(own.entry) else {
+                refused.append(.init(address: address, name: name, why: lacks
+                    + ", and this module offers no review of it the registry could record (short of the bar, or not marked): "
+                    + "take the entry's text with `ghidra_library_apply` and `take_text`"))
+                continue
+            }
+            // What only adds to the entry is its next version, from any module; a
+            // replacement only an administrator's decision takes.
+            if take.all || take.reasons[id] != nil || LibraryProposal.onlyAdds(to: object, offered: own.entry) {
+                var taken = own
+                taken.basedOn = id
+                taken.base = held.version
+                taken.linked = false
+                proposals.append(taken)
+                continue
+            }
+            let changed = LibraryProposal.changedFields(from: object, to: own.entry)
+                .filter { !["body", "constants", "function", "equates"].contains($0) }
+            refused.append(.init(address: address, name: name, why: lacks
+                + ", and its review here differs from the entry's (" + changed.joined(separator: ", ") + "): "
+                + "take the entry's text with `ghidra_library_apply` and `take_text`, or an administrator "
+                + "takes this module's review with `take_library_conflicts`"))
+        }
+        return (proposals, refused)
+    }
+
     /// The bodies the registry holds with no code take it from this module.
     func teachEntryCode(_ module: SHA256Digest, artifact: Data, rev: Int?, by: String?) async throws -> LibraryWriteResult? {
         let index = try await writer.readLibraryIndex()

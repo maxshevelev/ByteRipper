@@ -400,7 +400,14 @@ public actor GhidraHost {
         // review's candidates, and the changes to entries its functions link to.
         // A refusal leaves all of it as it was, and stores nothing.
         let offer = try Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data, artifact: raw)
-        let offered = try await Self.withoutLinked(offer.proposals, writer: writer)
+        var offered = try await Self.withoutLinked(offer.proposals, writer: writer)
+        // A link reads its entry's text: an entry with none learns it from here.
+        let completion = try await Self.completions(raw, offer: offer.proposals, offered: offered, reviewed: reviewed,
+                                                    take: options.takeLibrary, writer: writer)
+        if let refusal = LibraryRefusal.refusal(completion.refused) {
+            throw GhidraHostError(.refused, refusal, status: 409)
+        }
+        offered += completion.proposals
         let would = offered.isEmpty ? nil : try await writer.previewLibraryEntries(
             module: module, rev: last?.rev, by: by, proposals: offered, take: options.takeLibrary)
         if let refusal = would?.publishRefusal ?? Self.offerRefusal(offer.shortfalls, would: would) {
@@ -787,8 +794,13 @@ public actor GhidraHost {
         do {
             let offer = try Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data,
                                               artifact: raw)
-            let offered = try await Self.withoutLinked(offer.proposals, writer: writer)
-            if !offered.isEmpty {
+            var offered = try await Self.withoutLinked(offer.proposals, writer: writer)
+            let completion = try await Self.completions(raw, offer: offer.proposals, offered: offered, reviewed: reviewed,
+                                                        take: takeLibrary, writer: writer)
+            offered += completion.proposals
+            if let refusal = LibraryRefusal.refusal(completion.refused) {
+                preview["library_refused"] = refusal
+            } else if !offered.isEmpty {
                 let would = try await writer.previewLibraryEntries(
                     module: module, rev: revision, by: nil, proposals: offered,
                     take: takeLibrary)

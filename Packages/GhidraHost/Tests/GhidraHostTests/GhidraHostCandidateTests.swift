@@ -539,6 +539,74 @@ final class GhidraHostCandidateTests: XCTestCase {
 
     /// A body taken out of the registry is the module's function again: it takes
     /// the entry's text as its own, and the next publish stores that, with no link.
+    /// An entry from before entries held their function — one a take-out kept
+    /// and a restore brought back — as the registry's index lists it.
+    private func withoutItsFunction(_ id: String, in store: ContentStore, directory: URL) throws {
+        let url = directory.appendingPathComponent("store/library/index.json")
+        var index = try json(try Data(contentsOf: url))
+        var entries = try XCTUnwrap(index["entries"] as? [String: Any])
+        var row = try XCTUnwrap(entries[id] as? [String: Any])
+        let held = try XCTUnwrap(SHA256Digest(hex: try XCTUnwrap(row["entry"] as? String)))
+        var object = try json(try store.object(held))
+        XCTAssertNotNil(object["function"])
+        object["function"] = nil
+        object["equates"] = nil
+        row["entry"] = try store.putObject(try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])).hex
+        entries[id] = row
+        index["entries"] = entries
+        try JSONSerialization.data(withJSONObject: index, options: [.sortedKeys]).write(to: url)
+    }
+
+    /// A link reads its entry's text. A module that links to an entry holding
+    /// no C, with its own review of the function differing from the entry's, is
+    /// refused: its C would carry what nobody took. Brought to the entry's text,
+    /// it records its C there in the same publish — no version moves — and
+    /// stores a link: no stored analysis holds the function's text.
+    func testALinkToAnEntryWithNoCRecordsTheModulesCOnlyAsTheEntrysReview() async throws {
+        let (host, store, reviewed, other, _, target, id, directory) = try await aullshrInBoth()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        defer { Task { await host.stop(reviewed); await host.stop(other) } }
+        let applied = try json(await host.library(other, .init(action: .apply)))
+        let row = (applied["results"] as? [[String: Any]] ?? []).first { $0["address"] as? String == target }
+        XCTAssertEqual(row?["marked"] as? Bool, true, "\(applied)")
+        try withoutItsFunction(id, in: store, directory: directory)
+        let before = try XCTUnwrap(try store.libraryIndex().entries[id])
+        // Something of the module's own, so the publish is a review's.
+        let theirs = try await functions(host, other)
+        let own = try XCTUnwrap(theirs.first { $0["name"] as? String != "__aullshr" }?["entry"] as? String)
+        _ = try await host.write(other, "/v1/set/comment", body: body([
+            "address": own, "kind": "pre", "text": "A step of the module's own."]))
+        let storedBefore = try store.analysis(module: other)?.artifact
+
+        // Function ID's plate is this module's text of it: short of the bar, it offers nothing the entry could record.
+        let preview = try json(await host.publishPreview(other))
+        let said = try XCTUnwrap(preview["library_refused"] as? String, "\(preview)")
+        XCTAssertTrue(said.contains("__aullshr") && said.contains("holds no C") && said.contains("take_text"), said)
+        do {
+            _ = try await host.publish(other, by: "agent")
+            XCTFail("a link to an entry with no C, its review differing, stores nothing")
+        } catch {
+            XCTAssertTrue("\(error)".contains("holds no C"), "\(error)")
+        }
+        XCTAssertEqual(try store.analysis(module: other)?.artifact, storedBefore, "nothing was stored")
+        XCTAssertNil(try json(try store.object(try XCTUnwrap(try store.libraryIndex().entries[id]).entry))["function"])
+
+        // The entry's text taken, the module's review of it is the entry's.
+        _ = try await host.library(other, .init(action: .apply, address: target, id: id, takeText: true))
+        _ = try await host.publish(other, by: "agent")
+        let after = try XCTUnwrap(try store.libraryIndex().entries[id])
+        XCTAssertEqual(after.version, before.version, "recording the C moves no version")
+        let object = try json(try store.object(after.entry))
+        let function = try XCTUnwrap(object["function"] as? [String: Any], "the entry learned its C")
+        XCTAssertNotNil(function["c"])
+        let history = try XCTUnwrap(try store.libraryHistory(id: id))
+        XCTAssertTrue(history.versions.last?.reason?.hasPrefix("the function's C recorded") == true,
+                      "\(String(describing: history.versions.last?.reason))")
+        let stored = try XCTUnwrap(try storedRow(of: target, in: store, module: other))
+        XCTAssertEqual(stored["registry"] as? String, id, "stored as a link")
+        XCTAssertNil(stored["c"], "no text of the function in the module")
+    }
+
     func testABodyTakenOutIsTheModulesAgain() async throws {
         let (host, store, reviewed, other, source, _, id, directory) = try await aullshrInBoth()
         defer { try? FileManager.default.removeItem(at: directory) }
