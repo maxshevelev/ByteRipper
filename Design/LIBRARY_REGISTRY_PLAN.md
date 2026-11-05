@@ -19,7 +19,11 @@
 > artifact or the review (`LibraryCopyFree`); such a function has `state: linked`, a
 > stored copy shows as `stored_copy`. The key masks an operand, so a function whose data
 > references point at other bytes than the entry's is another function
-> (`reference_bytes`). A function is in one place in the registry, and history is no copy.
+> (`reference_bytes`). A reference reads 16 bytes, a string only up to its terminator, and
+> doubt counts as a difference. One limit: a GUID whose first byte is printable and whose second
+> is zero reads as a one-character string. An entry learns its bytes at its source module's
+> publish and decides nothing until then, so a source module publishes first. A function is in one
+> place in the registry, and history is no copy.
 >
 > **What a library function is (2026-11-03):** it depends on no module. It refers to
 > no data, or only to a constant defined in its own library's source file, cited by

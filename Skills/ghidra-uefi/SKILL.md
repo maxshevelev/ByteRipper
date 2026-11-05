@@ -486,7 +486,11 @@ removes it. A caller's own C prints a callee's name as it stood at that module's
 an entry is renamed, the caller shows the old name until its module publishes again. A write in a linked function first brings the entry's current text into the project,
 so it works on what the entry says; the publish takes it back out. The body's key masks an operand,
 so a function whose data references point at other bytes than the entry's (`reference_bytes`) is
-another function, however alike the instructions.
+another function, however alike the instructions. A reference reads 16 bytes, a string only up to
+its terminator, and anything in doubt counts as a difference. One limit: a GUID whose first byte
+is printable and whose second is zero reads as a one-character string, so two such GUIDs with the
+same first byte read alike. An entry learns its bytes when its source module publishes; until
+then it decides nothing and lets a holder through, so a source module publishes first.
 
 **Reading through.** A function at its entry reads as the entry wherever it is read:
 `code_query` and `ghidra_function` give the entry's name, signature, plate, comments and C with

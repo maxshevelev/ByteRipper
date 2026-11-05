@@ -2358,7 +2358,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "A library function depends on no module: it refers to no data but a constant of its own library's source, and calls only library functions. A body that does not qualify leaves the registry with this tool: with `body`, that body alone; without, the whole entry, and its name is free. A publish does not offer it again. A module whose function took it or was tagged with it keeps the text at its next open, and the function stops being library. The history stays. `ghidra_library_restore` takes a wrong decision back. `dry_run: true` answers the same and writes nothing.",
+    "description" : "A library function depends on no module: it refers to no data but a constant of its own library's source, and calls only library functions. A body that does not qualify leaves the registry with this tool: with `body`, that body alone; without, the whole entry, and its name is free. A publish does not offer it again. A module whose function took it or was tagged with it keeps the text at its next open, and the function stops being library. The history stays. `ghidra_library_restore` takes a wrong decision back. On a body already out, `reason` corrects what its reason says: nothing else moves, and the history keeps the old one. `dry_run: true` answers the same and writes nothing.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {

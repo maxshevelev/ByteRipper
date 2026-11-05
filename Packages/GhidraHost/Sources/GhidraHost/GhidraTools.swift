@@ -267,8 +267,9 @@ public enum GhidraTools {
                     the registry with this tool: with `body`, that body alone; without, the whole entry, and \
                     its name is free. A publish does not offer it again. A module whose function took it or \
                     was tagged with it keeps the text at its next open, and the function stops being library. \
-                    The history stays. `ghidra_library_restore` takes a wrong decision back. `dry_run: true` \
-                    answers the same and writes nothing.
+                    The history stays. `ghidra_library_restore` takes a wrong decision back. On a body already \
+                    out, `reason` corrects what its reason says: nothing else moves, and the history keeps the \
+                    old one. `dry_run: true` answers the same and writes nothing.
                     """,
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,

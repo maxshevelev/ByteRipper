@@ -420,6 +420,30 @@ final class LibraryViewTests: XCTestCase {
                        "split from \(body.key) (CopyMem): y")
     }
 
+    /// A take-out's reason found wrong is corrected: the body stays out, at its
+    /// version, and history keeps what it said.
+    func testATakeOutReasonIsCorrectedAndHistoryKeepsTheOldOne() throws {
+        try register(try entryObject())
+        let (id, _) = try XCTUnwrap(try store.libraryIndex().entry(for: body))
+        try store.changeLibrary(.init(action: .takeOut, id: id, reason: "three over fourteen"), by: "agent")
+        let version = try XCTUnwrap(store.libraryIndex().takenOut?[body.key]?.version)
+        let rows = try XCTUnwrap(store.libraryHistory(id: id)).versions.count
+
+        try store.changeLibrary(.init(action: .takeOut, id: id, reason: "two groups over four"), by: "agent", dryRun: true)
+        XCTAssertEqual(try store.libraryIndex().takenOut?[body.key]?.reason, "three over fourteen", "a dry run writes nothing")
+
+        let result = try store.changeLibrary(.init(action: .takeOut, id: id, reason: "two groups over four"), by: "agent")
+        XCTAssertEqual(result.takenOut?.map(\.id), [id])
+        let out = try XCTUnwrap(store.libraryIndex().takenOut?[body.key])
+        XCTAssertEqual(out.reason, "two groups over four")
+        XCTAssertEqual(out.version, version)
+        XCTAssertNil(try store.libraryIndex().entries[id], "it stays out")
+        let history = try XCTUnwrap(store.libraryHistory(id: id)).versions
+        XCTAssertEqual(history.count, rows + 1)
+        XCTAssertEqual(history.last?.reason, "reason corrected: two groups over four (it said: three over fourteen)")
+        XCTAssertThrowsError(try store.changeLibrary(.init(action: .takeOut, id: "no-such", reason: "x"), by: "agent"))
+    }
+
     /// Recording the C brings nothing else of the module that offers it: the
     /// constants the entry holds stay, whatever that module reads.
     func testRecordingTheFunctionChangesNothingElse() throws {

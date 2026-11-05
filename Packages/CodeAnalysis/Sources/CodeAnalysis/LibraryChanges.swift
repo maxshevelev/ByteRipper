@@ -188,6 +188,11 @@ extension ContentStore {
         guard let id = change.id else { throw CodeAnalysisError.analysisMismatch("name the entry by `id`") }
         return try withLock {
             var index = try libraryIndex()
+            // Already out: this corrects what its reason says.
+            let already = (index.takenOut ?? [:]).filter { $0.value.id == id && (change.body == nil || change.body == $0.key) }
+            if !already.isEmpty, change.body != nil || index.entries[id] == nil {
+                return try correctTakeOutReason(already, why: why, by: by, changedFrom: changedFrom, in: &index, dryRun: dryRun)
+            }
             guard var entry = index.entries[id] else {
                 throw CodeAnalysisError.analysisMismatch("the registry holds no entry \(id)")
             }
@@ -219,6 +224,31 @@ extension ContentStore {
             try atomicWrite(try encoder.encode(index), to: libraryIndexURL)
             return result
         }
+    }
+
+    /// A take-out's reason that turned out wrong is corrected, and history keeps
+    /// what it said. Nothing else moves: the body stays out, at its version.
+    private func correctTakeOutReason(_ bodies: [String: LibraryTakenOut], why: String, by: String?,
+                                      changedFrom: SHA256Digest?, in index: inout LibraryIndex,
+                                      dryRun: Bool) throws -> LibraryWriteResult {
+        var result = LibraryWriteResult()
+        var taken: [LibraryWriteResult.Change] = []
+        for (key, out) in bodies.sorted(by: { $0.key < $1.key }) {
+            taken.append(.init(id: out.id, name: out.name, version: out.version))
+            guard !dryRun else { continue }
+            var history = try libraryHistory(id: out.id) ?? LibraryHistory(id: out.id, versions: [])
+            history.versions.append(LibraryVersion(version: out.version, entry: out.entry, source: out.source,
+                                                   reason: "reason corrected: \(why) (it said: \(out.reason))",
+                                                   recordedAt: Timestamps.now(), changedFrom: changedFrom))
+            try atomicWrite(try encoder.encode(history), to: libraryHistoryURL(out.id))
+            var corrected = out
+            corrected.reason = why
+            corrected.by = by
+            index.takenOut?[key] = corrected
+        }
+        result.takenOut = taken
+        if !dryRun { try atomicWrite(try encoder.encode(index), to: libraryIndexURL) }
+        return result
     }
 
     /// A body taken out by a wrong decision comes back to its entry.
