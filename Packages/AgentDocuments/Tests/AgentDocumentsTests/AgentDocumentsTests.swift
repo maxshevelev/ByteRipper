@@ -71,13 +71,13 @@ final class AgentDocumentsTests: XCTestCase {
         XCTAssertEqual(answer, .json(["name": "a.bin", "wrapped": "a.bin (d1)", "document": "d1"]))
     }
 
-    /// One `ghidra_open` in the list, and it is the one by a node.
+    /// One `ghidra_create` in the list, and it is the one by a node.
     func testGhidraOpenIsReplacedNotAdded() {
         let tools = GhidraNodeOpen.tools(backend: NoGhidra(), documents: Documents([]),
                                          description: "Opens by node.", document: "The dump.")
         let names = tools.map(\.name)
         XCTAssertEqual(names.count, Set(names).count, "two tools of one name")
-        let open = tools.first { $0.name == "ghidra_open" }
+        let open = tools.first { $0.name == "ghidra_create" }
         XCTAssertEqual(open?.description, "Opens by node.")
         XCTAssertNotNil(open?.inputSchema["properties"]?["node"])
         XCTAssertNil(open?.inputSchema["properties"]?["image"])
@@ -180,11 +180,8 @@ final class CodeReadingsTests: XCTestCase {
         XCTAssertEqual(Set(seen).count, 1200)
     }
 
-    /// `code_query`'s library block: the numbers a Review status is written
-    /// from — kinds, entries by state, the entries this module installed, the
-    /// ones that moved on after it, and the tagged functions short of the
-    /// bar — counted from the stored analysis and the registry, with
-    /// `too_short` from an owner that runs.
+    /// `code_query`'s library block: how many links the module holds, of whose
+    /// library, and how many entries came from it.
     func testTheLibrarySummaryCountsTheRegistry() async throws {
         let store = try ContentStore(root: directory)
         let body1 = LibraryBody(size: 0x10, full: "1111111111111111", specific: "aaaaaaaaaaaaaaaa")
@@ -203,27 +200,24 @@ final class CodeReadingsTests: XCTestCase {
         // The second entry moves on: the module's mark is a version behind.
         try store.putLibraryEntries(module: module.sha256, rev: 2, by: "agent", proposals: [
             try proposal("LibAmdIoWrite", body2, "amd", "v2", base: 1)
-        ], take: LibraryTake.none.with(entryReasons: [body2.key: "the second version"]))
+        ], take: .these([body2.key: "the second version"]))
         let artifact = """
-            {"script_version": 9, "ghidra": "12.1.2", "functions": [
-              {"entry": "0x1000", "name": "SetMem", "signature": "void SetMem(void)",
-               "library_kind": "edk2", "review_level": "full",
-               "library_entry": {"id": "\(body1.key)", "version": 1, "state": "entry"},
+            {"script_version": 10, "ghidra": "12.1.2", "functions": [
+              {"entry": "0x1000", "registry": "\(body1.key)", "body": "\(body1.key)",
                "instructions": [{"address": "0x1000", "text": "RET"}]},
-              {"entry": "0x1020", "name": "LibAmdIoWrite", "signature": "void LibAmdIoWrite(void)",
-               "library_kind": "amd", "review_level": "partial", "review_gaps": ["plate", "locals"],
-               "library_entry": {"id": "\(body2.key)", "version": 1, "state": "conflict", "base": 1},
+              {"entry": "0x1020", "registry": "\(body2.key)", "body": "\(body2.key)",
                "instructions": [{"address": "0x1020", "text": "RET"}]},
-              {"entry": "0x1040", "name": "AsmWriteTr", "library_kind": "amd",
+              {"entry": "0x1040", "name": "AsmWriteTr",
                "instructions": [{"address": "0x1040", "text": "RET"}]},
               {"entry": "0x1060", "name": "OwnFull", "signature": "void OwnFull(void)", "review_level": "full",
                "instructions": [{"address": "0x1060", "text": "RET"}]},
-              {"entry": "0x1080", "name": "OwnTagged", "signature": "undefined8 OwnTagged(void)",
-               "library_kind": "amd", "review_level": "partial", "review_gaps": ["plate", "locals"],
+              {"entry": "0x1080", "name": "OwnPartly", "signature": "undefined8 OwnPartly(void)",
+               "review_level": "partial", "review_gaps": ["plate", "locals"],
                "instructions": [{"address": "0x1080", "text": "RET"}]}
             ]}
             """
         try store.putAnalysis(module: module, recipe: recipe, artifact: Data(artifact.utf8))
+        _ = try store.relinkModules(bodies: nil, dryRun: false)
 
         let tool = try query(readings())
         let answer = try await tool.run(AgentCall(tool: "code_query", arguments: AgentArguments([
@@ -234,116 +228,33 @@ final class CodeReadingsTests: XCTestCase {
         XCTAssertEqual(levels["full"], .int(1))
         XCTAssertEqual(levels["partial"], .int(1))
         XCTAssertEqual(levels["decompiled"], .int(0))
-        XCTAssertEqual(levels["library"], .int(2), "a marked function reads as its entry")
+        XCTAssertEqual(levels["library"], .int(2), "a link reads as its entry")
         XCTAssertEqual(levels["no_body"], .int(0))
         XCTAssertEqual(levels["unrecorded"], .int(1))
         let partial = try await tool.run(AgentCall(tool: "code_query", arguments: AgentArguments([
             "module": .string(module.sha256.hex), "what": .string("functions"), "level": .string("partial")])))
         guard case .json(.object(let only)) = partial else { return XCTFail("not an object: \(partial)") }
         XCTAssertEqual(only["total"], .int(1))
-        XCTAssertEqual(only["functions"]?.arrayValue?.first?["name"]?.stringValue, "OwnTagged")
+        XCTAssertEqual(only["functions"]?.arrayValue?.first?["name"]?.stringValue, "OwnPartly")
         XCTAssertEqual(only["review_levels"]?.objectValue?["full"], .int(1), "the counts stay whole")
         XCTAssertEqual(library["edk2"], .int(1))
-        XCTAssertEqual(library["amd"], .int(3))
+        XCTAssertEqual(library["amd"], .int(1))
         XCTAssertEqual(library["intel"], .int(0))
-        XCTAssertEqual(library["with_entry"], .int(2))
-        XCTAssertEqual(library["entry"], .int(1))
-        XCTAssertEqual(library["conflict"], .int(1))
-        XCTAssertEqual(library["edited"], .int(0))
-        XCTAssertEqual(library["differs"], .int(0))
-        XCTAssertEqual(library["installed"], .int(2), "both entries carry this module's current version")
-        let below = try XCTUnwrap(library["below_bar"]?.objectValue)
-        XCTAssertEqual(below["plate"], .int(1))
-        XCTAssertEqual(below["locals"], .int(1))
-        XCTAssertEqual(below["return"], .int(1), "the prototype's return type is Ghidra's placeholder")
-        XCTAssertEqual(below["too_short"], .string("unknown"), "no owner was asked")
-        XCTAssertEqual(below["name"], .int(0))
-
-        // An owner that runs answers what Function ID could not hash.
-        let running = readings()
-        running.tooShortCount = { _ in 3 }
-        let asked = try await query(running).run(AgentCall(tool: "code_query", arguments: AgentArguments([
-            "module": .string(module.sha256.hex), "what": .string("functions")])))
-        guard case .json(.object(let second)) = asked,
-              let shortfall = second["library"]?["below_bar"]?.objectValue else {
-            return XCTFail("no library block: \(asked)")
+        XCTAssertEqual(library["links"], .int(2))
+        XCTAssertEqual(library["installed"], .int(2), "both entries came from this module")
+        for gone in ["with_entry", "entry", "conflict", "edited", "differs", "below_bar"] {
+            XCTAssertNil(library[gone], gone)
         }
-        XCTAssertEqual(shortfall["too_short"], .int(3))
     }
 
-    /// A library function is graded like any other: its level is the tag's,
-    /// but the gaps the bar reads are written into the artifact, so the
-    /// counters here and the owner's `below_bar` describe the same reading.
-
-    /// Every list goes by pages; `function` takes an address inside a body, and
-    /// `search` narrows instructions as it does the other lists.
-    /// A row says which body it is, so a function matched to the registry with no mark can be counted.
-    func testACodeQueryRowNamesItsBody() async throws {
-        let store = try ContentStore(root: directory)
-        let functions = #"{"entry": "0x1000", "name": "Keyed", "body": "5-aa-bb"}, {"entry": "0x1010", "name": "Unkeyed"}"#
-        try store.putAnalysis(module: module, recipe: recipe, artifact: Data((#"{"script_version": 10, "ghidra": "12.1.2", "functions": ["# + functions + "]}").utf8))
-        let tool = try query(readings())
-        guard case .json(.object(let body)) = try await tool.run(AgentCall(tool: "code_query", arguments: AgentArguments([
-            "module": .string(module.sha256.hex), "what": "functions"]))),
-              case .array(let rows)? = body["functions"] else { return XCTFail("no rows") }
-        let keys = rows.map { row -> JSONValue? in
-            guard case .object(let fields) = row else { return nil }
-            return fields["body"]
-        }
-        XCTAssertEqual(keys, [.string("5-aa-bb"), JSONValue.null])
-    }
-
-    func testCodeQueryListsGoByPages() async throws {
-        let store = try ContentStore(root: directory)
-        let functions = (0..<5).map { index in
-            """
-            {"entry": "0x\(1000 + index * 10)", "name": "Fn\(index)", "signature_reason": "why \(index)",
-             "instructions": [{"address": "0x\(1000 + index * 10)", "text": "PUSH EBP"},
-                              {"address": "0x\(1001 + index * 10)", "text": "RET"}]}
-            """
-        }.joined(separator: ",")
-        try store.putAnalysis(module: module, recipe: recipe, artifact: Data((#"{"script_version": 9, "ghidra": "12.1.2", "functions": ["# + functions + "]}").utf8))
-        let tool = try query(readings())
-        func ask(_ arguments: [String: JSONValue]) async throws -> [String: JSONValue] {
-            var all = arguments
-            all["module"] = .string(module.sha256.hex)
-            guard case .json(.object(let body)) = try await tool.run(AgentCall(tool: "code_query", arguments: AgentArguments(all))) else {
-                throw CocoaError(.fileReadUnknown)
-            }
-            return body
-        }
-        var names: [String] = []
-        var after: String?
-        repeat {
-            var question: [String: JSONValue] = ["what": "functions", "limit": 2]
-            if let after { question["after"] = .string(after) }
-            let page = try await ask(question)
-            XCTAssertEqual(page["total"], 5)
-            names += page["functions"]?.arrayValue?.compactMap { $0["name"]?.stringValue } ?? []
-            after = page["next"]?.stringValue
-        } while after != nil
-        XCTAssertEqual(names, ["Fn0", "Fn1", "Fn2", "Fn3", "Fn4"])
-
-        let middle = try await ask(["what": "instructions", "function": "0x1011"])
-        XCTAssertEqual(middle["function"]?.stringValue, "Fn1", "an address inside a body")
-        XCTAssertEqual(middle["entry"]?.stringValue, "0x1010")
-        let found = try await ask(["what": "instructions", "function": "Fn1", "search": "ret"])
-        XCTAssertEqual(found["total"], 1)
-        XCTAssertEqual(found["instructions"]?.arrayValue?.first?["text"]?.stringValue, "RET")
-        XCTAssertEqual(found["instructions_in_function"], 2)
-        let row = try await ask(["what": "functions", "search": "Fn3"])
-        XCTAssertEqual(row["functions"]?.arrayValue?.first?["signature_reason"]?.stringValue, "why 3")
-    }
-
-    func testALibraryFunctionShortOfTheBarCountsInTheArtifactToo() async throws {
+    /// What an old file says of a function does not make it a library function:
+    /// with no link it is the module's, and the library block counts none.
+    func testAnOldTagCountsAsNothing() async throws {
         let artifact = """
             {"script_version": 9, "ghidra": "12.1.2", "functions": [
               {"entry": "0x1020", "name": "SetJump", "signature": "undefined8 SetJump(void)",
                "library_kind": "edk2", "review_level": "library", "review_gaps": ["locals"],
-               "instructions": [{"address": "0x1020", "text": "RET"}]},
-              {"entry": "0x1040", "name": "LongJump", "signature": "void LongJump(void)",
-               "library_kind": "edk2", "review_level": "library", "review_gaps": ["c"],
-               "instructions": [{"address": "0x1040", "text": "RET"}]}
+               "instructions": [{"address": "0x1020", "text": "RET"}]}
             ]}
             """
         try ContentStore(root: directory).putAnalysis(module: module, recipe: recipe,
@@ -353,45 +264,75 @@ final class CodeReadingsTests: XCTestCase {
             "module": .string(module.sha256.hex), "what": .string("functions")])))
         guard case .json(.object(let body)) = answer,
               let library = body["library"]?.objectValue,
-              let below = library["below_bar"]?.objectValue else {
-            return XCTFail("no library block: \(answer)")
-        }
-        XCTAssertEqual(library["edk2"], .int(2), "the tag still says whose library it is")
-        XCTAssertEqual(below["locals"], .int(1), "the gap the owner's bar also reads")
-        XCTAssertEqual(below["c"], .int(1), "a body with no C is short of the bar")
-        XCTAssertEqual(below["plate"], .int(0))
+              let row = body["functions"]?.arrayValue?.first else { return XCTFail("no library block: \(answer)") }
+        XCTAssertEqual(library["links"], .int(0))
+        XCTAssertEqual(library["edk2"], .int(0))
+        XCTAssertEqual(row["library_kind"], JSONValue.null)
+        XCTAssertEqual(row["library_entry"], JSONValue.null)
+        XCTAssertEqual(row["review_level"]?.stringValue, "partial")
     }
 
-    /// A placeholder the C still prints is reported on the row and counted, and
-    /// the bar does not read it: the function stays clean of gaps.
-    func testAPlaceholderInTheCIsReportedAndIsNotAGap() async throws {
+    /// `library_registry` counts, across the store, how analyses hold library
+    /// functions, so one read says whether any module stores one.
+    func testTheRegistryCountsWhatEveryModuleHolds() async throws {
+        let store = try ContentStore(root: directory)
+        let body = LibraryBody(size: 0x10, full: "1111111111111111", specific: "aaaaaaaaaaaaaaaa")
+        let entry = try JSONSerialization.data(withJSONObject: ["name": "SetMem", "kind": "edk2"], options: .sortedKeys)
+        try store.putLibraryEntries(module: module.sha256, rev: 1, by: "agent", proposals: [
+            LibraryProposal(body: body, name: "SetMem", kind: "edk2", address: "0x1000", entry: entry)
+        ])
         let artifact = """
-            {"script_version": 9, "ghidra": "12.1.2", "functions": [
-              {"entry": "0x1020", "name": "SetJump", "c": "uVar1 = Named;",
-               "c_spans": [[0, 5, "local"], [8, 5, "local"]],
-               "library_kind": "edk2", "review_level": "library", "review_gaps": [],
-               "instructions": [{"address": "0x1020", "text": "RET"}]},
-              {"entry": "0x1040", "name": "LongJump", "c": "Named = 1;",
-               "c_spans": [[0, 5, "local"]],
-               "library_kind": "edk2", "review_level": "library", "review_gaps": [],
+            {"script_version": 10, "ghidra": "12.1.2", "functions": [
+              {"entry": "0x1000", "name": "ACopy", "c": "text", "body": "\(body.key)",
+               "instructions": [{"address": "0x1000", "text": "RET"}]},
+              {"entry": "0x1040", "name": "Own", "c": "own text",
                "instructions": [{"address": "0x1040", "text": "RET"}]}
             ]}
             """
-        try ContentStore(root: directory).putAnalysis(module: module, recipe: recipe,
-                                                      artifact: Data(artifact.utf8))
-        let tool = try query(readings())
-        let answer = try await tool.run(AgentCall(tool: "code_query", arguments: AgentArguments([
-            "module": .string(module.sha256.hex), "what": .string("functions")])))
-        guard case .json(.object(let body)) = answer,
-              let library = body["library"]?.objectValue,
-              let below = library["below_bar"]?.objectValue,
-              let rows = body["functions"]?.arrayValue else {
-            return XCTFail("no library block: \(answer)")
+        try store.putAnalysis(module: module, recipe: recipe, artifact: Data(artifact.utf8))
+        _ = try store.relinkModules(bodies: nil, dryRun: false)
+        let tool = try XCTUnwrap(readings().tools().first { $0.name == "library_registry" })
+        guard case .json(.object(let answer)) = try await tool.run(AgentCall(tool: "library_registry", arguments: AgentArguments([
+            "show": .string("modules")]))), let totals = answer["totals"]?.objectValue else { return XCTFail("no totals") }
+        XCTAssertEqual(totals["analyses"], .int(1))
+        XCTAssertEqual(totals["links"], .int(1))
+        XCTAssertEqual(totals["own_bodies_in_registry"], .int(0))
+        XCTAssertEqual(totals["out_of_format"], .int(0))
+    }
+
+    /// The registry's code is what `part: instructions` answers: each at its
+    /// place in the function, a call by the name its callee has now.
+    func testTheRegistryShowsItsCodeWithTheCalleesName() async throws {
+        let store = try ContentStore(root: directory)
+        let caller = LibraryBody(size: 0x20, full: "1111111111111111", specific: "aaaaaaaaaaaaaaaa")
+        let callee = LibraryBody(size: 0x10, full: "2222222222222222", specific: "bbbbbbbbbbbbbbbb")
+        func entry(_ name: String) throws -> Data {
+            try JSONSerialization.data(withJSONObject: ["name": name, "kind": "edk2"], options: .sortedKeys)
         }
-        XCTAssertEqual(rows.first?["temporaries"], .array([.string("uVar1")]))
-        XCTAssertEqual(rows.last?["temporaries"], .array([]))
-        XCTAssertEqual(library["with_temporaries"], .int(1))
-        XCTAssertEqual(below["locals"], .int(0), "reported, and bars nothing")
+        try store.putLibraryEntries(module: module.sha256, rev: 1, by: "agent", proposals: [
+            LibraryProposal(body: caller, name: "CopyMemFastcall", kind: "edk2", address: "0x1000", entry: try entry("CopyMemFastcall")),
+            LibraryProposal(body: callee, name: "InternalMemCopyMem", kind: "edk2", address: "0x1040", entry: try entry("InternalMemCopyMem"))
+        ])
+        let artifact = """
+            {"script_version": 10, "ghidra": "12.1.2", "functions": [
+              {"entry": "0x1000", "name": "CopyMemFastcall", "c": "text", "body": "\(caller.key)", "callees": ["0x1040"],
+               "instructions": [{"address": "0x1000", "bytes": "E8 3B 00 00 00", "mnemonic": "CALL", "text": "CALL 0x00001040",
+                                 "flow": "CALL", "references": [{"to": "0x1040", "type": "UNCONDITIONAL_CALL"}]}]},
+              {"entry": "0x1040", "name": "InternalMemCopyMem", "c": "text", "body": "\(callee.key)", "callers": ["0x1000"],
+               "instructions": [{"address": "0x1040", "bytes": "C3", "mnemonic": "RET", "text": "RET"}]}
+            ]}
+            """
+        try store.putAnalysis(module: module, recipe: recipe, artifact: Data(artifact.utf8))
+        _ = try store.relinkModules(bodies: nil, dryRun: false)
+        let tool = try XCTUnwrap(readings().tools().first { $0.name == "library_registry" })
+        do {
+        guard case .json(.object(let answer)) = try await tool.run(AgentCall(tool: "library_registry", arguments: AgentArguments([
+            "id": .string(caller.key), "part": .string("instructions")]))) else { return XCTFail("not an object") }
+        let row = try XCTUnwrap(answer["items"]?.arrayValue?.first)
+        XCTAssertEqual(row["offset"]?.stringValue, "0x0")
+        XCTAssertEqual(row["text"]?.stringValue, "CALL InternalMemCopyMem")
+        XCTAssertNil(row["address"])
+        } catch { XCTFail(String(reflecting: error)) }
     }
 
     /// `live` and `unpublished_writes`: the stored analysis is not the live

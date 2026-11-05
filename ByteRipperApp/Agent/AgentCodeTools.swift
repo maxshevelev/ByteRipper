@@ -58,13 +58,8 @@ final class AgentCodeTools {
             the placeholder names its C still prints (uVar1, in_ECX), reported only: not a gap, and a library \
             function can hold them, so a clean row does not mean the locals are named; a library \
             function's `library_kind` whose library it is — edk2, amd (AGESA) or intel (FSP/RC) — and \
-            `library_entry`, the library registry entry it was matched with: `id`, `version`, and `state` — \
-            entry (the function is it), edited (changed on it since), differs (its review keeps \
-            `differences`) or conflict (its review was made on version `base`, not the current one). The answer to `what: "functions"` also carries `library`: the module's tagged library functions by \
-            kind (`edk2`, `amd`, `intel`), how many carry a registry entry (`with_entry`) and in which `state`, \
-            how many entries hold this module's current version (`installed`), how many still print a placeholder name (`with_temporaries`, reported only), and `below_bar` — the tagged functions short of the bar, counted by the gap each \
-            keeps (name, plate, comments, params, locals, return, c) — with `too_short`, bodies Function ID cannot \
-            hash, known only while the module's owner runs. `live` says whether an owner has this module's program open — the `ghidra_*` tools read that program, \
+            `library_entry`, the registry entry a link reads from: `id` and `version`; null for a function of the module. `text: "registry"` says the name, signature and C are the entry's. The answer to `what: "functions"` also carries `library`: how many `links` the module holds, of each kind (`edk2`, `amd`, `intel`), how many entries hold this module's body as their source (`installed`), and how many still print a placeholder name (`with_temporaries`). \
+            `live` says whether an owner has this module's program open — the `ghidra_*` tools read that program, \
             `code_query` reads the stored analysis — and, while it does, `unpublished_writes` whether the program \
             holds writes the store has not got: publish to bring them across. Addresses come twice: \
             `entry`/`address` is Ghidra's virtual address, `offset` the same byte's offset in the \

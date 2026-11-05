@@ -3,8 +3,8 @@ import Foundation
 
 /// `ghidra_function` and `ghidra_functions` while the registry reads through:
 /// a function still at its entry answers the entry's text, so a review reads
-/// what every other reader reads. What it has edited since is its own draft and
-/// answers as Ghidra holds it. Parameters, locals and their storage stay the
+/// what every other reader reads. One written on since, a dirty one, answers as
+/// Ghidra holds it. Parameters, locals and their storage stay the
 /// project's: they are what a write names them by. Nothing here is stored.
 extension GhidraHost {
     private static let entryUnreadable = "the registry entry could not be read: this is the project's text"
@@ -39,14 +39,11 @@ extension GhidraHost {
             answer["library_entry"] = other
             return nil
         }
-        // No text in the project: the link is all this module holds.
-        if answer["stored_copy"] == nil {
-            var linked = mark
-            linked["state"] = "linked"
-            // What it reads is the entry's current version, whatever it was linked at.
-            linked["version"] = row.version
-            answer["library_entry"] = linked
-        }
+        var linked = mark
+        linked["state"] = "linked"
+        // What it reads is the entry's current version, whatever it was linked at.
+        linked["version"] = row.version
+        answer["library_entry"] = linked
         return (id, row)
     }
 

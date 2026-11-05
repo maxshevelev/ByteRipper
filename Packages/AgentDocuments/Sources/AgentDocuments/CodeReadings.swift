@@ -153,15 +153,20 @@ public final class CodeReadings {
                 paged. `review.body.size`, in hex at the head of the `id`, is Function ID's count of code \
                 units, not bytes: in practice the instructions without the calls. A name on a decompiler \
                 temporary (`HASH:`, `unique:` storage) stays the module's and does not reach `review.locals`. \
-                A publish offers the registry every function tagged `library.<kind>` whose review \
-                meets the bar of a finished function.
+                `show: "modules"` counts, across the whole store, how each stored analysis holds library \
+                functions, read from its bytes: `links`; `own_bodies_in_registry`, functions with text whose \
+                body an entry holds; `out_of_format`, a link with a field no link has or a function with a \
+                word of an older form. `totals` adds them up; the last two are zero in a clean store. \
+                `libraries` says which library depends on which; a function calls only functions of its own library or of one it depends on. \
+                A publish takes a review's `ghidra_library_candidate` functions here, and a module then holds a link.
                 """,
             inputSchema: AgentSchema.object([
                 "id": AgentSchema.string("An entry's id, as the list gives it, for the entry itself."),
                 "search": AgentSchema.string("Only entries whose name holds this text, any case."),
                 "kind": AgentSchema.choice(["edk2", "amd", "intel"], "Only entries of this kind."),
-                "show": AgentSchema.choice(["entries", "taken_out", "sources"], "Which list. Default: entries."),
-                "part": AgentSchema.choice(LibraryEntryParts.names, "With `id`: one part of the recorded function."),
+                "show": AgentSchema.choice(["entries", "taken_out", "sources", "modules"], "Which list. Default: entries."),
+                "part": AgentSchema.choice(LibraryEntryParts.names, "With `id`: one part of the recorded function. `instructions` is the registry's code: each at its offset in the function, what it calls by the name that function has now."),
+                "body": AgentSchema.string("With `part: instructions`: which of the entry's bodies. The first when not given."),
                 "limit": AgentSchema.limit(default: 200, maximum: 1000),
                 "after": AgentSchema.string("The `next` of the page before.")
             ])
@@ -176,7 +181,7 @@ public final class CodeReadings {
         let search = try arguments.optionalString("search")?.lowercased()
         let kind = try arguments.optionalString("kind")
         let limit = try arguments.limit(default: 200, maximum: 1000)
-        let show = try arguments.choice("show", from: ["entries", "taken_out", "sources"], default: "entries")
+        let show = try arguments.choice("show", from: ["entries", "taken_out", "sources", "modules"], default: "entries")
         let part = try arguments.optionalString("part")
         if let part, !LibraryEntryParts.names.contains(part) {
             throw AgentToolError("`part` is one of \(LibraryEntryParts.names.joined(separator: ", ")).")
@@ -185,6 +190,23 @@ public final class CodeReadings {
         return try await Task.detached(priority: .userInitiated) { () throws -> JSONValue in
             guard let store = try? ContentStore(root: root, create: false) else {
                 return .object(["entries": .array([]), "total": .int(0)])
+            }
+            if show == "modules" {
+                let rows = try store.libraryHoldings()
+                return .object([
+                    "modules": .array(rows.map { row in
+                        .object(["module": .string(row.module.hex), "name": .string(row.name),
+                                 "recipe": .string(row.recipe), "links": .count(row.links),
+                                 "own_bodies_in_registry": .count(row.ownBodiesInRegistry),
+                                 "out_of_format": .count(row.outOfFormat)])
+                    }),
+                    "totals": .object([
+                        "analyses": .count(rows.count),
+                        "links": .count(rows.reduce(0) { $0 + $1.links }),
+                        "own_bodies_in_registry": .count(rows.reduce(0) { $0 + $1.ownBodiesInRegistry }),
+                        "out_of_format": .count(rows.reduce(0) { $0 + $1.outOfFormat })
+                    ])
+                ])
             }
             let index = try store.libraryIndex()
             func source(_ source: LibrarySource) -> JSONValue {
@@ -230,11 +252,28 @@ public final class CodeReadings {
                 }
             }
             /// One page of a part of the recorded function.
-            func page(of part: String, id: String, version: Int, review: SHA256Digest) throws -> JSONValue {
-                let data = try store.object(review)
-                guard let text = LibraryEntryParts.part(part, of: data),
-                      case .array(let items) = try JSONDecoder().decode(JSONValue.self, from: text) else {
-                    throw AgentToolError("The entry \(id) has no `\(part)`: no function is recorded in it.")
+            func page(of part: String, id: String, version: Int, review: SHA256Digest,
+                      variants: [LibraryVariant]) throws -> JSONValue {
+                let items: [JSONValue]
+                // The code a body has in the registry: by place in the function,
+                // and what it calls by the name it has now.
+                let wanted = try arguments.optionalString("body")
+                if let wanted, !variants.contains(where: { $0.body.key == wanted }) {
+                    throw AgentToolError("The entry \(id) has no body \(wanted).")
+                }
+                if part == "instructions",
+                   let digest = variants.first(where: { wanted == nil || $0.body.key == wanted })?.code,
+                   let listing = LibraryCode.listing(code: try store.object(digest), name: { index.entries[$0]?.name }),
+                   case .array(let rows) = try JSONDecoder().decode(
+                    JSONValue.self, from: JSONSerialization.data(withJSONObject: listing)) {
+                    items = rows
+                } else {
+                    let data = try store.object(review)
+                    guard let text = LibraryEntryParts.part(part, of: data),
+                          case .array(let rows) = try JSONDecoder().decode(JSONValue.self, from: text) else {
+                        throw AgentToolError("The entry \(id) has no `\(part)`: no function is recorded in it.")
+                    }
+                    items = rows
                 }
                 let page = try AgentPage(arguments, fingerprint: AgentPage.fingerprint([id, version, part]),
                                          changed: "The entry changed since that page; ask again without `after`.")
@@ -262,7 +301,10 @@ public final class CodeReadings {
                 guard let last = bodies.first?.value else {
                     throw AgentToolError("The registry has no entry \(id): `library_registry` without `id` lists them.")
                 }
-                if let part { return try page(of: part, id: id, version: last.version, review: last.entry) }
+                if let part {
+                    return try page(of: part, id: id, version: last.version, review: last.entry,
+                                    variants: bodies.map(\.value.variant))
+                }
                 var answer: [String: JSONValue] = [
                     "id": .string(id), "name": .string(last.name), "kind": .string(last.kind),
                     "version": .int(Int64(last.version)),
@@ -276,7 +318,9 @@ public final class CodeReadings {
                 guard let entry = index.entries[id] else {
                     throw AgentToolError("The registry has no entry \(id): `library_registry` without `id` lists them.")
                 }
-                if let part { return try page(of: part, id: id, version: entry.version, review: entry.entry) }
+                if let part {
+                    return try page(of: part, id: id, version: entry.version, review: entry.entry, variants: entry.variants)
+                }
                 var answer: [String: JSONValue] = [:]
                 answer["id"] = .string(id)
                 answer["name"] = .string(entry.name)
@@ -320,7 +364,11 @@ public final class CodeReadings {
             }
             let page = try AgentPage(arguments, fingerprint: AgentPage.fingerprint([show, search, kind, rows.count]),
                                      changed: "The registry changed since that page, or the question did; ask again without `after`.")
-            return try page.answer(["total": .int(Int64(matching.count)),
+            let libraries = index.declaredLibraries.mapValues { definition -> JSONValue in
+                .object(["depends_on": .array(definition.dependsOn.sorted().map(JSONValue.string))])
+            }
+            return try page.answer(["libraries": .object(libraries),
+                                    "total": .int(Int64(matching.count)),
                                     "taken_out_total": .int(Int64(takenOutRows.count)),
                                     "sources_total": .int(Int64(citationRows.count))],
                                    key: show, items: Array(rows.dropFirst(page.first).prefix(limit)),
@@ -570,7 +618,6 @@ public final class CodeReadings {
                     return .object(row)
                 })
             }
-            if function.storedCopy { body["stored_copy"] = .bool(true) }
             if function.textUnavailable { body["text_unavailable"] = .string("the registry entry could not be read") }
             if !function.publisherAddresses.isEmpty {
                 body["publisher_addresses"] = .array(function.publisherAddresses.map(JSONValue.string))
@@ -686,12 +733,8 @@ public final class CodeReadings {
         return .json(.object(body))
     }
 
-    /// What the module's library functions and the registry say now: the
-    /// kinds, how many functions carry an entry and in which state, how many
-    /// entries hold this module's version, how many moved on after it, and the
-    /// tagged functions short of the bar by what they lack. Everything but
-    /// `too_short` is in the stored analysis and the registry's index;
-    /// `too_short` is a fact of Function ID, which only a running owner has.
+    /// What the module links to in the registry: how many links, of whose
+    /// library, and how many entries hold this module's body as their source.
     private func libraryBlock(for source: Source) async -> JSONValue {
         let root = store()
         let index = await Task.detached(priority: .userInitiated) {
@@ -699,56 +742,21 @@ public final class CodeReadings {
         }.value
         let module = source.manifest.module.sha256
         var kinds: [String: Int] = [:]
-        var states: [String: Int] = [:]
-        var withEntry = 0
-        var below: [String: Int] = [:]
+        var links = 0
         var withTemporaries = 0
-        for function in source.artifact.functions {
+        for function in source.artifact.functions where function.libraryEntry != nil {
+            links += 1
             if let kind = function.libraryKind { kinds[kind.rawValue, default: 0] += 1 }
-            if let mark = function.libraryEntry {
-                withEntry += 1
-                states[mark.state?.rawValue ?? "unrecorded", default: 0] += 1
-            }
-            guard function.libraryKind != nil else { continue }
             if !LibraryEntryReview.temporaries(in: function).isEmpty { withTemporaries += 1 }
-            for gap in function.reviewGaps { below[gap, default: 0] += 1 }
-            if Self.hasPlaceholderReturn(function.signature) { below["return", default: 0] += 1 }
         }
-        var block: [String: JSONValue] = [
+        return .object([
             "edk2": .count(kinds["edk2"] ?? 0),
             "amd": .count(kinds["amd"] ?? 0),
             "intel": .count(kinds["intel"] ?? 0),
-            "with_entry": .count(withEntry),
-            "entry": .count(states["entry"] ?? 0),
-            "edited": .count(states["edited"] ?? 0),
-            "differs": .count(states["differs"] ?? 0),
-            "conflict": .count(states["conflict"] ?? 0),
+            "links": .count(links),
             "installed": .count(index.entries.values.filter { $0.source.module == module }.count),
             "with_temporaries": .count(withTemporaries)
-        ]
-        if let unrecorded = states["unrecorded"], unrecorded > 0 {
-            block["unrecorded"] = .count(unrecorded)
-        }
-        var shortfall: [String: JSONValue] = [
-            "name": .count(below["name"] ?? 0),
-            "plate": .count(below["plate"] ?? 0),
-            "comments": .count(below["comments"] ?? 0),
-            "params": .count(below["params"] ?? 0),
-            "locals": .count(below["locals"] ?? 0),
-            "return": .count(below["return"] ?? 0),
-            "c": .count(below["c"] ?? 0)
-        ]
-        if let probe = tooShortCount {
-            if let count = await probe(module) {
-                shortfall["too_short"] = .count(count)
-            } else {
-                shortfall["too_short"] = .string("unknown")
-            }
-        } else {
-            shortfall["too_short"] = .string("unknown")
-        }
-        block["below_bar"] = .object(shortfall)
-        return .object(block)
+        ])
     }
 
     /// Whether a prototype's return type is Ghidra's placeholder — `undefined`
@@ -760,10 +768,6 @@ public final class CodeReadings {
         return returnType.hasPrefix("undefined")
     }
 
-    /// How many of a module's tagged functions are too short for Function ID
-    /// to hash, asked of an owner that is running — the analysis cannot say.
-    /// nil, or a module with no owner, leaves `below_bar.too_short` unknown.
-    public var tooShortCount: (@Sendable (SHA256Digest) async -> Int?)?
 
     /// Whether the module has an owner open, and whether that program holds
     /// writes the store has not got — what `code_query` answers as `live` and
@@ -829,10 +833,7 @@ public final class CodeReadings {
 private func libraryEntryItem(_ entry: CodeArtifact.LibraryEntry?) -> JSONValue {
     guard let entry else { return .null }
     var item: [String: JSONValue] = ["id": .string(entry.id), "version": .int(Int64(entry.version))]
-    item["state"] = entry.state.map { .string($0.rawValue) } ?? .null
     if !entry.codes.isEmpty { item["codes"] = .array(entry.codes.map(JSONValue.string)) }
-    if !entry.differences.isEmpty { item["differences"] = .array(entry.differences.map(JSONValue.string)) }
-    if let base = entry.base { item["base"] = .int(Int64(base)) }
     return .object(item)
 }
 
@@ -861,7 +862,6 @@ private func functionItem(_ function: CodeArtifact.Function,
     item["library_kind"] = text(function.libraryKind?.rawValue)
     item["library_entry"] = libraryEntryItem(function.libraryEntry)
     if function.textFromRegistry { item["text"] = .string("registry") }
-    if function.storedCopy { item["stored_copy"] = .bool(true) }
     if function.textUnavailable { item["text_unavailable"] = .string("the registry entry could not be read") }
     if !function.publisherAddresses.isEmpty {
         item["publisher_addresses"] = .array(function.publisherAddresses.map(JSONValue.string))

@@ -18,7 +18,7 @@ enum GhidraRoutes {
                                       "merge/functions", "clear/locals", "rename/variable",
                                       "rename/variables", "set/signature", "set/comment", "set/comments",
                                       "set/data", "set/description", "set/code-mode", "redecode", "set/equate",
-                                      "tag/function", "type", "save"]
+                                      "type", "save"]
 
     /// `ghidra.use` for every route; publish and release write into the store
     /// too, and need `cas.write` beside it (`Design/SERVER_HEADLESS_PLAN.md`
@@ -110,6 +110,10 @@ enum GhidraRoutes {
             let options = GhidraHost.PublishOptions(
                 takeTypeConflicts: request.query["take_type_conflicts"] == "1",
                 takeLibrary: Self.libraryTake(request))
+            // Replacing a shared definition is an administrator's decision.
+            if options.takeTypeConflicts || options.takeLibrary.all || !options.takeLibrary.ids.isEmpty {
+                try request.principal?.require(.admin)
+            }
             let publication = try await answer {
                 try await host.publish(module, by: by(request), options: options)
             }
@@ -135,6 +139,11 @@ enum GhidraRoutes {
                 asked = try JSONDecoder().decode(GhidraHost.LibraryRequest.self, from: request.body)
             } catch {
                 throw HTTPError(.badRequest, "the body is {\"action\": \"status\" | \"apply\" | \"decline\" | \"entry\", …}")
+            }
+            // A write on the registry itself is an administrator's decision, but
+            // for a citation, which only adds.
+            if asked.action == .rename || (asked.action == .change && asked.change?.action != .cite) {
+                try request.principal?.require(.admin)
             }
             let data = try await answer { try await host.library(module, asked) }
             return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)

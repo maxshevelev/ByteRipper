@@ -62,39 +62,24 @@ public actor GhidraHost {
         /// What the library registry made of this module's library functions
         /// reviewed to the bar; nil when the publish offered it nothing.
         public var library: LibraryWriteResult?
-        /// The tagged library functions short of the registry's bar, with
-        /// what keeps each from it.
-        public var libraryBelowBar: [LibraryShortfall]
         /// Why the registry could not be offered the functions, when it could
         /// not: the publish itself is stored either way.
         public var libraryError: String?
         /// Links whose text is a default name while the target has a real one.
         public var staleLinks: [StaleLink]
-        /// Functions this publish should have linked to their entries and could
-        /// not: they keep what they held, and the module is not closed.
-        public var linkFailures: [LinkFailure]
 
         public init(manifest: AnalysisManifest, typeConflicts: [String], typeConflictsTaken: [String] = [],
                     typeConflictOrigins: [String: String] = [:], library: LibraryWriteResult? = nil,
-                    libraryBelowBar: [LibraryShortfall] = [], libraryError: String? = nil,
-                    staleLinks: [StaleLink] = [], linkFailures: [LinkFailure] = []) {
-            self.linkFailures = linkFailures
+                    libraryError: String? = nil,
+                    staleLinks: [StaleLink] = []) {
             self.manifest = manifest
             self.typeConflicts = typeConflicts
             self.typeConflictsTaken = typeConflictsTaken
             self.typeConflictOrigins = typeConflictOrigins
             self.library = library
-            self.libraryBelowBar = libraryBelowBar
             self.libraryError = libraryError
             self.staleLinks = staleLinks
         }
-    }
-
-    /// A function a publish could not link to its entry, and why.
-    public struct LinkFailure: Codable, Equatable, Sendable {
-        public var address: String
-        public var id: String
-        public var error: String
     }
 
     /// What a publish may decide beyond storing the review.
@@ -117,8 +102,8 @@ public actor GhidraHost {
         public var address: String
         public var name: String
         public var kind: String
-        /// `name`, `plate`, `comments`, `params`, `locals`, or `too_short` —
-        /// a body Function ID does not hash.
+        /// `name`, `plate`, `comments`, `params`, `locals`, or `no_body` —
+        /// a thunk or an external function, which has no body to offer.
         public var gaps: [String]
     }
 
@@ -273,7 +258,6 @@ public actor GhidraHost {
         let record = try await owner(of: module)
         let held = leases[module] != nil
         if !held { await keepLeaseBaseline(module, record) }
-        try await bringEntryTextBefore(path, body: body, module: module, record: record)
         var token = try await lease(module, record)
         let answer: Data
         do {
@@ -412,26 +396,64 @@ public actor GhidraHost {
             over: last?.recipe) {
             throw GhidraHostError(.refused, refusal, status: 409)
         }
-        // An entry moved with no reason refuses the whole publish, before
-        // anything is stored. A failure to ask is the registry step's to report.
-        if reviewed, let offer = try? Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data,
-                                                        artifact: raw),
-           let offered = try? await Self.withoutLinked(offer.proposals, writer: writer), !offered.isEmpty,
-           let would = try? await writer.previewLibraryEntries(module: module, rev: last?.rev, by: by, proposals: offered,
-                                                               take: options.takeLibrary),
-           let refusal = would.publishRefusal {
+        // The registry decides first, on everything this publish offers: the
+        // review's candidates, and the changes to entries its functions link to.
+        // A refusal leaves all of it as it was, and stores nothing.
+        let offer = try Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data, artifact: raw)
+        let offered = try await Self.withoutLinked(offer.proposals, writer: writer)
+        let would = offered.isEmpty ? nil : try await writer.previewLibraryEntries(
+            module: module, rev: last?.rev, by: by, proposals: offered, take: options.takeLibrary)
+        if let refusal = would?.publishRefusal ?? Self.offerRefusal(offer.shortfalls, would: would) {
             throw GhidraHostError(.refused, refusal, status: 409)
         }
+        // The registry said yes. The one export is what the revision holds: the
+        // project is the review's own, and nothing here changes it before the
+        // revision is stored.
+        var library: LibraryWriteResult?
+        var libraryError: String?
+        var marks: [[String: Any]] = []
+        if reviewed {
+            if !offered.isEmpty {
+                let written = try await writer.writeLibraryEntries(
+                    module: module, rev: (last?.rev ?? 0) + 1, by: by, proposals: offered,
+                    take: options.takeLibrary)
+                library = written
+                // A store older than take_ids ignores them and answers with
+                // the conflict: say which entries were not taken, rather
+                // than let the publish read as if it had taken them.
+                let missed = options.takeLibrary.ids.intersection(Set(written.conflicts.map(\.id)))
+                if !missed.isEmpty {
+                    libraryError = "the store did not take "
+                        + missed.sorted().joined(separator: ", ")
+                        + ": its server predates take_ids"
+                }
+                marks = Self.libraryMarks(offered, result: written, index: try await writer.readLibraryIndex())
+                var entries: [String: String] = [:]
+                for mark in marks {
+                    if let address = mark["address"] as? String, let id = mark["id"] as? String { entries[address] = id }
+                }
+                raw = ModuleFormat.decided(raw, entries: entries)
+            }
+            // The registry takes each body's ASM from here, and every module
+            // holding the body links to it at once.
+            if let taught = try await teachEntryCode(module, artifact: raw, rev: (last?.rev ?? 0) + 1, by: by) {
+                if let relinked = taught.relinked {
+                    var answer = library ?? LibraryWriteResult()
+                    answer.relinked = (answer.relinked ?? []) + relinked
+                    library = answer
+                }
+                if let error = taught.relinkError { libraryError = error }
+            }
+        }
         // What a module stores is its own facts: the text of a registry function
-        // is the entry's. The offer below is made from the export, which has it.
-        var plain = exported
-        let first = await Self.copyFree(exported, writer: writer)
+        // is the entry's.
+        let first = await Self.stored(raw, writer: writer)
         raw = first.artifact
         var reading: AnalysisReading?
         var review: SHA256Digest?
         var described: SHA256Digest?
         if reviewed {
-            let stored = try await writer.writeObject(LibraryCopyFree.stripReview(document, of: first))
+            let stored = try await writer.writeObject(ModuleFormat.review(document, of: first))
             review = stored
             if !description.isEmpty { described = try await writer.writeObject(description) }
             let changed = last?.artifact != SHA256Digest(data: raw).hex || last?.review != stored.hex
@@ -443,68 +465,18 @@ public actor GhidraHost {
             // a revision without its artifact is one nobody can diff.
             let code = try await writer.writeObject(raw)
             try await writer.writeRevision(module: module, reading: current, artifact: code, by: by)
-        }
-        // The library registry is offered the module's library functions
-        // reviewed to its bar. A failure here is reported, not thrown: the
-        // review is already stored.
-        var library: LibraryWriteResult?
-        var shortfalls: [LibraryShortfall] = []
-        var libraryError: String?
-        var linkFailures: [LinkFailure] = []
-        if reviewed {
+            // The revision is stored: the transaction closes on the project. The
+            // functions the registry took are no candidates and no longer dirty,
+            // and their text stays. What the entries learn is from the export the
+            // offer was made of. A failure here is reported: the revision is
+            // stored, and the next publish offers the same again and changes nothing.
             do {
-                let offer = try Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data,
-                                                  artifact: plain)
-                shortfalls = offer.shortfalls
-                let offered = try await Self.withoutLinked(offer.proposals, writer: writer)
-                var marked = false
-                if !offered.isEmpty {
-                    let written = try await writer.writeLibraryEntries(
-                        module: module, rev: reading?.rev, by: by, proposals: offered,
-                        take: options.takeLibrary)
-                    library = written
-                    // A store older than take_ids ignores them and answers with
-                    // the conflict: say which entries were not taken, rather
-                    // than let the publish read as if it had taken them.
-                    let missed = options.takeLibrary.ids.intersection(Set(written.conflicts.map(\.id)))
-                    if !missed.isEmpty {
-                        libraryError = "the store did not take "
-                            + missed.sorted().joined(separator: ", ")
-                            + ": its server predates take_ids"
-                    }
-                    // The marks may change what the artifact says of the
-                    // registry — a function that became the entry's next
-                    // version, one left in conflict: then it is exported
-                    // again, and stored in place of the first.
-                    marked = try await markLibrary(module, proposals: offered, result: written) > 0
+                if !marks.isEmpty {
+                    _ = try await write(module, "/v1/library/mark",
+                                        body: try JSONSerialization.data(withJSONObject: ["items": marks]))
                 }
-                // Whatever this publish left at an entry, the project keeps no
-                // text of: it is the entry's now.
-                let copies = try await removeProjectCopies(module)
-                if copies.changed { marked = true }
-                linkFailures = copies.failures
-                try await teachEntryBytes(module, rev: reading?.rev, by: by)
-                try await teachEntryEquates(module, artifact: plain, rev: reading?.rev, by: by)
-                if marked {
-                    let again = try await write(module, "/v1/export", body: Data())
-                    if again != plain {
-                        plain = again
-                        let now = await Self.copyFree(again, writer: writer)
-                        raw = now.artifact
-                        let code = try await writer.writeObject(raw)
-                        // Functions this publish made the registry's leave the
-                        // review as they left the artifact.
-                        let kept = try await writer.writeObject(LibraryCopyFree.stripReview(document, of: now))
-                        review = kept
-                        reading?.review = kept
-                        if var current = reading, current.rev == last?.rev {
-                            current.rev += 1
-                            reading = current
-                            try await writer.writeRevision(module: module, reading: current,
-                                                           artifact: code, by: by)
-                        }
-                    }
-                }
+                try await teachEntryBytes(module, rev: rev, by: by)
+                try await teachEntryEquates(module, artifact: exported, rev: rev, by: by)
             } catch {
                 libraryError = "\(error)"
             }
@@ -519,7 +491,8 @@ public actor GhidraHost {
         // A mechanical artifact never replaces another — except this project's
         // own last publish, which a new one of the same program supersedes.
         let stored = try await writer.storedAnalysis(module: module, recipe: recipe.id)
-        let ours = stored != nil && last != nil && stored?.artifact.sha256.hex == last?.artifact
+        let ours = stored != nil && last != nil
+            && (stored?.artifact.sha256.hex == last?.artifact || stored?.relinkedFrom?.hex == last?.artifact)
         let source = SourceIdentity(path: state.source?.path, document: state.source?.document,
                                     node: state.source?.node)
         let manifest = try await writer.writeAnalysis(module: identity, recipe: recipe, artifact: raw,
@@ -541,12 +514,14 @@ public actor GhidraHost {
                                 description: described?.hex, rev: reading?.rev,
                                 at: same ? (before?.at ?? Self.now()) : Self.now(),
                                 modification: number, writes: writes)
-        state.reviewed = reviewed
+        // What the module's own reading says: entries it only links are the
+        // registry's review, not one of this module.
+        state.reviewed = reviewed && Self.holdsOwnReview(
+            document: review == nil ? document : ModuleFormat.review(document, of: first), description: description)
         try project.write(state)
         return Publication(manifest: manifest, typeConflicts: conflicts, typeConflictsTaken: taken,
-                           typeConflictOrigins: origins, library: library, libraryBelowBar: shortfalls,
-                           libraryError: libraryError, staleLinks: await staleLinks(port: record.port),
-                           linkFailures: linkFailures)
+                           typeConflictOrigins: origins, library: library,
+                           libraryError: libraryError, staleLinks: await staleLinks(port: record.port))
     }
 
     /// A report beside a stored publish: failing to read it never fails that.
@@ -558,61 +533,49 @@ public actor GhidraHost {
         return (try? JSONDecoder().decode(Answer.self, from: data))?.stale_links ?? []
     }
 
-    /// The functions the registry took or matched carry the version it holds
-    /// now, so the next change to one is made on that version; a conflict's
-    /// function keeps the mark it had.
-    /// Answers how many functions read otherwise in an artifact now.
-    func markLibrary(_ module: SHA256Digest, proposals: [LibraryProposal], result: LibraryWriteResult) async throws -> Int {
-        let index = try await writer.readLibraryIndex()
-        let items = Self.libraryMarks(proposals, result: result, index: index)
-        guard !items.isEmpty else { return 0 }
-        let data = try await write(module, "/v1/library/mark",
-                                   body: try JSONSerialization.data(withJSONObject: ["items": items]))
-        return ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])?["changed"] as? Int ?? 0
-    }
-
     /// The marks a publish leaves: a function the registry took or matched
-    /// carries the version it holds; one in conflict, the entry's version and
-    /// the one its review was made on.
+    /// carries the version it holds. One it did not take keeps what it had.
     static func libraryMarks(_ proposals: [LibraryProposal], result: LibraryWriteResult,
                              index: LibraryIndex) -> [[String: Any]] {
         let accepted = Set((result.added + result.updated + result.unchanged + (result.variants ?? [])).map(\.id))
-        let conflicts = Dictionary(result.conflicts.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         return proposals.compactMap { proposal in
-            guard let id = index.bodies[proposal.body.key] ?? proposal.variantOf else { return nil }
-            if accepted.contains(id), index.bodies[proposal.body.key] == id, let held = index.entries[id] {
-                return ["address": proposal.address, "id": id, "version": held.version]
+            // A short body's entry is the one its review was made on, or the one
+            // this publish made of it: its bytes do not say.
+            if proposal.body.isShort {
+                let id = proposal.basedOn ?? result.added.first { $0.name == proposal.name }?.id
+                guard let id, accepted.contains(id), let held = index.entries[id] else { return nil }
+                return ["address": proposal.address, "id": id, "version": held.version, "kind": proposal.kind]
             }
-            if let conflict = conflicts[id] {
-                var item: [String: Any] = ["address": proposal.address, "id": id, "version": conflict.version,
-                                           "conflict": true]
-                item["base"] = conflict.base
-                return item
-            }
-            return nil
+            guard let id = index.bodies[proposal.body.key] ?? proposal.variantOf,
+                  accepted.contains(id), index.bodies[proposal.body.key] == id, let held = index.entries[id] else { return nil }
+            return ["address": proposal.address, "id": id, "version": held.version, "kind": proposal.kind]
         }
     }
 
     /// The owner's `GET /v1/library`, as the registry takes it: each entry's
     /// object made canonical — sorted keys — so the same review stores the
     /// same object whichever owner wrote it.
-    /// The export with no text of a function the registry holds: readers take it
-    /// from there. No registry to read says nothing is stripped.
-    static func copyFree(_ raw: Data, writer: any AnalysisWriter) async -> LibraryCopyFree.Stripped {
-        guard let index = try? await writer.readLibraryIndex() else {
-            return LibraryCopyFree.strip(raw, index: LibraryIndex())
+    /// The export as a store keeps it. No registry to read says nothing is a link.
+    static func stored(_ raw: Data, writer: any AnalysisWriter) async -> ModuleFormat.Stored {
+        let index = (try? await writer.readLibraryIndex()) ?? LibraryIndex()
+        var code: [SHA256Digest: Data] = [:]
+        for digest in ModuleFormat.codeNeeded(raw, index: index) {
+            code[digest] = try? await writer.readObject(digest)
         }
-        return LibraryCopyFree.strip(raw, index: index)
+        return ModuleFormat.stored(raw, index: index, code: code)
     }
 
-    /// A function linked to an entry and not edited since has nothing to say
-    /// to the registry, whatever its project still holds: it is offered only
-    /// when it is the entry's own review, which completes an older entry.
+    /// A function bound to an entry and not dirty has nothing to say to the
+    /// registry, whatever its project still holds: it is offered only when it is
+    /// the entry's own review, which completes an older entry. One whose entry
+    /// was taken out is the module's own again, whatever was written on it.
     static func withoutLinked(_ proposals: [LibraryProposal], writer: any AnalysisWriter) async throws -> [LibraryProposal] {
-        guard proposals.contains(where: \.linked) else { return proposals }
+        guard proposals.contains(where: { $0.linked || $0.basedOn != nil }) else { return proposals }
         let index = try await writer.readLibraryIndex()
         var kept: [LibraryProposal] = []
         for proposal in proposals {
+            if let based = proposal.basedOn, index.entries[based] == nil,
+               index.takenOut?.contains(where: { $0.value.id == based }) == true { continue }
             guard proposal.linked else { kept.append(proposal); continue }
             guard let (_, held) = index.entry(for: proposal.body) else { continue }
             if LibraryProposal.sameReview(try await writer.readObject(held.entry), proposal.entry) { kept.append(proposal) }
@@ -649,8 +612,31 @@ public actor GhidraHost {
         return rows.sorted { ($0["name"] as? String ?? "") < ($1["name"] as? String ?? "") }
     }
 
-    static let notOfTheDescription: Set<String> = ["callers", "callees", "library_entry", "library_kind",
-                                                   "review_level", "review_gaps", "body"]
+    static let notOfTheDescription: Set<String> = ["callers", "callees", "library_entry", "review_level",
+                                                   "review_gaps", "body"]
+
+    /// Whether a review document says anything of the module's own, once the
+    /// functions it only links are out. Types and equates do not count: applying
+    /// an entry brings its own.
+    static func holdsOwnReview(document: Data, description: Data) -> Bool {
+        guard description.isEmpty else { return true }
+        guard let object = (try? JSONSerialization.jsonObject(with: document)) as? [String: Any] else { return false }
+        return !(object["functions"] as? [String: Any] ?? [:]).isEmpty
+            || !(object["comments"] as? [Any] ?? []).isEmpty
+            || !(object["data"] as? [String: Any] ?? [:]).isEmpty
+    }
+
+    /// What the registry would not take, and why.
+    static func offerRefusal(_ shortfalls: [LibraryShortfall], would: LibraryWriteResult?) -> String? {
+        let below = shortfalls.map {
+            LibraryRefusal.Row(address: $0.address, name: $0.name,
+                               why: $0.gaps.contains("no_body") ? "it has no body: a thunk or an external function"
+                                   : "short of the bar: " + $0.gaps.joined(separator: ", ")
+                                       + "; if it is a registry function, take the entry's text with `ghidra_library_apply` "
+                                       + "and `take_text`, then repeat the edit")
+        }
+        return LibraryRefusal.refusal(below + (would.map(LibraryRefusal.rows(of:)) ?? []))
+    }
 
     static func libraryOffer(_ data: Data, artifact: Data? = nil) throws -> (proposals: [LibraryProposal], shortfalls: [LibraryShortfall]) {
         guard let answer = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -686,8 +672,6 @@ public actor GhidraHost {
                                              role: entry["assert"] as? Bool == true ? "assert" : nil,
                                              basedOn: item["based_on"] as? String,
                                              base: item["base"] as? Int,
-                                             signatureReason: item["signature_reason"] as? String,
-                                             nameReason: item["name_reason"] as? String,
                                              linked: item["linked"] as? Bool ?? false,
                                              dataReferences: item["data_references"] as? [String],
                                              callees: (item["callees"] as? [[String: Any]])?.map {
@@ -731,8 +715,8 @@ public actor GhidraHost {
         }
         let reviewed = headers["x-owner-reviewed"] == "true"
         let conflicts = (headers["x-owner-type-conflicts"] ?? "").split(separator: ",").map(String.init)
-        let stored = await Self.copyFree(raw, writer: writer)
-        let storedDocument = LibraryCopyFree.stripReview(document, of: stored)
+        let stored = await Self.stored(raw, writer: writer)
+        let storedDocument = ModuleFormat.review(document, of: stored)
         let artifactDigest = SHA256Digest(data: stored.artifact).hex
         let documentDigest = SHA256Digest(data: storedDocument).hex
         let descriptionDigest: String? = description.isEmpty ? nil : SHA256Digest(data: description).hex
@@ -743,13 +727,13 @@ public actor GhidraHost {
         let instructions = functions.reduce(0) { $0 + (($1["instructions"] as? [Any])?.count ?? 0) }
         var preview: [String: Any] = [
             "dry_run": true,
-            "reviewed": reviewed,
+            "reviewed": reviewed && Self.holdsOwnReview(document: storedDocument, description: description),
             "changed": changed,
             // A publish writes the registry's states and marks into the artifact,
             // which a preview cannot: the review's hash holds, this one need not.
             "artifact": ["sha256": artifactDigest, "size": stored.artifact.count, "before_library_marks": true],
             "document": ["sha256": documentDigest, "size": storedDocument.count],
-            "copy_free_functions": stored.functions.count,
+            "links": stored.functions.count,
             "functions": functions.count,
             "instructions": instructions,
             "types": (artifact["types"] as? [Any])?.count ?? 0,
@@ -774,23 +758,25 @@ public actor GhidraHost {
         // What the publish would do to the library registry, without doing
         // it: the offer is the owner's, the decision the reader's, and the
         // store answers the would-be result — refusals included — and writes
-        // nothing.
-        if reviewed {
-            do {
-                let offer = try Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data,
-                                                  artifact: raw)
-                preview["library_below_bar"] = try Self.plain(offer.shortfalls)
-                let offered = try await Self.withoutLinked(offer.proposals, writer: writer)
-                if !offered.isEmpty {
-                    let would = try await writer.previewLibraryEntries(
-                        module: module, rev: revision, by: nil, proposals: offered,
-                        take: takeLibrary)
-                    preview["library"] = try Self.plain(would)
-                    if let refusal = would.publishRefusal { preview["library_refused"] = refusal }
+        // nothing. Candidates are asked about before anything else makes the
+        // program a review, as the publish refuses them.
+        do {
+            let offer = try Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data,
+                                              artifact: raw)
+            let offered = try await Self.withoutLinked(offer.proposals, writer: writer)
+            if !offered.isEmpty {
+                let would = try await writer.previewLibraryEntries(
+                    module: module, rev: revision, by: nil, proposals: offered,
+                    take: takeLibrary)
+                preview["library"] = try Self.plain(would)
+                if let refusal = would.publishRefusal ?? Self.offerRefusal(offer.shortfalls, would: would) {
+                    preview["library_refused"] = refusal
                 }
-            } catch {
-                preview["library_error"] = "\(error)"
+            } else if let refusal = Self.offerRefusal(offer.shortfalls, would: nil) {
+                preview["library_refused"] = refusal
             }
+        } catch {
+            preview["library_error"] = "\(error)"
         }
         return try JSONSerialization.data(withJSONObject: preview, options: [.sortedKeys])
     }

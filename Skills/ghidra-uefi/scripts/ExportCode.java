@@ -297,7 +297,10 @@ public class ExportCode extends GhidraScript {
                 }
                 for (CommentType kind : new CommentType[] { CommentType.PRE, CommentType.EOL, CommentType.POST }) {
                     String said = instruction.getComment(kind);
-                    if (said != null && !said.isBlank()) steps++;
+                    if (said != null && !said.isBlank()
+                        && !writtenByAnalysis(instruction.getAddress(), kind.name().toLowerCase(java.util.Locale.ROOT), said)) {
+                    steps++;
+                }
                 }
                 String text = instruction.toString();
                 // A call through a table entry at +0x58 is the PEI
@@ -534,18 +537,6 @@ public class ExportCode extends GhidraScript {
         if (folded != null) json.append("      \"c_unreachable\": ").append(folded).append(",\n");
     }
 
-    // EDK2's library routines, which a module statically links in: a review
-    // does not name them, and the panel groups them apart. A function
-    // carrying one of Ghidra's library tags is one whatever its name: the tag
-    // says whose library — `library.edk2`, `library.amd` (AGESA),
-    // `library.intel` (FSP/RC) — and the bare `library` of a review made
-    // before the kinds says only that it is one.
-    private static final Set<String> LIBRARY_NAMES = new HashSet<>(Arrays.asList(
-        "CopyMem", "SetMem", "ZeroMem", "CompareMem", "CopyGuid", "CompareGuid",
-        "ScanMem8", "StrLen", "StrCmp", "AsciiStrLen", "AsciiStrCmp", "CpuDeadLoop",
-        "CpuPause", "AsmCpuid", "AsmReadMsr64", "AsmWriteMsr64", "GetTickCount",
-        "IsZeroBuffer", "CalculateSum8", "CalculateCheckSum8"));
-
     // The names that say a review has not passed: Ghidra's placeholders. The
     // owner reads the same pattern, so both call the same work unfinished.
     private static final Pattern PLACEHOLDER = Pattern.compile(
@@ -579,21 +570,6 @@ public class ExportCode extends GhidraScript {
             }
         }
         return true;
-    }
-
-    private static boolean library(Function function) {
-        return libraryBasis(function) != null;
-    }
-
-    /**
-     * Why a function is written at the `library` level: `edk2_name` for a
-     * name on the EDK2 list, `tag` for a review's `library` tag, null for a
-     * function that is not one. The owner answers with it, so a review sees
-     * the reason the exporter will use.
-     */
-    static String libraryBasis(Function function) {
-        if (LIBRARY_NAMES.contains(function.getName())) return "edk2_name";
-        return libraryTag(function) != null ? "tag" : null;
     }
 
     /**
@@ -697,45 +673,68 @@ public class ExportCode extends GhidraScript {
     /** The body's key, as the registry writes it; null where none can be made. */
     static String bodyKey(Function function) {
         if (function.isExternal() || function.isThunk()) return null;
+        ghidra.feature.fid.hash.FidHashQuad hash = bodyHash(function);
+        if (hash == null) return null;
+        return Long.toHexString(hash.getCodeUnitSize()) + "-" + String.format("%016x", hash.getFullHash())
+            + "-" + String.format("%016x", hash.getSpecificHash());
+    }
+
+    /**
+     * What the library registry knows a body by: Function ID's hashes. Function
+     * ID hashes nothing under four instructions, so a body that short is hashed
+     * from its exact bytes. One `RET` is many functions, so that names candidates
+     * and identifies nothing: a review binds the function to an entry by its id.
+     * Null for an external function, and for a thunk Function ID does not hash.
+     */
+    static ghidra.feature.fid.hash.FidHashQuad bodyHash(Function function) {
         try {
             if (fid == null) fid = new ghidra.feature.fid.service.FidService();
             ghidra.feature.fid.hash.FidHashQuad hash = fid.hashFunction(function);
-            if (hash == null) return null;
-            return Long.toHexString(hash.getCodeUnitSize()) + "-" + String.format("%016x", hash.getFullHash())
-                + "-" + String.format("%016x", hash.getSpecificHash());
+            if (hash != null || function.isExternal() || function.isThunk()) return hash;
+            return shortBodyHash(function);
         } catch (Exception error) {
             return null;
         }
     }
 
-    /** The library kinds a tag can name, as `library.<kind>`. */
-    static final List<String> LIBRARY_KINDS = Arrays.asList("edk2", "amd", "intel");
-
-    /** The function's library tag — `library` or `library.<kind>` — or null. */
-    static String libraryTag(Function function) {
-        String found = null;
-        for (FunctionTag tag : function.getTags()) {
-            if (tag == null) continue;
-            String name = tag.getName().toLowerCase(java.util.Locale.ROOT);
-            if (name.equals("library")) {
-                if (found == null) found = name;
-            } else if (name.startsWith("library.") && LIBRARY_KINDS.contains(name.substring(8))) {
-                found = name;
-            }
+    private static ghidra.feature.fid.hash.FidHashQuad shortBodyHash(Function function) throws Exception {
+        java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+        int units = 0;
+        InstructionIterator code = function.getProgram().getListing().getInstructions(function.getBody(), true);
+        while (code.hasNext()) {
+            digest.update(code.next().getBytes());
+            units++;
         }
-        return found;
+        if (units == 0) return null;
+        java.nio.ByteBuffer read = java.nio.ByteBuffer.wrap(digest.digest());
+        long full = read.getLong(), specific = read.getLong();
+        short size = (short) units;
+        return new ghidra.feature.fid.hash.FidHashQuad() {
+            @Override public short getCodeUnitSize() { return size; }
+            @Override public long getFullHash() { return full; }
+            @Override public byte getSpecificHashAdditionalSize() { return 0; }
+            @Override public long getSpecificHash() { return specific; }
+        };
     }
 
     /**
-     * Whose library a library function is: the kind its tag names, `edk2`
-     * for a name on the EDK2 list, null for a function that is not one or
-     * whose bare `library` tag does not say.
+     * The comments the program held before anyone reviewed it, as `offset/kind/text`:
+     * what Function ID's plate and any other analyzer left. The owner sets them
+     * from its baseline. They are not a review's text, whatever a review would
+     * make of them.
      */
-    static String libraryKind(Function function) {
-        String tag = libraryTag(function);
-        if (tag != null && tag.startsWith("library.")) return tag.substring(8);
-        if (LIBRARY_NAMES.contains(function.getName())) return "edk2";
-        return null;
+    static java.util.Set<String> analysisComments = java.util.Set.of();
+
+    /** Whether this comment is one the program held before any review. */
+    static boolean writtenByAnalysis(Address at, String kind, String text) {
+        return analysisComments.contains(at.getOffset() + "/" + kind + "/" + text);
+    }
+
+    /** The function's plate, unless analysis wrote it: nil when no review has. */
+    static String reviewPlate(Function function) {
+        String plate = function.getComment();
+        if (plate == null || plate.isBlank() || writtenByAnalysis(function.getEntryPoint(), "plate", plate)) return null;
+        return plate;
     }
 
     /**
@@ -753,7 +752,7 @@ public class ExportCode extends GhidraScript {
     static Assessment assess(Function function, DecompileResults decompiled, int steps) {
         Assessment result = new Assessment();
         boolean placeholderName = function.getSymbol().getSource() == SourceType.DEFAULT;
-        boolean noPlate = function.getComment() == null || function.getComment().isBlank();
+        boolean noPlate = reviewPlate(function) == null;
         // What the review itself did: a plate, a step comment, or a name
         // a person gave the function or one of its variables. A name the
         // UEFI pass read or the image carried is not review work.
@@ -830,16 +829,7 @@ public class ExportCode extends GhidraScript {
             DecompileResults decompiled, int steps) {
         String level;
         List<String> gaps = new ArrayList<>();
-        if (library(function)) {
-            // The level is the tag's, not the bar's: a library function stays
-            // `library` however far its review is from the bar. Its gaps are
-            // still written — the registry's bar reads them, and the artifact
-            // has to say the same thing the owner's `below_bar` does.
-            level = "library";
-            if (!function.isExternal() && !function.isThunk()) {
-                gaps.addAll(assess(function, decompiled, steps).gaps);
-            }
-        } else if (function.isExternal() || function.isThunk()) {
+        if (function.isExternal() || function.isThunk()) {
             level = "no_body";
         } else {
             Assessment assessment = assess(function, decompiled, steps);
@@ -849,12 +839,14 @@ public class ExportCode extends GhidraScript {
             else level = "partial";
         }
         json.append("      \"review_level\": ").append(quote(level)).append(",\n");
-        String kind = "library".equals(level) ? libraryKind(function) : null;
-        if (kind != null) json.append("      \"library_kind\": ").append(quote(kind)).append(",\n");
-        // The function and the library registry, as the owner wrote it before
-        // the export: the entry, its version, and whether the function is it.
+        // A project's own note for the publish, which stores the function as a
+        // link to that entry (`ModuleFormat`): no store holds this field.
         String entry = libraryState(function);
         if (entry != null) json.append("      \"library_entry\": ").append(entry).append(",\n");
+        StringPropertyMap candidates = function.getProgram().getUsrPropertyManager()
+            .getStringPropertyMap("ByteRipper.libraryCandidate");
+        String proposed = candidates == null ? null : candidates.getString(function.getEntryPoint());
+        if (proposed != null) json.append("      \"library_candidate\": ").append(proposed).append(",\n");
         // The key the registry knows this body by: how a reader finds the one
         // description of a library function, with no mark needed.
         String body = bodyKey(function);

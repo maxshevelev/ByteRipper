@@ -62,15 +62,15 @@ final class ServerMCPTests: XCTestCase {
             XCTAssertTrue(names.contains(required), "\(required) is not in the server's list")
         }
         XCTAssertFalse(names.contains("ghidra_publish"), "no Ghidra role, no Ghidra tools")
-        XCTAssertFalse(names.contains("ghidra_open"))
+        XCTAssertFalse(names.contains("ghidra_create"))
     }
 
-    /// With Ghidra, its review tools are there — one `ghidra_open`, the one by
+    /// With Ghidra, its review tools are there — one `ghidra_create`, the one by
     /// a node, and the list pins the document rule in its words.
     func testWithGhidraTheReviewToolsAreThere() throws {
         let tools = tools(ghidra: NoGhidra())
         let names = tools.map(\.name)
-        XCTAssertEqual(names.filter { $0 == "ghidra_open" }.count, 1)
+        XCTAssertEqual(names.filter { $0 == "ghidra_create" }.count, 1)
         XCTAssertTrue(names.contains("ghidra_publish"))
         // The gaps read is a tool of the review and a read of the bridge: a
         // review starts from it instead of screening the code between bodies by hand.
@@ -85,7 +85,7 @@ final class ServerMCPTests: XCTestCase {
         let type = try tool("ghidra_type", tools)
         XCTAssertNotNil(type.inputSchema["properties"]?["shared"])
         XCTAssertNotNil(type.inputSchema["properties"]?["reason"])
-        let open = try tool("ghidra_open", tools)
+        let open = try tool("ghidra_create", tools)
         XCTAssertNil(open.inputSchema["properties"]?["image"])
         XCTAssertNotNil(open.inputSchema["properties"]?["node"])
         XCTAssertEqual(names.count, Set(names).count)

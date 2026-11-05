@@ -131,7 +131,7 @@ packages:
   GhidraHost:
     path: Packages/GhidraHost
   # The agent's tools both hosts serve over their own documents: the document
-  # rule, a tool-module's query, `code_query`/`code_modules`, `ghidra_open` by
+  # rule, a tool-module's query, `code_query`/`code_modules`, `ghidra_create` by
   # a node (`Design/SERVER_HEADLESS_PLAN.md` §4.1). The app links it, and
   # `byteripper-server` will.
   AgentDocuments:

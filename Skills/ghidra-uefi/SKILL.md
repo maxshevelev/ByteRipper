@@ -77,7 +77,7 @@ uefi_find(document: d1, name: "PE32 image", type: "Section", limit: 10)
 ## 2. Get it into Ghidra
 
 A review — reading the decompiler, renaming, typing, commenting — goes through
-the `ghidra_` tools. `ghidra_open` takes the image `node` and its `document`;
+the `ghidra_` tools. `ghidra_create` takes the image `node` and its `document`;
 the server sends the bytes, so there is nothing to extract, and it converts a
 TE image itself. A module opened before opens by `module`, its SHA-256.
 
@@ -105,11 +105,10 @@ read as 16-bit or 32-bit code — the reset vector's real-mode code in a 32-bit
 module), `ghidra_equate` (a name for a constant an instruction holds: an I/O
 port, an MSR, a PCI config address — as an enum member with a comment saying
 what it is and its source, which the app shows when the name is clicked);
-`ghidra_function_tag` (library code the module statically links in, tagged
-with whose it is — `library.edk2`, `library.amd`, `library.intel` — by the
-criteria in "Library functions"; the exported artifact records it at the
-`library` review level with that kind: complete as it is, no further review;
-an empty tag removes it);
+`ghidra_library_candidate` (a reviewed function the module statically links in,
+proposed for the library registry with whose library it is — `edk2`, `amd`, `intel` —
+by the criteria in "Library functions"; `ghidra_publish` decides, and the module then
+stores a link and no text of it);
 `ghidra_description` and `ghidra_describe` for the module description (the
 whole document, or one `## ` section); `ghidra_publish` at a coherent
 checkpoint, `ghidra_done` at the end. The rules a review keeps are in "What a
@@ -164,7 +163,7 @@ Names alone do not get there. Every review applies these rules:
    `IA32_DESCRIPTOR`, the PE and TE headers — with every field's offset, and
    says whether the three agree. Type the variables with it, the decompiler's
    synthetic pieces included. The server's Ghidra has a patched x86 language
-   (`README.md` in the patch's folder, `ghidra/language-patch/` in an install; `language_patch` in `ghidra_open`'s answer), in
+   (`README.md` in the patch's folder, `ghidra/language-patch/` in an install; `language_patch` in `ghidra_create`'s answer), in
    which a `SIDT` prints as two reads:
    `Idtr.Limit = InterruptDescriptorTableLimit();`,
    `iVar1 = InterruptDescriptorTableBase();`. Name the temporary for what it holds
@@ -325,19 +324,40 @@ intermediate state and is reported as one.
 
 ### Library functions
 
-A library function is code the module links in rather than its own work. It is
-tagged instead of reviewed, and the tag says whose library it is. The panel
-groups the three kinds under Library functions and marks each function with its
-kind: **EDK2**, **AMD**, **Intel**. The kinds are reserved for every review,
-whatever vendor's module is open.
+A library function is code the module links in rather than its own work. It lives
+in the registry and nowhere else: a module stores a link to its entry, and has no
+field for its name or its text. A review works in one transaction: through the review
+`ghidra_library_candidate` proposes functions, with whose library each is, and that is
+kept in the project only. `ghidra_publish` ends the stage and decides for all of them
+at once. Either the registry takes every candidate, and the one publish makes the
+entries and stores the module with links, one revision. Or it is refused whole, nothing
+is stored, and the module does not publish until that is resolved. Ask first with
+`ghidra_publish` and `dry_run: true`. Publish when a stage of the review is finished,
+never to get one function into the registry. The panel groups the three kinds under
+Library functions and marks each function with its kind: **EDK2**, **AMD**, **Intel**.
+The kinds are reserved for every review, whatever vendor's module is open.
 
-| Tag | Kind | What it covers |
+| `kind` | Whose | What it covers |
 | --- | --- | --- |
-| `library.edk2` | EDK2 | MdePkg, MdeModulePkg and UefiCpuPkg libraries: BaseMemoryLib, BaseLib (its 64-bit math included), HobLib, PeiServicesLib, PcdLib, IoLib, DebugLib, TimerLib; and the compiler helpers a 32-bit MSVC build links (`__allshl`, `__aullshr`, `_allmul`, `_aulldiv`). |
-| `library.amd` | AMD AGESA | AGESA's own libraries: LibAmd I/O and memory access, `AgesaAssertHalt`-style asserts, IDS debug print and IDS hook dispatch, AGESA delay and register-access helpers. |
-| `library.intel` | Intel FSP/RC | The FSP's and Reference Code's own libraries: PCH/SA/CPU register access (`PchPcr*`, `MmPciBase`), FSP debug and assert, RC delay and SMBus helpers. |
+| `edk2` | EDK2 | MdePkg, MdeModulePkg and UefiCpuPkg libraries: BaseMemoryLib, BaseLib (its 64-bit math included), HobLib, PeiServicesLib, PcdLib, IoLib, DebugLib, TimerLib; and the compiler helpers a 32-bit MSVC build links (`__allshl`, `__aullshr`, `_allmul`, `_aulldiv`). |
+| `amd` | AMD AGESA | AGESA's own libraries: LibAmd I/O and memory access, `AgesaAssertHalt`-style asserts, IDS debug print and IDS hook dispatch, AGESA delay and register-access helpers. |
+| `intel` | Intel FSP/RC | The FSP's and Reference Code's own libraries: PCH/SA/CPU register access (`PchPcr*`, `MmPciBase`), FSP debug and assert, RC delay and SMBus helpers. |
 
-A function is tagged only when all three of these hold; otherwise it is the
+**What the registry cannot hold is the module's function.** A refusal names every
+function and why. Bring it to the bar, rename it, resolve the conflict, or take it off
+the list with `remove`: then it is the module's. A thunk or an external function has no
+body and cannot be a candidate that passes. A body under four instructions, which
+Function ID does not hash, links nothing by itself: one `RET` is many functions.
+`ghidra_library` lists the entries holding its bytes as `short_candidate`. Decide
+from how the function is called: bind one with `ghidra_library_apply`, or if none
+fits, give it a name of its own, write its plate and a step comment, and propose it. Its
+identity is then the entry's number and its bytes, so a rename changes nothing. If it
+is not library code, leave it as the module's. A name alone never makes a function a
+library function. What the program held before any review, such as Function ID's
+`Library Function` plate, is no review's text: it meets no bar, and it does not keep
+a whole match from linking.
+
+A function is a candidate only when all three of these hold; otherwise it is the
 module's own work and is reviewed like any other function.
 
 1. **It is a general service.** Memory, string, GUID, 64-bit math, port or
@@ -369,65 +389,65 @@ module's own work and is reviewed like any other function.
    0x81–0x83".
 
 An EDK2 routine inside an AMD or Intel module is EDK2. Evidence short of
-point 2 is not enough: such a function is not tagged, and the review reads it.
-The bare `library` tag of an earlier review names no kind; the panel shows it
-as a library of no recorded kind until the review tags it again.
+point 2 is not enough: such a function is no candidate, and the review reads it.
 
-**The library registry.** A tagged function is offered at every publish to the
-registry shared by every module (`Design/LIBRARY_REGISTRY_PLAN.md`), keyed by
-its body as Function ID hashes it — and taken only at the highest bar: the bar
-of "What a finished function looks like" (a real name, every parameter and local
-named and typed, the plate with its evidence, step comments). A library
-function's level is the tag's, and the exporter leaves it `library` however far
-its review is from the bar — but it writes the gaps the review still has, so
-the artifact, `code_query` and the owner's `below_bar` read one list. The
-registry, which copies the function into every module with the same body,
-takes it only when that list is empty. A name given to a decompiler temporary
-(`HASH:` or `unique:` storage) is the module's own: it is not in the entry, and
-another module's copy of the function does not get it. `ghidra_publish`
-answers what happened:
+**The library registry.** The registry is shared by every module
+(`Design/LIBRARY_REGISTRY_PLAN.md`) and keyed by a body as Function ID hashes it. It
+takes a function only at the highest bar: the bar of "What a finished function looks
+like" (a real name, every parameter and local named and typed, the plate with its
+evidence, step comments). `ghidra_publish` with `dry_run: true` answers what it would
+do, the gaps of a candidate short of the bar included. A name given to a
+decompiler temporary (`HASH:` or `unique:` storage) is not in the entry. A candidate that is an
+assert routine says so with `assert_routine: true` on its row, so the registry knows
+its codes from its callers' bodies.
+
+A new entry, by whichever publish, rewrites at once every module the store holds with
+that body: its row becomes the link, its review loses its words on the function, and
+its revision stays. Its project does not change.
+
+`ghidra_publish` offers the candidates and the registry functions that became dirty
+(below), and answers what happened:
 
 - `library.added`, `library.updated`: the entries this publish made or moved
   to their next version; the ones it matched are a count
   (`library.unchanged_count`) unless `full: true` is given;
-- `library_below_bar`: the tagged functions the registry did not take, with
-  their gaps — bring them to the bar and publish again;
-- `library.conflicts`: bodies whose entry holds another review than this
-  module's, which was not made on the entry's current version — the entry's
-  name and version, the version this review was made on (`base`, none when the
-  function never carried the entry), who published the current one, and the
-  name this module proposes. No module holds an entry: a change to a function
-  that is the entry's current version is its next version from any module,
-  with no conflict. One body is one function: there are never two entries for
-  it. Read both reviews (`library_registry` with the entry's `id` gives the
-  current one), decide which is right or merge the better parts into this
-  module's, and publish with `take_library_conflicts` naming the entries this
-  module wins — or `true` for every one — and a `library_reason` that says
-  why, one text or an object of entry id to reason. Leave it when the entry's
-  review is the better one, and take it with `ghidra_library_apply` and
-  `replace: true`. A publish takes what it names and leaves the rest
-  conflicts: `library.conflicts` in the answer is what remains, each with the
-  version it was based on.
+- `library.conflicts`: entries this module's review would replace — the entry's
+  name and version, `changed` (what would change), `names` (the equates and
+  labels its C prints otherwise), who wrote it (`held_by`), and the name this
+  module proposes. The whole publish is refused and nothing is stored.
 
-Every change to an entry names its module and its reason, on the answer's row
-and in the entry's history. A publish that would move an entry with no reason
-is refused whole and stores nothing, and the refusal names the entries; so is
-a `ghidra_done` that has to publish it, which keeps the lease. Give the reason
-in `entry_reasons`, an object of entry id to why this module changes it. A
-first version, an unchanged entry and a taken conflict with its
-`library_reason` need nothing more. A `take_library_conflicts` that names the
-entry also speaks for a change on its current version; `true` does not. A
-function's own reason counts only when its name or signature is all that moved.
-A publish to a store that predates this rule is refused. A history row's
-`changed_from` is the module a change came from where `source` still names the
-review's author: a rename, a take-out, a restore, a split, a recorded part.
+**The registry and the shared type archive follow one rule.**
 
-A dry publish (`dry_run: true`) with the same `take_library_conflicts`,
-`library_reason` and `entry_reasons` answers what the registry offer would do and writes nothing:
-`library` with the entries it would add or move, the conflicts it would leave,
-`library.needs_reason` with `library_refused` when a publish would be refused,
-and `library_error` when a named entry is not a conflict — read it before the
-publish when the decision is large.
+| what arrives | what happens |
+|---|---|
+| new (a candidate, a type) | accepted |
+| the same | nothing changes |
+| only additions | the entry's next version, from any module, on any version it was made on |
+| a replacement of what is there | the whole publish is refused, naming the source |
+
+An addition is a comment or a plate where the entry had none, a name or a type in
+place of a Ghidra placeholder, an equate or a label the entry did not name. The
+function's name, its return type, its convention, a parameter's type or written name,
+and any text already written are the entry's: changing one is a replacement. Everything
+the entry says must still be there, word for word.
+
+**Avoid replacing a shared definition unless the code proves it wrong.** Only an
+administrator replaces one (`byteripper-cas library-rename` and its neighbours below, or a
+token with the `admin` right); no tool of a review can. Write down what was found in
+the report to the person.
+
+A replacement refused: take the entry's text with `ghidra_library_apply`, `address`
+and `take_text: true`, make the addition over it, name with `ghidra_label` any label
+the refusal lists (`label -NAME`: an entry holds labels only as C text, so `take_text`
+cannot place them), and publish again. Each version names its module and a reason in the
+entry's history: `entry_reasons`, an object of entry id to why, gives it in the
+review's words, and an addition without one says what was added. A history row's
+`changed_from` is the module a change came from where `source` still names the review's
+author: a rename, a take-out, a restore, a split, a recorded part.
+
+A dry publish (`dry_run: true`) answers what the registry would do and writes nothing:
+`library` with the entries it would add or move and the conflicts it would refuse for,
+and `library_refused` with the words of the refusal.
 
 `ghidra_library` lists each match with two readings of the same review: `gaps`
 — what the function's review still lacks, as the last published analysis
@@ -442,21 +462,20 @@ entry split into two variables (a 64-bit register as two dwords) is a reading
 of the C, not a gap, and stays one.
 
 **One description, in the registry.** A library function is one code, one C and
-one description, whichever module it is in. Opening a module links its function
-to the entry: the name, the signature and a mark, and nothing else goes into the
-project; the panel and `code_query` show the entry. To change an entry, take it
-as a working copy (`ghidra_library_apply` with `address` and `replace: true`),
-change it, and publish. A text true of one module only means the function is not
-a library function: do not tag it.
+one description, whichever module it is in. Creating a module links its function to
+the entry: the number, the name and the signature its callers print. The panel and
+`code_query` show the entry. To change an entry, write in the function of any module
+that holds it, and publish: see "Reading through". A text true of one module only
+means the function is not a library function: do not propose it.
 
 **A name goes by meaning, not by who came first.** A different body is a different
 function, with its own entry and its own name, and a library name is unique in the
 registry. A publish that offers a body under a name another entry holds answers
 `library.name_conflicts` with `held_by`. Read that entry beside the new function
-(`library_registry`), compare what they do, and resolve it either way: rename the new
-function if the name fits the old one, or, if the name is too wide for the old one or
-fits the new one better, give the old one the narrower name it earns with
-`ghidra_library_rename` and the reason, then publish again. A module's own function
+(`library_registry`) and compare what they do. Rename the new function; if the name is
+too wide for the old one or
+fits the new one better, say so to the person: renaming an entry is an administrator's
+decision. A module's own function
 is in the module's scope: it is not offered here and conflicts with nothing elsewhere.
 
 **What a library function is.** It depends on no module, which is decided bottom-up:
@@ -475,27 +494,41 @@ publish enter together when each one's callees are held or among them, so a pair
 call each other enters as a pair; a citation can be given before a body's first publish. The owner reads data references from the instructions and treats
 a constant that lands in the image as one, so it errs towards refusing.
 
-**What a module stores of a registry function.** Its own facts and the link: where it is, who
-calls it, its instructions, its body and its mark. Its name, signature, plate, comments and C are
-the entry's, and neither the artifact, the review document nor the project keeps them
-(`state: linked`, `copy_free`). The project keeps its name, signature, calling convention and
-parameter storage, which its callers' decompile reads; its plate, comments, local names and name
-and signature reasons go. Labels and equates stay; the entry records the equates its C prints, and
-holds no labels. `stored_copy` on a row, in `ghidra_function` and `code_query` alike, says the
-entry's text is still stored there, unedited; a publish removes it. An edited function is
-`library_entry.state: edited`, its text a draft. A link a publish cannot make, because another
-function of the module holds the entry's name for one, is listed in `link_failures` on its answer: the
-function keeps what it held, and the module is not closed until that is resolved. An entry from before
-entries recorded equates learns them at the next publish of the module its C came from, with no
-new version, and a history row says so. A caller's own C prints a callee's name as it stood at that module's last publish: after
-an entry is renamed, the caller shows the old name until its module publishes again. A write in a linked function first brings the entry's current text into the project,
-so it works on what the entry says; the publish takes it back out. The body's key masks an operand,
-so a function whose data references point at other bytes than the entry's (`reference_bytes`) is
-another function, however alike the instructions. A reference reads 16 bytes, a string only up to
-its terminator, and anything in doubt counts as a difference. One limit: a GUID whose first byte
-is printable and whose second is zero reads as a one-character string, so two such GUIDs with the
-same first byte read alike. An entry learns its bytes when its source module publishes; until
-then it decides nothing and lets a holder through, so a source module publishes first.
+**What a module stores of a registry function.** A stored function is one of two
+things. An own function has its name and its text and no library field. A link has
+`registry`, the entry's number, and its own facts: `entry`, `size`, `callers`,
+`callees`, `targets`, `body` and `reference_bytes`. A link has no name, signature,
+plate, comment, C or instruction, in the artifact and in the review document alike,
+and no form holds them: the store writes every analysis through that one form,
+whatever it was given. The instructions are the registry's, one list per body, with a
+call to another library function kept as that function's number; `targets` says where
+each such number (and each data reference, by label) is in this module, and a reader
+gets the instructions at this module's addresses. A body links only if that rebuild
+gives exactly its real bytes and text; a function whose code differs is the module's.
+A library function calls only library functions, of its own library or of one it
+depends on. The store holds those dependencies (`libraries` in `library_registry`'s
+answer): EDK2 depends on nothing, AMD and Intel on EDK2, and not on each other. A
+candidate that calls what the registry does not hold (`why: callee`) or a library its
+own does not depend on (`why: dependency`) refuses the publish, and that says it is
+not a library function. `library_registry` with `part: instructions` shows the code by offset, each
+call by the name the callee has now. The Ghidra project is the review's own, and a
+publish does not clean it: what was written on a function stays there, and only the
+marks below change. The entry records the equates its C prints, and holds no labels. A
+function written on since it was bound is dirty, `library_entry.state: edited` in the
+project's answers; its text no store holds until the registry takes it. An entry from before
+entries recorded equates learns them at the next publish of the module its C came
+from, with no new version, and a history row says so. A caller's own C prints a
+callee's name as it stood at that module's last publish: after an entry is renamed,
+the caller shows the old name until its module publishes again. A write in a linked
+function first brings the entry's current text into the project, so it works on what
+the entry says; the publish takes it back out. The body's key masks an operand, so a
+function whose data references point at other bytes than the entry's
+(`reference_bytes`) is another function, however alike the instructions. A reference
+reads 16 bytes, a string only up to its terminator, and anything in doubt counts as a
+difference. One limit: a GUID whose first byte is printable and whose second is zero
+reads as a one-character string, so two such GUIDs with the same first byte read
+alike. An entry learns its bytes when its source module publishes; until then it
+decides nothing and lets a holder through, so a source module publishes first.
 
 An entry's C is its text, so what a printed name means is the entry's: the entry records each equate
 its C prints, with value and comment, and a holder's C reads the entry's. A linked function's own
@@ -523,41 +556,30 @@ a temporary is then not kept. A review ends with
 `publisher_addresses`, without a link. A mark on an entry given back is no mark: the function
 reads its own text and shows no `library_entry`, and the next open releases it.
 
-A pair enters only whole, in one publish of one module. With its other half in another
-module, or with one half below the bar (that half is a `below_bar` item), the rest is
-refused under `callee`: its callee is neither held nor entering with it. Both stay in
-their modules.
+A pair enters only whole, in one publish of one module: propose both. With its other
+half in another module, or with one half short of the bar, the publish is refused
+under `callee` or the bar, until the review resolves it or takes them off the list.
 
-**Putting the registry in order.** These change the registry itself; each needs a
-`reason` and takes `dry_run`, and the history keeps it.
-- `ghidra_library_take_out` gives an entry, or one `body` of it, back to its modules.
-  A publish does not offer it again. A function that took it or was tagged with it
-  keeps the text at its module's next open, and its mark and tag come off; then
-  publish that module. Open and publish every module that holds it: the registry
-  does not list them. `ghidra_library_restore` takes a wrong decision back.
-- `ghidra_library_split` makes one body its own entry under a narrower name.
-- `ghidra_library_rename` narrows the name of a whole entry.
-- A text is corrected by editing the function in a module holding the body and
-  publishing with `take_library_conflicts` and `library_reason`.
+**Putting the registry in order is an administrator's.** No tool of a review does this.
+Each needs a `--reason`, answers what it would do until `--apply` is given, and the
+history keeps it. They run on the store's directory.
+- `byteripper-cas library-take-out <id> [--body <key>]` gives an entry, or one body of it,
+  back to its modules. A publish does not offer it again. A function that held it is the
+  module's again, with the text its project holds; one with none takes the entry's at its
+  module's next open. Open and publish every module that holds it.
+  `byteripper-cas library-restore <body>` takes a wrong decision back.
+- `byteripper-cas library-split <id> <body> <name>` makes one body its own entry under a
+  narrower name.
+- `byteripper-cas library-rename <id> <name>` narrows the name of a whole entry.
+- A text is replaced by publishing over the review server's routes with a token that has
+  the `admin` right: `take_library_conflicts` names the entries and `library_reasons`
+  says why; `take_type_conflicts=1` replaces a shared type.
 
-**Resolving a conflict.** `library.conflicts` means the registry holds another
-review of the same body than this module's, and neither side is right by
-default. Read the entry's review (`library_registry` with its `id`) beside the
-module's and decide in so many words:
-
-- one review fuller and better than the other: take it — this module's with
-  `take_library_conflicts: true` and a `library_reason`, the entry's with
-  `ghidra_library_apply` and `replace: true`;
-- both reviewed: merge them and take the best of both. Bring what the entry
-  has and this module's review lacks into this one, and publish with
-  `take_library_conflicts` and a `library_reason` that says what came from
-  where. The registry is usually surer of provenance — it names the EDK2 file
-  the body came from, and whether a public wrapper exists; this module's review
-  is often surer of the local types, names and step comments;
-- never take an entry because it is another module's or newer, and decide every
-  conflict in the one publish: `take_library_conflicts` names the entries this
-  module wins and leaves the rest as conflicts, so none is left half-decided
-  and no second apply is needed.
+**A refusal for a replacement.** `library.conflicts` means this module's review would
+replace what the registry says. Read the entry's review (`library_registry` with its
+`id`) beside the module's. What the entry lacks goes in as an addition over its text.
+What the entry has wrong goes to the person, with the evidence, for an administrator's
+decision. Never replace an entry because it is another module's or older.
 
 `library_registry` reads the registry: its entries by name and kind, the
 taken-out bodies and the citations (`show`), and one entry's review and history,
@@ -565,61 +587,36 @@ taken-out ones too. A recorded function's `instructions`, `c_spans` and
 `c_fields` are left out of that answer and read apart with `part`, a page at a
 time.
 
-**Applying the registry.** `ghidra_open` applies the registry to the module it
+**Applying the registry.** `ghidra_create` applies the registry to the module it
 opens and says what it did in `library`; `ghidra_library` lists the matches at
 any time, and `ghidra_library_apply` without `address` applies them again. A
 match is by body: the same code, with the addresses a relocation moves masked.
 
-- A function no review named takes the whole entry — name, signature with its
-  storage, variables, plate, step comments, the library tag — and carries the
-  entry's mark (`results[].marked`). A whole apply replaces the review, names
-  below included: a local the entry does not name is removed, not left beside
-  the entry's (a fill only adds and retypes). A newer version of the entry
-  replaces it at the next open while the function is not edited. An entry
-  published before its module read the decompiled C — its locals then came
-  from the listing — carries the listing's leftovers: republish the function
-  first, then apply, or a whole apply brings that dirt along.
-- A function a review named takes the entry's name (the old one is kept in
-  the name's reason) and only what its review left empty. `results[].renamed`
-  says what was renamed; `differences` what the review says otherwise — keep
-  the module's version, or take the entry's with `ghidra_library_apply`,
-  `address` and `replace: true`, or make the module's the entry's next version
-  at the publish (`take_library_conflicts` with a reason). Never leave two
-  names for one body: the registry's name is the one every module shows.
+- A matching function links: it takes the entry's number, its name (the old one is
+  kept in the name's reason) and its signature with its storage, and what the project
+  wrote on it stays in the project, unread: a reader is shown the entry.
+  `results[].marked` says it is linked, `results[].renamed` what was renamed. There are
+  never two names or two descriptions for one body in the store.
+- Before adding to such a function, take the entry's text: `ghidra_library_apply`,
+  `address`, `take_text: true`. A write made on what the project happened to hold is
+  refused at the publish, short of the bar or as a replacement.
 - What an entry carries is the review the decompiled C shows: locals with the
   decompiler's names and types, none for a stack slot the C never reads, and
   none for a register or a value split over registers — those are the
   decompiler's pieces, as the bar reads them, and never a gap.
-  A publish whose offer differs from the entry's object is its next version
-  when the function carries that version — so republishing a module whose
-  entries were made from the listing writes the clean review over them.
-- `edited`: a function applied and edited since. It is the review's now; a
-  newer version of the entry is offered, not applied. `replace: true` puts the
-  entry's review in place of it; `fields` takes only the parts named —
-  `signature` (return type, convention, parameter types and arity), `names`
-  (the function's and its parameters' names), `locals`, `plate`, `comments` —
-  and keeps the rest of the function's. A merge that keeps this module's plate
-  and takes the entry's signature is `fields: ["signature"]`.
-- `dry_run: true` on an apply answers the same `results` — `filled`,
-  `differences`, `unplaced`, `leftovers` — and writes nothing: each entry is
-  applied in its transaction and rolled back, so a `replace` or a merge can be
-  read before it is made.
-- `leftovers` in a result is the gaps the function still keeps after the
-  apply: a local the fill left unnamed, a return type still the decompiler's —
-  name them before publishing, or `filter: unfinished` will say so later. They
-  come with an apply that names `address`; a bulk apply — and the one an open
-  makes — leaves them out, since the reading decompiles every function it
-  answers.
+- `edited`: a dirty function. A publish offers it, with no candidate mark, and the
+  table above decides; `ghidra_library_apply` with `address` makes it clean again, and it
+  offers nothing. A success takes the dirty and candidate marks off, and nothing else.
+- `dry_run: true` on an apply answers the same `results` and writes nothing: each
+  entry is applied in its transaction and rolled back.
 - `candidates`: a body of an entry's shape with other constants, each one
   listed with the entry's. Another constant is another function — an MSR, a
   port, a mask or a size changes what the code does — so review it as a
   function of its own. The exception is the code an assert routine is called
   with (AGESA's `file id << 16 | line`): a body that differs only there is a
-  `variant` of the entry and is applied as one by itself. Tag the assert
-  routine itself `assert_routine` beside its library tag, so the registry
-  knows it. Take a candidate with `ghidra_library_apply`, `address` and a
-  `reason` only when the values are shown to make no difference, or refuse it
-  with `decline: true`.
+  `variant` of the entry and links as one by itself. Take a candidate with
+  `ghidra_library_apply`, `address` and a `reason` only when the values are shown
+  to make no difference, or refuse it with `decline: true`.
 
 ### On an analysis server
 
@@ -741,7 +738,7 @@ app reads the same artifact.
 A run is deterministic: the same dump, node and Ghidra version give the same
 module and the same function list. Useful checks:
 
-- `ghidra_open` answers the module's SHA-256 and its blocks; the same image
+- `ghidra_create` answers the module's SHA-256 and its blocks; the same image
   opened twice is the same `module`.
 - `ghidra_publish` reports the functions and instructions its export holds; a
   changed review reads as a new revision of the same module, not a new module.

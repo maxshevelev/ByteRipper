@@ -31,7 +31,6 @@ public protocol GhidraBackend: Sendable {
     /// The tagged library functions short of the bar, as the owner offers
     /// them; nil when no owner runs for the module — a body too short for
     /// Function ID to hash is a fact only Ghidra has.
-    func libraryShortfalls(_ module: SHA256Digest) async throws -> [GhidraHost.LibraryShortfall]?
     /// Whether the module's owner runs and holds a program the store has not
     /// got; nil when no owner runs for it.
     func ownerHasUnpublishedWrites(_ module: SHA256Digest) async throws -> Bool?
@@ -86,10 +85,8 @@ public struct PublishAnswer: Codable, Sendable {
     public var typeConflictOrigins: [String: String]
     /// What the library registry made of the module's library functions.
     public var library: LibraryWriteResult?
-    public var libraryBelowBar: [GhidraHost.LibraryShortfall]?
     public var libraryError: String?
     public var staleLinks: [GhidraHost.StaleLink]?
-    public var linkFailures: [GhidraHost.LinkFailure]?
 
     public init(_ publication: GhidraHost.Publication?) {
         manifest = publication?.manifest
@@ -97,10 +94,8 @@ public struct PublishAnswer: Codable, Sendable {
         typeConflictsTaken = publication?.typeConflictsTaken ?? []
         typeConflictOrigins = publication?.typeConflictOrigins ?? [:]
         library = publication?.library
-        libraryBelowBar = publication.map(\.libraryBelowBar).flatMap { $0.isEmpty ? nil : $0 }
         libraryError = publication?.libraryError
         staleLinks = publication.map(\.staleLinks).flatMap { $0.isEmpty ? nil : $0 }
-        linkFailures = publication.map(\.linkFailures).flatMap { $0.isEmpty ? nil : $0 }
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -109,10 +104,8 @@ public struct PublishAnswer: Codable, Sendable {
         case typeConflictsTaken = "type_conflicts_taken"
         case typeConflictOrigins = "type_conflict_origins"
         case library
-        case libraryBelowBar = "library_below_bar"
         case libraryError = "library_error"
         case staleLinks = "stale_links"
-        case linkFailures = "link_failures"
     }
 }
 

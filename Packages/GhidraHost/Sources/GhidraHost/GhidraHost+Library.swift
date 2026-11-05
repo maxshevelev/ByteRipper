@@ -16,6 +16,9 @@ extension GhidraHost {
             case apply
             /// The entry `id` is not offered for the function at `address` again.
             case decline
+            /// `candidates` are proposed for the registry, `remove` no longer: in the
+            /// project only, and the next publish decides.
+            case candidate
             /// One entry: its review and its history.
             case entry
             /// The entry `id` takes the narrower `name`, for `reason`.
@@ -29,32 +32,52 @@ extension GhidraHost {
         public var id: String?
         /// Why a candidate is taken as a variant, or why an entry is declined.
         public var reason: String?
-        /// With `address`: the entry's review replaces the function's, where
-        /// the function's review differs or was edited since.
-        public var replace: Bool?
-        /// With `address`: the parts of the entry's review to take, the rest
-        /// of the function's kept — `signature`, `names`, `locals`, `plate`,
-        /// `comments`. Nil takes the whole review, as `replace` does.
-        public var fields: [String]?
+        public var candidates: [LibraryCandidate]?
+        /// The addresses of functions that are candidates no longer.
+        public var remove: [String]?
         /// The name `rename` gives the entry.
         public var name: String?
         public var change: LibraryChange?
+        /// `apply` at `address` puts the entry's text in the project, in place of
+        /// the function's own, for a review that goes on writing over it.
+        public var takeText: Bool?
         /// Answer what the apply would do and write nothing: each entry is
         /// applied in its transaction and rolled back.
         public var dryRun: Bool?
 
         public init(action: Action, address: String? = nil, id: String? = nil, reason: String? = nil,
-                    replace: Bool? = nil, fields: [String]? = nil, dryRun: Bool? = nil, name: String? = nil,
-                    change: LibraryChange? = nil) {
+                    candidates: [LibraryCandidate]? = nil, remove: [String]? = nil, dryRun: Bool? = nil, name: String? = nil,
+                    change: LibraryChange? = nil, takeText: Bool? = nil) {
+            self.takeText = takeText
+            self.candidates = candidates
+            self.remove = remove
             self.change = change
             self.name = name
             self.action = action
             self.address = address
             self.id = id
             self.reason = reason
-            self.replace = replace
-            self.fields = fields
             self.dryRun = dryRun
+        }
+    }
+
+    /// A function proposed for the registry, and whose library it is: edk2, amd or intel.
+    public struct LibraryCandidate: Codable, Equatable, Sendable {
+        public var address: String
+        public var kind: String
+        /// An assert routine: the codes it is called with make variants of the
+        /// entries that call it, not functions of their own.
+        public var assertRoutine: Bool?
+
+        enum CodingKeys: String, CodingKey {
+            case address, kind
+            case assertRoutine = "assert_routine"
+        }
+
+        public init(address: String, kind: String, assertRoutine: Bool? = nil) {
+            self.address = address
+            self.kind = kind
+            self.assertRoutine = assertRoutine
         }
     }
 
@@ -71,7 +94,6 @@ extension GhidraHost {
         var name: String
         var named: Bool
         var key: String
-        var kind: String?
         var exact: String?
         var near: [String]?
         var mark: Mark?
@@ -79,12 +101,10 @@ extension GhidraHost {
         /// The digest of what the body's data references point at.
         var referenceBytes: String?
         /// A plate or a comment is written in the project.
-        var holdsText: Bool?
 
         private enum CodingKeys: String, CodingKey {
-            case address, name, named, key, kind, exact, near, mark, declined
+            case address, name, named, key, exact, near, mark, declined
             case referenceBytes = "reference_bytes"
-            case holdsText = "holds_text"
         }
     }
 
@@ -125,12 +145,11 @@ extension GhidraHost {
         public var entryName: String
         public var id: String
         public var version: Int
-        /// `link` — the function takes the entry's name and signature and
-        /// refers to it for the rest — or, asked for by `replace`, `whole` or
-        /// `variant`: the entry's review as a working copy to change it on.
+        /// `link`: the function holds the entry's number, and its name and
+        /// signature for its callers to print. Everything else is the entry's.
         public var mode: String?
-        /// `unnamed`, `named`, `newer_version`, `assert_codes`, `applied`,
-        /// `edited`, `candidate` or `declined`.
+        /// `unnamed`, `named`, `copy`, `newer_version`, `assert_codes`, `applied`,
+        /// `edited`, `candidate`, `short_candidate`, `reference_bytes` or `declined`.
         public var state: String
         public var codes: [String]?
         public var differences: [LibraryConstant]?
@@ -155,10 +174,8 @@ extension GhidraHost {
         public var hashed: Int
         /// Functions carrying the current version of their entry.
         public var applied: [LibraryStep] = []
-        /// Matches that apply by themselves: a function no review named, one
-        /// a review named (the entry's name, and only what the review left
-        /// empty), a newer version of an entry applied before, a body that
-        /// differs from an entry only in assert codes.
+        /// Matches that link by themselves: a body the registry holds is the
+        /// entry's, whatever the project wrote on it.
         public var toApply: [LibraryStep] = []
         /// Functions applied from an entry and edited since: the review's now.
         public var edited: [LibraryStep] = []
@@ -201,7 +218,7 @@ extension GhidraHost {
     /// asked to compare: bodies with no exact match, not yet the entry's.
     static func comparisons(_ matches: [LibraryMatch]) -> [(address: String, id: String)] {
         matches.flatMap { match -> [(address: String, id: String)] in
-            guard match.exact == nil else { return [] }
+            guard match.exact == nil, !LibraryBody.isShort(key: match.key) else { return [] }
             return (match.near ?? []).filter { id in
                 !(match.declined ?? []).contains(id) && match.mark?.id != id
             }.map { (match.address, $0) }
@@ -213,15 +230,12 @@ extension GhidraHost {
     static func libraryPlan(_ matches: [LibraryMatch], index: LibraryIndex, hashed: Int,
                             comparisons: [String: LibraryComparison]) -> LibraryPlan {
         var plan = LibraryPlan(entries: index.entries.count, hashed: hashed)
-        // A module holds a copy until the registry reads through: linking
-        // before that would leave its function with no text to show.
-        let linking = true
         for match in matches {
             // The module's function again, if it ever took the entry or was
             // offered as one. Any other function of that body stays untouched:
             // no review of this module said anything about it.
             if let out = index.takenOut?[match.key] {
-                if match.mark != nil || match.kind != nil {
+                if match.mark != nil {
                     plan.released.append(LibraryStep(address: match.address, name: match.name, entryName: out.name,
                                                      id: match.key, version: out.version, mode: "release",
                                                      state: "taken_out", why: out.reason))
@@ -251,12 +265,8 @@ extension GhidraHost {
                                             why: mark.version < held.version
                                                 ? "version \(held.version) is newer than the v\(mark.version) applied" : nil))
                 } else if mark.version >= held.version {
-                    // At its mark, its text is the entry's: a copy, which goes.
-                    if linking, match.holdsText == true {
-                        plan.toApply.append(step(id, held, mode: "link", state: "copy", codes: mark.codes))
-                    } else {
-                        plan.applied.append(step(id, held, mode: nil, state: "applied", codes: mark.codes))
-                    }
+                    // Bound and not dirty: what its project holds stays there.
+                    plan.applied.append(step(id, held, mode: nil, state: "applied", codes: mark.codes))
                 } else {
                     plan.toApply.append(step(id, held, mode: mode, state: "newer_version", codes: mark.codes))
                 }
@@ -272,14 +282,8 @@ extension GhidraHost {
                 }
                 if (match.declined ?? []).contains(id) {
                     plan.declined.append(step(id, held, mode: nil, state: "declined"))
-                } else if marked(id, held, mode: linking ? "link" : "whole") {
-                } else if !match.named {
-                    // Text nobody compared with the entry is not stripped: `fill`
-                    // keeps it, and says when it differs.
-                    let free = linking && match.holdsText != true
-                    plan.toApply.append(step(id, held, mode: free ? "link" : linking ? "fill" : "whole", state: "unnamed"))
-                } else {
-                    plan.toApply.append(step(id, held, mode: linking && match.holdsText != true ? "link" : "fill", state: "named"))
+                } else if !marked(id, held, mode: "link") {
+                    plan.toApply.append(step(id, held, mode: "link", state: match.named ? "named" : "unnamed"))
                 }
                 continue
             }
@@ -290,16 +294,24 @@ extension GhidraHost {
                     plan.declined.append(step(id, held, mode: nil, state: "declined"))
                     continue
                 }
-                if marked(id, held, mode: linking ? "link" : "variant") { applying = true; continue }
+                if marked(id, held, mode: "link") { applying = true; continue }
+                // A short body: the same bytes, and a review says which function
+                // it is, from how it is called. Nothing links by itself.
+                if LibraryBody.isShort(key: match.key) {
+                    if match.mark == nil {
+                        plan.candidates.append(step(id, held, mode: "link", state: "short_candidate",
+                                                    why: "the same bytes as this entry: bind it if the calls show it is that function"))
+                    }
+                    continue
+                }
                 let comparison = comparisons["\(match.address) \(id)"]
                 if !applying, let comparison, comparison.comparable, comparison.assertCodesOnly == true {
                     applying = true
-                    plan.toApply.append(step(id, held, mode: linking && match.holdsText != true ? "link" : "variant",
-                                             state: "assert_codes",
+                    plan.toApply.append(step(id, held, mode: "link", state: "assert_codes",
                                              codes: comparison.differences?.map(\.value),
                                              differences: comparison.differences))
                 } else {
-                    plan.candidates.append(step(id, held, mode: "variant", state: "candidate",
+                    plan.candidates.append(step(id, held, mode: "link", state: "candidate",
                                                 differences: comparison?.differences,
                                                 why: comparison?.why ?? (comparison == nil
                                                     ? "not compared" : "other constants: another function, "
@@ -332,7 +344,7 @@ extension GhidraHost {
     }
 
     /// The registry against the module: an answer for `ghidra_library` and
-    /// `ghidra_library_apply`, and what `ghidra_open` applies.
+    /// `ghidra_library_apply`, and what `ghidra_create` applies.
     public func library(_ module: SHA256Digest, _ request: LibraryRequest) async throws -> Data {
         switch request.action {
         case .rename:
@@ -367,6 +379,25 @@ extension GhidraHost {
             }
             if let history = try await writer.readLibraryHistory(id: id) { answer["history"] = try Self.plain(history) }
             return try JSONSerialization.data(withJSONObject: answer, options: [.sortedKeys])
+        case .candidate:
+            let candidates = request.candidates ?? [], remove = request.remove ?? []
+            guard !candidates.isEmpty || !remove.isEmpty else {
+                throw GhidraHostError(.refused, "name the functions: `functions`, each with its `kind`, or `remove`", status: 400)
+            }
+            // A candidate is a function new to the registry. One it holds already
+            // is bound to its entry, and a change to it offers itself at a publish.
+            if !candidates.isEmpty {
+                let (plan, _) = try await libraryPlan(module)
+                let held = plan.toApply + plan.applied + plan.edited
+                for candidate in candidates {
+                    if let step = held.first(where: { $0.address.caseInsensitiveCompare(candidate.address) == .orderedSame }) {
+                        throw GhidraHostError(.refused, "the function at \(candidate.address) is entry \(step.id) (\(step.entryName)) "
+                            + "of the registry already: no candidate. A change to it offers itself at a publish", status: 409)
+                    }
+                }
+            }
+            return try await write(module, "/v1/library/candidate", body: try JSONSerialization.data(
+                withJSONObject: ["items": try Self.plain(candidates), "remove": remove]))
         case .status:
             let (plan, _) = try await libraryPlan(module)
             return try JSONSerialization.data(withJSONObject: try Self.plain(plan), options: [.sortedKeys])
@@ -383,24 +414,23 @@ extension GhidraHost {
                                                                    "reason": request.reason ?? "", "by": "agent"])
             return try await write(module, "/v1/library/decline", body: body)
         case .apply:
+            // Linking entries, as an open does, is no review of this module.
+            let before = request.address == nil ? (try? project(module).state())?.reviewed : nil
+            defer {
+                if let before, var state = try? project(module).state(), state.reviewed != before {
+                    state.reviewed = before
+                    try? project(module).write(state)
+                }
+            }
             let (plan, index) = try await libraryPlan(module)
             var steps = plan.toApply
             if let address = request.address {
-                steps = try Self.chosen(plan, address: address, id: request.id, reason: request.reason,
-                                        replace: request.replace ?? false, fields: request.fields)
+                steps = try Self.chosen(plan, address: address, id: request.id, reason: request.reason)
             }
             var answer = try Self.plain(plan) as? [String: Any] ?? [:]
             // What the registry gave back goes with a plain apply and an open.
             if request.address == nil, !plan.released.isEmpty, request.dryRun != true {
-                var items: [[String: Any]] = []
-                for step in plan.released {
-                    guard let out = index.takenOut?[step.id] else { continue }
-                    items.append(["address": step.address, "id": out.id, "version": step.version,
-                                  "entry": try JSONSerialization.jsonObject(with: try await writer.readObject(out.entry))])
-                }
-                let body = try JSONSerialization.data(withJSONObject: ["items": items])
-                answer["released"] = (try JSONSerialization.jsonObject(
-                    with: try await write(module, "/v1/library/release", body: body)) as? [String: Any])?["items"] ?? []
+                answer["released"] = try await releaseGivenBack(module, plan: plan, index: index)
             }
             guard !steps.isEmpty else {
                 answer["results"] = []
@@ -412,7 +442,10 @@ extension GhidraHost {
                 var item: [String: Any] = [
                     "address": step.address, "id": step.id, "version": held.version,
                     "entry": try JSONSerialization.jsonObject(with: try await writer.readObject(held.entry)),
-                    "mode": step.mode ?? "fill"
+                    // `take_text` brings the entry's text to the function: its own
+                    // goes, and what the review writes next stands on the entry's.
+                    "mode": request.takeText == true && request.address != nil
+                        ? (step.codes == nil ? "whole" : "variant") : "link"
                 ]
                 item["codes"] = step.codes
                 if request.address != nil {
@@ -421,7 +454,6 @@ extension GhidraHost {
                     // applying every match — an open does — pays nothing.
                     item["leftovers"] = true
                 }
-                if let fields = request.fields, !fields.isEmpty { item["fields"] = fields }
                 items.append(item)
             }
             let body = try JSONSerialization.data(withJSONObject: ["items": items])
@@ -430,65 +462,6 @@ extension GhidraHost {
             answer["results"] = (applied as? [String: Any])?["items"] ?? []
             return try JSONSerialization.data(withJSONObject: answer, options: [.sortedKeys])
         }
-    }
-
-    /// A write in a linked function works on the entry's text: the project holds
-    /// none, and what the write leaves is what a publish offers as the entry.
-    /// Refused if the text cannot be brought, so nothing is written on nothing.
-    func bringEntryTextBefore(_ path: String, body: Data, module: SHA256Digest, record: OwnerRecord) async throws {
-        guard !path.hasPrefix("/v1/library/"), path != "/v1/export", !body.isEmpty,
-              (try? JSONSerialization.jsonObject(with: body)) is [String: Any],
-              let data = try? await Self.call(record.port, "POST", "/v1/library/text_free", body: body).data,
-              let found = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-              let rows = found["items"] as? [[String: Any]], !rows.isEmpty else { return }
-        let index = try await writer.readLibraryIndex()
-        var items: [[String: Any]] = []
-        for row in rows {
-            guard let id = row["id"] as? String, let held = index.entries[id] else { continue }
-            var item: [String: Any] = [
-                "address": row["address"] ?? "", "id": id, "version": held.version,
-                "entry": try JSONSerialization.jsonObject(with: try await writer.readObject(held.entry)),
-                "mode": row["codes"] == nil ? "whole" : "variant"
-            ]
-            item["codes"] = row["codes"]
-            items.append(item)
-        }
-        guard !items.isEmpty else { return }
-        let answer = try await write(module, "/v1/library/apply",
-                                     body: try JSONSerialization.data(withJSONObject: ["items": items]))
-        let results = ((try JSONSerialization.jsonObject(with: answer)) as? [String: Any])?["items"] as? [[String: Any]] ?? []
-        if let failed = results.first(where: { $0["ok"] as? Bool != true }) {
-            throw GhidraHostError(.refused, "the entry's text could not be brought to \(failed["address"] ?? "the function"): "
-                + "\(failed["error"] ?? "unknown"). Nothing was written.", status: 409)
-        }
-    }
-
-    /// Functions at their entry whose text is still written in the project lose
-    /// it, and those behind it catch up. Says whether any changed, and which
-    /// could not: a name another function of the module holds refuses the link.
-    func removeProjectCopies(_ module: SHA256Digest) async throws -> (changed: Bool, failures: [LinkFailure]) {
-        let (plan, index) = try await libraryPlan(module)
-        var items: [[String: Any]] = []
-        // One behind takes the name and signature its callers print, too.
-        for step in plan.toApply where step.state == "copy" || step.state == "newer_version" {
-            guard let held = index.entries[step.id] else { continue }
-            var item: [String: Any] = [
-                "address": step.address, "id": step.id, "version": held.version,
-                "entry": try JSONSerialization.jsonObject(with: try await writer.readObject(held.entry)),
-                "mode": "link"
-            ]
-            item["codes"] = step.codes
-            items.append(item)
-        }
-        guard !items.isEmpty else { return (false, []) }
-        let answer = try await write(module, "/v1/library/apply",
-                                     body: try JSONSerialization.data(withJSONObject: ["items": items]))
-        let results = ((try JSONSerialization.jsonObject(with: answer)) as? [String: Any])?["items"] as? [[String: Any]] ?? []
-        let failures = results.filter { $0["ok"] as? Bool != true }.map {
-            LinkFailure(address: $0["address"] as? String ?? "", id: $0["id"] as? String ?? "",
-                        error: $0["error"] as? String ?? "unknown")
-        }
-        return (failures.count < items.count, failures)
     }
 
     /// The entries this module is the source of learn what their data references
@@ -514,6 +487,20 @@ extension GhidraHost {
         }
         guard !proposals.isEmpty else { return }
         _ = try await writer.writeLibraryEntries(module: module, rev: rev, by: by, proposals: proposals, take: .none)
+    }
+
+    /// The bodies the registry holds with no code take it from this module.
+    func teachEntryCode(_ module: SHA256Digest, artifact: Data, rev: Int?, by: String?) async throws -> LibraryWriteResult? {
+        let index = try await writer.readLibraryIndex()
+        let proposals = ModuleFormat.teachings(artifact, index: index).map { teaching in
+            var proposal = LibraryProposal(body: teaching.variant.body, name: teaching.name, kind: teaching.kind,
+                                           address: teaching.address, entry: Data("{}".utf8), basedOn: teaching.id,
+                                           teachesBytesOnly: true)
+            proposal.code = teaching.code
+            return proposal
+        }
+        guard !proposals.isEmpty else { return nil }
+        return try await writer.writeLibraryEntries(module: module, rev: rev, by: by, proposals: proposals, take: .none)
     }
 
     /// The entries this module is the source of, from before entries recorded
@@ -563,20 +550,17 @@ extension GhidraHost {
         return try? JSONSerialization.data(withJSONObject: object, options: .sortedKeys)
     }
 
-    /// The step `ghidra_library_apply` names by address: a match that
-    /// applies by itself; a candidate, taken as a variant with a reason; or
-    /// with `replace`, a function whose review differs or was edited since.
-    static func chosen(_ plan: LibraryPlan, address: String, id: String?, reason: String?,
-                       replace: Bool, fields: [String]? = nil) throws -> [LibraryStep] {
+    /// The step `ghidra_library_apply` names by address: a match that links by
+    /// itself; a candidate, with a reason where its constants differ; or a
+    /// dirty function, which stops being dirty and offers nothing.
+    static func chosen(_ plan: LibraryPlan, address: String, id: String?, reason: String?) throws -> [LibraryStep] {
         func at(_ steps: [LibraryStep]) -> LibraryStep? {
             steps.first { $0.address.caseInsensitiveCompare(address) == .orderedSame && (id == nil || $0.id == id) }
         }
         let reason = reason?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if var step = at(plan.toApply) {
-            if replace || !(fields ?? []).isEmpty { step.mode = step.codes == nil ? "whole" : "variant" }
-            return [step]
-        }
+        if let step = at(plan.toApply) { return [step] }
         if var step = at(plan.candidates) {
+            if step.state == "short_candidate" { return [step] }
             guard !reason.isEmpty else {
                 throw GhidraHostError(.refused, "the function at \(address) holds other constants than "
                     + "\(step.entryName): say in `reason` why they make no difference, or review it as a "
@@ -586,12 +570,7 @@ extension GhidraHost {
             return [step]
         }
         if var step = at(plan.edited) ?? at(plan.applied) ?? at(plan.declined) {
-            guard replace || !(fields ?? []).isEmpty else {
-                throw GhidraHostError(.refused, "the function at \(address) is \(step.state): `replace: true` "
-                    + "puts the entry's review in place of the function's, and `fields` takes parts of it",
-                    status: 409)
-            }
-            step.mode = step.codes == nil ? "whole" : "variant"
+            step.mode = "link"
             return [step]
         }
         throw GhidraHostError(.refused, "no registry entry matches the function at \(address)", status: 404)
@@ -621,18 +600,6 @@ extension GhidraHost {
             return modification > recorded
         }
         return hello["changed"] as? Bool
-    }
-
-    /// The owner's offer of its tagged library functions, read without a
-    /// publish: the ones short of the bar and their gaps, `too_short` among
-    /// them. nil when the module has no running owner — nothing is started
-    /// for a question about a module nobody has open, and the analysis the
-    /// caller reads cannot say what Function ID could not hash.
-    public func libraryShortfalls(_ module: SHA256Digest) async throws -> [LibraryShortfall]? {
-        let project = self.project(module)
-        guard project.exists, let record = await runningOwner(project) else { return nil }
-        let data = try await Self.call(record.port, "GET", "/v1/library", timeout: 600).data
-        return try? Self.libraryOffer(data).shortfalls
     }
 
     /// The module's matches and what each calls for, with the index they were made against.
@@ -690,5 +657,21 @@ extension GhidraHost {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         return try JSONSerialization.jsonObject(with: try encoder.encode(value))
+    }
+}
+
+extension GhidraHost {
+    /// The functions the registry gave back stop being library functions: the
+    /// answer of `/v1/library/release`.
+    func releaseGivenBack(_ module: SHA256Digest, plan: LibraryPlan, index: LibraryIndex) async throws -> Any {
+        var items: [[String: Any]] = []
+        for step in plan.released {
+            guard let out = index.takenOut?[step.id] else { continue }
+            items.append(["address": step.address, "id": out.id, "version": step.version,
+                          "entry": try JSONSerialization.jsonObject(with: try await writer.readObject(out.entry))])
+        }
+        let body = try JSONSerialization.data(withJSONObject: ["items": items])
+        return (try JSONSerialization.jsonObject(
+            with: try await write(module, "/v1/library/release", body: body)) as? [String: Any])?["items"] ?? []
     }
 }

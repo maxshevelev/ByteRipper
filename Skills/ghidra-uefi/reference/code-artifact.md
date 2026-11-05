@@ -111,8 +111,8 @@ Ghidra's has neither (`language-patch/README.md`).
 | 5 | `post_codes` are the POST codes followed back through their wrappers, with `value`, `width`, `via` and `unresolved`; the other ports' writes are `port_writes`; a function's `c_sites` place its calls in `c`. |
 | 6 | A call the processor model makes into one of its named operations (x86's `SIDT`) is a `pcode` span, not a function with no target. |
 | 7 | Adds a function's `review_level` and `review_gaps`: how far the review has got with it, and what keeps it from `full`. |
-| 8 | Adds a library function's `library_kind`: `edk2`, `amd` or `intel`. |
-| 9 | Adds a function's `library_entry`: the library registry entry it was matched with, and how it stands to it. |
+| 8 | Added a library function's `library_kind`. No longer stored: see "A stored function". |
+| 9 | Added a function's `library_entry`. No longer stored: see "A stored function". |
 
 ### v7: review level
 
@@ -137,9 +137,8 @@ empty list does not mean the C is clean of raw offsets. The levels are:
 - `decompiled` — nothing of the review: no plate, no step comments, and no
   parameter, local or function name a person gave. A name the UEFI pass read
   or the image carried is not review work.
-- `library` — library code the module statically links in: a name on the
-  exporter's EDK2 list (`CopyMem`, `ZeroMem`, `AsmCpuid`, …), or a function
-  carrying a library tag. It is complete as it is, so its gaps are empty.
+- `library` — library code the module statically links in: a function carrying
+  a library tag. A publish stores none without a registry entry.
 - `no_body` — external or thunk; the exporter writes no C for it, so there is
   nothing to review and its gaps are empty.
 
@@ -165,45 +164,42 @@ own.
 has neither field, and the panel shows its functions as "Review level not
 recorded".
 
-### v8: library kind
+### A stored function: its own, or a link
 
-A `library` function carries `library_kind`, written after `review_level`:
+What the store holds of a function is one of two records
+(`ModuleFormat.stored`, which every analysis goes through on its way in):
 
-- `edk2` — EDK2's libraries; the kind of every name on the exporter's EDK2
-  list, and of a function tagged `library.edk2`.
-- `amd` — AGESA's own libraries, tagged `library.amd`.
-- `intel` — the FSP's and Reference Code's own libraries, tagged
-  `library.intel`.
+- **Its own**: the fields of this schema, with no library field.
+- **A link**: `registry`, the library entry's number
+  (`Design/LIBRARY_REGISTRY_PLAN.md`), and `entry`, `size`, `callers`, `callees`,
+  `targets`, `body`, `reference_bytes`. No name, signature, comment, C or instruction:
+  a reader takes those from the registry. `targets` maps what the body's code refers
+  to outside itself — a callee by its registry number, data by its label — to the
+  address in this module.
 
-The criteria for each kind are the skill's ("Library functions" in
-`SKILL.md`). A function carrying the bare `library` tag of a review made before
-the kinds has no `library_kind`; nor has a v7 artifact. The panel shows such a
-function as a library of no recorded kind.
-
-### v9: library registry entry
-
-A function the library registry matched (`Design/LIBRARY_REGISTRY_PLAN.md`)
-carries `library_entry`, written after `library_kind`:
+The registry holds a body's code as an object of its own (`LibraryVariant.code`):
 
 ```json
-"library_entry": {"id": "a-a777f5ad6ab9f4d1-7af5a0be35b7ab26", "version": 2, "state": "entry"}
+{"base": "0x…",
+ "instructions": [{"address": "0x…", "bytes": "E8 …", "mnemonic": "CALL", "text": "CALL 0x…",
+                   "flow": "…",
+                   "references": [{"to": "0x…", "type": "UNCONDITIONAL_CALL", "entry": "<number>"}]}]}
 ```
 
-- `id` — the entry: the key of the body it was first published with.
-- `version` — the entry's version the function was applied from or published
-  as.
-- `state` — `entry`: the function is that version; `edited`: changed on it
-  since, and the next publish makes the change the entry's next version;
-  `differs`: a review that named the function keeps what differs from the
-  entry, listed in `differences`; `conflict`: the function's review, published,
-  was not made on the entry's current version, and `base` is the one it was
-  made on.
-- `codes` — for a variant of the entry, the assert codes its body carries.
+`base` and the addresses are those of the module it was learned from; a reader replaces
+them with its module's (`LibraryCode.instructions`), and the rebuild must give that
+module's real bytes and text for the link to exist (`LibraryCode.bind`). The lists of an
+artifact (`post_codes`, `port_writes`, `status_code_calls`) keep no text at a link's
+instructions; a reader fills it the same way.
 
-The owner writes the object before each export from the function's registry
-mark, and a publish whose marks change it exports again, so the stored
-artifact says what the registry made of the publish. A function the registry
-does not hold has no `library_entry`; nor has a v8 artifact.
+`library_kind`, `library_entry` and a `review_level` of `library` are not in the
+stored form. A reader that meets them in an older object does not read them: a row
+with no `registry` is the module's function.
+
+`library_kind` and `library_entry` in `code_query`'s answer come from the entry, not
+from the artifact. An export from a project still carries `library_entry` (`id`,
+`version`, `state`: `entry`, or `edited` for a function written on since it was bound,
+the mark `dirty` in the project): that is the project's note to the publish, and no store holds it.
 
 ### v5: POST codes
 
@@ -311,7 +307,7 @@ the v2 one; the v2 analysis stays readable.
 A module with a kept project is exported by a publish:
 
 ```
-ghidra_open(node: "0.5.5.2.0.1.0.8.1", document: <id>)   # or module: <sha256>
+ghidra_create(node: "0.5.5.2.0.1.0.8.1", document: <id>)   # or module: <sha256>
 ghidra_publish()                                         # artifact, revision, review
 ```
 

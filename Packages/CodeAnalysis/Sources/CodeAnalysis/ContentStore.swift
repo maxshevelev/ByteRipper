@@ -224,6 +224,9 @@ public struct ContentStore: Sendable {
         guard SafeName.isSafe(recipe.id) else {
             throw CodeAnalysisError.invalidRecipe(recipe.id)
         }
+        // What goes into a store is the stored form, from whatever writes it.
+        let index = (try? libraryIndex()) ?? LibraryIndex()
+        let artifact = ModuleFormat.stored(artifact, index: index, code: libraryCode(for: artifact, index: index)).artifact
         let digest = try putObject(artifact)
         let manifest = AnalysisManifest(
             module: module,

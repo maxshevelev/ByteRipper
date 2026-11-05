@@ -836,14 +836,14 @@ final class CodePaneViewTests: XCTestCase {
             suite.removePersistentDomain(forName: suiteName)
             CodePaneView.defaults = .standard
         }
-        let art = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        let art = try throughARegistry("""
         {"script_version":8,"program":{"image_base":"0x0"},
          "functions":[
           {"entry":"0x100","name":"Partly","review_level":"partial",
            "review_gaps":["plate","locals"],"instructions":[]},
           {"entry":"0x200","name":"CopyMem","review_level":"library","library_kind":"edk2",
            "instructions":[]}]}
-        """.utf8))
+        """)
         let view = CodePaneView(manifest: manifest(), artifact: art,
                                 moduleBytes: moduleBytes, hexView: NSView())
         view.frame = NSRect(x: 0, y: 0, width: 480, height: 400)
@@ -859,7 +859,8 @@ final class CodePaneViewTests: XCTestCase {
         // sits under its kind's heading and says whose library it is.
         XCTAssertEqual(try tooltip(1), "Review: partly reviewed — missing plate comment, unnamed locals")
         XCTAssertNil(try tooltip(3), "the kind's heading")
-        XCTAssertEqual(try tooltip(4), "Review: library function: EDK2")
+        let shared = try tooltip(4) ?? ""
+        XCTAssertTrue(shared.contains("Shared library function. Stored in the library registry"), shared)
     }
 
     /// Every function's name carries the function mark, a call in the tree
@@ -987,12 +988,10 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertEqual(CodePaneView.functionMark(.full), "function")
         XCTAssertEqual(CodePaneView.functionMark(.partial), "function.partial")
         XCTAssertEqual(CodePaneView.functionMark(.decompiled), "function.decompiled")
-        XCTAssertEqual(CodePaneView.functionMark(.library, library: .edk2), "library.edk2")
-        XCTAssertEqual(CodePaneView.functionMark(.library, library: .amd), "library.amd")
-        XCTAssertEqual(CodePaneView.functionMark(.library, library: .intel), "library.intel")
-        XCTAssertEqual(CodePaneView.functionMark(.library), "library.unrecorded")
-        XCTAssertEqual(CodePaneView.functionMark(.library, library: .amd, registry: .entry), "library.amd.entry")
-        XCTAssertEqual(CodePaneView.functionMark(.library, library: .amd, registry: .matched), "library.amd.matched")
+        XCTAssertEqual(CodePaneView.functionMark(.library, library: .edk2), "library.edk2.entry")
+        XCTAssertEqual(CodePaneView.functionMark(.library, library: .amd), "library.amd.entry")
+        XCTAssertEqual(CodePaneView.functionMark(.library, library: .intel), "library.intel.entry")
+        XCTAssertEqual(CodePaneView.functionMark(.library), "library.unrecorded.entry")
         XCTAssertEqual(CodePaneView.functionMark(.noBody), "function.noBody")
         XCTAssertEqual(CodePaneView.functionMark(.unknown), "function")
 
@@ -1110,9 +1109,9 @@ final class CodePaneViewTests: XCTestCase {
         XCTAssertTrue(button.chevronTurn.isIdentity, "a closed chevron points right")
     }
 
-    /// A library function the registry holds says so on its badge — filled
-    /// for the entry, dotted when matched otherwise — in its hover and on the
-    /// header beside its name, and its kind says how many it holds.
+    /// A library function says it is shared and stored in the registry — on its
+    /// badge, in its hover and on the header beside its name — in one wording,
+    /// and its kind says how many it holds.
     func testTheLibraryRegistryShowsOnTheBadgeTheHoverAndTheHeader() throws {
         let suiteName = "CodePaneViewTests.registry"
         let suite = try XCTUnwrap(UserDefaults(suiteName: suiteName))
@@ -1122,17 +1121,14 @@ final class CodePaneViewTests: XCTestCase {
             suite.removePersistentDomain(forName: suiteName)
             CodePaneView.defaults = .standard
         }
-        let art = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        let art = try throughARegistry("""
         {"script_version":9,"program":{"image_base":"0x0"},
          "functions":[
-          {"entry":"0x100","name":"CopyGuid","review_level":"library","library_kind":"edk2",
-           "library_entry":{"id":"a-1","version":3,"state":"entry"},"instructions":[]},
-          {"entry":"0x200","name":"CopyMem","review_level":"library","library_kind":"edk2",
-           "library_entry":{"id":"b-1","version":2,"state":"differs","differences":["plate"]},"instructions":[]},
-          {"entry":"0x300","name":"ZeroMem","review_level":"library","library_kind":"edk2","instructions":[]},
-          {"entry":"0x400","name":"ReadSmn","review_level":"library","library_kind":"amd",
-           "library_entry":{"id":"c-1","version":1,"state":"entry","codes":["0x10199"]},"instructions":[]}]}
-        """.utf8))
+          {"entry":"0x100","name":"CopyGuid","review_level":"library","library_kind":"edk2","instructions":[]},
+          {"entry":"0x200","name":"CopyMem","review_level":"library","library_kind":"edk2","instructions":[]},
+          {"entry":"0x400","name":"ReadSmn","review_level":"library","library_kind":"amd","codes":["0x10199"],"instructions":[]},
+          {"entry":"0x500","name":"OwnWork","review_level":"full","instructions":[]}]}
+        """)
         let view = CodePaneView(manifest: manifest(), artifact: art,
                                 moduleBytes: moduleBytes, hexView: NSView())
         view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
@@ -1144,27 +1140,22 @@ final class CodePaneViewTests: XCTestCase {
         func cell(_ row: Int) throws -> CodeNavigatorCell {
             try XCTUnwrap(list.view(atColumn: 0, row: row, makeIfNecessary: true) as? CodeNavigatorCell)
         }
-        // Library functions, EDK2 — CopyGuid, CopyMem, ZeroMem — then AMD.
-        XCTAssertEqual(try cell(1).textField?.stringValue, "EDK2 (3, 1 in the registry)")
-        XCTAssertEqual(try cell(2).iconName, "library.edk2.entry")
-        XCTAssertEqual(try cell(3).iconName, "library.edk2.matched")
-        XCTAssertEqual(try cell(4).iconName, "library.edk2")
-        // Every function of the kind is the registry's entry: the badge there is
-        // the entry's own, filled, and the count says it in words.
-        XCTAssertEqual(try cell(5).textField?.stringValue, "AMD AGESA (1 all in registry)")
-        XCTAssertEqual(try cell(5).iconName, "library.amd.entry")
-        XCTAssertTrue(try cell(2).toolTip?.contains("Library registry entry, version 3") == true)
-        XCTAssertTrue(try cell(3).toolTip?.contains(
-            "Matches library registry entry version 2; this module's review differs: plate") == true)
-        XCTAssertFalse(try cell(4).toolTip?.contains("registry") == true)
-        XCTAssertTrue(try cell(6).toolTip?.contains("A variant: assert codes 0x10199") == true)
+        // The module's own function first, then the library ones: EDK2, then AMD.
+        XCTAssertEqual(try cell(1).textField?.stringValue, "OwnWork")
+        XCTAssertEqual(try cell(3).textField?.stringValue, "EDK2 (2)")
+        XCTAssertEqual(try cell(3).iconName, "library.edk2.entry")
+        XCTAssertEqual(try cell(4).iconName, "library.edk2.entry")
+        XCTAssertEqual(try cell(5).iconName, "library.edk2.entry")
+        XCTAssertEqual(try cell(6).textField?.stringValue, "AMD AGESA (1)")
+        let shared = "Shared library function. Stored in the library registry, entry version 1"
+        XCTAssertTrue(try cell(4).toolTip?.contains(shared) == true)
+        XCTAssertTrue(try cell(7).toolTip?.contains("A variant: assert codes 0x10199") == true)
+        XCTAssertFalse(try cell(1).toolTip?.contains("registry") == true, "a function of the module says nothing of it")
 
         view.selectFunction(at: 0)
         view.layoutSubtreeIfNeeded()
         XCTAssertFalse(view.functionMark.isHidden, "the header carries the badge of a library function")
-        XCTAssertEqual(view.functionMark.toolTip, "Library registry entry, version 3")
-        view.selectFunction(at: 2)
-        XCTAssertEqual(view.functionMark.toolTip, "Library function: EDK2. The library registry does not hold it.")
+        XCTAssertEqual(view.functionMark.toolTip, shared)
     }
 
     /// A revision the panel receives marks the functions it changed: they read

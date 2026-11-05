@@ -1,10 +1,10 @@
 import Foundation
 
 /// A library function has one description, and it is the registry's: its name,
-/// its signature, its C with the comments in it. A module holds the code, at
-/// its own addresses; it holds no description of a function the registry has.
-/// This is how a reader gets one: the function as the module publishes it, with
-/// everything that describes it taken from the entry.
+/// its signature, its C with the comments in it. A module holds a link: the
+/// entry's number and the code, at its own addresses (`ModuleFormat`). This is
+/// how a reader gets the function: the link, with everything that describes it
+/// taken from the entry.
 ///
 /// What stays the module's is what is the module's: where the function is, who
 /// calls it, its instructions. In the entry's C, what a token names is carried
@@ -50,12 +50,12 @@ public enum LibraryView {
         }
     }
 
-    /// The registry's entry for a function: by its body, or by the mark of an
-    /// artifact from before functions recorded their bodies. A thunk and an
-    /// external have no body to match.
+    /// The entry a function reads from: a link's, and a function of the module
+    /// has none. A body split off to another entry is followed there.
     public static func entryID(of function: CodeArtifact.Function, in index: LibraryIndex) -> String? {
-        entryID(body: function.body, mark: function.libraryEntry?.id, external: function.external,
-                thunk: function.thunk, referenceBytes: function.referenceBytes, in: index)
+        guard let number = function.registryNumber else { return nil }
+        return entryID(body: function.body, mark: number, external: function.external,
+                       thunk: function.thunk, referenceBytes: function.referenceBytes, in: index)
     }
 
     /// The same, from what decides it. A body whose data references point at
@@ -74,7 +74,7 @@ public enum LibraryView {
 
     /// The function as a reader sees it. `name` is this module's name for an
     /// address, nil when it has none.
-    public static func function(_ local: CodeArtifact.Function, entry: Entry,
+    public static func function(_ local: CodeArtifact.Function, entry: Entry, codes: [String] = [],
                                 name: (CodeAddress) -> String?,
                                 string: (CodeAddress) -> String? = { _ in nil }) -> CodeArtifact.Function {
         var function = local
@@ -84,12 +84,8 @@ public enum LibraryView {
         function.nameReason = "library registry entry \(entry.id)"
         function.reviewLevel = .library
         function.reviewGaps = []
-        function.libraryKind = entry.kind ?? local.libraryKind
-        let held = local.libraryEntry?.state
-        function.storedCopy = !local.copyFree && (held == nil || held == .entry)
-        function.libraryEntry = .init(id: entry.id, version: entry.version, codes: local.libraryEntry?.codes ?? [],
-                                      state: local.copyFree ? .linked : held, differences: local.libraryEntry?.differences ?? [],
-                                      base: local.libraryEntry?.base)
+        function.libraryKind = entry.kind
+        function.libraryEntry = .init(id: entry.id, version: entry.version, codes: codes)
         guard let source = entry.function, source.c != nil, !local.codeIsPending else { return function }
         let carried = carriedOver(from: source, to: local)
         let rendered = render(source, carried: carried, name: name, string: string)
@@ -303,7 +299,51 @@ extension ContentStore {
         guard let index = try? libraryIndex(), !index.entries.isEmpty else { return artifact }
         var artifact = artifact
         artifact.functions = throughRegistry(artifact.functions, names: artifact, index: index)
+        fillInstructionText(&artifact, index: index)
         return artifact
+    }
+
+    /// A link's instructions: the registry's code, at this module's addresses.
+    func instructions(of function: CodeArtifact.Function, id: String, in index: LibraryIndex) -> [CodeArtifact.Instruction]? {
+        guard let digest = index.code(ofBody: function.body, entry: id),
+              let code = try? object(digest),
+              let rows = LibraryCode.instructions(code: code, entry: function.entry.value,
+                                                  targets: function.targets.mapValues { $0.description }),
+              let data = try? JSONSerialization.data(withJSONObject: rows) else { return nil }
+        return try? JSONDecoder().decode([CodeArtifact.Instruction].self, from: data)
+    }
+
+    /// The module's lists keep no text at a link's instructions: it is read here.
+    private func fillInstructionText(_ artifact: inout CodeArtifact, index: LibraryIndex) {
+        var read: [CodeAddress: [CodeArtifact.Instruction]] = [:]
+        let links = Dictionary(artifact.functions.filter { $0.registryNumber != nil }.map { ($0.entry, $0) },
+                               uniquingKeysWith: { first, _ in first })
+        func held(_ owner: CodeAddress?) -> [CodeArtifact.Instruction] {
+            guard let owner, let function = links[owner] else { return [] }
+            if let known = read[owner] { return known }
+            var list = function.instructions
+            if list.isEmpty, let id = LibraryView.entryID(of: function, in: index)
+                ?? index.takenOutRecord(of: function)?.id {
+                list = instructions(of: function, id: id, in: index) ?? []
+            }
+            read[owner] = list
+            return list
+        }
+        func fill(_ rows: inout [CodeArtifact.PostCode]) {
+            for row in rows.indices where rows[row].text.isEmpty {
+                if let found = held(rows[row].function).first(where: { $0.address == rows[row].address }) {
+                    rows[row].text = found.text
+                }
+            }
+        }
+        fill(&artifact.postCodes)
+        fill(&artifact.portWrites)
+        for row in artifact.statusCodeCalls.indices where artifact.statusCodeCalls[row].text.isEmpty {
+            let list = held(artifact.statusCodeCalls[row].function)
+            guard let place = list.firstIndex(where: { $0.address == artifact.statusCodeCalls[row].address }) else { continue }
+            artifact.statusCodeCalls[row].text = list[place].text
+            artifact.statusCodeCalls[row].context = list[max(0, place - 8)..<place].map(\.text)
+        }
     }
 
     /// Functions as a reader sees them; `names` is the artifact they are from.
@@ -327,22 +367,39 @@ extension ContentStore {
         }
         var strings: [CodeAddress: String] = [:]
         for string in artifact.strings { strings[string.address] = string.value }
+        func withCode(_ function: CodeArtifact.Function, id: String) -> CodeArtifact.Function? {
+            guard function.registryNumber != nil, function.instructions.isEmpty, !function.codeIsPending else { return function }
+            return instructions(of: function, id: id, in: index).map {
+                var read = function
+                read.instructions = $0
+                return read
+            }
+        }
         return functions.map { function in
             guard let id = LibraryView.entryID(of: function, in: index) else {
-                // A mark on what the registry gave back or no longer holds: a
-                // function of the module, reading its own text.
-                var own = function
-                own.libraryEntry = nil
-                return own
+                // A body taken out: no entry speaks for it now, and until its
+                // project publishes its instructions are still the registry's.
+                if let out = index.takenOutRecord(of: function) {
+                    return withCode(function, id: out.id) ?? function
+                }
+                return function
             }
-            // An entry that cannot be read leaves the row marked and without
-            // `text`, which is how it shows.
+            guard let function = withCode(function, id: id) else {
+                var unread = function
+                if let row = index.entries[id] { unread.name = row.name }
+                unread.textUnavailable = true
+                return unread
+            }
+            // An entry that cannot be read leaves the link without text, which
+            // is how it shows.
             guard let read = entry(id) else {
-                var own = function
-                own.textUnavailable = true
-                return own
+                var unread = function
+                if let row = index.entries[id] { unread.name = row.name }
+                unread.textUnavailable = true
+                return unread
             }
-            return LibraryView.function(function, entry: read, name: { named[$0] }, string: { strings[$0] })
+            let codes = index.entries[id]?.variants.first { $0.body.key == function.body }?.codes ?? []
+            return LibraryView.function(function, entry: read, codes: codes, name: { named[$0] }, string: { strings[$0] })
         }
     }
 }

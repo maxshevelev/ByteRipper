@@ -395,7 +395,6 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         ("/v1/redecode", ["start": "0x1", "end": "0x2"]),
         ("/v1/set/code-mode", ["start": "0x1", "end": "0x2", "bits": 16]),
         ("/v1/set/equate", ["address": "0x1", "name": "PROBE", "value": "0x1", "enum": "PROBE_ENUM"]),
-        ("/v1/tag/function", ["address": "0x1", "tag": "probe"]),
         ("/v1/set/description", ["section": "### Probe", "text": "x"]),
         ("/v1/type", ["c": "this is not C"]),
         ("/v1/set/data", ["address": "0x1", "type": "UINT32"]),

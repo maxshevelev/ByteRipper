@@ -129,12 +129,19 @@ backing up `var/`:
 
 ```
 var/store/      the code store: artifacts, analyses, reviews, descriptions
-var/projects/   the kept Ghidra project of each module
+var/projects/   the kept Ghidra project of each module, when `projects` names it
 var/support/    tokens.json, sessions.json, documents.json, Uploads/, mcp.sock
 var/dumps/      the dumps the console may open
 var/log/        server.log
 var/port        the console's port, as last started
 ```
+
+The folder of the kept projects is what `projects` names (below). Without that key it
+is `~/Library/Application Support/ByteRipper/GhidraProjects`, outside `var/`, and it
+goes in the backup all the same. A published revision does not refer to its project and
+is read without it, but no review can go on without one: a module whose project is lost
+stays a product without its source, and a new project starts the review from the
+beginning. Keep the projects and the store together.
 
 Three caches live outside it, shared by every copy on the Mac: the EDK2 type
 archives (`~/Library/Application Support/ByteRipper/Ghidra`), the compiled

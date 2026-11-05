@@ -95,8 +95,7 @@ public enum ServedStoreProtocol {
         /// which a server that predates it ignores. Nil for a take of all.
         public var takeIDs: [String]?
         public var reasons: [String: String]?
-        /// Why this offer changes the entries it moves, by id. A server that
-        /// predates it ignores them, and takes the change with no reason.
+        /// Why this offer adds to the entries it moves, by id, in the review's words.
         public var entryReasons: [String: String]?
         /// Answer what the offer would do and write nothing.
         public var dryRun: Bool?
@@ -139,7 +138,7 @@ public enum ServedStoreProtocol {
         }
 
         private enum CodingKeys: String, CodingKey {
-            case module, rev, by, proposals, take, reason, reasons
+            case module, rev, by, proposals, take, reason, reasons, change
             case takeIDs = "take_ids"
             case entryReasons = "entry_reasons"
             case dryRun = "dry_run"

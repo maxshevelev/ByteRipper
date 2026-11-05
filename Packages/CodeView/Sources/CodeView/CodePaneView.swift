@@ -1491,48 +1491,22 @@ import ToolModuleKit
     /// mark of its own, the filled `f`; partial, the `f` in a frame;
     /// decompiler only, the same framed `f` in red — the review has not gone
     /// past the decompiler; no body, the framed `f` in grey; a library
-    /// routine, the badge of whose library it is — filled when the function is
-    /// the library registry's entry, with a dot when the registry matched it
-    /// otherwise.
-    static func functionMark(_ group: FunctionGroup, library: LibrarySection? = nil,
-                             registry: CodeReaderState.RegistryMark? = nil) -> String {
+    /// function, which the library registry holds, the badge of whose library it is.
+    static func functionMark(_ group: FunctionGroup, library: LibrarySection? = nil) -> String {
         switch group {
         case .partial: "function.partial"
         case .decompiled: "function.decompiled"
         case .noBody: "function.noBody"
-        case .library:
-            switch registry {
-            case .entry?: "library.\(library ?? .unrecorded).entry"
-            case .matched?: "library.\(library ?? .unrecorded).matched"
-            case nil: "library.\(library ?? .unrecorded)"
-            }
+        case .library: "library.\(library ?? .unrecorded).entry"
         default: "function"
         }
     }
 
     /// What the library registry says of a function, for its hover and the
-    /// header's mark; nil for a function the registry does not hold.
+    /// header's mark; nil for a function of the module.
     static func registryDetail(_ function: CodeArtifact.Function) -> String? {
         guard let entry = function.libraryEntry else { return nil }
-        let version = String(entry.version)
-        var line: String
-        switch entry.state {
-        case .entry?, .linked?:
-            line = L("Library registry entry, version %1$@", version)
-        case .edited?:
-            line = L("Library registry entry, version %1$@, changed since: the next publish makes the change its next version", version)
-        case .differs?:
-            line = entry.differences.isEmpty
-                ? L("Matches library registry entry version %1$@; this module's review differs", version)
-                : L("Matches library registry entry version %1$@; this module's review differs: %2$@",
-                    version, entry.differences.joined(separator: ", "))
-        case .conflict?:
-            line = entry.base.map {
-                L("Matches library registry entry version %1$@; this module's review was made on version %2$@", version, String($0))
-            } ?? L("Matches library registry entry version %1$@; this module's review was not made on it", version)
-        case nil:
-            line = L("Matched with library registry entry version %1$@", version)
-        }
+        var line = L("Shared library function. Stored in the library registry, entry version %1$@", String(entry.version))
         if !entry.codes.isEmpty {
             line += "\n" + L("A variant: assert codes %1$@", entry.codes.joined(separator: ", "))
         }
@@ -2299,14 +2273,8 @@ import ToolModuleKit
         let detail: String
         if state.group(of: index) == .library {
             let section = state.librarySection(of: index) ?? .unrecorded
-            let style: CodeNavigatorIcon.BadgeStyle = switch state.registryMark(of: index) {
-            case .entry?: .filled
-            case .matched?: .dotted
-            case nil: .outlined
-            }
-            mark = CodeNavigatorIcon.library(Self.badge(of: section), style: style)
-            detail = Self.registryDetail(function)
-                ?? L("Library function: %1$@. The library registry does not hold it.", Self.title(of: section))
+            mark = CodeNavigatorIcon.library(Self.badge(of: section))
+            detail = Self.registryDetail(function) ?? Self.title(of: section)
         } else {
             mark = reviewMark(of: index)
             detail = Self.reviewDetail(function)
@@ -4794,12 +4762,7 @@ import ToolModuleKit
             case .intel: .intel
             case nil: .unrecorded
             }
-            let style: CodeNavigatorIcon.BadgeStyle = switch state.registryMark(of: index) {
-            case .entry?: .filled
-            case .matched?: .dotted
-            case nil: .outlined
-            }
-            return CodeNavigatorIcon.library(Self.badge(of: section), style: style)
+            return CodeNavigatorIcon.library(Self.badge(of: section))
         default: return CodeNavigatorIcon.function
         }
     }
@@ -5217,8 +5180,7 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
                 // The mark says how far the review has got, in every order: a
                 // root of the tree and a call under it alike.
                 cell.showsIcon(Self.functionMark(state.group(of: index),
-                                                 library: state.librarySection(of: index),
-                                                 registry: state.registryMark(of: index)))
+                                                 library: state.librarySection(of: index)))
                 if unopenedChanges[index] != nil {
                     cell.textField?.font = Self.navigatorBoldFont()
                     cell.badge.text = L("New")
@@ -5442,17 +5404,8 @@ extension CodePaneView: NSTableViewDataSource, NSTableViewDelegate {
         cell.textField?.font = .systemFont(ofSize: Self.navigatorSize, weight: .semibold)
         cell.textField?.textColor = .secondaryLabelColor
         let count = state.groupCount(at: row) ?? 0
-        let entries = state.registryCount(at: row) ?? 0
-        // A kind whose every function is the registry's entry is the registry's
-        // through and through: the badge there is the entry's own, filled, and
-        // the count says it in words rather than naming the kind's size twice.
-        let allEntries = count > 0 && entries == count
-        cell.textField?.stringValue = allEntries
-            ? L("%1$@ (%2$@ all in registry)", Self.title(of: section), String(count))
-            : entries > 0
-                ? L("%1$@ (%2$@, %3$@ in the registry)", Self.title(of: section), String(count), String(entries))
-                : Self.title(of: section) + " (\(count))"
-        cell.showsIcon(allEntries ? "library.\(section).entry" : "library.\(section)")
+        cell.textField?.stringValue = Self.title(of: section) + " (\(count))"
+        cell.showsIcon("library.\(section).entry")
         cell.showsBadge(false)
         cell.indent = Self.groupMemberIndent
         cell.showsDisclosure(true)
@@ -5689,9 +5642,7 @@ final class CodeNavigatorCell: NSTableCellView {
             CodeReaderState.LibrarySection.allCases.lazy.compactMap { section -> (glyph: CodeNavigatorIcon.Glyph, color: NSColor)? in
                 let badge = CodePaneView.badge(of: section)
                 switch name {
-                case "library.\(section)": return CodeNavigatorIcon.library(badge)
-                case "library.\(section).entry": return CodeNavigatorIcon.library(badge, style: .filled)
-                case "library.\(section).matched": return CodeNavigatorIcon.library(badge, style: .dotted)
+                case "library.\(section).entry": return CodeNavigatorIcon.library(badge)
                 default: return nil
                 }
             }.first

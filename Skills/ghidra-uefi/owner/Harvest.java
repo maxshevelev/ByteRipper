@@ -81,6 +81,20 @@ final class Harvest {
         return true;
     }
 
+    /** The comments of the baseline, as `ExportCode.analysisComments` holds them. */
+    static java.util.Set<String> baselineComments(Program program) {
+        String text = program.getOptions(OPTIONS).getString(BASELINE, null);
+        if (text == null) return java.util.Set.of();
+        java.util.Set<String> held = new java.util.HashSet<>();
+        JsonArray comments = JsonParser.parseString(text).getAsJsonObject().getAsJsonArray("comments");
+        for (var element : comments) {
+            JsonObject item = element.getAsJsonObject();
+            held.add(Long.decode(item.get("address").getAsString()) + "/" + item.get("kind").getAsString()
+                     + "/" + item.get("text").getAsString());
+        }
+        return held;
+    }
+
     static Document of(Program program, String moduleSha, String projectId) {
         JsonObject now = decisions(program);
         String text = program.getOptions(OPTIONS).getString(BASELINE, null);

@@ -123,16 +123,17 @@ extension LibraryProposal {
     /// depends on anything but the other. A body with a refusal of its own, or a
     /// name another entry holds, does not enter, and neither does what calls it.
     static func admitted(_ proposals: [LibraryProposal], in index: LibraryIndex) -> Set<String> {
+        let kinds = Dictionary(proposals.map { ($0.body.key, $0.kind) }, uniquingKeysWith: { first, _ in first })
         var admitted = Set(proposals.filter { proposal in
             index.bodies[proposal.body.key] == nil
                 && !index.entries.values.contains { $0.name == proposal.name }
-                && proposal.refusal(in: index, admitted: Set(proposals.map(\.body.key))) == nil
+                && proposal.refusal(in: index, admitted: Set(proposals.map(\.body.key)), admittedKinds: kinds) == nil
         }.map(\.body.key))
         var changed = true
         while changed {
             changed = false
             for proposal in proposals where admitted.contains(proposal.body.key) {
-                if proposal.refusal(in: index, admitted: admitted) != nil {
+                if proposal.refusal(in: index, admitted: admitted, admittedKinds: kinds) != nil {
                     admitted.remove(proposal.body.key)
                     changed = true
                 }
@@ -144,16 +145,27 @@ extension LibraryProposal {
     /// Why this body cannot be a library function, nil when it can. A proposal
     /// that does not say what it refers to is not judged on it. `admitted` are
     /// the bodies entering with it, which count as held.
-    func refusal(in index: LibraryIndex, admitted: Set<String> = []) -> LibraryWriteResult.NotLibrary? {
+    func refusal(in index: LibraryIndex, admitted: Set<String> = [],
+                 admittedKinds: [String: String] = [:]) -> LibraryWriteResult.NotLibrary? {
         if let out = index.takenOut?[body.key] {
             return .init(address: address, name: name, body: body.key, why: "taken_out", reason: out.reason)
         }
-        let foreign = (callees ?? []).filter { callee in
-            guard let key = callee.body else { return true }
-            return key != body.key && index.bodies[key] == nil && !admitted.contains(key)
+        if index.declaredLibraries[kind] == nil {
+            return .init(address: address, name: name, body: body.key, why: "library")
         }
+        func held(_ callee: LibraryCallee) -> String? {
+            guard let key = callee.body else { return nil }
+            if key == body.key { return kind }
+            let entering = admitted.contains(key) ? admittedKinds[key] ?? kind : nil
+            return entering ?? index.bodies[key].flatMap { index.entries[$0]?.kind }
+        }
+        let foreign = (callees ?? []).filter { held($0) == nil }
         if !foreign.isEmpty {
             return .init(address: address, name: name, body: body.key, why: "callee", callees: foreign.map(\.name))
+        }
+        let forbidden = (callees ?? []).filter { callee in held(callee).map { !index.mayCall(kind, $0) } ?? false }
+        if !forbidden.isEmpty {
+            return .init(address: address, name: name, body: body.key, why: "dependency", callees: forbidden.map(\.name))
         }
         if let data = dataReferences, !data.isEmpty, index.sources?[body.key] == nil {
             return .init(address: address, name: name, body: body.key, why: "data", data: data)
@@ -330,7 +342,7 @@ extension ContentStore {
             let now = Timestamps.now()
             let digest = SHA256Digest(data: data)
             let new = LibraryIndexEntry(version: 1, entry: digest, name: name, kind: entry.kind, source: entry.source,
-                                        variants: [LibraryVariant(body: variant.body, module: variant.module)],
+                                        variants: [LibraryVariant(body: variant.body, module: variant.module, code: variant.code)],
                                         role: entry.role)
             let newHistory = LibraryHistory(id: key, versions: [
                 LibraryVersion(version: 1, entry: digest, source: entry.source,

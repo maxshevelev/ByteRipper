@@ -16,11 +16,11 @@ speaks to the running server over `var/support/mcp.sock`. It carries:
 - `documents`, `read`, `find_bytes` — the dumps this server holds;
 - `uefi_tree`, `uefi_find`, `uefi_node`, `uefi_node_data` — a firmware image's
   structure, down to the PE32 and TE images inside compressed sections;
-- `ghidra_open` and the `ghidra_` review tools — the decompiled C, names,
+- `ghidra_create` and the `ghidra_` review tools — the decompiled C, names,
   signatures, types, comments, the module description, `ghidra_publish`;
 - `code_modules`, `code_query` — the stored analyses, readable without Ghidra.
 
-A module is named by the SHA-256 of its bytes; `ghidra_open` takes its image
+A module is named by the SHA-256 of its bytes; `ghidra_create` takes its image
 `node` and `document`, and the server sends the bytes.
 
 ## The skill

@@ -9,7 +9,7 @@ import UEFIToolUI
 /// The review tools of Ghidra on the app's own MCP server
 /// (`Design/SERVER_PLAN.md` §6.4), relayed to the server Settings ▸ Code
 /// Analysis names, so an agent goes from a UEFI node to a rename on one
-/// connection. `ghidra_open` takes a node of an open dump and sends its
+/// connection. `ghidra_create` takes a node of an open dump and sends its
 /// bytes — `GhidraNodeOpen`, which `byteripper-server` serves too
 /// (`Packages/AgentDocuments`).
 ///
@@ -32,7 +32,7 @@ final class AgentGhidraTools {
                              document: "The dump the node is in. Default: the focused one.")
     }
 
-    /// `ghidra_open` by a node, in the app's words: Ghidra is the analysis
+    /// `ghidra_create` by a node, in the app's words: Ghidra is the analysis
     /// server's or this Mac's, by the setting.
     private nonisolated static let openDescription = """
             Opens a module for a review in Ghidra and answers its owner's `hello`: program, functions, \

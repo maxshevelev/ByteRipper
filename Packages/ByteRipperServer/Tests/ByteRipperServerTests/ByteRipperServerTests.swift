@@ -374,7 +374,7 @@ final class ServerTests: XCTestCase {
     /// `ghidra.use` reaches Ghidra, and a refusal names the right it lacks.
     func testEachRouteAsksForItsRight() async throws {
         let tokens = try TokenStore.open(at: directory.appendingPathComponent("tokens.json"))
-        try tokens.add(name: "admin", rights: TokenPreset.admin.rights)
+        let (_, admin) = try tokens.add(name: "admin", rights: TokenPreset.admin.rights)
         let (_, reader) = try tokens.add(name: "reader", rights: TokenPreset.reader.rights)
         let (_, app) = try tokens.add(name: "app", rights: TokenPreset.app.rights)
         var configuration = ServerConfiguration()
@@ -416,6 +416,36 @@ final class ServerTests: XCTestCase {
         // agent on the server uses the socket, not a route.
         let status2 = try await call("POST", "mcp", reader, body: Data("{}".utf8)).0
         XCTAssertEqual(status2, 404)
+        // Replacing a shared definition is an administrator's: a token that may
+        // use Ghidra and write the store does not reach it, on any route; the
+        // administrator's goes past the right, and hears why there is nothing to do.
+        let someModule = SHA256Digest(data: object).hex
+        let replacing: [(String, Data)] = [
+            ("ghidra/v1/modules/\(someModule)/publish",
+             Data(#"{"take_library_conflicts":["a"],"library_reasons":{"a":"why"}}"#.utf8)),
+            ("ghidra/v1/modules/\(someModule)/library", Data(#"{"action":"rename","id":"a","name":"B","reason":"why"}"#.utf8)),
+            ("ghidra/v1/modules/\(someModule)/library",
+             Data(#"{"action":"change","change":{"action":"take_out","id":"a","reason":"why"}}"#.utf8)),
+            ("cas/v1/library", try JSONEncoder().encode(ServedStoreProtocol.PutLibrary(
+                module: SHA256Digest(data: object), rev: nil, by: "test", proposals: [],
+                change: LibraryChange(action: .takeOut, id: "a", reason: "why")))),
+            ("cas/v1/library", try JSONEncoder().encode(ServedStoreProtocol.PutLibrary(
+                module: SHA256Digest(data: object), rev: nil, by: "test", proposals: [], reason: "why",
+                renameID: "a", renameTo: "B")))
+        ]
+        for (path, body) in replacing {
+            let (refused, words) = try await call("POST", path, app, body: body)
+            XCTAssertEqual(refused, 403, "\(path): \(words)")
+            XCTAssertTrue(words.contains("admin"), words)
+            let reached = try await call("POST", path, admin, body: body).0
+            XCTAssertNotEqual(reached, 403, path)
+        }
+        // A citation only adds, and stays with whoever may write the store.
+        let citation = try JSONEncoder().encode(ServedStoreProtocol.PutLibrary(
+            module: SHA256Digest(data: object), rev: nil, by: "test", proposals: [],
+            change: LibraryChange(action: .cite, id: "a", file: "MdePkg/x.c", line: 1)))
+        let cited = try await call("POST", "cas/v1/library", app, body: citation).0
+        XCTAssertNotEqual(cited, 403)
         // A publish lacks two rights, and one refusal names both — through
         // the client the app relays Ghidra calls with, as values.
         do {

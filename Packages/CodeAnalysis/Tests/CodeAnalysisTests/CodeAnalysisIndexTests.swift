@@ -130,13 +130,15 @@ final class CodeAnalysisIndexTests: XCTestCase {
         XCTAssertEqual(index.latestReading(of: new), new)
     }
 
-    func testAnotherProjectsReadingOrAMechanicalOneIsNotFollowed() {
+    /// A fresh project replaces the one a saved session read: its old review has
+    /// no reader any more. A mechanical analysis is no reading to follow or leave.
+    func testAFreshProjectsReadingIsFollowedAndAMechanicalOneIsNot() {
         let shown = reading("code-v6-ghidra-12.1.2", project: "p", rev: 30)
         let other = reading("code-v7-ghidra-12.1.2", project: "q", rev: 40)
         let mechanical = reading("code-v2-ghidra-12.1.2", project: nil, rev: 0)
         let index = CodeAnalysisIndex(manifests: [shown, other, mechanical])
 
-        XCTAssertEqual(index.latestReading(of: shown), shown)
+        XCTAssertEqual(index.latestReading(of: shown), other)
         XCTAssertEqual(index.latestReading(of: mechanical), mechanical)
     }
 

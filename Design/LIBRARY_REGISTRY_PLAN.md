@@ -2,31 +2,41 @@
 
 > **The rule, as the person set it (2026-11-03), over everything below that says
 > otherwise:** a library function is one code, one C and one description, whichever
-> module it is in, and the description exists only in the registry. A module holds
-> the code at its addresses, and a link to the entry: the name and signature its
-> callers print, and nothing else. A reader takes the rest from the entry
-> (`LibraryView`). A different body is a different function: its own entry, its own
+> module it is in, and the description exists only in the registry. A module holds a
+> link to the entry and where the function and what it calls lie in that module; the
+> instructions are the registry's too (the person, 2026-11-05: an earlier text here
+> said a module holds the code; that was never the person's decision, and it is not
+> so). A reader takes the rest from the entry (`LibraryView`). A different body is a different function: its own entry, its own
 > C, and its own name. A library function's name is unique in the registry: a body
 > offered under a name another entry holds is refused (`name_conflicts`), and the
-> review looks at what both functions mean and resolves it, by renaming either: a
-> name goes by meaning, not by who came first, and `ghidra_library_rename` lets the
-> entry that holds one too wide give it up. A module's own
+> review names the new function otherwise: a name goes by meaning, not by who came
+> first, and an administrator (`byteripper-cas library-rename`) gives an entry that
+> holds one too wide a narrower one. A module's own
 > function is in the module's scope and conflicts with nothing in other modules.
 > A text true of one module only means the function is not a library function, and
-> it does not belong here. An open links (`mode: link`); `whole` remains only as the
-> working copy `replace` asks for, to change an entry on. A module stores its own facts
-> and the link: no name, signature, plate, comment or C of a registry function, in the
-> artifact or the review (`LibraryCopyFree`); such a function has `state: linked`, a
-> stored copy shows as `stored_copy`. The key masks an operand, so a function whose data
+> it does not belong here. An open links (`mode: link`), and only that. A module stores its
+> own facts and the link: no name, signature, plate, comment or C of a registry function, in
+> the artifact or the review, and no form holds them (`ModuleFormat`). The key masks an operand, so a function whose data
 > references point at other bytes than the entry's is another function
 > (`reference_bytes`). A reference reads 16 bytes, a string only up to its terminator, and
 > doubt counts as a difference. One limit: a GUID whose first byte is printable and whose second
 > is zero reads as a one-character string. An entry learns its bytes at its source module's
 > publish and decides nothing until then, so a source module publishes first. An entry records the
 > equates its C prints (name, value, comment, places): their meaning is the entry's, and an equate or
-> named label the offered C prints differently needs a reason and is named in the row's `names`. A
+> named label the offered C prints differently is named in the row's `names`. A
 > project's own equate on a linked function is not printed and is reported as `project_equates`. A function is in one
 > place in the registry, and history is no copy.
+>
+> **The review and the product (the person, 2026-11-05).** A Ghidra project is the state
+> of a review: no part of the store, and a revision knows nothing of it. A publish takes a
+> project as its input: it validates what is offered and closes one transaction, and a
+> success takes `dirty` and the candidate mark off the functions the registry took.
+> It writes nothing else there: text stays, and the mark's `dirty` was `written` before.
+> A candidate is a function new to the registry; a function of the registry that became
+> dirty offers itself. A function bound and not dirty offers nothing, whatever its project
+> holds. Type-archive conflicts are still reported rather than refusing the publish;
+> that part of the one rule arrives with the transaction of the next stage. Loss of a
+> project leaves its module a product without source.
 >
 > **What a library function is (2026-11-03):** it depends on no module. It refers to
 > no data, or only to a constant defined in its own library's source file, cited by
@@ -121,19 +131,13 @@ review documents.
 - **No module holds an entry.** A function in the registry belongs to every
   module whose function has its body, alike; the module that published a
   version is in the history, as the author of a commit, and has no say over
-  the next. What decides is the version a change was made on. Each function
-  that is the entry carries its version in its mark — applied at an open, or
-  marked by the publish that offered it. A change to such a function,
-  published, is the entry's next version, whichever module publishes it. A
-  review made on an older version, or by a function that never carried the
-  entry, is a conflict, reported with the version it was made on; one publish
-  takes the conflicts it names (`take_library_conflicts: ["<id>", …]`, or
-  `true` for all), each with the reason the history keeps, and leaves the rest
-  as conflicts. The agent that reviews and publishes resolves a conflict: it
-  reads both reviews, keeps the better one or merges them, and gives the
-  reason the history keeps.
-  The next version reaches every other module at its next open, where its
-  function was not edited since.
+  the next. What decides is what a change does to the entry (the person,
+  2026-11-05; the same rule holds for the shared type archive): new is accepted,
+  the same changes nothing, what only adds is the next version from any module
+  on any version, and a replacement of what the entry says refuses the whole
+  publish and names who wrote it. Only an administrator replaces
+  (`take_library_conflicts`, `take_type_conflicts`, rename, take-out, split, restore).
+  The next version reaches every reader at once: readers read the entry.
 - **Readers see that a function is the registry's**: the artifact records
   `library_entry` (the entry, its version, and whether the function is the
   entry, was edited on it, or differs from it), `code_query` answers it, and
@@ -178,7 +182,7 @@ objects/<sha256>                   the entries, as review documents are
 
 ## 4. Open and apply
 
-1. At `ghidra_open` the host reads the index and hands the owner the keys
+1. At `ghidra_create` the host reads the index and hands the owner the keys
    (`POST /v1/library/match`: the keys only, a few kilobytes even for
    thousands of entries).
 2. The owner hashes every function of the program once (Function ID is
@@ -272,3 +276,89 @@ Phases 1, 2 and 3 are done.
   bar; one body, one entry, renamed to converge; the agent resolves conflicts
   with a reason; other constants are other functions, assert codes make
   variants.
+
+## No third state in the store
+
+The person's rule (2026-11-05): a library function is stored in the registry; no other
+place exists, and the structure, not a rule, is what says so. **Everything in this
+document above this section that speaks of a tag, an offer at a publish, `replace`, or
+`state` in a stored object describes what came before, and is overridden here.**
+
+- **The stored form.** A function row is either a module's own function (name, text, no
+  library field) or a link (`registry` and the module's own facts:
+  `entry,size,callers,callees,targets,body,reference_bytes`).
+  `ModuleFormat.stored` is the only way into the store, and it is not a check that can
+  refuse: what a registry holds becomes a link, whatever the writer sent. The decoder reads
+  nothing descriptive from a link. `library_kind`, `library_entry` and the review level
+  `library` are not decoded from any object; `LibraryView` sets them from the entry.
+- **The code is the registry's (the person, 2026-11-05).** "ASM must be the same in every
+  place of use, up to the offset." Every body holds its code (`LibraryVariant.code`, an object
+  the store keeps as it keeps an entry): one list of instructions, with a call to another
+  library function kept as *that function's number*, not as an address. A module's link says
+  where the function starts (`entry`) and, in `targets`, what each of those numbers (and each
+  data reference, by its label) is in this module. A reader gets the instructions at the
+  module's addresses (`LibraryCode.instructions`), and the registry shows them by offset with
+  the callee's current name (`library_registry` `part: instructions`, `LibraryCode.listing`).
+  A function links only if that rebuild gives exactly its real bytes, mnemonics and text
+  (`LibraryCode.bind`); otherwise it is the module's. Measured on the live store before this
+  was written (a script, not this code): 333 linked functions of 33 modules, 9178
+  instructions, all identical when rebuilt. The object stores the publisher's addresses and
+  replaces them when read: nothing reads them as an address of any other module.
+- **What a library function may call (the person, 2026-11-05).** "Only other library functions
+  of the same library or of another base library": one of the main criteria of being a library
+  function. The dependencies between libraries are formal and stored: `libraries` in
+  `library/index.json`, each with its `depends_on`. In the present set EDK2 is the base and
+  depends on nothing; AMD and Intel depend on EDK2, and not on each other (the person,
+  2026-11-05). `LibraryIndex.mayCall` reads that table and nothing else. A candidate that calls
+  what the registry does not hold is refused (`why: callee`), one that calls a library its own
+  does not depend on likewise (`why: dependency`), and code holding such a call makes no link
+  whichever way it arrives (`ModuleFormat`). A library the table does not declare takes no
+  entries (`why: library`). An index from before the table reads as this set and has it written
+  at its next write.
+- **The way in: one transaction, closed by a publish** (the person, 2026-11-05). Through a
+  review `ghidra_library_candidate` proposes functions; this is kept in the project only, and
+  decides nothing. `ghidra_publish` is the logical end of a stage of review and decides for all
+  of them at once: the registry takes every candidate, and the publish makes the entries and
+  then stores the one revision with links; or it is refused whole, nothing is stored, and the
+  module does not publish until the review resolves it. A dry publish asks without writing.
+  A publish is never forced by getting one function in: no tool publishes on its own. The old
+  tag is gone: `ghidra_function_tag` and `/v1/tag/function`. A candidate is not it: the
+  stored form has no field for one, and no store holds one.
+- **Every holder at once.** A new entry or body rewrites every stored analysis with that body
+  (`ContentStore.relinkModules`): artifact and review, same revision, `relinked_from` in the
+  manifest. The holder's project learns at its next publish, which accepts that manifest as
+  its own. Old objects stay in the store until a `gc`.
+- **Short bodies.** Under Function ID's four instructions a body is known by its exact bytes,
+  and one `RET` is many functions, so bytes alone link nothing. The entry's number is not made
+  from the body. The review gets the entries holding those bytes as candidates, decides from
+  how the function is called, binds one by number, or moves a new one. The number and the
+  bytes are the identity; the name is no part of it, so a rename changes nothing.
+- **Bringing an existing store to this form.** `byteripper-cas relink-modules --apply`, with
+  the server stopped, and `library-holdings` to count before and after. No Ghidra is run.
+  The registry's index changes once: every body the registry holds without code learns it
+  from a stored analysis, the entry's source module first. No number or version moves. A store-wide count afterwards is `library_registry`
+  `show: "modules"`.
+- **What stays transitional, and until when.** Only an old project's marks: `retireLibraryTags`
+  and the tag fallback in `markKind` read a kept project's old tags once. They go when every
+  kept project has published once under this code. The decoder has no transitional line.
+- **Known consequences.** An app older than this form cannot decode a link row, so the app and
+  the server ship together. A taken-out link reads as a `FUN_` placeholder, with the registry's
+  instructions, until its project publishes again. A function whose project holds a mark but
+  whose code does not bind becomes the module's at the next publish, with the entry's name and
+  no text. The registry's own review (the entry object) still records the instructions of the
+  review it came from; the panel and the tools read the code object.
+
+## Next stage: who uses an entry, and a new name everywhere
+
+An entry does not record the modules that use it: `variants` counts bodies. The
+facts are in each module's stored analysis (the function's entry, its callers), and
+reading them all for each question grows with every module, so the store keeps an
+index: entry to the functions of each module that hold it and call it. A publish
+updates that module's rows when it stores its analysis, in the same step. The index
+is derived and can be rebuilt from the analyses, so it is no new source of truth, and
+a mirror has to carry or rebuild it. The app shows, for a library function, which
+functions of which modules hold it and call it.
+
+A new name on an entry reaches the function itself at once, since it reads from the
+entry. A caller's C prints the name as it stood at that module's last publish; a
+reader should print the entry's current name there.

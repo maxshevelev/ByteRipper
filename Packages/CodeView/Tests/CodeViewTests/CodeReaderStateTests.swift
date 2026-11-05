@@ -150,7 +150,7 @@ final class CodeReaderStateTests: XCTestCase {
     /// The groups read in review order — full, partial, decompiled, library,
     /// no body, not recorded — and each group's functions read alphabetically.
     func testTheReviewOrderReadsTheReviewLevel() throws {
-        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        let artifact = try throughARegistry("""
         {"script_version":7,
          "functions":[
           {"entry":"0x100","name":"FullOne","review_level":"full","instructions":[]},
@@ -162,7 +162,7 @@ final class CodeReaderStateTests: XCTestCase {
           {"entry":"0x400","name":"CopyMem","review_level":"library","instructions":[]},
           {"entry":"0x500","name":"ExternalRoutine","review_level":"no_body","instructions":[]},
           {"entry":"0x600","name":"NotRecorded","instructions":[]}]}
-        """.utf8))
+        """)
         var state = CodeReaderState(model: CodeModel(artifact: artifact, moduleBytes: nil))
         state.show(.review)
         XCTAssertEqual(state.functionRows, [
@@ -172,7 +172,7 @@ final class CodeReaderStateTests: XCTestCase {
             .group(.library), .section(.unrecorded), .function(4, level: 2),
             .group(.noBody), .function(5, level: 1),
             .group(.unknown), .function(6, level: 1)
-        ], "a v7 library function records no kind")
+        ], "an entry that says no kind")
         XCTAssertEqual(state.groupCount(at: 0), 2)
         XCTAssertEqual(state.groupCount(at: 3), 1)
         XCTAssertEqual(state.groupCount(at: 12), 1)
@@ -183,7 +183,7 @@ final class CodeReaderStateTests: XCTestCase {
     /// many it holds, opens and closes, and opens again for a hidden function
     /// revealed. A kind with none is not shown.
     func testLibraryFunctionsSitUnderTheirKinds() throws {
-        let artifact = try JSONDecoder().decode(CodeArtifact.self, from: Data("""
+        let artifact = try throughARegistry("""
         {"script_version":8,
          "functions":[
           {"entry":"0x100","name":"IoWrite","review_level":"library","library_kind":"amd","instructions":[]},
@@ -191,7 +191,7 @@ final class CodeReaderStateTests: XCTestCase {
           {"entry":"0x300","name":"CopyMem","review_level":"library","library_kind":"edk2","instructions":[]},
           {"entry":"0x400","name":"OldTag","review_level":"library","instructions":[]},
           {"entry":"0x500","name":"Mine","review_level":"full","instructions":[]}]}
-        """.utf8))
+        """)
         var state = CodeReaderState(model: CodeModel(artifact: artifact, moduleBytes: nil))
         state.show(.review)
         XCTAssertEqual(state.functionRows, [

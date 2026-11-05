@@ -28,18 +28,17 @@ public enum GhidraTools {
         These tools review one UEFI module (a PEIM or a DXE driver) in Ghidra: the names, signatures, \
         types and comments a review writes are Ghidra's own and are kept in the module's project between \
         sessions. A module is named by the SHA-256 of its bytes (`module`). Start with `ghidra_modules` \
-        or `ghidra_open`; read with `ghidra_functions`, `ghidra_gaps` (the code between bodies the \
+        or `ghidra_create`; read with `ghidra_functions`, `ghidra_gaps` (the code between bodies the \
         analysis never cut), `ghidra_function` (decompiled C, parameters and \
         locals with their storage), `ghidra_disassembly`, `ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_equates_on_memory`, `ghidra_type_definition`, \
         `ghidra_type_uses` (where every module names a type), `ghidra_description`; write with `ghidra_rename`, `ghidra_function_create`, `ghidra_function_delete`, `ghidra_function_merge`, \
         `ghidra_rename_variable`, `ghidra_function_locals_reset`, `ghidra_redecode`, `ghidra_signature`, \
-        `ghidra_type`, `ghidra_set_data`, `ghidra_comment`, `ghidra_describe`, `ghidra_code_mode`, `ghidra_equate`, \
-        `ghidra_function_tag`. `ghidra_function_tag` marks library code the module statically links in, and \
-        whose: `library.edk2`, `library.amd` (AGESA) or `library.intel` (FSP/RC), by the criteria in the \
-        skill's "Library functions"; the artifact records it at the library review level with that kind, \
-        and it needs no further review. The shared registry of reviewed library functions is applied to a \
-        module as it opens — `library` in `ghidra_open`'s answer; `ghidra_library` lists the matches and \
-        `ghidra_library_apply` applies, replaces or declines one. `ghidra_publish` makes the review visible to the app — every \
+        `ghidra_type`, `ghidra_set_data`, `ghidra_comment`, `ghidra_describe`, `ghidra_code_mode`, `ghidra_equate`. \
+        A library function lives in the shared registry and nowhere else: a module holds a link to its entry. \
+        `ghidra_library_candidate` proposes a reviewed function for it — `edk2`, `amd` (AGESA) or `intel` (FSP/RC), by the \
+        criteria in the skill's "Library functions" — and `ghidra_publish` decides: the registry takes every candidate, or the publish is refused until that is resolved. A body the registry \
+        holds links as a module is created — `library` in `ghidra_create`'s answer; `ghidra_library` lists the \
+        matches and `ghidra_library_apply` links or declines one. `ghidra_publish` makes the review visible to the app — every \
         ByteRipper that reads this store — as a new revision; publish at coherent checkpoints, not after \
         every rename. `ghidra_done` publishes and ends the session; `ghidra_forget` lets a kept \
         project go — its owner stopped and its folder moved to the Trash — for a program that cannot \
@@ -101,7 +100,7 @@ public enum GhidraTools {
             title: "List the modules kept in Ghidra",
             description: """
                 The modules that have a kept Ghidra project: `module` (SHA-256), `name`, whether an owner \
-                is `running`, whether the project holds a review (`reviewed`), and its last publish \
+                is `running`, whether the project holds a review of its own (`reviewed`; entries it only links are none), and its last publish \
                 (`published`: artifact, recipe, revision, and `at`, when what is stored last changed). \
                 `modification` and `writes` under `published` count this project's writes up to that \
                 publish, for telling what is still unpublished: they move at a publish that stores \
@@ -120,10 +119,11 @@ public enum GhidraTools {
             properties["name"] = AgentSchema.string("With `image_base64`: what to call the module, e.g. \"CpuPei\".")
         }
         return AgentTool(
-            name: "ghidra_open",
-            title: "Open a module in Ghidra",
+            name: "ghidra_create",
+            title: "Create a module in Ghidra",
             description: """
-                Starts the module's owner — Ghidra holding its project open — and answers its `hello`: \
+                Creates the module's project if it has none, and goes on with the one it has otherwise. Starts \
+                the module's owner — Ghidra holding its project open — and answers its `hello`: \
                 program, functions, whether there are unpublished changes. The owner saves the program \
                 when it idles out, is stopped or gets a signal, so work between publishes survives a \
                 server restart — only an owner killed outright or crashed loses it, and then `writes_lost` here and in \
@@ -153,7 +153,7 @@ public enum GhidraTools {
         }
     }
 
-    /// `ghidra_open`'s answer: the owner's `hello`, and what the library
+    /// `ghidra_create`'s answer: the owner's `hello`, and what the library
     /// registry applied to the module as it opened (`library`) — or why it
     /// could not (`library_error`): the open stands either way.
     public static func opened(_ hello: Data, module: SHA256Digest, backend: GhidraBackend) async -> Data {
@@ -182,7 +182,7 @@ public enum GhidraTools {
         return summary
     }
 
-    /// A write on the registry itself, as a tool asks for it.
+    /// A citation on the registry, as its tool asks for it.
     private static func change(_ arguments: AgentArguments, _ backend: GhidraBackend,
                                _ change: LibraryChange) async throws -> AgentAnswer {
         let module = try module(arguments)
@@ -200,20 +200,22 @@ public enum GhidraTools {
                     The module's functions against the shared registry of reviewed library functions, \
                     matched by body (Ghidra's Function ID: the code with relocated addresses masked, and \
                     its constants). `applied`: functions carrying the current version of their entry. \
-                    `to_apply`: matches that apply by themselves — `ghidra_open` applies them, and \
-                    `ghidra_library_apply` without `address` does: an unnamed function takes the whole \
-                    entry (`whole`); one a review named takes the entry's name, its old name kept in the \
-                    reason, and only what its review left empty (`fill`); a newer version replaces one \
-                    applied and not edited since; a body that differs from an entry only in the codes an \
-                    assert routine is called with is a `variant` of it. `edited`: applied, then edited — \
-                    the review's now. `candidates`: bodies of an entry's shape with other constants, \
+                    `to_apply`: matches that link by themselves — `ghidra_create` links them, and \
+                    `ghidra_library_apply` without `address` does: the function takes the entry's number, \
+                    name and signature, and what the project wrote on it stays. A body that differs from an \
+                    entry only in the codes an assert routine is called with links as a variant of it. \
+                    `edited`: linked and dirty, written on since: the next publish offers it to the entry. \
+                    `short_candidate`: a body under four instructions with the same bytes as an entry: \
+                    nothing links by itself, and a review binds it with `ghidra_library_apply` from how it \
+                    is called, or names it and proposes it as a new entry. \
+                    `candidates`: bodies of an entry's shape with other constants, \
                     each difference listed (`value`, `entry_value`, `assert`): other functions unless a \
                     review says why the values make no difference. `declined`: entries a review refused \
                     for the function. With `id`: one entry — its index row, its review, its history and \
                     `gaps`, what its review lacks, read from the review itself; `library_registry` reads the \
                     `function_parts` left out of the review. A match's `gaps` are the \
                     function's own missing parts as the last published analysis recorded them, and \
-                    `entry_gaps` the entry's, so a decision to apply, replace or take can be made without \
+                    `entry_gaps` the entry's, so a decision to link or take can be made without \
                     opening either — and the two are read in the same words.
                     """,
                 inputSchema: AgentSchema.object([
@@ -226,105 +228,6 @@ public enum GhidraTools {
                     return try await answer { try await backend.library(module, .init(action: .entry, id: id)) }
                 }
                 return try await answer { try await backend.library(module, .init(action: .status)) }
-            },
-            AgentTool(
-                name: "ghidra_library_rename",
-                title: "Give a library registry entry a narrower name",
-                description: """
-                    The name changes in the entry, its signatures and its stored C, not in comments or in \
-                    other entries' C. A library function's name is unique in the registry, and it goes by what the functions \
-                    mean, not by who published first. When a publish answers `library.name_conflicts`, read \
-                    the entry that holds the name (`library_registry` with its `id`) beside the new function. \
-                    If the name fits the new function, or fits neither well, give the entry the narrower name \
-                    its code earns with this tool, and publish again; otherwise rename the new function. The \
-                    `reason` says what the review found, and the history keeps it. Every module takes the new \
-                    name at its next open. The text of the entry's recorded `function.c` keeps the old name \
-                    until a new C is recorded; a reader through the registry sees the new one. `dry_run: true` \
-                    answers the same and writes nothing.
-                    """,
-                inputSchema: AgentSchema.object([
-                    "module": moduleProperty,
-                    "id": AgentSchema.string("The entry to rename, as a name conflict's `held_by` gives it."),
-                    "name": AgentSchema.string("The narrower name, free in the registry."),
-                    "reason": AgentSchema.string("What the review of both functions found."),
-                    "dry_run": AgentSchema.boolean("Answer what the rename would do and write nothing.")
-                ], required: ["module", "id", "name", "reason"]),
-                annotations: .edit
-            ) { call in
-                let arguments = call.arguments
-                let module = try module(arguments)
-                let request = GhidraHost.LibraryRequest(
-                    action: .rename, id: try arguments.string("id"), reason: try arguments.string("reason"),
-                    dryRun: try arguments.bool("dry_run", default: false), name: try arguments.string("name"))
-                return try await answer { try await backend.library(module, request) }
-            },
-            AgentTool(
-                name: "ghidra_library_take_out",
-                title: "Give a body back to its modules",
-                description: """
-                    A library function depends on no module: it refers to no data but a constant of its own \
-                    library's source, and calls only library functions. A body that does not qualify leaves \
-                    the registry with this tool: with `body`, that body alone; without, the whole entry, and \
-                    its name is free. A publish does not offer it again. A module whose function took it or \
-                    was tagged with it keeps the text at its next open, and the function stops being library. \
-                    The history stays. `ghidra_library_restore` takes a wrong decision back. On a body already \
-                    out, `reason` corrects what its reason says: nothing else moves, and the history keeps the \
-                    old one. `dry_run: true` answers the same and writes nothing.
-                    """,
-                inputSchema: AgentSchema.object([
-                    "module": moduleProperty,
-                    "id": AgentSchema.string("The entry."),
-                    "body": AgentSchema.string("One of its bodies; omit for the whole entry."),
-                    "reason": AgentSchema.string("What in the code ties it to a module."),
-                    "dry_run": AgentSchema.boolean("Answer what would be done and write nothing.")
-                ], required: ["module", "id", "reason"]),
-                annotations: .edit
-            ) { call in
-                try await change(call.arguments, backend, LibraryChange(
-                    action: .takeOut, id: try call.arguments.string("id"),
-                    body: try call.arguments.optionalString("body"), reason: try call.arguments.string("reason")))
-            },
-            AgentTool(
-                name: "ghidra_library_restore",
-                title: "Take a body back into the registry",
-                description: """
-                    Takes back a `ghidra_library_take_out`: the body returns to its entry, or the entry returns \
-                    with it. The name must still be free. `dry_run: true` answers the same and writes nothing.
-                    """,
-                inputSchema: AgentSchema.object([
-                    "module": moduleProperty,
-                    "body": AgentSchema.string("The body key, as the index's `taken_out` lists it."),
-                    "reason": AgentSchema.string("Why the decision was wrong."),
-                    "dry_run": AgentSchema.boolean("Answer what would be done and write nothing.")
-                ], required: ["module", "body", "reason"]),
-                annotations: .edit
-            ) { call in
-                try await change(call.arguments, backend, LibraryChange(
-                    action: .restore, body: try call.arguments.string("body"), reason: try call.arguments.string("reason")))
-            },
-            AgentTool(
-                name: "ghidra_library_split",
-                title: "Make one body of an entry its own entry",
-                description: """
-                    Different bodies are different functions. One body of an entry becomes an entry of its own, \
-                    under the name its code earns, starting from the review they shared; correct its text from \
-                    a module that holds it. The body the entry is keyed by stays: give it its name with \
-                    `ghidra_library_rename`, and split the others off. `dry_run: true` answers the same and \
-                    writes nothing.
-                    """,
-                inputSchema: AgentSchema.object([
-                    "module": moduleProperty,
-                    "id": AgentSchema.string("The entry."),
-                    "body": AgentSchema.string("The body to split off."),
-                    "name": AgentSchema.string("Its name, free in the registry."),
-                    "reason": AgentSchema.string("What the review found."),
-                    "dry_run": AgentSchema.boolean("Answer what would be done and write nothing.")
-                ], required: ["module", "id", "body", "name", "reason"]),
-                annotations: .edit
-            ) { call in
-                try await change(call.arguments, backend, LibraryChange(
-                    action: .split, id: try call.arguments.string("id"), body: try call.arguments.string("body"),
-                    name: try call.arguments.string("name"), reason: try call.arguments.string("reason")))
             },
             AgentTool(
                 name: "ghidra_library_cite",
@@ -359,43 +262,30 @@ public enum GhidraTools {
             },
             AgentTool(
                 name: "ghidra_library_apply",
-                title: "Apply or decline a library registry entry",
+                title: "Link or decline a library registry entry",
                 description: """
-                    Applies the registry's entries to the module, each in a transaction of its own, and \
-                    answers each in `results`: `renamed` (from, to), `filled`, `differences` the \
-                    function's review keeps, `unplaced` (a variable or comment the function has no place \
-                    for), `leftovers` — the gaps the function still keeps after the apply, so a local it \
-                    left unnamed says so at once — and `marked` when the function is now the entry's. \
-                    Without `address`: every match `ghidra_library` lists in `to_apply`. With `address`: that function — a candidate \
-                    only with `reason` (why its other constants make no difference: it becomes a variant \
-                    of the entry at the next publish); `replace: true` puts the entry's review in place \
-                    of a review that differs or was edited since; `leftovers` accompany an apply that \
-                    names `address`, and a bulk apply leaves them out (the reading decompiles each \
-                    function it answers); `fields` takes only the parts named — \
-                    signature (return type, convention, parameter types), names (the function's and its \
-                    parameters'), locals, plate, comments — and keeps the rest of the function's. \
-                    `dry_run: true` answers the same and writes nothing: each entry is applied in its \
-                    transaction and rolled back, so a `replace` can be read before it is made. \
-                    `decline: true` refuses the entry for the function (`id`, or the one matched), and it \
-                    is not offered again. A difference a review keeps is settled by keeping it, or by \
-                    publishing it as the entry's next version (`ghidra_publish` with \
-                    `take_library_conflicts` and a reason). A match's `gaps` are the function's own missing \
-                    parts and `entry_gaps` the entry's, so the two reviews can be compared before either \
-                    is changed.
+                    Links functions to the registry's entries, each in a transaction of its own, and \
+                    answers each in `results`: `renamed` (from, to), `filled`, `leftovers`, and `marked`. \
+                    A linked function holds the entry's number, and its name and signature for its callers \
+                    to print; what the project wrote on it stays in the project, and a reader is shown the \
+                    entry. \
+                    Without `address`: every match `ghidra_library` lists in `to_apply`. With `address`: \
+                    that function — a candidate only with `reason` (why its other constants make no \
+                    difference: it becomes a variant of the entry), a dirty function stops being dirty and offers \
+                    nothing. With `take_text: true` the entry's text replaces what the project holds on the \
+                    function: do this before adding to a function of the registry, so that an addition stands on \
+                    the entry's text. \
+                    `dry_run: true` answers the same and writes nothing. `decline: true` refuses the entry \
+                    for the function (`id`, or the one matched), and it is not offered again.
                     """,
                 inputSchema: AgentSchema.object([
                     "module": moduleProperty,
                     "address": AgentSchema.string("The function's entry. Leave out to apply every match that applies by itself."),
                     "id": AgentSchema.string("The entry, where several match the function."),
                     "reason": AgentSchema.string("Why a candidate's other constants make no difference, or why an entry is declined."),
-                    "replace": AgentSchema.boolean("Put the entry's review in place of the function's."),
-                    "fields": AgentSchema.strings(
-                        "Take parts of the entry's review and keep the rest of the function's: signature, "
-                            + "names, locals, plate, comments."),
-                    "dry_run": AgentSchema.boolean(
-                        "Answer what the apply would do — filled, differences, unplaced, leftovers — and "
-                            + "write nothing."),
+                    "dry_run": AgentSchema.boolean("Answer what the apply would do, and write nothing."),
                     "decline": AgentSchema.boolean("Refuse the entry for the function at `address`."),
+                    "take_text": AgentSchema.boolean("Replace what the project holds on the function at `address` with the entry's text."),
                     "full": AgentSchema.boolean(
                         "Answer with the functions already carrying their entry; by default only a count.")
                 ], required: ["module"]),
@@ -408,15 +298,71 @@ public enum GhidraTools {
                     action: try arguments.bool("decline", default: false) ? .decline : .apply,
                     address: address, id: try arguments.optionalString("id"),
                     reason: try arguments.optionalString("reason"),
-                    replace: try arguments.bool("replace", default: false),
-                    fields: try arguments.strings("fields"),
-                    dryRun: try arguments.bool("dry_run", default: false))
+                    dryRun: try arguments.bool("dry_run", default: false),
+                    takeText: try arguments.bool("take_text", default: false))
+                if request.action == .apply, request.takeText == true, address == nil {
+                    throw AgentToolError("`take_text` names the function by `address`.")
+                }
                 if request.action == .decline, address == nil {
                     throw AgentToolError("`decline` names the function by `address`.")
                 }
                 let full = try arguments.bool("full", default: false)
                 let reply = try await answer { try await backend.library(module, request) }
                 return full ? reply : Self.compactPlan(reply)
+            },
+            AgentTool(
+                name: "ghidra_library_candidate",
+                title: "Propose functions for the library registry",
+                description: """
+                    Proposes reviewed functions for the shared registry: code the module statically links in, \
+                    and whose — `edk2` (EDK2's MdePkg libraries: `CopyMem`, HobLib, PeiServicesLib, BaseLib's \
+                    math), `amd` (AGESA's own libraries: LibAmd I/O, assert, IDS debug print) or `intel` (FSP \
+                    and Reference Code libraries), by the criteria in the skill's "Library functions". This \
+                    decides nothing and is kept in the project only. `ghidra_publish` decides, for all of them \
+                    at once: either the registry takes every one, and the publish stores the module with \
+                    links to the new entries, one revision; or it is refused whole, naming each function and \
+                    why — short of the bar of a finished function, no body (a thunk or an external), data or \
+                    a callee the registry does not hold, a name another entry holds, a change to what an entry \
+                    says — and nothing is stored. `ghidra_publish` with `dry_run: true` asks the registry without publishing. \
+                    A refusal is resolved by bringing the function to the bar, renaming, or `remove`: a \
+                    function the registry cannot hold is the module's. A function the registry already holds \
+                    is refused here: a change to it offers itself at a publish. A new function under a name \
+                    the registry holds takes another name; renaming an entry is an administrator's. A body under four instructions is told \
+                    by how it is called, not by its bytes: read `short_candidate` in `ghidra_library` first \
+                    and bind an entry that fits with `ghidra_library_apply`; propose it only when none does. \
+                    Answers `candidates`, the module's list now.
+                    """,
+                inputSchema: AgentSchema.object([
+                    "module": moduleProperty,
+                    "functions": .object([
+                        "type": .string("array"),
+                        "description": .string("The functions to propose."),
+                        "items": AgentSchema.object([
+                            "address": AgentSchema.string("The function's entry."),
+                            "kind": AgentSchema.string("Whose library: edk2, amd or intel."),
+                            "assert_routine": AgentSchema.boolean("An assert routine: the codes it is called with make variants of the entries that call it.")
+                        ], required: ["address", "kind"])
+                    ]),
+                    "remove": .object([
+                        "type": .string("array"),
+                        "description": .string("The entries of functions that are candidates no longer."),
+                        "items": AgentSchema.string("The function's entry.")
+                    ])
+                ], required: ["module"]),
+                annotations: .edit
+            ) { call in
+                let arguments = call.arguments
+                let module = try module(arguments)
+                let candidates = try (arguments["functions"]?.arrayValue ?? []).map { row -> GhidraHost.LibraryCandidate in
+                    guard let address = row["address"]?.stringValue, let kind = row["kind"]?.stringValue else {
+                        throw AgentToolError("Argument `functions`: each takes `address` and `kind`.")
+                    }
+                    return GhidraHost.LibraryCandidate(address: address, kind: kind,
+                                                       assertRoutine: row["assert_routine"]?.boolValue)
+                }
+                let remove = (arguments["remove"]?.arrayValue ?? []).compactMap(\.stringValue)
+                let request = GhidraHost.LibraryRequest(action: .candidate, candidates: candidates, remove: remove)
+                return try await answer { try await backend.library(module, request) }
             }
         ]
     }
@@ -446,10 +392,8 @@ public enum GhidraTools {
         return .json(.object(publication))
     }
 
-    /// `take_library_conflicts` as the tool takes it: `true` — every conflict,
-    /// with the one `library_reason` — or a list of entry ids, each with its
-    /// reason from `library_reason` given as an object of id to text.
-    static func libraryTake(_ arguments: AgentArguments) throws -> LibraryTake {
+    /// The reasons a review gives for what it adds to the entries it moves.
+    static func entryReasons(_ arguments: AgentArguments) throws -> [String: String] {
         var entryReasons: [String: String] = [:]
         if let given = arguments["entry_reasons"] {
             guard let map = given.objectValue else {
@@ -462,33 +406,7 @@ public enum GhidraTools {
                 entryReasons[id] = reason
             }
         }
-        return try libraryConflictsTake(arguments).with(entryReasons: entryReasons)
-    }
-
-    private static func libraryConflictsTake(_ arguments: AgentArguments) throws -> LibraryTake {
-        guard let value = arguments["take_library_conflicts"] else { return .none }
-        if let all = value.boolValue {
-            guard all else { return .none }
-            return .all(try arguments.optionalString("library_reason") ?? "")
-        }
-        guard let items = value.arrayValue, items.allSatisfy({ $0.stringValue != nil }) else {
-            throw AgentToolError("Argument `take_library_conflicts`: expected true or false, "
-                + "or a list of entry ids.")
-        }
-        let ids = items.compactMap(\.stringValue)
-        var reasons: [String: String] = [:]
-        if let map = arguments["library_reason"]?.objectValue {
-            for (id, text) in map {
-                guard let reason = text.stringValue else {
-                    throw AgentToolError("Argument `library_reason`: an object of entry id to reason.")
-                }
-                reasons[id] = reason
-            }
-        } else if let text = try arguments.optionalString("library_reason") {
-            for id in ids { reasons[id] = text }
-        }
-        for id in ids where reasons[id] == nil { reasons[id] = "" }
-        return .these(reasons)
+        return entryReasons
     }
 
     static func readTools(_ backend: GhidraBackend) -> [AgentTool] {
@@ -537,9 +455,7 @@ public enum GhidraTools {
                 title: "List a module's functions",
                 description: """
                     The module's functions as Ghidra holds them now: entry, name, name_source, size, \
-                    signature, `tags`, and for a function the export writes at the library review \
-                    level `library` — `edk2_name` or `tag` — and `library_kind` — edk2, amd or intel; \
-                    none for a bare `library` tag. `name_contains` and `name_source` (a Ghidra source such as USER_DEFINED) \
+                    signature and `tags`. `name_contains` and `name_source` (a Ghidra source such as USER_DEFINED) \
                     narrow the list, `address_from`/`address_to` narrow it by entry. `filter: \
                     "unfinished"` keeps what a review has not passed — a parameter or a local Ghidra \
                     still names itself, or one still typed `undefined`, or no plate comment — each with \
@@ -550,7 +466,7 @@ public enum GhidraTools {
                     name like `uVar1` among them still prints in the C — and `fragment_names` names \
                     them; `filter: "fragments"` lists every function that has them. Paged by \
                     `offset` and `limit`; `next` says where the next page starts. `library_entry` is \
-                    the function's mark and whether it is still the entry (`state`: entry, edited). \
+                    the entry a function links to (`state`: linked, or edited when it is dirty: written on since it was bound). \
                     While the registry reads through, a row at its entry has the entry's name and \
                     signature and `text: "registry"`, or `text_unavailable` saying why not; `leftovers`, \
                     and so `filter: "unfinished"`, stay the project's, and can list a function that \
@@ -605,10 +521,7 @@ public enum GhidraTools {
                 name: "ghidra_function",
                 title: "Read one function",
                 description: """
-                    One function as Ghidra holds it now: its signature, its `tags` and — for a function \
-                    the export writes at the library review level — `library`, why: `edk2_name` for a \
-                    name on the EDK2 list, `tag` for a review's library tag — and `library_kind`, whose: \
-                    edk2, amd or intel; its parameters and locals with \
+                    One function as Ghidra holds it now: its signature, its `tags`; its parameters and locals with \
                     their `storage` and `first_use` (what `ghidra_rename_variable` names a local by), its \
                     plate comment, its `comments` — every comment in the body with its `address`, `kind` \
                     (plate, pre, eol, post, repeatable) and `text`, to check against a re-read of the C — \
@@ -1155,24 +1068,6 @@ public enum GhidraTools {
                 if arguments.has("operand") { body["operand"] = .int(try arguments.integer("operand")) }
                 return body
             },
-            write("ghidra_function_tag", "tag/function", "Tag a function",
-                  "Tags the function containing `address`, as the other function writes find it. A library "
-                  + "tag marks code the module statically links in that the automatic detection did not "
-                  + "recognise, and says whose: `library.edk2` (EDK2's MdePkg libraries — `CopyMem`, HobLib, "
-                  + "PeiServicesLib, BaseLib's math), `library.amd` (AGESA's own libraries — LibAmd I/O, "
-                  + "assert, IDS debug print) or `library.intel` (FSP and Reference Code libraries). Which "
-                  + "one, and when a vendor routine is the module's own work rather than a library, is "
-                  + "decided by the criteria in the skill's \"Library functions\". The exported code "
-                  + "artifact records a function carrying the tag at the `library` review level with that "
-                  + "kind, complete as it is. A function holds one library tag: a new one replaces it; the "
-                  + "bare `library` is refused. An empty `tag`, or `none`, removes the library tag. The "
-                  + "answer lists the function's tags, sorted, with `library` and `library_kind`.",
-                  ["address": AgentSchema.string("The function's entry address, or any address inside it."),
-                   "tag": AgentSchema.string(
-                       "The tag: library.edk2, library.amd or library.intel; empty or \"none\" removes the library tag.")],
-                  required: ["address", "tag"]) { arguments in
-                try optional(arguments, ["address", "tag"])
-            },
             write("ghidra_set_data", "set/data", "Name or type a datum",
                   "Names and/or types the datum at `address`, e.g. a GUID or a table. An empty `name` removes "
                   + "the label there, a leftover under a type that now names the place. A type laid over decoded "
@@ -1285,47 +1180,34 @@ public enum GhidraTools {
             description: """
                 Saves the module's program and stores its artifact and review document as the next \
                 revision: every ByteRipper reading this store shows the new names. Publishing an unchanged \
-                program is the same revision. `link_failures` lists functions it could not link to their entries, each with its entry and why: they keep what they held, and the module is not closed. `stale_links` lists links in comments and the description whose \
+                program is the same revision. `stale_links` lists links in comments and the description whose \
                 text is a default name (`FUN_…`) while the target now has a real one: `at` and `kind` say \
                 where, `name` is what the text should read; they are reported, not rewritten. `type_conflicts` names types another review defines \
                 differently, which stay in this module only: `ghidra_type_definition` shows both, and \
                 `type_conflict_origins` names the module that wrote the shared copy. \
-                `take_type_conflicts: true` replaces the shared copy of each conflicting type with this \
-                module's — the answer to a layout that was published wrong, and never an enum, whose \
-                clashing member means one of the two reviews is wrong. The types replaced come back as \
-                `type_conflicts_taken`, a typedef and the structure it names each named, since the archive \
-                holds them separately. A type made of a replaced one follows it and is not named, so a take \
-                can name fewer types than `type_conflicts` listed; a dry run with both flags merges into a \
-                copy of the archive and answers what the publish would. \
-                The library registry is offered every function tagged `library.<kind>` whose review \
-                meets the bar of a finished function: `library` says which bodies became entries \
-                (`added`), new versions (`updated` — a change to a function that was the entry's current \
-                version, from any module: no module holds an entry), were the same (`unchanged`), or hold \
-                another review not made on the current version (`conflicts`: the entry's name and \
-                version, the version this review was made on as `base`, who published the current one, \
-                and the name this module proposes); `library_below_bar` lists the tagged functions short of the bar with \
-                their gaps. `take_library_conflicts: true` with `library_reason` makes this module's review \
-                of every conflicting body the entry's next version; a list of entry ids takes those alone, \
-                each with its own reason in `library_reason` given as an object — a reason is required for \
-                each and kept in the entry's history. The conflicts not taken come back in `conflicts`, \
-                with the version this review was based on as `base`. A change names its `module` and \
-                `reason` on its row and in the entry's history, so a publish that would move an entry with \
-                no reason is refused and stores nothing, naming the entries in the refusal. Give each one \
-                in `entry_reasons`, an object of entry id to why this module changes it. A first version, \
-                an unchanged entry and a taken conflict with its reason need none; a take that names the \
-                entry also speaks for a change on its current version, and a function's own reason does \
-                only when its name or signature is all that moved. An equate or a named label the offered C \
-                prints differently is a change, named on the row in `names` (`equate +NAME`, `equate -NAME`, \
-                `equate ~NAME`, `label +NAME`, `label -NAME`), and the reason answers for it. A store that predates this rule is \
-                refused, since it would take the change with no reason. By default the answer carries only \
-                what the publish changed; `full: true` adds the list of entries it left as they were. \
-                `dry_run: true` answers the same without storing (its artifact hash is taken before the registry's states and marks, so a publish that touches the registry stores another): the artifact's counts, the revision \
-                it would become, the description's size, the type conflicts, and — with the library \
-                decision given as it would be to the publish — `library`, what the registry offer would \
-                do: the entries it would add or move to their next version, the conflicts it would leave, \
-                the entries that need a reason in `library.needs_reason` with the refusal in \
-                `library_refused`, and the same refusal a take of an entry that is not in conflict gets, \
-                in `library_error`. \
+                A shared definition is replaced only by an administrator: avoid changing what another \
+                review wrote unless the code proves it wrong. \
+                A function of the registry that became dirty — written on since it was bound — offers \
+                itself to the registry, and needs no candidate mark. The publish decides for all at once. \
+                New: `library.added`. The same review: `unchanged`. A review that only adds to the entry \
+                — a comment or a plate where it had none, a name or a type in place of a Ghidra placeholder, \
+                an equate or a label it did not name — is the entry's next version, `updated`, whichever \
+                version it was made on. A review that changes the function's name, its signature or \
+                any text the entry holds replaces it: the whole publish is refused, nothing is stored, the \
+                function stays dirty, and `conflicts` names the entry, its version, what would change and \
+                the module that wrote it. Take the entry's text with `ghidra_library_apply` and \
+                `take_text`, make the addition over it, and publish again. A dirty function short of the \
+                bar of a finished function is refused the same way. Each version names its `module` and \
+                `reason` in the entry's history; `entry_reasons`, an object of entry id to why, says it \
+                in the review's words, and an addition without one says what was added. \
+                A success takes the candidate and dirty marks off what the registry took; nothing else \
+                in the project changes, and what the project wrote on a function stays there. What the \
+                revision stores of such a function is a link from the module to its registry entry. \
+                By default the answer carries only what the publish changed; `full: true` adds the list of \
+                entries it left as they were. `dry_run: true` answers the same without storing: the \
+                artifact's counts, the revision it would become, the description's size, the type \
+                conflicts, and `library`, what the registry would do, with the refusal in \
+                `library_refused`. \
                 The export is done, so it costs what a publish costs. Publishing is the point another host sees the work; the \
                 owner also writes the program out when it idles out, is stopped or gets a signal — not \
                 after every change — so only an owner killed outright or crashed loses what came after \
@@ -1335,25 +1217,11 @@ public enum GhidraTools {
                 "module": moduleProperty,
                 "dry_run": AgentSchema.boolean(
                     "Answer what a publish would store — counts, the revision, the conflicts — and store nothing."),
-                "take_type_conflicts": AgentSchema.boolean(
-                    "Replace the shared copy of each conflicting type with this module's. An enum is never taken."),
-                "take_library_conflicts": .object([
-                    "type": .array([.string("boolean"), .string("array")]),
-                    "items": ["type": "string"],
-                    "description": .string("Take the conflicts this module's review wins: true for every "
-                        + "one, or a list of entry ids for those alone.")
-                ]),
-                "library_reason": .object([
-                    "type": .array([.string("string"), .string("object")]),
-                    "additionalProperties": ["type": "string"],
-                    "description": .string("Why this module's review is the better one: one text for "
-                        + "take_library_conflicts: true, or an object of entry id to reason for a list.")
-                ]),
                 "entry_reasons": .object([
                     "type": "object",
                     "additionalProperties": ["type": "string"],
-                    "description": .string("Why this module changes each entry this publish moves: an object "
-                        + "of entry id to reason, kept in the entry's history.")
+                    "description": .string("Why this module adds to each entry this publish moves: an object "
+                        + "of entry id to reason, kept in the entry's history. Optional.")
                 ]),
                 "full": AgentSchema.boolean(
                     "Answer with every entry the publish left as it was; by default only what changed.")
@@ -1361,19 +1229,15 @@ public enum GhidraTools {
             annotations: .edit
         ) { call in
             let module = try module(call.arguments)
-            let take = try call.arguments.bool("take_type_conflicts", default: false)
-            let libraryTake = try Self.libraryTake(call.arguments)
+            let libraryTake = LibraryTake.none.with(entryReasons: try Self.entryReasons(call.arguments))
             let full = try call.arguments.bool("full", default: false)
             if try call.arguments.bool("dry_run", default: false) {
                 let reply = try await answer {
-                    try await backend.publishPreview(module, takeTypeConflicts: take,
-                                                     takeLibrary: libraryTake)
+                    try await backend.publishPreview(module, takeTypeConflicts: false, takeLibrary: libraryTake)
                 }
                 return full ? reply : Self.compactPublish(reply)
             }
-            let options = GhidraHost.PublishOptions(
-                takeTypeConflicts: take,
-                takeLibrary: libraryTake)
+            let options = GhidraHost.PublishOptions(takeLibrary: libraryTake)
             let reply = try await answer { try await backend.publishModule(module, by: "agent", options: options) }
             return full ? reply : Self.compactPublish(reply)
         }
@@ -1387,8 +1251,8 @@ public enum GhidraTools {
                 + "an earlier session's, and gives the module's write lease back, so "
                 + "another session or a person can write. With nothing changed it publishes nothing. The "
                 + "module's owner stays up until it has been idle for a while, so a read or the next open "
-                + "costs no start; a later write takes a new lease. A publish that would move a library entry "
-                + "with no reason is refused and the lease stays: give `entry_reasons` to `ghidra_publish` first.",
+                + "costs no start; a later write takes a new lease. A publish the registry refuses "
+                + "stores nothing and the lease stays: `ghidra_publish` says what to do about it.",
             inputSchema: AgentSchema.object(["module": moduleProperty], required: ["module"]),
             annotations: .edit
         ) { call in

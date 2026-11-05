@@ -45,7 +45,7 @@
 7. **Agents get one set of tools from either place.** The tools are defined
    once (`GhidraHost`, on `AgentKit`), and what they need of a document —
    the document rule, a module query, `code_query`/`code_modules`,
-   `ghidra_open` by a node — is `Packages/AgentDocuments`, which both hosts
+   `ghidra_create` by a node — is `Packages/AgentDocuments`, which both hosts
    link. The app serves the list on its own MCP server — in-process for a
    desktop host, relayed to the server otherwise — beside the tree tools. The
    server serves its own list to an agent on its own machine over
@@ -78,7 +78,7 @@ by SHA must already have a project or be sent its bytes (§6.3).
 | package | targets | what it is |
 |---|---|---|
 | `Packages/HTTPService` | `HTTPService` | a small HTTP/1.1 server: listener, request parsing, routes with access and body limits, the authorizer seam, long poll. macOS: Network.framework |
-| `Packages/AgentDocuments` | `AgentDocuments` | the tools both hosts serve over their own documents: the document rule, a tool-module's query, `code_query`/`code_modules`, `ghidra_open` by a node |
+| `Packages/AgentDocuments` | `AgentDocuments` | the tools both hosts serve over their own documents: the document rule, a tool-module's query, `code_query`/`code_modules`, `ghidra_create` by a node |
 | `Packages/CodeAnalysis` | + `RemoteStore`, `StoreMirror` | the client of a served store and the mirror the app reads; the store itself as today |
 | `Packages/CASService` | `CASService` | the store's routes over `ContentStore` and its change feed, each naming its right |
 | `Packages/GhidraHost` | `GhidraHost` | Ghidra install, `Owner.jar`, projects, owner pool, lease, publish, the MCP tools |
@@ -187,7 +187,7 @@ own lease stays the guard against a second host.
 
 ### 6.4 The tools
 
-`ghidra_open`, `ghidra_functions`, `ghidra_function`, `ghidra_disassembly`,
+`ghidra_create`, `ghidra_functions`, `ghidra_function`, `ghidra_disassembly`,
 `ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_type_definition`, `ghidra_rename`,
 `ghidra_function_create`, `ghidra_rename_variable`, `ghidra_signature`, `ghidra_comment`,
 `ghidra_set_data`, `ghidra_type`, `ghidra_publish`, `ghidra_done`. The server's
@@ -283,7 +283,7 @@ them).
 4. **The tools — done.** `GhidraTools` over a `GhidraBackend` (the host, or
    a server's `/ghidra/v1`), and `AgentDocuments` for what they need of a
    document: the app serves the list on its own MCP server, with
-   `ghidra_open` taking a node of an open dump, and the server serves its own
+   `ghidra_create` taking a node of an open dump, and the server serves its own
    list with the dumps it holds over `<Server>/mcp.sock`
    (`Design/SERVER_HEADLESS_PLAN.md` §7). The `/mcp` endpoint this phase
    first built is gone (§9 of that plan).

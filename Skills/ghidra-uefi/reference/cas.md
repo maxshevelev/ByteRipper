@@ -173,15 +173,18 @@ same revision overwrites.
 `library/` is the shared registry of library functions
 (`Design/LIBRARY_REGISTRY_PLAN.md`): one entry per function body — its
 Function ID code units, full hash and specific hash, written
-`<size>-<full>-<specific>` in hex — holding the review one module published.
-`index.json` maps every entry's id to its current version (an object, as a
+`<size>-<full>-<specific>` in hex — holding the review one module published and, per body, the body's code.
+`index.json` declares the libraries and what each depends on (`libraries`:
+`edk2` on nothing, `amd` and `intel` on `edk2`), and maps every entry's id to its current version (an object, as a
 review document is), name, kind (`edk2`, `amd`, `intel`), source (module,
 address, revision, who) and bodies, and every body to its entry.
 `history/<id>.json` keeps every version and who published it, with the reason
 when an agent took a review not made on the current version.
 
-A publish offers the registry its module's functions tagged `library.<kind>`
-whose review meets the bar of a finished function. A body the registry lacks
+A publish offers the registry the review's candidates
+(`ghidra_library_candidate`), and every other function it marks as library,
+whose review meets the bar of a finished function; if the registry does not take
+them all, nothing is stored. A body the registry lacks
 is a new entry; the same review is no change; a review made on the entry's
 current version (`based_on` and `base`, from the function's mark) is the next
 version, from any module; any other review is a conflict, and the entry stays
@@ -189,7 +192,9 @@ unless the publish takes it with a reason. No module holds an entry. A served st
 offer at `POST /cas/v1/library` and serves `GET /cas/v1/library` and
 `GET /cas/v1/library/history/<id>`; its change feed says `library: true` when
 the index changed, and a mirror copies the index (not the histories). `gc`
-keeps every object the index and the histories name.
+keeps every object the index and the histories name, a body's code among them. A
+body's code is an object of its own (`reference/code-artifact.md`), and a mirror
+fetches it when a reader needs it, as it does any object.
 
 ### References and collection
 
@@ -244,6 +249,12 @@ python3 scripts/cas_cli.py history <module-sha>
 The server writes through this store — a publish is a write — and its
 `code_query` tool reads it. `cas_cli.py` takes the same `--store` and is how a
 person reads, verifies or moves what the store holds.
+
+An administrator changes what the registry says with `library-rename`, `library-take-out`,
+`library-restore` and `library-split`: each takes `--reason`, answers what it would do until
+`--apply` is given, and runs on a store's directory, not over a server. Over a server, the
+same changes, and a publish that takes a conflict, need a token with the `admin` right. A
+citation only adds, and stays with `cas.write`.
 
 ## A served store
 

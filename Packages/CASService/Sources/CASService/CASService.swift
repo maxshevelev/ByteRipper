@@ -148,6 +148,12 @@ public struct CASService: Sendable {
         router.add("POST", "\(prefix)/library", access: .rights([.casWrite])) { request in
             let put = try request.json(ServedStoreProtocol.PutLibrary.self)
             let dryRun = put.dryRun == true
+            // Replacing what the registry says is an administrator's decision, but
+            // for a citation, which only adds.
+            if put.renameID != nil || (put.change != nil && put.change?.action != .cite)
+                || put.decision.all || !put.decision.ids.isEmpty {
+                try request.principal?.require(.admin)
+            }
             if let change = put.change {
                 let result = try Self.answer { try store.changeLibrary(change, by: put.by, changedFrom: put.module, dryRun: dryRun) }
                 if !dryRun { await feed.rescan() }

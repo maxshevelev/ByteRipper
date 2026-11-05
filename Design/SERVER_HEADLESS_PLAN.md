@@ -11,7 +11,7 @@
    Structure panel uses (`UEFIContentSource`), and answers an agent on the same
    machine over a **local** MCP socket. The app is not needed for an analysis.
 2. **One agent layer, two hosts.** The tools both the app and the server serve
-   — the query adapter, the document rule, the code readings, `ghidra_open` by
+   — the query adapter, the document rule, the code readings, `ghidra_create` by
    a node — move out of the app target into `Packages/AgentDocuments`. The
    server does not keep a second copy of them.
 3. **Only REST goes outward.** The client app keeps its own MCP socket and its
@@ -72,7 +72,7 @@
    when the file is replaced atomically. The `stat` is taken at each listing —
    the console's poll and the `documents` tool — **and on every tool call that
    names a document**, whose answer then carries `disk` (below): an agent
-   calls `documents` once and works in `uefi_tree`, `read` and `ghidra_open`
+   calls `documents` once and works in `uefi_tree`, `read` and `ghidra_create`
    after, so that is where it must see the mark. A `stat` costs microseconds.
    The mark has two values: `changed` (the file is there but is not the one
    read) and `gone` (the `stat` fails — deleted or renamed). Either way the
@@ -159,7 +159,7 @@ server both link:
 | the document rule | `AgentDesk.place(named:)` | `AgentDocumentSet` (`@MainActor` protocol): `documents()` and `resolve(_ document: String?) throws -> any AgentDocument`; an `AgentDocument` is an id, a label, the `disk` mark and a read host. The rule of a host with no focus is `AgentDocumentRule` — one open: implied; several: required, the error lists ids and names; none: the host's own message. The app keeps its own rule, the focused document when none is named, since the person is looking at one. Size and version stay with each host's `documents` tool, which is not moved |
 | the query adapter | `AgentModuleTools.query`/`runQuery` (`ByteRipperApp/Agent/AgentModuleTools.swift:48-105`) | `ToolQueryTools.tool(for: ToolAgentQuery, documents:)`: adds `document`, resolves it, runs the query on the document's `ToolReadHost`, puts `document` into the answer, and `disk` beside it when the resolved `AgentDocument` reports one (the server's does; the app's reports none). The app wraps it with its own node links (`AgentNodeLinks`), which belong to parts and stay in the app |
 | the code readings | `AgentCodeTools` query and modules tools | `CodeReadings`: `code_query` and `code_modules` over an `AgentDocumentSet`, each document's `ToolReadHost`, the store's root as a closure (the app's follows its setting) and the GUID catalogue as a closure (as `UEFIAgentQueries.all(catalogue:)` takes it). `open_code` stays in the app — it opens a panel |
-| `ghidra_open` by a node | `AgentGhidraTools.openTool` | `GhidraNodeOpen`: reads the node's body through `UEFIAgentNodeData.bytes` and opens it on a `GhidraBackend`; by `module` for a project already made. Both hosts use `GhidraTools.tools(backend:includeOpenByImage: false)` and **replace** its `ghidra_open` with this one — two tools of one name in one list is a defect. The answer names the document it read and carries its `disk` mark, as a query's does: an agent works in `ghidra_open` after calling `documents` once (decision 9) |
+| `ghidra_create` by a node | `AgentGhidraTools.openTool` | `GhidraNodeOpen`: reads the node's body through `UEFIAgentNodeData.bytes` and opens it on a `GhidraBackend`; by `module` for a project already made. Both hosts use `GhidraTools.tools(backend:includeOpenByImage: false)` and **replace** its `ghidra_create` with this one — two tools of one name in one list is a defect. The answer names the document it read and carries its `disk` mark, as a query's does: an agent works in `ghidra_create` after calling `documents` once (decision 9) |
 
 Depends on `AgentKit`, `ToolModuleKit`, `UEFIImage`, `UEFITool` (the pure
 target), `CodeAnalysis`, `GhidraHost`. It is listed in `packages:` in
@@ -350,7 +350,7 @@ imports AppKit in several files: the server stays macOS-only in v1.
   not served: `region_scan` follows with ME and FIT (decision 15);
   `code_modules`/`code_query` from `CodeReadings` over the local
   `ContentStore`; with `--ghidra`, `GhidraTools.tools(backend:
-  includeOpenByImage: false)` with `ghidra_open` replaced by `GhidraNodeOpen`.
+  includeOpenByImage: false)` with `ghidra_create` replaced by `GhidraNodeOpen`.
   The server has no base64 form.
 - The GUID catalogue: the server has no download of its own, so it passes
   `{ .empty }` and `uefi_node` names a file by GUID only. Bundling the
@@ -361,7 +361,7 @@ imports AppKit in several files: the server stays macOS-only in v1.
   names, asserts none is present, asserts `uefi_tree`, `read` and
   `ghidra_publish` are present under their roles, and asserts every tool name
   appears once.
-- Descriptions: `code_query`, `code_modules` and `ghidra_open` take their
+- Descriptions: `code_query`, `code_modules` and `ghidra_create` take their
   words from the host (`CodeReadings.Wording`, the description
   `GhidraNodeOpen.tools` is given); the rest — the module queries, and the
   server's own `documents`/`read`/`find_bytes` — are worded from a
@@ -496,10 +496,10 @@ Every phase ends with its packages' tests green and the server starting.
    `AgentToolListTests` pins it in a golden file so the next move cannot drift
    it unseen.
    Each host gives the tools their words (`CodeReadings.Wording`, the
-   description of `ghidra_open`), so the server's can name no panel.
+   description of `ghidra_create`), so the server's can name no panel.
    `UEFICodeOpening` moved to the UEFI Structure's pure target, its codec
    staying in the UI one. Package tests for the document rule, the adapter
-   and the replaced `ghidra_open`; the app's agent tests run unchanged and
+   and the replaced `ghidra_create`; the app's agent tests run unchanged and
    pass.
 4. **`DumpHost`** — done: `DocumentRegistry`, `SnapshotReader`,
    `DocumentHost`, `FileStamp` and the disk mark, `documents.json` with the
@@ -521,7 +521,7 @@ Every phase ends with its packages' tests green and the server starting.
    (the server's `documents`/`read`/`find_bytes`, the UEFI Structure's
    queries through `ToolQueryTools` with the texts that name the app's screen
    reworded in `ServerToolText`, `CodeReadings`, and Ghidra's with
-   `ghidra_open` by a node under `--ghidra`), `MCPSocket` serves it on
+   `ghidra_create` by a node under `--ghidra`), `MCPSocket` serves it on
    `<Server>/mcp.sock` with a row per connection in `ServerActivity`, and
    `ServerRelay` is the stdio↔socket bridge behind `byteripper-server relay`.
    `MCPEndpoint` and its tests are gone; `/mcp` answers 404. The server now
@@ -578,7 +578,7 @@ Every phase ends with its packages' tests green and the server starting.
 - A manual end-to-end run on a real Lenovo dump:
   `byteripper-server --dump-roots … --ghidra`; an agent through
   `byteripper-server relay`: `documents` → `uefi_tree` → `uefi_node_data` →
-  `ghidra_open(document, node)` → edit → `ghidra_publish` → `code_query`.
+  `ghidra_create(document, node)` → edit → `ghidra_publish` → `code_query`.
 - Rights: a token without `cas.write` gets 403 on publish; without
   `ghidra.use`, 403 on the Ghidra routes; `admin` opens the console; a console
   cookie is refused outside `/admin`; the app shows the missing right.

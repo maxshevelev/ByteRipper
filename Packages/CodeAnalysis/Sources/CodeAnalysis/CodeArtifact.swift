@@ -59,17 +59,15 @@ public enum ReviewLevel: String, Decodable, Sendable, CaseIterable {
     case partial
     /// Nothing of the review: a placeholder name and nothing else.
     case decompiled
-    /// A library routine the module links in, or a function tagged
-    /// `library`; complete as it is.
+    /// A link to a registry entry. Never stored: a reader says it of a function
+    /// it read through the registry (`LibraryView`).
     case library
     /// An external function or a thunk: the exporter writes no C for it.
     case noBody = "no_body"
 }
 
-/// Whose library a `library` function is (v8): the code a module links in
-/// rather than its own, by the vendor that ships it. The review's tags name
-/// them — `library.edk2`, `library.amd`, `library.intel` — and a name on the
-/// exporter's EDK2 list is EDK2's without a tag.
+/// Whose library a registry function is: the code a module links in rather than
+/// its own, by the vendor that ships it.
 public enum LibraryKind: String, Decodable, Sendable, CaseIterable {
     /// EDK2's own libraries: BaseMemoryLib, HobLib, PeiServicesLib, …
     case edk2
@@ -135,11 +133,11 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
     /// Before v5, every OUT instruction, as it reads; from v5, the writes to
     /// port 0x80 — and to a port the analysis could not tell — at the place
     /// that supplies the value.
-    public let postCodes: [PostCode]
+    public internal(set) var postCodes: [PostCode]
     /// The writes to every other port (v5): CMOS, PCI configuration, the
     /// keyboard controller.
-    public let portWrites: [PostCode]
-    public let statusCodeCalls: [StatusCodeCall]
+    public internal(set) var portWrites: [PostCode]
+    public internal(set) var statusCodeCalls: [StatusCodeCall]
     /// Named data, from v4 on: what the UEFI pass named, and what the image's
     /// own symbols did. Empty for an older artifact.
     public let symbols: [Symbol]
@@ -310,11 +308,11 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         /// `plate`, `comments`, `params`, `locals`. Empty for a library
         /// function, for a `no_body` one, and before v7.
         public internal(set) var reviewGaps: [String]
-        /// Whose library a `library` function is (v8); nil for any other
-        /// level, and for a library function whose kind was not recorded.
+        /// The registry number a link stores; nil for a function of the module.
+        public let registryNumber: String?
+        /// Whose library the entry says it is. Set by `LibraryView`, never stored.
         public internal(set) var libraryKind: LibraryKind?
-        /// The library registry entry the function was matched with (v9);
-        /// nil for a function the registry does not hold.
+        /// The entry a link reads from. Set by `LibraryView`, never stored.
         public internal(set) var libraryEntry: LibraryEntry?
         /// This reading's C is the registry entry's, not the artifact's own. Set
         /// by `LibraryView`, never stored.
@@ -328,13 +326,13 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         /// Its registry entry could not be read, so this is the artifact's own
         /// text. Set by `LibraryView`, never stored.
         public internal(set) var textUnavailable = false
-        /// The module stores a copy of the entry's text for this function:
-        /// unfinished work, which a publish clears. Set by `LibraryView`, never stored.
-        public internal(set) var storedCopy = false
         /// What the index of a cut artifact says the function reads as, when
         /// this is that entry and not the function: its code has yet to be read.
         public let fingerprint: String?
-        public let instructions: [Instruction]
+        public internal(set) var instructions: [Instruction]
+        /// A link's addresses for what its code names outside itself: a registry
+        /// number or a datum's label, each to where it is in this module.
+        public let targets: [String: CodeAddress]
         /// The key the library registry knows this body by (v10):
         /// `<size>-<full>-<specific>`. Nil for a body too short to key, an
         /// external, a thunk, and before v10.
@@ -343,9 +341,6 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         /// with one key can differ here, since the key masks the operand. Nil
         /// for a body with none, and before the exporter wrote it.
         public let referenceBytes: String?
-        /// Holds no description of its own: the registry has it, and this is
-        /// the module's facts and the link.
-        public let copyFree: Bool
 
         /// Whether the name is Ghidra's placeholder rather than evidence.
         public var hasPlaceholderName: Bool {
@@ -355,34 +350,36 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         public init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             entry = try container.decode(CodeAddress.self, forKey: .entry)
-            name = try container.decode(String.self, forKey: .name)
+            registryNumber = try container.decodeIfPresent(String.self, forKey: .registryNumber)
+            // A link has no name of its own, and no other field that describes it.
+            let isLink = registryNumber != nil
+            name = try isLink ? "FUN_" + (LibraryView.hex(entry, width: 8) ?? String(entry.value, radix: 16))
+                : container.decode(String.self, forKey: .name)
             size = try container.decodeIfPresent(Int.self, forKey: .size)
-            signature = try container.decodeIfPresent(String.self, forKey: .signature)
+            signature = try isLink ? nil : container.decodeIfPresent(String.self, forKey: .signature)
             external = try container.decodeIfPresent(Bool.self, forKey: .external) ?? false
             thunk = try container.decodeIfPresent(Bool.self, forKey: .thunk) ?? false
             callers = try container.decodeIfPresent([CodeAddress].self, forKey: .callers) ?? []
             callees = try container.decodeIfPresent([CodeAddress].self, forKey: .callees) ?? []
-            c = try container.decodeIfPresent(String.self, forKey: .c)
-            cSpans = try container.decodeIfPresent([CSpan].self, forKey: .cSpans) ?? []
-            cSites = try container.decodeIfPresent([CSite].self, forKey: .cSites) ?? []
-            cFields = try container.decodeIfPresent([CField].self, forKey: .cFields) ?? []
-            cUnreachable = try container.decodeIfPresent(CUnreachable.self, forKey: .cUnreachable)
-            nameSource = try container.decodeIfPresent(String.self, forKey: .nameSource)
-            nameReason = try container.decodeIfPresent(String.self, forKey: .nameReason)
-            signatureReason = try container.decodeIfPresent(String.self, forKey: .signatureReason)
-            customStorage = try container.decodeIfPresent(Bool.self, forKey: .customStorage)
+            targets = try container.decodeIfPresent([String: CodeAddress].self, forKey: .targets) ?? [:]
+            c = try isLink ? nil : container.decodeIfPresent(String.self, forKey: .c)
+            cSpans = try isLink ? [] : container.decodeIfPresent([CSpan].self, forKey: .cSpans) ?? []
+            cSites = try isLink ? [] : container.decodeIfPresent([CSite].self, forKey: .cSites) ?? []
+            cFields = try isLink ? [] : container.decodeIfPresent([CField].self, forKey: .cFields) ?? []
+            cUnreachable = try isLink ? nil : container.decodeIfPresent(CUnreachable.self, forKey: .cUnreachable)
+            nameSource = try isLink ? "DEFAULT" : container.decodeIfPresent(String.self, forKey: .nameSource)
+            nameReason = try isLink ? nil : container.decodeIfPresent(String.self, forKey: .nameReason)
+            signatureReason = try isLink ? nil : container.decodeIfPresent(String.self, forKey: .signatureReason)
+            customStorage = try isLink ? nil : container.decodeIfPresent(Bool.self, forKey: .customStorage)
             // Decoded as the raw string so an unknown level is nil, not a
-            // refusal of the whole artifact: a later exporter may add one.
-            reviewLevel = try container.decodeIfPresent(String.self, forKey: .reviewLevel)
-                .flatMap(ReviewLevel.init(rawValue:))
-            reviewGaps = try container.decodeIfPresent([String].self, forKey: .reviewGaps) ?? []
-            libraryKind = try container.decodeIfPresent(String.self, forKey: .libraryKind)
-                .flatMap(LibraryKind.init(rawValue:))
-            libraryEntry = try container.decodeIfPresent(LibraryEntry.self, forKey: .libraryEntry)
+            // refusal of the whole artifact: a later exporter may add one. No
+            // stored function is at the `library` level: a reader says that of a link.
+            let level = try isLink ? nil : container.decodeIfPresent(String.self, forKey: .reviewLevel)
+            reviewLevel = level == ReviewLevel.library.rawValue ? nil : level.flatMap(ReviewLevel.init(rawValue:))
+            reviewGaps = try isLink ? [] : container.decodeIfPresent([String].self, forKey: .reviewGaps) ?? []
             fingerprint = try container.decodeIfPresent(String.self, forKey: .fingerprint)
             body = try container.decodeIfPresent(String.self, forKey: .body)
             referenceBytes = try container.decodeIfPresent(String.self, forKey: .referenceBytes)
-            copyFree = try container.decodeIfPresent(Bool.self, forKey: .copyFree) ?? false
             instructions = try container.decodeIfPresent(
                 [Instruction].self, forKey: .instructions) ?? []
         }
@@ -400,71 +397,24 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
             case customStorage = "custom_storage"
             case reviewLevel = "review_level"
             case reviewGaps = "review_gaps"
-            case libraryKind = "library_kind"
-            case libraryEntry = "library_entry"
+            case registryNumber = "registry"
+            case targets
             case fingerprint, body
             case referenceBytes = "reference_bytes"
-            case copyFree = "copy_free"
         }
     }
 
-    /// A function and the library registry (`Design/LIBRARY_REGISTRY_PLAN.md`
-    /// §5): one entry is one function for every module whose function has
-    /// its body, and this is how this module's function stands to it.
-    public struct LibraryEntry: Decodable, Equatable, Sendable {
-        public enum State: String, Sendable {
-            /// The function is the entry's version, and the module stores a copy of it.
-            case entry
-            /// The function is the entry's: the module stores only the link. Worked
-            /// out at a read, never stored, so an older reader does not meet it in a file.
-            case linked
-            /// Changed on that version since; the next publish makes the change
-            /// the entry's next version.
-            case edited
-            /// A review that named the function keeps what differs from the
-            /// entry: `differences`.
-            case differs
-            /// The function's review, published, was not made on the entry's
-            /// current version (`base`), and the entry kept its own.
-            case conflict
-        }
-
+    /// The registry entry a link reads from.
+    public struct LibraryEntry: Equatable, Sendable {
         public let id: String
         public let version: Int
-        /// Nil for a state this reader does not know.
-        public let state: State?
-        /// The assert codes a variant of the entry carries.
+        /// The assert codes this body holds where the entry's first body holds others.
         public let codes: [String]
-        public let differences: [String]
-        public let base: Int?
 
-        /// Whether the function is the entry's, as the panel's filled badge says.
-        public var isEntry: Bool { state == .entry || state == .linked }
-
-        /// A function read through its registry entry. What the function's own
-        /// mark says of it stays said: `conflict`, `differs` or `edited` is not
-        /// made `entry` by the reading.
-        init(id: String, version: Int, codes: [String], state: State? = nil, differences: [String] = [], base: Int? = nil) {
+        init(id: String, version: Int, codes: [String]) {
             self.id = id
             self.version = version
-            self.state = state ?? .entry
             self.codes = codes
-            self.differences = differences
-            self.base = base
-        }
-
-        public init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            id = try container.decode(String.self, forKey: .id)
-            version = try container.decode(Int.self, forKey: .version)
-            state = try container.decodeIfPresent(String.self, forKey: .state).flatMap(State.init(rawValue:))
-            codes = try container.decodeIfPresent([String].self, forKey: .codes) ?? []
-            differences = try container.decodeIfPresent([String].self, forKey: .differences) ?? []
-            base = try container.decodeIfPresent(Int.self, forKey: .base)
-        }
-
-        private enum CodingKeys: String, CodingKey {
-            case id, version, state, codes, differences, base
         }
     }
 
@@ -766,7 +716,7 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
         public let unresolved: Unresolved?
         /// The functions between this place and the OUT, outermost first.
         public let via: [Wrapper]
-        public let text: String
+        public internal(set) var text: String
 
         /// The port as a number, when it is one.
         public var portNumber: UInt64? {
@@ -797,8 +747,8 @@ public struct CodeArtifact: Decodable, Equatable, Sendable {
     public struct StatusCodeCall: Decodable, Equatable, Sendable {
         public let address: CodeAddress
         public let function: CodeAddress?
-        public let text: String
-        public let context: [String]
+        public internal(set) var text: String
+        public internal(set) var context: [String]
 
         public init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)

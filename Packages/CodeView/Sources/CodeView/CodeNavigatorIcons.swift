@@ -22,15 +22,7 @@ enum CodeNavigatorIcon {
         /// A short name in a frame as wide as the name: a library function's
         /// kind — EDK2, AMD, Intel — drawn as the function stands to the
         /// library registry.
-        case badge(String, BadgeStyle)
-    }
-
-    /// How a library badge is drawn: outlined for a library function the
-    /// registry does not hold; filled for one that is the registry's entry;
-    /// outlined with a dot for one the registry matched that is not its entry
-    /// — edited since, differing, or in conflict.
-    enum BadgeStyle: Equatable {
-        case outlined, filled, dotted
+        case badge(String)
     }
 
     /// A function's mark: a fully reviewed one, and any without a level of
@@ -50,22 +42,17 @@ enum CodeNavigatorIcon {
     static let bodylessFunction = (glyph: Glyph.framedLetter("f"), color: NSColor.systemGray)
     /// A library routine: the badge of whose library it is, in the library
     /// heading's blue.
-    static func library(_ name: String, style: BadgeStyle = .outlined) -> (glyph: Glyph, color: NSColor) {
-        (.badge(name, style), .systemBlue)
+    static func library(_ name: String) -> (glyph: Glyph, color: NSColor) {
+        (.badge(name), .systemBlue)
     }
 
     /// How wide a mark is at `side`: a square, or a badge — its name and
     /// the frame's room on either side of it.
     static func width(of glyph: Glyph, side: CGFloat) -> CGFloat {
-        guard case let .badge(name, style) = glyph else { return side }
+        guard case let .badge(name) = glyph else { return side }
         let ink = CTLineGetBoundsWithOptions(label(name, color: .labelColor, side: side), .useGlyphPathBounds)
-        return (ink.width + 2 * badgeInset(side: side)).rounded(.up) + (style == .dotted ? dotRoom(side: side) : 0)
+        return (ink.width + 2 * badgeInset(side: side)).rounded(.up)
     }
-
-    /// The dot's room beside a badge: it sits on the frame's corner, half
-    /// outside it, and clear of the name.
-    private static func dotSide(side: CGFloat) -> CGFloat { (side * 0.32).rounded() }
-    private static func dotRoom(side: CGFloat) -> CGFloat { (dotSide(side: side) / 2).rounded(.up) + 1 }
 
     /// The room between a badge's frame and its name.
     private static func badgeInset(side: CGFloat) -> CGFloat {
@@ -135,43 +122,16 @@ enum CodeNavigatorIcon {
             case let .symbol(name):
                 square(rect, radius: radius, color: color, onPlate: inverted)
                 drawSymbol(name, color: .white, scale: 0.7, in: rect)
-            case let .badge(name, style):
-                // The frame and the name leave the dot its room on the right.
-                let rect = style == .dotted
-                    ? NSRect(x: rect.minX, y: rect.minY, width: rect.width - dotRoom(side: side), height: rect.height)
-                    : rect
-                // A badge keeps its own colours on a selected row, on a white
-                // plate: inverted, a filled badge would read as the outlined
-                // one beside it, and filled is what says the registry holds it.
+            case let .badge(name):
+                // A badge keeps its own colours on a selected row, on a white plate.
                 if inverted {
                     NSColor.white.setFill()
                     NSBezierPath(roundedRect: rect.insetBy(dx: 0, dy: 1), xRadius: 3.5, yRadius: 3.5).fill()
                 }
-                if style == .filled {
-                    color.setFill()
-                    let chip = inverted ? rect.insetBy(dx: 1.5, dy: 2.5) : rect.insetBy(dx: 0, dy: 1)
-                    NSBezierPath(roundedRect: chip, xRadius: 3, yRadius: 3).fill()
-                    drawLabel(name, color: .white, in: rect)
-                } else {
-                    let frame = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 1.5), xRadius: 3, yRadius: 3)
-                    frame.lineWidth = 1
-                    color.setStroke()
-                    frame.stroke()
-                    drawLabel(name, color: color, in: rect)
-                }
-                if style == .dotted {
-                    // At the frame's top right corner, over its line, ringed
-                    // in white so it reads off the frame.
-                    // Centred on the frame's corner, its white ring inside the
-                    // image: past the image's edge the ring would be cut,
-                    // which shows on a selected row.
-                    let dot = dotSide(side: side)
-                    let spot = NSRect(x: rect.maxX - dot / 2 - 0.5, y: rect.maxY - dot - 1, width: dot, height: dot)
-                    NSColor.white.setFill()
-                    NSBezierPath(ovalIn: spot.insetBy(dx: -1, dy: -1)).fill()
-                    color.setFill()
-                    NSBezierPath(ovalIn: spot).fill()
-                }
+                color.setFill()
+                let chip = inverted ? rect.insetBy(dx: 1.5, dy: 2.5) : rect.insetBy(dx: 0, dy: 1)
+                NSBezierPath(roundedRect: chip, xRadius: 3, yRadius: 3).fill()
+                drawLabel(name, color: .white, in: rect)
             }
             return true
         }

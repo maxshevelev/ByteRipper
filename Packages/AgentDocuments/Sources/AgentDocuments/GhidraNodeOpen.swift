@@ -4,15 +4,15 @@ import Foundation
 import GhidraHost
 import UEFITool
 
-/// `ghidra_open` by a node of an open dump, or by `module` for one with a
+/// `ghidra_create` by a node of an open dump, or by `module` for one with a
 /// project already (`Design/SERVER_HEADLESS_PLAN.md` §4.1): the node's body
 /// is read from the document's tree and its bytes go to Ghidra.
 ///
-/// Both hosts serve the shared Ghidra tools without their `ghidra_open` by
+/// Both hosts serve the shared Ghidra tools without their `ghidra_create` by
 /// base64 and with this one in its place — two tools of one name in one list
 /// is a defect, so `tools` replaces rather than adds.
 public enum GhidraNodeOpen {
-    /// `GhidraTools`' list over `backend`, its `ghidra_open` this one.
+    /// `GhidraTools`' list over `backend`, its `ghidra_create` this one.
     ///
     /// - Parameters:
     ///   - description: what the tool says — where Ghidra runs is the host's
@@ -21,7 +21,7 @@ public enum GhidraNodeOpen {
     public static func tools(backend: GhidraBackend, documents: any AgentDocumentSet,
                              description: String, document: String) -> [AgentTool] {
         GhidraTools.tools(backend: backend, includeOpenByImage: false).map { tool in
-            tool.name == "ghidra_open"
+            tool.name == "ghidra_create"
                 ? self.tool(backend: backend, documents: documents, description: description, document: document)
                 : tool
         }
@@ -30,8 +30,8 @@ public enum GhidraNodeOpen {
     public static func tool(backend: GhidraBackend, documents: any AgentDocumentSet,
                             description: String, document: String) -> AgentTool {
         AgentTool(
-            name: "ghidra_open",
-            title: "Open a module in Ghidra",
+            name: "ghidra_create",
+            title: "Create a module in Ghidra",
             description: description,
             inputSchema: AgentSchema.object([
                 "document": AgentSchema.string(document),
@@ -56,7 +56,7 @@ public enum GhidraNodeOpen {
                 }
                 // The answer says which document it read and carries its disk
                 // mark, as a query's does: an agent calls `documents` once and
-                // works in `uefi_tree`, `read` and `ghidra_open` after, so
+                // works in `uefi_tree`, `read` and `ghidra_create` after, so
                 // that is where it has to see the mark
                 // (`Design/SERVER_HEADLESS_PLAN.md` decision 9).
                 return ToolQueryTools.stamped(answer, with: found.document)

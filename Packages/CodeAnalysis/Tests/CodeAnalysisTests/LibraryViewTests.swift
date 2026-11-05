@@ -50,12 +50,14 @@ final class LibraryViewTests: XCTestCase {
 
     /// The module's own copy: another name, other C, other addresses.
     private func moduleArtifact(pending: Bool = false, bodyKey: String? = nil) throws -> CodeArtifact {
+        let link = bodyKey == nil
         var function: [String: Any] = [
             "entry": "0x9000", "name": "OwnName", "signature": "int OwnName(int param_1)",
             "review_level": "full", "review_gaps": ["plate"],
             "callers": ["0x9500"]
         ]
         if let key = bodyKey ?? Optional(body.key) { function["body"] = key }
+        if link { function["registry"] = body.key }
         if pending {
             function["fingerprint"] = "pending"
         } else {
@@ -83,7 +85,6 @@ final class LibraryViewTests: XCTestCase {
         XCTAssertEqual(read.reviewGaps, [])
         XCTAssertEqual(read.libraryKind, .edk2)
         XCTAssertEqual(read.libraryEntry?.id, body.key)
-        XCTAssertEqual(read.libraryEntry?.isEntry, true)
         XCTAssertFalse(read.c?.contains("uVar1") ?? true, "nothing of the module's copy shows")
         // Its place stays this module's.
         XCTAssertEqual(read.entry, CodeAddress(0x9000))
@@ -116,7 +117,7 @@ final class LibraryViewTests: XCTestCase {
         try register(try entryObject())
         let data = try JSONSerialization.data(withJSONObject: [
             "script_version": 10, "ghidra": "12.2", "functions": [
-                ["entry": "0x9000", "name": "OwnName", "body": body.key]
+                ["entry": "0x9000", "registry": body.key, "body": body.key]
             ]
         ])
         let artifact = try JSONDecoder().decode(CodeArtifact.self, from: data)
@@ -150,7 +151,7 @@ final class LibraryViewTests: XCTestCase {
         let read = store.throughRegistry(try moduleArtifact()).functions[0]
         XCTAssertEqual(read.name, "CopyMem")
         XCTAssertEqual(read.signature, "void CopyMem(void)")
-        XCTAssertEqual(read.c, "int OwnName(int param_1) { MyCallee(); uVar1 = 1; }")
+        XCTAssertNil(read.c, "a link has no text of its own to fall back on")
     }
 
     /// Another module's C of the same review is no new version; the same
@@ -650,11 +651,11 @@ final class LibraryViewTests: XCTestCase {
                                        "comment": "What the entry says.", "uses": [["0x4", 1]]]]
         let printing = try offering(c: "void CopyMem(void) {\n  cpuid(ONE_NAME);\n}\n", equates: named)
 
-        let refused = try offer(printing, from: source, base: 1)
-        XCTAssertEqual(refused.needsReason?.first?.names, ["equate +ONE_NAME"])
-        XCTAssertTrue(refused.needsReason?.first?.changed?.contains("equates") == true)
-        XCTAssertTrue(refused.reasonRefusal?.contains("printing equate +ONE_NAME") == true)
-        XCTAssertEqual(try store.libraryIndex().entry(for: body)?.1.version, 1, "nothing stored")
+        // A name where the entry printed a number only adds to it.
+        let would = try offer(printing, from: source, base: 1)
+        XCTAssertEqual(would.updated.first?.names, ["equate +ONE_NAME"])
+        XCTAssertEqual(would.updated.first?.changed?.contains("equates"), true)
+        XCTAssertEqual(try store.libraryIndex().entry(for: body)?.1.version, 1, "a dry run stored nothing")
 
         let taken = try offer(printing, from: source, base: 1, why: "the leaf is AGESA's")
         XCTAssertEqual(taken.updated.first?.names, ["equate +ONE_NAME"])
@@ -667,16 +668,16 @@ final class LibraryViewTests: XCTestCase {
         let otherName = try offering(c: "void CopyMem(void) {\n  cpuid(OTHER_NAME);\n}\n", equates: [
             ["name": "OTHER_NAME", "value": "0xBACCD00B", "uses": [["0x4", 1]]]
         ])
-        XCTAssertEqual(try offer(otherName, from: other, base: 2).needsReason?.first?.names,
+        XCTAssertEqual(try offer(otherName, from: other, base: 2).conflicts.first?.names,
                        ["equate +OTHER_NAME", "equate -ONE_NAME"])
         // Its text printing the number drops the name, and says so.
         let number = try offering(c: "void CopyMem(void) {\n  cpuid(0xbaccd00b);\n}\n")
-        XCTAssertEqual(try offer(number, from: other, base: 2).needsReason?.first?.names, ["equate -ONE_NAME"])
+        XCTAssertEqual(try offer(number, from: other, base: 2).conflicts.first?.names, ["equate -ONE_NAME"])
         // The comment moved: the name stays, and its meaning is another.
         var moved = named[0]
         moved["comment"] = "Another meaning."
         XCTAssertEqual(try offer(try offering(c: "void CopyMem(void) {\n  cpuid(ONE_NAME);\n}\n", equates: [moved]),
-                                 from: other, base: 2).needsReason?.first?.names, ["equate ~ONE_NAME"])
+                                 from: other, base: 2).conflicts.first?.names, ["equate ~ONE_NAME"])
 
         // A holder with its own equate on the value, its own tag and symbol.
         let (id, row) = try XCTUnwrap(try store.libraryIndex().entry(for: body))
@@ -685,7 +686,7 @@ final class LibraryViewTests: XCTestCase {
             "script_version": 10, "ghidra": "12.2", "program": ["image_base": "0x0"],
             "functions": [[
                 "entry": "0x9000", "name": "OwnSymbol", "signature": "int OwnSymbol(void)", "body": body.key,
-                "library_kind": "amd", "library_entry": ["id": id, "version": 1, "state": "entry"],
+                "registry": id,
                 "c": "int OwnSymbol(void) { cpuid(HOLDERS_NAME); }",
                 "instructions": [
                     ["address": "0x9000", "bytes": "90", "text": "NOP"],
@@ -743,11 +744,11 @@ final class LibraryViewTests: XCTestCase {
 
     /// A conflict says which names taking it would change, as a change does.
     func testAConflictNamesWhatItPrints() throws {
-        try register(try offering(c: "void CopyMem(void) {\n  cpuid(0x1);\n}\n"))
-        let printing = try offering(c: "void CopyMem(void) {\n  cpuid(ONE_NAME);\n}\n", equates: [
+        try register(try offering(c: "void CopyMem(void) {\n  cpuid(ONE_NAME);\n}\n", equates: [
             ["name": "ONE_NAME", "value": "0x1", "uses": [["0x4", 1]]]
-        ])
-        XCTAssertEqual(try offer(printing, from: source, base: 0).conflicts.first?.names, ["equate +ONE_NAME"])
+        ]))
+        let number = try offering(c: "void CopyMem(void) {\n  cpuid(0x1);\n}\n")
+        XCTAssertEqual(try offer(number, from: source, base: 0).conflicts.first?.names, ["equate -ONE_NAME"])
     }
 
     /// A named label in the offered C is the review's, answered for like an
@@ -755,13 +756,12 @@ final class LibraryViewTests: XCTestCase {
     func testANamedLabelInTheCIsAnsweredFor() throws {
         try register(try offering(c: "void CopyMem(void) {\n  goto LAB_00001004;\nLAB_00001004:\n}\n"))
         let named = try offering(c: "void CopyMem(void) {\n  goto ErrorExit;\nErrorExit:\n}\n")
-        let refused = try offer(named, from: source, base: 1)
-        XCTAssertEqual(refused.needsReason?.first?.names, ["label +ErrorExit"])
+        XCTAssertEqual(try offer(named, from: source, base: 1).updated.first?.names, ["label +ErrorExit"])
         let taken = try offer(named, from: source, base: 1, why: "the exit path")
         XCTAssertEqual(taken.updated.first?.names, ["label +ErrorExit"])
         let other = SHA256Digest(data: Data("other".utf8))
         XCTAssertEqual(try offer(try offering(c: "void CopyMem(void) {\n  goto LAB_09001004;\nLAB_09001004:\n}\n"),
-                                 from: other, base: 2).needsReason?.first?.names, ["label -ErrorExit"])
+                                 from: other, base: 2).conflicts.first?.names, ["label -ErrorExit"])
         XCTAssertTrue(LibraryProposal.sameReview(try offering(c: "goto LAB_00001000;"), try offering(c: "goto LAB_00009000;")),
                       "two modules' decompiler labels are no change")
     }
@@ -817,26 +817,10 @@ final class LibraryViewTests: XCTestCase {
         let read = try XCTUnwrap(store.throughRegistry(artifact).functions.first)
         XCTAssertFalse(read.textFromRegistry)
         XCTAssertTrue(read.textUnavailable)
-        XCTAssertEqual(read.name, "OwnName")
+        XCTAssertEqual(read.name, "CopyMem", "the index still names it")
     }
 
     /// A function's own state is not made `entry` by being read as the entry.
-    func testAConflictOnAMarkShowsThroughTheRegistry() throws {
-        try register(try entryObject())
-        let c = "int OwnName(void) { return 0; }"
-        let data = try JSONSerialization.data(withJSONObject: [
-            "script_version": 10, "ghidra": "12.2", "functions": [[
-                "entry": "0x9000", "name": "OwnName", "c": c, "body": body.key,
-                "library_entry": ["id": "x", "version": 1, "state": "conflict", "base": 1],
-                "instructions": [["address": "0x9000", "bytes": "90", "text": "NOP"]]
-            ] as [String: Any]]
-        ])
-        let read = try XCTUnwrap(store.throughRegistry(try JSONDecoder().decode(CodeArtifact.self, from: data)).functions.first)
-        XCTAssertTrue(read.textFromRegistry)
-        XCTAssertEqual(read.libraryEntry?.state, .conflict)
-        XCTAssertEqual(read.libraryEntry?.base, 1)
-    }
-
     // MARK: - Stage 2: no copies, and other bytes are another function
 
     private func exported(_ rows: [[String: Any]], symbols: [[String: Any]] = []) throws -> Data {
@@ -858,6 +842,20 @@ final class LibraryViewTests: XCTestCase {
         return row
     }
 
+    /// The index with the code the export gives it, as a publish teaches it.
+    private func taught(_ raw: Data, _ index: LibraryIndex) -> (LibraryIndex, [SHA256Digest: Data]) {
+        var index = index
+        var code: [SHA256Digest: Data] = [:]
+        for teaching in ModuleFormat.teachings(raw, index: index) {
+            let digest = SHA256Digest(data: teaching.code)
+            code[digest] = teaching.code
+            if let at = index.entries[teaching.id]?.variants.firstIndex(where: { $0.body.key == teaching.variant.body.key }) {
+                index.entries[teaching.id]?.variants[at].code = digest
+            }
+        }
+        return (index, code)
+    }
+
     private func indexHolding(_ key: String, bytes: String? = nil) -> LibraryIndex {
         var index = LibraryIndex()
         let parts = key.split(separator: "-").map(String.init)
@@ -877,48 +875,34 @@ final class LibraryViewTests: XCTestCase {
             row("0x1000", name: "ByMark", body: key, mark: ["id": key, "version": 3, "state": "entry"]),
             row("0x2000", name: "BodyOnly", body: key),
             row("0x3000", name: "Edited", body: key, mark: ["id": key, "version": 3, "state": "edited"]),
-            row("0x4000", name: "InConflict", body: key, mark: ["id": key, "version": 2, "state": "conflict"]),
             row("0x5000", name: "ModulesOwn", body: "13-1111111111111111-2222222222222222")
         ], symbols: [["address": "0x1000", "name": "ByMark"], ["address": "0x5000", "name": "ModulesOwn"],
                      ["address": "0x9000", "name": "gGuid"]])
-        let stripped = LibraryCopyFree.strip(raw, index: index)
-        XCTAssertEqual(stripped.functions, ["0x1000", "0x2000"])
-        XCTAssertEqual(stripped.addresses, ["0x1000", "0x2000"])
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: stripped.artifact) as? [String: Any])
+        let (taught, code) = taught(raw, index)
+        let stored = ModuleFormat.stored(raw, index: taught, code: code)
+        XCTAssertEqual(stored.functions, ["0x1000", "0x2000", "0x3000"], "a draft stays in its project")
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: stored.artifact) as? [String: Any])
         let rows = try XCTUnwrap(object["functions"] as? [[String: Any]])
-        for gone in rows.prefix(2) {
-            for key in ["signature", "c", "c_spans", "c_sites", "c_fields", "name_reason", "signature_reason", "library_kind"] {
-                XCTAssertNil(gone[key], key)
-            }
-            XCTAssertEqual(gone["copy_free"] as? Bool, true)
-            XCTAssertEqual(gone["name_source"] as? String, "DEFAULT")
-            XCTAssertTrue((gone["name"] as? String)?.hasPrefix("FUN_0000") == true, "\(gone["name"] ?? "")")
-            // What is the module's stays.
-            XCTAssertEqual(gone["callers"] as? [String], ["0x100"])
-            XCTAssertEqual((gone["instructions"] as? [Any])?.count, 1)
-            XCTAssertEqual(gone["body"] as? String, key)
+        for link in rows.prefix(3) {
+            XCTAssertEqual(link.keys.sorted(), ["body", "callees", "callers", "entry", "registry"])
+            XCTAssertEqual(link["registry"] as? String, key)
+            XCTAssertEqual(link["callers"] as? [String], ["0x100"])
         }
-        XCTAssertEqual(rows[0]["library_entry"] as? [String: AnyHashable], ["id": key, "version": 3, "state": "entry"])
-        for kept in rows.suffix(3) {
-            XCTAssertNotNil(kept["c"], "\(kept["name"] ?? "")")
-            XCTAssertNil(kept["copy_free"])
-        }
+        XCTAssertNotNil(rows[3]["c"])
+        XCTAssertNil(rows[3]["library_kind"])
+        XCTAssertEqual(rows[3]["review_level"] as? String, "partial")
         XCTAssertEqual((object["symbols"] as? [[String: Any]])?.compactMap { $0["name"] as? String }, ["ModulesOwn", "gGuid"])
-        // A reader from before this still decodes it, and a reader now tells them apart.
-        let read = try JSONDecoder().decode(CodeArtifact.self, from: stripped.artifact)
-        XCTAssertEqual(read.functions.map(\.copyFree), [true, true, false, false, false])
-        XCTAssertNil(read.functions[0].c)
-        // Nothing to strip: byte for byte.
-        XCTAssertEqual(LibraryCopyFree.strip(raw, index: LibraryIndex()).artifact, raw)
+        // Already in the form: byte for byte.
+        XCTAssertEqual(ModuleFormat.stored(stored.artifact, index: taught, code: code).artifact, stored.artifact)
     }
 
     func testAReviewDocumentKeepsNothingOfAStrippedFunction() throws {
-        let stripped = LibraryCopyFree.Stripped(artifact: Data(), functions: ["0x1000"], addresses: ["0x1000", "0x1002"])
+        let stripped = ModuleFormat.Stored(artifact: Data(), functions: ["0x1000"], addresses: ["0x1000", "0x1002"])
         let document = try JSONSerialization.data(withJSONObject: [
             "functions": ["0x1000": ["name": "ByMark"], "0x5000": ["name": "Own"]],
             "comments": [["address": "0x1002", "text": "a step"], ["address": "0x5000", "text": "own"]],
             "data": [:]], options: .sortedKeys)
-        let out = try XCTUnwrap(JSONSerialization.jsonObject(with: LibraryCopyFree.stripReview(document, of: stripped)) as? [String: Any])
+        let out = try XCTUnwrap(JSONSerialization.jsonObject(with: ModuleFormat.review(document, of: stripped)) as? [String: Any])
         XCTAssertEqual((out["functions"] as? [String: Any])?.keys.sorted(), ["0x5000"])
         XCTAssertEqual((out["comments"] as? [[String: Any]])?.compactMap { $0["text"] as? String }, ["own"])
     }
@@ -938,7 +922,8 @@ final class LibraryViewTests: XCTestCase {
         // So it keeps its text.
         let raw = try exported([row("0x2000", name: "OtherGuid", body: key, bytes: "bbbb"),
                                 row("0x3000", name: "SameGuid", body: key, bytes: "aaaa")])
-        XCTAssertEqual(LibraryCopyFree.strip(raw, index: index).functions, ["0x3000"])
+        let (known, code) = taught(raw, index)
+        XCTAssertEqual(ModuleFormat.stored(raw, index: known, code: code).functions, ["0x3000"])
     }
 
 }

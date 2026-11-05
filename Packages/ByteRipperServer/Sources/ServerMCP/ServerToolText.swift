@@ -17,7 +17,7 @@ public enum ServerToolText {
                               properties: query.properties, required: query.required, run: query.run)
     }
 
-    /// `ghidra_open` by a node, where Ghidra is this server's.
+    /// `ghidra_create` by a node, where Ghidra is this server's.
     public static let ghidraOpen = """
         Opens a module for a review in Ghidra and answers its owner's `hello`: program, functions, \
         unpublished changes. Give the PE32/TE image `node` of a dump (`uefi_find` with name "PE32 image" \

@@ -54,55 +54,12 @@ final class GhidraHostLibraryTests: XCTestCase {
 
     /// A link a publish cannot make is on its answer, not lost: another function
     /// of the module holds the name the entry moved to.
-    func testALinkAPublishCouldNotMakeIsOnItsAnswer() async throws {
-        guard let paths = ProcessInfo.processInfo.environment["GHIDRA_LIBRARY_MODULES"]?.split(separator: ":"),
-              paths.count == 2 else {
-            throw XCTSkip("GHIDRA_LIBRARY_MODULES is not set")
-        }
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("GhidraHostLibraryTests-\(UUID().uuidString)", isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let store = try ContentStore(root: directory.appendingPathComponent("store"))
-        let host = GhidraHost(configuration: .init(projectsRoot: directory.appendingPathComponent("projects"),
-                                                   idle: 300, holder: "GhidraHostLibraryTests"),
-                              writer: store)
-        let images = try paths.map { try Data(contentsOf: URL(fileURLWithPath: String($0))) }
-        let reviewed = SHA256Digest(data: images[0]), other = SHA256Digest(data: images[1])
-        _ = try await host.create(module: images[0], name: "Reviewed")
-        _ = try await host.create(module: images[1], name: "Other")
-        defer { Task { await host.stop(reviewed); await host.stop(other) } }
-
-        let copyGuid = try await function(of: 25, in: reviewed, host: host)
-        _ = try await host.write(reviewed, "/v1/set/signature", body: body([
-            "address": copyGuid, "signature": "EFI_GUID * CopyGuid(EFI_GUID * DestinationGuid, EFI_GUID * SourceGuid)",
-            "storage": ["ECX:4", "EDX:4"], "by": "agent", "reason": "EDK2 BaseLib CopyGuid"]))
-        _ = try await host.write(reviewed, "/v1/set/comment", body: body([
-            "address": copyGuid, "kind": "plate", "text": "EDK2 BaseLib CopyGuid: the plate of the entry."]))
-        _ = try await host.write(reviewed, "/v1/set/comment", body: body([
-            "address": copyGuid, "kind": "eol", "text": "first dword of the GUID"]))
-        _ = try await host.write(reviewed, "/v1/tag/function", body: body(["address": copyGuid, "tag": "library.edk2"]))
-        let first = try await host.publish(reviewed, by: "agent")
-        let id = try XCTUnwrap(first.library?.added.first { $0.name == "CopyGuid" }?.id)
-
-        let theirs = try await function(of: 25, in: other, host: host)
-        _ = try await host.library(other, .init(action: .apply))
-        let linked = try await host.publish(other, by: "agent")
-        XCTAssertEqual(linked.linkFailures, [])
-
-        // The entry moves to a name another function of the holder has by then.
-        let list = try json(await host.read(other, "/v1/functions"))["functions"] as? [[String: Any]] ?? []
-        let neighbour = try XCTUnwrap(list.first { $0["entry"] as? String != theirs }?["entry"] as? String)
-        _ = try await host.write(other, "/v1/rename/function", body: body([
-            "address": neighbour, "name": "TakenName", "by": "agent", "reason": "this module's own"]))
-        _ = try await host.write(reviewed, "/v1/rename/function", body: body([
-            "address": copyGuid, "name": "TakenName", "by": "agent", "reason": "the entry's new name"]))
-        let renamed = try await host.publish(reviewed, by: "agent")
-        XCTAssertEqual(renamed.library?.updated.first?.name, "TakenName")
-
-        let published = try await host.publish(other, by: "agent")
-        XCTAssertEqual(published.linkFailures.map(\.id), [id])
-        XCTAssertEqual(published.linkFailures.first?.address, theirs)
-        XCTAssertTrue(published.linkFailures.first?.error.contains("TakenName") == true, "\(published.linkFailures)")
+    /// A function proposed for the registry, and the publish that takes it.
+    private func moved(_ address: String, of module: SHA256Digest, host: GhidraHost,
+                       kind: String = "edk2") async throws -> LibraryWriteResult {
+        _ = try await host.library(module, .init(action: .candidate, candidates: [.init(address: address, kind: kind)]))
+        let published = try await host.publish(module, by: "agent")
+        return try XCTUnwrap(published.library)
     }
 
     /// With the registry reading through, `ghidra_function` and `ghidra_functions`
@@ -134,8 +91,7 @@ final class GhidraHostLibraryTests: XCTestCase {
             "address": copyGuid, "kind": "plate", "text": "EDK2 BaseLib CopyGuid: the plate of the entry."]))
         _ = try await host.write(reviewed, "/v1/set/comment", body: body([
             "address": copyGuid, "kind": "eol", "text": "first dword of the GUID"]))
-        _ = try await host.write(reviewed, "/v1/tag/function", body: body(["address": copyGuid, "tag": "library.edk2"]))
-        let added = try await host.publish(reviewed, by: "agent").library?.added.first { $0.name == "CopyGuid" }
+        let added = try await moved(copyGuid, of: reviewed, host: host).added.first { $0.name == "CopyGuid" }
         let id = try XCTUnwrap(added?.id)
 
         let theirs = try await function(of: 25, in: other, host: host)
@@ -156,20 +112,16 @@ final class GhidraHostLibraryTests: XCTestCase {
         let manifest = try XCTUnwrap(try store.analysis(module: other))
         let raw = try JSONDecoder().decode(CodeArtifact.self, from: try store.object(manifest.artifact.sha256))
         let stored = try XCTUnwrap(raw.functions.first { $0.entry == at })
-        XCTAssertTrue(stored.copyFree)
+        XCTAssertEqual(stored.registryNumber, id)
         XCTAssertNil(stored.c)
         XCTAssertNil(stored.signature)
-        XCTAssertFalse(asRead?.storedCopy ?? true)
-        XCTAssertEqual(asRead?.libraryEntry?.state, .linked)
+        XCTAssertEqual(asRead?.libraryEntry?.id, id)
         XCTAssertEqual((on["library_entry"] as? [String: Any])?["state"] as? String, "linked")
-        XCTAssertNil(on["stored_copy"])
 
         // An edit is the review's own draft.
         _ = try await host.write(other, "/v1/set/comment", body: body([
             "address": theirs, "kind": "plate", "text": "An edit of this review."]))
         // Its text is a draft, not a copy: both readers say the same.
-        let draft = try json(await host.readCall(other, "function/\(theirs)", query: [:]))
-        XCTAssertNil(draft["stored_copy"])
         let edited = try json(await host.readCall(other, "function/\(theirs)", query: [:]))
         XCTAssertNil(edited["text"])
         XCTAssertEqual(edited["plate"] as? String, "An edit of this review.")
@@ -246,13 +198,14 @@ final class GhidraHostLibraryTests: XCTestCase {
             if let use = local["first_use"] { change["first_use"] = use }
             _ = try await host.write(source, "/v1/rename/variable", body: body(change))
         }
-        _ = try await host.write(source, "/v1/tag/function", body: body(["address": at, "tag": "library.edk2"]))
-        let first = try await host.publish(source, by: "agent")
-        let id = try XCTUnwrap(first.library?.added.first { $0.name == "GetHobList" }?.id)
+        let first = try await moved(at, of: source, host: host)
+        let id = try XCTUnwrap(first.added.first { $0.name == "GetHobList" }?.id)
         _ = try await host.library(other, .init(action: .apply))
         _ = try await host.publish(other, by: "agent")
 
         for (module, address, name) in [(other, there, "OtherBase"), (source, at, "HobBase")] {
+            // A holder holds no text of its own: it takes the entry's to write on.
+            if module == other { _ = try await host.library(other, .init(action: .apply, address: there, takeText: true)) }
             var answer = try await read(module, address)
             XCTAssertEqual(answer["text"] as? String, "registry")
             let locals = answer["locals"] as? [[String: Any]] ?? []
@@ -278,34 +231,37 @@ final class GhidraHostLibraryTests: XCTestCase {
             XCTAssertEqual(state(answer), "linked")
             XCTAssertEqual((answer["c"] as? String)?.contains(name), false)
             XCTAssertNil(answer["project_names"], "a name on a temporary is not kept")
+            // The project keeps what it wrote: a publish is no cleaning of it.
             let raw = try json(await host.read(module, "/v1/function/\(address)"))
-            XCTAssertNil(raw["plate"])
-            XCTAssertEqual((raw["comments"] as? [Any])?.count ?? 0, 0)
-            XCTAssertNil(raw["name_reason"])
-            XCTAssertFalse((raw["locals"] as? [[String: Any]] ?? []).contains { $0["named"] as? Bool == true },
-                           "\(String(describing: raw["locals"]))")
+            XCTAssertEqual(raw["plate"] as? String, "EDK2 HobLib GetHobList: the plate.")
+            XCTAssertEqual((raw["c"] as? String)?.contains(name), true, "the temporary's name stays in the project")
             XCTAssertNotNil(raw["signature"], "what its callers read stays")
         }
 
-        // A change to the review, from a holder that is not the source.
+        // An addition to the review, from a holder that is not the source.
+        let places = (try json(await host.read(other, "/v1/disassembly/\(there)?limit=4"))["instructions"] as? [[String: Any]] ?? [])
+            .compactMap { $0["address"] as? String }
         _ = try await host.write(other, "/v1/set/comment", body: body([
-            "address": there, "kind": "plate", "text": "A holder's own plate."]))
+            "address": try XCTUnwrap(places.last), "kind": "pre", "text": "A holder's remark."]))
         let editedOther = try await read(other, there)
         XCTAssertEqual(state(editedOther), "edited")
         let moved = try await host.publish(other, by: "agent", options: .init(
-            takeLibrary: LibraryTake.none.with(entryReasons: [id: "the holder's plate says more"])))
+            takeLibrary: LibraryTake.none.with(entryReasons: [id: "the holder's remark says more"])))
         XCTAssertEqual(moved.library?.updated.map(\.version), [2])
         XCTAssertEqual(moved.library?.conflicts.count, 0)
         XCTAssertEqual(try store.libraryIndex().entries[id]?.version, 2)
         let theSource = try await read(source, at)
         XCTAssertEqual(theSource["text"] as? String, "registry")
-        XCTAssertEqual(theSource["plate"] as? String, "A holder's own plate.", "the source reads the holder's review")
+        XCTAssertTrue((theSource["comments"] as? [[String: Any]] ?? []).contains { $0["text"] as? String == "A holder's remark." },
+                      "the source reads the holder's addition")
     }
 
-    /// A publish that would move an entry with no reason stores nothing, from
-    /// the source and from another holder; the dry run and `ghidra_done` say the
-    /// same, and with a reason the row and the history name module and reason.
-    func testAPublishThatMovesAnEntryWithNoReasonIsRefusedWhole() async throws {
+    /// What the registry says is replaced by nobody here. Replacing it refuses the
+    /// whole publish, from the entry's source and from a holder, in the dry run
+    /// and in a done: nothing is stored and the function stays dirty. Over the
+    /// entry's text, taken explicitly, an addition passes as the next version,
+    /// takes `dirty` off, and leaves what the project wrote where it is.
+    func testAReplacementIsRefusedWholeAndAnAdditionOverTheEntrysTextPasses() async throws {
         guard let paths = ProcessInfo.processInfo.environment["GHIDRA_LIBRARY_MODULES"]?.split(separator: ":"),
               paths.count == 2 else {
             throw XCTSkip("GHIDRA_LIBRARY_MODULES is not set")
@@ -339,65 +295,90 @@ final class GhidraHostLibraryTests: XCTestCase {
             if let use = local["first_use"] { change["first_use"] = use }
             _ = try await host.write(source, "/v1/rename/variable", body: body(change))
         }
-        _ = try await host.write(source, "/v1/tag/function", body: body(["address": at, "tag": "library.edk2"]))
-        let first = try await host.publish(source, by: "agent")
-        let added = try XCTUnwrap(first.library?.added.first { $0.name == "GetHobList" })
+        let first = try await moved(at, of: source, host: host)
+        let added = try XCTUnwrap(first.added.first { $0.name == "GetHobList" })
         XCTAssertEqual(added.module, source)
         let id = added.id
         _ = try await host.library(other, .init(action: .apply))
         _ = try await host.publish(other, by: "agent")
 
+        func state(_ module: SHA256Digest, _ address: String) async throws -> String? {
+            let answer = try json(await host.readCall(module, "function/\(address)", query: [:]))
+            return (answer["library_entry"] as? [String: Any])?["state"] as? String
+        }
+        // The holder holds no text: a write on nothing is short of the bar, and
+        // the refusal says what to do.
+        _ = try await host.write(other, "/v1/set/comment", body: body([
+            "address": there, "kind": "eol", "text": "written on nothing."]))
+        let bare = try json(await host.preview(other))
+        XCTAssertTrue((bare["library_refused"] as? String)?.contains("take_text") == true, "\(bare)")
+        _ = try await host.library(other, .init(action: .apply, address: there, takeText: true))
+        let bound = try await state(other, there)
+        XCTAssertEqual(bound, "linked")
+        let taken = try json(await host.read(other, "/v1/function/\(there)"))
+        XCTAssertEqual(taken["plate"] as? String, "EDK2 HobLib GetHobList: the plate.", "the entry's text is in the project")
+
         var version = 1
-        for (module, address, plate) in [(source, at, "The source's plate."), (other, there, "A holder's plate.")] {
-            // On the entry's current version: a holder behind it gets a conflict, which is another rule.
-            _ = try await host.library(module, .init(action: .apply))
+        for (module, address) in [(source, at), (other, there)] {
+            // A change of what the entry says.
             _ = try await host.write(module, "/v1/set/comment", body: body([
-                "address": address, "kind": "plate", "text": plate]))
+                "address": address, "kind": "plate", "text": "Another plate."]))
             let before = try store.analysis(module: module)?.artifact
             let revisions = try store.reviewHistory(module: module)?.revisions.count
-
-            // The dry run names them and says the refusal.
             let dry = try json(await host.preview(module))
-            let would = try XCTUnwrap(dry["library"] as? [String: Any])
-            let rows = try XCTUnwrap(would["needs_reason"] as? [[String: Any]])
+            let rows = try XCTUnwrap((dry["library"] as? [String: Any])?["conflicts"] as? [[String: Any]])
             XCTAssertEqual(rows.map { $0["id"] as? String }, [id])
-            XCTAssertEqual(rows.first?["version"] as? Int, version + 1)
-            XCTAssertEqual(rows.first?["module"] as? String, module.hex)
+            XCTAssertEqual((rows.first?["held_by"] as? [String: Any])?["module"] as? String, source.hex)
             let refusal = try XCTUnwrap(dry["library_refused"] as? String)
-            XCTAssertTrue(refusal.contains(id), refusal)
-
-            // The publish and the done are refused with those words, and store nothing.
+            XCTAssertTrue(refusal.contains(id) && refusal.contains(source.hex) && refusal.contains("take_text"), refusal)
             for attempt in ["publish", "done"] {
                 do {
                     if attempt == "publish" { _ = try await host.publish(module, by: "agent") }
                     else { _ = try await host.release(module, by: "agent") }
-                    XCTFail("\(attempt) took a change with no reason")
+                    XCTFail("\(attempt) took a replacement")
                 } catch {
                     XCTAssertTrue("\(error)".contains(refusal), "\(attempt): \(error)")
                 }
                 XCTAssertEqual(try store.analysis(module: module)?.artifact, before, attempt)
                 XCTAssertEqual(try store.reviewHistory(module: module)?.revisions.count, revisions, attempt)
                 XCTAssertEqual(try store.libraryIndex().entries[id]?.version, version, attempt)
+                let still = try await state(module, address)
+                XCTAssertEqual(still, "edited", "it stays dirty")
             }
 
-            // A reason per entry: the row and the history name module and reason.
-            let reason = "why: \(plate)"
-            let take = LibraryTake.none.with(entryReasons: [id: reason])
-            let allowed = try json(await host.preview(module, takeLibrary: take))
-            XCTAssertNil(allowed["library_refused"])
-            let published = try await host.publish(module, by: "agent", options: .init(takeLibrary: take))
+            // The entry's text taken back, and an addition over it.
+            _ = try await host.library(module, .init(action: .apply, address: address, takeText: true))
+            let clean = try await state(module, address)
+            XCTAssertEqual(clean, "linked")
+            let listing = try json(await host.read(module, "/v1/disassembly/\(address)?limit=4"))
+            let places = (listing["instructions"] as? [[String: Any]] ?? []).compactMap { $0["address"] as? String }
+            // Each module adds at its own place: the same place would replace the other's words.
+            let place = places[places.count - (module == source ? 1 : 2)]
+            let remark = "an addition from \(module == source ? "the source" : "a holder")."
+            _ = try await host.write(module, "/v1/set/comment", body: body([
+                "address": place, "kind": "pre", "text": remark]))
+            let dirty = try await state(module, address)
+            XCTAssertEqual(dirty, "edited")
+            let published = try await host.publish(module, by: "agent")
             version += 1
             XCTAssertEqual(published.library?.updated.map(\.id), [id])
             XCTAssertEqual(published.library?.updated.first?.module, module)
-            XCTAssertEqual(published.library?.updated.first?.reason, reason)
-            let last = try XCTUnwrap(try store.libraryHistory(id: id)?.versions.last)
-            XCTAssertEqual(last.version, version)
-            XCTAssertEqual(last.source.module, module)
-            XCTAssertEqual(last.reason, reason)
-            XCTAssertNotEqual(try store.analysis(module: module)?.artifact, before)
+            XCTAssertEqual(published.library?.updated.first?.version, version)
+            XCTAssertEqual(published.library?.updated.first?.reason?.hasPrefix("added by this module"), true)
+            XCTAssertEqual(try store.libraryHistory(id: id)?.versions.last?.source.module, module)
+            let closed = try await state(module, address)
+            XCTAssertEqual(closed, "linked", "a success takes dirty off")
+            // The project still holds what was written on it.
+            let raw = try json(await host.read(module, "/v1/function/\(address)"))
+            XCTAssertEqual(raw["plate"] as? String, "EDK2 HobLib GetHobList: the plate.")
+            XCTAssertTrue((raw["comments"] as? [[String: Any]] ?? []).contains { $0["text"] as? String == remark })
             // Nothing left to say: the done goes through.
             _ = try await host.release(module, by: "agent")
             XCTAssertEqual(try store.libraryIndex().entries[id]?.version, version)
+            // The next addition stands on what the other module added.
+            if module == source {
+                _ = try await host.library(other, .init(action: .apply, address: there, takeText: true))
+            }
         }
     }
 
@@ -429,10 +410,8 @@ final class GhidraHostLibraryTests: XCTestCase {
             "text": "EDK2 BaseLib CopyGuid: four dword moves and the destination returned."]))
         _ = try await host.write(reviewed, "/v1/set/comment", body: body([
             "address": copyGuid, "kind": "eol", "text": "first dword of the GUID"]))
-        _ = try await host.write(reviewed, "/v1/tag/function", body: body(["address": copyGuid, "tag": "library.edk2"]))
-        let published = try await host.publish(reviewed, by: "agent")
-        XCTAssertNil(published.libraryError)
-        let added = try XCTUnwrap(published.library?.added.first { $0.name == "CopyGuid" })
+        let published = try await moved(copyGuid, of: reviewed, host: host)
+        let added = try XCTUnwrap(published.added.first { $0.name == "CopyGuid" })
         let entry = try XCTUnwrap(try store.object(store.libraryIndex().entries[added.id]!.entry))
         XCTAssertNotNil(try json(entry)["constants"], "an entry records its body's constants")
 
@@ -448,8 +427,8 @@ final class GhidraHostLibraryTests: XCTestCase {
         // reason, read through the registry, says it is the entry's.
         XCTAssertEqual(stored.nameReason?.hasPrefix("library registry entry"), true, "\(stored.nameReason ?? "nil")")
         let live = try json(await host.read(reviewed, "/v1/function/\(copyGuid)"))
-        XCTAssertNil(live["signature_reason"], "the project holds no reason of a linked function")
-        XCTAssertEqual(stored.libraryEntry?.state, .linked, "the artifact holds the link, not the text")
+        XCTAssertNotNil(live["signature_reason"], "the project keeps what the review wrote")
+        XCTAssertEqual(stored.registryNumber, added.id, "the artifact holds the link, not the text")
         XCTAssertEqual(stored.libraryEntry?.version, added.version)
 
         // The other module named the same body its own way.
@@ -479,53 +458,54 @@ final class GhidraHostLibraryTests: XCTestCase {
         let after = try json(await host.library(other, .init(action: .status)))
         XCTAssertEqual((after["applied"] as? [[String: Any]])?.compactMap { $0["address"] as? String }, [theirs])
 
-        // Edited since: the review's now, not applied over.
+        // Written on since: dirty, and not applied over.
+        _ = try await host.library(other, .init(action: .apply, address: theirs, takeText: true))
+        let lines = (try json(await host.read(other, "/v1/disassembly/\(theirs)?limit=4"))["instructions"] as? [[String: Any]] ?? [])
+            .compactMap { $0["address"] as? String }
         _ = try await host.write(other, "/v1/set/comment", body: body([
-            "address": theirs, "kind": "plate", "text": "Copied from the registry, then edited."]))
+            "address": lines[2], "kind": "pre", "text": "A step the holder adds."]))
         let edited = try json(await host.library(other, .init(action: .status)))
         XCTAssertEqual((edited["edited"] as? [[String: Any]])?.compactMap { $0["address"] as? String }, [theirs])
         XCTAssertEqual((edited["to_apply"] as? [Any])?.count, 0)
 
-        // That edit was made on the entry's current version: published, it is
-        // the next version, from a module that did not write the first.
+        // It only adds: published, it is the next version, from a module that did
+        // not write the first.
         let improved = try await host.publish(other, by: "agent", options: .init(
-            takeLibrary: LibraryTake.none.with(entryReasons: [added.id: "the holder's edit is better"])))
+            takeLibrary: LibraryTake.none.with(entryReasons: [added.id: "the holder's step says more"])))
         XCTAssertEqual(improved.library?.updated.map(\.version), [added.version + 1], "\(String(describing: improved.library))")
         XCTAssertEqual(improved.library?.conflicts, [])
         let improvedCode = try store.artifact(for: improved.manifest)
         let improvedEntry = improvedCode.functions.first { $0.entry == CodeAddress(hex: theirs) }?.libraryEntry
-        XCTAssertEqual(improvedEntry?.state, .linked, "exported again once the registry took the change")
         XCTAssertEqual(improvedEntry?.version, added.version + 1)
 
-        // The first module holds no copy to be behind with: its write works on
-        // the entry's current text, so the other holder's plate is not lost.
+        // The first module's project does not hold that step, and nothing puts it
+        // there. A write on what it holds would drop the step: it is refused, naming
+        // the holder, and nothing goes in.
         _ = try await host.write(reviewed, "/v1/set/comment", body: body([
-            "address": copyGuid, "kind": "eol", "text": "the first dword"]))
-        let brought = try json(await host.read(reviewed, "/v1/function/\(copyGuid)"))
-        XCTAssertEqual(brought["plate"] as? String, "Copied from the registry, then edited.")
-        let onTop = try await host.publish(reviewed, by: "agent", options: .init(
-            takeLibrary: LibraryTake.none.with(entryReasons: [added.id: "a closer comment"])))
+            "address": copyGuid, "kind": "pre", "text": "Written on the version before."]))
+        let behind = try json(await host.publishPreview(reviewed))
+        let conflicts = (behind["library"] as? [String: Any])?["conflicts"] as? [[String: Any]] ?? []
+        XCTAssertEqual(conflicts.first?["base"] as? Int, added.version, "\(behind)")
+        XCTAssertEqual(conflicts.first?["version"] as? Int, added.version + 1, "\(behind)")
+        XCTAssertTrue((behind["library_refused"] as? String)?.contains(other.hex) == true, "\(behind)")
+        do {
+            _ = try await host.publish(reviewed, by: "agent")
+            XCTFail("a publish that replaces what the entry says is refused")
+        } catch {
+            XCTAssertTrue("\(error)".contains("Nothing was stored"), "\(error)")
+        }
+        XCTAssertEqual(try store.libraryIndex().entries[added.id]?.version, added.version + 1)
+
+        // Over the entry's text the same addition goes in, and both modules' words stand.
+        _ = try await host.library(reviewed, .init(action: .apply, address: copyGuid, takeText: true))
+        _ = try await host.write(reviewed, "/v1/set/comment", body: body([
+            "address": copyGuid, "kind": "pre", "text": "Written on the current version."]))
+        let onTop = try await host.publish(reviewed, by: "agent")
         XCTAssertEqual(onTop.library?.updated.map(\.version), [added.version + 2], "\(String(describing: onTop.library))")
-        XCTAssertEqual(onTop.library?.conflicts, [])
         let current = try XCTUnwrap(store.libraryIndex().entries[added.id])
         let text = try JSONSerialization.jsonObject(with: try store.object(current.entry)) as? [String: Any]
-        XCTAssertEqual(text?["plate"] as? String, "Copied from the registry, then edited.",
-                       "a write on a linked function keeps what the entry says")
-
-        // A copy really behind: written on one version, another taken meanwhile.
-        _ = try await host.write(other, "/v1/set/comment", body: body([
-            "address": theirs, "kind": "plate", "text": "Written on the version before."]))
-        _ = try await host.write(reviewed, "/v1/set/comment", body: body([
-            "address": copyGuid, "kind": "eol", "text": "the first dword of it"]))
-        _ = try await host.publish(reviewed, by: "agent", options: .init(
-            takeLibrary: LibraryTake.none.with(entryReasons: [added.id: "closer still"])))
-        let behind = try await host.publish(other, by: "agent")
-        XCTAssertEqual(behind.library?.conflicts.map(\.base), [added.version + 2], "\(String(describing: behind.library))")
-        XCTAssertEqual(behind.library?.conflicts.first?.version, added.version + 3)
-        let behindEntry = try store.artifact(for: behind.manifest).functions
-            .first { $0.entry == CodeAddress(hex: theirs) }?.libraryEntry
-        XCTAssertEqual(behindEntry?.state, .conflict)
-        XCTAssertEqual(behindEntry?.base, added.version + 2)
+        let said = (text?["comments"] as? [[String: Any]] ?? []).compactMap { $0["text"] as? String }
+        XCTAssertTrue(said.contains("A step the holder adds.") && said.contains("Written on the current version."), "\(said)")
     }
 }
 

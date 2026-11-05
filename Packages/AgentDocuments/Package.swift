@@ -4,7 +4,7 @@
 //  documents (`Design/SERVER_HEADLESS_PLAN.md` §4.1): the rule that says
 //  which document a call means, a tool-module's query run on the document it
 //  names, a module's stored code analysis read by its node, and
-//  `ghidra_open` by a node.
+//  `ghidra_create` by a node.
 //
 //  A package of its own because the app and `byteripper-server` both serve
 //  these, over panes in one and over snapshots in the other, and neither may

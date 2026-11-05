@@ -95,7 +95,7 @@ final class CodeAgentTests: XCTestCase {
 
     // MARK: - Ghidra on the analysis server
 
-    /// `ghidra_open` sends a node's image to the server Settings name; with
+    /// `ghidra_create` sends a node's image to the server Settings name; with
     /// the analyses on this Mac the tools are answered by the host inside the
     /// app, not refused.
     func testGhidraOpenSendsTheNodesImageToTheAnalysisServer() async throws {
@@ -122,7 +122,7 @@ final class CodeAgentTests: XCTestCase {
         AppDefaults.store.set("http://127.0.0.1:\(port)", forKey: "CodeAnalysisServer")
         defer { for key in ["CodeAnalysisLocation", "CodeAnalysisServer"] { AppDefaults.store.removeObject(forKey: key) } }
 
-        let opened = try await client.answer("ghidra_open", ["node": .string(node)])
+        let opened = try await client.answer("ghidra_create", ["node": .string(node)])
         XCTAssertEqual(received.body, Self.teModule(), "the node's image is what went to the server")
         XCTAssertEqual(opened["module"]?.stringValue, SHA256Digest(data: Self.teModule()).hex)
         XCTAssertEqual(opened["document"]?.stringValue, "d1", "the answer names the document it read")

@@ -320,7 +320,7 @@ final class GhidraHostLibraryPlanTests: XCTestCase {
                        mark: GhidraHost.LibraryMatch.Mark? = nil,
                        declined: [String]? = nil) -> GhidraHost.LibraryMatch {
         GhidraHost.LibraryMatch(address: address, name: "F\(address.suffix(4))", named: named, key: "k",
-                                kind: nil, exact: exact, near: near, mark: mark, declined: declined)
+                                exact: exact, near: near, mark: mark, declined: declined)
     }
 
     func testTheKeysAreEveryBodyAndEveryShape() {
@@ -386,8 +386,7 @@ final class GhidraHostLibraryPlanTests: XCTestCase {
         XCTAssertEqual(plan.candidates.first?.entryName, "SetMem")
     }
 
-    /// A candidate is taken only with a reason; an edited function only
-    /// with `replace`; a named match with `replace` takes the whole entry.
+    /// A candidate is taken only with a reason; what is already matched links.
     func testAnAddressIsAppliedOnlyAsItsStateAllows() throws {
         let id = setMem.key
         let plan = GhidraHost.libraryPlan([
@@ -398,19 +397,13 @@ final class GhidraHostLibraryPlanTests: XCTestCase {
             comparable: true, why: nil,
             differences: [.init(offset: "0x8", operand: 1, value: "0x2", entryValue: "0x1", isAssert: false)],
             assertCodesOnly: false)])
-        XCTAssertEqual(try GhidraHost.chosen(plan, address: "0x2000", id: nil, reason: nil, replace: true).first?.mode,
-                       "whole")
-        XCTAssertThrowsError(try GhidraHost.chosen(plan, address: "0x5000", id: nil, reason: nil, replace: false))
-        XCTAssertEqual(try GhidraHost.chosen(plan, address: "0x5000", id: nil, reason: nil, replace: true).first?.mode,
-                       "whole")
-        // A mask takes parts of the review without a whole replacement.
-        XCTAssertEqual(try GhidraHost.chosen(plan, address: "0x5000", id: nil, reason: nil, replace: false,
-                                             fields: ["signature"]).first?.state, "edited")
-        XCTAssertThrowsError(try GhidraHost.chosen(plan, address: "0x8000", id: nil, reason: " ", replace: false))
-        let taken = try GhidraHost.chosen(plan, address: "0x8000", id: nil, reason: "a debug level, not logic",
-                                          replace: false)
+        XCTAssertEqual(try GhidraHost.chosen(plan, address: "0x2000", id: nil, reason: nil).first?.mode, "link")
+        // A draft of the entry's next version is given up by linking again.
+        XCTAssertEqual(try GhidraHost.chosen(plan, address: "0x5000", id: nil, reason: nil).first?.mode, "link")
+        XCTAssertThrowsError(try GhidraHost.chosen(plan, address: "0x8000", id: nil, reason: " "))
+        let taken = try GhidraHost.chosen(plan, address: "0x8000", id: nil, reason: "a debug level, not logic")
         XCTAssertEqual(taken.first?.codes, ["0x2"])
-        XCTAssertThrowsError(try GhidraHost.chosen(plan, address: "0x9000", id: nil, reason: nil, replace: false))
+        XCTAssertThrowsError(try GhidraHost.chosen(plan, address: "0x9000", id: nil, reason: nil))
     }
 
     /// A body applied as a variant is offered with the entry it joins and
@@ -432,35 +425,13 @@ final class GhidraHostLibraryPlanTests: XCTestCase {
         XCTAssertEqual(offer.proposals.last?.role, "assert")
     }
 
-    /// A publish takes the library conflicts it names, each with its own
-    /// reason, or every one with a single reason; nothing when it names none.
-    func testAPublishTakesLibraryEntriesByNameOrAllAtOnce() throws {
-        let all = try GhidraTools.libraryTake(AgentArguments([
-            "take_library_conflicts": true, "library_reason": .string("ours is typed")]))
-        XCTAssertEqual(all, .all("ours is typed"))
-
-        let named = try GhidraTools.libraryTake(AgentArguments([
-            "take_library_conflicts": ["a", "b"],
-            "library_reason": ["a": "first", "b": "second"]]))
-        XCTAssertEqual(named, .these(["a": "first", "b": "second"]))
-        XCTAssertEqual(named.reason(for: "a"), "first")
-        XCTAssertNil(named.reason(for: "c"))
-        XCTAssertEqual(named.ids, ["a", "b"])
-
-        XCTAssertEqual(try GhidraTools.libraryTake(AgentArguments([:])), .none)
-        XCTAssertEqual(try GhidraTools.libraryTake(AgentArguments(["take_library_conflicts": false])), .none)
-        // An id with no reason is taken with an empty one, which the store
-        // refuses by naming the entry.
-        let untyped = try GhidraTools.libraryTake(AgentArguments(["take_library_conflicts": ["a"]]))
-        XCTAssertEqual(untyped.reason(for: "a"), "")
-
-        let told = try GhidraTools.libraryTake(AgentArguments(["entry_reasons": ["a": "first"]]))
-        XCTAssertEqual(told, LibraryTake.none.with(entryReasons: ["a": "first"]))
-        let both = try GhidraTools.libraryTake(AgentArguments([
-            "take_library_conflicts": ["b"], "library_reason": ["b": "second"], "entry_reasons": ["a": "first"]]))
-        XCTAssertEqual(both, LibraryTake.these(["b": "second"]).with(entryReasons: ["a": "first"]))
-        XCTAssertThrowsError(try GhidraTools.libraryTake(AgentArguments(["entry_reasons": "not an object"])))
-        XCTAssertThrowsError(try GhidraTools.libraryTake(AgentArguments(["entry_reasons": ["a": 1]])))
+    /// What a review may say to a publish about the registry is why it adds to
+    /// an entry. Replacing one is no argument of the tool's.
+    func testAReviewGivesReasonsAndNoDecisionToReplace() async throws {
+        XCTAssertEqual(try GhidraTools.entryReasons(AgentArguments(["entry_reasons": ["a": "first"]])), ["a": "first"])
+        XCTAssertEqual(try GhidraTools.entryReasons(AgentArguments([:])), [:])
+        XCTAssertThrowsError(try GhidraTools.entryReasons(AgentArguments(["entry_reasons": "not an object"])))
+        XCTAssertThrowsError(try GhidraTools.entryReasons(AgentArguments(["entry_reasons": ["a": 1]])))
     }
 
     /// A publish answers what it changed: the entries it left as they were

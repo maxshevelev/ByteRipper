@@ -15,7 +15,7 @@ CAS, and its project lock keeps the owner off the project.
 | task | tool |
 |---|---|
 | the modules with a project | `ghidra_modules` |
-| open one, by node, image or SHA-256 | `ghidra_open` |
+| open one, by node, image or SHA-256 | `ghidra_create` |
 | all functions | `ghidra_functions` |
 | the code between bodies the analysis never cut | `ghidra_gaps` — `verdict: body` (a data reference lands in it) to create, `tail` (nothing refers to it, the body before runs into it) to merge |
 | C, parameters, locals and their storage | `ghidra_function` |
@@ -223,7 +223,7 @@ open:
   `ghidra_disassembly`, and put the real flow in the plate.
 - **An unexplained rename or conflict change is a build change until proven
   otherwise.** A live-versus-store line names the owner's `build`, the integer
-  `ghidra_open`'s `hello` answers; if one does not, ask for it. `build` is when
+  `ghidra_create`'s `hello` answers; if one does not, ask for it. `build` is when
   the owner's jar was built, so it moves when the owner's code does, and it
   says nothing of what the code is. The server replaces an owner of another
   build on the next call: the program is saved and the module reopens, and the

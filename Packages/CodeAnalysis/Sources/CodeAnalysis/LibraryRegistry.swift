@@ -22,6 +22,26 @@ public struct LibraryBody: Codable, Hashable, Comparable, Sendable {
     /// `<size>-<full>-<specific>`, the index's key for this body.
     public var key: String { "\(String(size, radix: 16))-\(full)-\(specific)" }
 
+    /// A body under Function ID's four instructions, which it does not hash. The
+    /// owner hashes its exact bytes instead. One `RET` is many functions, so
+    /// bytes alone identify nothing: `full` is the bytes, shared as a shape by
+    /// every entry holding them, and an entry's `specific` is its own at random,
+    /// which makes the entry's id. A review binds a function to one by that id.
+    public var isShort: Bool { size < Self.functionIDMinimum }
+    public static let functionIDMinimum = 4
+
+    /// Whether a body key is a short body's.
+    public static func isShort(key: String) -> Bool {
+        key.split(separator: "-").first.flatMap { Int($0, radix: 16) }.map { $0 < functionIDMinimum } ?? false
+    }
+
+    /// The body with a `specific` of its own, for a new short entry.
+    func withOwnIdentity() -> LibraryBody {
+        var body = self
+        body.specific = String((0..<16).map { _ in "0123456789abcdef".randomElement()! })
+        return body
+    }
+
     /// `<size>-<full>`: what bodies that differ only in constants share.
     public var shape: String { "\(String(size, radix: 16))-\(full)" }
 
@@ -68,8 +88,12 @@ public struct LibraryVariant: Codable, Equatable, Sendable {
     /// reported it. Nil for a body with none, and until its module publishes
     /// under an exporter that reports it.
     public var referenceBytes: String?
+    /// The body's code (`LibraryCode`): the one place its instructions are kept.
+    public var code: SHA256Digest?
 
-    public init(body: LibraryBody, module: SHA256Digest, codes: [String]? = nil, referenceBytes: String? = nil) {
+    public init(body: LibraryBody, module: SHA256Digest, codes: [String]? = nil, referenceBytes: String? = nil,
+                code: SHA256Digest? = nil) {
+        self.code = code
         self.body = body
         self.module = module
         self.codes = codes
@@ -77,7 +101,7 @@ public struct LibraryVariant: Codable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case body, module, codes
+        case body, module, codes, code
         case referenceBytes = "reference_bytes"
     }
 }
@@ -107,10 +131,27 @@ public struct LibraryIndexEntry: Codable, Equatable, Sendable {
     }
 }
 
+/// One library the registry holds, and the libraries it stands on.
+public struct LibraryDefinition: Codable, Equatable, Sendable {
+    public var dependsOn: [String]
+
+    public init(dependsOn: [String] = []) {
+        self.dependsOn = dependsOn
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case dependsOn = "depends_on"
+    }
+}
+
 /// `library/index.json`: every entry by its id, and every body of every entry
 /// by its key, so an exact match is one lookup.
 public struct LibraryIndex: Codable, Equatable, Sendable {
     public var schema = 1
+    /// The libraries and how they depend on each other: EDK2 is the base, AMD and
+    /// Intel stand on it and not on each other. Nil only in an index from before
+    /// this was written down, which reads as the standard set.
+    public var libraries: [String: LibraryDefinition]?
     public var entries: [String: LibraryIndexEntry] = [:]
     public var bodies: [String: String] = [:]
     /// Bodies given back to their modules, by key. Nil while there are none.
@@ -119,7 +160,32 @@ public struct LibraryIndex: Codable, Equatable, Sendable {
     public var sources: [String: LibraryCitation]?
     /// The citations later calls replaced or removed, by key. Nil while none.
     public var sourceChanges: [String: [LibraryCitationChange]]?
-    public init() {}
+    public init() {
+        libraries = Self.standardLibraries
+    }
+
+    public static let standardLibraries: [String: LibraryDefinition] = [
+        LibraryKind.edk2.rawValue: LibraryDefinition(),
+        LibraryKind.amd.rawValue: LibraryDefinition(dependsOn: [LibraryKind.edk2.rawValue]),
+        LibraryKind.intel.rawValue: LibraryDefinition(dependsOn: [LibraryKind.edk2.rawValue])
+    ]
+
+    /// The declared libraries.
+    public var declaredLibraries: [String: LibraryDefinition] { libraries ?? Self.standardLibraries }
+
+    /// Whether a function of library `caller` may call one of library `callee`:
+    /// its own, or one its library depends on, directly or through another.
+    public func mayCall(_ caller: String, _ callee: String) -> Bool {
+        let declared = declaredLibraries
+        guard declared[caller] != nil else { return false }
+        var seen: Set<String> = [], waiting = [caller]
+        while let next = waiting.popLast() {
+            guard seen.insert(next).inserted else { continue }
+            if next == callee { return true }
+            waiting += declared[next]?.dependsOn ?? []
+        }
+        return false
+    }
 
     /// Whether a body's data references point at other bytes than the entry
     /// holds for it. Either side not knowing says nothing.
@@ -131,7 +197,7 @@ public struct LibraryIndex: Codable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case schema, entries, bodies, sources
+        case schema, entries, bodies, sources, libraries
         case takenOut = "taken_out"
         case sourceChanges = "source_changes"
     }
@@ -182,8 +248,7 @@ public struct LibraryTake: Equatable, Sendable {
     public var reasons: [String: String]
     /// The reason a take of every conflict keeps.
     public var reason: String?
-    /// Why this publish changes an entry whose current version its review was
-    /// made on, by entry id. That change takes no decision, but it needs a reason.
+    /// Why this publish adds to an entry, by entry id, in the review's own words.
     public var entryReasons: [String: String] = [:]
 
     public static let none = LibraryTake()
@@ -242,17 +307,14 @@ public struct LibraryProposal: Codable, Equatable, Sendable {
     /// module.
     public var basedOn: String?
     public var base: Int?
-    /// The function's reason for its signature: not the review's text, so not
-    /// in `entry`. The history keeps it for a version that changes the signature.
-    public var signatureReason: String?
-    /// Why the function has its name, as the review wrote it.
-    public var nameReason: String?
     /// The function carries the entry's mark and was not edited since.
     public var linked: Bool = false
     /// The digest of what the body's data references point at (`LibraryVariant`).
     public var referenceBytes: String?
     /// A linked function has no review to offer: this says only what its bytes are.
     public var teachesBytesOnly: Bool?
+    /// The body's code, for a body the registry holds without it. Teaches only that.
+    public var code: Data?
     /// What the body refers to, by offset from its entry, and what it calls:
     /// what decides whether it depends on a module. Nil from an owner that
     /// does not say. Beside the review, not part of it.
@@ -261,7 +323,7 @@ public struct LibraryProposal: Codable, Equatable, Sendable {
 
     public init(body: LibraryBody, name: String, kind: String, address: String, entry: Data,
                 variantOf: String? = nil, codes: [String]? = nil, role: String? = nil,
-                basedOn: String? = nil, base: Int? = nil, signatureReason: String? = nil, nameReason: String? = nil,
+                basedOn: String? = nil, base: Int? = nil,
                 linked: Bool = false, dataReferences: [String]? = nil, callees: [LibraryCallee]? = nil,
                 referenceBytes: String? = nil, teachesBytesOnly: Bool? = nil) {
         self.teachesBytesOnly = teachesBytesOnly
@@ -278,9 +340,7 @@ public struct LibraryProposal: Codable, Equatable, Sendable {
         self.codes = codes
         self.role = role
         self.basedOn = basedOn
-        self.signatureReason = signatureReason
-        self.nameReason = nameReason
-        self.base = base
+                self.base = base
     }
 }
 
@@ -319,9 +379,23 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
         public var base: Int?
         /// The names its C prints that taking this would change (`Change.names`).
         public var names: [String]?
+        /// What the review would replace, by field; nil from a store that does not say.
+        public var changed: [String]?
+
+        public init(id: String, name: String, proposedName: String, heldBy: LibrarySource, version: Int,
+                    base: Int?, names: [String]? = nil, changed: [String]? = nil) {
+            self.id = id
+            self.name = name
+            self.proposedName = proposedName
+            self.heldBy = heldBy
+            self.version = version
+            self.base = base
+            self.names = names
+            self.changed = changed
+        }
 
         private enum CodingKeys: String, CodingKey {
-            case id, name, version, base, names
+            case id, name, version, base, names, changed
             case proposedName = "proposed_name"
             case heldBy = "held_by"
         }
@@ -331,10 +405,6 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
     public var updated: [Change] = []
     public var unchanged: [Change] = []
     public var conflicts: [Conflict] = []
-    /// Entries this publish would move with no reason given: a dry run names
-    /// them, a publish is refused. Each row says the version it would become.
-    /// Nil when there are none, and from a store that predates the rule.
-    public var needsReason: [Change]?
     /// Bodies added to an entry as variants; nil from a store that has none.
     public var variants: [Change]?
     /// Functions refused because another entry holds the name: a different
@@ -346,6 +416,10 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
     public var notLibrary: [NotLibrary]?
     /// What a change on the registry itself did; nil otherwise.
     public var takenOut: [Change]?
+    /// The modules whose text of these bodies became links.
+    public var relinked: [ContentStore.Relinked]?
+    /// Why that could not be done; a later entry or `relink-modules` does it.
+    public var relinkError: String?
     public var cited: [String]?
     public var citations: [LibraryCitationResult]?
 
@@ -396,17 +470,6 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
 
     public init() {}
 
-    /// What a publish that would move entries with no reason is refused with.
-    public var reasonRefusal: String? {
-        guard let rows = needsReason, !rows.isEmpty else { return nil }
-        let named = rows.map { row -> String in
-            let printed = row.names.map { ", printing \($0.joined(separator: " "))" } ?? ""
-            return "\(row.id) (\(row.name), to version \(row.version)\(printed))"
-        }.joined(separator: ", ")
-        return "this publish would change library entries with no reason given: \(named). Nothing was stored. "
-            + "Publish again with `entry_reasons`, an object of entry id to why this module changes it."
-    }
-
     /// A store that predates the rule leaves its rows without a module, and
     /// would take a change with no reason, whatever `entry_reasons` says.
     public var fromAStoreBeforeReasons: Bool {
@@ -419,16 +482,17 @@ public struct LibraryWriteResult: Codable, Equatable, Sendable {
             return "the store predates the rule that a change to a library entry names its module and reason: "
                 + "it would take this publish with no reason. Nothing was stored. Update the store's server first."
         }
-        return reasonRefusal
+        return nil
     }
 
     private enum CodingKeys: String, CodingKey {
         case added, updated, unchanged, conflicts, variants
-        case needsReason = "needs_reason"
         case cited, citations
         case nameConflicts = "name_conflicts"
         case notLibrary = "not_library"
         case takenOut = "taken_out"
+        case relinked
+        case relinkError = "relink_error"
     }
 }
 
@@ -490,34 +554,63 @@ extension LibraryProposal {
         return rows
     }
 
-    /// Whether all a review moved is the function's name or signature: all the
-    /// function's own reasons speak for. The recorded function is not the review.
-    static func movedOnlyNameOrSignature(from held: Data, to offered: Data) -> Bool {
-        guard nameChanges(from: held, to: offered).isEmpty else { return false }
-        let notTheReview: Set<String> = ["body", "constants", "function"]
-        let nameOrSignature: Set<String> = ["name", "signature", "return_type", "calling_convention", "params"]
-        return Set(changedFields(from: held, to: offered)).subtracting(notTheReview).isSubset(of: nameOrSignature)
-    }
-
-    /// What the history says of a version this review changed: the function's
-    /// own reason, and only one that changed against the function the entry
-    /// held, the one for what changed first. An older reason here would read
-    /// as the explanation of this change, which is worse than none. So are the
-    /// words the server wrote. A held entry with no function gives nothing to
-    /// compare with, and no reason comes of it.
-    func reason(signatureChanged: Bool, held: Data) -> String? {
-        guard let object = (try? JSONSerialization.jsonObject(with: held)) as? [String: Any],
-              let function = object["function"] as? [String: Any] else { return nil }
-        func own(_ reason: String?, _ key: String) -> String? {
-            guard let reason, reason != function[key] as? String,
-                  !Self.generatedReasons.contains(where: reason.hasPrefix) else { return nil }
-            return reason
+    /// Whether an offered review only adds to the one the entry holds: everything
+    /// the entry says is still said, word for word, and what is new stands where
+    /// the entry said nothing — a comment or a plate it did not have, a name or a
+    /// type in place of a Ghidra placeholder, an equate or a label it did not
+    /// name. The function's name, its return type, its convention, a parameter's
+    /// type or written name and any written text are the entry's: a review that
+    /// moves one of them replaces it.
+    public static func onlyAdds(to held: Data, offered: Data) -> Bool {
+        guard let old = (try? JSONSerialization.jsonObject(with: held)) as? [String: Any],
+              let new = (try? JSONSerialization.jsonObject(with: offered)) as? [String: Any] else { return false }
+        // What `sameReview` leaves out is no part of a review. Those compared
+        // here are the review's own, and any field no rule covers must stand.
+        let compared: Set<String> = ["body", "constants", "function", "equates", "params", "signature", "locals",
+                                     "plate", "comments"]
+        func rest(_ object: [String: Any]) -> NSDictionary {
+            object.filter { !compared.contains($0.key) } as NSDictionary
         }
-        let name = own(nameReason, "name_reason"), signature = own(signatureReason, "signature_reason")
-        return signatureChanged ? signature ?? name : name ?? signature
+        guard rest(old).isEqual(rest(new)) else { return false }
+        guard nameChanges(from: held, to: offered).allSatisfy({ $0.hasPrefix("equate +") || $0.hasPrefix("label +") })
+        else { return false }
+        // The plate.
+        let plate = old["plate"] as? String ?? ""
+        guard plate.isEmpty || plate == new["plate"] as? String else { return false }
+        // Comments: each the entry holds stands; others may join.
+        func comment(_ row: [String: Any]) -> String {
+            "\(row["offset"] ?? "")\u{0}\(row["kind"] ?? "")\u{0}\(row["text"] ?? "")"
+        }
+        let offeredComments = Set((new["comments"] as? [[String: Any]] ?? []).map(comment))
+        guard (old["comments"] as? [[String: Any]] ?? []).allSatisfy({ offeredComments.contains(comment($0)) })
+        else { return false }
+        // Parameters: same number and types; a placeholder may take a name.
+        let oldParams = old["params"] as? [[String: Any]] ?? [], newParams = new["params"] as? [[String: Any]] ?? []
+        guard oldParams.count == newParams.count else { return false }
+        var signature = old["signature"] as? String ?? ""
+        for (was, now) in zip(oldParams, newParams) {
+            guard was["type"] as? String == now["type"] as? String,
+                  was["storage"] as? String == now["storage"] as? String else { return false }
+            let (oldName, newName) = (was["name"] as? String, now["name"] as? String)
+            guard oldName != newName else { continue }
+            guard LibraryEntryReview.isPlaceholder(oldName), let oldName, let newName else { return false }
+            signature = signature.replacingOccurrences(
+                of: "\\b\(NSRegularExpression.escapedPattern(for: oldName))\\b", with: newName, options: .regularExpression)
+        }
+        guard signature == new["signature"] as? String ?? "" else { return false }
+        // Locals: a written name and a known type stand, by their place.
+        func place(_ row: [String: Any]) -> String { "\(row["storage"] ?? "")\u{0}\(row["first_use"] ?? "")" }
+        var offeredLocals: [String: [String: Any]] = [:]
+        for row in new["locals"] as? [[String: Any]] ?? [] { offeredLocals[place(row)] = row }
+        for row in old["locals"] as? [[String: Any]] ?? [] {
+            let name = row["name"] as? String, type = row["type"] as? String
+            if LibraryEntryReview.isPlaceholder(name), LibraryEntryReview.isUndefined(type) { continue }
+            guard let now = offeredLocals[place(row)] else { return false }
+            if !LibraryEntryReview.isPlaceholder(name), name != now["name"] as? String { return false }
+            if !LibraryEntryReview.isUndefined(type), type != now["type"] as? String { return false }
+        }
+        return true
     }
-
-    private static let generatedReasons = ["library registry entry ", "no longer a library function: ", "named in its signature"]
 
     /// Whether two entry objects are the same review: equal but for the body
     /// they were read from, its constants, and the function as that module
@@ -621,7 +714,10 @@ extension ContentStore {
     public func libraryIndex() throws -> LibraryIndex {
         guard FileManager.default.fileExists(atPath: libraryIndexURL.path) else { return LibraryIndex() }
         do {
-            return try decoder.decode(LibraryIndex.self, from: Data(contentsOf: libraryIndexURL))
+            var index = try decoder.decode(LibraryIndex.self, from: Data(contentsOf: libraryIndexURL))
+            // Written down with the index's next write.
+            index.libraries = index.declaredLibraries
+            return index
         } catch {
             throw CodeAnalysisError.io("\(libraryIndexURL.path): \(error)")
         }
@@ -656,6 +752,26 @@ extension ContentStore {
     public func putLibraryEntries(module: SHA256Digest, rev: Int?, by: String?,
                                   proposals: [LibraryProposal], take: LibraryTake = .none,
                                   dryRun: Bool = false) throws -> LibraryWriteResult {
+        var result = try writeLibraryEntries(module: module, rev: rev, by: by, proposals: proposals,
+                                             take: take, dryRun: dryRun)
+        // A body the registry holds has no other place: every module holding it
+        // links to the entry now. Short bodies link by a review's decision only.
+        // A body links once the registry holds its code.
+        let bodies = Set(proposals.filter { $0.code != nil && $0.body.isValid }.map(\.body.key))
+        if !dryRun, !bodies.isEmpty {
+            do {
+                let relinked = try relinkModules(bodies: bodies)
+                if !relinked.isEmpty { result.relinked = relinked }
+            } catch {
+                result.relinkError = "\(error)"
+            }
+        }
+        return result
+    }
+
+    private func writeLibraryEntries(module: SHA256Digest, rev: Int?, by: String?,
+                                     proposals: [LibraryProposal], take: LibraryTake,
+                                     dryRun: Bool) throws -> LibraryWriteResult {
         let allReason = take.reason?.trimmingCharacters(in: .whitespacesAndNewlines)
         if take.all, allReason?.isEmpty ?? true {
             throw CodeAnalysisError.analysisMismatch("taking a library conflict needs a reason")
@@ -705,11 +821,23 @@ extension ContentStore {
             var settled: [String: String] = [:]
             let now = Timestamps.now()
             let admitted = LibraryProposal.admitted(proposals, in: index)
-            for (proposal, digest) in zip(proposals, stored).sorted(by: { $0.0.body < $1.0.body }) {
+            for (offered, digest) in zip(proposals, stored).sorted(by: { $0.0.body < $1.0.body }) {
+                // A short body is the entry its review was made on, or one of
+                // its own: its bytes alone say nothing of which.
+                var proposal = offered
+                if proposal.body.isShort {
+                    if let based = proposal.basedOn,
+                       let held = index.entries[based]?.variants.first(where: { $0.body.shape == proposal.body.shape }) {
+                        proposal.body = held.body
+                    } else {
+                        proposal.body = proposal.body.withOwnIdentity()
+                    }
+                    proposal.variantOf = nil
+                }
                 let source = LibrarySource(module: module, address: proposal.address, rev: rev, by: by)
                 // Only a new body is judged here: what the registry already
                 // holds is put in order by a review, entry by entry.
-                if index.entry(for: proposal.body) == nil, let refusal = proposal.refusal(in: index, admitted: admitted) {
+                if index.entry(for: proposal.body) == nil, let refusal = proposal.refusal(in: index, admitted: admitted, admittedKinds: Dictionary(proposals.map { ($0.body.key, $0.kind) }, uniquingKeysWith: { first, _ in first })) {
                     result.notLibrary = (result.notLibrary ?? []) + [refusal]
                     continue
                 }
@@ -741,7 +869,9 @@ extension ContentStore {
                         variantOf[id] = proposal
                         result.conflicts.append(.init(id: id, name: held.name, proposedName: proposal.name,
                                                       heldBy: held.source, version: held.version,
-                                                      base: proposal.basedOn == id ? proposal.base : nil))
+                                                      base: proposal.basedOn == id ? proposal.base : nil,
+                                                      changed: LibraryProposal.changedFields(
+                                                          from: try object(held.entry), to: proposal.entry)))
                     }
                     continue
                 }
@@ -787,6 +917,13 @@ extension ContentStore {
                    found.variants[position].referenceBytes == nil, found.variants[position].module == module {
                     index.entries[id]?.variants[position].referenceBytes = bytes
                     changedIndex = true
+                }
+                if let code = proposal.code, proposal.teachesBytesOnly == true {
+                    if let position = found.variants.firstIndex(where: { $0.body.key == proposal.body.key }) ?? (found.variants.isEmpty ? nil : 0),
+                       found.variants[position].code == nil, !dryRun {
+                        index.entries[id]?.variants[position].code = try putObject(code)
+                        changedIndex = true
+                    }
                 }
                 if proposal.teachesBytesOnly == true {
                     settled[id] = "this publish only tells the entry what its data references point at"
@@ -854,47 +991,35 @@ extension ContentStore {
                     continue
                 }
                 let base = proposal.basedOn == id ? proposal.base : nil
-                let current = base == held.version
-                // A review that differs reaches here: it is the entry's next
-                // version, or a conflict the decision takes — or leaves.
+                // A review that differs reaches here. What only adds to the entry
+                // is its next version, from any module and on any version it was
+                // made on; anything else replaces what the entry says, which only
+                // an administrator's decision takes.
                 conflicting.insert(id)
                 let taken = take.all ? allReason : reasons[id]
-                guard current || completes || taken != nil else {
+                let recordsOnly = LibraryProposal.sameReview(heldObject, proposal.entry)
+                let adds = LibraryProposal.onlyAdds(to: heldObject, offered: proposal.entry)
+                guard adds || (completes && recordsOnly) || taken != nil else {
                     let printed = LibraryProposal.nameChanges(from: heldObject, to: proposal.entry)
                     result.conflicts.append(.init(id: id, name: held.name, proposedName: proposal.name,
                                                   heldBy: held.source, version: held.version, base: base,
-                                                  names: printed.isEmpty ? nil : printed))
-                    settled[id] = "this module's review was not made on its current version: "
-                        + "that is a conflict, taken with `take_library_conflicts`"
+                                                  names: printed.isEmpty ? nil : printed,
+                                                  changed: LibraryProposal.changedFields(from: heldObject, to: proposal.entry)))
+                    settled[id] = "this module's review replaces what the entry says: "
+                        + "an administrator's decision takes that, with `take_library_conflicts`"
                     continue
                 }
                 // Past here sameReview means only what the review lacked gets
                 // recorded. Anything else moves the review, and says why.
-                let recordsOnly = LibraryProposal.sameReview(heldObject, proposal.entry)
-                func signature(_ entry: Data) -> String? {
-                    ((try? JSONSerialization.jsonObject(with: entry)) as? [String: Any])?["signature"] as? String
-                }
-                let signatureChanged = signature(heldObject) != signature(proposal.entry)
-                let own = current ? proposal.reason(signatureChanged: signatureChanged, held: heldObject) : nil
-                let why: String?
+                let why: String
                 if recordsOnly {
                     settled[id] = "this publish only records what its review lacked, which asks no reason"
-                    why = own ?? (lacksFunction ? "the function's C recorded" : "the body's constants recorded")
+                    why = entryReasons[id] ?? (lacksFunction ? "the function's C recorded" : "the body's constants recorded")
                 } else {
                     moving.insert(id)
-                    // A take speaks for a change on the current version only by
-                    // naming the entry; the function's reason only for what it explains.
-                    let decided = current ? reasons[id] : taken
-                    let explained = LibraryProposal.movedOnlyNameOrSignature(from: heldObject, to: proposal.entry) ? own : nil
-                    why = entryReasons[id] ?? decided ?? explained
-                }
-                guard recordsOnly || why != nil else {
-                    result.needsReason = (result.needsReason ?? []) + [.init(
-                        id: id, name: proposal.name, version: held.version + 1,
-                        changed: LibraryProposal.changedFields(from: heldObject, to: proposal.entry),
-                        names: Optional(LibraryProposal.nameChanges(from: heldObject, to: proposal.entry)).flatMap { $0.isEmpty ? nil : $0 },
-                        module: module)]
-                    continue
+                    let added = LibraryProposal.changedFields(from: heldObject, to: proposal.entry)
+                        .filter { !["body", "constants", "function"].contains($0) }
+                    why = entryReasons[id] ?? taken ?? "added by this module: " + added.joined(separator: ", ")
                 }
                 var next = held
                 // The function's C recorded in an entry is no change of its
@@ -959,9 +1084,6 @@ extension ContentStore {
                 text += ", and " + (settled[id] ?? "this publish does not change it")
                 throw CodeAnalysisError.analysisMismatch(text)
             }
-            if !dryRun, let refusal = result.reasonRefusal {
-                throw CodeAnalysisError.analysisMismatch(refusal)
-            }
             guard !dryRun, !histories.isEmpty || changedIndex else { return result }
             for (id, history) in histories.sorted(by: { $0.key < $1.key }) {
                 try atomicWrite(try encoder.encode(history), to: libraryHistoryURL(id))
@@ -1004,7 +1126,7 @@ extension ContentStore {
             var history = try libraryHistory(id: id) ?? LibraryHistory(id: id, versions: [])
             entry.version += 1
             entry.entry = SHA256Digest(data: data)
-            entry.variants = [LibraryVariant(body: kept.body, module: kept.module)]
+            entry.variants = [LibraryVariant(body: kept.body, module: kept.module, code: kept.code)]
             history.id = bodyKey
             history.versions.append(LibraryVersion(version: entry.version, entry: entry.entry, source: entry.source,
                                                    reason: why, recordedAt: Timestamps.now()))
@@ -1134,6 +1256,7 @@ extension ContentStore {
             ids.insert(proposal.body.key)
             if let held = index.bodies[proposal.body.key] { ids.insert(held) }
             if let variantOf = proposal.variantOf { ids.insert(variantOf) }
+            if proposal.body.isShort, let based = proposal.basedOn { ids.insert(based) }
         }
         return ids
     }
@@ -1156,6 +1279,9 @@ extension ContentStore {
         var objects = Set(index.entries.values.map(\.entry))
         // A body taken out keeps its text: its modules take it at their next open.
         objects.formUnion((index.takenOut ?? [:]).values.map(\.entry))
+        // The bodies' code: the only place a linked function's instructions are.
+        objects.formUnion(index.entries.values.flatMap(\.variants).compactMap(\.code))
+        objects.formUnion((index.takenOut ?? [:]).values.compactMap(\.variant.code))
         for id in Set(index.entries.keys).union((index.takenOut ?? [:]).values.map(\.id)) {
             if let history = try? libraryHistory(id: id) {
                 objects.formUnion(history.versions.map(\.entry))

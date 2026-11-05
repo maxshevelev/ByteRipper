@@ -198,6 +198,7 @@ public class Owner {
             program.endTransaction(transaction, recorded);
         }
         if (recorded) saveProgram("baseline");
+        ExportCode.analysisComments = Harvest.baselineComments(program);
         // From here a change counts; the count goes on from the last session's.
         writesFile = new File(options.get("project-dir"), "writes");
         writesCarried = readWrites();
@@ -311,7 +312,6 @@ public class Owner {
                 // The registry's reads take a body (the keys) and write nothing.
                 if (path.equals("/v1/library/match")) { json(exchange, 200, libraryMatch(body(exchange))); return; }
                 if (path.equals("/v1/library/compare")) { json(exchange, 200, libraryCompare(body(exchange))); return; }
-                if (path.equals("/v1/library/text_free")) { json(exchange, 200, libraryTextFree(body(exchange))); return; }
                 if (path.equals("/v1/library/apply")) { json(exchange, 200, libraryApply(exchange)); return; }
                 if (path.equals("/v1/library/mark")) { json(exchange, 200, libraryMarkRequest(exchange)); return; }
                 if (path.equals("/v1/export")) { exportAgain(exchange); return; }
@@ -334,7 +334,7 @@ public class Owner {
                     case "/v1/function/extend" -> write(exchange, this::extendFunction);
                     case "/v1/set/equate" -> write(exchange, this::setEquate);
                     case "/v1/preview/equate" -> setEquateInFunctions(previewBody(exchange));
-                    case "/v1/tag/function" -> write(exchange, this::tagFunction);
+                    case "/v1/library/candidate" -> write(exchange, this::libraryCandidate);
                     case "/v1/library/decline" -> write(exchange, this::libraryDecline);
                     case "/v1/library/release" -> write(exchange, this::libraryRelease);
                     case "/v1/type" -> write(exchange, this::addType);
@@ -982,6 +982,8 @@ public class Owner {
         addLibraryMark(answer, function);
         answer.addProperty("signature", function.getPrototypeString(false, false));
         addTags(answer, function);
+        JsonObject proposed = libraryCandidate(function);
+        if (proposed != null) answer.add("library_candidate", proposed);
         StringPropertyMap signatureReasons =
             program.getUsrPropertyManager().getStringPropertyMap(Harvest.SIGNATURE_REASON);
         String signatureReason = signatureReasons == null ? null : signatureReasons.getString(function.getEntryPoint());
@@ -1736,6 +1738,33 @@ public class Owner {
         }
     }
 
+    /**
+     * A project from before moves were one step keeps library tags, and notes of
+     * how a function stood to its entry. Neither means anything now: a tag's kind
+     * goes into its function's mark, and a function with no mark is the module's.
+     */
+    private void retireLibraryTags() throws Exception {
+        for (Function function : program.getFunctionManager().getFunctions(true)) {
+            String kind = null;
+            boolean tagged = false;
+            for (ghidra.program.model.listing.FunctionTag tag : function.getTags()) {
+                if (tag == null) continue;
+                String name = tag.getName().toLowerCase(java.util.Locale.ROOT);
+                if (!name.startsWith("library")) continue;
+                tagged = true;
+                if (name.startsWith("library.")) kind = name.substring(8);
+            }
+            if (!tagged) continue;
+            JsonObject mark = libraryMark(function);
+            if (mark != null && !mark.has("kind") && kind != null) {
+                mark.addProperty("kind", kind);
+                propertyMap(LIBRARY_MARK).add(function.getEntryPoint(), COMPACT.toJson(mark));
+            }
+            removeLibraryTags(function);
+        }
+        program.getUsrPropertyManager().removePropertyMap("ByteRipper.libraryIssue");
+    }
+
     /** The registry states the exporter reads, in a transaction of their own. */
     private void writeLibraryStates() throws Exception {
         long before = program.getModificationNumber();
@@ -2480,32 +2509,30 @@ public class Owner {
 
     /**
      * What this program offers the library registry
-     * (`Design/LIBRARY_REGISTRY_PLAN.md`): every function a review tagged
-     * `library.<kind>`, keyed by its body as Function ID hashes it — the code
-     * units, the full hash (address operands masked) and the specific hash
-     * (constants kept). A function whose review meets the bar `full` sets —
-     * a real name, every parameter and local named and typed, a plate, step
-     * comments — is an `entries` item with the review the registry keeps; one
-     * short of it, or too short for Function ID to hash, is a `below_bar` item
-     * with its gaps. Read whenever asked; the host asks after a publish.
+     * (`Design/LIBRARY_REGISTRY_PLAN.md`): the functions `asked` names, `{"items":
+     * [{address, kind}]}`, and every function linked to an entry, whose change
+     * is the entry's next version. Each is keyed by its body as Function ID
+     * hashes it. A function whose review meets the bar `full` sets is an
+     * `entries` item with the review the registry keeps; one short of it, or
+     * with no body to key, is a `below_bar` item with its gaps. Writes nothing.
      */
     private JsonObject library() throws Exception {
         ghidra.feature.fid.service.FidService fid = new ghidra.feature.fid.service.FidService();
         JsonArray entries = new JsonArray();
         JsonArray below = new JsonArray();
         for (Function function : program.getFunctionManager().getFunctions(true)) {
-            String tag = ExportCode.libraryTag(function);
-            if (tag == null || !tag.startsWith("library.")) continue;
-            String kind = tag.substring("library.".length());
-            ghidra.feature.fid.hash.FidHashQuad hash = fid.hashFunction(function);
+            JsonObject heldMark = libraryMark(function);
+            JsonObject candidate = libraryCandidate(function);
+            if (heldMark == null && candidate == null) continue;
+            String kind = candidate != null ? candidate.get("kind").getAsString() : markKind(function, heldMark);
+            ghidra.feature.fid.hash.FidHashQuad hash = ExportCode.bodyHash(function);
             ExportCode.Assessment assessment = ExportCode.assess(
                 function, decompile(function), ExportCode.stepComments(function));
             java.util.List<String> gaps = new java.util.ArrayList<>(assessment.gaps);
-            if (hash == null) gaps.add("too_short");
+            if (ExportCode.bodyKey(function) == null) gaps.add("no_body");
             // Linked to an entry and not edited since: its description is the
             // entry's, and what the project lacks is no gap of anyone's.
-            JsonObject linkedMark = libraryMark(function);
-            boolean linked = linkedMark != null && atItsMark(function, hash, linkedMark);
+            boolean linked = heldMark != null && atItsMark(function, hash, heldMark);
             if (linked && !gaps.isEmpty()) continue;
             if (!gaps.isEmpty()) {
                 JsonObject item = new JsonObject();
@@ -2528,21 +2555,13 @@ public class Owner {
             item.addProperty("name", function.getName());
             item.addProperty("kind", kind);
             item.add("body", body);
-            item.add("entry", libraryEntry(function, kind, body));
+            JsonObject offeredEntry = libraryEntry(function, kind, body);
+            if (candidate != null && candidate.has("assert_routine")) offeredEntry.addProperty("assert", true);
+            item.add("entry", offeredEntry);
             if (linked) item.addProperty("linked", true);
             String offeredBytes = ExportCode.referenceBytes(function);
             if (offeredBytes != null) item.addProperty("reference_bytes", offeredBytes);
             libraryDependencies(function, fid, item);
-            // Why its signature is what it is: not of the review's text, so it
-            // goes beside the entry, for the history of the version it makes.
-            StringPropertyMap signatureReasons =
-                program.getUsrPropertyManager().getStringPropertyMap(Harvest.SIGNATURE_REASON);
-            String signatureReason = signatureReasons == null ? null : signatureReasons.getString(function.getEntryPoint());
-            if (signatureReason != null) item.addProperty("signature_reason", signatureReason);
-            StringPropertyMap nameReasons =
-                program.getUsrPropertyManager().getStringPropertyMap(Harvest.REASON);
-            String nameReason = nameReasons == null ? null : nameReasons.getString(function.getEntryPoint());
-            if (nameReason != null) item.addProperty("name_reason", nameReason);
             // A body applied as a variant of another entry says which, and
             // the assert codes that made it one.
             JsonObject mark = libraryMark(function);
@@ -2552,7 +2571,7 @@ public class Owner {
                 item.addProperty("based_on", mark.get("id").getAsString());
                 item.add("base", mark.get("version"));
             }
-            if (mark != null && !mark.get("id").getAsString().equals(bodyKey(hash))) {
+            if (mark != null && hash.getCodeUnitSize() >= 4 && !mark.get("id").getAsString().equals(bodyKey(hash))) {
                 item.addProperty("variant_of", mark.get("id").getAsString());
                 if (mark.has("codes")) item.add("codes", mark.get("codes"));
             }
@@ -2631,8 +2650,11 @@ public class Owner {
             Function target = each.isThunk() ? each.getThunkedFunction(true) : each;
             JsonObject callee = new JsonObject();
             callee.addProperty("name", target.getName());
-            ghidra.feature.fid.hash.FidHashQuad hash = target.isExternal() ? null : fid.hashFunction(target);
-            if (hash != null) callee.addProperty("body", bodyKey(hash));
+            ghidra.feature.fid.hash.FidHashQuad hash = target.isExternal() ? null : ExportCode.bodyHash(target);
+            // A short body's bytes name no entry: the mark does.
+            JsonObject calleeMark = hash != null && hash.getCodeUnitSize() < 4 ? libraryMark(target) : null;
+            if (calleeMark != null) callee.addProperty("body", calleeMark.get("id").getAsString());
+            else if (hash != null) callee.addProperty("body", bodyKey(hash));
             callees.add(callee);
         }
         item.add("callees", callees);
@@ -2755,15 +2777,12 @@ public class Owner {
 
     /** Where a function applied from the registry keeps its entry: id, version, the digest of what was applied, codes. */
     static final String LIBRARY_MARK = "ByteRipper.libraryEntry";
+    /** A function a review proposes for the registry: the project's, until a publish decides it. */
+    static final String LIBRARY_CANDIDATE = "ByteRipper.libraryCandidate";
     /** The entries a review declined for a function, by id, comma-separated. */
     static final String LIBRARY_DECLINED = "ByteRipper.libraryDeclined";
-    /**
-     * Why a function is not its entry although it was matched: `differs` — a
-     * review that named it keeps what differs (`differences`) — or `conflict`
-     * — its review, offered at a publish, was not made on the entry's current
-     * version (`base`). Written by an apply and by the marks after a publish.
-     */
-    static final String LIBRARY_ISSUE = "ByteRipper.libraryIssue";
+    /** Whose library a registry entry can say it is. */
+    static final java.util.List<String> LIBRARY_KINDS = java.util.List.of("edk2", "amd", "intel");
     /** The tag of an assert routine: the codes it is called with make variants, not functions. */
     static final String ASSERT_TAG = "assert_routine";
     private static final Gson COMPACT = new GsonBuilder().disableHtmlEscaping().create();
@@ -2831,6 +2850,18 @@ public class Owner {
         }
     }
 
+    /** Whose library the entry a function links to is, as its mark keeps it. */
+    private static String markKind(Function function, JsonObject mark) {
+        if (mark != null && mark.has("kind")) return mark.get("kind").getAsString();
+        // A mark from before the kind was on it: the kind is on the tag until
+        // the next publish retires it.
+        for (ghidra.program.model.listing.FunctionTag tag : function.getTags()) {
+            String name = tag == null ? "" : tag.getName().toLowerCase(java.util.Locale.ROOT);
+            if (name.startsWith("library.")) return name.substring(8);
+        }
+        return "";
+    }
+
     private java.util.List<String> declined(Function function) {
         StringPropertyMap map = program.getUsrPropertyManager().getStringPropertyMap(LIBRARY_DECLINED);
         String text = map == null ? null : map.getString(function.getEntryPoint());
@@ -2845,8 +2876,7 @@ public class Owner {
      * a function edited since is told from one that is not.
      */
     private String reviewDigest(Function function, ghidra.feature.fid.hash.FidHashQuad hash) throws Exception {
-        String kind = ExportCode.libraryKind(function);
-        JsonObject entry = libraryEntryListing(function, kind == null ? "" : kind, bodyObject(hash));
+        JsonObject entry = libraryEntryListing(function, markKind(function, libraryMark(function)), bodyObject(hash));
         byte[] bytes = COMPACT.toJson(entry).getBytes(StandardCharsets.UTF_8);
         return hexBytes(java.security.MessageDigest.getInstance("SHA-256").digest(bytes)).replace(" ", "");
     }
@@ -2867,7 +2897,7 @@ public class Owner {
         int hashed = 0;
         for (Function function : program.getFunctionManager().getFunctions(true)) {
             if (function.isThunk() || function.isExternal()) continue;
-            ghidra.feature.fid.hash.FidHashQuad hash = fid.hashFunction(function);
+            ghidra.feature.fid.hash.FidHashQuad hash = ExportCode.bodyHash(function);
             if (hash == null) continue;
             hashed++;
             String key = bodyKey(hash);
@@ -2880,18 +2910,14 @@ public class Owner {
             item.addProperty("name", function.getName());
             item.addProperty("named", function.getSymbol().getSource() == SourceType.USER_DEFINED);
             item.addProperty("key", key);
-            String kind = ExportCode.libraryKind(function);
-            if (kind != null) item.addProperty("kind", kind);
             if (exact != null) item.add("exact", exact);
             if (near != null) item.add("near", near);
             String bytes = ExportCode.referenceBytes(function);
             if (bytes != null) item.addProperty("reference_bytes", bytes);
-            // Unmarked, a reason says only how it got its name: it is a review's
-            // text that a link would lose and nobody compared with the entry.
-            if (mark != null ? holdsText(function) : holdsReview(function)) item.addProperty("holds_text", true);
             if (mark != null) {
                 JsonObject held = mark.deepCopy();
                 held.addProperty("edited", !atItsMark(function, hash, mark));
+                held.remove("dirty");
                 held.remove("written");
                 held.remove("digest");
                 item.add("mark", held);
@@ -2975,7 +3001,7 @@ public class Owner {
                 if (callee == null) return false;
                 JsonObject mark = libraryMark(callee);
                 if (mark != null && ids.contains(mark.get("id").getAsString())) return true;
-                ghidra.feature.fid.hash.FidHashQuad hash = fid.hashFunction(callee);
+                ghidra.feature.fid.hash.FidHashQuad hash = ExportCode.bodyHash(callee);
                 return hash != null && keys.contains(bodyKey(hash));
             }
             if (flow.isJump() || flow.isTerminal()) return false;
@@ -3060,55 +3086,24 @@ public class Owner {
         int version = integer(item, "version", 1);
         JsonObject entry = item.getAsJsonObject("entry");
         if (entry == null) throw new Failure(400, "the item holds no entry");
-        String mode = string(item, "mode", "fill");
-        // The function refers to the entry: it takes the name and the
-        // signature its callers print, and nothing else goes into the project.
+        String mode = string(item, "mode", "link");
+        // The function is bound to the entry: it takes the name and the signature
+        // its callers print, and what the project holds stays, which is the
+        // review's own. `whole` and `variant` put the entry's text in its place,
+        // for a review that goes on writing over it.
         boolean link = mode.equals("link");
-        // The version is `library_entry`'s to say: written here too, the reason
-        // falls behind at the entry's next version with nothing to re-apply it.
         String reason = "library registry entry " + id;
         if (item.has("reason") && !item.get("reason").isJsonNull()) reason += ": " + item.get("reason").getAsString();
-        // `fields`: take these parts of the entry and keep the review's for
-        // the rest — a merge, not a replacement. None means the mode decides.
-        JsonArray fields = item.has("fields") && !item.get("fields").isJsonNull()
-            ? item.getAsJsonArray("fields") : null;
-        if (link) {
-            fields = new JsonArray();
-            fields.add("signature");
-            fields.add("names");
-        }
-        boolean masked = fields != null;
-        java.util.Set<String> wanted = new java.util.HashSet<>();
-        if (masked) {
-            for (JsonElement field : fields) {
-                String word = field.getAsString();
-                if (!java.util.List.of("signature", "names", "locals", "plate", "comments").contains(word)) {
-                    throw new Failure(400, "replace takes signature, names, locals, plate or comments, not "
-                                      + word);
-                }
-                wanted.add(word);
-            }
-        }
-        java.util.function.Predicate<String> takes = field -> !masked || wanted.contains(field);
         JsonArray filled = new JsonArray(), differences = new JsonArray(), unplaced = new JsonArray();
         JsonObject answer = new JsonObject();
         answer.addProperty("address", hex(function.getEntryPoint()));
         answer.addProperty("id", id);
         answer.addProperty("version", version);
-        answer.addProperty("mode", link ? "link" : masked ? "fields" : mode);
-        if (masked && !link) answer.add("fields", fields.deepCopy());
+        answer.addProperty("mode", mode);
         String oldName = function.getName();
         String name = required(entry, "name");
-        // The review's own reason for a name it keeps stays: only a rename
-        // says why in the registry's words.
         Address at = function.getEntryPoint();
-        StringPropertyMap reasons = program.getUsrPropertyManager().getStringPropertyMap(Harvest.REASON);
-        StringPropertyMap bys = program.getUsrPropertyManager().getStringPropertyMap(Harvest.BY);
-        String keptReason = reasons == null ? null : reasons.getString(at);
-        String keptBy = bys == null ? null : bys.getString(at);
-        boolean wasNamed = function.getSymbol().getSource() == SourceType.USER_DEFINED;
-        boolean didRename = false;
-        if (takes.test("names") && !oldName.equals(name)) {
+        if (!oldName.equals(name)) {
             for (Symbol other : program.getSymbolTable().getGlobalSymbols(name)) {
                 if (!other.getAddress().equals(function.getEntryPoint())) {
                     throw new Failure(409, name + " already names " + hex(other.getAddress()));
@@ -3119,78 +3114,28 @@ public class Owner {
             renamed.addProperty("from", oldName);
             renamed.addProperty("to", name);
             answer.add("renamed", renamed);
-            didRename = true;
         }
         JsonObject why = new JsonObject();
         why.addProperty("reason", oldName.equals(name) ? reason : reason + " (was " + oldName + ")");
         why.addProperty("by", "agent");
-        boolean whole = mode.equals("whole") || mode.equals("variant");
-        boolean reviewedParameters = false;
-        for (Parameter parameter : function.getParameters()) {
-            if (!placeholder(parameter.getName())) reviewedParameters = true;
-        }
-        if (link) {
-            // The whole signature with its storage: an unreviewed function
-            // has none of the entry's parameters to retype.
-            if (!sameSignature(function, entry)) {
-                applySignature(function, entry, why);
-                filled.add("signature");
-            }
-        } else if (masked) {
-            if (takes.test("signature")) applySignatureShape(function, entry, filled, differences);
-            if (takes.test("names")) applyParameterNames(function, entry, filled, differences);
-        } else if (sameSignature(function, entry)) {
-            // Nothing to write: the function already has the entry's.
-        } else if (whole || !reviewedParameters) {
+        if (!sameSignature(function, entry)) {
             applySignature(function, entry, why);
             filled.add("signature");
-        } else {
-            fillParameters(function, entry, filled, differences);
         }
-        if (didRename || !wasNamed) {
-            why(at, why);
-        } else {
-            StringPropertyMap reasonMap = propertyMap(Harvest.REASON), byMap = propertyMap(Harvest.BY);
-            if (keptReason != null) reasonMap.add(at, keptReason); else reasonMap.remove(at);
-            if (keptBy != null) byMap.add(at, keptBy); else byMap.remove(at);
-        }
-        if (!masked || takes.test("locals")) {
-            applyLocals(function, entry, masked || whole, filled, differences, unplaced);
-        }
-        String plate = string(entry, "plate", "");
-        String ownPlate = function.getComment();
-        if (masked) {
-            if (takes.test("plate")) {
-                function.setComment(plate.isEmpty() ? null : plate);
-                filled.add("plate");
-            }
-        } else if (whole || ownPlate == null || ownPlate.isBlank()) {
+        why(at, why);
+        if (!link) {
+            applyLocals(function, entry, true, filled, differences, unplaced);
+            String plate = string(entry, "plate", "");
             function.setComment(plate.isEmpty() ? null : plate);
             filled.add("plate");
-        } else if (!ownPlate.equals(plate)) {
-            differences.add("plate");
+            applyComments(function, entry, true, filled, differences, unplaced);
+            applyEntryEquates(function, entry, differences);
         }
-        if (!masked || takes.test("comments")) {
-            applyComments(function, entry, masked || whole, filled, differences, unplaced);
-        }
-        if (!masked && whole) applyEntryEquates(function, entry, differences);
-        String kind = string(entry, "kind", null);
-        String ownKind = ExportCode.libraryKind(function);
-        if (kind != null && (whole || link || ownKind == null || ExportCode.libraryTag(function) == null)) {
-            removeLibraryTags(function);
-            function.addTag("library." + kind);
-        } else if (kind != null && !kind.equals(ownKind)) {
-            differences.add("kind: " + ownKind + ", entry " + kind);
-        }
+        String kind = string(entry, "kind", "");
         if (entry.has("assert") && entry.get("assert").getAsBoolean() && !hasTag(function, ASSERT_TAG)) {
             function.addTag(ASSERT_TAG);
         }
         decompiled.remove(function.getEntryPoint());
-        // What the review still lacks after this, by the bar's own reading —
-        // the decompiler's local map, not the listing's, which holds stack
-        // slots the C never mentions. Read only when the item asks: the
-        // reading decompiles, and an apply of every match — what an open does
-        // — would pay it once per function.
         if (item.has("leftovers") && item.get("leftovers").getAsBoolean()) {
             ExportCode.Assessment after = ExportCode.assess(
                 function, decompile(function), ExportCode.stepComments(function));
@@ -3200,40 +3145,18 @@ public class Owner {
                 answer.add("leftovers", left);
             }
         }
-        // Equal to the entry, apart from the body it is: the function is
-        // the entry's, and carries the mark.
-        ghidra.feature.fid.hash.FidHashQuad hash = new ghidra.feature.fid.service.FidService().hashFunction(function);
-        // The listing's reading, not the decompiler's: it is what a review
-        // writes, it costs no decompilation, and when it equals the entry's
-        // the entry's review is the function's.
-        JsonObject now = hash == null ? null
-            : libraryEntryListing(function, kind == null ? "" : kind, bodyObject(hash));
-        boolean equal = now != null && (link || review(now).equals(review(entry)));
-        if (link) {
-            stripText(function);
-            now = hash == null ? null : libraryEntryListing(function, kind == null ? "" : kind, bodyObject(hash));
-        }
-        StringPropertyMap issues = program.getUsrPropertyManager().getStringPropertyMap(LIBRARY_ISSUE);
-        if (issues != null) issues.remove(function.getEntryPoint());
-        if (equal) {
-            JsonObject mark = new JsonObject();
-            mark.addProperty("id", id);
-            mark.addProperty("version", version);
+        ghidra.feature.fid.hash.FidHashQuad hash = ExportCode.bodyHash(function);
+        JsonObject mark = new JsonObject();
+        mark.addProperty("id", id);
+        mark.addProperty("version", version);
+        mark.addProperty("kind", kind);
+        if (item.has("codes")) mark.add("codes", item.get("codes"));
+        propertyMap(LIBRARY_MARK).add(function.getEntryPoint(), COMPACT.toJson(mark));
+        if (hash != null) {
             mark.addProperty("digest", reviewDigest(function, hash));
-            if (item.has("codes")) mark.add("codes", item.get("codes"));
             propertyMap(LIBRARY_MARK).add(function.getEntryPoint(), COMPACT.toJson(mark));
-        } else {
-            StringPropertyMap marks = program.getUsrPropertyManager().getStringPropertyMap(LIBRARY_MARK);
-            if (marks != null) marks.remove(function.getEntryPoint());
-            if (differences.size() == 0) differences.add("the review keeps more than the entry");
-            JsonObject issue = new JsonObject();
-            issue.addProperty("id", id);
-            issue.addProperty("version", version);
-            issue.addProperty("state", "differs");
-            issue.add("differences", differences);
-            propertyMap(LIBRARY_ISSUE).add(function.getEntryPoint(), COMPACT.toJson(issue));
         }
-        answer.addProperty("marked", equal);
+        answer.addProperty("marked", true);
         if (filled.size() > 0) answer.add("filled", filled);
         if (differences.size() > 0) answer.add("differences", differences);
         if (unplaced.size() > 0) answer.add("unplaced", unplaced);
@@ -3270,7 +3193,6 @@ public class Owner {
         }
     }
 
-    /** An entry's review without its body: what two variants share. */
     private static JsonObject review(JsonObject entry) {
         JsonObject copy = entry.deepCopy();
         copy.remove("body");
@@ -3363,93 +3285,6 @@ public class Owner {
         }
     }
 
-    /** The entry's return type, convention and parameter types, and the function's own parameter names. */
-    private void applySignatureShape(Function function, JsonObject entry, JsonArray filled, JsonArray differences)
-            throws Exception {
-        String returned = string(entry, "return_type", null);
-        if (returned != null && !function.getReturnType().getDisplayName().equals(returned)) {
-            function.setReturnType(type(returned), SourceType.USER_DEFINED);
-            filled.add("return type");
-        }
-        String convention = namedConvention(entry);
-        if (convention != null && !convention.equals(function.getCallingConventionName())) {
-            function.setCallingConvention(convention);
-            filled.add("calling convention");
-        }
-        JsonArray params = entry.has("params") ? entry.getAsJsonArray("params") : new JsonArray();
-        Parameter[] current = function.getParameters();
-        if (params.size() != current.length) {
-            differences.add("signature: " + current.length + " parameters, entry " + params.size());
-            return;
-        }
-        for (int index = 0; index < current.length; index++) {
-            Parameter parameter = current[index];
-            String theirs = params.get(index).getAsJsonObject().get("type").getAsString();
-            if (parameter.getDataType().getDisplayName().equals(theirs)) continue;
-            parameter.setDataType(type(theirs), SourceType.USER_DEFINED);
-            filled.add("param " + index + " type");
-        }
-    }
-
-    /** The entry's parameter names by ordinal, where the arity fits. */
-    private void applyParameterNames(Function function, JsonObject entry, JsonArray filled, JsonArray differences)
-            throws Exception {
-        JsonArray params = entry.has("params") ? entry.getAsJsonArray("params") : new JsonArray();
-        Parameter[] current = function.getParameters();
-        if (params.size() != current.length) {
-            differences.add("names: " + current.length + " parameters, entry " + params.size());
-            return;
-        }
-        for (int index = 0; index < current.length; index++) {
-            Parameter parameter = current[index];
-            String name = params.get(index).getAsJsonObject().get("name").getAsString();
-            if (parameter.getName().equals(name)) continue;
-            parameter.setName(name, SourceType.USER_DEFINED);
-            filled.add("param " + index + " name");
-        }
-    }
-
-    private void fillParameters(Function function, JsonObject entry, JsonArray filled, JsonArray differences)
-            throws Exception {
-        JsonArray params = entry.has("params") ? entry.getAsJsonArray("params") : new JsonArray();
-        Parameter[] current = function.getParameters();
-        if (params.size() != current.length) {
-            differences.add("signature: " + current.length + " parameters, entry " + params.size());
-            return;
-        }
-        for (int index = 0; index < current.length; index++) {
-            JsonObject theirs = params.get(index).getAsJsonObject();
-            Parameter parameter = current[index];
-            String name = theirs.get("name").getAsString(), type = theirs.get("type").getAsString();
-            if (parameter.getName().equals(name)) {
-                // already the entry's
-            } else if (placeholder(parameter.getName())) {
-                parameter.setName(name, SourceType.USER_DEFINED);
-                filled.add("param " + index + " name");
-            } else if (!parameter.getName().equals(name)) {
-                differences.add("param " + index + " name: " + parameter.getName() + ", entry " + name);
-            }
-            if (parameter.getDataType().getDisplayName().equals(type)) {
-                // already the entry's
-            } else if (undefined(parameter.getDataType())) {
-                parameter.setDataType(type(type), SourceType.USER_DEFINED);
-                filled.add("param " + index + " type");
-            } else if (!parameter.getDataType().getDisplayName().equals(type)) {
-                differences.add("param " + index + " type: " + parameter.getDataType().getDisplayName()
-                                + ", entry " + type);
-            }
-        }
-        String returned = string(entry, "return_type", null);
-        if (returned == null || function.getReturnType().getDisplayName().equals(returned)) {
-            // already the entry's
-        } else if (undefined(function.getReturnType())) {
-            function.setReturnType(type(returned), SourceType.USER_DEFINED);
-            filled.add("return type");
-        } else if (returned != null && !function.getReturnType().getDisplayName().equals(returned)) {
-            differences.add("return type: " + function.getReturnType().getDisplayName() + ", entry " + returned);
-        }
-    }
-
     private void applyLocals(Function function, JsonObject entry, boolean whole, JsonArray filled,
                              JsonArray differences, JsonArray unplaced) throws Exception {
         JsonArray locals = entry.has("locals") ? entry.getAsJsonArray("locals") : new JsonArray();
@@ -3536,7 +3371,8 @@ public class Owner {
             }
             CommentType type = CommentType.valueOf(theirs.get("kind").getAsString().toUpperCase(java.util.Locale.ROOT));
             String text = theirs.get("text").getAsString(), own = instruction.getComment(type);
-            if (own == null || own.isBlank()) {
+            if (own == null || own.isBlank()
+                    || ExportCode.writtenByAnalysis(at, type.name().toLowerCase(java.util.Locale.ROOT), own)) {
                 instruction.setComment(type, text);
                 set++;
             } else if (!own.equals(text)) {
@@ -3563,25 +3399,20 @@ public class Owner {
             if (function == null) continue;
             String before = libraryState(function);
             String id = required(item, "id");
-            if (item.has("conflict") && item.get("conflict").getAsBoolean()) {
-                // The mark stays what it was: the review was made on it.
-                JsonObject issue = new JsonObject();
-                issue.addProperty("id", id);
-                issue.addProperty("version", integer(item, "version", 1));
-                issue.addProperty("state", "conflict");
-                if (item.has("base") && !item.get("base").isJsonNull()) issue.add("base", item.get("base"));
-                propertyMap(LIBRARY_ISSUE).add(function.getEntryPoint(), COMPACT.toJson(issue));
-                if (!java.util.Objects.equals(before, libraryState(function))) changed++;
-                continue;
-            }
-            ghidra.feature.fid.hash.FidHashQuad hash = fid.hashFunction(function);
+            ghidra.feature.fid.hash.FidHashQuad hash = ExportCode.bodyHash(function);
             if (hash == null) continue;
-            StringPropertyMap issues = program.getUsrPropertyManager().getStringPropertyMap(LIBRARY_ISSUE);
-            if (issues != null) issues.remove(function.getEntryPoint());
             JsonObject held = libraryMark(function);
             JsonObject mark = new JsonObject();
             mark.addProperty("id", id);
             mark.addProperty("version", integer(item, "version", 1));
+            mark.addProperty("kind", string(item, "kind", markKind(function, held)));
+            // The registry took it: it is no candidate now.
+            JsonObject candidate = libraryCandidate(function);
+            if (candidate != null) {
+                if (candidate.has("assert_routine")) function.addTag(ASSERT_TAG);
+                propertyMap(LIBRARY_CANDIDATE).remove(function.getEntryPoint());
+            }
+            propertyMap(LIBRARY_MARK).add(function.getEntryPoint(), COMPACT.toJson(mark));
             mark.addProperty("digest", reviewDigest(function, hash));
             if (held != null && id.equals(string(held, "id", "")) && held.has("codes")) mark.add("codes", held.get("codes"));
             propertyMap(LIBRARY_MARK).add(function.getEntryPoint(), COMPACT.toJson(mark));
@@ -3597,20 +3428,17 @@ public class Owner {
     }
 
     /**
-     * What the artifact says of a function and the registry (`library_entry`):
-     * the issue an apply or a publish left, else the mark — `entry` while the
-     * function is what was applied or published, `edited` once it was changed
-     * on that version — else nothing.
+     * What a project's export says of a function and the registry, for the
+     * publish to read: the entry it links to, `entry` while the function is what
+     * was linked and `edited` once a write made a draft of the entry's next
+     * version. No store holds this: a publish stores the link.
      */
     private String libraryState(Function function) {
-        StringPropertyMap issues = program.getUsrPropertyManager().getStringPropertyMap(LIBRARY_ISSUE);
-        String issue = issues == null ? null : issues.getString(function.getEntryPoint());
-        if (issue != null && !issue.isBlank()) return issue;
         JsonObject mark = libraryMark(function);
         if (mark == null) return null;
         boolean same;
         try {
-            ghidra.feature.fid.hash.FidHashQuad hash = new ghidra.feature.fid.service.FidService().hashFunction(function);
+            ghidra.feature.fid.hash.FidHashQuad hash = ExportCode.bodyHash(function);
             same = atItsMark(function, hash, mark);
         } catch (Exception error) {
             same = false;
@@ -3628,11 +3456,7 @@ public class Owner {
         if (libraryMark(function) == null) return;
         try {
             answer.add("library_entry", JsonParser.parseString(libraryState(function)));
-            // A copy is text at the entry: an edit's text is a draft of the review.
-            String state = answer.getAsJsonObject("library_entry").has("state")
-                ? answer.getAsJsonObject("library_entry").get("state").getAsString() : "";
-            if (state.equals("entry") && holdsText(function)) answer.addProperty("stored_copy", true);
-            ghidra.feature.fid.hash.FidHashQuad hash = new ghidra.feature.fid.service.FidService().hashFunction(function);
+            ghidra.feature.fid.hash.FidHashQuad hash = ExportCode.bodyHash(function);
             if (hash != null) answer.addProperty("body_key", bodyKey(hash));
             String bytes = ExportCode.referenceBytes(function);
             if (bytes != null) answer.addProperty("reference_bytes", bytes);
@@ -3641,64 +3465,9 @@ public class Owner {
         }
     }
 
-    private static final ghidra.program.model.listing.CommentType[] COMMENT_KINDS = {
-        ghidra.program.model.listing.CommentType.PLATE, ghidra.program.model.listing.CommentType.PRE,
-        ghidra.program.model.listing.CommentType.POST, ghidra.program.model.listing.CommentType.EOL,
-        ghidra.program.model.listing.CommentType.REPEATABLE };
-
-    /** Whether the project holds more of the function than its callers need. */
-    private boolean holdsText(Function function) {
-        if (holdsReview(function)) return true;
-        for (String property : REASONS) {
-            StringPropertyMap reasons = program.getUsrPropertyManager().getStringPropertyMap(property);
-            if (reasons != null && reasons.getString(function.getEntryPoint()) != null) return true;
-        }
-        return false;
-    }
-
-    /** Whether a plate, a comment or a local's name is written in the project. */
-    private boolean holdsReview(Function function) {
-        String plate = function.getComment();
-        if (plate != null && !plate.isBlank()) return true;
-        if (program.getListing().getCommentAddressIterator(function.getBody(), true).hasNext()) return true;
-        for (ghidra.program.model.listing.Variable local : function.getLocalVariables()) {
-            if (reviewNamed(local)) return true;
-        }
-        return false;
-    }
-
-    private static final String[] REASONS = { Harvest.REASON, Harvest.BY, Harvest.SIGNATURE_REASON };
-
-    private static boolean reviewNamed(ghidra.program.model.listing.Variable local) {
-        return local.getSource() == SourceType.USER_DEFINED || local.getSource() == SourceType.IMPORTED;
-    }
-
-    /**
-     * The project keeps of a linked function what its callers' decompile reads:
-     * its name, signature, calling convention and parameter storage. The rest is
-     * the entry's, and a write brings it back first.
-     */
-    private void stripText(Function function) {
-        ghidra.program.model.listing.Listing listing = program.getListing();
-        java.util.List<Address> places = new java.util.ArrayList<>();
-        ghidra.program.model.address.AddressIterator comments =
-            listing.getCommentAddressIterator(function.getBody(), true);
-        while (comments.hasNext()) places.add(comments.next());
-        for (Address place : places) {
-            for (ghidra.program.model.listing.CommentType kind : COMMENT_KINDS) listing.setComment(place, kind, null);
-        }
-        function.setComment(null);
-        for (ghidra.program.model.listing.Variable local : function.getLocalVariables()) {
-            if (reviewNamed(local)) function.removeVariable(local);
-        }
-        for (String property : REASONS) {
-            StringPropertyMap reasons = program.getUsrPropertyManager().getStringPropertyMap(property);
-            if (reasons != null) reasons.remove(function.getEntryPoint());
-        }
-    }
-
     /** Every function's `library_entry` written where the exporter reads it. */
     private void refreshLibraryStates() throws Exception {
+        retireLibraryTags();
         StringPropertyMap states = propertyMap(ExportCode.LIBRARY_STATE);
         for (Function function : program.getFunctionManager().getFunctions(true)) {
             String state = libraryState(function);
@@ -3729,6 +3498,58 @@ public class Owner {
         return answer;
     }
 
+    /** A function this review proposes for the registry: its kind, in this project only. */
+    private JsonObject libraryCandidate(Function function) {
+        StringPropertyMap map = program.getUsrPropertyManager().getStringPropertyMap(LIBRARY_CANDIDATE);
+        String text = map == null ? null : map.getString(function.getEntryPoint());
+        return text == null ? null : JsonParser.parseString(text).getAsJsonObject();
+    }
+
+    /**
+     * `POST /v1/library/candidate`: functions proposed for the registry,
+     * `{"items": [{address, kind, assert_routine?}], "remove": [address]}`.
+     * Nothing is decided here: the next publish offers them all, and the
+     * registry takes them, or that publish is refused.
+     */
+    private JsonObject libraryCandidate(JsonObject body) throws Exception {
+        if (body.has("items")) {
+            for (JsonElement element : body.getAsJsonArray("items")) {
+                JsonObject item = element.getAsJsonObject();
+                String kind = required(item, "kind");
+                if (!LIBRARY_KINDS.contains(kind)) {
+                    throw new Failure(400, kind + " is not a library kind: edk2, amd or intel");
+                }
+                Function function = functionAt(required(item, "address"));
+                if (libraryMark(function) != null) {
+                    throw new Failure(409, function.getName() + " at " + hex(function.getEntryPoint())
+                        + " links to the registry already: a change to it goes to its entry at a publish");
+                }
+                JsonObject candidate = new JsonObject();
+                candidate.addProperty("kind", kind);
+                if (item.has("assert_routine") && item.get("assert_routine").getAsBoolean()) {
+                    candidate.addProperty("assert_routine", true);
+                }
+                propertyMap(LIBRARY_CANDIDATE).add(function.getEntryPoint(), COMPACT.toJson(candidate));
+            }
+        }
+        if (body.has("remove")) {
+            for (JsonElement element : body.getAsJsonArray("remove")) {
+                propertyMap(LIBRARY_CANDIDATE).remove(functionAt(element.getAsString()).getEntryPoint());
+            }
+        }
+        JsonArray list = new JsonArray();
+        for (Function function : program.getFunctionManager().getFunctions(true)) {
+            JsonObject candidate = libraryCandidate(function);
+            if (candidate == null) continue;
+            candidate.addProperty("address", hex(function.getEntryPoint()));
+            candidate.addProperty("name", function.getName());
+            list.add(candidate);
+        }
+        JsonObject answer = identity();
+        answer.add("candidates", list);
+        return answer;
+    }
+
     /** `POST /v1/library/decline`: the entry `id` is not offered for the function at `address` again. */
     private JsonObject libraryDecline(JsonObject body) throws Exception {
         Function function = functionAt(required(body, "address"));
@@ -3748,7 +3569,7 @@ public class Owner {
     /**
      * `POST /v1/library/release`: the registry gave these bodies back, `{"items":
      * [{address, id, version, entry}]}`. Each function stops being a library
-     * function: its mark and tag come off, so a publish does not offer it. A
+     * function: its mark comes off, so a publish does not offer it. A
      * function that holds a copy keeps it; one that only linked to the entry,
      * with no text of its own, takes the entry's review as its own first.
      */
@@ -3770,7 +3591,6 @@ public class Owner {
             } else {
                 answer.addProperty("text", "the module's own");
             }
-            removeLibraryTags(function);
             StringPropertyMap marks = program.getUsrPropertyManager().getStringPropertyMap(LIBRARY_MARK);
             if (marks != null) marks.remove(function.getEntryPoint());
             noLongerLibrary(Harvest.REASON, function.getEntryPoint());
@@ -4221,8 +4041,8 @@ public class Owner {
      * A write inside a marked function is the review's own from then on, also
      * when what it changed is not of the entry's description: a temporary's
      * name, a label, an equate leave the digest as it was, and the function
-     * would go on reading as the entry, hiding the write. A publish marks it
-     * afresh.
+     * would go on reading as the entry, hiding the write. It is `dirty` until a
+     * publish's registry takes what it says, and marks it afresh.
      */
     private void noteWriteOnMarks(HttpExchange exchange, JsonObject body, long before) {
         if (program.getModificationNumber() == before) return;
@@ -4236,8 +4056,8 @@ public class Owner {
             }
             Function function = program.getFunctionManager().getFunctionContaining(at);
             JsonObject mark = function == null ? null : libraryMark(function);
-            if (mark == null || mark.has("written")) continue;
-            mark.addProperty("written", true);
+            if (mark == null || isDirty(mark)) continue;
+            mark.addProperty("dirty", true);
             try {
                 propertyMap(LIBRARY_MARK).add(function.getEntryPoint(), COMPACT.toJson(mark));
             } catch (Exception error) {
@@ -4264,41 +4084,14 @@ public class Owner {
         return places;
     }
 
-    /**
-     * The linked functions a write's body names that hold no text in the
-     * project: the host puts the entry's text there first, or the write would
-     * be on nothing and its publish would offer the entry without its comments.
-     * Writes nothing.
-     */
-    private JsonObject libraryTextFree(JsonObject body) throws Exception {
-        JsonArray items = new JsonArray();
-        java.util.Set<Address> seen = new java.util.HashSet<>();
-        ghidra.feature.fid.service.FidService fid = new ghidra.feature.fid.service.FidService();
-        for (String place : writePlaces(body)) {
-            Address at;
-            try {
-                at = address(place);
-            } catch (Exception error) {
-                continue;
-            }
-            Function function = program.getFunctionManager().getFunctionContaining(at);
-            JsonObject mark = function == null ? null : libraryMark(function);
-            if (mark == null || !seen.add(function.getEntryPoint()) || holdsText(function)
-                    || !atItsMark(function, fid.hashFunction(function), mark)) continue;
-            JsonObject item = new JsonObject();
-            item.addProperty("address", hex(function.getEntryPoint()));
-            item.add("id", mark.get("id"));
-            if (mark.has("codes")) item.add("codes", mark.get("codes"));
-            items.add(item);
-        }
-        JsonObject answer = identity();
-        answer.add("items", items);
-        return answer;
-    }
-
     /** Whether a marked function is still what the mark says. */
     private boolean atItsMark(Function function, ghidra.feature.fid.hash.FidHashQuad hash, JsonObject mark) throws Exception {
-        return hash != null && !mark.has("written") && reviewDigest(function, hash).equals(string(mark, "digest", ""));
+        return hash != null && !isDirty(mark) && reviewDigest(function, hash).equals(string(mark, "digest", ""));
+    }
+
+    /** Whether a write was made on a marked function since. A mark from before the word says `written`. */
+    private static boolean isDirty(JsonObject mark) {
+        return mark.has("dirty") || mark.has("written");
     }
 
     private JsonObject renameFunction(JsonObject body) throws Exception {
@@ -4405,51 +4198,16 @@ public class Owner {
     }
 
     /**
-     * A Ghidra tag on the function at `address` — a mark of what a function
-     * is that the code itself does not say. This is how a review says a
-     * function is library code the module statically links in that the
-     * automatic detection did not recognise, and whose: `library.edk2`,
-     * `library.amd` (AGESA) or `library.intel` (FSP/RC) makes ExportCode
-     * write the function at the `library` review level with that kind,
-     * complete as it is, whatever its name or comments. A function holds one
-     * library tag: a new one replaces it. The bare `library` is refused as a
-     * new tag, and still read where an earlier review left it, as a library
-     * of no recorded kind. The function is
-     * the one containing the address, as with the other function writes; a
-     * tag name is letters, digits, '.', '_' and '-', up to 40 of them. An
-     * empty `tag`, or `none`, removes the library tag. The answer lists the
-     * function's tags, sorted.
+     * The function's Ghidra tags, sorted.
      */
-    private JsonObject tagFunction(JsonObject body) throws Exception {
-        Function function = functionAt(required(body, "address"));
-        String tag = string(body, "tag", null);
-        if (tag == null || tag.isEmpty() || tag.equalsIgnoreCase("none")) {
-            removeLibraryTags(function);
-        } else {
-            if (!tag.matches("[A-Za-z0-9._-]{1,40}")) {
-                throw new Failure(400, tag + " is not a tag name: letters, digits, '.', '_' and '-', "
-                                  + "up to 40");
-            }
-            // A function is one kind of library: a new library tag replaces
-            // the one it had.
-            if (tag.toLowerCase(java.util.Locale.ROOT).startsWith("library")) {
-                String lower = tag.toLowerCase(java.util.Locale.ROOT);
-                // The bare `library` says nothing of whose: a review names the
-                // kind (`SKILL.md`, "Library functions").
-                if (!(lower.startsWith("library.") && ExportCode.LIBRARY_KINDS.contains(lower.substring(8)))) {
-                    throw new Failure(400, tag + " is not a library tag: library.edk2, library.amd "
-                                      + "or library.intel");
-                }
-                removeLibraryTags(function);
-                tag = lower;
-            }
-            function.addTag(tag);
+    private static void addTags(JsonObject answer, Function function) {
+        JsonArray tags = new JsonArray();
+        java.util.TreeSet<String> sorted = new java.util.TreeSet<>();
+        for (ghidra.program.model.listing.FunctionTag held : function.getTags()) {
+            if (held != null) sorted.add(held.getName());
         }
-        JsonObject answer = identity();
-        answer.addProperty("entry", hex(function.getEntryPoint()));
-        answer.addProperty("name", function.getName());
-        addTags(answer, function);
-        return answer;
+        for (String name : sorted) tags.add(name);
+        answer.add("tags", tags);
     }
 
     /** Takes every library tag off the function: `library` and `library.<kind>`. */
@@ -4461,24 +4219,6 @@ public class Owner {
             }
         }
         for (String name : held) function.removeTag(name);
-    }
-
-    /**
-     * The function's Ghidra tags, sorted, and — for a function the export
-     * writes at the `library` level — `library`: why, `edk2_name` or `tag`.
-     */
-    private static void addTags(JsonObject answer, Function function) {
-        JsonArray tags = new JsonArray();
-        java.util.TreeSet<String> sorted = new java.util.TreeSet<>();
-        for (ghidra.program.model.listing.FunctionTag held : function.getTags()) {
-            if (held != null) sorted.add(held.getName());
-        }
-        for (String name : sorted) tags.add(name);
-        answer.add("tags", tags);
-        String basis = ExportCode.libraryBasis(function);
-        if (basis != null) answer.addProperty("library", basis);
-        String kind = basis == null ? null : ExportCode.libraryKind(function);
-        if (kind != null) answer.addProperty("library_kind", kind);
     }
 
     /**

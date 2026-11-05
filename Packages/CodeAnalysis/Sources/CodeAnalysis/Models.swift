@@ -314,6 +314,10 @@ public struct AnalysisManifest: Codable, Equatable, Sendable {
     public var analyzedAt: String
     public var stats: AnalysisStats
     public var reading: AnalysisReading?
+    /// The artifact its project last published, when the store has since put
+    /// links in place of functions the registry took: still that project's
+    /// publish, for the next one to replace.
+    public var relinkedFrom: SHA256Digest?
 
     public init(schema: Int = CodeAnalysisSchema.current, module: ModuleIdentity,
                 recipe: AnalysisRecipe, artifact: AnalysisArtifact,
@@ -335,6 +339,7 @@ public struct AnalysisManifest: Codable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case schema, module, recipe, artifact, source, stats, reading
         case analyzedAt = "analyzed_at"
+        case relinkedFrom = "relinked_from"
     }
 }
 
