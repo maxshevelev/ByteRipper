@@ -51,6 +51,21 @@ done
 derived="${BYTERIPPER_DD:-${DUMPCOMPARE_DD:-$PWD/.build/xcode}}"
 failed=0
 
+# `ByteRipper.xcodeproj` is generated and gitignored, so a branch switch leaves
+# behind the one the other branch made. A project that names a package this
+# branch has not got stops every `xcodebuild` at "Could not resolve package
+# dependencies", before a test runs, and a group then prints nothing at all.
+# Generating takes a fraction of a second, so it is done on every run rather
+# than guessed to be stale.
+if ! command -v xcodegen >/dev/null; then
+    echo "xcodegen is not installed: the project cannot be generated (brew install xcodegen)" >&2
+    exit 1
+fi
+if ! xcodegen generate --quiet; then
+    echo "xcodegen could not generate ByteRipper.xcodeproj from project.yml" >&2
+    exit 1
+fi
+
 # The binary maps, their JSON manifests and the code's version marks must
 # agree (`Design/MAP_DATA.md`). `--check` reads and rebuilds in memory; it
 # never writes. A stale pair fails the run before a test starts, because every
