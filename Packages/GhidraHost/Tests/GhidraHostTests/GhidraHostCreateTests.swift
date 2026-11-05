@@ -221,7 +221,14 @@ final class GhidraHostLibraryTests: XCTestCase {
             XCTAssertEqual(answer["text"] as? String, "registry")
             XCTAssertEqual(state(answer), "linked")
             XCTAssertEqual((answer["c"] as? String)?.contains(name), false)
-            XCTAssertEqual(answer["project_names"] as? [String], [name], "says what the C does not print")
+            XCTAssertNil(answer["project_names"], "a name on a temporary is not kept")
+            let raw = try json(await host.read(module, "/v1/function/\(address)"))
+            XCTAssertNil(raw["plate"])
+            XCTAssertEqual((raw["comments"] as? [Any])?.count ?? 0, 0)
+            XCTAssertNil(raw["name_reason"])
+            XCTAssertFalse((raw["locals"] as? [[String: Any]] ?? []).contains { $0["named"] as? Bool == true },
+                           "\(String(describing: raw["locals"]))")
+            XCTAssertNotNil(raw["signature"], "what its callers read stays")
         }
 
         // A change to the review, from a holder that is not the source.
@@ -385,7 +392,7 @@ final class GhidraHostLibraryTests: XCTestCase {
         // reason, read through the registry, says it is the entry's.
         XCTAssertEqual(stored.nameReason?.hasPrefix("library registry entry"), true, "\(stored.nameReason ?? "nil")")
         let live = try json(await host.read(reviewed, "/v1/function/\(copyGuid)"))
-        XCTAssertEqual(live["signature_reason"] as? String, "EDK2 BaseLib CopyGuid", "\(live.keys.sorted())")
+        XCTAssertNil(live["signature_reason"], "the project holds no reason of a linked function")
         XCTAssertEqual(stored.libraryEntry?.state, .linked, "the artifact holds the link, not the text")
         XCTAssertEqual(stored.libraryEntry?.version, added.version)
 

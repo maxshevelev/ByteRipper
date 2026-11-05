@@ -618,12 +618,12 @@ public enum GhidraTools {
                     While the registry reads through, a function at its entry answers the entry's name, \
                     signature, plate, comments and C with `text: "registry"`, as the store reads it, and \
                     `publisher_addresses` lists any name that still carries the address of the module \
-                    the entry came from; `parameters` and `locals` stay the project's. Any write in it \
+                    the entry came from; `locals` are the entry's and `parameters` the project's. Any write in it \
                     makes it `edited` (`library_entry.state`): it then answers as Ghidra holds it. A \
                     publish that changes its review makes that the entry's next version, for every \
                     module that holds it, from any holder; one that does not — a name on a temporary, \
-                    a label, an equate alone — leaves the entry as it is, the function reads as the \
-                    entry again, and `project_names` lists a temporary's name the C does not print. \
+                    a label, an equate alone — leaves the entry as it is and the function reads as the \
+                    entry again; a name on a temporary is then not kept. \
                     `text_unavailable` says why a marked function has no `text`: the entry could not \
                     be read, or this store has no reading of the function. \
                     `summary: true` leaves the C and the equates out, for walking a module without \

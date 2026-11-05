@@ -2886,7 +2886,9 @@ public class Owner {
             if (near != null) item.add("near", near);
             String bytes = ExportCode.referenceBytes(function);
             if (bytes != null) item.addProperty("reference_bytes", bytes);
-            if (holdsText(function)) item.addProperty("holds_text", true);
+            // Unmarked, a reason says only how it got its name: it is a review's
+            // text that a link would lose and nobody compared with the entry.
+            if (mark != null ? holdsText(function) : holdsReview(function)) item.addProperty("holds_text", true);
             if (mark != null) {
                 JsonObject held = mark.deepCopy();
                 held.addProperty("edited", !atItsMark(function, hash, mark));
@@ -3608,14 +3610,38 @@ public class Owner {
         ghidra.program.model.listing.CommentType.POST, ghidra.program.model.listing.CommentType.EOL,
         ghidra.program.model.listing.CommentType.REPEATABLE };
 
-    /** Whether the function's plate or a comment in its body is written in the project. */
+    /** Whether the project holds more of the function than its callers need. */
     private boolean holdsText(Function function) {
-        String plate = function.getComment();
-        if (plate != null && !plate.isBlank()) return true;
-        return program.getListing().getCommentAddressIterator(function.getBody(), true).hasNext();
+        if (holdsReview(function)) return true;
+        for (String property : REASONS) {
+            StringPropertyMap reasons = program.getUsrPropertyManager().getStringPropertyMap(property);
+            if (reasons != null && reasons.getString(function.getEntryPoint()) != null) return true;
+        }
+        return false;
     }
 
-    /** The project keeps no text of a linked function: a reader takes it from the entry. */
+    /** Whether a plate, a comment or a local's name is written in the project. */
+    private boolean holdsReview(Function function) {
+        String plate = function.getComment();
+        if (plate != null && !plate.isBlank()) return true;
+        if (program.getListing().getCommentAddressIterator(function.getBody(), true).hasNext()) return true;
+        for (ghidra.program.model.listing.Variable local : function.getLocalVariables()) {
+            if (reviewNamed(local)) return true;
+        }
+        return false;
+    }
+
+    private static final String[] REASONS = { Harvest.REASON, Harvest.BY, Harvest.SIGNATURE_REASON };
+
+    private static boolean reviewNamed(ghidra.program.model.listing.Variable local) {
+        return local.getSource() == SourceType.USER_DEFINED || local.getSource() == SourceType.IMPORTED;
+    }
+
+    /**
+     * The project keeps of a linked function what its callers' decompile reads:
+     * its name, signature, calling convention and parameter storage. The rest is
+     * the entry's, and a write brings it back first.
+     */
     private void stripText(Function function) {
         ghidra.program.model.listing.Listing listing = program.getListing();
         java.util.List<Address> places = new java.util.ArrayList<>();
@@ -3626,6 +3652,13 @@ public class Owner {
             for (ghidra.program.model.listing.CommentType kind : COMMENT_KINDS) listing.setComment(place, kind, null);
         }
         function.setComment(null);
+        for (ghidra.program.model.listing.Variable local : function.getLocalVariables()) {
+            if (reviewNamed(local)) function.removeVariable(local);
+        }
+        for (String property : REASONS) {
+            StringPropertyMap reasons = program.getUsrPropertyManager().getStringPropertyMap(property);
+            if (reasons != null) reasons.remove(function.getEntryPoint());
+        }
     }
 
     /** Every function's `library_entry` written where the exporter reads it. */

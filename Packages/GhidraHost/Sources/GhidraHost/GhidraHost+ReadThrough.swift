@@ -86,23 +86,27 @@ extension GhidraHost {
         answer["name"] = read.name
         if let signature = read.signature { answer["signature"] = signature }
         if answer["c"] != nil, let c = read.c { answer["c"] = c }
-        // A name the project holds and the entry's C does not print: a
-        // temporary is not of the description, so a publish did not carry it.
-        let names = (answer["locals"] as? [[String: Any]] ?? []).compactMap { local -> String? in
-            guard (local["storage"] as? String)?.hasPrefix("HASH") == true, local["named"] as? Bool == true,
-                  let name = local["name"] as? String, read.c?.contains(name) != true else { return nil }
-            return name
-        }
-        if !names.isEmpty {
-            answer["project_names"] = names
-            answer["project_names_note"] = "named in this project, not printed here: the C is the entry's, and a name on "
-                + "a temporary reaches it only with a change to the review"
-        }
         answer["text"] = "registry"
         if !read.publisherAddresses.isEmpty { answer["publisher_addresses"] = read.publisherAddresses }
         if let object = try? await writer.readObject(held.row.entry),
            let fields = (try? JSONSerialization.jsonObject(with: object)) as? [String: Any] {
             answer["plate"] = fields["plate"]
+            // The project keeps no local's name: the C prints the entry's.
+            if let locals = fields["locals"] as? [[String: Any]] {
+                let held = answer["locals"] as? [[String: Any]] ?? []
+                let named = locals.map { local -> [String: Any] in
+                    var row = local
+                    if let same = held.first(where: { $0["storage"] as? String == local["storage"] as? String }) {
+                        row["first_use"] = same["first_use"]
+                    }
+                    row["named"] = true
+                    return row
+                }
+                // Temporaries are the decompiler's, and the entry holds none.
+                answer["locals"] = named + held.filter { row in
+                    !locals.contains { $0["storage"] as? String == row["storage"] as? String }
+                }
+            }
             if let comments = fields["comments"] as? [[String: Any]] {
                 answer["comments"] = comments.compactMap { comment -> [String: Any]? in
                     guard let offset = (comment["offset"] as? String).flatMap({ CodeAddress(hex: $0) }) else { return nil }

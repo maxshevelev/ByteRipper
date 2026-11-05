@@ -478,7 +478,10 @@ a constant that lands in the image as one, so it errs towards refusing.
 **What a module stores of a registry function.** Its own facts and the link: where it is, who
 calls it, its instructions, its body and its mark. Its name, signature, plate, comments and C are
 the entry's, and neither the artifact, the review document nor the project keeps them
-(`state: linked`, `copy_free`). `stored_copy` on a row says a copy is still stored there; a publish
+(`state: linked`, `copy_free`). The project keeps its name, signature, calling convention and
+parameter storage, which its callers' decompile reads; its plate, comments, local names and name
+and signature reasons go. Labels and equates stay: the entry holds neither, so an edit would lose
+them. `stored_copy` on a row says a copy is still stored there; a publish
 removes it. A write in a linked function first brings the entry's current text into the project,
 so it works on what the entry says; the publish takes it back out. The body's key masks an operand,
 so a function whose data references point at other bytes than the entry's (`reference_bytes`) is
@@ -490,8 +493,8 @@ another function, however alike the instructions.
 `locals` stay the project's. Any write in the function makes it `edited`: it answers as Ghidra
 holds it. A `ghidra_publish` that changes its review makes that the entry's next version, for
 every module that holds it, from any holder. One that does not — a temporary's name, a label,
-an equate alone — leaves the entry as it is, and the function reads as the entry again;
-`project_names` lists the temporary's name the C does not print. A review ends with
+an equate alone — leaves the entry as it is, and the function reads as the entry again; a name on
+a temporary is then not kept. A review ends with
 `ghidra_publish`. `text_unavailable` says why a marked function has no `text`. A name that still carries the publisher's address is listed under
 `publisher_addresses`, without a link. A mark on an entry given back is no mark: the function
 reads its own text and shows no `library_entry`, and the next open releases it.
