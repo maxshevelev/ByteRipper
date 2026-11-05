@@ -160,16 +160,67 @@ if ! python3 -I Skills/me-eom-structures/scripts/map_bin.py build --check \
     exit 1
 fi
 
-report() {   # keeps the counts, the failures, and any death of the test host
+# Every package's and every group's whole output is kept here, one file each,
+# and replaced on the next run. A failure names its file.
+logs="$PWD/.build/test-logs"
+rm -rf "$logs" && mkdir -p "$logs" || exit 1
+
+# What a failure looks like in the output. `error:` must open the line or
+# follow a blank: that takes the compiler's `file:12:5: error:`, xcodebuild's
+# `xcodebuild: error:`, SwiftPM's `error:`, XCTest's `file:42: error: -[…]` and
+# Swift's `Fatal error:`, and leaves the `…ofType:error:]` frames Xcode prints
+# when it trips over a leftover `.swiftpm`, which are noise.
+error_pattern='(^|[[:space:]])error:([[:space:]]|$)|Restarting after unexpected exit|Program crashed|[*][*] [A-Z ]*FAILED [*][*]'
+
+report() {   # $1: the file the whole output goes to; $2: "summary" keeps one count line
+    # Every error line is shown, never cut to a tail: a failure that cannot be
+    # read off the run is a failure nobody can act on. An error line ending in
+    # a colon is followed by its indented reasons ("Could not resolve package
+    # dependencies:" names the manifest on the next line), and those are shown
+    # too. xcodebuild prints each error twice; a repeated line is shown once.
+    #
     # A test host that dies mid-run is not a line in this output: XCTest prints
     # "Restarting after unexpected exit", launches a second host, and reports
     # totals that add the two together — so a class whose host crashed can
     # still print "Executed 15 tests, with 0 failures". That is worth a line of
     # its own, at the end, next to the counts it silently qualified.
-    awk '
-        /^\/Users.*error:|Executed [0-9]+ tests|Restarting after unexpected exit|Program crashed|TEST (FAILED|SUCCEEDED)/ { print; if ($0 ~ /Restarting after unexpected exit|Program crashed/) died = 1 }
-        END { if (died) print "  ⚠️  the test host died and XCTest restarted it — these counts span more than one launch" }
-    ' | tail -21
+    #
+    # SwiftPM colours its diagnostics even into a pipe, which puts an escape
+    # sequence rather than a blank before `error:`; the colours go first. The
+    # source excerpt under a diagnostic (`   |   `- error: …`) repeats the line
+    # above it and is left out.
+    tee "$1" | awk -v mode="${2:-all}" -v pattern="$error_pattern" '
+        function show(line) { if (!(line in seen)) { seen[line] = 1; print line } }
+        { gsub(/\033\[[0-9;]*m/, "") }
+        /^[[:space:]]*[0-9]*[[:space:]]*\|/ { next }
+        reasons && /^[[:space:]]+[^[:space:]]/ { show($0); next }
+        { reasons = 0 }
+        $0 ~ pattern {
+            show($0)
+            if ($0 ~ /Restarting after unexpected exit|Program crashed/) died = 1
+            if ($0 ~ /:[[:space:]]*$/) reasons = 1
+            next
+        }
+        /Executed [0-9]+ tests/ { if (mode == "summary") last = $0; else show($0); next }
+        /TEST SUCCEEDED/ { show($0) }
+        END {
+            if (last != "") print last
+            if (died) print "  ⚠️  the test host died and XCTest restarted it — these counts span more than one launch"
+        }
+    '
+}
+
+explain() {   # $1: the failed run's log
+    # A failure the pattern does not know — a tool that stops with a message
+    # of its own words, a group stopped mid-build — would otherwise print
+    # nothing at all. Then the end of the output is the best account there is.
+    if ! sed $'s/\033\\[[0-9;]*m//g' "$1" | grep -qE "$error_pattern"; then
+        echo "  ✗ no error line in the output; it ended with:"
+        sed $'s/\033\\[[0-9;]*m//g' "$1" \
+            | grep -vE 'IDEFileReferenceDebug|IDEContainer|^Method:|^[[:space:]]+[0-9]+[[:space:]]+[-+_]' \
+            | grep -v '^[[:space:]]*$' | tail -15 | sed 's/^/    /'
+    fi
+    echo "  ✗ full output: ${1#"$PWD"/}"
 }
 
 # Neither the app suite nor the package tests are sandboxed, so `cfprefsd`
@@ -223,8 +274,12 @@ if [ "$packages" = yes ] && [ -z "$only" ] && [ -z "$only_group" ]; then
     for package in $(ls -d ./*/Package.swift ./*/*/Package.swift 2>/dev/null \
                      | sed 's|/Package.swift$||' | sort); do
         echo "── ${package#./}"
-        ( cd "$package" && swift test 2>&1 ) | report | tail -1
-        [ "${PIPESTATUS[0]:-0}" -ne 0 ] && failed=1
+        log="$logs/package-${package##*/}.log"
+        ( cd "$package" && swift test 2>&1 ) | report "$log" summary
+        if [ "${PIPESTATUS[0]:-0}" -ne 0 ]; then
+            failed=1
+            explain "$log"
+        fi
         sweep_package_test_prefs
     done
 fi
@@ -267,7 +322,7 @@ run_group() {
     fi
     ran=$((ran + 1))
     echo "── group $group: $first … $last"
-    local before pidfile statusfile runner xcpid wedged since=0
+    local before pidfile statusfile runner xcpid wedged since=0 log="$logs/group-$group.log"
     before=$(wedged_hosts)
     pidfile=$(mktemp) statusfile=$(mktemp)
     # The test host under its own bundle identifier: its preferences domain is
@@ -290,7 +345,7 @@ run_group() {
         echo $! > "$pidfile"
         wait $!
         echo $? > "$statusfile"
-    ) 2>/dev/null | report &   # 2>: the shell's own "Terminated" when a group is stopped
+    ) 2>/dev/null | report "$log" &   # 2>: the shell's own "Terminated" when a group is stopped
     runner=$!
     while kill -0 "$runner" 2>/dev/null; do
         sleep 2
@@ -309,7 +364,10 @@ run_group() {
     status=$(cat "$statusfile" 2>/dev/null)
     rm -f "$pidfile" "$statusfile"
     sweep_app_test_prefs "$group_classes"
-    [ "${status:-1}" -ne 0 ] && failed=1
+    if [ "${status:-1}" -ne 0 ]; then
+        failed=1
+        explain "$log"
+    fi
     group=$((group + 1))
     args=""
     first=""
