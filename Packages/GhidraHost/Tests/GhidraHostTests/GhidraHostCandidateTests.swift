@@ -342,9 +342,16 @@ final class GhidraHostCandidateTests: XCTestCase {
             "address": pair.0, "kind": "plate", "text": "A short library routine, for the test."]))
         _ = try await host.write(reviewed, "/v1/set/comment", body: body([
             "address": pair.0, "kind": "pre", "text": "Its one step."]))
+        // A dry run counts the links the publish will store, the short body
+        // the registry is about to take among them.
+        try await propose(host, reviewed, pair.0)
+        let dry = try json(await host.preview(reviewed))
         let moved = try await move(host, reviewed, pair.0)
         let id = try XCTUnwrap(moved.added.first { $0.name == "ShortBodyForTheTest" }?.id, "\(moved)")
         XCTAssertEqual(try storedRow(of: pair.0, in: store, module: reviewed)?["registry"] as? String, id)
+        let links = try json(try store.object(try XCTUnwrap(try store.analysis(module: reviewed)).artifact.sha256))["functions"]
+            as? [[String: Any]] ?? []
+        XCTAssertEqual(dry["links"] as? Int, links.filter { $0["registry"] != nil }.count, "\(dry)")
         XCTAssertLessThan(try XCTUnwrap(Int(id.split(separator: "-")[0], radix: 16)), 4, id)
 
         // Nothing links by itself: the entry is a candidate, and the review binds it.

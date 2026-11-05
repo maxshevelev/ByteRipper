@@ -533,6 +533,27 @@ public actor GhidraHost {
         return (try? JSONDecoder().decode(Answer.self, from: data))?.stale_links ?? []
     }
 
+    /// An address as a number, whatever its spelling: `0x9DFCAAC`, `0x09dfcaac`.
+    static func addressValue(_ text: String) -> UInt64? {
+        let digits = text.lowercased().hasPrefix("0x") ? String(text.dropFirst(2)) : text
+        return UInt64(digits, radix: 16)
+    }
+
+    /// The addresses of the offered functions a registry's would-be answer
+    /// takes, as `libraryMarks` will mark them once it is written: a short body
+    /// by the entry its review was made on or the one made of it by name, any
+    /// other by the entry its body or its variant names.
+    static func wouldLink(_ proposals: [LibraryProposal], would: LibraryWriteResult) -> [String] {
+        let rows = would.added + would.updated + would.unchanged + (would.variants ?? [])
+        let accepted = Set(rows.map(\.id))
+        let names = Set(rows.map(\.name))
+        return proposals.compactMap { proposal in
+            if let based = proposal.basedOn ?? proposal.variantOf, accepted.contains(based) { return proposal.address }
+            if accepted.contains(proposal.body.key) || names.contains(proposal.name) { return proposal.address }
+            return nil
+        }
+    }
+
     /// The marks a publish leaves: a function the registry took or matched
     /// carries the version it holds. One it did not take keeps what it had.
     static func libraryMarks(_ proposals: [LibraryProposal], result: LibraryWriteResult,
@@ -733,7 +754,6 @@ public actor GhidraHost {
             // which a preview cannot: the review's hash holds, this one need not.
             "artifact": ["sha256": artifactDigest, "size": stored.artifact.count, "before_library_marks": true],
             "document": ["sha256": documentDigest, "size": storedDocument.count],
-            "links": stored.functions.count,
             "functions": functions.count,
             "instructions": instructions,
             "types": (artifact["types"] as? [Any])?.count ?? 0,
@@ -760,6 +780,10 @@ public actor GhidraHost {
         // store answers the would-be result — refusals included — and writes
         // nothing. Candidates are asked about before anything else makes the
         // program a review, as the publish refuses them.
+        // The links the revision would hold: those the export already carries,
+        // and the functions this publish offers that the registry would take —
+        // a short body among them becomes a link only by that decision.
+        var links = Set(stored.functions.compactMap(Self.addressValue))
         do {
             let offer = try Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data,
                                               artifact: raw)
@@ -771,6 +795,8 @@ public actor GhidraHost {
                 preview["library"] = try Self.plain(would)
                 if let refusal = would.publishRefusal ?? Self.offerRefusal(offer.shortfalls, would: would) {
                     preview["library_refused"] = refusal
+                } else if reviewed {
+                    links.formUnion(Self.wouldLink(offered, would: would).compactMap(Self.addressValue))
                 }
             } else if let refusal = Self.offerRefusal(offer.shortfalls, would: nil) {
                 preview["library_refused"] = refusal
@@ -778,6 +804,7 @@ public actor GhidraHost {
         } catch {
             preview["library_error"] = "\(error)"
         }
+        preview["links"] = links.count
         return try JSONSerialization.data(withJSONObject: preview, options: [.sortedKeys])
     }
 
