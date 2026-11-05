@@ -158,6 +158,91 @@ final class ModuleFormatTests: XCTestCase {
         XCTAssertTrue(store.hasObject(digest), "the old object stays: the way back")
     }
 
+    /// An analysis put in the store as it is, past `stored`: how files written
+    /// before a rule reach it.
+    @discardableResult
+    private func written(_ functions: [[String: Any]]) throws -> SHA256Digest {
+        let old = try artifact(functions)
+        let digest = try store.putObject(old)
+        let manifest = AnalysisManifest(module: module, recipe: recipe,
+                                        artifact: AnalysisArtifact(sha256: digest, size: old.count, mediaType: "application/json"),
+                                        analyzedAt: "2026-11-01T00:00:00Z", stats: ArtifactStats.count(in: old))
+        let url = store.manifestURL(try XCTUnwrap(manifest.key))
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try JSONEncoder().encode(manifest).write(to: url)
+        return digest
+    }
+
+    private func storedNow() throws -> [String: [String: Any]] {
+        let raw = try store.object(try XCTUnwrap(try store.analysis(module: module.sha256)).artifact.sha256)
+        let functions = try XCTUnwrap((JSONSerialization.jsonObject(with: raw) as? [String: Any])?["functions"] as? [[String: Any]])
+        return Dictionary(uniqueKeysWithValues: functions.map { ($0["name"] as? String ?? "", $0) })
+    }
+
+    /// A function that stops being library code says what a reader can find of
+    /// its review: the older form's "library" judged nothing where there is no C,
+    /// and a thunk has no body of its own.
+    func testAFunctionThatIsTheModulesAgainIsGradedByWhatIsStored() throws {
+        let rows = try stored([
+            ["entry": "0x10", "name": "FUN_00000010", "name_source": "DEFAULT", "body": "1f-aa-bb", "copy_free": true,
+             "review_level": "library", "review_gaps": [String](), "library_entry": ["id": "1f-aa-bb", "state": "entry"]],
+            ["entry": "0x20", "name": "StrCmp", "name_source": "DEFAULT", "thunk": true, "library_kind": "edk2",
+             "review_level": "library", "review_gaps": [String]()],
+            ["entry": "0x30", "name": "Reviewed", "name_source": "USER_DEFINED", "c": "int Reviewed(void) {}",
+             "library_kind": "edk2", "review_level": "library", "review_gaps": [String]()],
+            ["entry": "0x40", "name": "Named", "name_source": "USER_DEFINED", "library_kind": "edk2",
+             "review_level": "library", "review_gaps": ["params"]]
+        ])
+        let by = Dictionary(uniqueKeysWithValues: rows.map { ($0["entry"] as? String ?? "", $0) })
+        XCTAssertEqual(by["0x10"]?["review_level"] as? String, "decompiled")
+        XCTAssertEqual(by["0x10"]?["review_gaps"] as? [String], ["name", "plate", "comments", "c"])
+        XCTAssertEqual(by["0x20"]?["review_level"] as? String, "no_body")
+        XCTAssertEqual(by["0x20"]?["review_gaps"] as? [String], [])
+        XCTAssertEqual(by["0x30"]?["review_level"] as? String, "full", "the exporter's verdict over its C stays")
+        XCTAssertEqual(by["0x40"]?["review_level"] as? String, "partial")
+        XCTAssertEqual(by["0x40"]?["review_gaps"] as? [String], ["plate", "comments", "params", "c"])
+    }
+
+    /// A level an earlier walk wrote wrong is put right by the next one, and
+    /// only that changes.
+    func testAFullWithNoCIsPutRightByTheNextRelink() throws {
+        let digest = try written([
+            ["entry": "0x10", "name": "FUN_00000010", "name_source": "DEFAULT", "review_level": "full", "review_gaps": [String]()],
+            ["entry": "0x20", "name": "StrCmp", "thunk": true, "review_level": "full", "review_gaps": [String]()],
+            ["entry": "0x30", "name": "Reviewed", "name_source": "USER_DEFINED", "c": "text", "review_level": "full",
+             "review_gaps": [String]()],
+            // An older exporter's thunk, which wrote no level at all: left as it is.
+            ["entry": "0x40", "name": "Jump", "thunk": true]
+        ])
+        XCTAssertEqual(try store.relinkModules().count, 1)
+        let now = try storedNow()
+        XCTAssertEqual(now["FUN_00000010"]?["review_level"] as? String, "decompiled")
+        XCTAssertEqual(now["StrCmp"]?["review_level"] as? String, "no_body")
+        XCTAssertEqual(now["Reviewed"]?["review_level"] as? String, "full")
+        XCTAssertEqual(now["Reviewed"]?["c"] as? String, "text")
+        XCTAssertNil(now["Jump"]?["review_level"])
+        XCTAssertNil(now["Jump"]?["review_gaps"])
+        XCTAssertEqual(try store.analysis(module: module.sha256)?.relinkedFrom, digest)
+        XCTAssertEqual(try store.relinkModules(dryRun: true), [], "a second walk finds nothing")
+    }
+
+    /// The count of library code left in modules counts what the store would
+    /// link, not bytes: the same bytes with code of the module's own are the
+    /// module's function.
+    func testTheCountLeavesOutAFunctionWhoseCodeIsTheModules() throws {
+        try register()
+        try written([["entry": "0x10", "name": "Own", "name_source": "USER_DEFINED", "c": "own", "body": key,
+                      "review_level": "full", "review_gaps": [String](),
+                      "instructions": [["address": "0x10", "bytes": "91", "text": "XCHG"]]]])
+        let mine = try XCTUnwrap(try store.libraryHoldings().first)
+        XCTAssertEqual(mine.ownBodiesInRegistry, 0, "its code does not bind: the module's")
+        XCTAssertEqual(try store.relinkModules(dryRun: true), [], "and the store would not link it")
+        try written([["entry": "0x10", "name": "Copy", "name_source": "USER_DEFINED", "c": "copy", "body": key,
+                      "review_level": "full", "review_gaps": [String](),
+                      "instructions": [["address": "0x10", "bytes": "90", "text": "NOP"]]]])
+        XCTAssertEqual(try store.libraryHoldings().first?.ownBodiesInRegistry, 1, "the entry's code: a link to make")
+    }
+
     func testARefusalNamesEachFunction() throws {
         var result = LibraryWriteResult()
         result.notLibrary = [.init(address: "0x20", name: "Reader", body: "b", why: "data", data: ["0x900"]),

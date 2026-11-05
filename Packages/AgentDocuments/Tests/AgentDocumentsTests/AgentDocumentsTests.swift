@@ -210,6 +210,7 @@ final class CodeReadingsTests: XCTestCase {
               {"entry": "0x1040", "name": "AsmWriteTr",
                "instructions": [{"address": "0x1040", "text": "RET"}]},
               {"entry": "0x1060", "name": "OwnFull", "signature": "void OwnFull(void)", "review_level": "full",
+               "c": "void OwnFull(void) {}",
                "instructions": [{"address": "0x1060", "text": "RET"}]},
               {"entry": "0x1080", "name": "OwnPartly", "signature": "undefined8 OwnPartly(void)",
                "review_level": "partial", "review_gaps": ["plate", "locals"],

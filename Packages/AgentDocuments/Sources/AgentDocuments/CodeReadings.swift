@@ -154,8 +154,10 @@ public final class CodeReadings {
                 units, not bytes: in practice the instructions without the calls. A name on a decompiler \
                 temporary (`HASH:`, `unique:` storage) stays the module's and does not reach `review.locals`. \
                 `show: "modules"` counts, across the whole store, how each stored analysis holds library \
-                functions, read from its bytes: `links`; `own_bodies_in_registry`, functions with text whose \
-                body an entry holds; `out_of_format`, a link with a field no link has or a function with a \
+                functions, read from its bytes: `links`; `own_bodies_in_registry`, functions with text the \
+                store would make links — an entry holds the body, its code is the entry's, its callees are \
+                links (the same bytes calling a function of the module are the module's, and not counted); \
+                `out_of_format`, a link with a field no link has or a function with a \
                 word of an older form. `totals` adds them up; the last two are zero in a clean store. \
                 `libraries` says which library depends on which; a function calls only functions of its own library or of one it depends on. \
                 A publish takes a review's `ghidra_library_candidate` functions here, and a module then holds a link.

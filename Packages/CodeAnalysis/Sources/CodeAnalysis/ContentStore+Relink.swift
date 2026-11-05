@@ -104,7 +104,10 @@ extension ContentStore {
         public var name: String
         public var recipe: String
         public var links: Int
-        /// Functions with text whose body the registry holds: never, after `stored`.
+        /// Functions of the module that `stored` would make links now — the body
+        /// the registry holds, its code binding, its callees links too: never,
+        /// after `stored`. A function whose bytes the registry holds but whose
+        /// code or callees are the module's is the module's, and is not counted.
         public var ownBodiesInRegistry: Int
         /// Links holding a field no link has, and functions holding a word of the
         /// old form: never, after `stored`.
@@ -120,20 +123,19 @@ extension ContentStore {
                   let functions = root["functions"] as? [[String: Any]] else { return nil }
             var holding = LibraryHolding(module: found.module.sha256, name: found.module.name ?? "",
                                          recipe: found.recipe.id, links: 0, ownBodiesInRegistry: 0, outOfFormat: 0)
+            var own = Set<String>()
             for function in functions {
                 if function["registry"] != nil {
                     holding.links += 1
                     if !ModuleFormat.isLink(function) { holding.outOfFormat += 1 }
                 } else {
                     if ModuleFormat.holdsOldWords(function) { holding.outOfFormat += 1 }
-                    if LibraryView.entryID(body: function["body"] as? String, mark: nil,
-                                           external: function["external"] as? Bool ?? false,
-                                           thunk: function["thunk"] as? Bool ?? false,
-                                           referenceBytes: function["reference_bytes"] as? String, in: index) != nil {
-                        holding.ownBodiesInRegistry += 1
-                    }
+                    if let entry = function["entry"] as? String { own.insert(entry) }
                 }
             }
+            // What the store would link of them: the same decision `stored` makes.
+            let wouldLink = ModuleFormat.stored(whole, index: index, code: libraryCode(for: whole, index: index)).functions
+            holding.ownBodiesInRegistry = own.intersection(wouldLink).count
             return holding
         }
     }

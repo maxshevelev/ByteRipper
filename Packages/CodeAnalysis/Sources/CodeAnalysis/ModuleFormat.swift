@@ -32,6 +32,41 @@ public enum ModuleFormat {
         notStored.contains { function[$0] != nil } || function["review_level"] as? String == "library"
     }
 
+    /// A function of the module says how far its review got as the exporter would
+    /// of what is stored. A level that came from the older form — "library", which
+    /// judged nothing, or none where a link was — and a `full` over a thunk or over
+    /// a function with no C cannot stand: a thunk or an external has no body to
+    /// review, and a function with no
+    /// C has no plate and no step comments a reader could find, since both live
+    /// in the C. The exporter's own verdict on a function with C stays.
+    static func graded(_ function: inout [String: Any], wasLink: Bool) {
+        let level = function["review_level"] as? String
+        // An older exporter's function with no level at all is left as it wrote it.
+        guard level == "full" || level == "library" || (level == nil && wasLink) else { return }
+        if function["external"] as? Bool == true || function["thunk"] as? Bool == true {
+            function["review_level"] = "no_body"
+            function["review_gaps"] = [String]()
+            return
+        }
+        guard function["c"] == nil else { return }
+        let held = Set(function["review_gaps"] as? [String] ?? [])
+        let name = function["name"] as? String ?? ""
+        let placeholder = function["name_source"] as? String == "DEFAULT" || name.isEmpty || name.hasPrefix("FUN_")
+        var gaps: [String] = []
+        // In the exporter's order.
+        for gap in ["name", "plate", "comments", "params", "locals", "c"] {
+            let missing: Bool
+            switch gap {
+            case "name": missing = placeholder
+            case "plate", "comments", "c": missing = true
+            default: missing = held.contains(gap)
+            }
+            if missing { gaps.append(gap) }
+        }
+        function["review_gaps"] = gaps
+        function["review_level"] = placeholder ? "decompiled" : "partial"
+    }
+
     public struct Stored: Sendable {
         public var artifact: Data
         /// The entries of the functions that are links now.
@@ -193,6 +228,7 @@ public enum ModuleFormat {
                     function["name_source"] = "DEFAULT"
                     function["review_level"] = nil
                 }
+                graded(&function, wasLink: wasLink)
                 if function["review_level"] as? String == "library" {
                     function["review_level"] = ((function["review_gaps"] as? [Any]) ?? []).isEmpty ? "full" : "partial"
                 }
