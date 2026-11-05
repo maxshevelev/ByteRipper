@@ -501,7 +501,10 @@ publish offers. Any equate or named label the offered C prints differently from 
 entry's version, so it needs a reason, whatever else was edited: the row names it in `names`. An
 equate is not one module's fact once it is offered: name a value in a shared function only for what
 it means in every holder. Named labels are not brought by an edit: another holder's edit drops one,
-and the row says `label -NAME`.
+and the row says `label -NAME`. The listing is not the entry's: an instruction there shows the
+equate this project holds, or the number where it holds none, so a holder's ASM and C can print
+different names for one constant. The C and `equates` say what the entry means; `project_equates`
+and the listing say what this project holds.
 
 **Reading through.** A function at its entry reads as the entry wherever it is read:
 `code_query` and `ghidra_function` give the entry's name, signature, plate, comments and C with
