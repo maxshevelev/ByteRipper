@@ -681,7 +681,7 @@ public class ExportCode extends GhidraScript {
     static int textLength(byte[] bytes, int read) {
         int narrow = 0;
         while (narrow < read && printable(bytes[narrow])) narrow++;
-        if (narrow > 1 && narrow < read && bytes[narrow] == 0) return narrow;
+        if (narrow > 0 && narrow < read && bytes[narrow] == 0) return narrow;
         int wide = 0;
         while (wide + 1 < read && printable(bytes[wide]) && bytes[wide + 1] == 0) wide += 2;
         if (wide > 2 && wide + 1 < read && bytes[wide] == 0 && bytes[wide + 1] == 0) return wide;
