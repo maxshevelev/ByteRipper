@@ -661,6 +661,42 @@ final class GhidraHostCandidateTests: XCTestCase {
         try JSONSerialization.data(withJSONObject: index, options: [.sortedKeys]).write(to: url)
     }
 
+    /// SecCore's state: the module links to an entry whose version is an older
+    /// review — another plate, and no C — while the module's own review is
+    /// published. An administrator's take changes nothing of the module, so the
+    /// store keeps its revision, and the entry's next version names that
+    /// revision as its source, not the number the publish would have had.
+    func testATakeOnAnUnchangedModuleNamesTheRevisionTheStoreKept() async throws {
+        let (host, store, reviewed, other, _, _, id, directory) = try await aullshrInBoth()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        defer { Task { await host.stop(reviewed); await host.stop(other) } }
+        let rev = try XCTUnwrap(try store.analysis(module: reviewed)?.reading?.rev)
+        // The entry as a restore of an older version left it.
+        let url = directory.appendingPathComponent("store/library/index.json")
+        var index = try json(try Data(contentsOf: url))
+        var entries = try XCTUnwrap(index["entries"] as? [String: Any])
+        var row = try XCTUnwrap(entries[id] as? [String: Any])
+        var object = try json(try store.object(try XCTUnwrap(SHA256Digest(hex: try XCTUnwrap(row["entry"] as? String)))))
+        XCTAssertNotNil(object["plate"], "\(object.keys.sorted())")
+        object["plate"] = "An older review's plate."
+        object["function"] = nil
+        object["equates"] = nil
+        row["entry"] = try store.putObject(try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])).hex
+        entries[id] = row
+        index["entries"] = entries
+        try JSONSerialization.data(withJSONObject: index, options: [.sortedKeys]).write(to: url)
+        let before = try XCTUnwrap(try store.libraryIndex().entries[id])
+
+        let taken = try await host.publish(reviewed, by: "admin", options: .init(
+            takeLibrary: .these([id: "the module's review taken over the older one"])))
+        XCTAssertEqual(taken.manifest.reading?.rev, rev, "nothing of the module changed: the store keeps its revision")
+        let after = try XCTUnwrap(try store.libraryIndex().entries[id])
+        XCTAssertEqual(after.version, before.version + 1, "the take is the entry's next version: \(String(describing: taken.library))")
+        XCTAssertEqual(after.source.rev, rev, "the source is the revision the store kept")
+        XCTAssertEqual(try store.libraryHistory(id: id)?.versions.last?.source.rev, rev)
+        XCTAssertEqual(store.verify(), [])
+    }
+
     /// A link reads its entry's text. A module that links to an entry holding
     /// no C, with its own review of the function differing from the entry's, is
     /// refused: its C would carry what nobody took. Brought to the entry's text,

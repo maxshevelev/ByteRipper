@@ -608,6 +608,7 @@ public struct ContentStore: Sendable {
         }
 
         problems += verifyProjects()
+        problems += verifyLibrarySources()
 
         let refEntries = contents(of: refsURL).filter { $0.pathExtension == "json" }
         for url in refEntries {

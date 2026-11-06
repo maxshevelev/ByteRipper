@@ -751,8 +751,50 @@ final class ContentStoreTests: XCTestCase {
         let left = try XCTUnwrap(try store.reviewHistory(module: identity.sha256)).revisions
         XCTAssertEqual(left.map(\.rev), [1])
         XCTAssertEqual(left.map(\.project), ["new"])
-        XCTAssertEqual(store.verify(), [])
+        // The history row the plan counted names a revision that is gone: verify says so.
+        let problems = store.verify()
+        XCTAssertEqual(problems.count, done.historyRows, "\(problems)")
+        XCTAssertTrue(problems.first?.contains("version 1: its source names revision 2") ?? false, "\(problems)")
         XCTAssertEqual(try store.dropEarlierProjects(apply: false).modules, [], "nothing is left to drop")
+    }
+
+    /// A registry source that names a revision the module never got is a
+    /// problem `verify` reports, and renumbering puts it on the one it is.
+    func testASourceNamingNoRevisionIsReportedAndRenumbered() throws {
+        let identity = module()
+        let review = try store.putObject(Data("review".utf8))
+        let history = ReviewHistory(module: identity.sha256, revisions: [1, 2].map {
+            ReviewRevision(rev: $0, review: review, recordedAt: "2026-11-0\($0)T00:00:00Z")
+        })
+        try store.atomicWrite(try store.encoder.encode(history), to: store.reviewHistoryURL(identity.sha256))
+        try store.putAnalysis(module: identity, recipe: recipe(), artifact: artifact(),
+                              reading: AnalysisReading(rev: 2, review: review))
+        let body = LibraryBody(size: 0x40, full: "aa", specific: "bb")
+        let object = try store.putObject(Data("entry".utf8))
+        let planned = LibrarySource(module: identity.sha256, address: "0x10", rev: 3, by: "agent")
+        let earlier = LibrarySource(module: identity.sha256, address: "0x10", rev: 1, by: "agent")
+        var index = LibraryIndex()
+        index.entries[body.key] = LibraryIndexEntry(version: 2, entry: object, name: "Helper", kind: "library.amd",
+                                                    source: planned,
+                                                    variants: [LibraryVariant(body: body, module: identity.sha256)])
+        let rows = LibraryHistory(id: body.key, versions: [
+            LibraryVersion(version: 1, entry: object, source: earlier, reason: nil, recordedAt: "2026-11-01T00:00:01Z"),
+            LibraryVersion(version: 2, entry: object, source: planned, reason: "taken", recordedAt: "2026-11-02T00:00:01Z")])
+        try store.atomicWrite(try store.encoder.encode(index), to: store.libraryIndexURL)
+        try store.atomicWrite(try store.encoder.encode(rows), to: store.libraryHistoryURL(body.key))
+
+        let problems = store.verify()
+        XCTAssertEqual(problems.count, 2, "\(problems)")
+        XCTAssertTrue(problems.allSatisfy { $0.contains("names revision 3") }, "\(problems)")
+
+        XCTAssertEqual(try store.renumberLibrarySources(module: identity.sha256, from: 3, to: 2, dryRun: true), 2)
+        XCTAssertEqual(store.verify().count, 2, "a dry run writes nothing")
+        XCTAssertEqual(try store.renumberLibrarySources(module: identity.sha256, from: 3, to: 2), 2)
+        XCTAssertEqual(store.verify(), [])
+        XCTAssertEqual(try store.libraryIndex().entries[body.key]?.source.rev, 2)
+        XCTAssertEqual(try store.libraryHistory(id: body.key)?.versions.map(\.source.rev), [1, 2],
+                       "only the rows that named the missing revision move")
+        XCTAssertEqual(try store.renumberLibrarySources(module: identity.sha256, from: 3, to: 2), 0)
     }
 }
 

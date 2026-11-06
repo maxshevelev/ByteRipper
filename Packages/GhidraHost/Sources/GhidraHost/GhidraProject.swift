@@ -173,6 +173,8 @@ public protocol AnalysisWriter: Sendable {
                       environment: ProjectEnvironment) async throws -> ProjectRecord
     /// The module's kept project and the file holding it; nil when the store keeps none.
     func readProject(module: SHA256Digest) async throws -> (record: ProjectRecord, file: URL)?
+    /// The registry's sources of `module` naming revision `from` made to name `to`.
+    func renumberLibrarySources(module: SHA256Digest, from: Int, to: Int) async throws
 }
 
 extension ContentStore: AnalysisWriter {
@@ -188,6 +190,10 @@ extension ContentStore: AnalysisWriter {
 
     public func readProject(module: SHA256Digest) async throws -> (record: ProjectRecord, file: URL)? {
         try project(module: module).map { ($0, projectFile(module)) }
+    }
+
+    public func renumberLibrarySources(module: SHA256Digest, from: Int, to: Int) async throws {
+        try renumberLibrarySources(module: module, from: from, to: to, dryRun: false)
     }
 
     public func writeRevision(module: SHA256Digest, reading: AnalysisReading, artifact: SHA256Digest,
@@ -273,6 +279,9 @@ extension RemoteStore: AnalysisWriter {
     }
 
     public func readProject(module: SHA256Digest) async throws -> (record: ProjectRecord, file: URL)? { nil }
+    public func renumberLibrarySources(module: SHA256Digest, from: Int, to: Int) async throws {
+        throw CodeAnalysisError.analysisMismatch("a served store numbers its revisions and its sources itself")
+    }
 
     public func writeRevision(module: SHA256Digest, reading: AnalysisReading, artifact: SHA256Digest,
                               by: String?) async throws -> Int {

@@ -61,7 +61,8 @@ extension ContentStore {
         /// Entries whose current source is a revision on the list: `--apply`
         /// refuses while there is one.
         public var sources: [EarlierProjectSource]
-        /// Rows of the registry's histories that only name a revision on the list.
+        /// Rows of the registry's histories that only name a revision on the list:
+        /// they stay, and `verify` reports each as a source naming no revision.
         public var historyRows: Int
         public var analyses: Int
         public var revisions: Int

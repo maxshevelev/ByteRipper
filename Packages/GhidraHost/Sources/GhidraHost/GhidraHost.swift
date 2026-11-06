@@ -479,6 +479,12 @@ public actor GhidraHost {
                 artifact: code, by: by)
             let current = AnalysisReading(rev: rev, review: stored, description: described)
             reading = current
+            // What the registry was given — entries, their code — names the
+            // revision this publish would have been; the store kept the last
+            // one, unchanged, so it names that.
+            if rev != next {
+                try await writer.renumberLibrarySources(module: module, from: next, to: rev)
+            }
             // The revision is stored: the transaction closes on the project. The
             // functions the registry took are no candidates and no longer dirty,
             // and their text stays. What the entries learn is from the export the

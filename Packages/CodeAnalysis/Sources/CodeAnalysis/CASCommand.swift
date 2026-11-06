@@ -39,6 +39,7 @@ public enum CASCommand {
           library-holdings
           relink-modules [--apply]
           drop-earlier-projects [--apply]
+          library-source-rev --module <sha256> --from <rev> --to <rev> [--apply]
           library-rename <id> <name> --reason <text> [--apply]
           library-take-out <id> [--body <key>] --reason <text> [--apply]
           library-restore <body> --reason <text> [--apply]
@@ -242,6 +243,24 @@ public enum CASCommand {
             }
             output.stdout = try encode(try ContentStore(root: local.root, create: local.create)
                 .dropEarlierProjects(apply: apply))
+        case "library-source-rev":
+            let apply = parser.flag("--apply")
+            guard let text = parser.option("--module"), let module = SHA256Digest(hex: text),
+                  let from = parser.option("--from").flatMap({ Int($0) }),
+                  let to = parser.option("--to").flatMap({ Int($0) }) else {
+                throw Usage(description: "library-source-rev: --module <sha256> --from <rev> --to <rev> are required")
+            }
+            try parser.end()
+            guard let local = store as? LocalOperations else {
+                throw CodeAnalysisError.analysisMismatch("library-source-rev runs on a store directory, not on a server")
+            }
+            let store = try ContentStore(root: local.root, create: local.create)
+            // Only onto a revision the module has: the point is a source that names one.
+            guard (try store.reviewHistory(module: module))?.revisions.contains(where: { $0.rev == to }) == true else {
+                throw CodeAnalysisError.analysisMismatch("\(module.hex) has no revision \(to)")
+            }
+            let count = try store.renumberLibrarySources(module: module, from: from, to: to, dryRun: !apply)
+            output.stdout = try json(["sources": count, "applied": apply] as [String: Any])
         case "relink-modules":
             let apply = parser.flag("--apply")
             try parser.end()
