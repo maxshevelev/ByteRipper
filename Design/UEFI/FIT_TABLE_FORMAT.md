@@ -77,6 +77,7 @@ Every entry, the header included, is the same size: **16 bytes**.
 typedef struct {
     UINT64 Address;            // +0x00  component base address, 16-byte aligned
     UINT32 Size : 24;          // +0x08  component size in 16-byte units
+                               //        (in bytes for 0x0B and 0x0C, §7.4)
     UINT32 Reserved : 8;       // +0x0B  must be 0
     UINT16 Version;            // +0x0C  BCD: low byte minor, high byte major
     UINT8  Type : 7;           // +0x0E  bits [6:0]
@@ -259,6 +260,14 @@ Bit 0 at the given address holds the policy itself. `ChecksumValid` = 0,
 ### 7.4. Boot Guard Key Manifest (0x0B) and Boot Policy (0x0C)
 
 If a Startup ACM is present, both of these entries usually have to be as well.
+
+`Size` in these two rows is the manifest's length **in bytes**, not in 16-byte
+units as in the other rows. Measured on a real image (Alder Lake, Insyde): a
+Key Manifest row with `Size` = `0x355` at `0x17FA1C0`, a Boot Policy row with
+`Size` = `0x4A9` at `0x17FA5C0`, the table at `0x17FABC0` — `0x400` and `0x600`
+apart, which the byte reading fits and the unit reading (`0x3550`, `0x4A90`)
+overruns by the table and the components after it. The manifest's own header
+gives its length as well, and is what the UEFI tree trusts.
 A cross-check: the hash of the Boot Policy's public key, written down in the Key
 Manifest, must match the SHA-256 or SHA-384 of the actual public key in the Boot
 Policy. A mismatch means one of the two manifests has been replaced.

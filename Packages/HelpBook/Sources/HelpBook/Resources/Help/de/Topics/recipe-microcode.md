@@ -1,16 +1,16 @@
-@source-sha 68c22abd93bc022c3bdfce8d9192b58b426145ba65f0321b77adce24e5cf5452
+@source-sha c4363b764de8853dab6b30d01618e37d0a137e0e7fd59bc36b9ddedd79fb0b23
 # Microcode und die FIT-Tabelle
 
 > Was das Werkzeug „FIT-Tabelle“ über den Microcode eines Images meldet und was seine Befehle an der Tabelle ändern.
 
 Der Prozessor lädt ein [[term:microcode|Microcode-Update]], bevor er irgendeinen Firmware-Befehl ausführt, und findet es über die [[term:fit|Firmware Interface Table]]. Die Einträge dieser Tabelle enthalten absolute Adressen im Image; ein von einem Eintrag benanntes Bauteil lässt sich deshalb nicht verschieben, ohne den Eintrag selbst zu berichtigen.
 
-**Werkzeuge ▸ FIT-Tabelle** findet die Tabelle und gibt sie aus. Das Werkzeug selbst ist unter [[topic:tool-fit|FIT-Tabelle]] beschrieben; diese Seite behandelt, was seine Spalten bedeuten und was seine Befehle ändern.
+**Werkzeuge ▸ FIT-Tabelle** findet die Tabelle und gibt sie aus. Das Werkzeug selbst ist unter [[topic:tool-fit|FIT-Tabelle]] beschrieben; diese Seite behandelt, was seine Zeilen angeben und was seine Befehle ändern.
 
-## Was die Spalten bedeuten
+## Was die Zeilen angeben
 
-- **Typ**, **Adresse** und **Größe** stammen aus dem Eintrag selbst.
-- **Zeigt auf** wird nicht aus dem Eintrag gelesen. Das Werkzeug folgt der Adresse und meldet, was tatsächlich dort liegt: ein Microcode-Update mit gültigem Header, ein Manifest, ein gelöschter Bereich oder nichts Erkennbares. Ein Eintrag, der auf einen gelöschten Bereich zeigt, ist ein Eintrag, dessen Bauteil im Image fehlt.
+- **Typ** stammt aus dem Eintrag selbst. Nummer, Adresse und Größe des Eintrags stehen in der Detailliste unter der Tabelle.
+- Was auf den Typ folgt, wird nicht aus dem Eintrag gelesen. Das Werkzeug folgt der Adresse und meldet, was tatsächlich dort liegt: ein Microcode-Update mit gültigem Header, ein Manifest, ein gelöschter Bereich oder nichts Erkennbares. Ein Eintrag, der auf einen gelöschten Bereich zeigt, ist ein Eintrag, dessen Bauteil im Image fehlt.
 - Ein Microcode-Eintrag wird zusätzlich über einen Online-Katalog benannt: Prozessorsignatur (CPUID), Revision und Datum. Der Katalog ist unter [[topic:databases|Die Online-Kataloge]] beschrieben; ohne Netzzugang meldet das Werkzeug die Kennungen und lässt die Namen weg.
 
 Unter der Tabelle stehen die Verstöße gegen die Regeln der Spezifikation: der Header-Eintrag, die Anzahl der Einträge, die Prüfsumme der Tabelle, die Reihenfolge der Einträge nach Typ, die Ausrichtung der Adressen, das reservierte Byte sowie die Übereinstimmung der Tabelle mit ihrer [[term:top-swap|Top-Swap]]-Sicherungskopie, sofern das Image eine führt. Über die Regeln hinaus warnt die Liste, wenn zwei Microcode-Einträge denselben Prozessor auf denselben Plattformen bedienen — meist eine ältere Revision, die neben einer neueren stehen geblieben ist; die Signaturen aus einer erweiterten Signaturtabelle zählen dabei mit. Ein Doppelklick auf einen Verstoß bringt den Dump zu den betroffenen Bytes.
@@ -42,7 +42,7 @@ Der Befehl leistet dann Folgendes:
 
 ## Ersetzen und Entfernen
 
-Das Kontextmenü einer Microcode-Zeile enthält **Microcode ersetzen**, **Microcode entfernen**, **CPUID kopieren** und **Zum Offset springen**; die Header-Zeile enthält **Prüfsumme korrigieren**.
+Das Kontextmenü einer Microcode-Zeile enthält **Microcode ersetzen**, **Microcode entfernen**, **CPUID kopieren** und **Ziel anzeigen**; die Header-Zeile enthält **Prüfsumme korrigieren**.
 
 - **Microcode ersetzen** tauscht das von der Zeile benannte Bauteil gegen ein anderes beliebiger Signatur. Die Zeile bleibt; ist das neue Bauteil anders groß, rücken die Bauteile dahinter nach, und die Einträge, die sie benennen, werden berichtigt. Ein Ersatz, der einen Prozessor bedient, den eine andere Zeile auf denselben Plattformen bereits bedient, wird abgelehnt: Zu aktualisieren ist dann diese Zeile.
 - **Microcode entfernen** nimmt den Eintrag aus der Tabelle, rückt die Bauteile dahinter in den frei gewordenen Platz nach und löscht die Bytes am Ende der Reihe. Mindestens ein Microcode-Eintrag muss in der Tabelle verbleiben.

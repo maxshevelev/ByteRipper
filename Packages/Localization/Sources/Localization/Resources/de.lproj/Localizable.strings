@@ -433,7 +433,7 @@
 "Glossary: UEFI Images" = "Glossar: UEFI-Images";
 "Go To" = "Gehe zu";
 "Go To Position…" = "Gehe zu Offset…";
-"Go to Offset" = "Zum Offset springen";
+"Show Target" = "Ziel anzeigen";
 "Go to an offset or a bookmark" = "Zu einem Offset oder Lesezeichen springen";
 "Go to the next difference between the files" = "Zum nächsten Unterschied zwischen den Dateien springen";
 "Go to the previous difference between the files" = "Zum vorherigen Unterschied zwischen den Dateien springen";
@@ -992,7 +992,6 @@
 "addresses assumed" = "Adressen angenommen";
 "checksum %1$@" = "Prüfsumme %1$@";
 "checksum unused" = "Prüfsumme ungenutzt";
-"column|Address" = "Im Speicher";
 "column|Match Case" = "Schreibung";
 "column|Plat" = "Plat";
 "compressed" = "komprimiert";
@@ -1021,6 +1020,9 @@
 "outside this image" = "außerhalb dieses Images";
 "pre-release" = "Vorabversion";
 "r.%1$@" = "r.%1$@";
+"No processor names known for CPUID %1$@" = "Für CPUID %1$@ sind keine Prozessormodelle bekannt";
+"platform %1$@" = "Plattform %1$@";
+"series, models not listed" = "Serie, Modelle nicht aufgeführt";
 "settings|View" = "Darstellung";
 "the rest of the file" = "der Rest der Datei";
 "theme|Dark" = "Dunkel";

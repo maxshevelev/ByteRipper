@@ -120,6 +120,28 @@ def code_names(cell):
     return out
 
 
+# The core architectures the article writes in brackets after a code name:
+# "Alder Lake S (Golden Cove, Gracemont)". They name the cores, not the part,
+# so they go to `cores` and leave the code name; whatever else the brackets
+# say ("Core Series 1", "Broadwell DE", "no SGX") stays where it was.
+CORE_ARCHITECTURES = ["Golden Cove", "Raptor Cove", "Gracemont", "Goldmont", "Tremont"]
+
+
+def split_cores(name):
+    """`Alder Lake S (Golden Cove, Gracemont)` → (`Alder Lake S`,
+    [`Golden Cove`, `Gracemont`]); `Apollo Lake (Goldmont - no SGX)` →
+    (`Apollo Lake (no SGX)`, [`Goldmont`])."""
+    m = re.match(r"^(.*?)\s*\(([^()]*)\)\s*$", name)
+    if not m:
+        return name, []
+    parts = [p.strip() for p in re.split(r"[,/]|\s+-\s+", m.group(2)) if p.strip()]
+    cores = [p for p in parts if p in CORE_ARCHITECTURES]
+    if not cores:
+        return name, []
+    rest = [p for p in parts if p not in CORE_ARCHITECTURES]
+    return (f"{m.group(1)} ({', '.join(rest)})" if rest else m.group(1)), cores
+
+
 def cells_of(page):
     table = re.search(r"<table.*?</table>", page, re.S).group(0)
     for row in re.findall(r"<tr.*?</tr>", table, re.S)[1:]:
@@ -248,9 +270,13 @@ def main(argv):
         # A code name written into the family column.
         codes += [f for f in families if f.endswith("Lake-N") and f not in codes]
         families = [f for f in families if not f.endswith("Lake-N")]
+        split = [split_cores(c) for c in codes]
+        codes = [name for name, _ in split]
+        cores = unique(core for _, found in split for core in found)
         entries.append({
             "cpuids": [c.upper() for c in re.findall(r"[0-9A-Fa-fX]{5}", clean(cpuid))],
             "codeNames": unique(codes),
+            "cores": cores,
             "productFamilies": unique(families),
             "steppings": steppings,
             "segments": unique(SEGMENTS[s.lower()] for s in

@@ -529,7 +529,7 @@ struct FITParkedState: PersistableToolSessionState {
     /// outline back with it.
     private func outline(of display: FITDisplay) -> FITDisplay {
         guard let zone = focusZone else { return display }
-        guard display.zones.zones.contains(where: { $0.id == zone }) else {
+        guard display.allZones.contains(where: { $0.id == zone }) else {
             return display.focusing(zoneID: nil, in: Localization.appLanguage)
         }
         return display.focusing(zoneID: zone, in: Localization.appLanguage)
@@ -572,7 +572,7 @@ struct FITParkedState: PersistableToolSessionState {
     /// Public because a click on the title is driven the same way the panel's
     /// other clicks are — through the session, not a simulated mouse.
     public func showTable() {
-        guard let range = display.zones.zones.first(where: { $0.id == FITPresenter.tableZoneID })?.range
+        guard let range = display.allZones.first(where: { $0.id == FITPresenter.tableZoneID })?.range
         else { return }
         host.noteNavigationStep()
         focusZone = FITPresenter.tableZoneID

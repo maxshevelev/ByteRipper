@@ -433,7 +433,7 @@
 "Glossary: UEFI Images" = "Глоссарий: образы UEFI";
 "Go To" = "Перейти";
 "Go To Position…" = "Перейти к адресу…";
-"Go to Offset" = "Перейти к адресу";
+"Show Target" = "Показать цель";
 "Go to an offset or a bookmark" = "Перейти к адресу или закладке";
 "Go to the next difference between the files" = "Перейти к следующему различию между файлами";
 "Go to the previous difference between the files" = "Перейти к предыдущему различию между файлами";
@@ -992,7 +992,6 @@
 "addresses assumed" = "адреса предположительные";
 "checksum %1$@" = "контрольная сумма %1$@";
 "checksum unused" = "контрольная сумма не используется";
-"column|Address" = "В памяти";
 "column|Match Case" = "Регистр";
 "column|Plat" = "Плат";
 "compressed" = "сжатый";
@@ -1021,6 +1020,9 @@
 "outside this image" = "за пределами этого образа";
 "pre-release" = "предрелиз";
 "r.%1$@" = "r.%1$@";
+"No processor names known for CPUID %1$@" = "Модели процессоров для CPUID %1$@ неизвестны";
+"platform %1$@" = "платформа %1$@";
+"series, models not listed" = "серия, модели не перечислены";
 "settings|View" = "Вид";
 "the rest of the file" = "остаток файла";
 "theme|Dark" = "Тёмная";

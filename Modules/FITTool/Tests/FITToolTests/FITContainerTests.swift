@@ -497,7 +497,7 @@ final class FITTopSwapTests: XCTestCase {
                        "nothing that changes the table")
         XCTAssertFalse(display.rows[1].commands.filter { if case .replaceMicrocode = $0 { return true }; return false }.isEmpty)
         XCTAssertEqual(FITPresenter.rowIndex(ofZone: "fit.backup.target.1"), FITPresenter.backupKey(1))
-        XCTAssertEqual(display.zones.zones.first { $0.id == "fit.backup.target.1" }?.range.lowerBound, 0x4060)
+        XCTAssertEqual(display.allZones.first { $0.id == "fit.backup.target.1" }?.range.lowerBound, 0x4060)
         XCTAssertEqual(display.focusing(copy.key, in: .english).detail.title, "Backup #2 Microcode")
     }
 

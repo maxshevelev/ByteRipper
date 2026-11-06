@@ -106,11 +106,10 @@ final class FITDisplayTests: XCTestCase {
         XCTAssertTrue(shown.rows.isEmpty)
     }
 
-    /// A microcode row leads with its CPUID rather than with the word
-    /// "microcode" — the type column has said that already, and the CPUID is
-    /// the thing being looked for. Five hex digits, no leading zero, the way a
-    /// bench writes it.
-    func testAMicrocodeRowLeadsWithItsCpuid() {
+    /// A microcode row says its revision, date and platforms; its CPUID —
+    /// five hex digits, no leading zero, the way a bench writes it — is the
+    /// row it opens into, and what Copy CPUID copies.
+    func testAMicrocodeRowSaysItsRevisionAndOpensIntoItsCpuid() {
         let row = display([microcodeRow]).rows[1]
 
         XCTAssertEqual(row.typeText, "Microcode")
@@ -119,7 +118,13 @@ final class FITDisplayTests: XCTestCase {
         // The size has its own column now; for a microcode it is the
         // component's, not the row's zero field (§7.1) — hex, the way the
         // column shows every size.
-        XCTAssertEqual(row.targetText, "CPUID 806EA · r.F0 · 2019-07-15")
+        XCTAssertEqual(row.targetText, "r.F0 · 2019-07-15 · platform 01")
+        // The row opens into the processors the shipped table names for it.
+        XCTAssertEqual(row.processorGroups.map(\.cpuid), ["806EA"])
+        let lines = row.processorGroups[0].lines
+        XCTAssertEqual(lines.first?.kind, .model, "the models, with nothing ahead of them")
+        XCTAssertTrue(lines.contains { $0.text == "Core i5-8250U" }, "\(lines)")
+        XCTAssertTrue(display([microcodeRow]).rows[0].processorGroups.isEmpty, "the header opens into nothing")
         XCTAssertEqual(row.sizeText, "0x180")
         XCTAssertEqual(row.targetRange, microcode..<(microcode + 0x180))
         XCTAssertFalse(row.hasProblem)
@@ -137,10 +142,15 @@ final class FITDisplayTests: XCTestCase {
 
         XCTAssertEqual(row.cpuidText, "B06A2", "Copy CPUID copies the header's own")
         XCTAssertEqual(row.cpuids, [0x000B_06A2, 0x000B_06A3, 0x000B_06A8])
-        XCTAssertEqual(row.targetText, "CPUID B06A2 + B06A3, B06A8 · r.F0 · 2019-07-15")
-        XCTAssertEqual(shown.zones.zones.first { $0.id == "fit.target.1" }?.name,
+        XCTAssertEqual(row.targetText, "r.F0 · 2019-07-15 · platform 01")
+        XCTAssertEqual(shown.allZones.first { $0.id == "fit.target.1" }?.name,
                        "CPUID B06A2 + B06A3, B06A8")
         XCTAssertEqual(display([microcodeRow]).rows[1].cpuids, [0x0008_06EA])
+        // One group per CPUID, each its own level in the panel's tree.
+        XCTAssertEqual(row.processorGroups.map(\.cpuid), ["B06A2", "B06A3", "B06A8"])
+        XCTAssertTrue(row.processorGroups[0].codeNames.contains { $0.hasPrefix("Raptor Lake") },
+                      "\(row.processorGroups[0].codeNames)")
+        XCTAssertEqual(row.processorGroups[2].lines.map(\.kind), [.unknown], "B06A8 is not in the table")
     }
 
     /// A row's own size field is required to be zero for most types, so where
@@ -159,6 +169,23 @@ final class FITDisplayTests: XCTestCase {
         // the half that arrives second, once the branch covering the address
         // has been read, so it must not push the address sideways when it does.
         XCTAssertEqual(row.targetText, "0x3000 (FFSv2)")
+    }
+
+    /// A Boot Guard manifest's `Size` is its length in bytes, not in 16-byte
+    /// units (§7.4): a Key Manifest of 0x355 bytes is drawn as 0x355 bytes, not
+    /// as 0x3550 over the Boot Policy and the table behind it.
+    func testABootGuardManifestsSizeIsInBytes() {
+        let shown = display([
+            TestFIT.Row(FIT.keyManifestType, target: 0x3000, size: 0x355),
+            TestFIT.Row(FIT.bootPolicyType, target: 0x3400, size: 0x4A9),
+            TestFIT.Row(0x07, target: 0x3800, size: 0x10)
+        ])
+        XCTAssertEqual(shown.rows[1].targetRange, 0x3000..<0x3355)
+        XCTAssertEqual(shown.rows[1].sizeText, "0x355")
+        XCTAssertEqual(shown.rows[2].targetRange, 0x3400..<0x38A9)
+        // The other rows keep their 16-byte units.
+        XCTAssertEqual(shown.rows[3].targetRange, 0x3800..<0x3900)
+        XCTAssertEqual(shown.allZones.first { $0.id == "fit.target.1" }?.range, 0x3000..<0x3355)
     }
 
     /// The header's `Size` counts entries, not bytes — the field everyone reads
@@ -196,22 +223,36 @@ final class FITDisplayTests: XCTestCase {
 
     // MARK: - Zones
 
-    /// The table, the pointer that leads to it, every row, and what every row
-    /// points at — the last being the useful one, since the components are
-    /// scattered across the image and the table is not.
-    func testTheZonesCoverTheTableThePointerAndWhatTheRowsPointAt() {
-        let zones = display([microcodeRow]).zones
+    /// What the panel can put in focus: the table, the pointer that leads to
+    /// it, every row, and what every row points at.
+    func testEveryZoneThePanelCanFocusIsKept() {
+        let zones = display([microcodeRow]).allZones
 
-        XCTAssertEqual(zones.zones.map(\.id).sorted(), [
+        XCTAssertEqual(zones.map(\.id).sorted(), [
             "fit.pointer", "fit.row.0", "fit.row.1", "fit.table", "fit.target.1"
         ])
-        XCTAssertEqual(zones.zones.first { $0.id == "fit.table" }?.range, 0x1000..<0x1020)
-        XCTAssertEqual(zones.zones.first { $0.id == "fit.pointer" }?.range, 0xFFC0..<0xFFC4)
-        XCTAssertEqual(zones.zones.first { $0.id == "fit.row.1" }?.range, 0x1010..<0x1020)
+        XCTAssertEqual(zones.first { $0.id == "fit.table" }?.range, 0x1000..<0x1020)
+        XCTAssertEqual(zones.first { $0.id == "fit.pointer" }?.range, 0xFFC0..<0xFFC4)
+        XCTAssertEqual(zones.first { $0.id == "fit.row.1" }?.range, 0x1010..<0x1020)
         XCTAssertEqual(
-            zones.zones.first { $0.id == "fit.target.1" }?.range,
+            zones.first { $0.id == "fit.target.1" }?.range,
             microcode..<(microcode + 0x180)
         )
+    }
+
+    /// What the dump draws is the table, all its rows in one zone, and the one
+    /// zone in focus — a row, what a row points at, or the table itself. What
+    /// the rows point at is not drawn until the reader goes to it.
+    func testTheDumpDrawsTheTableAndTheFocusOnly() {
+        let shown = display([microcodeRow, TestFIT.Row(FIT.microcodeType, target: 0x3000)])
+        func drawn(_ display: FITDisplay) -> [String] { display.zones.zones.map(\.id).sorted() }
+
+        XCTAssertEqual(drawn(shown), ["fit.table"])
+        XCTAssertEqual(drawn(shown.focusing(1, in: .english)), ["fit.row.1", "fit.table"])
+        XCTAssertEqual(drawn(shown.focusingTarget(of: 1, in: .english)), ["fit.table", "fit.target.1"])
+        XCTAssertEqual(drawn(shown.focusing(zoneID: "fit.table", in: .english)), ["fit.table"])
+        // And back: a focus that moves on takes its zone with it.
+        XCTAssertEqual(drawn(shown.focusingTarget(of: 1, in: .english).focusing(nil, in: .english)), ["fit.table"])
     }
 
     /// Every microcode in the table is a zone from the moment it is read, named
@@ -220,13 +261,13 @@ final class FITDisplayTests: XCTestCase {
         let zones = display([
             microcodeRow,
             TestFIT.Row(FIT.microcodeType, target: 0x3000)
-        ]).zones
+        ]).allZones
 
         // The row's number counts from one, so the first microcode — the row
         // after the header — is the second row, not the first.
-        XCTAssertEqual(zones.zones.first { $0.id == "fit.row.1" }?.name, "#2 Microcode")
-        XCTAssertEqual(zones.zones.first { $0.id == "fit.target.1" }?.name, "CPUID 806EA")
-        XCTAssertEqual(zones.zones.first { $0.id == "fit.target.2" }?.range, 0x3000..<0x3010)
+        XCTAssertEqual(zones.first { $0.id == "fit.row.1" }?.name, "#2 Microcode")
+        XCTAssertEqual(zones.first { $0.id == "fit.target.1" }?.name, "CPUID 806EA")
+        XCTAssertEqual(zones.first { $0.id == "fit.target.2" }?.range, 0x3000..<0x3010)
     }
 
     /// Going to an offset puts the component in focus, not the row that names
@@ -261,7 +302,7 @@ final class FITDisplayTests: XCTestCase {
         XCTAssertEqual(rows[1].commands,
                        [.goToOffset(microcode), .copyCPUID("806EA"), .replaceMicrocode(1)])
         XCTAssertEqual(rows[1].commands.map { $0.title.text(in: .english) },
-                       ["Go to Offset", "Copy CPUID", "Replace Microcode"])
+                       ["Show Target", "Copy CPUID", "Replace Microcode"])
     }
 
     /// Every microcode row may be replaced — the slot stays, so even the last

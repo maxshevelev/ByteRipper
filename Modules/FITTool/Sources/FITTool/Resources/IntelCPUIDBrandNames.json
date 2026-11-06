@@ -92,6 +92,7 @@
       "codeNames": [
         "Haswell Server EP, EP4S"
       ],
+      "cores": [],
       "productFamilies": [
         "Intel Xeon E processor family"
       ],
@@ -417,6 +418,7 @@
       "codeNames": [
         "Haswell Server EX"
       ],
+      "cores": [],
       "productFamilies": [
         "Intel Xeon E processor family"
       ],
@@ -544,6 +546,7 @@
         "Skylake U",
         "Skylake U23e"
       ],
+      "cores": [],
       "productFamilies": [
         "6th Generation Intel Core Processor Family"
       ],
@@ -716,6 +719,7 @@
         "Broadwell Server E, EP",
         "Broadwell Server EX"
       ],
+      "cores": [],
       "productFamilies": [
         "Intel Xeon E processor family"
       ],
@@ -1121,6 +1125,7 @@
       "codeNames": [
         "Skylake Server"
       ],
+      "cores": [],
       "productFamilies": [
         "Intel Xeon Scalable processor family"
       ],
@@ -1159,6 +1164,7 @@
         "Skylake W",
         "Skylake X"
       ],
+      "cores": [],
       "productFamilies": [
         "Intel Xeon Scalable processor family",
         "Intel Xeon D processor family",
@@ -1943,6 +1949,7 @@
       "codeNames": [
         "Cascade Lake Server"
       ],
+      "cores": [],
       "productFamilies": [
         "2nd Generation Intel Xeon Scalable processor family"
       ],
@@ -1967,6 +1974,7 @@
         "Cascade Lake W",
         "Cascade Lake X"
       ],
+      "cores": [],
       "productFamilies": [
         "2nd Generation Intel Xeon Scalable processor family",
         "Intel Xeon W processor family",
@@ -2920,6 +2928,7 @@
       "codeNames": [
         "Cooper Lake"
       ],
+      "cores": [],
       "productFamilies": [
         "3rd Generation Intel Xeon Scalable processor family"
       ],
@@ -2997,6 +3006,7 @@
       "codeNames": [
         "Broadwell DE V2,V3"
       ],
+      "cores": [],
       "productFamilies": [
         "Intel Xeon D processor family"
       ],
@@ -3157,6 +3167,7 @@
       "codeNames": [
         "Broadwell DE Y010"
       ],
+      "cores": [],
       "productFamilies": [
         "Intel Xeon D processor family"
       ],
@@ -3238,6 +3249,7 @@
         "Broadwell DE A1",
         "Hewitt Lake (Broadwell DE)"
       ],
+      "cores": [],
       "productFamilies": [
         "Intel Xeon D processor family"
       ],
@@ -3370,8 +3382,11 @@
         "506C9"
       ],
       "codeNames": [
-        "Apollo Lake (Goldmont - no SGX)",
+        "Apollo Lake (no SGX)",
         "Apollo Lake"
+      ],
+      "cores": [
+        "Goldmont"
       ],
       "productFamilies": [
         "Intel Pentium Processor J Series",
@@ -3500,6 +3515,7 @@
       "codeNames": [
         "Apollo Lake"
       ],
+      "cores": [],
       "productFamilies": [
         "Intel Pentium Processor N Series",
         "Intel Atom Processor E3900 Series"
@@ -3590,6 +3606,7 @@
         "Skylake H",
         "Skylake S"
       ],
+      "cores": [],
       "productFamilies": [
         "Intel Xeon E processor family",
         "6th Generation Intel Core Processor Family"
@@ -4114,7 +4131,10 @@
         "506F1"
       ],
       "codeNames": [
-        "Denverton (Goldmont)"
+        "Denverton"
+      ],
+      "cores": [
+        "Goldmont"
       ],
       "productFamilies": [
         "Intel Atom C processor family"
@@ -4319,6 +4339,7 @@
       "codeNames": [
         "Ice Lake Xeon-SP"
       ],
+      "cores": [],
       "productFamilies": [
         "3rd Gen Intel Xeon Scalable processor family"
       ],
@@ -4356,6 +4377,7 @@
       "codeNames": [
         "Ice Lake D"
       ],
+      "cores": [],
       "productFamilies": [
         "Intel Xeon D Processor"
       ],
@@ -4741,6 +4763,7 @@
       "codeNames": [
         "Gemini Lake"
       ],
+      "cores": [],
       "productFamilies": [
         "Intel Pentium Processor Silver Series",
         "Intel Celeron Processor J Series",
@@ -4797,6 +4820,7 @@
       "codeNames": [
         "Gemini Lake"
       ],
+      "cores": [],
       "productFamilies": [
         "Intel Processor J Series",
         "Intel Processor N Series"
@@ -4855,6 +4879,7 @@
       "codeNames": [
         "Ice Lake U, Y"
       ],
+      "cores": [],
       "productFamilies": [
         "10th Generation Intel Core Processor Family"
       ],
@@ -4925,7 +4950,10 @@
         "80664"
       ],
       "codeNames": [
-        "Snow Ridge BTS (Tremont)"
+        "Snow Ridge BTS"
+      ],
+      "cores": [
+        "Tremont"
       ],
       "productFamilies": [
         "Intel Atom Processors"
@@ -4958,7 +4986,10 @@
         "80665"
       ],
       "codeNames": [
-        "Snow Ridge BTS (Tremont)"
+        "Snow Ridge BTS"
+      ],
+      "cores": [
+        "Tremont"
       ],
       "productFamilies": [
         "Intel Atom Processor P5900"
@@ -4994,6 +5025,7 @@
         "Parker Ridge / Snow Ridge",
         "NS/NX"
       ],
+      "cores": [],
       "productFamilies": [
         "Intel Atom Processor C5000",
         "Intel Atom Processor P5300",
@@ -5147,7 +5179,10 @@
         "806A1"
       ],
       "codeNames": [
-        "Lakefield B-step (Tremont)"
+        "Lakefield B-step"
+      ],
+      "cores": [
+        "Tremont"
       ],
       "productFamilies": [
         "Intel Core Processors with Intel Hybrid Technology"
@@ -5175,6 +5210,7 @@
         "Tiger Lake UP3/4",
         "Tiger Lake H35"
       ],
+      "cores": [],
       "productFamilies": [
         "11th Generation Intel Core Processor Family"
       ],
@@ -5339,6 +5375,7 @@
         "Tiger Lake U Refresh",
         "Tiger Lake H35"
       ],
+      "cores": [],
       "productFamilies": [
         "11th Generation Intel Core Processor Family"
       ],
@@ -5402,6 +5439,7 @@
       "codeNames": [
         "Tiger Lake H"
       ],
+      "cores": [],
       "productFamilies": [
         "11th Generation Intel Core Processor Family",
         "Intel Xeon Processor Family"
@@ -5487,6 +5525,7 @@
       "codeNames": [
         "Tiger Lake H"
       ],
+      "cores": [],
       "productFamilies": [
         "11th Generation Intel Core Processor Family",
         "Intel Xeon Processor Family"
@@ -5549,6 +5588,7 @@
         "Kaby Lake U23e",
         "Kaby Lake Y"
       ],
+      "cores": [],
       "productFamilies": [
         "8th Generation Intel Core Processor Family",
         "7th Generation Intel Core Processor Family"
@@ -5869,6 +5909,7 @@
         "Coffee Lake U43e",
         "Kaby Lake Refresh U"
       ],
+      "cores": [],
       "productFamilies": [
         "8th Generation Intel Core Processor Family"
       ],
@@ -5963,6 +6004,7 @@
       "codeNames": [
         "Whiskey Lake U"
       ],
+      "cores": [],
       "productFamilies": [
         "8th Generation Intel Core Processors"
       ],
@@ -6016,6 +6058,7 @@
         "Comet Lake U42",
         "Amber Lake Y"
       ],
+      "cores": [],
       "productFamilies": [
         "8th Generation Intel Core Processors",
         "10th Generation Intel Core Processor Family",
@@ -6182,7 +6225,10 @@
         "90661"
       ],
       "codeNames": [
-        "Elkhart Lake (Tremont)"
+        "Elkhart Lake"
+      ],
+      "cores": [
+        "Tremont"
       ],
       "productFamilies": [
         "Intel Atom Processors"
@@ -6316,7 +6362,11 @@
       ],
       "codeNames": [
         "Alder Lake-HX",
-        "Alder Lake S (Golden Cove, Gracemont)"
+        "Alder Lake S"
+      ],
+      "cores": [
+        "Golden Cove",
+        "Gracemont"
       ],
       "productFamilies": [
         "12th Generation Intel Core Processor Family"
@@ -6434,7 +6484,11 @@
         "90675"
       ],
       "codeNames": [
-        "Alder Lake S (Golden Cove, Gracemont)"
+        "Alder Lake S"
+      ],
+      "cores": [
+        "Golden Cove",
+        "Gracemont"
       ],
       "productFamilies": [
         "12th Generation Intel Core Processor Family",
@@ -6547,8 +6601,12 @@
         "906A3"
       ],
       "codeNames": [
-        "Alder Lake H (Golden Cove, Gracemont)",
-        "Alder Lake P (Golden Cove, Gracemont)"
+        "Alder Lake H",
+        "Alder Lake P"
+      ],
+      "cores": [
+        "Golden Cove",
+        "Gracemont"
       ],
       "productFamilies": [
         "12th Generation Intel Core Processor Family"
@@ -6649,7 +6707,11 @@
         "906A4"
       ],
       "codeNames": [
-        "Alder Lake U (Golden Cove, Gracemont)"
+        "Alder Lake U"
+      ],
+      "cores": [
+        "Golden Cove",
+        "Gracemont"
       ],
       "productFamilies": [
         "12th Generation Intel Core Processor Family",
@@ -6762,7 +6824,10 @@
         "906C0"
       ],
       "codeNames": [
-        "Jasper Lake (Tremont)"
+        "Jasper Lake"
+      ],
+      "cores": [
+        "Tremont"
       ],
       "productFamilies": [
         "Intel Atom Processors"
@@ -6825,6 +6890,7 @@
         "Kaby Lake X",
         "Kaby Lake Xeon E3"
       ],
+      "cores": [],
       "productFamilies": [
         "7th Generation Intel Core Processor Family",
         "8th Generation Intel Core Processor Family",
@@ -7176,6 +7242,7 @@
         "Coffee Lake S x/KBP",
         "Coffee Lake S"
       ],
+      "cores": [],
       "productFamilies": [
         "8th Generation Intel Core Processor Family",
         "Intel Xeon E processor family"
@@ -7595,6 +7662,7 @@
       "codeNames": [
         "Coffee Lake S"
       ],
+      "cores": [],
       "productFamilies": [
         "8th Generation Intel Core Processor Family",
         "Intel Pentium Gold Processor Series",
@@ -7746,6 +7814,7 @@
       "codeNames": [
         "Coffee Lake S"
       ],
+      "cores": [],
       "productFamilies": [
         "9th Generation Intel Core Processor Family"
       ],
@@ -7837,6 +7906,7 @@
         "Coffee Lake Xeon E",
         "Coffee Lake S"
       ],
+      "cores": [],
       "productFamilies": [
         "9th Generation Intel Core Processor Family",
         "Intel Xeon E processor family"
@@ -8019,6 +8089,7 @@
       "codeNames": [
         "Comet Lake H"
       ],
+      "cores": [],
       "productFamilies": [
         "10th Generation Intel Core Processor Family",
         "Intel Xeon W processor family"
@@ -8104,6 +8175,7 @@
       "codeNames": [
         "Comet Lake S"
       ],
+      "cores": [],
       "productFamilies": [
         "10th Generation Intel Core Processor Family",
         "Intel Pentium Gold Processor Family",
@@ -8368,6 +8440,7 @@
       "codeNames": [
         "Comet Lake S"
       ],
+      "cores": [],
       "productFamilies": [
         "10th Generation Intel Core Processor Family",
         "Intel Xeon W processor family"
@@ -8512,6 +8585,7 @@
       "codeNames": [
         "Comet Lake U62"
       ],
+      "cores": [],
       "productFamilies": [
         "10th Generation Intel Core Processor Family",
         "Intel Xeon W processor family"
@@ -8586,6 +8660,7 @@
       "codeNames": [
         "Rocket Lake"
       ],
+      "cores": [],
       "productFamilies": [
         "11th Generation Intel Core Processor Family",
         "Intel Xeon E-2300 Processor Family",
@@ -8839,6 +8914,7 @@
         "Meteor Lake-U15",
         "Meteor Lake-H"
       ],
+      "cores": [],
       "productFamilies": [
         "Core Ultra Series 1"
       ],
@@ -8972,6 +9048,7 @@
       "codeNames": [
         "Arrow Lake-U"
       ],
+      "cores": [],
       "productFamilies": [
         "Core Ultra Series 2"
       ],
@@ -9018,8 +9095,12 @@
       ],
       "codeNames": [
         "Raptor Lake-HX",
-        "Raptor Lake (Raptor Cove/Gracemont)",
+        "Raptor Lake",
         "Raptor Lake-HX Refresh"
+      ],
+      "cores": [
+        "Raptor Cove",
+        "Gracemont"
       ],
       "productFamilies": [
         "13th Generation Intel Core Processor Family",
@@ -9141,6 +9222,7 @@
         "Raptor Lake-H",
         "Raptor Lake-H Re-refresh"
       ],
+      "cores": [],
       "productFamilies": [
         "13th Generation Intel Core Processor Family"
       ],
@@ -9286,6 +9368,7 @@
         "Raptor Lake-U Refresh (Core Series 1)",
         "Raptor Lake-U Re-refresh (Core Series 2)"
       ],
+      "cores": [],
       "productFamilies": [
         "13th Generation Intel Core Processor Family"
       ],
@@ -9388,6 +9471,7 @@
       "codeNames": [
         "Lunar Lake"
       ],
+      "cores": [],
       "productFamilies": [
         "Intel Core Ultra 200V"
       ],
@@ -9471,6 +9555,7 @@
         "Alder Lake-N",
         "Twin Lake-N"
       ],
+      "cores": [],
       "productFamilies": [
         "12th Generation Intel Atom Processor",
         "12th Generation Intel Core Processor Family"
@@ -9580,6 +9665,7 @@
       "codeNames": [
         "Raptor Lake-HX"
       ],
+      "cores": [],
       "productFamilies": [
         "13th Generation Intel Core Processor Family"
       ],

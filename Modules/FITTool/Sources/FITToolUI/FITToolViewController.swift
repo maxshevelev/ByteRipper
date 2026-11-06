@@ -51,7 +51,21 @@ import ToolModuleKit
     /// re-shows and selects again until the stack runs out.
     private var isShowingState = false
 
-    let entries = ToolPanelTableView()
+    /// The entries, as an outline: a microcode row opens into the processors
+    /// it is for (`FITProcessorLine`).
+    let entries = ToolPanelOutlineView()
+    /// The outline's rows, rebuilt with every `show`. NSOutlineView knows a
+    /// row by the identity of its item, so the items live here between calls.
+    private var topItems: [FITOutlineItem] = []
+    private var itemsByKind: [FITOutlineItem.Kind: FITOutlineItem] = [:]
+    private var childItems: [FITOutlineItem.Kind: [FITOutlineItem]] = [:]
+    /// The rows the reader has opened — kept across a re-read, a zoom and an
+    /// edit, which rebuild the items.
+    private var expandedKinds: Set<FITOutlineItem.Kind> = []
+    /// The entries the panel has shown before. One it has not is opened a
+    /// level, so its CPUIDs are on screen without a click; one the reader has
+    /// closed stays closed.
+    private var seenEntries: Set<FITOutlineItem.Kind> = []
     let problems = NSTableView()
     private let entriesScroll = NSScrollView()
     private let problemsScroll = NSScrollView()
@@ -82,34 +96,24 @@ import ToolModuleKit
     private var zoomObserver: NSObjectProtocol?
 
     private enum Column {
-        static let index = NSUserInterfaceItemIdentifier("index")
         static let type = NSUserInterfaceItemIdentifier("type")
-        static let address = NSUserInterfaceItemIdentifier("address")
-        static let size = NSUserInterfaceItemIdentifier("size")
-        static let target = NSUserInterfaceItemIdentifier("target")
         static let problem = NSUserInterfaceItemIdentifier("problem")
     }
 
-    /// The columns, with the width each was laid out at — a width for text at
-    /// `ToolPanelFont.designSize`, so the panel scales it to whatever size the
-    /// zoom is at rather than leaving "Points at" saying "Microco…" the moment
-    /// the type grows.
+    /// The one column, with the width it was laid out at — a width for text
+    /// at `ToolPanelFont.designSize`, so the panel scales it to whatever size
+    /// the zoom is at. It says the entry's type and, after it, what the entry
+    /// points at; it takes the panel's width, and only below `minWidth` does
+    /// the table scroll sideways.
     ///
-    /// `minWidth` is how far a column gives way when the panel is narrow: the
-    /// row number and the eight hex digits of an address not at all, the rest
-    /// to where their text starts to be cut short.
+    /// No row number, no address and no size: all three are in the detail.
     private static let entryColumns:
     [(id: NSUserInterfaceItemIdentifier, title: String, width: CGFloat, minWidth: CGFloat)] = [
-        (Column.index, "#", 20, 20),
-        (Column.type, L("Type"), 96, 56),
-        (Column.address, L("Address", context: "column"), 76, 76),
-        (Column.size, L("Size"), 84, 40),
-        (Column.target, L("Points at"), 300, 80)
+        (Column.type, L("Type"), 300, 80)
     ]
-    /// The columns that give way, in order, once "Points at" is down to its
-    /// floor and the table is still wider than the panel — and get their
-    /// width back, the other way round, when the panel grows again.
-    private static let yieldingColumns = [Column.size, Column.type]
+    /// The columns that give way once the last one is down to its floor —
+    /// none, with one column.
+    private static let yieldingColumns: [NSUserInterfaceItemIdentifier] = []
     /// The width each yielding column was given — by the design, a zoom or a
     /// drag — before a narrow panel squeezed it.
     private var wantedWidths: [NSUserInterfaceItemIdentifier: CGFloat] = [:]
@@ -143,24 +147,26 @@ import ToolModuleKit
         configure(entries, doubleAction: #selector(entryDoubleClicked))
         // The table keeps inside its scroll view, as the UEFI and ME trees do:
         // wider than it, the inset style's margins and rounded selection
-        // scroll off the edges and the rows run edge to edge. "Points at", the
-        // column with something to say, takes whatever width the panel gives;
-        // narrowed, it gives way first, then Size and Type, each down to a
-        // floor — and only below all of those does the table scroll sideways.
-        // A cut-short cell still says the whole of it under the pointer.
-        //
-        // Only "Points at" is resized with the table. AppKit's sequential
-        // styles give way from the last column but grow from the first, which
-        // puts a wider panel's width into the row number; Size and Type are
-        // squeezed by hand instead (`fitColumnsToThePanel`).
+        // scroll off the edges and the rows run edge to edge. The one column
+        // takes whatever width the panel gives, down to a floor — and only
+        // below that does the table scroll sideways. A cut-short row still
+        // says the whole of it under the pointer.
         entries.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
         for spec in Self.entryColumns {
             column(entries, spec.id, spec.title, spec.width, minWidth: spec.minWidth,
-                   resizesWithTable: spec.id == Column.target)
+                   resizesWithTable: spec.id == Column.type)
         }
         for id in Self.yieldingColumns {
             wantedWidths[id] = entries.tableColumn(withIdentifier: id)?.width
         }
+        // The arrow leads the row, as in the UEFI tree, and the levels under
+        // it are indented under their microcode.
+        entries.outlineTableColumn = entries.tableColumn(withIdentifier: Column.type)
+        entries.indentationPerLevel = 16
+        // The column is the panel's width, and an opened level is indented
+        // inside it — not added to it, which would push the table past the
+        // panel's edge the moment a microcode opens.
+        entries.autoresizesOutlineColumn = false
         entriesScroll.contentView.postsFrameChangedNotifications = true
         NotificationCenter.default.addObserver(
             self, selector: #selector(entriesClipResized),
@@ -345,7 +351,7 @@ import ToolModuleKit
         ToolPanelTable.apply(to: entries)
         ToolPanelTable.apply(to: problems)
         applyColumnWidths()
-        entries.reloadData()
+        reloadEntries()
         problems.reloadData()
         renderDetail(display.detail, subject: detailSubject)
         if !display.problems.isEmpty {
@@ -426,11 +432,11 @@ import ToolModuleKit
         fitColumnsToThePanel()
     }
 
-    /// "Points at" takes the width the other columns leave. Below its floor,
-    /// Size and then Type give way down to theirs; with room again, Type and
-    /// then Size get back what they gave, and "Points at" the rest.
+    /// The last column takes the width the others leave; below its floor,
+    /// the yielding columns give way down to theirs, and get it back with room
+    /// again. With one column, it is the panel's width down to its floor.
     private func fitColumnsToThePanel() {
-        guard !isFittingColumns, let target = entries.tableColumn(withIdentifier: Column.target),
+        guard !isFittingColumns, let target = entries.tableColumn(withIdentifier: Column.type),
               entriesScroll.contentView.bounds.width > 0
         else { return }
         isFittingColumns = true
@@ -460,6 +466,10 @@ import ToolModuleKit
             }
         }
         entries.sizeLastColumnToFit()
+    }
+
+    func outlineViewColumnDidResize(_ notification: Notification) {
+        tableViewColumnDidResize(notification)
     }
 
     func tableViewColumnDidResize(_ notification: Notification) {
@@ -495,11 +505,16 @@ import ToolModuleKit
         defer { isShowingState = false }
 
         summaryLabel.stringValue = display.summary
-        entries.reloadData()
+        // A line under a microcode stands for the microcode: choosing it puts
+        // the microcode in focus, and the line stays chosen when it comes back.
+        let chosen = item(atRow: entries.selectedRow)?.kind
+        rebuildItems()
+        reloadEntries()
         updateRowMarks()
         problems.reloadData()
         renderDetail(display.detail, subject: focus.map(String.init) ?? "")
-        if let focus, let row = tableRow(ofKey: focus) {
+        if let focus, let row = tableRow(of: chosen?.key == focus ? chosen! : .entry(focus))
+            ?? tableRow(of: .entry(focus)) {
             entries.selectRowIndexes([row], byExtendingSelection: false)
         } else {
             entries.deselectAll(nil)
@@ -657,133 +672,298 @@ extension FITToolViewController: NSMenuDelegate {
     }
 }
 
-extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
-    func numberOfRows(in tableView: NSTableView) -> Int {
-        tableView === problems ? display.problems.count : tableRowCount
+/// One row of the entries' outline: an entry of the table, a line under a
+/// microcode entry, or the heading in front of the Top Swap backup's copy. A
+/// class, because NSOutlineView knows its rows by identity.
+final class FITOutlineItem: NSObject {
+    enum Kind: Hashable {
+        case heading
+        /// The row's key (`FITDisplayRow.key`).
+        case entry(Int)
+        /// The row's key and the group's place among its `processorGroups`: a
+        /// CPUID of an update that serves several, a level of its own.
+        case cpuid(Int, Int)
+        /// The row's key, the group's place, and the line's place in it.
+        case line(Int, Int, Int)
+
+        /// The entry this item belongs to.
+        var key: Int? {
+            switch self {
+            case .heading: return nil
+            case .entry(let key), .cpuid(let key, _), .line(let key, _, _): return key
+            }
+        }
     }
 
-    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int)
-    -> NSView? {
-        if tableView === entries, isHeading(row) {
-            return headingView(in: tableView)
-        }
-        guard let column = tableColumn else { return nil }
-        let cell = tableView.makeView(withIdentifier: column.identifier, owner: self)
-            as? NSTableCellView
-            ?? ToolPanelTable.makeCell(identifier: column.identifier,
-                                       warning: column.identifier == Column.type,
-                                       marker: column.identifier == Column.type,
-                                       badges: column.identifier == Column.type)
+    let kind: Kind
 
-        if tableView === problems {
-            guard row < display.problems.count else { return nil }
-            let problem = display.problems[row]
-            cell.textField?.stringValue = problem.message.text
-            cell.textField?.font = ToolPanelFont.body()
-            cell.textField?.textColor = problem.severity == .error
-                ? SemanticColors.bad : SemanticColors.quiet
+    init(_ kind: Kind) {
+        self.kind = kind
+    }
+}
+
+extension FITToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate {
+    // MARK: - The items
+
+    /// The outline's items for the display on hand: every row, the heading
+    /// where the backup's copy starts, and under a microcode a row for each
+    /// CPUID it serves, which opens into the processors behind it.
+    fileprivate func rebuildItems() {
+        // No table — another file, or one still being read — and nothing of
+        // the last one's opening is kept: its rows open afresh.
+        if display.rows.isEmpty {
+            seenEntries = []
+            expandedKinds = []
+        }
+        topItems = []
+        itemsByKind = [:]
+        childItems = [:]
+        func made(_ kind: FITOutlineItem.Kind) -> FITOutlineItem {
+            let item = FITOutlineItem(kind)
+            itemsByKind[kind] = item
+            return item
+        }
+        func lines(_ key: Int, _ group: Int, _ count: Int) -> [FITOutlineItem] {
+            (0..<count).map { made(.line(key, group, $0)) }
+        }
+        for (index, row) in display.rows.enumerated() {
+            if display.backupStart == index { topItems.append(FITOutlineItem(.heading)) }
+            let entry = FITOutlineItem.Kind.entry(row.key)
+            topItems.append(made(entry))
+            let groups = row.processorGroups
+            guard !groups.isEmpty else { continue }
+            childItems[entry] = groups.indices.map { g in
+                let cpuid = made(.cpuid(row.key, g))
+                childItems[cpuid.kind] = lines(row.key, g, groups[g].lines.count)
+                return cpuid
+            }
+            if seenEntries.insert(entry).inserted { expandedKinds.insert(entry) }
+        }
+        if display.backupStart == display.rows.count { topItems.append(FITOutlineItem(.heading)) }
+        expandedKinds.formIntersection(itemsByKind.keys)
+    }
+
+    /// Reloads the entries and opens again the rows the reader had open — a
+    /// reload is a new set of items, and NSOutlineView opens none of them. A
+    /// parent opens before its children, so the order is the tree's.
+    fileprivate func reloadEntries() {
+        let wasShowing = isShowingState
+        isShowingState = true
+        defer { isShowingState = wasShowing }
+        entries.reloadData()
+        func reopen(_ items: [FITOutlineItem]) {
+            for item in items where expandedKinds.contains(item.kind) && entries.isExpandable(item) {
+                entries.expandItem(item)
+                reopen(childItems[item.kind] ?? [])
+            }
+        }
+        reopen(topItems)
+    }
+
+    private func item(atRow row: Int) -> FITOutlineItem? {
+        row >= 0 ? entries.item(atRow: row) as? FITOutlineItem : nil
+    }
+
+    private func entry(ofKey key: Int) -> FITDisplayRow? {
+        display.rows.first { $0.key == key }
+    }
+
+    /// The entry a row stands for: its own, or — for a CPUID or a line under a
+    /// microcode — the microcode's, so its menu, its double-click and the
+    /// detail act on the microcode.
+    private func displayRow(atTableRow row: Int) -> FITDisplayRow? {
+        item(atRow: row)?.kind.key.flatMap(entry(ofKey:))
+    }
+
+    /// The row an item is on, when it is on screen — a line under a closed
+    /// microcode is on none.
+    private func tableRow(of kind: FITOutlineItem.Kind) -> Int? {
+        guard let item = itemsByKind[kind] else { return nil }
+        let row = entries.row(forItem: item)
+        return row >= 0 ? row : nil
+    }
+
+    private func isHeading(_ row: Int) -> Bool { item(atRow: row)?.kind == .heading }
+
+    // MARK: - Data source
+
+    func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
+        guard let item = item as? FITOutlineItem else { return topItems.count }
+        return childItems[item.kind]?.count ?? 0
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, child index: Int, ofItem item: Any?) -> Any {
+        guard let item = item as? FITOutlineItem else { return topItems[index] }
+        return childItems[item.kind]?[index] ?? FITOutlineItem(.heading)
+    }
+
+    // help: fit.processors
+    func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool {
+        guard let item = item as? FITOutlineItem else { return false }
+        return !(childItems[item.kind]?.isEmpty ?? true)
+    }
+
+    func outlineViewItemDidExpand(_ notification: Notification) {
+        noteExpansion(notification, expanded: true)
+    }
+
+    func outlineViewItemDidCollapse(_ notification: Notification) {
+        noteExpansion(notification, expanded: false)
+    }
+
+    private func noteExpansion(_ notification: Notification, expanded: Bool) {
+        guard !isShowingState, let item = notification.userInfo?["NSObject"] as? FITOutlineItem else { return }
+        if expanded { expandedKinds.insert(item.kind) } else { expandedKinds.remove(item.kind) }
+    }
+
+    // MARK: - Views
+
+    func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {
+        guard let item = item as? FITOutlineItem else { return nil }
+        switch item.kind {
+        case .heading:
+            return headingView(in: outlineView)
+        case .entry(let key):
+            guard let column = tableColumn, let entry = entry(ofKey: key) else { return nil }
+            return entryCell(entry, column: column)
+        case .cpuid(let key, let group):
+            guard tableColumn?.identifier == Column.type,
+                  let groups = entry(ofKey: key)?.processorGroups, group < groups.count
+            else { return nil }
+            // The cores, the stepping and the segments are under the pointer:
+            // the row says the CPUID and its code names, and nothing more.
+            let cpuid = groups[group]
+            let cell = lineCell(text: L("CPUID %1$@", cpuid.cpuid), detail: cpuid.codeNames.joined(separator: ", "),
+                                weight: .medium, quiet: false)
+            if !cpuid.notes.isEmpty {
+                (cell as? NSTableCellView)?.textField?.toolTip = cpuid.notes.joined(separator: "\n")
+            }
             return cell
+        case .line(let key, let group, let index):
+            guard tableColumn?.identifier == Column.type,
+                  let groups = entry(ofKey: key)?.processorGroups, group < groups.count,
+                  index < groups[group].lines.count
+            else { return nil }
+            let line = groups[group].lines[index]
+            return lineCell(text: line.text, detail: line.detail,
+                            weight: .regular, quiet: line.kind == .unknown)
         }
-
-        guard let entry = displayRow(atTableRow: row) else { return nil }
-        let monospaced = ToolPanelFont.monospacedDigits()
-        // The Type column wears the row's problem — the red octagon for an
-        // error, the orange circle for a caution, as in the UEFI tree, rather
-        // than the whole row in red — and, ahead of it, the microcode row's
-        // verdict against the catalogue. Both are row-wide states worn on the
-        // column the row is named by, in the icons of the shared catalogue.
-        if column.identifier == Column.type {
-            ToolPanelTable.dress(cell, with: marks(ofRow: row))
-            let verdict = FITRowMarks.verdict(of: entry.latestState, in: Localization.appLanguage)
-            ToolPanelTable.setVerdict(verdict?.mark, toolTip: verdict?.toolTip, on: cell)
-        }
-        switch column.identifier {
-        case Column.index:
-            // The number the reader counts, from one — not the row's zero-based
-            // place, which the header would show as 0.
-            cell.textField?.stringValue = "\(entry.displayNumber)"
-            cell.textField?.font = monospaced
-        case Column.type:
-            cell.textField?.stringValue = entry.typeText
-            cell.textField?.font = ToolPanelFont.body()
-        case Column.address:
-            cell.textField?.stringValue = entry.addressText
-            cell.textField?.font = monospaced
-        case Column.size:
-            cell.textField?.stringValue = entry.sizeText
-            cell.textField?.font = monospaced
-        default:
-            cell.textField?.stringValue = entry.targetText
-            cell.textField?.font = ToolPanelFont.body()
-        }
-        // The backup's rows read quieter: they are there to be compared, and
-        // nothing on them is changed on its own.
-        cell.textField?.textColor = entry.isBackup ? .secondaryLabelColor : .labelColor
-        // The version is a real field and it decides how a policy row's address
-        // is read (§7.3), but it is the same 1.00 on almost every row — so it
-        // lives where a curious pointer finds it rather than in a column.
-        cell.textField?.toolTip = column.identifier == Column.type
-            ? L("Version %1$@", entry.versionText)
-            : (entry.targetText.isEmpty ? nil : entry.targetText)
-        return cell
     }
 
-    /// The entries' rows carry the Boot Guard background; the findings list
-    /// under them is a strip of lines, not rows of the image, and keeps the
-    /// plain row.
-    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
-        guard tableView === entries, !isHeading(row) else { return nil }
-        let rowView = tableView.makeView(withIdentifier: Self.rowViewIdentifier, owner: self)
+    func outlineView(_ outlineView: NSOutlineView, isGroupItem item: Any) -> Bool {
+        (item as? FITOutlineItem)?.kind == .heading
+    }
+
+    /// Every row is chosen as in the UEFI tree — the arrow keys walk the
+    /// processors as they walk the entries — except the heading, which is a
+    /// heading. A CPUID or a line chosen puts its microcode in focus.
+    func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
+        (item as? FITOutlineItem)?.kind != .heading
+    }
+
+    /// The entries' rows carry the Boot Guard background; the lines under a
+    /// microcode are about the processor, not about bytes of the image, and
+    /// keep the plain row.
+    func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
+        guard let item = item as? FITOutlineItem, case .entry(let key) = item.kind,
+              let entry = entry(ofKey: key)
+        else { return nil }
+        let rowView = outlineView.makeView(withIdentifier: Self.rowViewIdentifier, owner: self)
             as? ToolPanelRowView ?? {
                 let created = ToolPanelRowView()
                 created.identifier = Self.rowViewIdentifier
                 return created
             }()
         rowView.showsMarkings = legend.showsMarkings
-        rowView.marks = marks(ofRow: row)
+        rowView.marks = marks(of: entry)
         return rowView
     }
 
-    /// What an entry row wears besides its text, decided in the pure target.
-    private func marks(ofRow row: Int) -> ToolRowMarks {
-        guard let entry = displayRow(atTableRow: row) else { return .none }
-        return FITRowMarks.marks(for: entry, problems: display.problems, in: Localization.appLanguage)
+    func outlineViewSelectionDidChange(_ notification: Notification) {
+        selectionDidChange()
     }
 
-    /// The row views on screen, given their background again: reloading the
-    /// cells does not reach a row view, and the ranges land after the rows.
-    private func updateRowMarks() {
-        entries.enumerateAvailableRowViews { rowView, row in
-            guard let rowView = rowView as? ToolPanelRowView else { return }
-            rowView.showsMarkings = legend.showsMarkings
-            rowView.marks = marks(ofRow: row)
-        }
-    }
-
-    func tableViewSelectionDidChange(_ notification: Notification) {
-        guard !isShowingState, notification.object as AnyObject? === entries else { return }
+    private func selectionDidChange() {
+        guard !isShowingState else { return }
         let row = entries.selectedRow
         if entries.isHandlingClick { onWillChoose?() }
         onSelect?(displayRow(atTableRow: row)?.key)
     }
 
-    // MARK: - The Top Swap backup's heading
-
-    /// The table's rows: the entries, and — for an image that keeps a Top Swap
-    /// backup — a heading in front of the backup's copy.
-    private var tableRowCount: Int { display.rows.count + (display.backupStart == nil ? 0 : 1) }
-
-    private func isHeading(_ row: Int) -> Bool { display.backupStart == row }
-
-    private func displayRow(atTableRow row: Int) -> FITDisplayRow? {
-        guard row >= 0, !isHeading(row) else { return nil }
-        let index = display.backupStart.map { row > $0 ? row - 1 : row } ?? row
-        return index < display.rows.count ? display.rows[index] : nil
+    private func entryCell(_ entry: FITDisplayRow, column: NSTableColumn) -> NSView {
+        let cell = entries.makeView(withIdentifier: column.identifier, owner: self)
+            as? NSTableCellView
+            ?? ToolPanelTable.makeCell(identifier: column.identifier, warning: true, marker: true, badges: true)
+        // The row wears its problem — the red octagon for an error, the orange
+        // circle for a caution, as in the UEFI tree, rather than the whole row
+        // in red — and, ahead of it, the microcode row's verdict against the
+        // catalogue. Both are row-wide states worn ahead of the row's name, in
+        // the icons of the shared catalogue.
+        ToolPanelTable.dress(cell, with: marks(of: entry))
+        let verdict = FITRowMarks.verdict(of: entry.latestState, in: Localization.appLanguage)
+        ToolPanelTable.setVerdict(verdict?.mark, toolTip: verdict?.toolTip, on: cell)
+        // The type names the row; what it points at follows in the body's
+        // weight. The backup's rows read quieter: they are there to be
+        // compared, and nothing on them is changed on its own.
+        cell.textField?.font = ToolPanelFont.body()
+        cell.textField?.attributedStringValue = Self.twoPart(
+            entry.typeText, weight: .medium, color: entry.isBackup ? .secondaryLabelColor : .labelColor,
+            detail: entry.targetText, detailColor: entry.isBackup ? .tertiaryLabelColor : .labelColor)
+        // The version is a real field and it decides how a policy row's address
+        // is read (§7.3), but it is the same 1.00 on almost every row — so it
+        // lives where a curious pointer finds it rather than on the line.
+        let line = entry.targetText.isEmpty ? entry.typeText : "\(entry.typeText)   \(entry.targetText)"
+        cell.textField?.toolTip = "\(line)\n" + L("Version %1$@", entry.versionText)
+        return cell
     }
 
-    private func tableRow(ofKey key: Int) -> Int? {
-        guard let index = display.rows.firstIndex(where: { $0.key == key }) else { return nil }
-        return display.backupStart.map { index >= $0 ? index + 1 : index } ?? index
+    /// A name and, after it, what is said about it: the line every row of the
+    /// outline is drawn as.
+    private static func twoPart(
+        _ text: String, weight: NSFont.Weight, color: NSColor, detail: String, detailColor: NSColor
+    ) -> NSAttributedString {
+        let line = NSMutableAttributedString(string: text, attributes: [
+            .font: ToolPanelFont.body(weight: weight), .foregroundColor: color
+        ])
+        if !detail.isEmpty {
+            line.append(NSAttributedString(string: "   " + detail, attributes: [
+                .font: ToolPanelFont.body(), .foregroundColor: detailColor
+            ]))
+        }
+        return line
+    }
+
+    /// A row under a microcode: a CPUID in the weight of a heading, a model in
+    /// the body's, and what follows each — the code names, the S-SPECs —
+    /// quieter after it.
+    private func lineCell(text: String, detail: String, weight: NSFont.Weight, quiet: Bool) -> NSView {
+        let identifier = NSUserInterfaceItemIdentifier("processorLine")
+        let cell = entries.makeView(withIdentifier: identifier, owner: self) as? NSTableCellView
+            ?? ToolPanelTable.makeCell(identifier: identifier)
+        cell.textField?.font = ToolPanelFont.body()
+        cell.textField?.attributedStringValue = Self.twoPart(
+            text, weight: weight, color: quiet ? .secondaryLabelColor : .labelColor,
+            detail: detail, detailColor: .secondaryLabelColor)
+        cell.textField?.toolTip = detail.isEmpty ? text : "\(text)   \(detail)"
+        return cell
+    }
+
+    /// What an entry row wears besides its text, decided in the pure target.
+    private func marks(of entry: FITDisplayRow) -> ToolRowMarks {
+        FITRowMarks.marks(for: entry, problems: display.problems, in: Localization.appLanguage)
+    }
+
+    /// The row views on screen, given their background again: reloading the
+    /// cells does not reach a row view, and the ranges land after the rows.
+    fileprivate func updateRowMarks() {
+        entries.enumerateAvailableRowViews { rowView, row in
+            guard let rowView = rowView as? ToolPanelRowView,
+                  case .entry(let key)? = item(atRow: row)?.kind,
+                  let entry = entry(ofKey: key)
+            else { return }
+            rowView.showsMarkings = legend.showsMarkings
+            rowView.marks = marks(of: entry)
+        }
     }
 
     private func headingView(in tableView: NSTableView) -> NSView {
@@ -799,13 +979,37 @@ extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
         label.textColor = .secondaryLabelColor
         return label
     }
+}
+
+/// The findings list is a plain table. The entries answer here too, by row,
+/// for whoever asks a table delegate about one of its rows.
+extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
+    func numberOfRows(in tableView: NSTableView) -> Int {
+        tableView === problems ? display.problems.count : entries.numberOfRows
+    }
+
+    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int)
+    -> NSView? {
+        if tableView === entries {
+            return item(atRow: row).flatMap { outlineView(entries, viewFor: tableColumn, item: $0) }
+        }
+        guard let column = tableColumn, row < display.problems.count else { return nil }
+        let cell = tableView.makeView(withIdentifier: column.identifier, owner: self)
+            as? NSTableCellView ?? ToolPanelTable.makeCell(identifier: column.identifier)
+        let problem = display.problems[row]
+        cell.textField?.stringValue = problem.message.text
+        cell.textField?.font = ToolPanelFont.body()
+        cell.textField?.textColor = problem.severity == .error
+            ? SemanticColors.bad : SemanticColors.quiet
+        return cell
+    }
 
     func tableView(_ tableView: NSTableView, isGroupRow row: Int) -> Bool {
         tableView === entries && isHeading(row)
     }
 
     func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
-        !(tableView === entries && isHeading(row))
+        guard tableView === entries else { return true }
+        return item(atRow: row).map { outlineView(entries, shouldSelectItem: $0) } ?? false
     }
-
 }

@@ -92,7 +92,16 @@ public struct FITEntry: Equatable, Sendable {
     public var isEmptySlot: Bool { type == FIT.emptyType }
 
     /// What `Size` means in bytes, for the types that use it at all.
-    public var sizeInBytes: UInt64 { UInt64(size) * 16 }
+    ///
+    /// The field counts 16-byte units — except in a Boot Guard manifest's row
+    /// (Key Manifest 0x0B, Boot Policy 0x0C), where it is the manifest's length
+    /// in bytes (`FIT_TABLE_FORMAT.md` §4, §7.4). Read as units there, a Key
+    /// Manifest of 0x355 bytes became 0x3550 and covered the Boot Policy, the
+    /// table and the Startup Module after it in the dump. `UEFIImage`'s
+    /// `FITComponent` reads these rows the same way.
+    public var sizeInBytes: UInt64 {
+        FIT.sizeIsInBytes(type) ? UInt64(size) : UInt64(size) * 16
+    }
 }
 
 /// The table's constants (§13) and the names for what is in it (§6).
@@ -117,6 +126,12 @@ public enum FIT {
     public static let bootPolicyType: UInt8 = 0x0C
     public static let cseSecureBootType: UInt8 = 0x10
     public static let emptyType: UInt8 = 0x7F
+
+    /// The types whose `Size` is a length in bytes rather than in 16-byte
+    /// units: the Boot Guard manifests.
+    public static func sizeIsInBytes(_ type: UInt8) -> Bool {
+        type == keyManifestType || type == bootPolicyType
+    }
 
     /// A policy entry whose version is 0 keeps an Index/IO register descriptor
     /// in the first eight bytes, not an address (§7.3).
