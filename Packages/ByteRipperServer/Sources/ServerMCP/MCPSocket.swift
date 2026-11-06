@@ -49,8 +49,9 @@ public final class MCPSocket {
         connections[key] = socket
         let number = nextNumber
         nextNumber += 1
+        let peer = socket.peerPID.map { AgentPeer.of(relayPID: $0) }
         let about = socket.peerPID.map(Self.about)
-        activity.opened(number: number, about: about)
+        activity.opened(number: number, about: about, clientPID: peer?.clientPID)
         let activity = self.activity
         let connection = AgentConnection(
             server: server,

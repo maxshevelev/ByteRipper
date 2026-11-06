@@ -34,7 +34,7 @@ enum GhidraRoutes {
             let digest = try digest(module)
             let closed = try await answer { try await host.closeLease(digest, by: by) }
             return try JSONEncoder().encode(closed)
-        })
+        }, localHolder: localHolder)
     }
 
     /// Who holds a module taken on the server's own MCP socket.

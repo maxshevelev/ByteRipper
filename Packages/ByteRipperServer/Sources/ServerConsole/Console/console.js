@@ -939,6 +939,13 @@
     return h("span", { class: "pill warn", title: "Connected, has said nothing yet", text: "Silent" });
   }
 
+  // What is behind a connection: the Claude Code session's own name when it
+  // is one, beside the client process; the process alone otherwise.
+  function agentLabel(row) {
+    if (row.agent) return row.client ? `${row.agent} · ${row.client}` : row.agent;
+    return row.client || "client not known";
+  }
+
   function agentCard(row) {
     const end = Date.now();
     const log = row.log || [];
@@ -946,7 +953,7 @@
       h("div", { class: "agent-head" },
         h("div", { class: "agent-badge" }, icon("bot", 18)),
         h("div", {}, h("div", { class: "agent-title", text: `Connection ${row.number}` }),
-          h("div", { class: "agent-sub", text: row.client || "client not known" })),
+          h("div", { class: "agent-sub", text: agentLabel(row) })),
         connectionState(row)),
       h("div", { class: "agent-stats" },
         h("div", { class: "agent-stat" }, h("b", { text: row.calls }), h("span", { text: "calls" })),
@@ -1086,7 +1093,7 @@
     fill(parts.head,
       h("div", { class: "agent-badge" }, icon("bot", 18)),
       h("div", { class: "grow" }, h("div", { class: "agent-title", text: `Connection ${row.number}` }),
-        h("div", { class: "agent-sub", text: row.client || "client not known" })),
+        h("div", { class: "agent-sub", text: agentLabel(row) })),
       connectionState(row),
       iconButton("x", "Close the log", closeLog));
     fill(parts.stats,
@@ -1352,12 +1359,13 @@
   function leaseTable(rows) {
     return h("div", { class: "table-wrap" }, h("table", {},
       h("thead", {}, h("tr", {},
-        h("th", { text: "Module" }), h("th", { text: "Holder" }), h("th", { text: "In work since" }),
+        h("th", { text: "Module" }), h("th", { text: "Holder" }), h("th", { text: "Connection" }), h("th", { text: "In work since" }),
         h("th", { text: "Last call" }), h("th", { class: "num", text: "Writes" }), h("th", { class: "num", text: "Publishes" }),
         h("th", { text: "Last revision" }), h("th", {}))),
       h("tbody", {}, rows.map((row) => h("tr", {},
         moduleCell(row),
         h("td", { text: row.holder }),
+        connectionCell(row),
         h("td", { class: "muted", text: when(row.since) }),
         h("td", {}, row.last_call
           ? h("div", {}, h("div", { class: "mono", text: row.last_call }), h("div", { class: "muted", text: ago(row.last_at) }))
@@ -1367,6 +1375,21 @@
         h("td", { class: "muted", text: row.revision ? `rev ${row.revision}` : "—" }),
         h("td", { class: "actions" },
           iconButton("ban", "Close the lease — the holder's unpublished changes are dropped", () => closeLease(row), "danger")))))));
+  }
+
+  // Which connection works on a module the local MCP holds: every agent on
+  // the socket is the one holder, so the connection says which agent it is.
+  // A token's lease is its token's: nothing to add.
+  function connectionCell(row) {
+    const use = row.connection || row.taken_on;
+    if (!use) return h("td", { class: "muted", text: "—" });
+    const line = (u) => `Connection ${u.number}` + (u.open ? "" : " (closed)");
+    const taken = row.taken_on && row.connection && row.taken_on.number !== row.connection.number
+      ? h("div", { class: "muted", text: `taken on ${line(row.taken_on)}` }) : null;
+    return h("td", {},
+      h("div", { text: line(use) }),
+      h("div", { class: "muted", text: use.open ? (use.agent || use.client || "client not known") : "no longer connected" }),
+      taken);
   }
 
   function closedLeaseTable(rows) {

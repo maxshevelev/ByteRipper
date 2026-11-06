@@ -664,7 +664,10 @@ a call on its MCP socket holds a module as `local MCP`, an HTTP client as
 `token <name>`. `GET /ghidra/v1/leases` lists the modules in work; an
 administrator closes one with `DELETE /ghidra/v1/leases/<module>` or from the
 console's Activity page, which shows each module in work with what its holder
-has done under the lease, and a client waiting on `GET
+has done under the lease. Every agent on the socket is the one holder
+`local MCP`, so a lease of it also names the connection that took the module
+and the one that last named it, and a connection's card names the Claude Code
+session behind it. A client waiting on `GET
 /ghidra/v1/leases/<module>/wait` hears of it at once. Every `ghidra_` call,
 the publish included, goes to the server.
 The store it publishes into is its own: `--store` names

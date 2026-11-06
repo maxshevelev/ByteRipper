@@ -150,11 +150,24 @@ public struct Console: Sendable {
         let rest = self.rest
         let mcp = self.mcp
         add("GET", "/admin/api/activity") { _ in
-            let agents = await MainActor.run { mcp?.listed ?? [] }
+            let (agents, takes, uses) = await MainActor.run {
+                (mcp?.listed ?? [], mcp?.takes ?? [:], mcp?.lastUses ?? [:])
+            }
             // The modules in work in Ghidra, with what each holder has done
-            // under its lease; nil where the server has no Ghidra role.
+            // under its lease; nil where the server has no Ghidra role. A
+            // lease of the local MCP's one holder says which connection took
+            // the module and which last named it: which agent works on it.
             var modules = JSONValue.null
-            if let leases { modules = (try? JSONValue.parse(await leases.list())) ?? .array([]) }
+            if let leases {
+                let rows = (try? JSONValue.parse(await leases.list()))?.arrayValue ?? []
+                modules = .array(rows.map { row in
+                    guard var members = row.objectValue, row["holder"]?.stringValue == leases.localHolder,
+                          let module = row["module"]?.stringValue?.lowercased() else { return row }
+                    if let use = takes[module] { members["taken_on"] = Self.use(use, among: agents) }
+                    if let use = uses[module] { members["connection"] = Self.use(use, among: agents) }
+                    return .object(members)
+                })
+            }
             return Self.json([
                 "mcp": .array(agents.map(Self.agent)),
                 "rest": .array(rest.listed.map(Self.client)),
@@ -402,6 +415,26 @@ public struct Console: Sendable {
         return .object(members)
     }
 
+    /// A connection's use of a module, for a lease row: its number, the
+    /// agent or client behind it while it is open, the call and when.
+    static func use(_ use: ServerActivity.ModuleUse, among agents: [ServerActivity.Row]) -> JSONValue {
+        var members: [String: JSONValue] = [
+            "number": .count(use.connection),
+            "tool": .string(use.tool),
+            "at": .string(date(use.at))
+        ]
+        if let row = agents.first(where: { $0.number == use.connection }) {
+            members["open"] = .bool(true)
+            if let pid = row.clientPID, let name = ServerActivity.agentName(clientPID: pid) {
+                members["agent"] = .string(name)
+            }
+            if let about = row.about { members["client"] = .string(about) }
+        } else {
+            members["open"] = .bool(false)
+        }
+        return .object(members)
+    }
+
     static func agent(_ row: ServerActivity.Row) -> JSONValue {
         var members: [String: JSONValue] = [
             "number": .count(row.number),
@@ -414,6 +447,9 @@ public struct Console: Sendable {
             "log": .array(row.log.map(call))
         ]
         if let about = row.about { members["client"] = .string(about) }
+        if let pid = row.clientPID, let name = ServerActivity.agentName(clientPID: pid) {
+            members["agent"] = .string(name)
+        }
         if let tool = row.lastTool { members["last_tool"] = .string(tool) }
         if let call = row.lastCall { members["last_call"] = .string(date(call)) }
         return .object(members)

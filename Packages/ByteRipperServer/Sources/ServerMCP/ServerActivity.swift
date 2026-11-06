@@ -34,6 +34,9 @@ public final class ServerActivity {
         public let number: Int
         /// The process behind the connection, when the system says.
         public let about: String?
+        /// The client process behind the relay: what names the agent
+        /// (`ServerActivity.agentName`).
+        public let clientPID: Int32?
         public let started: Date
         /// Whether the client has sent anything: a relay started and
         /// abandoned holds a connection and never speaks.
@@ -74,11 +77,27 @@ public final class ServerActivity {
 
     public private(set) var rows: [Row] = []
 
+    /// A connection's answered call that named a module: which connection,
+    /// which tool, when. The console shows by it which connection — which
+    /// agent — works on a module in work, since every agent on this socket
+    /// holds a lease as the same holder.
+    public struct ModuleUse: Equatable, Sendable {
+        public let connection: Int
+        public let tool: String
+        public let at: Date
+    }
+
+    /// By module: the connection that last took it into work
+    /// (`ghidra_take`), and the one whose call last named it. Kept when the
+    /// connection closes, so a module in work still says where it was taken.
+    public private(set) var takes: [String: ModuleUse] = [:]
+    public private(set) var lastUses: [String: ModuleUse] = [:]
+
     public init() {}
 
     @discardableResult
-    public func opened(number: Int, about: String?) -> Row {
-        let row = Row(number: number, about: about, started: Date())
+    public func opened(number: Int, about: String?, clientPID: Int32? = nil) -> Row {
+        let row = Row(number: number, about: about, clientPID: clientPID, started: Date())
         rows.append(row)
         return row
     }
@@ -117,10 +136,30 @@ public final class ServerActivity {
         switch record.outcome {
         case .toolError, .overBound:
             row.errors += 1
-        case .answered, .cancelled, .running:
+        case .answered:
+            if let module = record.arguments["module"]?.stringValue?.lowercased() {
+                let use = ModuleUse(connection: number, tool: record.tool, at: record.finished)
+                lastUses[module] = use
+                if record.tool == "ghidra_take" { takes[module] = use }
+            }
+        case .cancelled, .running:
             break
         }
         rows[index] = row
+    }
+
+    /// The name of the Claude Code session whose process is `pid`, as it
+    /// names itself in `~/.claude/sessions/<pid>.json` — read each time, so a
+    /// renamed session shows its new name. Nil for any other client: it is
+    /// then known by the name it gave itself.
+    public nonisolated static func agentName(clientPID pid: Int32,
+                                             home: URL = FileManager.default.homeDirectoryForCurrentUser) -> String? {
+        let file = home.appendingPathComponent(".claude/sessions/\(pid).json")
+        guard let data = try? Data(contentsOf: file),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              (object["pid"] as? NSNumber)?.int32Value == pid,
+              let name = object["name"] as? String, !name.isEmpty else { return nil }
+        return name
     }
 
     /// A connection is gone: its row goes with it. What it did is read while

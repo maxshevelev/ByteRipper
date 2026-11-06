@@ -493,6 +493,45 @@ final class ServerConsoleTests: XCTestCase {
         XCTAssertTrue(cut.hasSuffix("…"))
     }
 
+    /// Every agent on the socket holds a lease as the one local holder, so
+    /// the console says which connection took a module and which last named
+    /// it, and the agent behind a connection by its Claude Code session name.
+    func testALeaseSaysWhichConnectionWorksOnTheModule() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent("ServerActivity-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: home) }
+        try FileManager.default.createDirectory(at: home.appendingPathComponent(".claude/sessions"), withIntermediateDirectories: true)
+        try Data(#"{"pid": 4242, "name": "Analyzis"}"#.utf8).write(to: home.appendingPathComponent(".claude/sessions/4242.json"))
+        try Data(#"{"pid": 7, "name": "Someone else"}"#.utf8).write(to: home.appendingPathComponent(".claude/sessions/4243.json"))
+        XCTAssertEqual(ServerActivity.agentName(clientPID: 4242, home: home), "Analyzis")
+        XCTAssertNil(ServerActivity.agentName(clientPID: 4243, home: home), "a file of another process names nobody")
+        XCTAssertNil(ServerActivity.agentName(clientPID: 4244, home: home), "a client that is not Claude Code has no session name")
+
+        let activity = ServerActivity()
+        activity.opened(number: 1, about: "claude, PID 4242", clientPID: 4242)
+        activity.opened(number: 2, about: "claude, PID 4245", clientPID: 4245)
+        let module = String(repeating: "ab", count: 32)
+        func answer(_ tool: String, on connection: Int, _ outcome: AgentCallRecord.Outcome = .answered) {
+            let now = Date()
+            activity.finished(AgentCallRecord(client: "claude-code", tool: tool, arguments: ["module": .string(module.uppercased())],
+                                              started: now, duration: .zero, finished: now, answerBytes: 2, outcome: outcome),
+                              connection: connection)
+        }
+        answer("ghidra_take", on: 1)
+        answer("ghidra_comment", on: 2)
+        answer("ghidra_take", on: 2, .toolError("in work"))
+        XCTAssertEqual(activity.takes[module]?.connection, 1, "a refused take takes nothing")
+        XCTAssertEqual(activity.lastUses[module]?.connection, 2)
+        XCTAssertEqual(activity.lastUses[module]?.tool, "ghidra_comment", "only an answered call counts")
+
+        activity.closed(1)
+        let taken = Console.use(try XCTUnwrap(activity.takes[module]), among: activity.listed)
+        XCTAssertEqual(taken["number"], .count(1))
+        XCTAssertEqual(taken["open"], .bool(false), "the connection that took it is gone; the take is still said")
+        let last = Console.use(try XCTUnwrap(activity.lastUses[module]), among: activity.listed)
+        XCTAssertEqual(last["open"], .bool(true))
+        XCTAssertEqual(last["client"]?.stringValue, "claude, PID 4245")
+    }
+
     /// A burst of failed attempts is spaced by the pause, not let through
     /// together after one: each waiter looks at the gate again when it wakes,
     /// in the turn that runs its attempt.
