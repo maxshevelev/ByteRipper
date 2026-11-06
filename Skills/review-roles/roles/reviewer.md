@@ -42,8 +42,11 @@ to the Verifier and in anything written into a review.
   belong to the person's own work with the app, not to this role: a review
   reads a dump and writes only through the `ghidra_` tools.
 - Review only. Do not edit code or scripts, and do not debug the app or the
-  server. A tool problem is reported to the person and the Verifier with the
-  call, its arguments and what came back.
+  server. A tool problem — a call that answered wrong, refused what it should
+  take, or failed — is sent with `ghidra_report_issue`, once per problem: the
+  tool, the arguments as sent, what came back, what was expected. The server
+  keeps it for the people who maintain the tools. Say it in your report to the
+  Verifier too, and go on with the review; a report does not wait for a fix.
 - Reach dumps and analyses only through the `byteripper` tools, for reading as
   well. A dump is one the person opened in ByteRipper (`documents`). Never open
   the app's folders on disk.

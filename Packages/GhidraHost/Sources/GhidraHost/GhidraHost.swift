@@ -23,11 +23,14 @@ public actor GhidraHost {
         /// Where the modules in work are kept across restarts; nil keeps them
         /// in memory only.
         public var leasesFile: URL?
+        /// Where agents' reports about the tools are kept (`IssueBook`); nil
+        /// takes none.
+        public var issuesFile: URL?
 
         public init(projectsRoot: URL = GhidraHost.defaultProjectsRoot, ghidraHome: URL? = nil,
                     sources: OwnerSources = .checkout, idle: Int = 1800,
                     holder: String = "\(NSUserName()) via byteripper-server",
-                    startTimeout: TimeInterval = 300, leasesFile: URL? = nil) {
+                    startTimeout: TimeInterval = 300, leasesFile: URL? = nil, issuesFile: URL? = nil) {
             self.projectsRoot = projectsRoot
             self.ghidraHome = ghidraHome
             self.sources = sources
@@ -35,6 +38,7 @@ public actor GhidraHost {
             self.holder = holder
             self.startTimeout = startTimeout
             self.leasesFile = leasesFile
+            self.issuesFile = issuesFile
         }
     }
 
@@ -190,7 +194,11 @@ public actor GhidraHost {
         self.configuration = configuration
         self.writer = writer
         self.leaseBook = Self.loadLeaseBook(configuration.leasesFile)
+        self.issues = configuration.issuesFile.map { IssueBook(file: $0) }
     }
+
+    /// Agents' reports about the tools, when the host keeps them.
+    public nonisolated let issues: IssueBook?
 
     public func ghidra() throws -> GhidraInstall {
         if let install { return install }

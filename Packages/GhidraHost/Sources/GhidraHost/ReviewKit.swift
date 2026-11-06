@@ -166,15 +166,28 @@ public actor ReviewKitCache {
     /// The kit to serve now: fetched again when it is time, otherwise the
     /// copy in memory or on disk. Nil when no server is named — a kit kept
     /// from an earlier server would describe tools that are not there.
-    public func current(now: Date = Date()) async -> ReviewKit? {
-        guard let source = await source() else { return nil }
+    public func current(now: Date = Date(), force: Bool = false) async -> ReviewKit? {
+        guard let source = await source() else {
+            fetched = nil
+            return nil
+        }
         if kit == nil { kit = load() }
-        if lastTry.map({ now.timeIntervalSince($0) >= interval }) ?? true {
+        if force || (lastTry.map({ now.timeIntervalSince($0) >= interval }) ?? true) {
             lastTry = now
-            if let fetched = try? await fetch(source) { kit = fetched }
+            do {
+                kit = try await fetch(source)
+                fetched = true
+            } catch {
+                fetched = false
+            }
         }
         return kit
     }
+
+    /// Whether the last fetch reached the server and took its kit: false when
+    /// it could not be reached or refused — a token without `ghidra.use` —
+    /// and the copy served is the last one kept; nil before any fetch.
+    public private(set) var fetched: Bool?
 
     private func fetch(_ source: Source) async throws -> ReviewKit {
         let manifest = try JSONDecoder().decode(ReviewKit.Manifest.self, from: try await source.manifest())

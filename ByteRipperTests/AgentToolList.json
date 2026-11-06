@@ -2565,6 +2565,51 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
+    "description" : "Reports a problem with one of these tools to the people who maintain them: a call that answered wrong, refused what it should take, or failed. The analysis server keeps the report with who sent it, and its console lists it; nothing is changed in any module, and nobody answers here. Give the `tool`, the `arguments` as you sent them (JSON text), the `answer` that came back (cut to what shows the problem), and what you `expected` instead; `module` when the call was about one, and a `note` for what you tried around it. Report once per problem, not per call, and go on with the review: a report does not wait for a fix. Leave out serial numbers, keys and personal paths. Answers the kept report, with its `id`.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "answer" : {
+          "description" : "What came back, or the part of it that shows the problem.",
+          "type" : "string"
+        },
+        "arguments" : {
+          "description" : "The arguments as sent, as JSON text.",
+          "type" : "string"
+        },
+        "expected" : {
+          "description" : "What should have happened instead.",
+          "type" : "string"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        },
+        "note" : {
+          "description" : "What else was tried, or how the problem shows.",
+          "type" : "string"
+        },
+        "tool" : {
+          "description" : "The tool that showed the problem, e.g. \"ghidra_rename_variable\".",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "tool",
+        "expected"
+      ],
+      "type" : "object"
+    },
+    "name" : "ghidra_report_issue",
+    "title" : "Report a problem with a tool"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
     "description" : "Overwrites bytes in a document open in a tab, as one step of its undo named by `label` — write the label in the person's language, it is what their Edit menu offers to undo. The bytes replace as many as they are, never inserting or deleting: a write past the end of the file is refused. The written bytes show red until the person saves, and the dump scrolls to them. `expect` makes the write conditional: the bytes there now must be these, or nothing is written and the answer says what is there. Needs the person's permission — Settings ▸ Agent, \"Let agents edit open files\"; without it the write is refused. Never saves; checksums are not updated — use a module's fix, such as `uefi_fix_checksum`.",
     "inputSchema" : {
       "additionalProperties" : false,

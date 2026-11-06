@@ -44,6 +44,8 @@ public protocol GhidraBackend: Sendable {
     func forgetModule(_ module: SHA256Digest) async throws -> Data
     /// Where each module's last published analysis names a type.
     func typeUses(name: String, limit: Int) async throws -> Data
+    /// A report about a tool, kept where the tools' maintainers read it.
+    func reportIssue(_ report: IssueBook.Report) async throws -> Data
 }
 
 public extension GhidraBackend {
@@ -56,6 +58,10 @@ public extension GhidraBackend {
     }
     func typeUses(name: String, limit: Int) async throws -> Data {
         throw GhidraHostError(.install, "this backend reads no store")
+    }
+    func reportIssue(_ report: IssueBook.Report) async throws -> Data {
+        throw GhidraHostError(.install, "this backend keeps no reports: there is no analysis server to send it to. "
+            + "Tell the person instead, with the call, its arguments and what came back.")
     }
 }
 
@@ -194,6 +200,19 @@ extension GhidraHost: GhidraBackend {
     public func forgetModule(_ module: SHA256Digest) async throws -> Data {
         try Self.encode(["trashed": try await forget(module).path])
     }
+
+    /// Reported by this host's own holder — the server's local MCP.
+    public func reportIssue(_ report: IssueBook.Report) async throws -> Data {
+        try await reportIssue(report, by: configuration.holder)
+    }
+
+    public nonisolated func reportIssue(_ report: IssueBook.Report, by reporter: String) async throws -> Data {
+        guard let issues else {
+            throw GhidraHostError(.install, "this host keeps no reports: there is no analysis server to send it to. "
+                + "Tell the person instead, with the call, its arguments and what came back.")
+        }
+        return try IssueBook.encoder.encode(try await issues.report(report, by: reporter))
+    }
 }
 
 /// A `byteripper-server`'s Ghidra role, over `/ghidra/v1`: what the app's
@@ -287,6 +306,10 @@ public struct GhidraRemote: GhidraBackend {
     public func library(_ module: SHA256Digest, _ request: GhidraHost.LibraryRequest) async throws -> Data {
         try await call("POST", "modules/\(module.hex)/library", body: try JSONEncoder().encode(request),
                        timeout: 1800)
+    }
+
+    public func reportIssue(_ report: IssueBook.Report) async throws -> Data {
+        try await call("POST", "issues", body: try JSONEncoder().encode(report), timeout: 30)
     }
 
     /// The review kit's manifest (`ReviewKit.Manifest`), and one of its files.

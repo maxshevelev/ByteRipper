@@ -1156,3 +1156,8 @@ details.revoked[open] summary::before { content: "▾ "; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Issues */
+.issue-detail td { background: var(--panel-2); }
+.issue-part h4 { margin: 0 0 4px; font-size: 12px; color: var(--muted); font-weight: 600; }
+.issue-part pre.code { white-space: pre-wrap; word-break: break-word; max-height: 320px; }

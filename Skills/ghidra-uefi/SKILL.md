@@ -250,7 +250,10 @@ Names alone do not get there. Every review applies these rules:
    unbounded buffer, a wrong format, an unused parameter — goes in a comment
    at its place and in the report to the person. It never shapes a name: the
    function is named for what it was meant to do, and the comment says what it
-   actually does.
+   actually does. A defect of a *tool* — a call that answered wrong, refused
+   what it should take, or failed — goes to `ghidra_report_issue` with the
+   call, its arguments, what came back and what was expected; the analysis
+   server keeps it, and its console lists it for whoever fixes the tools.
 7. **The module is described, not only its functions.** The review writes the
    module description — an article, in plain language with every abbreviation
    expanded in parentheses at its first mention, and only this module's narrow

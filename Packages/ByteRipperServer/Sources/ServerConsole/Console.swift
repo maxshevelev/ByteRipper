@@ -27,11 +27,13 @@ public struct Console: Sendable {
     public let status: @Sendable () async -> ConsoleStatus
     /// The modules in work in Ghidra: nil where the server has no Ghidra role.
     public let leases: ConsoleLeases?
+    /// What agents reported about the tools: nil without a Ghidra role.
+    public let issues: ConsoleIssues?
     let assets: ConsoleAssets
 
     public init(registry: DocumentRegistry, tokens: TokenStore, authorizer: ServerAuthorizer,
                 gate: SignInGate = SignInGate(), rest: RESTActivity, mcp: ServerActivity?,
-                agent: ConsoleAgent? = nil, leases: ConsoleLeases? = nil,
+                agent: ConsoleAgent? = nil, leases: ConsoleLeases? = nil, issues: ConsoleIssues? = nil,
                 status: @escaping @Sendable () async -> ConsoleStatus) throws {
         self.registry = registry
         self.tokens = tokens
@@ -42,13 +44,14 @@ public struct Console: Sendable {
         self.agent = agent
         self.status = status
         self.leases = leases
+        self.issues = issues
         assets = try ConsoleAssets.load()
     }
 
     /// The pages the shell answers, each by name (§5): a pattern such as
     /// `/admin/*page` would answer the API's GETs too.
     public static let pages = ["/admin", "/admin/login", "/admin/documents", "/admin/activity",
-                               "/admin/tokens", "/admin/configuration", "/admin/status"]
+                               "/admin/tokens", "/admin/issues", "/admin/configuration", "/admin/status"]
 
     public func routes(uploadLimit: UInt64) -> HTTPRouter {
         var router = HTTPRouter()
@@ -91,6 +94,22 @@ public struct Console: Sendable {
             let by = request.principal?.name ?? "an administrator"
             let closed = try await leases.close(request.parameters["module"] ?? "", by)
             return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: closed)
+        }
+
+        // What agents reported about the tools, and an administrator's resolve.
+        let issues = self.issues
+        add("GET", "/admin/api/issues") { request in
+            guard let issues else { throw HTTPError(.notFound, "this server has no Ghidra role") }
+            let data = await issues.list(request.query["all"] == "1")
+            return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
+        }
+        add("POST", "/admin/api/issues/:id/resolve", maxBodyBytes: 16 << 10) { request in
+            guard let issues else { throw HTTPError(.notFound, "this server has no Ghidra role") }
+            struct Resolving: Decodable { let note: String? }
+            let note = request.body.isEmpty ? nil : try request.json(Resolving.self).note
+            let by = request.principal?.name ?? "an administrator"
+            let data = try await issues.resolve(request.parameters["id"] ?? "", by, note)
+            return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
         }
 
         // Documents.

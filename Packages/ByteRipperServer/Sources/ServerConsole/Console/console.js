@@ -333,11 +333,15 @@
     // Which request logs the operator has opened, by token: the page is drawn
     // again on every poll, and a log that shut itself would be unreadable.
     openLogs: new Set(),
+    // Which reports the operator has opened, and whether resolved ones show.
+    openIssues: new Set(),
+    resolvedIssues: false,
   };
 
   const PAGES = {
     "/admin/documents": { title: "Documents", subtitle: "The firmware images the local MCP serves.", icon: "chip", endpoint: "/admin/api/documents", mount: mountDocuments },
     "/admin/activity": { title: "Activity", subtitle: "Who is connected now, and what each connection is doing.", icon: "activity", endpoint: "/admin/api/activity", interval: 1000, mount: mountActivity },
+    "/admin/issues": { title: "Issues", subtitle: "What agents reported about the tools.", icon: "alert", endpoint: "/admin/api/issues?all=1", interval: 10000, mount: mountIssues },
     "/admin/tokens": { title: "Tokens", subtitle: "Who may reach this server, and with which rights.", icon: "key", endpoint: "/admin/api/tokens", mount: mountTokens },
     "/admin/configuration": { title: "Configuration", subtitle: "How an agent on this machine connects to the server.", icon: "sliders", endpoint: "/admin/api/configuration", interval: 15000, mount: mountConfiguration },
     "/admin/status": { title: "Status", subtitle: "The server, its roles, its limits.", icon: "gauge", endpoint: "/admin/api/status", mount: mountStatus },
@@ -1194,6 +1198,64 @@
   }
 
   // ---------- Tokens ----------
+
+  // ---------- Issues ----------
+
+  function mountIssues(actions) {
+    const toggle = h("label", { class: "check" },
+      h("input", { type: "checkbox", checked: state.resolvedIssues, onchange: (e) => { state.resolvedIssues = e.target.checked; refresh(); } }),
+      "Show resolved");
+    append(actions, toggle);
+    const open = card("Reports", "newest first");
+    const root = h("div", { class: "stack" }, open.root);
+
+    function update(issues) {
+      const shown = issues.filter((issue) => state.resolvedIssues || !issue.resolved);
+      fill(open.body, shown.length ? issueList(shown)
+        : empty("check", "No open report", "An agent reports a problem with a tool through ghidra_report_issue; it is listed here."));
+    }
+    return { root, update };
+  }
+
+  function issueList(issues) {
+    return h("div", { class: "table-wrap" }, h("table", {},
+      h("thead", {}, h("tr", {},
+        h("th", { text: "Reported" }), h("th", { text: "By" }), h("th", { text: "Tool" }), h("th", { text: "Expected" }), h("th", {}))),
+      h("tbody", {}, issues.flatMap((issue) => {
+        const opened = state.openIssues.has(issue.id);
+        const flip = () => { if (opened) state.openIssues.delete(issue.id); else state.openIssues.add(issue.id); refresh(); };
+        const row = h("tr", { class: issue.resolved ? "dim" : "" },
+          h("td", { class: "muted", title: when(issue.at), text: ago(issue.at) }),
+          h("td", { text: issue.reporter }),
+          h("td", {}, h("code", { text: issue.tool })),
+          h("td", { text: issue.expected.length > 140 ? issue.expected.slice(0, 140) + "…" : issue.expected }),
+          h("td", { class: "actions" },
+            iconButton(opened ? "up" : "down", opened ? "Hide the report" : "Show the whole report", flip),
+            issue.resolved ? h("span", { class: "pill", title: `${issue.resolved.by}, ${when(issue.resolved.at)}`, text: "Resolved" })
+              : iconButton("check", "Mark resolved", () => resolveIssue(issue))));
+        if (!opened) return [row];
+        const part = (label, text) => text ? h("div", { class: "issue-part" }, h("h4", { text: label }), h("pre", { class: "code", text })) : null;
+        const detail = h("tr", { class: "issue-detail" }, h("td", { colspan: "5" },
+          h("div", { class: "stack" },
+            issue.module ? h("div", { class: "muted", text: `Module ${issue.module}` }) : null,
+            part("Arguments", issue.arguments), part("Answer", issue.answer), part("Expected", issue.expected),
+            part("Note", issue.note),
+            issue.resolved ? part(`Resolved by ${issue.resolved.by}, ${when(issue.resolved.at)}`, issue.resolved.note || "—") : null)));
+        return [row, detail];
+      }))));
+  }
+
+  async function resolveIssue(issue) {
+    const note = h("input", { class: "field", placeholder: "What was done, e.g. the build that fixed it", autocomplete: "off" });
+    const done = await dialog({
+      icon: "check", tone: "ok", title: `Resolve the report on ${issue.tool}?`,
+      text: "It leaves the open list; the report and the note stay.",
+      body: note,
+      actions: [{ label: "Cancel", kind: "ghost", value: false }, { label: "Resolve", kind: "primary", value: true, focus: true }],
+    });
+    if (!done) return;
+    await act(() => call("POST", `/admin/api/issues/${issue.id}/resolve`, { note: note.value.trim() || null }), "Report resolved");
+  }
 
   function mountTokens(actions) {
     let presets = {};

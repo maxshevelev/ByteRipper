@@ -391,6 +391,62 @@ final class ServerTests: XCTestCase {
     /// references and publishes through Ghidra, only `admin` writes the store
     /// past a publish (stage 2.5), `ghidra.use` reaches Ghidra, and a refusal
     /// names the right it lacks.
+    /// A report about a tool: any client that may use Ghidra sends one, under
+    /// its token's name; only an administrator lists them and resolves one,
+    /// on the route and on the console's API.
+    func testAReportAboutAToolIsKeptForAnAdministrator() async throws {
+        let tokens = try TokenStore.open(at: directory.appendingPathComponent("tokens.json"))
+        let (_, admin) = try tokens.add(name: "admin", rights: TokenPreset.admin.rights)
+        let (_, app) = try tokens.add(name: "bench-mac", rights: TokenPreset.app.rights)
+        var configuration = ServerConfiguration()
+        configuration.roles = [.cas, .ghidra]
+        configuration.port = 0
+        configuration.store = directory.appendingPathComponent("store")
+        configuration.projects = directory.appendingPathComponent("projects")
+        configuration.tokensFile = directory.appendingPathComponent("tokens.json")
+        configuration.uploads = directory.appendingPathComponent("Uploads")
+        configuration.documentsFile = directory.appendingPathComponent("documents.json")
+        configuration.mcpSocket = URL(fileURLWithPath: "/tmp/br-\(UUID().uuidString.prefix(8)).sock")
+        configuration.clientTokenFile = directory.appendingPathComponent("token")
+        let server = Server(configuration: configuration, log: { _ in })
+        let port = try await server.start()
+        defer { server.stop() }
+        let base = URL(string: "http://127.0.0.1:\(port)")!
+        func call(_ method: String, _ path: String, _ token: String, body: Data? = nil) async throws -> (Int, Data) {
+            // `appendingPathComponent` would escape a query's `?`.
+            var request = URLRequest(url: URL(string: path, relativeTo: base)!)
+            request.httpMethod = method
+            request.httpBody = body
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            let (data, response) = try await URLSession.shared.data(for: request)
+            return ((response as! HTTPURLResponse).statusCode, data)
+        }
+
+        let sent = try await GhidraRemote(base: base, token: app).reportIssue(
+            .init(tool: "ghidra_equate", answer: "not_in_c", expected: "the name in the C", module: "a4cc4a55"))
+        let kept = try JSONSerialization.jsonObject(with: sent) as? [String: Any]
+        XCTAssertEqual(kept?["reporter"] as? String, "token bench-mac")
+        let id = try XCTUnwrap(kept?["id"] as? String)
+
+        let (refused, _) = try await call("GET", "ghidra/v1/issues", app)
+        XCTAssertEqual(refused, 403, "only an administrator reads the reports")
+        let (listed, body) = try await call("GET", "ghidra/v1/issues", admin)
+        XCTAssertEqual(listed, 200)
+        XCTAssertEqual((try JSONSerialization.jsonObject(with: body) as? [[String: Any]])?.first?["id"] as? String, id)
+
+        let (resolved, _) = try await call("POST", "admin/api/issues/\(id)/resolve", admin,
+                                           body: Data(#"{"note":"fixed in 476"}"#.utf8))
+        XCTAssertEqual(resolved, 200)
+        let (_, open) = try await call("GET", "admin/api/issues", admin)
+        XCTAssertEqual((try JSONSerialization.jsonObject(with: open) as? [Any])?.count, 0)
+        let (_, all) = try await call("GET", "admin/api/issues?all=1", admin)
+        let first = (try JSONSerialization.jsonObject(with: all) as? [[String: Any]])?.first
+        XCTAssertEqual((first?["resolved"] as? [String: Any])?["note"] as? String, "fixed in 476")
+        let (page, _) = try await call("GET", "admin/issues", admin)
+        XCTAssertEqual(page, 200, "the console's page")
+    }
+
     /// The review kit goes to a client that may use Ghidra, as the app's cache
     /// fetches it: the manifest, each file matching its sum, nothing else.
     func testTheReviewKitIsServedToAClientThatMayUseGhidra() async throws {

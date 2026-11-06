@@ -1,6 +1,7 @@
 import Cocoa
 import AppPalette
 import CodeAnalysis
+import GhidraHost
 import HelpBook
 import HelpUI
 import Localization
@@ -16,6 +17,12 @@ final class CodeAnalysisSettingsViewController: NSViewController {
     var location: CodeAnalysisLocation = .shared {
         didSet { refresh() }
     }
+    /// The review kit the app's MCP offers, which says whether this server
+    /// gives this token the review roles. The app's own unless a test hands
+    /// it another.
+    var reviewKit: ReviewKitCache = AgentService.reviewKit {
+        didSet { refresh() }
+    }
 
     private let thisMacButton = NSButton(radioButtonWithTitle: "", target: nil, action: nil)
     private let serverButton = NSButton(radioButtonWithTitle: "", target: nil, action: nil)
@@ -23,6 +30,10 @@ final class CodeAnalysisSettingsViewController: NSViewController {
     private let tokenField = NSSecureTextField()
     private let connectButton = NSButton(title: "", target: nil, action: nil)
     private let statusLabel = NSTextField(wrappingLabelWithString: "")
+    /// How to start the review pair's sessions: shown while the server is
+    /// connected and gives this token the review kit.
+    let reviewAgents = NSStackView()
+    private var reviewCheck: Task<Void, Never>?
     private var observer: NSObjectProtocol?
 
     override func loadView() {
@@ -58,11 +69,18 @@ final class CodeAnalysisSettingsViewController: NSViewController {
         let serverCaption = small(L("The token is kept in a file only you may read. Leave the field empty to keep the token already there."))
 
         statusLabel.font = .systemFont(ofSize: 11)
+        buildReviewAgents()
+        let tail = NSStackView(views: [statusLabel, reviewAgents])
+        tail.orientation = .vertical
+        tail.alignment = .leading
+        tail.spacing = 16
+        statusLabel.widthAnchor.constraint(equalTo: tail.widthAnchor).isActive = true
+        reviewAgents.widthAnchor.constraint(equalTo: tail.widthAnchor).isActive = true
 
         let help = HelpButton.standard(for: .topic(.codeAnalyses))
 
         for subview in [keptLabel, thisMacButton, serverButton, caption, grid, connectButton, serverCaption,
-                        statusLabel, help] {
+                        tail, help] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             root.addSubview(subview)
         }
@@ -91,10 +109,10 @@ final class CodeAnalysisSettingsViewController: NSViewController {
             serverCaption.leadingAnchor.constraint(equalTo: thisMacButton.leadingAnchor),
             serverCaption.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
 
-            statusLabel.topAnchor.constraint(equalTo: serverCaption.bottomAnchor, constant: 8),
-            statusLabel.leadingAnchor.constraint(equalTo: thisMacButton.leadingAnchor),
-            statusLabel.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
-            statusLabel.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -20),
+            tail.topAnchor.constraint(equalTo: serverCaption.bottomAnchor, constant: 8),
+            tail.leadingAnchor.constraint(equalTo: thisMacButton.leadingAnchor),
+            tail.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
+            tail.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -20),
 
             SettingsMetrics.pinnedWidth(of: root),
         ])
@@ -110,6 +128,74 @@ final class CodeAnalysisSettingsViewController: NSViewController {
 
     deinit {
         if let observer { NotificationCenter.default.removeObserver(observer) }
+        reviewCheck?.cancel()
+    }
+
+    /// The two commands that start the review pair, and what each session is.
+    // help: settings.code-analysis.review-agents
+    private func buildReviewAgents() {
+        let title = NSTextField(labelWithString: L("Review agents"))
+        title.font = .boldSystemFont(ofSize: NSFont.systemFontSize)
+        let intro = small(L("This server gives agents the roles of a review pair. Start each in its own Terminal window:"))
+        func command(_ text: String, _ role: String) -> NSView {
+            let field = NSTextField(labelWithString: text)
+            field.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+            field.isSelectable = true
+            let what = small(role)
+            let column = NSStackView(views: [field, what])
+            column.orientation = .vertical
+            column.alignment = .leading
+            column.spacing = 2
+            what.widthAnchor.constraint(equalTo: column.widthAnchor).isActive = true
+            return column
+        }
+        let reviewer = command(Self.reviewerCommand, L("Reviewer: reviews modules and publishes them."))
+        let verifier = command(Self.verifierCommand,
+                               L("Verifier: checks the Reviewer's results and changes nothing."))
+        let needs = small(L("Both need the agent service switched on and ByteRipper added to Claude Code, as Settings ▸ Agent shows."))
+        for view in [title, intro, reviewer, verifier, needs] { reviewAgents.addArrangedSubview(view) }
+        for view in [intro, reviewer, verifier, needs] {
+            view.widthAnchor.constraint(equalTo: reviewAgents.widthAnchor).isActive = true
+        }
+        reviewAgents.orientation = .vertical
+        reviewAgents.alignment = .leading
+        reviewAgents.spacing = 8
+        reviewAgents.setCustomSpacing(4, after: title)
+        reviewAgents.isHidden = true
+    }
+
+    /// Typed in Terminal: Claude Code starts with the role's prompt, which
+    /// the app's MCP gives from the server's kit.
+    static let reviewerCommand = #"claude "/mcp__byteripper__reviewer""#
+    static let verifierCommand = #"claude "/mcp__byteripper__verifier""#
+
+    /// Whether the review pair can be started: the server is connected, and
+    /// the last fetch of its kit took it — a token without `ghidra.use` is
+    /// refused it.
+    static func showsReviewAgents(state: CodeAnalysisLocation.State, kitFetched: Bool?, hasKit: Bool) -> Bool {
+        guard case .connected = state else { return false }
+        return kitFetched == true && hasKit
+    }
+
+    /// Asks the server for its kit again and shows or hides the commands.
+    private func checkReviewAgents() {
+        reviewCheck?.cancel()
+        let state = location.state
+        guard case .connected = state else {
+            reviewAgents.isHidden = true
+            return
+        }
+        let kit = reviewKit
+        reviewCheck = Task { [weak self] in
+            let current = await kit.current(force: true)
+            let fetched = await kit.fetched
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard let self else { return }
+                self.reviewAgents.isHidden = !Self.showsReviewAgents(state: self.location.state, kitFetched: fetched,
+                                                                     hasKit: current != nil)
+            }
+        }
     }
 
     override func viewWillAppear() {
@@ -142,6 +228,7 @@ final class CodeAnalysisSettingsViewController: NSViewController {
         default:
             statusLabel.textColor = .secondaryLabelColor
         }
+        checkReviewAgents()
     }
 
     /// The radio buttons show the choice being made; until Connect is clicked

@@ -19,7 +19,45 @@ public enum GhidraTools {
         tools += writeTools(backend)
         tools += libraryTools(backend)
         tools += [publishTool(backend), takeTool(backend), doneTool(backend), forgetTool(backend)]
+        tools.append(reportIssueTool(backend))
         return tools
+    }
+
+    /// A report about a tool, for whoever maintains them: kept on the
+    /// analysis server, listed on its console.
+    static func reportIssueTool(_ backend: GhidraBackend) -> AgentTool {
+        AgentTool(
+            name: "ghidra_report_issue",
+            title: "Report a problem with a tool",
+            description: """
+                Reports a problem with one of these tools to the people who maintain them: a call that \
+                answered wrong, refused what it should take, or failed. The analysis server keeps the report \
+                with who sent it, and its console lists it; nothing is changed in any module, and nobody \
+                answers here. Give the `tool`, the `arguments` as you sent them (JSON text), the `answer` that \
+                came back (cut to what shows the problem), and what you `expected` instead; `module` when the \
+                call was about one, and a `note` for what you tried around it. Report once per problem, \
+                not per call, and go on with the review: a report does not wait for a fix. Leave out serial \
+                numbers, keys and personal paths. Answers the kept report, with its `id`.
+                """,
+            inputSchema: AgentSchema.object([
+                "tool": AgentSchema.string("The tool that showed the problem, e.g. \"ghidra_rename_variable\"."),
+                "arguments": AgentSchema.string("The arguments as sent, as JSON text."),
+                "answer": AgentSchema.string("What came back, or the part of it that shows the problem."),
+                "expected": AgentSchema.string("What should have happened instead."),
+                "module": moduleProperty,
+                "note": AgentSchema.string("What else was tried, or how the problem shows.")
+            ], required: ["tool", "expected"]),
+            annotations: .init(readOnly: false, destructive: false, idempotent: false)
+        ) { call in
+            let arguments = call.arguments
+            let report = IssueBook.Report(tool: try arguments.string("tool"),
+                                          arguments: try arguments.optionalString("arguments"),
+                                          answer: try arguments.optionalString("answer"),
+                                          expected: try arguments.string("expected"),
+                                          module: try arguments.optionalString("module"),
+                                          note: try arguments.optionalString("note"))
+            return try await answer { try await backend.reportIssue(report) }
+        }
     }
 
     /// What the server tells a model about the tools: how a review goes, and
@@ -45,7 +83,9 @@ public enum GhidraTools {
         every rename; a publish keeps the module in work. `ghidra_done` publishes and gives the module \
         back; `ghidra_forget` lets a kept \
         project go — its owner stopped and its folder moved to the Trash — for a program that cannot \
-        be put right, and touches nothing of the store.
+        be put right, and touches nothing of the store. A tool that answers wrong, refuses what it \
+        should take, or fails is reported with `ghidra_report_issue`, once per problem: the server keeps \
+        it for the people who maintain the tools.
 
         A review aims at decompiled C that reads like the module's source:
         1. Names, not constants: a value of a set becomes an enum member and the parameter, field or return \

@@ -97,7 +97,9 @@ public final class Server {
                                                        idle: configuration.idle,
                                                        holder: GhidraRoutes.localHolder,
                                                        leasesFile: cas.store.root
-                                                           .appendingPathComponent("private/leases.json")),
+                                                           .appendingPathComponent("private/leases.json"),
+                                                       issuesFile: cas.store.root
+                                                           .appendingPathComponent("private/issues.json")),
                                   writer: writer)
             // A publish this server stopped in the middle is finished before
             // any route opens: its store steps now, its owner's at the
@@ -177,6 +179,7 @@ public final class Server {
                                   agent: ConsoleAgent(socket: configuration.mcpSocket.path,
                                                       binary: Self.executablePath()),
                                   leases: ghidra.map(GhidraRoutes.consoleLeases),
+                                  issues: ghidra.flatMap(GhidraRoutes.consoleIssues),
                                   status: { [weak self] in await self?.status() ?? Self.noStatus })
         } catch {
             stop()

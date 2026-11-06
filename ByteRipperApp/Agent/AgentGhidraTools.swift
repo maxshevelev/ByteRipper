@@ -91,8 +91,21 @@ struct CurrentGhidraBackend: GhidraBackend {
                        options: GhidraHost.PublishOptions) async throws -> Data {
         try await resolve().publishModule(module, by: by, options: options)
     }
-    func publishPreview(_ module: SHA256Digest, takeTypeConflicts: Bool) async throws -> Data {
-        try await resolve().publishPreview(module, takeTypeConflicts: takeTypeConflicts)
+    // Every call of the protocol is passed on: one left to its default
+    // answers here as if the host had no store, no projects or no library
+    // decisions, which is what `ghidra_type_uses` and `ghidra_forget` did.
+    func publishPreview(_ module: SHA256Digest, takeTypeConflicts: Bool,
+                        takeLibrary: LibraryTake) async throws -> Data {
+        try await resolve().publishPreview(module, takeTypeConflicts: takeTypeConflicts, takeLibrary: takeLibrary)
+    }
+    func ownerHasUnpublishedWrites(_ module: SHA256Digest) async throws -> Bool? {
+        try await resolve().ownerHasUnpublishedWrites(module)
+    }
+    func forgetModule(_ module: SHA256Digest) async throws -> Data {
+        try await resolve().forgetModule(module)
+    }
+    func typeUses(name: String, limit: Int) async throws -> Data {
+        try await resolve().typeUses(name: name, limit: limit)
     }
     func takeModule(_ module: SHA256Digest) async throws -> Data {
         try await resolve().takeModule(module)
@@ -102,6 +115,11 @@ struct CurrentGhidraBackend: GhidraBackend {
     }
     func library(_ module: SHA256Digest, _ request: GhidraHost.LibraryRequest) async throws -> Data {
         try await resolve().library(module, request)
+    }
+    /// To the analysis server; with the analyses on this Mac there is no one
+    /// to send it to, and the tool says so.
+    func reportIssue(_ report: IssueBook.Report) async throws -> Data {
+        try await resolve().reportIssue(report)
     }
 }
 

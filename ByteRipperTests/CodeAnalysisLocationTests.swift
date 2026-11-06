@@ -1,6 +1,7 @@
 import AppPalette
 import CASService
 import CodeAnalysis
+import GhidraHost
 import HTTPService
 import Localization
 import UEFIToolUI
@@ -167,6 +168,65 @@ final class CodeAnalysisLocationTests: XCTestCase {
                                                             height: .greatestFiniteMagnitude)).height
         XCTAssertGreaterThan(needed, label.font!.pointSize * 2, "the line is longer than the tab: \(label.stringValue)")
         XCTAssertGreaterThanOrEqual(label.frame.height + 1, needed, "the label is as tall as its lines")
+    }
+
+    /// The commands that start a review pair show while the server is
+    /// connected and gives this token its kit, and only then: a token the
+    /// kit is refused to, and the analyses on this Mac, show none.
+    func testTheReviewAgentsShowWhenTheServerGivesTheirRoles() async throws {
+        try location.choose(.server, server: address, token: "secret")
+        await wait("the connection") { if case .connected = location.state { return true } else { return false } }
+        let kit = ReviewKit(texts: ["review-roles/roles/reviewer.md": "Reviewer · {{mac}}",
+                                    "review-roles/roles/verifier.md": "Verifier · {{mac}}",
+                                    "ghidra-uefi/SKILL.md": "# Rules"])
+        let manifest = try JSONEncoder().encode(kit.manifest)
+        func cache(refused: Bool) -> ReviewKitCache {
+            ReviewKitCache(folder: directory.appendingPathComponent("kit-\(refused)"), source: {
+                ReviewKitCache.Source(manifest: {
+                    if refused { throw GhidraHostError(.refused, "The token lacks the ghidra.use right.", status: 403) }
+                    return manifest
+                }, file: { Data((kit.texts[$0] ?? "").utf8) })
+            })
+        }
+        let settings = CodeAnalysisSettingsViewController()
+        settings.location = location
+        let window = NSWindow(contentViewController: settings)
+        defer { window.close() }
+
+        settings.reviewKit = cache(refused: false)
+        await wait("the commands") { !settings.reviewAgents.isHidden }
+        let texts = Self.labels(in: settings.reviewAgents).map(\.stringValue)
+        XCTAssertTrue(texts.contains(CodeAnalysisSettingsViewController.reviewerCommand), "\(texts)")
+        XCTAssertTrue(texts.contains(CodeAnalysisSettingsViewController.verifierCommand), "\(texts)")
+        settings.view.layoutSubtreeIfNeeded()
+        XCTAssertGreaterThan(settings.reviewAgents.frame.height, 60, "the block is laid out, not collapsed")
+        if let path = ProcessInfo.processInfo.environment["BR_SNAPSHOT_DIR"] {
+            let view = settings.view
+            if let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                view.cacheDisplay(in: view.bounds, to: rep)
+                try rep.representation(using: .png, properties: [:])?
+                    .write(to: URL(fileURLWithPath: path).appendingPathComponent("code-analysis-settings.png"))
+            }
+        }
+
+        settings.reviewKit = cache(refused: true)
+        await wait("the commands hidden") { settings.reviewAgents.isHidden }
+
+        settings.reviewKit = cache(refused: false)
+        await wait("the commands again") { !settings.reviewAgents.isHidden }
+        try location.choose(.thisMac, server: address, token: nil)
+        settings.refresh()
+        XCTAssertTrue(settings.reviewAgents.isHidden, "no review pair with the analyses on this Mac")
+    }
+
+    func testWhenTheReviewAgentsShow() {
+        typealias Settings = CodeAnalysisSettingsViewController
+        XCTAssertTrue(Settings.showsReviewAgents(state: .connected(store: "s"), kitFetched: true, hasKit: true))
+        XCTAssertFalse(Settings.showsReviewAgents(state: .connected(store: "s"), kitFetched: false, hasKit: true),
+                       "a kept copy is not a right the token has now")
+        XCTAssertFalse(Settings.showsReviewAgents(state: .connected(store: "s"), kitFetched: nil, hasKit: false))
+        XCTAssertFalse(Settings.showsReviewAgents(state: .unreachable(reason: "x"), kitFetched: true, hasKit: true))
+        XCTAssertFalse(Settings.showsReviewAgents(state: .local, kitFetched: true, hasKit: true))
     }
 
     private static func labels(in view: NSView) -> [NSTextField] {

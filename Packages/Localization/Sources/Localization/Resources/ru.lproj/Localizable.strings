@@ -1871,3 +1871,8 @@
 "The analysis store on this Mac does not hold the code of this analysis." = "В хранилище разборов на этом Mac нет кода этого разбора.";
 "The code of this analysis on the server is damaged." = "Код этого разбора на сервере повреждён.";
 "The code of this analysis in the analysis store on this Mac is damaged." = "Код этого разбора в хранилище разборов на этом Mac повреждён.";
+"Review agents" = "Агенты разбора";
+"This server gives agents the roles of a review pair. Start each in its own Terminal window:" = "Сервер выдаёт агентам роли пары разбора. Каждую роль запустите в отдельном окне Терминала:";
+"Reviewer: reviews modules and publishes them." = "Reviewer: разбирает модули и публикует их.";
+"Verifier: checks the Reviewer's results and changes nothing." = "Verifier: проверяет результаты Reviewer и ничего не изменяет.";
+"Both need the agent service switched on and ByteRipper added to Claude Code, as Settings ▸ Agent shows." = "Обеим ролям нужны включённая служба агентов и ByteRipper, добавленный в Claude Code, — как показано в «Настройки ▸ Агент».";

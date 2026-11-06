@@ -97,6 +97,21 @@ final class ReviewKitTests: XCTestCase {
         XCTAssertEqual(server.filesRead, [], "the same version reads no file")
     }
 
+    func testTheCacheSaysWhetherItsLastFetchTookTheKit() async throws {
+        let server = FakeServer(kit: Self.kit())
+        let cache = cache(server)
+        let before = await cache.fetched
+        XCTAssertNil(before)
+        _ = await cache.current()
+        let first = await cache.fetched
+        XCTAssertEqual(first, true)
+        server.reachable = false
+        let kept = await cache.current(force: true)
+        let second = await cache.fetched
+        XCTAssertEqual(second, false)
+        XCTAssertNotNil(kept, "the copy is still served")
+    }
+
     func testAFileThatDoesNotMatchItsManifestIsNotTaken() async throws {
         let server = FakeServer(kit: Self.kit())
         server.tamper = "ghidra-uefi/SKILL.md"

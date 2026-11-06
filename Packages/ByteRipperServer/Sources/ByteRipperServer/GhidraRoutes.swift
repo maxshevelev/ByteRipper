@@ -37,12 +37,36 @@ enum GhidraRoutes {
         }, localHolder: localHolder)
     }
 
+    /// The console's Issues page over the host's reports.
+    static func consoleIssues(_ host: GhidraHost) -> ConsoleIssues? {
+        guard let book = host.issues else { return nil }
+        return ConsoleIssues(list: { all in
+            (try? IssueBook.encoder.encode(await book.list(all: all))) ?? Data("[]".utf8)
+        }, resolve: { id, by, note in
+            let resolved = try await answer { try await book.resolve(id, by: by, note: note) }
+            return try IssueBook.encoder.encode(resolved)
+        })
+    }
+
     /// Who holds a module taken on the server's own MCP socket.
     static let localHolder = "local MCP"
 
     static func routes(host: GhidraHost, kit: ReviewKit? = nil,
                        published: @escaping @Sendable () async -> Void) -> HTTPRouter {
         var router = HTTPRouter()
+
+        // A report about a tool, by whoever the token is; an administrator
+        // lists them and marks one resolved (`IssueBook`).
+        router.add("POST", "\(prefix)/issues", maxBodyBytes: 256 << 10, access: .rights([.ghidraUse])) { request in
+            let report = try request.json(IssueBook.Report.self)
+            let data = try await answer { try await host.reportIssue(report, by: holder(request)) }
+            return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
+        }
+        router.add("GET", "\(prefix)/issues", access: .rights([.admin])) { request in
+            guard let book = host.issues else { throw HTTPError(.notFound, "this server keeps no reports") }
+            return HTTPResponse(.ok, headers: ["content-type": "application/json"],
+                                body: try IssueBook.encoder.encode(await book.list(all: request.query["all"] == "1")))
+        }
 
         // The review kit (`ReviewKit`): the manifest, then each file by its
         // path. A server whose folder has no kit says so, and a client then
