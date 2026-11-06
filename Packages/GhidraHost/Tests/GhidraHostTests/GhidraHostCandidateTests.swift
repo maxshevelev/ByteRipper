@@ -593,6 +593,56 @@ final class GhidraHostCandidateTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: folder.path))
     }
 
+    /// A folder whose last publish is the store's last revision is packed for
+    /// it; one an owner holds, or one that is not that revision's project, is
+    /// named and left; the folders are never changed.
+    func testPackingKeepsEachFolderThatIsItsRevisionsProject() async throws {
+        let (host, store, module, directory) = try await setUp("pack")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let listed = try await functions(host, module)
+        let entry = try XCTUnwrap(listed.first?["entry"] as? String)
+        _ = try await host.write(module, "/v1/rename/function",
+                                 body: body(["address": entry, "name": "PackedName", "by": "agent"]))
+        let published = try await host.publish(module, by: "agent")
+        let rev = try XCTUnwrap(published.manifest.reading?.rev)
+        // As a store from before keeping projects: nothing in the private part.
+        try FileManager.default.removeItem(at: store.privateURL)
+        func row() async throws -> GhidraHost.ProjectPacking {
+            let rows = try await host.packProjects(apply: false).modules
+            return try XCTUnwrap(rows.first { $0.module == module.hex })
+        }
+        let held = try await row()
+        XCTAssertTrue(held.status.contains("an owner holds it"), held.status)
+
+        await host.stop(module)
+        let folder = await host.project(module).folder
+        let before = try FileManager.default.contentsOfDirectory(atPath: folder.path).sorted()
+        let would = try await row()
+        XCTAssertEqual(would.status, "would pack")
+        XCTAssertEqual(would.rev, rev)
+        XCTAssertNil(try store.project(module: module), "a list packs nothing")
+
+        let packed = try await host.packProjects(apply: true)
+        XCTAssertEqual(packed.modules.first { $0.module == module.hex }?.status, "packed")
+        XCTAssertTrue(packed.applied)
+        let record = try XCTUnwrap(try store.project(module: module))
+        XCTAssertEqual(record.rev, rev)
+        XCTAssertEqual(record.artifact, published.manifest.artifact.sha256)
+        XCTAssertEqual(store.verify(), [])
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: folder.path).sorted(), before,
+                       "the folder is read, not changed")
+        let again = try await row()
+        XCTAssertEqual(again.status, "kept already")
+
+        // A folder made afresh after the revision published nothing: it is not that revision's project.
+        let project = await host.project(module)
+        var state = try project.state()
+        state.published = nil
+        try project.write(state)
+        let fresh = try await row()
+        XCTAssertTrue(fresh.status.contains("is not the project of revision \(rev)"), fresh.status)
+    }
+
     /// An entry from before entries held their function — one a take-out kept
     /// and a restore brought back — as the registry's index lists it.
     private func withoutItsFunction(_ id: String, in store: ContentStore, directory: URL) throws {

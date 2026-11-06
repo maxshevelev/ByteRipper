@@ -538,24 +538,23 @@ final class WorkspaceRestoreTests: XCTestCase {
                                     language: "x86:LE:32:default", imageBase: "0x0")
         let recipe = AnalysisRecipe(id: "code-v2-ghidra-12.1.2", exporter: 2,
                                     ghidra: "12.1.2", script: "ExportCode.java")
-        // Revision 24 is what the reader last saw; 25 is what the store holds
-        // now, and the function reads otherwise in it.
+        // Revision 1 is what the reader last saw — the store numbers the
+        // revisions — and 2 is what it holds now; the function reads otherwise in it.
         let review = try store.putObject(Data("review".utf8))
         let before = try store.putObject(try artifact(oldCode))
-        try store.recordRevision(module: module.sha256,
-                                 reading: AnalysisReading(project: "p", rev: 24, review: review),
+        try store.recordRevision(module: module.sha256, reading: AnalysisReading(rev: 1, review: review),
                                  artifact: before)
         let manifest = try store.putAnalysis(module: module, recipe: recipe,
                                              artifact: try artifact(newCode),
-                                             reading: AnalysisReading(project: "p", rev: 25))
+                                             reading: AnalysisReading(rev: 2))
         let previousRoot = UEFIToolModule.codeAnalysisRoot
         UEFIToolModule.codeAnalysisRoot = storeRoot
         addTeardownBlock { UEFIToolModule.codeAnalysisRoot = previousRoot }
 
-        // The records the last launch left: the function was seen at r24, as
+        // The records the last launch left: the function was seen at r1, as
         // it read then.
         CodeRevisionSeen.save(["0x100": SeenRecord(
-            revision: 24,
+            revision: 1,
             fingerprint: SeenRecord.fingerprint(name: "Long", signature: nil, c: oldCode))],
             module: module.sha256, recipe: recipe.id)
         addTeardownBlock {
@@ -662,15 +661,14 @@ final class WorkspaceRestoreTests: XCTestCase {
                                     language: "x86:LE:32:default", imageBase: "0x0")
         let recipe = AnalysisRecipe(id: "code-v2-ghidra-12.1.2", exporter: 2,
                                     ghidra: "12.1.2", script: "ExportCode.java")
-        // Revision 24 published its code; 25 is the one the panel opens on.
+        // Revision 1 published its code; 2 is the one the panel opens on.
         let review = try store.putObject(Data("review".utf8))
         let oldCode = try store.putObject(artifactData("entry"))
-        try store.recordRevision(module: module.sha256,
-                                 reading: AnalysisReading(project: "p", rev: 24, review: review),
+        try store.recordRevision(module: module.sha256, reading: AnalysisReading(rev: 1, review: review),
                                  artifact: oldCode)
         let manifest = try store.putAnalysis(module: module, recipe: recipe,
                                              artifact: artifactData("SecStartup"),
-                                             reading: AnalysisReading(project: "p", rev: 25))
+                                             reading: AnalysisReading(rev: 2))
         let previousRoot = UEFIToolModule.codeAnalysisRoot
         UEFIToolModule.codeAnalysisRoot = storeRoot
         addTeardownBlock { UEFIToolModule.codeAnalysisRoot = previousRoot }

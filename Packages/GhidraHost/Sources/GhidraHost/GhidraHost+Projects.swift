@@ -62,4 +62,82 @@ extension GhidraHost {
             throw GhidraHostError(.project, "\(folder.path): \(error)")
         }
     }
+
+    /// One module folder in `packProjects`'s answer.
+    public struct ProjectPacking: Encodable, Sendable {
+        public var module: String
+        public var name: String
+        /// The store's last revision of the module, when it has one.
+        public var rev: Int?
+        /// `packed`, `would pack`, `kept already`, or why the folder is not packed.
+        public var status: String
+        public var size: Int?
+    }
+
+    public struct ProjectsPacked: Encodable, Sendable {
+        public var modules: [ProjectPacking]
+        public var packed: Int
+        /// Folders left as they are, for the reason their row gives.
+        public var notPacked: Int
+        public var applied: Bool
+
+        private enum CodingKeys: String, CodingKey {
+            case modules, packed, applied
+            case notPacked = "not_packed"
+        }
+    }
+
+    /// Every project folder here whose last publish is the store's last revision
+    /// of its module packed into the store's private part, for that revision.
+    /// The folders are read, never changed. A folder is left out, and its row
+    /// says why, when it published nothing the store has as its last revision —
+    /// a project made afresh after the revision, or one of another revision —
+    /// when an owner holds it, or when it holds writes the store has not got.
+    public func packProjects(apply: Bool) async throws -> ProjectsPacked {
+        var rows: [ProjectPacking] = []
+        for project in GhidraProject.all(in: configuration.projectsRoot) {
+            let module = project.module
+            let state = try project.state()
+            var row = ProjectPacking(module: module.hex, name: state.module.name, rev: nil, status: "", size: nil)
+            defer { rows.append(row) }
+            guard let last = try await writer.latestRevision(module: module), let artifact = last.artifact else {
+                row.status = "the store has no revision of it"
+                continue
+            }
+            row.rev = last.rev
+            guard let published = state.published else {
+                row.status = "this folder has published nothing: it is not the project of revision \(last.rev)"
+                continue
+            }
+            guard published.artifact == artifact.hex, published.rev == last.rev else {
+                row.status = "this folder last published revision \(published.rev.map(String.init) ?? "none") "
+                    + "with other code: it is not the project of revision \(last.rev)"
+                continue
+            }
+            if await runningOwner(project) != nil {
+                row.status = "an owner holds it: stop it first"
+                continue
+            }
+            if await holdsUnpublishedWrites(module) {
+                row.status = "it holds writes the store has not got: publish or drop them first"
+                continue
+            }
+            if let kept = try await writer.readProject(module: module)?.record,
+               kept.rev == last.rev, kept.artifact == artifact {
+                row.status = "kept already"
+                row.size = kept.size
+                continue
+            }
+            guard apply else {
+                row.status = "would pack"
+                continue
+            }
+            let record = try await keepProject(module, state: state, rev: last.rev, artifact: artifact,
+                                               review: last.review, recipe: published.recipe)
+            row.status = "packed"
+            row.size = record.size
+        }
+        let packed = rows.filter { ["packed", "would pack", "kept already"].contains($0.status) }.count
+        return ProjectsPacked(modules: rows, packed: packed, notPacked: rows.count - packed, applied: apply)
+    }
 }

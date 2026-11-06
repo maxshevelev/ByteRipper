@@ -13,6 +13,9 @@ public enum ServerCommand: Equatable {
     /// The stdio↔socket bridge an agent's client launches. No role is
     /// started: the process only copies bytes (`ServerRelay`).
     case relay(path: String)
+    /// The project folders packed into the store's private part, each for the
+    /// revision it published; without `apply`, the list of what would be.
+    case packProjects(ServerConfiguration, apply: Bool)
     case help
 
     public static let usage = """
@@ -24,6 +27,8 @@ public enum ServerCommand: Equatable {
                byteripper-server token add --name <name> [--rights <right,…> | --preset <reader|app|admin>]
                byteripper-server token list | rotate <id|name> | revoke <id|name>
                byteripper-server relay [--mcp-socket <path>]
+               byteripper-server pack-projects [--apply] [--store <dir>] [--projects <dir>]
+                                 [--ghidra-home <dir>] [--ghidra-scripts <dir>]
 
         \(TokenCommand.usage)
 
@@ -186,6 +191,24 @@ public enum ServerCommand: Equatable {
             } catch let failure as TokenCommand.Failure {
                 throw Failure(description: failure.description)
             }
+        case "pack-projects":
+            var configuration = fromFile
+            var apply = false
+            while let flag = rest.popFirst() {
+                switch flag {
+                case "--apply": apply = true
+                case "--store": configuration.store = try path(flag)
+                case "--projects": configuration.projects = try path(flag)
+                case "--ghidra-home": configuration.ghidraHome = try path(flag)
+                case "--ghidra-scripts": configuration.ghidraScripts = try path(flag)
+                case "--support": _ = try value(flag)   // read before the loop
+                case "--config": _ = try value(flag)   // read before the loop
+                case "--no-config": break
+                case "--help", "-h": return .help
+                default: throw Failure(description: "pack-projects does not take \(flag)")
+                }
+            }
+            return .packProjects(configuration, apply: apply)
         case "serve":
             var configuration = fromFile
             var roles: Set<ServerConfiguration.Role> = []

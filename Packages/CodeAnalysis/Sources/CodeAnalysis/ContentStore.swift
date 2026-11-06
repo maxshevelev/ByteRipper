@@ -397,11 +397,15 @@ public struct ContentStore: Sendable {
 
     // MARK: - Review history
 
-    /// Record a revision of a reading in its module's history. A publish
-    /// stores, in this order, the review document, this revision, and then the
-    /// analysis whose `reading` names it (`Design/GHIDRA_SHARED_PLAN.md` §5.4):
-    /// the document must already be here, and a revision a failed publish left
-    /// behind is overwritten by the next publish of the same revision.
+    /// Record a revision in its module's history, the store choosing its
+    /// number: the last revision's when this one holds what it holds — a
+    /// publish that changed nothing — or when the last is ahead of every
+    /// analysis of the module, a publish that stopped after recording it; the
+    /// next one after the newest otherwise. `reading.rev` is not read. A
+    /// publish stores, in this order, the review document, this revision, and
+    /// then the analysis whose `reading` names it (`Design/GHIDRA_SHARED_PLAN.md`
+    /// §5.4): the document must already be here. The revision recorded is the
+    /// last of the history answered.
     @discardableResult
     public func recordRevision(module: SHA256Digest, reading: AnalysisReading,
                                artifact: SHA256Digest? = nil,
@@ -417,24 +421,30 @@ public struct ContentStore: Sendable {
         }
         let url = reviewHistoryURL(module)
         // Off the lock: it reads the code of two revisions.
+        let known = (try? reviewHistory(module: module))?.revisions ?? []
         let changed = artifact.flatMap { artifact -> [String]? in
-            let known = (try? reviewHistory(module: module))?.revisions ?? []
-            return changedFunctions(in: artifact, after: revisionBefore(project: reading.project, rev: reading.rev,
-                                                                       in: known))
+            changedFunctions(in: artifact, after: revisionBefore(rev: (known.map(\.rev).max() ?? 0) + 1, in: known))
         }
         return try withLock {
             var history = try reviewHistory(module: module) ?? ReviewHistory(module: module)
-            let revision = ReviewRevision(project: reading.project, rev: reading.rev, review: review,
-                                          description: reading.description, artifact: artifact,
-                                          changedFunctions: changed,
+            if let last = history.revisions.last, last.review == review, last.description == reading.description,
+               last.artifact == artifact {
+                return history
+            }
+            let stored = recipes(ofModule: module).compactMap { recipe -> Int? in
+                guard let key = AnalysisKey(module: module, recipe: recipe) else { return nil }
+                return (try? decodeManifest(at: manifestURL(key)))?.reading?.rev
+            }.max() ?? 0
+            let newest = history.revisions.map(\.rev).max() ?? 0
+            var revision = ReviewRevision(rev: newest + 1, review: review, description: reading.description,
+                                          artifact: artifact, changedFunctions: changed,
                                           recordedAt: Timestamps.now(), by: by)
-            if let at = history.revisions.firstIndex(where: {
-                $0.project == reading.project && $0.rev == reading.rev
-            }) {
-                guard history.revisions[at].review != review
-                        || history.revisions[at].description != reading.description
-                        || history.revisions[at].artifact != artifact else { return history }
-                history.revisions[at] = revision
+            if let last = history.revisions.indices.last, history.revisions[last].rev == newest, newest > stored {
+                revision.rev = newest
+                revision.changedFunctions = artifact.flatMap {
+                    changedFunctions(in: $0, after: revisionBefore(rev: newest, in: history.revisions))
+                }
+                history.revisions[last] = revision
             } else {
                 history.revisions.append(revision)
             }
@@ -569,28 +579,24 @@ public struct ContentStore: Sendable {
                 problems.append("reviews/\(name): cannot be read")
                 continue
             }
-            var latest: [String: Int] = [:]
             for revision in history.revisions {
                 if lacks(revision.review) {
-                    problems.append("reviews/\(name): revision \(revision.rev) of \(revision.project): "
+                    problems.append("reviews/\(name): revision \(revision.rev): "
                                     + "review document \(revision.review.hex) is missing")
                 }
                 if let description = revision.description, lacks(description) {
-                    problems.append("reviews/\(name): revision \(revision.rev) of \(revision.project): "
+                    problems.append("reviews/\(name): revision \(revision.rev): "
                                     + "module description \(description.hex) is missing")
                 }
                 if let artifact = revision.artifact, lacks(artifact) {
-                    problems.append("reviews/\(name): revision \(revision.rev) of \(revision.project): "
+                    problems.append("reviews/\(name): revision \(revision.rev): "
                                     + "artifact \(artifact.hex) is missing")
                 }
-                latest[revision.project] = max(latest[revision.project] ?? 0, revision.rev)
             }
-            for (project, rev) in latest.sorted(by: { $0.key < $1.key }) {
-                let named = readings
-                    .filter { $0.module.sha256 == module && $0.reading?.project == project }
-                    .compactMap(\.reading?.rev).max()
+            if let rev = history.revisions.map(\.rev).max() {
+                let named = readings.filter { $0.module.sha256 == module }.compactMap(\.reading?.rev).max()
                 if named.map({ $0 < rev }) ?? true {
-                    problems.append("reviews/\(name): revision \(rev) of \(project) is ahead of its analysis"
+                    problems.append("reviews/\(name): revision \(rev) is ahead of its analysis"
                                     + (named.map { " (revision \($0))" } ?? ""))
                 }
             }

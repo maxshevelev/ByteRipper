@@ -264,12 +264,15 @@ final class ModuleFormatTests: XCTestCase {
             reading: project.map { AnalysisReading(project: $0, rev: rev, review: digest, description: nil) })
     }
 
-    func testAReviewFromAProjectReplacedByAFreshOneIsNotShown() {
-        let old = manifest(project: "old", rev: 8, at: "2026-01-01T00:00:00Z", recipe: "code-v5")
-        let fresh = manifest(project: "fresh", at: "2026-11-05T00:00:00Z", recipe: "code-v10")
-        let index = CodeAnalysisIndex(manifests: [old, fresh])
-        XCTAssertEqual(index.manifests(for: module.sha256).map(\.recipe.id), ["code-v10"])
-        XCTAssertEqual(index.latestReading(of: old).recipe.id, "code-v10", "a saved session follows to the fresh project")
+    /// A module has one history: a reader is shown every analysis the store
+    /// holds, whatever project an older build named its reading by, and a saved
+    /// session follows to the later revision.
+    func testEveryAnalysisIsShownAndASessionFollowsTheLaterRevision() {
+        let old = manifest(project: "old", rev: 2, at: "2026-01-01T00:00:00Z", recipe: "code-v5")
+        let later = manifest(project: "later", rev: 3, at: "2026-11-05T00:00:00Z", recipe: "code-v10")
+        let index = CodeAnalysisIndex(manifests: [old, later])
+        XCTAssertEqual(Set(index.manifests(for: module.sha256).map(\.recipe.id)), ["code-v5", "code-v10"])
+        XCTAssertEqual(index.latestReading(of: old).recipe.id, "code-v10")
     }
 
     func testAMechanicalRunDoesNotHideAReviewAndOneProjectKeepsItsRecipes() {

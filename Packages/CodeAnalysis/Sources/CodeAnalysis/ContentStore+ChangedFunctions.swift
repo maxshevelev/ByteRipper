@@ -28,8 +28,8 @@ extension ContentStore {
     }
 
     /// What this revision follows: the latest of its reading before it with code.
-    func revisionBefore(project: String, rev: Int, in revisions: [ReviewRevision]) -> SHA256Digest? {
-        revisions.filter { $0.project == project && $0.rev < rev && $0.artifact != nil }
+    func revisionBefore(rev: Int, in revisions: [ReviewRevision]) -> SHA256Digest? {
+        revisions.filter { $0.rev < rev && $0.artifact != nil }
             .max { $0.rev < $1.rev }?.artifact
     }
 
@@ -42,7 +42,7 @@ extension ContentStore {
         var found: [Int: [String]] = [:]
         for (index, revision) in history.revisions.enumerated() where revision.changedFunctions == nil {
             guard let artifact = revision.artifact else { continue }
-            let before = revisionBefore(project: revision.project, rev: revision.rev, in: history.revisions)
+            let before = revisionBefore(rev: revision.rev, in: history.revisions)
             found[index] = changedFunctions(in: artifact, after: before)
         }
         guard !found.isEmpty else { return false }
@@ -53,7 +53,7 @@ extension ContentStore {
             for (index, changed) in found {
                 let revision = history.revisions[index]
                 guard let at = current.revisions.firstIndex(where: {
-                    $0.project == revision.project && $0.rev == revision.rev && $0.artifact == revision.artifact
+                    $0.rev == revision.rev && $0.artifact == revision.artifact
                 }), current.revisions[at].changedFunctions == nil else { continue }
                 current.revisions[at].changedFunctions = changed
                 wrote = true

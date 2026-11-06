@@ -218,12 +218,14 @@ public struct AnalysisStats: Codable, Equatable, Sendable {
     }
 }
 
-/// Which reading of a module an artifact renders: the Ghidra project a
-/// person or an agent reviewed it in, and how many publishes of that project
-/// it is (`Design/GHIDRA_SHARED_PLAN.md` §5.6). A mechanical artifact — Ghidra
-/// and the UEFI pass, nobody's decisions — has none.
+/// Which reading of a module an artifact renders: its revision in the
+/// module's one history (`Design/GHIDRA_SHARED_PLAN.md` §5.6). A mechanical
+/// artifact — Ghidra and the UEFI pass, nobody's decisions — has none.
 public struct AnalysisReading: Codable, Equatable, Sendable {
-    public var project: String
+    /// The Ghidra project an earlier build named the reading by. A revision
+    /// knows nothing of the project now: nil in everything written since, and
+    /// read from an older file only to be ignored.
+    public var project: String?
     public var rev: Int
     /// The review document harvested with this publish, when there is one.
     public var review: SHA256Digest?
@@ -232,7 +234,7 @@ public struct AnalysisReading: Codable, Equatable, Sendable {
     /// — as this publish left it; nil while nobody has written one.
     public var description: SHA256Digest?
 
-    public init(project: String, rev: Int, review: SHA256Digest? = nil, description: SHA256Digest? = nil) {
+    public init(project: String? = nil, rev: Int, review: SHA256Digest? = nil, description: SHA256Digest? = nil) {
         self.project = project
         self.rev = rev
         self.review = review
@@ -246,7 +248,8 @@ public struct AnalysisReading: Codable, Equatable, Sendable {
 /// One revision of a reading as the history keeps it: the reading, and when
 /// and by whom it was published.
 public struct ReviewRevision: Codable, Equatable, Sendable {
-    public var project: String
+    /// What an earlier build named the project by; nil since, and ignored.
+    public var project: String?
     public var rev: Int
     public var review: SHA256Digest
     /// The module's description at this revision, when it had one.
@@ -262,7 +265,7 @@ public struct ReviewRevision: Codable, Equatable, Sendable {
     public var recordedAt: String
     public var by: String?
 
-    public init(project: String, rev: Int, review: SHA256Digest, description: SHA256Digest? = nil,
+    public init(project: String? = nil, rev: Int, review: SHA256Digest, description: SHA256Digest? = nil,
                 artifact: SHA256Digest? = nil, changedFunctions: [String]? = nil,
                 recordedAt: String, by: String? = nil) {
         self.project = project
@@ -288,8 +291,8 @@ public struct ReviewRevision: Codable, Equatable, Sendable {
     }
 }
 
-/// `reviews/<module-sha>/manifest.json`: every revision of every reading of a
-/// module, oldest first — the base for a diff and for pruning. Which reading
+/// `reviews/<module-sha>/manifest.json`: every revision of the module, oldest
+/// first — the base for a diff and for pruning. Which reading
 /// is current is the analysis manifest's `reading`, never this file's.
 public struct ReviewHistory: Codable, Equatable, Sendable {
     public var schema: Int
@@ -346,14 +349,15 @@ public struct AnalysisManifest: Codable, Equatable, Sendable {
 /// How an incoming analysis stands to the one stored under the same key, by
 /// their readings. Only an artifact that is not the stored one is compared.
 public enum ReadingOrder: Equatable, Sendable {
-    /// A later publish of the same project, or a reading over a mechanical
-    /// artifact: it replaces the stored one.
+    /// A later revision, or a reading over a mechanical artifact: it replaces
+    /// the stored one.
     case newer
-    /// The same project's reading, at the stored revision or before it.
+    /// The stored revision or one before it.
     case notNewer
     /// A mechanical artifact over a reviewed one: the reading is kept.
     case unreviewedOverReviewed
-    /// Two different projects' readings: a person chooses.
+    /// Two different projects' readings, as a build that named projects
+    /// told them apart. A module has one history now: nothing answers this.
     case otherProject
     /// Two mechanical artifacts that differ: the stored one stays, as today.
     case unreviewed
@@ -364,11 +368,7 @@ public enum ReadingOrder: Equatable, Sendable {
         case (.some, nil): self = .newer
         case (nil, .some): self = .unreviewedOverReviewed
         case let (.some(incoming), .some(stored)):
-            if incoming.project != stored.project {
-                self = .otherProject
-            } else {
-                self = incoming.rev > stored.rev ? .newer : .notNewer
-            }
+            self = incoming.rev > stored.rev ? .newer : .notNewer
         }
     }
 }

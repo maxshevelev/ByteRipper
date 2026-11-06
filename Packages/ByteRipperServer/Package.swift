@@ -88,7 +88,12 @@ let package = Package(
             .product(name: "GhidraHost", package: "GhidraHost"),
             .product(name: "AgentKit", package: "AgentKit")
         ]),
-        .executableTarget(name: "byteripper-server", dependencies: ["ByteRipperServer", "ServerRelay"]),
+        .executableTarget(name: "byteripper-server", dependencies: [
+            "ByteRipperServer",
+            "ServerRelay",
+            .product(name: "CodeAnalysis", package: "CodeAnalysis"),
+            .product(name: "GhidraHost", package: "GhidraHost")
+        ]),
         .testTarget(name: "ServerAuthTests", dependencies: [
             "ServerAuth",
             .product(name: "HTTPService", package: "HTTPService")

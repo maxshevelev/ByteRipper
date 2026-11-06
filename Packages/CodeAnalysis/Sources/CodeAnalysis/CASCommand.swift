@@ -38,6 +38,7 @@ public enum CASCommand {
           hello
           library-holdings
           relink-modules [--apply]
+          drop-earlier-projects [--apply]
           library-rename <id> <name> --reason <text> [--apply]
           library-take-out <id> [--body <key>] --reason <text> [--apply]
           library-restore <body> --reason <text> [--apply]
@@ -233,6 +234,14 @@ public enum CASCommand {
                 "own_bodies_in_registry": rows.reduce(0) { $0 + $1.ownBodiesInRegistry },
                 "out_of_format": rows.reduce(0) { $0 + $1.outOfFormat }
             ])
+        case "drop-earlier-projects":
+            let apply = parser.flag("--apply")
+            try parser.end()
+            guard let local = store as? LocalOperations else {
+                throw CodeAnalysisError.analysisMismatch("drop-earlier-projects runs on a store directory, not on a server")
+            }
+            output.stdout = try encode(try ContentStore(root: local.root, create: local.create)
+                .dropEarlierProjects(apply: apply))
         case "relink-modules":
             let apply = parser.flag("--apply")
             try parser.end()

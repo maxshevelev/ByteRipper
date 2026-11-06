@@ -54,21 +54,19 @@ enum CodeAnalysisStore {
         let root = root ?? self.root
         let module = manifest.module.sha256
         let current = manifest.reading?.rev
-        let project = manifest.reading?.project
         return await Task.detached(priority: .userInitiated) {
             () -> (options: [RevisionOption], hasHistory: Bool, currentChanged: Set<CodeAddress>?) in
             guard let store = try? ContentStore(root: root, create: false) else { return ([], false, nil) }
             // A store of this machine's own has nobody else to work this out.
             _ = try? store.backfillChangedFunctions(module: module)
             guard let history = try? store.reviewHistory(module: module) else { return ([], false, nil) }
-            let options = Self.revisionOptions(history, current: current, project: project)
-            let shown = history.revisions.first { $0.rev == current && $0.project == project }
+            let options = Self.revisionOptions(history, current: current)
+            let shown = history.revisions.last { $0.rev == current }
             return (options, !history.revisions.isEmpty, shown?.changedEntries)
         }.value
     }
 
-    private nonisolated static func revisionOptions(_ history: ReviewHistory, current: Int?,
-                                                    project: String?) -> [RevisionOption] {
+    private nonisolated static func revisionOptions(_ history: ReviewHistory, current: Int?) -> [RevisionOption] {
         let formatter = DateFormatter()
         formatter.dateStyle = .short
         formatter.timeStyle = .none
@@ -85,8 +83,6 @@ enum CodeAnalysisStore {
             }
             if let by = revision.by, !by.isEmpty {
                 title += ", " + by
-            } else if revision.project != project {
-                title += ", " + revision.project
             }
             options.append(RevisionOption(
                 choice: CodePaneView.RevisionChoice(revision: revision.rev, title: title, hasCode: true,

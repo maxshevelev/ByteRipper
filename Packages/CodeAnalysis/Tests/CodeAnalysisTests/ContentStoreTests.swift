@@ -226,7 +226,9 @@ final class ContentStoreTests: XCTestCase {
         XCTAssertEqual(ReadingOrder(incoming: reading(2), stored: reading(1)), .newer)
         XCTAssertEqual(ReadingOrder(incoming: reading(1), stored: reading(1)), .notNewer)
         XCTAssertEqual(ReadingOrder(incoming: reading(1), stored: reading(2)), .notNewer)
-        XCTAssertEqual(ReadingOrder(incoming: reading(9, project: "q"), stored: reading(1)), .otherProject)
+        // One history: a project an older build named a reading by is no other.
+        XCTAssertEqual(ReadingOrder(incoming: reading(9, project: "q"), stored: reading(1)), .newer)
+        XCTAssertEqual(ReadingOrder(incoming: reading(1, project: "q"), stored: reading(9)), .notNewer)
     }
 
     func testALaterPublishReplacesTheReadingAndAnEarlierOneIsRefused() throws {
@@ -257,7 +259,9 @@ final class ContentStoreTests: XCTestCase {
     }
 
     /// A comment changes the review document and not the artifact: the same
-    /// artifact takes a newer reading of the same project, and nothing else.
+    /// artifact takes a newer reading, and nothing else. A module has one
+    /// history: a reading an older build named by another project is only a
+    /// revision of it.
     func testTheSameArtifactTakesANewerReadingOnly() throws {
         try store.putAnalysis(module: module(), recipe: recipe(), artifact: artifact())
         let adopted = try store.putAnalysis(module: module(), recipe: recipe(), artifact: artifact(),
@@ -270,8 +274,11 @@ final class ContentStoreTests: XCTestCase {
                                           reading: reading(2))
         XCTAssertEqual(older.reading, reading(5))
         let other = try store.putAnalysis(module: module(), recipe: recipe(), artifact: artifact(),
-                                          reading: reading(9, project: "q"))
+                                          reading: reading(3, project: "q"))
         XCTAssertEqual(other.reading, reading(5))
+        let later = try store.putAnalysis(module: module(), recipe: recipe(), artifact: artifact(),
+                                          reading: reading(9, project: "q"))
+        XCTAssertEqual(later.reading, reading(9, project: "q"))
     }
 
     /// A later revision that printed the artifact a recipe already holds is the
@@ -309,13 +316,13 @@ final class ContentStoreTests: XCTestCase {
         XCTAssertEqual(try other.analysis(module: module("a").sha256)?.reading?.rev, 3)
         // A mechanical artifact never replaces a reading.
         XCTAssertEqual(try other.importBundle(from: bundle(nil, functions: 4, module: "a")).skipped.count, 1)
-        // Another project's reading is kept aside, and its object survives gc.
-        let conflict = try other.importBundle(from: bundle(reading(1, project: "q"), functions: 5, module: "a"))
-        XCTAssertEqual(conflict.conflicts.count, 1)
-        XCTAssertEqual(other.conflicts().count, 1)
-        XCTAssertEqual(try other.analysis(module: module("a").sha256)?.reading?.project, "p")
-        try other.collectGarbage(dryRun: false)
-        XCTAssertTrue(other.hasObject(other.conflicts()[0].artifact.sha256))
+        // One history: a reading an older build named by another project is
+        // compared by its revision alone, and nothing is kept aside.
+        let named = try other.importBundle(from: bundle(reading(1, project: "q"), functions: 5, module: "a"))
+        XCTAssertEqual(named.skipped.count, 1)
+        XCTAssertEqual(named.conflicts.count, 0)
+        XCTAssertEqual(other.conflicts().count, 0)
+        XCTAssertEqual(try other.analysis(module: module("a").sha256)?.reading?.rev, 3)
         XCTAssertEqual(other.verify(), [])
     }
 
@@ -446,7 +453,7 @@ final class ContentStoreTests: XCTestCase {
         try store.recordRevision(module: module().sha256,
                                  reading: AnalysisReading(project: "p", rev: 2, review: stray))
         XCTAssertEqual(store.verify().count, 1)
-        XCTAssertTrue(store.verify()[0].contains("revision 2 of p is ahead of its analysis"), store.verify()[0])
+        XCTAssertTrue(store.verify()[0].contains("revision 2 is ahead of its analysis"), store.verify()[0])
         // The next publish is revision 2 again, and overwrites the entry.
         let again = try publish(2, document: #"{"rev":2}"#, functions: 2)
         let history = try XCTUnwrap(try store.reviewHistory(module: module().sha256))
@@ -559,7 +566,7 @@ final class ContentStoreTests: XCTestCase {
             if let c { function["c"] = c }
             return function
         }
-        return try! JSONSerialization.data(withJSONObject: ["script_version": 5, "functions": list])
+        return try! JSONSerialization.data(withJSONObject: ["script_version": 5, "functions": list], options: .sortedKeys)
     }
 
     func testARevisionRecordsTheFunctionsItChanged() throws {
@@ -568,12 +575,20 @@ final class ContentStoreTests: XCTestCase {
         let store = try ContentStore(root: root)
         let module = SHA256Digest(data: Data("module".utf8))
         let review = try store.putObject(Data("review".utf8))
-        func record(_ rev: Int, _ functions: [(String, String?)]) throws -> ReviewRevision {
-            let artifact = try store.putObject(codeArtifact(functions))
-            let history = try store.recordRevision(module: module,
-                                                   reading: AnalysisReading(project: "p", rev: rev, review: review),
+        // As a publish does: the revision the store numbers, then its analysis.
+        func record(_ rev: Int, _ functions: [(String, String?)], review: SHA256Digest = review) throws -> ReviewRevision {
+            let code = codeArtifact(functions)
+            let artifact = try store.putObject(code)
+            let history = try store.recordRevision(module: module, reading: AnalysisReading(rev: 0, review: review),
                                                    artifact: artifact)
-            return try XCTUnwrap(history.revisions.first { $0.rev == rev })
+            let recorded = try XCTUnwrap(history.revisions.last)
+            XCTAssertEqual(recorded.rev, rev, "the store numbers the revisions")
+            try store.putAnalysis(module: ModuleIdentity(sha256: module, size: 1, name: "M", kind: "PE32",
+                                                         language: "x86:LE:32:default", imageBase: "0x0"),
+                                  recipe: AnalysisRecipe(id: "r", exporter: 10, ghidra: "12.2", script: "ExportCode.java",
+                                                         types: nil, passes: nil),
+                                  artifact: code, reading: AnalysisReading(rev: recorded.rev, review: review))
+            return recorded
         }
         let first = try record(1, [("0x10", "int a;\n"), ("0x20", "int b;\n"), ("0x30", nil)])
         XCTAssertEqual(first.changedFunctions, ["0x10", "0x20"], "all there is, at the start")
@@ -582,7 +597,9 @@ final class ContentStoreTests: XCTestCase {
         XCTAssertEqual(second.changedEntries, [CodeAddress(0x20)])
         let third = try record(3, [("0x20", "int c;\n"), ("0x30", "new\n")])
         XCTAssertEqual(third.changedFunctions, ["0x10", "0x30"], "one gone and one that gained C")
-        let same = try record(4, [("0x20", "int c;\n"), ("0x30", "new\n")])
+        let unchanged = try record(3, [("0x20", "int c;\n"), ("0x30", "new\n")])
+        XCTAssertEqual(unchanged, third, "what the last revision holds is that revision")
+        let same = try record(4, [("0x20", "int c;\n"), ("0x30", "new\n")], review: try store.putObject(Data("other".utf8)))
         XCTAssertEqual(same.changedFunctions, [], "the same code changes nothing")
     }
 
@@ -666,6 +683,76 @@ final class ContentStoreTests: XCTestCase {
         XCTAssertLessThan(parts.filter(mirror.hasObject).count, parts.count)
         try mirror.fetch(digest)
         XCTAssertFalse(mirror.mustFetch(digest))
+    }
+
+    // MARK: - Earlier projects
+
+    /// What an earlier project of a module left — its analyses, its revisions —
+    /// goes, and the newest stays; a registry entry whose source is one of those
+    /// revisions stops it until it is decided.
+    func testAnEarlierProjectsAnalysesAndRevisionsGoAndTheNewestStays() throws {
+        let identity = module()
+        let review = try store.putObject(Data("review".utf8))
+        // An earlier project's three revisions, then the project that replaced it starts at 1.
+        try store.putAnalysis(module: identity, recipe: recipe("r-a-old"), artifact: artifact(functions: 1),
+                              reading: AnalysisReading(project: "old", rev: 3, review: review))
+        try store.putAnalysis(module: identity, recipe: recipe("r-b-new"), artifact: artifact(functions: 2),
+                              reading: AnalysisReading(project: "new", rev: 1, review: review))
+        let rows = [("old", 1, 1), ("old", 2, 2), ("old", 3, 3), ("new", 1, 5)].map {
+            ReviewRevision(project: $0.0, rev: $0.1, review: review, recordedAt: "2026-10-0\($0.2)T00:00:00Z")
+        }
+        try store.atomicWrite(try store.encoder.encode(ReviewHistory(module: identity.sha256, revisions: rows)),
+                              to: store.reviewHistoryURL(identity.sha256))
+
+        // An entry whose source is the earlier project's revision 2, taken when it was recorded.
+        var index = LibraryIndex()
+        let body = LibraryBody(size: 0x40, full: "aa", specific: "bb")
+        let object = try store.putObject(Data("entry".utf8))
+        let earlier = LibrarySource(module: identity.sha256, address: "0x10", rev: 2, by: nil)
+        index.entries[body.key] = LibraryIndexEntry(
+            version: 1, entry: object, name: "Helper", kind: "library.edk2", source: earlier,
+            variants: [LibraryVariant(body: body, module: identity.sha256)])
+        var history = LibraryHistory(id: body.key, versions: [
+            LibraryVersion(version: 1, entry: object, source: earlier, reason: nil, recordedAt: "2026-10-02T00:00:10Z")])
+        try store.atomicWrite(try store.encoder.encode(index), to: store.libraryIndexURL)
+        try store.atomicWrite(try store.encoder.encode(history), to: store.libraryHistoryURL(body.key))
+
+        let plan = try store.dropEarlierProjects(apply: false)
+        XCTAssertEqual(plan.modules.map(\.current), ["new"])
+        XCTAssertEqual(plan.modules.first?.analyses, ["r-a-old"])
+        XCTAssertEqual(plan.modules.first?.revisions.map(\.rev), [1, 2, 3])
+        XCTAssertEqual(plan.modules.first?.keptRecipe, "r-b-new")
+        XCTAssertEqual(plan.sources.map(\.name), ["Helper"])
+        XCTAssertFalse(plan.applied)
+        XCTAssertEqual(store.recipes(ofModule: identity.sha256).sorted(), ["r-a-old", "r-b-new"],
+                       "a plan removes nothing")
+        XCTAssertThrowsError(try store.dropEarlierProjects(apply: true), "an entry's source is on the list")
+        XCTAssertEqual(store.recipes(ofModule: identity.sha256).count, 2, "a refusal removes nothing")
+
+        // The entry's next version comes from the revision that stays — the new
+        // project's revision 1, not the earlier one's of the same number: the
+        // time tells them apart. Now the drop goes through; the old row is counted.
+        let kept = LibrarySource(module: identity.sha256, address: "0x10", rev: 1, by: nil)
+        index.entries[body.key]?.version = 2
+        index.entries[body.key]?.source = kept
+        history.versions.append(LibraryVersion(version: 2, entry: object, source: kept, reason: nil,
+                                               recordedAt: "2026-10-05T00:00:10Z"))
+        try store.atomicWrite(try store.encoder.encode(index), to: store.libraryIndexURL)
+        try store.atomicWrite(try store.encoder.encode(history), to: store.libraryHistoryURL(body.key))
+        XCTAssertEqual(try store.earlierProjects().sources, [])
+        XCTAssertEqual(try store.earlierProjects().historyRows, 1)
+        let rowsBefore = try XCTUnwrap(try store.reviewHistory(module: identity.sha256)).revisions
+        XCTAssertEqual(rowsBefore.count, 4)
+        let done = try store.dropEarlierProjects(apply: true)
+        XCTAssertTrue(done.applied)
+        XCTAssertEqual(done.analyses, 1)
+        XCTAssertEqual(done.revisions, 3)
+        XCTAssertEqual(store.recipes(ofModule: identity.sha256), ["r-b-new"])
+        let left = try XCTUnwrap(try store.reviewHistory(module: identity.sha256)).revisions
+        XCTAssertEqual(left.map(\.rev), [1])
+        XCTAssertEqual(left.map(\.project), ["new"])
+        XCTAssertEqual(store.verify(), [])
+        XCTAssertEqual(try store.dropEarlierProjects(apply: false).modules, [], "nothing is left to drop")
     }
 }
 

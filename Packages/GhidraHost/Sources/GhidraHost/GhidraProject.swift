@@ -137,8 +137,11 @@ struct OwnerRecord: Codable, Equatable, Sendable {
 /// revision, then the analysis naming both.
 public protocol AnalysisWriter: Sendable {
     func writeObject(_ data: Data) async throws -> SHA256Digest
+    /// The revision recorded, numbered by the store: `reading.rev` is not read.
     func writeRevision(module: SHA256Digest, reading: AnalysisReading, artifact: SHA256Digest,
-                       by: String?) async throws
+                       by: String?) async throws -> Int
+    /// The module's last recorded revision; nil before the first.
+    func latestRevision(module: SHA256Digest) async throws -> ReviewRevision?
     func storedAnalysis(module: SHA256Digest, recipe: String) async throws -> AnalysisManifest?
     func writeAnalysis(module: ModuleIdentity, recipe: AnalysisRecipe, artifact: Data, source: SourceIdentity,
                        reading: AnalysisReading?, replace: Bool) async throws -> AnalysisManifest
@@ -188,8 +191,16 @@ extension ContentStore: AnalysisWriter {
     }
 
     public func writeRevision(module: SHA256Digest, reading: AnalysisReading, artifact: SHA256Digest,
-                              by: String?) async throws {
-        try recordRevision(module: module, reading: reading, artifact: artifact, by: by)
+                              by: String?) async throws -> Int {
+        let history = try recordRevision(module: module, reading: reading, artifact: artifact, by: by)
+        guard let rev = history.revisions.last?.rev else {
+            throw CodeAnalysisError.analysisMismatch("the store recorded no revision of \(module.hex)")
+        }
+        return rev
+    }
+
+    public func latestRevision(module: SHA256Digest) async throws -> ReviewRevision? {
+        try reviewHistory(module: module)?.revisions.last
     }
 
     public func storedAnalysis(module: SHA256Digest, recipe: String) async throws -> AnalysisManifest? {
@@ -264,8 +275,16 @@ extension RemoteStore: AnalysisWriter {
     public func readProject(module: SHA256Digest) async throws -> (record: ProjectRecord, file: URL)? { nil }
 
     public func writeRevision(module: SHA256Digest, reading: AnalysisReading, artifact: SHA256Digest,
-                              by: String?) async throws {
-        try await recordRevision(module: module, reading: reading, artifact: artifact, by: by)
+                              by: String?) async throws -> Int {
+        let history = try await recordRevision(module: module, reading: reading, artifact: artifact, by: by)
+        guard let rev = history.revisions.last?.rev else {
+            throw CodeAnalysisError.analysisMismatch("the store recorded no revision of \(module.hex)")
+        }
+        return rev
+    }
+
+    public func latestRevision(module: SHA256Digest) async throws -> ReviewRevision? {
+        try await reviewHistory(module: module)?.revisions.last
     }
 
     public func storedAnalysis(module: SHA256Digest, recipe: String) async throws -> AnalysisManifest? {

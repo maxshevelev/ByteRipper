@@ -333,7 +333,7 @@ public actor GhidraHost {
 
     /// Whether the project holds writes the store has not got, asked of its owner
     /// or, with none up, of the count it left behind; no owner is started to ask.
-    private func holdsUnpublishedWrites(_ module: SHA256Digest) async -> Bool {
+    func holdsUnpublishedWrites(_ module: SHA256Digest) async -> Bool {
         let project = self.project(module)
         guard let state = try? project.state() else { return false }
         if let record = await runningOwner(project) {
@@ -396,6 +396,8 @@ public actor GhidraHost {
         let taken = (headers["x-owner-type-taken"] ?? "").split(separator: ",").map(String.init)
         let origins = Self.typeOrigins(headers["x-owner-type-origins"])
         let last = state.published
+        // The revision this publish would be, as the store numbers them.
+        let next = ((try await writer.latestRevision(module: module))?.rev ?? 0) + 1
         if let refusal = Self.languagePatchRefusal(
             publishing: Self.recipe(for: artifact, types: state.madeWith.types, passes: state.madeWith.passes).id,
             over: last?.recipe) {
@@ -414,7 +416,7 @@ public actor GhidraHost {
         }
         offered += completion.proposals
         let would = offered.isEmpty ? nil : try await writer.previewLibraryEntries(
-            module: module, rev: last?.rev, by: by, proposals: offered, take: options.takeLibrary)
+            module: module, rev: next - 1, by: by, proposals: offered, take: options.takeLibrary)
         if let refusal = would?.publishRefusal ?? Self.offerRefusal(offer.shortfalls, would: would) {
             throw GhidraHostError(.refused, refusal, status: 409)
         }
@@ -427,7 +429,7 @@ public actor GhidraHost {
         if reviewed {
             if !offered.isEmpty {
                 let written = try await writer.writeLibraryEntries(
-                    module: module, rev: (last?.rev ?? 0) + 1, by: by, proposals: offered,
+                    module: module, rev: next, by: by, proposals: offered,
                     take: options.takeLibrary)
                 library = written
                 // A store older than take_ids ignores them and answers with
@@ -448,7 +450,7 @@ public actor GhidraHost {
             }
             // The registry takes each body's ASM from here, and every module
             // holding the body links to it at once.
-            if let taught = try await teachEntryCode(module, artifact: raw, rev: (last?.rev ?? 0) + 1, by: by) {
+            if let taught = try await teachEntryCode(module, artifact: raw, rev: next, by: by) {
                 if let relinked = taught.relinked {
                     var answer = library ?? LibraryWriteResult()
                     answer.relinked = (answer.relinked ?? []) + relinked
@@ -468,15 +470,15 @@ public actor GhidraHost {
             let stored = try await writer.writeObject(ModuleFormat.review(document, of: first))
             review = stored
             if !description.isEmpty { described = try await writer.writeObject(description) }
-            let changed = last?.artifact != SHA256Digest(data: raw).hex || last?.review != stored.hex
-                || last?.description != described?.hex
-            let rev = max(1, (last?.rev ?? 0) + (changed ? 1 : 0))
-            let current = AnalysisReading(project: state.project, rev: rev, review: stored, description: described)
-            reading = current
             // The code goes into the store before the revision that names it:
-            // a revision without its artifact is one nobody can diff.
+            // a revision without its artifact is one nobody can diff. The store
+            // numbers it: the last one again when nothing changed.
             let code = try await writer.writeObject(raw)
-            try await writer.writeRevision(module: module, reading: current, artifact: code, by: by)
+            let rev = try await writer.writeRevision(
+                module: module, reading: AnalysisReading(rev: next, review: stored, description: described),
+                artifact: code, by: by)
+            let current = AnalysisReading(rev: rev, review: stored, description: described)
+            reading = current
             // The revision is stored: the transaction closes on the project. The
             // functions the registry took are no candidates and no longer dirty,
             // and their text stays. What the entries learn is from the export the
@@ -765,9 +767,10 @@ public actor GhidraHost {
         let artifactDigest = SHA256Digest(data: stored.artifact).hex
         let documentDigest = SHA256Digest(data: storedDocument).hex
         let descriptionDigest: String? = description.isEmpty ? nil : SHA256Digest(data: description).hex
-        let last = state.published
-        let changed = last?.artifact != artifactDigest || last?.review != documentDigest
-            || last?.description != descriptionDigest
+        // What the store holds last decides, as it numbers the revisions.
+        let last = try await writer.latestRevision(module: module)
+        let changed = last?.artifact?.hex != artifactDigest || last?.review.hex != documentDigest
+            || last?.description?.hex != descriptionDigest
         let functions = artifact["functions"] as? [[String: Any]] ?? []
         let instructions = functions.reduce(0) { $0 + (($1["instructions"] as? [Any])?.count ?? 0) }
         var preview: [String: Any] = [

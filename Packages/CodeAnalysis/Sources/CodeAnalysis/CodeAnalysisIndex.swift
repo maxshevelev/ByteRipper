@@ -64,13 +64,9 @@ public struct CodeAnalysisIndex: Equatable, Sendable {
         !(byModule[module]?.isEmpty ?? true)
     }
 
-    /// A module's analyses a reader may be shown. A review from a project since
-    /// replaced by a fresh one is no longer among them: it stays in the store,
-    /// and has no value to a reader.
+    /// A module's analyses a reader may be shown: every one the store holds.
     public func manifests(for module: SHA256Digest) -> [AnalysisManifest] {
-        let all = byModule[module] ?? []
-        guard let project = Self.newest(of: all)?.reading?.project else { return all }
-        return all.filter { $0.reading.map { $0.project == project } ?? true }
+        byModule[module] ?? []
     }
 
     /// The newest readable analysis of a module: what `Open with Code` will
@@ -85,24 +81,14 @@ public struct CodeAnalysisIndex: Equatable, Sendable {
     }
 
     /// The analysis that carries a manifest's reading now: itself, or the
-    /// same project's later revision under another recipe of the module. A
-    /// publish through a newer exporter stores the next revision beside the
-    /// old recipe, which keeps the revision it had; a screen that followed
-    /// only its recipe would stay there.
-    private static func newest(of manifests: [AnalysisManifest]) -> AnalysisManifest? {
-        manifests.max(by: ContentStore.olderThan)
-    }
-
+    /// module's later revision under another recipe. A publish through a newer
+    /// exporter stores the next revision beside the old recipe, which keeps the
+    /// revision it had; a screen that followed only its recipe would stay there.
     public func latestReading(of manifest: AnalysisManifest) -> AnalysisManifest {
         guard let reading = manifest.reading else { return manifest }
-        // A project made afresh replaced the one this reading came from.
-        if let newest = Self.newest(of: byModule[manifest.module.sha256] ?? []), let current = newest.reading,
-           current.project != reading.project {
-            return latestReading(of: newest)
-        }
         let later = manifests(for: manifest.module.sha256).filter {
             guard let other = $0.reading else { return false }
-            return other.project == reading.project && other.rev > reading.rev
+            return other.rev > reading.rev
         }
         return later.max { left, right in
             if left.reading!.rev == right.reading!.rev {

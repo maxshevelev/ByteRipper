@@ -52,6 +52,20 @@ final class ServerCommandTests: XCTestCase {
         XCTAssertEqual(configuration.tokensFile, ServerPaths.defaultTokensFile)
     }
 
+    /// Packing reads the store and the projects the server is set up with, and
+    /// writes only when told to.
+    func testPackingProjectsTakesTheServersFoldersAndAppliesOnlyWhenTold() throws {
+        guard case .packProjects(let listed, let listOnly) = try parse(["pack-projects"]) else { return XCTFail() }
+        XCTAssertFalse(listOnly)
+        XCTAssertEqual(listed.store, CodeAnalysisPaths.defaultRoot)
+        guard case .packProjects(let named, let apply) = try parse(["pack-projects", "--apply", "--store", "/tmp/s",
+                                                                    "--projects", "/tmp/p"]) else { return XCTFail() }
+        XCTAssertTrue(apply)
+        XCTAssertEqual(named.store.path, "/tmp/s")
+        XCTAssertEqual(named.projects.path, "/tmp/p")
+        XCTAssertThrowsError(try parse(["pack-projects", "--listen", "127.0.0.1:1"]))
+    }
+
     func testAnAddressAStoreAndATokensFile() throws {
         let parsed = try parse(["serve", "--cas", "--listen", "100.64.1.2:9000",
                                               "--store", "/tmp/s", "--tokens", "/tmp/t.json"])

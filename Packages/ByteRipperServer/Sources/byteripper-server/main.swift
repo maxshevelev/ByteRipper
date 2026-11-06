@@ -1,5 +1,7 @@
 import ByteRipperServer
+import CodeAnalysis
 import Foundation
+import GhidraHost
 import ServerRelay
 
 // `byteripper-server`: the arguments to a command, and the server run until a
@@ -23,6 +25,23 @@ case .help:
 case .token(let command):
     do {
         print(try command.run())
+    } catch {
+        fail("\(error)")
+    }
+case .packProjects(let configuration, let apply):
+    // The store and the projects this server is configured with; the folders
+    // are read, never changed. Run with the server and its owners stopped.
+    do {
+        let store = try ContentStore(root: configuration.store)
+        let host = GhidraHost(configuration: .init(projectsRoot: configuration.projects,
+                                                   ghidraHome: configuration.ghidraHome,
+                                                   sources: OwnerSources.resolved(explicit: configuration.ghidraScripts),
+                                                   idle: configuration.idle),
+                              writer: store)
+        let answer = try await host.packProjects(apply: apply)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        print(String(decoding: try encoder.encode(answer), as: UTF8.self))
     } catch {
         fail("\(error)")
     }
