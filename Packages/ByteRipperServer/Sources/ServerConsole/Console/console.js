@@ -939,11 +939,11 @@
     return h("span", { class: "pill warn", title: "Connected, has said nothing yet", text: "Silent" });
   }
 
-  // What is behind a connection: the Claude Code session's own name when it
-  // is one, beside the client process; the process alone otherwise.
-  function agentLabel(row) {
-    if (row.agent) return row.client ? `${row.agent} · ${row.client}` : row.agent;
-    return row.client || "client not known";
+  // A connection by its number and the agent behind it — the Claude Code
+  // session's own name — or "Connection" when the client gives none; the
+  // client process goes on the line below.
+  function connectionTitle(number, agent) {
+    return `#${number} ${agent || "Connection"}`;
   }
 
   function agentCard(row) {
@@ -952,8 +952,8 @@
     return h("div", { class: `agent ${row.active ? "active" : ""}` },
       h("div", { class: "agent-head" },
         h("div", { class: "agent-badge" }, icon("bot", 18)),
-        h("div", {}, h("div", { class: "agent-title", text: `Connection ${row.number}` }),
-          h("div", { class: "agent-sub", text: agentLabel(row) })),
+        h("div", {}, h("div", { class: "agent-title", text: connectionTitle(row.number, row.agent) }),
+          h("div", { class: "agent-sub", text: row.client || "client not known" })),
         connectionState(row)),
       h("div", { class: "agent-stats" },
         h("div", { class: "agent-stat" }, h("b", { text: row.calls }), h("span", { text: "calls" })),
@@ -1092,8 +1092,8 @@
     const end = Date.now();
     fill(parts.head,
       h("div", { class: "agent-badge" }, icon("bot", 18)),
-      h("div", { class: "grow" }, h("div", { class: "agent-title", text: `Connection ${row.number}` }),
-        h("div", { class: "agent-sub", text: agentLabel(row) })),
+      h("div", { class: "grow" }, h("div", { class: "agent-title", text: connectionTitle(row.number, row.agent) }),
+        h("div", { class: "agent-sub", text: row.client || "client not known" })),
       connectionState(row),
       iconButton("x", "Close the log", closeLog));
     fill(parts.stats,
@@ -1383,12 +1383,12 @@
   function connectionCell(row) {
     const use = row.connection || row.taken_on;
     if (!use) return h("td", { class: "muted", text: "—" });
-    const line = (u) => `Connection ${u.number}` + (u.open ? "" : " (closed)");
+    const title = (u) => connectionTitle(u.number, u.open ? u.agent : null) + (u.open ? "" : " (closed)");
     const taken = row.taken_on && row.connection && row.taken_on.number !== row.connection.number
-      ? h("div", { class: "muted", text: `taken on ${line(row.taken_on)}` }) : null;
+      ? h("div", { class: "muted", text: `taken on ${title(row.taken_on)}` }) : null;
     return h("td", {},
-      h("div", { text: line(use) }),
-      h("div", { class: "muted", text: use.open ? (use.agent || use.client || "client not known") : "no longer connected" }),
+      h("div", { class: "agent-title", text: title(use) }),
+      h("div", { class: "muted", text: use.open ? (use.client || "client not known") : "no longer connected" }),
       taken);
   }
 
