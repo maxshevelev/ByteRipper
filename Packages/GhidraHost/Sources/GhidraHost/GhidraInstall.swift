@@ -48,6 +48,16 @@ public struct GhidraInstall: Equatable, Sendable {
     }
     public var java: URL { jdk.appendingPathComponent("bin/java") }
 
+    /// The x86 language patch this install was compiled with, as
+    /// `Scripts/make-patched-ghidra.sh` marks it — what the owner's `hello`
+    /// says; nil for a stock Ghidra.
+    public var languagePatch: String? {
+        let marker = home.appendingPathComponent("byteripper-language-patch")
+        guard let text = try? String(contentsOf: marker, encoding: .utf8) else { return nil }
+        let line = text.split(separator: "\n").first.map { $0.trimmingCharacters(in: .whitespaces) }
+        return line?.isEmpty == false ? line : nil
+    }
+
     /// The oldest Ghidra this build runs on, and the JDK it needs: 12.2 runs
     /// on no JDK older than 25. The releases before it are not supported —
     /// the owner compiles against the install's own jars, and a build nobody

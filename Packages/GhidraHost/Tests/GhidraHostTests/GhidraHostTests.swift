@@ -218,16 +218,30 @@ final class GhidraHostOwnerTests: XCTestCase {
         let store = try ContentStore(root: root.appendingPathComponent("store"))
         let host = GhidraHost(configuration: .init(projectsRoot: root.appendingPathComponent("projects"),
                                                    idle: 120, holder: "test"), writer: store)
-        let module = SHA256Digest(data: Data("module".utf8))
+        let module = SHA256Digest(data: Data("module \(UUID().uuidString)".utf8))
         let folder = root.appendingPathComponent("projects/\(module.hex)", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         try Data("{}".utf8).write(to: folder.appendingPathComponent("state.json"))
         try Data("x".utf8).write(to: folder.appendingPathComponent("module.gpr"))
+        // The store's copy of the project goes too, or the next open would bring it back.
+        let zip = root.appendingPathComponent("project.zip")
+        try Data("a project".utf8).write(to: zip)
+        try store.putProject(module: module, file: zip, rev: 1, artifact: SHA256Digest(data: Data()), review: nil,
+                             environment: .init(ghidra: "12.2", languagePatch: nil, types: nil, passes: [],
+                                                recipe: "r", ownerBuild: nil))
+        let trash = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".Trash")
+        addTeardownBlock {
+            for name in (try? FileManager.default.contentsOfDirectory(atPath: trash.path)) ?? []
+            where name.hasPrefix(module.hex) {
+                try? FileManager.default.removeItem(at: trash.appendingPathComponent(name))
+            }
+        }
 
         let trashed = try await host.forget(module)
         addTeardownBlock { try? FileManager.default.removeItem(at: trashed) }
         XCTAssertFalse(FileManager.default.fileExists(atPath: folder.path), "the project folder is gone")
         XCTAssertTrue(FileManager.default.fileExists(atPath: trashed.path), "and it is in the Trash")
+        XCTAssertNil(try store.project(module: module), "the store keeps no copy of it")
         XCTAssertTrue(FileManager.default.fileExists(atPath: store.root.path), "the store stays")
     }
 

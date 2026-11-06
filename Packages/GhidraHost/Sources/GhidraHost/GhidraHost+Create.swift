@@ -33,6 +33,7 @@ extension GhidraHost {
                        progress: @escaping @Sendable (String) -> Void = { _ in }) async throws -> ProjectState {
         let digest = SHA256Digest(data: blob)
         let project = self.project(digest)
+        if !project.exists { try await restoreProject(digest) }
         if project.exists { return try project.state() }
         // Ghidra refuses a project whose path has an element starting with ".".
         if project.folder.pathComponents.contains(where: { $0.hasPrefix(".") }) {

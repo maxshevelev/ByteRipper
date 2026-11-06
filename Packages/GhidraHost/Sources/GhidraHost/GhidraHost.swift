@@ -67,6 +67,11 @@ public actor GhidraHost {
         public var libraryError: String?
         /// Links whose text is a default name while the target has a real one.
         public var staleLinks: [StaleLink]
+        /// The kept project the store holds for this revision now.
+        public var project: ProjectRecord?
+        /// Why the project could not be kept: the revision is stored either way,
+        /// and the next publish keeps it.
+        public var projectError: String?
 
         public init(manifest: AnalysisManifest, typeConflicts: [String], typeConflictsTaken: [String] = [],
                     typeConflictOrigins: [String: String] = [:], library: LibraryWriteResult? = nil,
@@ -526,9 +531,21 @@ public actor GhidraHost {
         state.reviewed = reviewed && Self.holdsOwnReview(
             document: review == nil ? document : ModuleFormat.review(document, of: first), description: description)
         try project.write(state)
-        return Publication(manifest: manifest, typeConflicts: conflicts, typeConflictsTaken: taken,
-                           typeConflictOrigins: origins, library: library,
-                           libraryError: libraryError, staleLinks: await staleLinks(port: record.port))
+        var publication = Publication(manifest: manifest, typeConflicts: conflicts, typeConflictsTaken: taken,
+                                      typeConflictOrigins: origins, library: library,
+                                      libraryError: libraryError, staleLinks: await staleLinks(port: record.port))
+        // The project is kept with the revision it published, last: everything
+        // the owner writes for this publish is saved by now, `state.json` too.
+        if let reading {
+            do {
+                publication.project = try await keepProject(module, state: state, rev: reading.rev,
+                                                            artifact: SHA256Digest(data: raw), review: reading.review,
+                                                            recipe: recipe.id)
+            } catch {
+                publication.projectError = "\(error)"
+            }
+        }
+        return publication
     }
 
     /// A report beside a stored publish: failing to read it never fails that.
@@ -893,6 +910,11 @@ public actor GhidraHost {
         leases[module] = nil
         var trashed: NSURL?
         try FileManager.default.trashItem(at: project.folder, resultingItemURL: &trashed)
+        // The store's copy goes with it, or the next open would bring the same
+        // program back: to the Trash too, as recoverable as the folder.
+        if let kept = try await writer.readProject(module: module) {
+            try FileManager.default.trashItem(at: kept.file.deletingLastPathComponent(), resultingItemURL: nil)
+        }
         return (trashed as URL?) ?? project.folder
     }
 
@@ -901,6 +923,7 @@ public actor GhidraHost {
     /// The module's running owner, or a new one.
     func owner(of module: SHA256Digest) async throws -> OwnerRecord {
         let project = self.project(module)
+        if !project.exists { try await restoreProject(module) }
         guard project.exists else {
             throw GhidraHostError(.project, "no project for \(module.hex): open the module first", status: 404)
         }

@@ -539,6 +539,60 @@ final class GhidraHostCandidateTests: XCTestCase {
 
     /// A body taken out of the registry is the module's function again: it takes
     /// the entry's text as its own, and the next publish stores that, with no link.
+    /// A publish keeps the project in the store's private part with the revision
+    /// it published, without what belongs to one owner's run. A host with no
+    /// folder for the module opens the store's one, the review in it; one whose
+    /// Ghidra could not open it as it was made refuses, and unpacks nothing.
+    func testAPublishKeepsTheProjectAndAnOpenWithNoFolderBringsItBack() async throws {
+        let (host, store, module, directory) = try await setUp("kept")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let listed = try await functions(host, module)
+        let entry = try XCTUnwrap(listed.first?["entry"] as? String)
+        let name = "KeptName\(Int.random(in: 1000...9999))"
+        _ = try await host.write(module, "/v1/rename/function", body: body(["address": entry, "name": name, "by": "agent"]))
+        let published = try await host.publish(module, by: "agent")
+        XCTAssertNil(published.projectError)
+        let record = try XCTUnwrap(published.project)
+        let rev = try XCTUnwrap(published.manifest.reading?.rev)
+        XCTAssertEqual(record.rev, rev)
+        XCTAssertEqual(try store.project(module: module), record)
+        let version = try await host.ghidra().version
+        XCTAssertEqual(record.environment.ghidra, version)
+        XCTAssertEqual(store.verify(), [])
+
+        // What is in the file: the project and the state, nothing of the owner's run.
+        let look = directory.appendingPathComponent("look")
+        try ProjectPack.unpack(store.projectFile(module), into: look)
+        let names = try FileManager.default.contentsOfDirectory(atPath: look.path)
+        XCTAssertTrue(names.contains("module.gpr") && names.contains("module.rep") && names.contains("state.json"), "\(names)")
+        XCTAssertFalse(names.contains { $0 == "owner.json" || $0.hasPrefix("module.lock") || $0.hasSuffix(".log") }, "\(names)")
+        let state = try JSONDecoder().decode(ProjectState.self, from: Data(contentsOf: look.appendingPathComponent("state.json")))
+        XCTAssertFalse(state.archive?.contains("/") ?? false, "the EDK2 archive is named, not placed")
+
+        // No folder: the store's project comes back, with the review in it.
+        await host.stop(module)
+        let folder = await host.project(module).folder
+        let aside = directory.appendingPathComponent("aside")
+        try FileManager.default.moveItem(at: folder, to: aside)
+        let back = try await functions(host, module)
+        XCTAssertTrue(back.contains { $0["name"] as? String == name }, "the review came back with the project")
+        await host.stop(module)
+
+        // An install that would not open it as it was made: refused, nothing unpacked.
+        var other = record
+        other.environment.ghidra = "0.1"
+        let url = store.privateURL.appendingPathComponent("projects/\(module.hex)/record.json")
+        try JSONEncoder().encode(other).write(to: url)
+        try FileManager.default.removeItem(at: folder)
+        do {
+            _ = try await host.read(module, "/v1/hello")
+            XCTFail("a project made by another Ghidra is not opened")
+        } catch {
+            XCTAssertTrue("\(error)".contains("cannot open it as it was made"), "\(error)")
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: folder.path))
+    }
+
     /// An entry from before entries held their function — one a take-out kept
     /// and a restore brought back — as the registry's index lists it.
     private func withoutItsFunction(_ id: String, in store: ContentStore, directory: URL) throws {

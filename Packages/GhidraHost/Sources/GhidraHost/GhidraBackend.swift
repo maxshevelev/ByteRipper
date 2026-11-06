@@ -87,6 +87,10 @@ public struct PublishAnswer: Codable, Sendable {
     public var library: LibraryWriteResult?
     public var libraryError: String?
     public var staleLinks: [GhidraHost.StaleLink]?
+    /// The kept project the store holds for this revision now.
+    public var project: ProjectRecord?
+    /// Why the project could not be kept: the revision is stored either way.
+    public var projectError: String?
 
     public init(_ publication: GhidraHost.Publication?) {
         manifest = publication?.manifest
@@ -96,6 +100,8 @@ public struct PublishAnswer: Codable, Sendable {
         library = publication?.library
         libraryError = publication?.libraryError
         staleLinks = publication.map(\.staleLinks).flatMap { $0.isEmpty ? nil : $0 }
+        project = publication?.project
+        projectError = publication?.projectError
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -106,6 +112,8 @@ public struct PublishAnswer: Codable, Sendable {
         case library
         case libraryError = "library_error"
         case staleLinks = "stale_links"
+        case project
+        case projectError = "project_error"
     }
 }
 

@@ -356,6 +356,53 @@ final class ContentStoreTests: XCTestCase {
         XCTAssertEqual(store.verify(), [])
     }
 
+    /// The module's kept project lives in the store's private part, beside the
+    /// revision it belongs to: one per module, the newest replacing the one
+    /// before. `verify` checks its sum and its revision; `gc` leaves it; it is
+    /// no object, so nothing serves or mirrors it by a digest.
+    func testAProjectIsKeptPrivatelyAtItsRevision() throws {
+        let document = try store.putObject(Data(#"{"rev":1}"#.utf8))
+        let code = try store.putObject(artifact())
+        let reading = AnalysisReading(project: "p", rev: 1, review: document)
+        try store.recordRevision(module: module().sha256, reading: reading, artifact: code, by: "agent")
+        try store.putAnalysis(module: module(), recipe: recipe(), artifact: artifact(), reading: reading)
+        let environment = ProjectEnvironment(ghidra: "12.2", languagePatch: "descriptor-tables-1", types: "t",
+                                             passes: ["ApplyUefi.java"], recipe: recipe().id, ownerBuild: 7)
+        let file = directory.appendingPathComponent("made.zip")
+        try Data("first project".utf8).write(to: file)
+        XCTAssertNil(try store.project(module: module().sha256))
+        let record = try store.putProject(module: module().sha256, file: file, rev: 1, artifact: code,
+                                          review: document, environment: environment)
+        XCTAssertEqual(try store.project(module: module().sha256), record)
+        XCTAssertEqual(try Data(contentsOf: store.projectFile(module().sha256)), Data("first project".utf8))
+        XCTAssertEqual(store.projects(), [module().sha256])
+        XCTAssertFalse(store.hasObject(record.sha256), "the project is no object")
+        XCTAssertEqual(store.verify(), [])
+        XCTAssertEqual(try store.collectGarbage(dryRun: false).objects, 0)
+        XCTAssertNotNil(try store.project(module: module().sha256), "gc leaves the private part")
+
+        // The newest replaces the one before.
+        try Data("second project".utf8).write(to: file)
+        try store.putProject(module: module().sha256, file: file, rev: 1, artifact: code, review: document,
+                             environment: environment)
+        XCTAssertEqual(try Data(contentsOf: store.projectFile(module().sha256)), Data("second project".utf8))
+        XCTAssertEqual(store.verify(), [])
+
+        // A file that is not the record's, or a revision the history lacks, is a problem.
+        try Data("changed behind the record".utf8).write(to: store.projectFile(module().sha256))
+        XCTAssertEqual(store.verify().filter { $0.contains("project.zip is not") }.count, 1, "\(store.verify())")
+        try store.putProject(module: module().sha256, file: file, rev: 9, artifact: code, review: document,
+                             environment: environment)
+        XCTAssertEqual(store.verify().filter { $0.contains("is not in the module's history") }.count, 1)
+    }
+
+    func testAnEnvironmentSaysWhatAnInstallDoesNotShare() {
+        let made = ProjectEnvironment(ghidra: "12.2", languagePatch: "descriptor-tables-1", types: nil, passes: [],
+                                      recipe: "r", ownerBuild: 1)
+        XCTAssertEqual(made.differences(ghidra: "12.2", languagePatch: "descriptor-tables-1"), [])
+        XCTAssertEqual(made.differences(ghidra: "12.3", languagePatch: nil).count, 2)
+    }
+
     /// A revision keeps the code it published: the history names the
     /// artifact, `gc` keeps it although no analysis manifest does, `verify`
     /// says when it is gone, and a revision naming one the store does not

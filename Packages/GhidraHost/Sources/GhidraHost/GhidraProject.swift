@@ -99,9 +99,14 @@ public struct GhidraProject: Sendable {
     }
 
     public func write(_ state: ProjectState) throws {
+        try Self.encoded(state).write(to: stateURL, options: .atomic)
+    }
+
+    /// `state.json` as every writer writes it.
+    static func encoded(_ state: ProjectState) throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        try (encoder.encode(state) + Data("\n".utf8)).write(to: stateURL, options: .atomic)
+        return try encoder.encode(state) + Data("\n".utf8)
     }
 
     /// The modules that have a project under `root`.
@@ -160,11 +165,26 @@ public protocol AnalysisWriter: Sendable {
     /// One function of the module's newest analysis as a reader of the store
     /// sees it, nil when this store cannot say.
     func functionAsRead(module: SHA256Digest, entry: CodeAddress) async throws -> CodeArtifact.Function?
+    /// The project at `file` kept for the revision `rev`, in the store's private part.
+    func writeProject(module: SHA256Digest, file: URL, rev: Int, artifact: SHA256Digest, review: SHA256Digest?,
+                      environment: ProjectEnvironment) async throws -> ProjectRecord
+    /// The module's kept project and the file holding it; nil when the store keeps none.
+    func readProject(module: SHA256Digest) async throws -> (record: ProjectRecord, file: URL)?
 }
 
 extension ContentStore: AnalysisWriter {
     public func writeObject(_ data: Data) async throws -> SHA256Digest {
         try putObject(data)
+    }
+
+    public func writeProject(module: SHA256Digest, file: URL, rev: Int, artifact: SHA256Digest,
+                             review: SHA256Digest?, environment: ProjectEnvironment) async throws -> ProjectRecord {
+        try putProject(module: module, file: file, rev: rev, artifact: artifact, review: review,
+                       environment: environment)
+    }
+
+    public func readProject(module: SHA256Digest) async throws -> (record: ProjectRecord, file: URL)? {
+        try project(module: module).map { ($0, projectFile(module)) }
     }
 
     public func writeRevision(module: SHA256Digest, reading: AnalysisReading, artifact: SHA256Digest,
@@ -233,6 +253,15 @@ extension RemoteStore: AnalysisWriter {
     public func writeObject(_ data: Data) async throws -> SHA256Digest {
         try await putObject(data)
     }
+
+    /// A served store keeps its projects to itself: the server keeps what its
+    /// own host publishes, and nothing reaches it from outside.
+    public func writeProject(module: SHA256Digest, file: URL, rev: Int, artifact: SHA256Digest,
+                             review: SHA256Digest?, environment: ProjectEnvironment) async throws -> ProjectRecord {
+        throw GhidraHostError(.refused, "a served store keeps no project sent to it")
+    }
+
+    public func readProject(module: SHA256Digest) async throws -> (record: ProjectRecord, file: URL)? { nil }
 
     public func writeRevision(module: SHA256Digest, reading: AnalysisReading, artifact: SHA256Digest,
                               by: String?) async throws {

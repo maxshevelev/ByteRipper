@@ -601,6 +601,8 @@ public struct ContentStore: Sendable {
                             + "\(manifest.artifact.sha256.hex) is missing")
         }
 
+        problems += verifyProjects()
+
         let refEntries = contents(of: refsURL).filter { $0.pathExtension == "json" }
         for url in refEntries {
             guard let data = try? Data(contentsOf: url),
