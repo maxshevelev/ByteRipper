@@ -179,6 +179,45 @@ final class ContentStoreTests: XCTestCase {
         XCTAssertThrowsError(try store.putJournal(id: "../x", data: journal), "a journal's name stays in its folder")
     }
 
+    /// A type archive's versions follow one another, are never rewritten, and
+    /// a version put again with the same files — a journal finishing — is the same.
+    func testTypeArchiveVersionsFollowOneAnotherAndAreNeverRewritten() throws {
+        func files(_ archive: String) throws -> [String: SHA256Digest] {
+            ["archive.gdt": try store.putObject(Data(archive.utf8)),
+             "origin.json": try store.putObject(Data("{}".utf8)),
+             "withdrawn.json": try store.putObject(Data("{}".utf8))]
+        }
+        XCTAssertNil(try store.typeArchive(bits: "Ia32"))
+        let first = TypeArchiveVersion(version: 1, files: try files("one"), at: "2026-11-06T10:00:00Z", by: nil,
+                                       module: nil, rev: nil)
+        XCTAssertThrowsError(try store.putTypeArchive(bits: "Ia32", version: { var v = first; v.version = 2; return v }()),
+                             "the first version is 1")
+        try store.putTypeArchive(bits: "Ia32", version: first)
+        try store.putTypeArchive(bits: "Ia32", version: first)
+        XCTAssertEqual(try store.typeArchive(bits: "Ia32")?.versions.count, 1, "the same version again is the same")
+        var other = first
+        other.files = try files("another one")
+        XCTAssertThrowsError(try store.putTypeArchive(bits: "Ia32", version: other), "a kept version is not rewritten")
+        var skipped = other
+        skipped.version = 3
+        XCTAssertThrowsError(try store.putTypeArchive(bits: "Ia32", version: skipped), "versions do not skip")
+        var second = other
+        second.version = 2
+        second.added = ["NEW_TYPE"]
+        try store.putTypeArchive(bits: "Ia32", version: second)
+        XCTAssertEqual(try store.typeArchive(bits: "Ia32")?.current?.version, 2)
+        XCTAssertEqual(try Data(contentsOf: store.typeArchiveFolder(bits: "Ia32", version: 2)
+                                    .appendingPathComponent("archive.gdt")), Data("another one".utf8))
+        XCTAssertThrowsError(try store.typeArchive(bits: "../x"), "a size names one of the two")
+        XCTAssertEqual(store.verify(), [])
+        // Kept outside objects/: a collection takes the objects, the versions stay.
+        try store.collectGarbage(dryRun: false)
+        XCTAssertEqual(store.verify(), [])
+        try Data("damaged".utf8).write(to: store.typeArchiveFolder(bits: "Ia32", version: 1)
+                                            .appendingPathComponent("archive.gdt"))
+        XCTAssertEqual(store.verify(), ["private/types/Ia32/1/archive.gdt: not the file index.json names"])
+    }
+
     /// A mirror holds what was asked of it: a manifest naming an object it has
     /// not fetched yet is not a damaged store, and the same store with no source
     /// to fetch it from is.

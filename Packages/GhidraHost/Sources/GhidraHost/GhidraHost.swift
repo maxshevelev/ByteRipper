@@ -70,6 +70,8 @@ public actor GhidraHost {
         /// Why the review's types could not be merged into the shared archive:
         /// the revision is stored either way, and the next publish merges them.
         public var typesError: String?
+        /// The shared types' version this publish made, when its types changed the archive.
+        public var typesVersion: Int?
         /// The kept project the store holds for this revision now.
         public var project: ProjectRecord?
         /// Why the project could not be kept: the revision is stored either way,
@@ -267,8 +269,34 @@ public actor GhidraHost {
         return try await Self.call(record.port, "POST", path, body: body).data
     }
 
+    /// A call of the owner on the shared types: under the module's lease, which
+    /// it takes and gives back when it held none, and counted as no write of
+    /// the review — it changes an archive, not the program.
+    func typesCall(_ module: SHA256Digest, _ path: String, body: Data) async throws -> Data {
+        let record = try await owner(of: module)
+        let held = leases[module] != nil
+        let token = try await lease(module, record)
+        do {
+            let answer = try await Self.call(record.port, "POST", path, body: body, lease: token).data
+            if !held {
+                leases[module] = nil
+                _ = try? await Self.call(record.port, "DELETE", "/v1/lease", lease: token)
+            }
+            return answer
+        } catch {
+            if !held {
+                leases[module] = nil
+                _ = try? await Self.call(record.port, "DELETE", "/v1/lease", lease: token)
+            }
+            throw error
+        }
+    }
+
     /// A write call of the bridge, under the host's lease of the module.
     public func write(_ module: SHA256Digest, _ path: String, body: Data) async throws -> Data {
+        if path == "/v1/type", writer.keepsTypeArchives, Self.withdrawsShared(body) {
+            return try await withdrawSharedType(module, body: body)
+        }
         writesBegun[module, default: 0] += 1
         writesRunning[module, default: 0] += 1
         defer { writesRunning[module, default: 1] -= 1 }
@@ -442,8 +470,15 @@ public actor GhidraHost {
         if let refusal = would?.publishRefusal ?? Self.offerRefusal(offer.shortfalls, would: would) {
             throw GhidraHostError(.refused, refusal, status: 409)
         }
-        // The registry said yes: the journal goes down before the first write.
         let program = artifact["program"] as? [String: Any] ?? [:]
+        // Then the shared types: merged into a copy of the archive's current
+        // version; one the archive holds differently refuses the publish, here,
+        // before anything is written.
+        let types = writer.keepsTypeArchives && reviewed
+            ? try await decideTypes(module, language: program["language"] as? String ?? "unknown",
+                                    take: options.takeTypeConflicts, by: by)
+            : nil
+        // Both said yes: the journal goes down before the first write.
         let identity = ModuleIdentity(sha256: module, size: state.module.size, name: state.module.name,
                                       kind: state.module.kind,
                                       language: program["language"] as? String ?? "unknown",
@@ -461,8 +496,15 @@ public actor GhidraHost {
             exported: try await writer.writeObject(exported), document: try await writer.writeObject(document),
             description: try await writer.writeObject(description), identity: identity, recipe: recipe,
             source: SourceIdentity(path: state.source?.path, document: state.source?.document, node: state.source?.node),
-            replace: ours, typeConflicts: conflicts, typeConflictsTaken: taken, typeConflictOrigins: origins)
+            replace: ours, typeConflicts: types?.merged.conflicts ?? conflicts,
+            typeConflictsTaken: types?.merged.taken ?? taken, typeConflictOrigins: types?.merged.origins ?? origins)
         journal.objects = [journal.exported, journal.document, journal.description]
+        journal.typesInOwner = !writer.keepsTypeArchives
+        if let types {
+            journal.typesBits = types.bits
+            journal.typesVersion = types.version
+            for object in types.version?.files.values.sorted() ?? [] { journal.keep(object) }
+        }
         try await writeDown(journal)
         try await applyStoreSteps(&journal)
         try await applyOwnerSteps(&journal, record: record)
@@ -473,9 +515,16 @@ public actor GhidraHost {
                                       typeConflictOrigins: journal.typeConflictOrigins, library: journal.library,
                                       libraryError: journal.libraryError, staleLinks: await staleLinks(port: record.port))
         publication.typesError = journal.typesError
+        publication.typesVersion = journal.typesVersion?.version
         publication.project = journal.project
         publication.projectError = journal.projectError
         return publication
+    }
+
+    /// Whether a `/v1/type` body takes a type out of the shared archive.
+    static func withdrawsShared(_ body: Data) -> Bool {
+        let request = (try? JSONSerialization.jsonObject(with: body) as? [String: Any]) ?? [:]
+        return request["delete"] as? Bool == true && request["shared"] as? Bool == true
     }
 
     /// A journal's name sorts by when it began.
@@ -728,7 +777,17 @@ public actor GhidraHost {
         // Always present, empty included: a reader tells "nothing to take"
         // from "this build has no such field".
         preview["type_conflicts_taken"] = taken
-        preview["type_conflict_origins"] = Self.typeOrigins(headers["x-owner-type-origins"])
+        let typeOrigins = Self.typeOrigins(headers["x-owner-type-origins"])
+        preview["type_conflict_origins"] = typeOrigins
+        // A type the shared archive holds differently refuses the publish; a
+        // withdrawn name only stays in this module.
+        let replacing = conflicts.filter { !(typeOrigins[$0] ?? "").hasPrefix("withdrawn ") }
+        if writer.keepsTypeArchives, !replacing.isEmpty, !takeTypeConflicts {
+            let names = Dictionary((try? await writer.newestAnalyses())?.map { ($0.module.sha256.hex, $0.module.name) } ?? [],
+                                   uniquingKeysWith: { first, _ in first })
+            preview["types_refused"] = Self.typeRefusal(replacing, origins: typeOrigins, names: names, version: nil,
+                                                        bits: Self.archiveBits(language: (artifact["program"] as? [String: Any])?["language"] as? String ?? ""))
+        }
         preview["stale_links"] = try Self.plain(await staleLinks(port: record.port))
         if let descriptionDigest {
             preview["description"] = ["sha256": descriptionDigest, "size": description.count]

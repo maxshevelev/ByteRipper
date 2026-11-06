@@ -93,6 +93,8 @@ public struct PublishAnswer: Codable, Sendable {
     public var projectError: String?
     /// Why the review's types could not be merged into the shared archive.
     public var typesError: String?
+    /// The shared types' version the publish made, when it changed the archive.
+    public var typesVersion: Int?
 
     public init(_ publication: GhidraHost.Publication?) {
         manifest = publication?.manifest
@@ -105,6 +107,7 @@ public struct PublishAnswer: Codable, Sendable {
         project = publication?.project
         projectError = publication?.projectError
         typesError = publication?.typesError
+        typesVersion = publication?.typesVersion
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -118,6 +121,7 @@ public struct PublishAnswer: Codable, Sendable {
         case project
         case projectError = "project_error"
         case typesError = "types_error"
+        case typesVersion = "types_version"
     }
 }
 

@@ -66,8 +66,9 @@ PCI Local Bus Specification 3.0, 3.2.2.3.2."`, or `not confirmed`. The app
 shows the comment, the value and the instructions that use the name when the
 reader clicks it, in the C or on the number in the listing; a name without
 one shows only its value. The enum is a type of the review: it is shared at
-publish (`review-types-*.gdt`) and grows member by member from module to
-module, so in the next module `name` and `enum` alone bring the comment along,
+publish (`review-types-*.gdt`, kept by the server in versions) and grows member
+by member from module to module — a member another module gave a different
+value refuses the publish — so in the next module `name` and `enum` alone bring the comment along,
 and a name the program's enums hold needs no `enum` at all. One value has one
 name in an enum (an equate shows the first name of its value): a second
 meaning of the same number belongs in another enum. A name given before

@@ -573,7 +573,8 @@ history keeps it. They run on the store's directory.
 - `byteripper-cas library-rename <id> <name>` narrows the name of a whole entry.
 - A text is replaced by publishing over the review server's routes with a token that has
   the `admin` right: `take_library_conflicts` names the entries and `library_reasons`
-  says why; `take_type_conflicts=1` replaces a shared type.
+  says why; `take_type_conflicts=1` replaces a shared type, as the shared types' next
+  version.
 
 **A refusal for a replacement.** `library.conflicts` means this module's review would
 replace what the registry says. Read the entry's review (`library_registry` with its

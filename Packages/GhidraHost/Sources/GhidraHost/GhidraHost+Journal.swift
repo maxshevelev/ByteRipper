@@ -13,12 +13,12 @@ import Foundation
 struct PublishJournal: Codable, Sendable {
     enum Step: String, Codable, CaseIterable, Sendable {
         // The store's.
-        case library, code, revision, sources, equates, analysis
+        case library, code, revision, sources, equates, analysis, typeVersion
         // The owner's.
         case marks, bytes, types, state, project
 
         var isStore: Bool { Self.store.contains(self) }
-        static let store: [Step] = [.library, .code, .revision, .sources, .equates, .analysis]
+        static let store: [Step] = [.library, .code, .revision, .sources, .equates, .analysis, .typeVersion]
         static let owner: [Step] = [.marks, .bytes, .types, .state, .project]
     }
 
@@ -48,6 +48,13 @@ struct PublishJournal: Codable, Sendable {
     var typeConflicts: [String]
     var typeConflictsTaken: [String]
     var typeConflictOrigins: [String: String]
+    /// The shared types' next version, decided before the journal went down,
+    /// and its pointer size; nil when the merge changed nothing.
+    var typesBits: String?
+    var typesVersion: TypeArchiveVersion?
+    /// Merged by the owner after the registry's decision, into the archive
+    /// beside the projects: a store that keeps no versions.
+    var typesInOwner: Bool?
     /// Every object the journal names, for `gc` to keep while it is there.
     var objects: [SHA256Digest] = []
 
@@ -216,6 +223,16 @@ extension GhidraHost {
                 source: journal.source, reading: journal.reading, replace: journal.replace)
             try await mark(.analysis, in: &journal)
         }
+        if !journal.did(.typeVersion) {
+            // The shared types' next version, naming the revision that made it;
+            // then the copy the owners read.
+            if var version = journal.typesVersion, let bits = journal.typesBits {
+                version.rev = journal.rev
+                _ = try await writer.writeTypeArchive(bits: bits, version: version)
+                try? await refreshArchiveCopy(bits: bits)
+            }
+            try await mark(.typeVersion, in: &journal)
+        }
     }
 
     /// The owner's steps not yet done. A failure of one is reported in the
@@ -244,9 +261,10 @@ extension GhidraHost {
             }
             try await mark(.bytes, in: &journal)
         }
-        if !journal.did(.types) {
-            // The review's types into the shared archive, now that the registry
-            // has said yes.
+        if !journal.did(.types), journal.typesInOwner ?? true {
+            // The review's types into the shared archive beside the projects,
+            // now that the registry has said yes: a store that keeps versions
+            // has had them decided and kept already.
             let path = journal.takeTypeConflicts ? "/v1/types/merge?take_type_conflicts=1" : "/v1/types/merge"
             do {
                 let answer = try JSONSerialization.jsonObject(with: try await write(module, path, body: Data("{}".utf8)))
@@ -257,6 +275,8 @@ extension GhidraHost {
             } catch {
                 journal.typesError = "\(error)"
             }
+            try await mark(.types, in: &journal)
+        } else if !journal.did(.types) {
             try await mark(.types, in: &journal)
         }
         if !journal.did(.state) {
@@ -319,6 +339,8 @@ extension GhidraHost {
             hold.release()
         }
         var found = 0
+        // A version kept before a stop and not yet copied beside the projects.
+        await refreshArchiveCopies()
         for data in try await writer.readJournals() {
             var journal = try JSONDecoder().decode(PublishJournal.self, from: data)
             found += 1

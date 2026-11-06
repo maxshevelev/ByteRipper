@@ -568,6 +568,22 @@ final class GhidraHostCandidateTests: XCTestCase {
         state["state"] = "r\(published?.rev ?? -1) \(published?.artifact == manifest.artifact.sha256.hex)"
         state["journals"] = "\(try store.journals().count)"
         state["verify"] = store.verify().joined(separator: "; ")
+        // The shared types' versions — not their bytes: Ghidra writes ids of its
+        // own into an archive — and whether the copy beside the projects is the
+        // current one.
+        for bits in ContentStore.typeArchiveBits {
+            let versions = try store.typeArchive(bits: bits)?.versions ?? []
+            state["types \(bits)"] = versions.map {
+                "v\($0.version) r\($0.rev ?? -1) by \($0.by ?? "-") +\($0.added.sorted()) ~\($0.amended.sorted())"
+            }.joined(separator: "; ")
+            if let current = versions.last {
+                let kept = try Data(contentsOf: store.typeArchiveFolder(bits: bits, version: current.version)
+                                        .appendingPathComponent("archive.gdt"))
+                let beside = try? Data(contentsOf: await host.configuration.projectsRoot
+                                           .appendingPathComponent("review-types-\(bits).gdt"))
+                state["types \(bits) copy"] = "\(beside == kept)"
+            }
+        }
         return state
     }
 
@@ -581,6 +597,9 @@ final class GhidraHostCandidateTests: XCTestCase {
             let (host, store, reviewed, other, source, _, directory) = try await aullshrReviewed()
             defer { try? FileManager.default.removeItem(at: directory) }
             try await propose(host, reviewed, source)
+            // A type of the review's own, so the shared types get a version.
+            _ = try await host.write(reviewed, "/v1/type", body: try JSONSerialization.data(withJSONObject: [
+                "c": "typedef struct _STOP_TYPE { int Count; } STOP_TYPE;"]))
             guard let stop else {
                 _ = try await host.publish(reviewed, by: "agent")
                 let state = try await publishedState(store, reviewed, host)
@@ -609,8 +628,10 @@ final class GhidraHostCandidateTests: XCTestCase {
         let whole = try await run(nil)
         XCTAssertEqual(whole["journals"], "0")
         XCTAssertEqual(whole["verify"], "")
+        XCTAssertTrue(whole.contains { $0.key.hasPrefix("types ") && !$0.key.hasSuffix(" copy") && !$0.value.isEmpty },
+                      "the publish makes a version of the shared types: \(whole.filter { $0.key.hasPrefix("types") })")
         var stops = PublishJournal.Step.allCases.map { PublishStop(step: $0, marked: true) }
-        stops += [.library, .code, .revision, .equates, .analysis, .marks, .types, .project]
+        stops += [.library, .code, .revision, .equates, .analysis, .typeVersion, .marks, .types, .project]
             .map { PublishStop(step: $0, marked: false) }
         if let only = ProcessInfo.processInfo.environment["PUBLISH_STOP_ONLY"] {
             stops = stops.filter { "\($0.step.rawValue)\($0.marked ? "" : "-unmarked")" == only }

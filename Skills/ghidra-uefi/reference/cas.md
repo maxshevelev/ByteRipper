@@ -50,6 +50,10 @@ refused, never dropped.
   private/projects/<module-sha>/record.json   # which revision it is, and what made it
   private/journal/<id>.json                   # a publish that has not finished
   private/publish.lock                        # flock one publish holds from its decision to its end
+  private/types/<bits>/index.json             # the shared review types' versions, Ia32 or X64, current last
+  private/types/<bits>/<version>/archive.gdt  # one version: the Ghidra archive,
+  private/types/<bits>/<version>/origin.json  #   the module that wrote each type,
+  private/types/<bits>/<version>/withdrawn.json  # and the names taken out, with who and why
   tmp/                                        # staging; cleaned by gc
   .lock                                       # flock for writers
 ```
@@ -174,20 +178,40 @@ A revision recorded before revisions kept their code names none, and `gc` keeps
 only what a revision names: such a revision cannot be compared with, and the
 panel's picker leaves it out.
 
-A publish is one transaction. What the owner exports and the registry's
-decision come first, and nothing is written while the registry can still say
-no. Then the journal (`private/journal/`) goes down with everything the publish
-will write, and the steps follow, each marked there when it is done and each
-safe to do again: the registry's entries, their code, the revision, the
-sources' revision number, the entries' equates, the analysis — the store's
-steps — then the marks in the project, the bytes the registry learns from it,
-the review's types into the shared archive, `state.json` and the kept project —
-the owner's. A server that stopped part way finishes the store's steps before
+A publish is one transaction. What the owner exports, the registry's decision
+and the shared types' decision come first, and nothing is written while either
+can still say no. Then the journal (`private/journal/`) goes down with
+everything the publish will write, and the steps follow, each marked there when
+it is done and each safe to do again: the registry's entries, their code, the
+revision, the sources' revision number, the entries' equates, the analysis, the
+shared types' next version — the store's steps — then the marks in the project,
+the bytes the registry learns from it, `state.json` and the kept project — the
+owner's. A server that stopped part way finishes the store's steps before
 it opens a route, and the owner's the next time the module is opened; the last
 step removes the journal. One publish at a time holds a store, from its
 decision to its end. A registry source names the revision the store recorded;
 `verify` reports one that names a revision the module's history does not
 hold.
+
+The shared review types — one archive per pointer size — are kept by the server
+in versions, by the registry's rule. While a publish holds the store, its owner
+merges the review's types into a copy of the current version: a type new to
+the archive is added; the same type is nothing; an addition — an enum member, a
+real name where the shared copy had a placeholder (`Unknown…`, `field_0x…`,
+`param_N`, a member type Ghidra made up as `_func_N` or a `.conflict` copy) —
+makes the next version. Comments and descriptions are the last publish's: a
+module whose text for a type, a field or an enum member differs from the
+archive's writes its own, and that too is the next version. A type the
+archive holds differently in any other way refuses the publish, and nothing is
+written; only an administrator replaces one (`take_type_conflicts`), and that
+too is a version. A name withdrawn from the archive does not refuse: it stays
+in the module's program and is reported. A withdrawal is a version of its own.
+A version names the module, the revision, who made it and what it added,
+amended, replaced or took out, and is never rewritten. The first version of an
+archive is the one an earlier server kept beside its projects
+(`GhidraProjects/review-types-*.gdt`); those files stay a copy of the current
+version, which owners read when they start, and the server puts them right when
+it starts. `verify` checks each version's files against its index.
 
 ### The library registry
 

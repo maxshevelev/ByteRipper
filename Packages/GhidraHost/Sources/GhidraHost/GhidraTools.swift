@@ -1182,11 +1182,19 @@ public enum GhidraTools {
                 revision: every ByteRipper reading this store shows the new names. Publishing an unchanged \
                 program is the same revision. `stale_links` lists links in comments and the description whose \
                 text is a default name (`FUN_…`) while the target now has a real one: `at` and `kind` say \
-                where, `name` is what the text should read; they are reported, not rewritten. `type_conflicts` names types another review defines \
-                differently, which stay in this module only: `ghidra_type_definition` shows both, and \
-                `type_conflict_origins` names the module that wrote the shared copy. \
-                A shared definition is replaced only by an administrator: avoid changing what another \
-                review wrote unless the code proves it wrong. \
+                where, `name` is what the text should read; they are reported, not rewritten. The review's types \
+                are shared by the registry's rule, and the store keeps the shared archive in versions: a \
+                type new to it is added; the same type is nothing; an addition — an enum member, a real \
+                name where the shared copy has a placeholder (`Unknown…`, `field_0x…`, `param_N`, a member \
+                type Ghidra made up as `_func_N`) — makes the next version, `types_version`. Comments and \
+                descriptions are the last publish's: this module's text for a type, a field or an enum member \
+                replaces the shared one, and that is a version too. A type the archive holds differently in any other way \
+                refuses the whole publish before anything is stored, naming each type and the module that \
+                wrote the shared copy: `ghidra_type_definition` shows both; bring the module's type in line \
+                with the shared one. A shared definition is replaced only by an administrator: avoid \
+                changing what another review wrote unless the code proves it wrong. A name withdrawn from \
+                the archive does not refuse: it is listed in `type_conflicts`, its `type_conflict_origins` \
+                saying `withdrawn`, and stays in this module only. \
                 A function of the registry that became dirty — written on since it was bound — offers \
                 itself to the registry, and needs no candidate mark. The publish decides for all at once. \
                 New: `library.added`. The same review: `unchanged`. A review that only adds to the entry \
@@ -1206,7 +1214,7 @@ public enum GhidraTools {
                 By default the answer carries only what the publish changed; `full: true` adds the list of \
                 entries it left as they were. `dry_run: true` answers the same without storing: the \
                 artifact's counts, the revision it would become, the description's size, the type \
-                conflicts, and `library`, what the registry would do, with the refusal in \
+                conflicts with `types_refused` when they would refuse the publish, and `library`, what the registry would do, with the refusal in \
                 `library_refused`. \
                 The export is done, so it costs what a publish costs. Publishing is the point another host sees the work; the \
                 owner also writes the program out when it idles out, is stopped or gets a signal — not \

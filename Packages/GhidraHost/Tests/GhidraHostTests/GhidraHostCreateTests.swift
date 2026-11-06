@@ -664,10 +664,108 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
         XCTAssertEqual(published.typeConflicts, [])
         let shown = String(decoding: try await host.read(module, "/v1/type?name=TC_C"), as: UTF8.self)
         XCTAssertTrue(shown.contains("Now explained."), shown)
-        // A layout that differs is still a conflict.
+        // A layout that differs is still a conflict, and refuses the publish.
         try await define(["c": "typedef struct _TC_C { int Leaf; int More; } TC_C;"])
-        let differing = try await host.publish(module, by: nil)
-        XCTAssertTrue(differing.typeConflicts.contains("_TC_C"), "\(differing.typeConflicts)")
+        do {
+            _ = try await host.publish(module, by: nil)
+            XCTFail("a type the archive holds differently refuses the publish")
+        } catch let error as GhidraHostError {
+            XCTAssertEqual(error.status, 409)
+            XCTAssertTrue("\(error)".contains("_TC_C"), "\(error)")
+        }
+    }
+
+    /// The shared types come in versions the store keeps: a new type is the
+    /// first, a field named where the archive said `Unknown…` is an amendment
+    /// and the next, a layout that differs refuses the publish and leaves the
+    /// store as it was, an administrator's take and a withdrawal are versions
+    /// too, and the copy beside the projects is always the current one.
+    func testSharedTypesComeInVersionsAndAReplacementRefusesThePublish() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
+            throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GhidraHostTypeVersionTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ContentStore(root: directory.appendingPathComponent("store"))
+        let projects = directory.appendingPathComponent("projects")
+        let host = GhidraHost(configuration: .init(projectsRoot: projects, idle: 300,
+                                                   holder: "GhidraHostTypeVersionTests"),
+                              writer: store)
+        let image = try Data(contentsOf: URL(fileURLWithPath: path))
+        let module = SHA256Digest(data: image)
+        _ = try await host.create(module: image, name: "Module")
+        defer { Task { await host.stop(module) } }
+        let language = try json(await host.read(module, "/v1/hello"))["language"] as? String ?? ""
+        let bits = GhidraHost.archiveBits(language: language)
+        func define(_ c: String) async throws {
+            _ = try await host.write(module, "/v1/type", body: try JSONSerialization.data(withJSONObject: ["c": c]))
+        }
+        func versions() throws -> [TypeArchiveVersion] { try store.typeArchive(bits: bits)?.versions ?? [] }
+        func copyIsCurrent() throws {
+            let current = try XCTUnwrap(try versions().last)
+            let kept = try Data(contentsOf: store.typeArchiveFolder(bits: bits, version: current.version)
+                                    .appendingPathComponent("archive.gdt"))
+            let beside = try Data(contentsOf: projects.appendingPathComponent("review-types-\(bits).gdt"))
+            XCTAssertEqual(SHA256Digest(data: kept), SHA256Digest(data: beside), "the copy beside the projects")
+        }
+
+        try await define("typedef struct _TV_ITEM { int Unknown00; int Count; } TV_ITEM;")
+        _ = try await host.publish(module, by: "agent")
+        let first = try versions()
+        XCTAssertEqual(first.map(\.version), [1])
+        XCTAssertTrue(!Set(first[0].added).isDisjoint(with: ["TV_ITEM", "_TV_ITEM"]), "\(first[0])")
+        XCTAssertEqual(first[0].module, module)
+        XCTAssertNotNil(first[0].rev, "a version names the revision that made it")
+        try copyIsCurrent()
+
+        try await define("typedef struct _TV_ITEM { int Size; int Count; } TV_ITEM;")
+        let amended = try await host.publish(module, by: "agent")
+        XCTAssertEqual(amended.typeConflicts, [])
+        let second = try versions()
+        XCTAssertEqual(second.map(\.version), [1, 2])
+        XCTAssertTrue(!Set(second[1].amended).isDisjoint(with: ["TV_ITEM", "_TV_ITEM"]), "\(second[1])")
+        try copyIsCurrent()
+
+        // A layout that differs: refused, and nothing of the store changes.
+        let revision = try await store.latestRevision(module: module)
+        let index = try store.libraryIndex()
+        try await define("typedef struct _TV_ITEM { int Size; int Count; int More; } TV_ITEM;")
+        do {
+            _ = try await host.publish(module, by: "agent")
+            XCTFail("a replacement is refused")
+        } catch let error as GhidraHostError {
+            XCTAssertEqual(error.status, 409)
+            XCTAssertTrue("\(error)".contains("_TV_ITEM"), "\(error)")
+            XCTAssertTrue("\(error)".contains("Nothing was written"), "\(error)")
+        }
+        XCTAssertEqual(try versions().map(\.version), [1, 2])
+        let after = try await store.latestRevision(module: module)
+        XCTAssertEqual(after, revision)
+        XCTAssertEqual(try store.libraryIndex(), index)
+        XCTAssertEqual(try store.journals().count, 0)
+        try copyIsCurrent()
+
+        // The person's choice: an administrator's take is the next version.
+        let taken = try await host.publish(module, by: "person", options: .init(takeTypeConflicts: true))
+        XCTAssertFalse(taken.typeConflictsTaken.isEmpty)
+        let third = try versions()
+        XCTAssertEqual(third.map(\.version), [1, 2, 3])
+        XCTAssertFalse(third[2].taken.isEmpty, "\(third[2])")
+        try copyIsCurrent()
+
+        // A withdrawal is one too.
+        try await define("typedef struct _TV_GONE { int A; } TV_GONE;")
+        _ = try await host.publish(module, by: "agent")
+        XCTAssertEqual(try versions().count, 4)
+        _ = try await host.write(module, "/v1/type", body: try JSONSerialization.data(withJSONObject: [
+            "delete": true, "shared": true, "name": "TV_GONE", "reason": "a test name"] as [String: Any]))
+        let fifth = try versions()
+        XCTAssertEqual(fifth.count, 5)
+        XCTAssertTrue(fifth.last?.withdrawn.contains("TV_GONE") == true, "\(String(describing: fifth.last))")
+        XCTAssertEqual(fifth.last?.reason, "a test name")
+        try copyIsCurrent()
+        XCTAssertEqual(store.verify(), [])
     }
 
     func testAnEquateNamesAValueAcrossFunctionsAndKeepsOtherNames() async throws {

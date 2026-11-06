@@ -182,6 +182,14 @@ public protocol AnalysisWriter: Sendable {
     func removeJournal(id: String) async throws
     /// Held from a publish's decision to its last step; the answer gives it back.
     func lockPublishes() async throws -> PublishHold
+    /// Whether this store keeps the shared type archives in versions; one that
+    /// does not leaves the archive beside the projects to the owners.
+    var keepsTypeArchives: Bool { get }
+    /// The current version of the archive of this size and the folder of its
+    /// files; nil when the store keeps none.
+    func readTypeArchive(bits: String) async throws -> (version: TypeArchiveVersion, folder: URL)?
+    /// The next version of the archive, its files objects of this store.
+    func writeTypeArchive(bits: String, version: TypeArchiveVersion) async throws -> TypeArchiveVersion
 }
 
 /// A publish's hold on its store: given back once, by `release`.
@@ -214,6 +222,17 @@ extension ContentStore: AnalysisWriter {
     public func readJournals() async throws -> [Data] { try journals().map(\.data) }
 
     public func removeJournal(id: String) async throws { try deleteJournal(id: id) }
+
+    public var keepsTypeArchives: Bool { true }
+
+    public func readTypeArchive(bits: String) async throws -> (version: TypeArchiveVersion, folder: URL)? {
+        guard let current = try typeArchive(bits: bits)?.current else { return nil }
+        return (current, typeArchiveFolder(bits: bits, version: current.version))
+    }
+
+    public func writeTypeArchive(bits: String, version: TypeArchiveVersion) async throws -> TypeArchiveVersion {
+        try putTypeArchive(bits: bits, version: version)
+    }
 
     /// One publish at a time in this process, by the gate, and across
     /// processes writing this store, by the file lock, taken off the
@@ -329,6 +348,13 @@ extension RemoteStore: AnalysisWriter {
     public func writeJournal(id: String, data: Data) async throws {}
     public func readJournals() async throws -> [Data] { [] }
     public func removeJournal(id: String) async throws {}
+
+    /// The archive a client's owners merge into stays beside its projects.
+    public var keepsTypeArchives: Bool { false }
+    public func readTypeArchive(bits: String) async throws -> (version: TypeArchiveVersion, folder: URL)? { nil }
+    public func writeTypeArchive(bits: String, version: TypeArchiveVersion) async throws -> TypeArchiveVersion {
+        throw GhidraHostError(.refused, "a served store keeps its type archives itself")
+    }
     public func lockPublishes() async throws -> PublishHold {
         let key = "remote:\(base.absoluteString)"
         await PublishGate.shared.enter(key)

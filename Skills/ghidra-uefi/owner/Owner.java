@@ -1729,16 +1729,27 @@ public class Owner {
     }
 
     /**
-     * `POST /v1/types/merge`: the review's types into the shared archive, as a
-     * publish without `merge_types=0` merges them — the step of a publish the
-     * host takes once the registry has decided. `take_type_conflicts=1` as
-     * there. Merging again what is merged changes nothing.
+     * `POST /v1/types/merge`: the review's types into a shared archive, as a
+     * publish without `merge_types=0` merges them. With `{"archive": DIR}` the
+     * archive is `DIR/review-types-<bits>.gdt` and its sidecars — the copy of
+     * the current version the server hands over while it decides a publish,
+     * and keeps as the next version when the merge changed it; without it,
+     * the archive beside the projects, as before versions. `take_type_conflicts=1`
+     * as there. Merging again what is merged changes nothing.
      */
     private JsonObject typesMerge(HttpExchange exchange) throws Exception {
         requireLease(exchange);
         boolean take = "1".equals(query(exchange.getRequestURI().getRawQuery()).get("take_type_conflicts"));
-        Merge merge = mergeReviewTypes(true, take);
+        JsonObject body = body(exchange);
+        Merge merge = mergeReviewTypes(true, take, archiveNamed(body));
         JsonObject answer = new JsonObject();
+        answer.addProperty("changed", merge.written || merge.changed);
+        JsonArray added = new JsonArray();
+        for (String name : merge.added) added.add(name);
+        JsonArray amended = new JsonArray();
+        for (String name : merge.amended) amended.add(name);
+        answer.add("added", added);
+        answer.add("amended", amended);
         JsonArray conflicts = new JsonArray();
         for (String name : merge.conflicts) conflicts.add(name);
         JsonArray taken = new JsonArray();
@@ -1751,6 +1762,22 @@ public class Owner {
         answer.add("taken", taken);
         answer.add("origins", origins);
         return answer;
+    }
+
+    /**
+     * The archive a call names with `archive` — a folder of the server's —
+     * or the one beside the projects. The folder must exist; the archive in
+     * it need not, for the first version of a size.
+     */
+    private File archiveNamed(JsonObject body) throws Failure {
+        if (body == null || !body.has("archive") || body.get("archive").isJsonNull()) {
+            if (reviewTypes == null) throw new Failure(409, "this owner was started with no shared archive");
+            return reviewTypes;
+        }
+        File folder = new File(body.get("archive").getAsString());
+        if (!folder.isDirectory()) throw new Failure(400, "archive names no folder: " + folder.getPath());
+        String bits = program.getDefaultPointerSize() == 8 ? "X64" : "Ia32";
+        return new File(folder, "review-types-" + bits + ".gdt");
     }
 
     /** ExportCode run on the program in this process: the artifact's bytes. */
@@ -1827,8 +1854,10 @@ public class Owner {
         }
     }
 
-    private FileChannel lockChannel() throws Exception {
-        File lock = new File(reviewTypes.getPath() + ".lock");
+    private FileChannel lockChannel() throws Exception { return lockChannel(reviewTypes); }
+
+    private static FileChannel lockChannel(File archive) throws Exception {
+        File lock = new File(archive.getPath() + ".lock");
         return FileChannel.open(lock.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
     }
 
@@ -1844,6 +1873,11 @@ public class Owner {
         JsonObject withdrawn = new JsonObject();
         /** A shared type was added or replaced: the sidecar has something to record. */
         boolean written;
+        /** Something of the archive changed: a member, a comment, a description. */
+        boolean changed;
+        /** Types new to the archive, and types this publish amended. */
+        final java.util.List<String> added = new java.util.ArrayList<>();
+        final java.util.List<String> amended = new java.util.ArrayList<>();
     }
 
     /**
@@ -1858,9 +1892,13 @@ public class Owner {
      * The lock is held for the length of the merge, a second or so.
      */
     private Merge mergeReviewTypes(boolean apply, boolean take) throws Exception {
+        return mergeReviewTypes(apply, take, reviewTypes);
+    }
+
+    private Merge mergeReviewTypes(boolean apply, boolean take, File target) throws Exception {
         Merge merge = new Merge();
         java.util.TreeMap<String, String> mine = Harvest.reviewTypes(program);
-        if (reviewTypes == null || mine.isEmpty()) return merge;
+        if (target == null || mine.isEmpty()) return merge;
         if (!apply) {
             if (!reviewTypes.isFile()) return merge;
             // The merge itself, on a copy: replacing one type can settle the
@@ -1889,15 +1927,15 @@ public class Owner {
             }
             return merge;
         }
-        reviewTypes.getParentFile().mkdirs();
-        try (FileChannel channel = lockChannel(); FileLock lock = channel.lock()) {
-            merge.withdrawn = readWithdrawn();
-            FileDataTypeManager shared = reviewTypes.isFile()
-                ? FileDataTypeManager.openFileArchive(reviewTypes, true)
-                : FileDataTypeManager.createFileArchive(reviewTypes, program.getLanguageID(),
+        target.getParentFile().mkdirs();
+        try (FileChannel channel = lockChannel(target); FileLock lock = channel.lock()) {
+            merge.withdrawn = readWithdrawn(target);
+            FileDataTypeManager shared = target.isFile()
+                ? FileDataTypeManager.openFileArchive(target, true)
+                : FileDataTypeManager.createFileArchive(target, program.getLanguageID(),
                       program.getCompilerSpec().getCompilerSpecID());
             try {
-                JsonObject origins = readOrigins();
+                JsonObject origins = readOrigins(target);
                 boolean changed = false;
                 int transaction = shared.startTransaction("review types of " + options.get("module"));
                 try {
@@ -1906,7 +1944,8 @@ public class Owner {
                     shared.endTransaction(transaction, true);
                 }
                 if (changed) shared.save();
-                if (merge.written) writeOrigins(origins);
+                merge.changed = changed;
+                if (merge.written) writeOrigins(target, origins);
             } finally {
                 shared.close();
             }
@@ -1984,6 +2023,7 @@ public class Owner {
         if (there.isEmpty()) {
             shared.resolve(here, DataTypeConflictHandler.KEEP_HANDLER);
             merge.written = true;
+            if (!merge.added.contains(name)) merge.added.add(name);
             recordOrigin(origins, name, module);
             return true;
         }
@@ -1993,6 +2033,7 @@ public class Owner {
             && here instanceof ghidra.program.model.data.Enum ownEnum) {
             int merged = mergeEnum(ownEnum, sharedEnum);
             if (merged < 0) { recordConflict(merge, origins, name); return false; }
+            if (merged > 0 && !merge.amended.contains(name)) merge.amended.add(name);
             return merged > 0;
         }
         // An equivalent structure whose members' types are named differently
@@ -2002,6 +2043,18 @@ public class Owner {
         // the archive then holds the names every module after it reads.
         boolean sameShape = sameShape(here, theirs, new java.util.HashSet<>());
         if (!sameShape || memberTypesRenamed(here, theirs)) {
+            // Names given where the shared copy had only placeholders — a
+            // field `Unknown08` named, a member type Ghidra called `_func_3`
+            // named after its slot, a `param_1` named — and nothing else
+            // different: the same type better read, an amendment, not a
+            // replacement.
+            if (replaceable(here, theirs) && onlyNamesGiven(here, theirs, new java.util.HashSet<>())) {
+                if (!merge.amended.contains(name)) merge.amended.add(name);
+                replaceShared(shared, theirs, here);
+                merge.written = true;
+                recordOrigin(origins, name, module);
+                return true;
+            }
             if (take && replaceable(here, theirs)) {
                 if (!merge.taken.contains(name)) merge.taken.add(name);
                 merge.origins.put(name, originOf(origins, name));
@@ -2015,7 +2068,100 @@ public class Owner {
         }
         int merged = mergeComments(here, theirs);
         if (merged < 0) { recordConflict(merge, origins, name); return false; }
+        if (merged > 0 && !merge.amended.contains(name)) merge.amended.add(name);
         return merged > 0;
+    }
+
+    /**
+     * Whether `ours` is `theirs` with names given where `theirs` had only
+     * placeholders, and nothing else: the same layout, member for member, at
+     * every depth; a field named where the shared copy says `Unknown…`,
+     * `field_0x…` or nothing; a member type named where Ghidra had made one
+     * up (`_func_N`, a `.conflict` copy); a parameter named where it was
+     * `param_N`. At least one such name must differ — otherwise the two are
+     * simply the same.
+     */
+    private static boolean onlyNamesGiven(DataType ours, DataType theirs, java.util.Set<String> seen) {
+        boolean[] given = {false};
+        return namesOnlyGiven(ours, theirs, seen, given) && given[0];
+    }
+
+    private static boolean namesOnlyGiven(DataType a, DataType b, java.util.Set<String> seen, boolean[] given) {
+        if (a == null || b == null) return a == b;
+        if (!seen.add(a.getPathName() + "|" + b.getPathName())) return true;
+        if (!a.getName().equals(b.getName())) {
+            if (!(madeUpTypeName(b.getName()) && !madeUpTypeName(a.getName()))) {
+                // Pointers and arrays carry their target's name: compared below.
+                if (!(a instanceof ghidra.program.model.data.Pointer) && !(a instanceof ghidra.program.model.data.Array)) {
+                    return false;
+                }
+            } else {
+                given[0] = true;
+            }
+        }
+        if (a instanceof ghidra.program.model.data.Pointer p && b instanceof ghidra.program.model.data.Pointer q) {
+            return p.getLength() == q.getLength() && namesOnlyGiven(p.getDataType(), q.getDataType(), seen, given);
+        }
+        if (a instanceof ghidra.program.model.data.Array p && b instanceof ghidra.program.model.data.Array q) {
+            return p.getNumElements() == q.getNumElements() && namesOnlyGiven(p.getDataType(), q.getDataType(), seen, given);
+        }
+        if (a instanceof ghidra.program.model.data.TypeDef p && b instanceof ghidra.program.model.data.TypeDef q) {
+            return namesOnlyGiven(p.getDataType(), q.getDataType(), seen, given);
+        }
+        if (a instanceof ghidra.program.model.data.Composite p && b instanceof ghidra.program.model.data.Composite q) {
+            if ((p instanceof ghidra.program.model.data.Union) != (q instanceof ghidra.program.model.data.Union)) return false;
+            ghidra.program.model.data.DataTypeComponent[] left = p.getDefinedComponents();
+            ghidra.program.model.data.DataTypeComponent[] right = q.getDefinedComponents();
+            if (p.getLength() != q.getLength() || left.length != right.length) return false;
+            for (int i = 0; i < left.length; i++) {
+                if (left[i].getOffset() != right[i].getOffset() || left[i].getLength() != right[i].getLength()) return false;
+                String mine = left[i].getFieldName();
+                String shared = right[i].getFieldName();
+                if (!java.util.Objects.equals(mine, shared)) {
+                    if (!placeholderField(shared) || placeholderField(mine)) return false;
+                    given[0] = true;
+                }
+                if (!namesOnlyGiven(left[i].getDataType(), right[i].getDataType(), seen, given)) return false;
+            }
+            return true;
+        }
+        if (a instanceof ghidra.program.model.data.FunctionDefinition p
+            && b instanceof ghidra.program.model.data.FunctionDefinition q) {
+            ghidra.program.model.data.ParameterDefinition[] left = p.getArguments();
+            ghidra.program.model.data.ParameterDefinition[] right = q.getArguments();
+            if (left.length != right.length || p.hasVarArgs() != q.hasVarArgs()
+                || !java.util.Objects.equals(p.getCallingConventionName(), q.getCallingConventionName())) return false;
+            if (!namesOnlyGiven(p.getReturnType(), q.getReturnType(), seen, given)) return false;
+            for (int i = 0; i < left.length; i++) {
+                String mine = left[i].getName();
+                String shared = right[i].getName();
+                if (!java.util.Objects.equals(mine, shared)) {
+                    if (!placeholderParameter(shared) || placeholderParameter(mine)) return false;
+                    given[0] = true;
+                }
+                if (!namesOnlyGiven(left[i].getDataType(), right[i].getDataType(), seen, given)) return false;
+            }
+            return true;
+        }
+        return a.isEquivalent(b) || sameShape(a, b, new java.util.HashSet<>());
+    }
+
+    /** A type name Ghidra made up: an inline function type, or a `.conflict` copy. */
+    static boolean madeUpTypeName(String name) {
+        if (name == null) return true;
+        String bare = name.replace(" ", "").replaceAll("\\*+$", "");
+        return bare.matches("_func_\\d+(\\.conflict\\d*)?") || bare.matches(".*\\.conflict\\d*");
+    }
+
+    /** A field name that says nobody knew: none, `Unknown…`, `field_0x…`, `field1_0x…`. */
+    static boolean placeholderField(String name) {
+        return name == null || name.isEmpty() || name.matches("(?i)unknown[0-9a-f_]*")
+            || name.matches("field\\d*_0x[0-9a-fA-F]+");
+    }
+
+    /** A parameter name Ghidra made up. */
+    static boolean placeholderParameter(String name) {
+        return name == null || name.isEmpty() || name.matches("param_\\d+");
     }
 
     /**
@@ -2282,12 +2428,15 @@ public class Owner {
         String name = required(body, "name").trim();
         String reason = string(body, "reason", "").trim();
         if (reason.isEmpty()) throw new Failure(400, "taking a type out of the shared archive needs a reason");
-        if (reviewTypes == null || !reviewTypes.isFile()) throw new Failure(404, "there is no shared archive here");
+        // The archive the server names — its copy of the current version, kept
+        // as the next one when this is done — or the one beside the projects.
+        File target = archiveNamed(body);
+        if (!target.isFile()) throw new Failure(404, "there is no shared archive here");
         String alternate = name.startsWith("_") ? name.substring(1) : "_" + name;
         JsonArray gone = new JsonArray();
-        try (FileChannel channel = lockChannel(); FileLock lock = channel.lock()) {
-            JsonObject withdrawn = readWithdrawn();
-            FileDataTypeManager shared = FileDataTypeManager.openFileArchive(reviewTypes, true);
+        try (FileChannel channel = lockChannel(target); FileLock lock = channel.lock()) {
+            JsonObject withdrawn = readWithdrawn(target);
+            FileDataTypeManager shared = FileDataTypeManager.openFileArchive(target, true);
             try {
                 DataType found = findAny(shared, name, alternate);
                 if (found == null) {
@@ -2324,7 +2473,7 @@ public class Owner {
                 }
                 java.util.List<DataType> order = new java.util.ArrayList<>(group.values());
                 order.sort(java.util.Comparator.comparingInt(type -> type instanceof ghidra.program.model.data.TypeDef ? 0 : 1));
-                JsonObject origins = readOrigins();
+                JsonObject origins = readOrigins(target);
                 String at = java.time.Instant.now().toString();
                 int transaction = shared.startTransaction("withdraw " + found.getName());
                 boolean done = false;
@@ -2349,15 +2498,15 @@ public class Owner {
                     shared.endTransaction(transaction, done);
                 }
                 shared.save();
-                writeWithdrawn(withdrawn);
-                writeOrigins(origins);
+                writeWithdrawn(target, withdrawn);
+                writeOrigins(target, origins);
             } finally {
                 shared.close();
             }
             // What this owner reads a shared type from is a copy made at start.
             if (reviewArchive != null) reviewArchive.close();
             if (reviewTypesCopy == null) reviewTypesCopy = File.createTempFile("review-types-", ".gdt");
-            Files.copy(reviewTypes.toPath(), reviewTypesCopy.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            Files.copy(target.toPath(), reviewTypesCopy.toPath(), StandardCopyOption.REPLACE_EXISTING);
             reviewArchive = FileDataTypeManager.openFileArchive(reviewTypesCopy, false);
         }
         JsonObject answer = identity();
@@ -2369,12 +2518,14 @@ public class Owner {
     }
 
     /** The names withdrawn from the shared archive, in a sidecar beside it. */
-    private File withdrawnFile() {
-        return new File(reviewTypes.getPath() + ".withdrawn.json");
+    private static File withdrawnFile(File archive) {
+        return new File(archive.getPath() + ".withdrawn.json");
     }
 
-    private JsonObject readWithdrawn() throws Failure {
-        File file = withdrawnFile();
+    private JsonObject readWithdrawn() throws Failure { return readWithdrawn(reviewTypes); }
+
+    private static JsonObject readWithdrawn(File archive) throws Failure {
+        File file = withdrawnFile(archive);
         if (!file.isFile()) return new JsonObject();
         // Unreadable is refused, not read as empty: an empty list would let a
         // publish bring back every name a review withdrew.
@@ -2386,19 +2537,21 @@ public class Owner {
         }
     }
 
-    private void writeWithdrawn(JsonObject withdrawn) throws Exception {
-        File next = new File(withdrawnFile().getPath() + ".next");
+    private static void writeWithdrawn(File archive, JsonObject withdrawn) throws Exception {
+        File next = new File(withdrawnFile(archive).getPath() + ".next");
         Files.writeString(next.toPath(), withdrawn.toString(), StandardCharsets.UTF_8);
-        Files.move(next.toPath(), withdrawnFile().toPath(), StandardCopyOption.REPLACE_EXISTING);
+        Files.move(next.toPath(), withdrawnFile(archive).toPath(), StandardCopyOption.REPLACE_EXISTING);
     }
 
     /** The module that last wrote each shared type, in a sidecar beside the archive. */
-    private File originFile() {
-        return new File(reviewTypes.getPath() + ".origin.json");
+    private static File originFile(File archive) {
+        return new File(archive.getPath() + ".origin.json");
     }
 
-    private JsonObject readOrigins() {
-        File file = originFile();
+    private JsonObject readOrigins() { return readOrigins(reviewTypes); }
+
+    private static JsonObject readOrigins(File archive) {
+        File file = originFile(archive);
         if (!file.isFile()) return new JsonObject();
         try (java.io.Reader reader = new java.io.InputStreamReader(new java.io.FileInputStream(file),
                                                                    java.nio.charset.StandardCharsets.UTF_8)) {
@@ -2410,8 +2563,8 @@ public class Owner {
         }
     }
 
-    private void writeOrigins(JsonObject origins) {
-        try (java.io.Writer writer = new java.io.OutputStreamWriter(new java.io.FileOutputStream(originFile()),
+    private static void writeOrigins(File archive, JsonObject origins) {
+        try (java.io.Writer writer = new java.io.OutputStreamWriter(new java.io.FileOutputStream(originFile(archive)),
                                                                     java.nio.charset.StandardCharsets.UTF_8)) {
             writer.write(origins.toString());
         } catch (Exception error) {
