@@ -994,6 +994,8 @@ public class Owner {
         String nameReason = nameReasons == null ? null : nameReasons.getString(function.getEntryPoint());
         if (nameReason != null) answer.addProperty("name_reason", nameReason);
         answer.addProperty("calling_convention", function.getCallingConventionName());
+        JsonArray keptRegisters = keptRegisters(function);
+        if (keptRegisters != null) answer.add("unaffected_kept", keptRegisters);
         String plate = function.getComment();
         if (plate != null && !plate.isBlank()) answer.addProperty("plate", plate);
         answer.add("comments", commentsIn(function));
@@ -5560,6 +5562,7 @@ public class Owner {
         }
         if (body.has("storage") || body.has("return_storage")) applyStorage(function, body);
         String unsettled = settleConvention(function);
+        if (body.has("unaffected")) keepRegisters(function, body.getAsJsonArray("unaffected"));
         // Why the signature is what it is has a place of its own: the name's
         // reason says where the name came from, and a signature is not that. A
         // signature that changes the name says so there, and what it replaced.
@@ -5575,6 +5578,9 @@ public class Owner {
         answer.addProperty("signature", function.getPrototypeString(false, false));
         if (aligned.size() > 0) answer.add("aligned", aligned);
         if (unsettled != null) answer.addProperty("convention_stays_unknown", unsettled);
+        answer.addProperty("calling_convention", function.getCallingConventionName());
+        JsonArray kept = keptRegisters(function);
+        if (kept != null) answer.add("unaffected_kept", kept);
         if (function.hasCustomVariableStorage()) {
             JsonArray storage = new JsonArray();
             for (Parameter parameter : function.getParameters()) storage.add(parameter.getVariableStorage().toString());
@@ -5582,6 +5588,164 @@ public class Owner {
             answer.addProperty("return_storage", function.getReturn().getVariableStorage().toString());
         }
         return answer;
+    }
+
+    /** What a convention of the program's own adds to the one it is made from. */
+    private static final String KEEPS = "_keeps_";
+
+    /**
+     * Registers the function leaves as they were beyond what its convention
+     * keeps — a helper that never writes EDX, which every x86 convention says
+     * a call destroys. A call's effect on registers is the callee's
+     * convention's, not the function's, so the program gets one of its own:
+     * the function's convention plus these registers as unaffected, kept in
+     * the program as a compiler-spec extension (`__stdcall_keeps_EDX`) and
+     * shared by every function that keeps the same ones. An empty list goes
+     * back to the convention it was made from.
+     */
+    private void keepRegisters(Function function, JsonArray names) throws Exception {
+        ghidra.program.model.lang.CompilerSpec spec = program.getCompilerSpec();
+        String current = function.getCallingConventionName();
+        String root = current.contains(KEEPS) ? current.substring(0, current.indexOf(KEEPS)) : current;
+        ghidra.program.model.lang.PrototypeModel rootModel = spec.getCallingConvention(root);
+        if (rootModel == null) rootModel = spec.getDefaultCallingConvention();
+        root = rootModel.getName();
+        java.util.TreeSet<String> kept = new java.util.TreeSet<>();
+        for (com.google.gson.JsonElement item : names) {
+            String asked = item.getAsString().trim();
+            ghidra.program.model.lang.Register register = program.getRegister(asked.toUpperCase());
+            if (register == null) register = program.getRegister(asked);
+            if (register == null) throw new Failure(400, "no register " + asked + " in this program's language");
+            kept.add(register.getName());
+        }
+        if (kept.isEmpty()) {
+            function.setCallingConvention(root);
+            return;
+        }
+        String name = root + KEEPS + String.join("_", kept);
+        if (spec.getCallingConvention(name) == null) {
+            ghidra.program.model.pcode.XmlEncode encoder = new ghidra.program.model.pcode.XmlEncode();
+            rootModel.encode(encoder, spec.getPcodeInjectLibrary());
+            String xml = keeping(encoder.toString(), name, kept);
+            try {
+                new ghidra.program.database.SpecExtension(program).addReplaceCompilerSpecExtension(xml, TaskMonitor.DUMMY);
+            } catch (Exception error) {
+                throw new Failure(400, "the convention " + name + " was not taken: " + error.getMessage());
+            }
+            // The decompiler process took the compiler spec when it opened the
+            // program: without opening it again, a call to the function reads
+            // as the default convention's.
+            decompiler.closeProgram();
+            decompiler.setOptions(ExportCode.decompileOptions(program));
+            decompiler.openProgram(program);
+        }
+        function.setCallingConvention(name);
+    }
+
+    /** The registers a function's own convention adds as unaffected, or null for a plain one. */
+    private JsonArray keptRegisters(Function function) {
+        String name = function.getCallingConventionName();
+        if (name == null || !name.contains(KEEPS)) return null;
+        JsonArray kept = new JsonArray();
+        for (String register : name.substring(name.indexOf(KEEPS) + KEEPS.length()).split("_")) kept.add(register);
+        return kept;
+    }
+
+    /**
+     * The convention's XML renamed, with the registers out of `killedbycall`
+     * and `likelytrash` and into `unaffected`. A result place that uses one
+     * goes too — x86's `EDX:EAX` for 64 bits: the output is killed by the
+     * call as a whole, so a register in any of its places is destroyed by
+     * every call however `killedbycall` reads.
+     */
+    private String keeping(String xml, String name, java.util.Set<String> kept) throws Exception {
+        javax.xml.parsers.DocumentBuilderFactory factory = javax.xml.parsers.DocumentBuilderFactory.newInstance();
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        org.w3c.dom.Document document = factory.newDocumentBuilder()
+            .parse(new org.xml.sax.InputSource(new java.io.StringReader(xml)));
+        org.w3c.dom.Element prototype = document.getDocumentElement();
+        prototype.setAttribute("name", name);
+        org.w3c.dom.Element unaffected = null;
+        org.w3c.dom.Element output = null;
+        java.util.List<org.w3c.dom.Element> lists = new java.util.ArrayList<>();
+        for (org.w3c.dom.Node child = prototype.getFirstChild(); child != null; child = child.getNextSibling()) {
+            if (!(child instanceof org.w3c.dom.Element element)) continue;
+            switch (element.getTagName()) {
+                case "unaffected" -> unaffected = element;
+                case "output" -> output = element;
+                case "killedbycall", "likelytrash" -> lists.add(element);
+                default -> { }
+            }
+        }
+        for (String registerName : kept) {
+            ghidra.program.model.lang.Register register = program.getRegister(registerName);
+            for (org.w3c.dom.Element list : lists) {
+                java.util.List<org.w3c.dom.Node> gone = new java.util.ArrayList<>();
+                for (org.w3c.dom.Node entry = list.getFirstChild(); entry != null; entry = entry.getNextSibling()) {
+                    if (entry instanceof org.w3c.dom.Element element && names(element, register)) gone.add(entry);
+                }
+                for (org.w3c.dom.Node entry : gone) list.removeChild(entry);
+            }
+            if (output != null) {
+                java.util.List<org.w3c.dom.Node> gone = new java.util.ArrayList<>();
+                for (org.w3c.dom.Node entry = output.getFirstChild(); entry != null; entry = entry.getNextSibling()) {
+                    if (!(entry instanceof org.w3c.dom.Element pentry)) continue;
+                    for (org.w3c.dom.Node place = pentry.getFirstChild(); place != null; place = place.getNextSibling()) {
+                        if (place instanceof org.w3c.dom.Element element && (names(element, register) || joins(element, register))) {
+                            gone.add(entry);
+                            break;
+                        }
+                    }
+                }
+                for (org.w3c.dom.Node entry : gone) output.removeChild(entry);
+            }
+            if (unaffected == null) {
+                unaffected = document.createElement("unaffected");
+                prototype.insertBefore(unaffected, lists.isEmpty() ? null : lists.get(0));
+            }
+            org.w3c.dom.Element entry = document.createElement("register");
+            entry.setAttribute("name", register.getName());
+            unaffected.appendChild(entry);
+        }
+        javax.xml.transform.Transformer transformer = javax.xml.transform.TransformerFactory.newInstance().newTransformer();
+        transformer.setOutputProperty(javax.xml.transform.OutputKeys.OMIT_XML_DECLARATION, "yes");
+        java.io.StringWriter out = new java.io.StringWriter();
+        transformer.transform(new javax.xml.transform.dom.DOMSource(document), new javax.xml.transform.stream.StreamResult(out));
+        return out.toString();
+    }
+
+    /** Whether a `join` place has this register as a piece: `piece1="register:0x8:4"`. */
+    private static boolean joins(org.w3c.dom.Element place, ghidra.program.model.lang.Register register) {
+        if (!"join".equals(place.getAttribute("space"))) return false;
+        org.w3c.dom.NamedNodeMap attributes = place.getAttributes();
+        for (int index = 0; index < attributes.getLength(); index++) {
+            org.w3c.dom.Node attribute = attributes.item(index);
+            if (!attribute.getNodeName().startsWith("piece")) continue;
+            String[] parts = attribute.getNodeValue().split(":");
+            if (parts.length < 2) continue;
+            if (parts[0].equalsIgnoreCase(register.getName())) return true;
+            if (!parts[0].equals("register")) continue;
+            try {
+                if (Long.decode(parts[1]) == register.getOffset()) return true;
+            } catch (NumberFormatException error) {
+                // not an offset
+            }
+        }
+        return false;
+    }
+
+    /** Whether a `<register>` or a register `<addr>` entry is this register. */
+    private static boolean names(org.w3c.dom.Element entry, ghidra.program.model.lang.Register register) {
+        if (entry.getTagName().equals("register")) return register.getName().equalsIgnoreCase(entry.getAttribute("name"));
+        if (!entry.getTagName().equals("addr") && !entry.getTagName().equals("varnode")) return false;
+        if (!"register".equals(entry.getAttribute("space"))) return false;
+        try {
+            return Long.decode(entry.getAttribute("offset")) == register.getOffset()
+                && (entry.getAttribute("size").isEmpty()
+                    || Integer.decode(entry.getAttribute("size")) == register.getMinimumByteSize());
+        } catch (NumberFormatException error) {
+            return false;
+        }
     }
 
     /**

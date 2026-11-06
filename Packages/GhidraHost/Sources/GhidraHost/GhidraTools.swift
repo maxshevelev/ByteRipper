@@ -989,13 +989,21 @@ public enum GhidraTools {
                   + "that does not give that storage is dropped, so the C prints none against it. "
                   + "A function analysis left at `unknown`, for which the decompiler writes a warning into its C, moves to "
                   + "`default`, which names no convention and does not say the function follows one; "
-                  + "`convention_stays_unknown` in the answer says why not, when that would move a parameter.",
+                  + "`convention_stays_unknown` in the answer says why not, when that would move a parameter. "
+                  + "`unaffected` names registers the function leaves as they were, beyond what its convention "
+                  + "keeps (`[\"EDX\"]` for a helper that never writes EDX): every caller's C then reads the value "
+                  + "across the call instead of an uninitialised one. The program gets a convention of its own, the "
+                  + "function's one plus those registers (`__stdcall_keeps_EDX`), and `ghidra_function` lists them as "
+                  + "`unaffected_kept`. Claim it only from the function's instructions — every path, and the helpers "
+                  + "it calls. `[]` goes back to the plain convention; leaving it out keeps what was set.",
                   ["address": AgentSchema.string("The function's entry address."),
                    "signature": AgentSchema.string("The C prototype."),
                    "storage": .object(["type": "array", "items": .object(["type": "string"]),
                                        "description": "Where each parameter is, in order: \"EDX:4\", \"Stack[0x4]:4\"."]),
                    "return_storage": AgentSchema.string("Where the result is: \"EAX:4\", \"EDX:4,EAX:4\", \"void\"."),
-                   "reason": AgentSchema.string("Why the signature is this one. Kept as `signature_reason`, apart from the name's reason.")],
+                   "reason": AgentSchema.string("Why the signature is this one. Kept as `signature_reason`, apart from the name's reason."),
+                   "unaffected": .object(["type": "array", "items": .object(["type": "string"]),
+                                          "description": "Registers the function leaves unchanged beyond its convention: [\"EDX\"]; [] for none."])],
                   required: ["address", "signature"]) { arguments in
                 var body = try optional(arguments, ["address", "signature", "return_storage", "reason"])
                 if arguments.has("storage") {
@@ -1004,6 +1012,13 @@ public enum GhidraTools {
                         throw AgentToolError("`storage` is a list of places, one string per parameter.")
                     }
                     body["storage"] = .array(places)
+                }
+                if arguments.has("unaffected") {
+                    guard case .array(let registers)? = arguments["unaffected"],
+                          registers.allSatisfy({ $0.stringValue != nil }) else {
+                        throw AgentToolError("`unaffected` is a list of register names, e.g. [\"EDX\"].")
+                    }
+                    body["unaffected"] = .array(registers)
                 }
                 body["by"] = "agent"
                 return body

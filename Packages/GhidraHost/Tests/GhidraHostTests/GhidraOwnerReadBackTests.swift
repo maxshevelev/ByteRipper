@@ -935,6 +935,43 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         XCTAssertEqual(now["calling_convention"] as? String, "__cdecl")
     }
 
+    /// A helper that never writes EDX keeps it for its callers: with
+    /// `unaffected`, the caller's C reads EDX across the call (issue 6cbeb000,
+    /// DebugMaskPei's CopyGenericVariableGuid at 0x9A0FD2A, called from
+    /// 0x9A0FC4F).
+    func testARegisterTheCalleeKeepsReadsAcrossTheCall() async throws {
+        let bytes = try image()
+        guard SHA256Digest(data: bytes).hex.hasPrefix("98290ef9") else { throw XCTSkip("GHIDRA_TYPE_MODULE is not DebugMaskPei") }
+        try await open(bytes)
+        let before = try await read("/v1/function/0x9A0FC4F")["c"] as? String ?? ""
+        XCTAssertTrue(before.contains("extraout_EDX"), "the call kills EDX as the plain convention says: \(before)")
+        let signature = "EFI_GUID * CopyGenericVariableGuid(EFI_GUID *DestinationGuid)"
+        let set = try await post("/v1/set/signature", ["address": "0x9A0FD2A", "signature": signature,
+                                                       "storage": ["ECX:4"], "return_storage": "EAX:4",
+                                                       "unaffected": ["edx"]])
+        XCTAssertEqual(set["unaffected_kept"] as? [String], ["EDX"], "\(set)")
+        let root = try XCTUnwrap((set["calling_convention"] as? String)?.components(separatedBy: "_keeps_").first)
+        XCTAssertEqual(set["calling_convention"] as? String, "\(root)_keeps_EDX", "\(set)")
+        XCTAssertEqual(set["storage"] as? [String], ["ECX:4"], "the places stay: \(set)")
+        let callee = try await read("/v1/function/0x9A0FD2A")
+        XCTAssertEqual(callee["unaffected_kept"] as? [String], ["EDX"])
+        let after = try await read("/v1/function/0x9A0FC4F")["c"] as? String ?? ""
+        print("CALLER BEFORE\n\(before)\nCALLER AFTER\n\(after)")
+        XCTAssertFalse(after.contains("extraout_EDX"), "the caller's C reads EDX across the call: \(after)")
+
+        // A second function keeping the same register shares the convention;
+        // [] goes back to the plain one.
+        let plain = try await post("/v1/set/signature", ["address": "0x9A0FD2A", "signature": signature,
+                                                         "storage": ["ECX:4"], "return_storage": "EAX:4",
+                                                         "unaffected": [String]()])
+        XCTAssertNil(plain["unaffected_kept"], "\(plain)")
+        XCTAssertEqual(plain["calling_convention"] as? String, root)
+        do {
+            _ = try await post("/v1/set/signature", ["address": "0x9A0FD2A", "signature": signature, "unaffected": ["XYZ"]])
+            XCTFail("a register the language has not got")
+        } catch {}
+    }
+
     /// A gap's range is half-open like every other: `end` is `start` + `size`.
     func testAGapEndsAtTheByteAfterIt() async throws {
         try await open(try image())

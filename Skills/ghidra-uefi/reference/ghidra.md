@@ -39,6 +39,7 @@ CAS, and its project lock keeps the owner off the project.
 | a name for an I/O port, an MSR, a PCI config address | `ghidra_equate` |
 | 16-bit code in a 32-bit module (the reset vector) | `ghidra_code_mode` with `bits: 16` |
 | a linker's clone with arguments in other registers | `ghidra_signature` with `storage` / `return_storage` |
+| a helper that leaves a register its convention says a call destroys (EDX) — the caller's C shows `extraout_EDX` | `ghidra_signature` with `unaffected: ["EDX"]`, proved from every path of the helper and its callees; the program gets `<convention>_keeps_EDX`, `ghidra_function` lists `unaffected_kept`, and the callers' C reads the register across the call. `[]` undoes it |
 | signature, comment, datum | `ghidra_signature`, `ghidra_comment`, `ghidra_set_data` |
 | read a type: program, shared archive, EDK2 | `ghidra_type_definition` |
 | define a type | `ghidra_type` |
