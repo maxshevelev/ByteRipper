@@ -206,6 +206,12 @@ archive holds differently in any other way refuses the publish, and nothing is
 written; only an administrator replaces one (`take_type_conflicts`), and that
 too is a version. A name withdrawn from the archive does not refuse: it stays
 in the module's program and is reported. A withdrawal is a version of its own.
+A typedef named like the function it renames — what the C parser makes of
+`typedef UINT32 NAME(…)` — is that function, so a module that holds the
+typedef and an archive that holds the function agree; a `.conflict` copy the
+archive kept of such a typedef, or of a type that became its twin, is folded
+into the twin in the same merge, so republishing an unchanged module makes no
+version.
 A version names the module, the revision, who made it and what it added,
 amended, replaced or took out, and is never rewritten. The first version of an
 archive is the one an earlier server kept beside its projects

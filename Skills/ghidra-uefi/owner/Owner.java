@@ -2089,7 +2089,13 @@ public class Owner {
     private static boolean namesOnlyGiven(DataType a, DataType b, java.util.Set<String> seen, boolean[] given) {
         if (a == null || b == null) return a == b;
         if (!seen.add(a.getPathName() + "|" + b.getPathName())) return true;
-        if (!a.getName().equals(b.getName())) {
+        if (namesItsFunction(a) && !(b instanceof ghidra.program.model.data.TypeDef)) {
+            return namesOnlyGiven(((ghidra.program.model.data.TypeDef) a).getBaseDataType(), b, seen, given);
+        }
+        if (namesItsFunction(b) && !(a instanceof ghidra.program.model.data.TypeDef)) {
+            return namesOnlyGiven(a, ((ghidra.program.model.data.TypeDef) b).getBaseDataType(), seen, given);
+        }
+        if (!withoutConflictCopy(a.getName()).equals(withoutConflictCopy(b.getName()))) {
             if (!(madeUpTypeName(b.getName()) && !madeUpTypeName(a.getName()))) {
                 // Pointers and arrays carry their target's name: compared below.
                 if (!(a instanceof ghidra.program.model.data.Pointer) && !(a instanceof ghidra.program.model.data.Array)) {
@@ -2256,9 +2262,43 @@ public class Owner {
             String left = from[i].getDataType().getName();
             String right = to[i].getDataType().getName();
             if (left == null || right == null) continue;
-            if (!left.equals(right)) return true;
+            if (!withoutConflictCopy(left).equals(withoutConflictCopy(right))) return true;
         }
         return false;
+    }
+
+    /** The description and the field comments, as `ghidra_type_definition` shows them. */
+    private static boolean sameTexts(DataType here, DataType theirs) {
+        JsonObject mine = TypeText.describe(here).getAsJsonObject();
+        JsonObject shared = TypeText.describe(theirs).getAsJsonObject();
+        if (!java.util.Objects.equals(mine.get("description"), shared.get("description"))) return false;
+        JsonArray left = mine.has("fields") ? mine.getAsJsonArray("fields") : new JsonArray();
+        JsonArray right = shared.has("fields") ? shared.getAsJsonArray("fields") : new JsonArray();
+        if (left.size() != right.size()) return false;
+        for (int i = 0; i < left.size(); i++) {
+            if (!java.util.Objects.equals(left.get(i).getAsJsonObject().get("comment"),
+                                          right.get(i).getAsJsonObject().get("comment"))) return false;
+        }
+        return true;
+    }
+
+    /** A typedef whose base is a function definition of the same name, `.conflict` aside. */
+    static boolean namesItsFunction(DataType type) {
+        if (!(type instanceof ghidra.program.model.data.TypeDef def)) return false;
+        DataType base = def.getBaseDataType();
+        return base instanceof ghidra.program.model.data.FunctionDefinition
+            && withoutConflictCopy(base.getName()).equals(withoutConflictCopy(def.getName()));
+    }
+
+    /**
+     * A name with Ghidra's `.conflict` suffix taken off. The archive stores a
+     * type under `X.conflict` when it already holds another type named `X` —
+     * a typedef and the function it names, say — and stores it so again at
+     * every merge: `X.conflict` against `X` is the same type, not a name to
+     * give, or every publish would write it again.
+     */
+    static String withoutConflictCopy(String name) {
+        return name == null ? null : name.replaceAll("\\.conflict\\d*(?=[\\s*\\[]|$)", "");
     }
 
     /**
@@ -2310,8 +2350,18 @@ public class Owner {
      * stayed the type in use — the archive then carried a name that says
      * "conflict" for a type that is not one. A copy that is the same type as
      * its twin is a duplicate: the twin takes its uses, and it goes.
+     *
+     * One repair can make the next: a structure whose member was a copy reads
+     * the same as its own copy once the member is the twin. The passes go on
+     * until one finds nothing, so a publish leaves nothing for the next.
      */
     private static boolean repairConflictNames(FileDataTypeManager shared) {
+        boolean changed = false;
+        for (int pass = 0; pass < 16 && repairConflictNamesOnce(shared); pass++) changed = true;
+        return changed;
+    }
+
+    private static boolean repairConflictNamesOnce(FileDataTypeManager shared) {
         boolean changed = false;
         // Taken from the listing: `findDataTypes` reads past the suffix, so
         // asking it for `X.conflict` answers X, which then "replaces" itself.
@@ -2327,7 +2377,13 @@ public class Owner {
             java.util.List<DataType> found = new java.util.ArrayList<>();
             shared.findDataTypes(canonical, found);
             DataType twin = exactly(found, canonical);
-            if (twin == null || !sameShapeIgnoringComments(twin, copy)) continue;
+            if (twin == null) continue;
+            // The same type, or a typedef that only renames the twin function:
+            // either way the twin takes its uses.
+            boolean same = sameShapeIgnoringComments(twin, copy)
+                || (namesItsFunction(copy) && sameShapeIgnoringComments(
+                        twin, ((ghidra.program.model.data.TypeDef) copy).getBaseDataType()));
+            if (!same) continue;
             try {
                 shared.replaceDataType(copy, twin, true);
                 changed = true;
@@ -2665,6 +2721,14 @@ public class Owner {
     private static boolean sameShape(DataType a, DataType b, java.util.Set<String> seen) {
         if (a == null || b == null) return a == b;
         if (!seen.add(a.getPathName() + "|" + b.getPathName())) return true;
+        // A typedef that only renames a function of its own name — what the C
+        // parser makes of `typedef UINT32 NAME(…)` — is that function.
+        if (namesItsFunction(a) && !(b instanceof ghidra.program.model.data.TypeDef)) {
+            return sameShape(((ghidra.program.model.data.TypeDef) a).getBaseDataType(), b, seen);
+        }
+        if (namesItsFunction(b) && !(a instanceof ghidra.program.model.data.TypeDef)) {
+            return sameShape(a, ((ghidra.program.model.data.TypeDef) b).getBaseDataType(), seen);
+        }
         if (a instanceof ghidra.program.model.data.Pointer p && b instanceof ghidra.program.model.data.Pointer q) {
             return p.getLength() == q.getLength() && sameShape(p.getDataType(), q.getDataType(), seen);
         }
@@ -6170,7 +6234,12 @@ public class Owner {
                     if (here != null && inShared != null) {
                         // `isEquivalent` reads past `.conflict`, so a member's
                         // type name is compared as well.
-                        answer.addProperty("same", inShared.isEquivalent(here) && !memberTypesRenamed(here, inShared));
+                        // The same as the publish's merge reads it — a typedef
+                        // that only renames its function is that function —
+                        // and with the same texts.
+                        answer.addProperty("same", (inShared.isEquivalent(here)
+                                || (sameShape(here, inShared, new java.util.HashSet<>()) && sameTexts(here, inShared)))
+                            && !memberTypesRenamed(here, inShared));
                     }
                 } finally {
                     shared.close();

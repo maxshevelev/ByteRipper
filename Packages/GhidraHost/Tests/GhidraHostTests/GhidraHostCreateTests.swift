@@ -680,6 +680,67 @@ final class GhidraHostDeclinedTypeTests: XCTestCase {
     /// and the next, a layout that differs refuses the publish and leaves the
     /// store as it was, an administrator's take and a withdrawal are versions
     /// too, and the copy beside the projects is always the current one.
+    /// A publish of a module whose types the archive already holds as they
+    /// are makes no version — the first round of a test archive, and the
+    /// shared archive as 468 left it (`GHIDRA_TYPE_ARCHIVE`, a folder with
+    /// `review-types-Ia32.gdt` and its sidecars). There `IDS_HOOK_FUNCTION`
+    /// is a function, and AmdSocFp6RnPei's typedef of the same name — what the
+    /// C parser makes of `typedef UINT32 NAME(…)` — went in as
+    /// `IDS_HOOK_FUNCTION.conflict`, so every publish of the unchanged module
+    /// amended `IDS_HOOK_ENTRY` again: a new version each time.
+    func testAnUnchangedModulePublishedAgainMakesNoTypeVersion() async throws {
+        guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
+            throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
+        }
+        let seeds: [URL?] = [nil] + (ProcessInfo.processInfo.environment["GHIDRA_TYPE_ARCHIVE"]
+                                       .map { [URL(fileURLWithPath: $0)] } ?? [])
+        for seed in seeds {
+            let directory = FileManager.default.temporaryDirectory
+                .appendingPathComponent("GhidraHostTypeRepublishTests-\(UUID().uuidString)", isDirectory: true)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let projects = directory.appendingPathComponent("projects")
+            if let seed {
+                try FileManager.default.createDirectory(at: projects, withIntermediateDirectories: true)
+                for name in try FileManager.default.contentsOfDirectory(atPath: seed.path) where name.hasPrefix("review-types-") {
+                    try FileManager.default.copyItem(at: seed.appendingPathComponent(name),
+                                                     to: projects.appendingPathComponent(name))
+                }
+            }
+            let store = try ContentStore(root: directory.appendingPathComponent("store"))
+            let host = GhidraHost(configuration: .init(projectsRoot: projects, idle: 300,
+                                                       holder: "GhidraHostTypeRepublishTests"),
+                                  writer: store)
+            let image = try Data(contentsOf: URL(fileURLWithPath: path))
+            let module = SHA256Digest(data: image)
+            _ = try await host.create(module: image, name: "Module")
+            let language = try json(await host.read(module, "/v1/hello"))["language"] as? String ?? ""
+            let bits = GhidraHost.archiveBits(language: language)
+            func versions() throws -> [Int] { try store.typeArchive(bits: bits)?.versions.map(\.version) ?? [] }
+            let (function, entry) = seed == nil ? ("TV_HOOK", "TV_HOOK_ENTRY") : ("IDS_HOOK_FUNCTION", "IDS_HOOK_ENTRY")
+            let label = seed == nil ? "a fresh archive" : "the 468 archive"
+
+            _ = try await host.write(module, "/v1/type", body: try JSONSerialization.data(withJSONObject: [
+                "c": "typedef UINT32 \(function)(UINT32 HookId, UINT32 Reserved0, UINT32 Reserved1);"
+                    + " typedef struct _\(entry) { UINT32 HookId; \(function) *Hook; } \(entry);"]))
+            _ = try await host.publish(module, by: "agent")
+            let made = try versions()
+            XCTAssertFalse(made.isEmpty, "\(label): the first publish keeps a version")
+            for round in 1...2 {
+                let again = try await host.publish(module, by: "agent")
+                let kept = try store.typeArchive(bits: bits)?.versions.map { "v\($0.version) added \($0.added) amended \($0.amended)" } ?? []
+                XCTAssertNil(again.typesVersion, "\(label), round \(round): \(kept)")
+                XCTAssertEqual(try versions(), made, "\(label), round \(round): an unchanged module makes no version")
+            }
+
+            let shown = try json(await host.read(module, "/v1/type?name=\(entry)"))
+            let shared = try XCTUnwrap(shown["shared"] as? [String: Any], "\(shown)")
+            let hook = (shared["fields"] as? [[String: Any]])?.first { $0["name"] as? String == "Hook" }
+            XCTAssertEqual(hook?["type"] as? String, "\(function) *", "\(label): the shared member is named, not a .conflict copy")
+            XCTAssertEqual(shown["same"] as? Bool, true, "\(label): \(shown)")
+            await host.stop(module)
+        }
+    }
+
     func testSharedTypesComeInVersionsAndAReplacementRefusesThePublish() async throws {
         guard let path = ProcessInfo.processInfo.environment["GHIDRA_TYPE_MODULE"] else {
             throw XCTSkip("GHIDRA_TYPE_MODULE is not set")
