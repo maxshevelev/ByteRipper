@@ -1,5 +1,7 @@
 import Cocoa
 import AgentKit
+import CodeAnalysis
+import GhidraHost
 import Localization
 import ToolModuleKit
 
@@ -62,9 +64,35 @@ final class AgentService {
         info: AgentServerInfo(name: "byteripper", version: Self.appVersion, title: "ByteRipper"),
         instructions: Self.instructions,
         tools: catalogue.map { trimming(linking(noted($0.tool))) },
+        content: ReviewKitContent(cache: Self.reviewKit, mac: { Self.macName }),
         // The analysis server's bound: a large function's C or listing is one
         // answer, which at 24 KiB a review could not read at all.
         limits: .init(maxAnswerBytes: 96 << 10))
+
+    /// The review kit of the analysis server Settings ▸ Code Analysis names —
+    /// the roles of a review pair as prompts, the review rules as resources
+    /// (`ReviewKit`) — kept beside the store so a session started while the
+    /// server cannot be reached still has the last copy. Nothing is offered
+    /// with the analyses on this Mac: the kit describes a server's tools.
+    // help: agent.review-kit
+    static let reviewKit = ReviewKitCache(
+        folder: CodeAnalysisPaths.defaultRoot.deletingLastPathComponent()
+            .appendingPathComponent("Review Kit", isDirectory: true),
+        source: {
+            await MainActor.run { () -> ReviewKitCache.Source? in
+                let location = CodeAnalysisLocation.shared
+                guard location.mode == .server, let url = CodeAnalysisLocation.serverURL(location.serverAddress) else {
+                    return nil
+                }
+                return GhidraRemote(base: url, token: try? location.readToken()).kitSource
+            }
+        })
+
+    /// This Mac's name, which a role puts in the session's name
+    /// ("Reviewer · Bench-Mac").
+    nonisolated static var macName: String {
+        Host.current().localizedName ?? ProcessInfo.processInfo.hostName
+    }
 
     /// Every tool, in the order `tools/list` gives them, with where it comes
     /// from and what it does — what the Agent window's Tools page lists.

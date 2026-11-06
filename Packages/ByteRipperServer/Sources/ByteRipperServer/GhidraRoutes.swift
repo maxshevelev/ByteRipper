@@ -40,8 +40,22 @@ enum GhidraRoutes {
     /// Who holds a module taken on the server's own MCP socket.
     static let localHolder = "local MCP"
 
-    static func routes(host: GhidraHost, published: @escaping @Sendable () async -> Void) -> HTTPRouter {
+    static func routes(host: GhidraHost, kit: ReviewKit? = nil,
+                       published: @escaping @Sendable () async -> Void) -> HTTPRouter {
         var router = HTTPRouter()
+
+        // The review kit (`ReviewKit`): the manifest, then each file by its
+        // path. A server whose folder has no kit says so, and a client then
+        // offers its agents nothing.
+        router.add("GET", "\(prefix)/kit", access: .rights([.ghidraUse])) { _ in
+            guard let kit else { throw HTTPError(.notFound, "this server has no review kit") }
+            return .json(kit.manifest)
+        }
+        router.add("GET", "\(prefix)/kit/*path", access: .rights([.ghidraUse])) { request in
+            let path = request.parameters["path"] ?? ""
+            guard let text = kit?.texts[path] else { throw HTTPError(.notFound, "\(path) is not a file of the review kit") }
+            return .bytes(Data(text.utf8), type: "text/markdown; charset=utf-8")
+        }
 
         router.add("GET", "\(prefix)/modules", access: .rights([.ghidraUse])) { _ in
             .json(await host.summaries())

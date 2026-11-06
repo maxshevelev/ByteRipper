@@ -35,6 +35,8 @@ public actor AgentConnection {
     /// their answer, but they are still work in progress, and
     /// `waitUntilIdle` must wait for them like any other.
     private var stopping: [Task<Void, Never>] = []
+    /// Prompts and resources still being read.
+    private var pending: [UUID: Task<Void, Never>] = [:]
     private var closed = false
 
     private struct InFlight {
@@ -99,9 +101,10 @@ public actor AgentConnection {
     /// Returns once no tool call is running. For a test, and for a transport
     /// that wants to finish what it was asked before it closes.
     public func waitUntilIdle() async {
-        while let task = inFlight.values.first?.task ?? stopping.first {
+        while let task = inFlight.values.first?.task ?? stopping.first ?? pending.values.first {
             await task.value
             stopping.removeAll { $0 == task }
+            pending = pending.filter { $0.value != task }
         }
     }
 
@@ -189,6 +192,11 @@ public actor AgentConnection {
             write(RPCMessage.result(id: id, wrap(["tools": tools], era: era, cacheable: true)))
         case "tools/call":
             try startCall(id: id, key: key, params: params, era: era)
+        case "prompts/list", "prompts/get", "resources/list", "resources/read", "resources/templates/list":
+            guard let content = server.content else {
+                throw RPCError(code: MCPProtocol.ErrorCode.methodNotFound, message: "Method not found: \(method)")
+            }
+            startContent(method, content: content, id: id, params: params, era: era)
         default:
             throw RPCError(code: MCPProtocol.ErrorCode.methodNotFound, message: "Method not found: \(method)")
         }
@@ -226,7 +234,7 @@ public actor AgentConnection {
         clientName = params["clientInfo"]?["name"]?.stringValue
         var result: [String: JSONValue] = [
             "protocolVersion": .string(agreed),
-            "capabilities": ["tools": ["listChanged": false]],
+            "capabilities": capabilities(legacy: true),
             "serverInfo": server.info.json
         ]
         if let instructions = server.instructions { result["instructions"] = .string(instructions) }
@@ -236,10 +244,22 @@ public actor AgentConnection {
     private func discovery() -> JSONValue {
         var result: [String: JSONValue] = [
             "supportedVersions": .array(MCPProtocol.supportedVersions.map { .string($0) }),
-            "capabilities": ["tools": .object([:])]
+            "capabilities": capabilities(legacy: false)
         ]
         if let instructions = server.instructions { result["instructions"] = .string(instructions) }
         return .object(result)
+    }
+
+    /// What this server serves. A legacy client is told the tool list never
+    /// changes; the prompts and resources can — they arrive with the analysis
+    /// server's kit — but the server does not notify, so a client asks again.
+    private func capabilities(legacy: Bool) -> JSONValue {
+        var members: [String: JSONValue] = ["tools": legacy ? ["listChanged": false] : .object([:])]
+        if server.content != nil {
+            members["prompts"] = legacy ? ["listChanged": false] : .object([:])
+            members["resources"] = legacy ? ["subscribe": false, "listChanged": false] : .object([:])
+        }
+        return .object(members)
     }
 
     /// A result as its era writes it: a modern one says what kind of result
@@ -261,6 +281,71 @@ public actor AgentConnection {
             members["cacheScope"] = "public"
         }
         return .object(members)
+    }
+
+    // MARK: - Prompts and resources
+
+    /// A prompt or a resource, asked of the content in a task of its own: the
+    /// kit may have to be read from disk. Answered when it is done; a client
+    /// that has gone is not written to.
+    private func startContent(_ method: String, content: AgentContent, id: JSONValue, params: JSONValue, era: MCPEra) {
+        // Inserted below before the task can finish: the actor runs nothing
+        // else until this function returns.
+        let token = UUID()
+        let task = Task { [weak self] in
+            let result: Result<JSONValue, RPCError>
+            do {
+                result = .success(try await Self.answer(method, content: content, params: params))
+            } catch let error as RPCError {
+                result = .failure(error)
+            } catch let error as AgentToolError {
+                result = .failure(.invalidParams(error.message))
+            } catch {
+                result = .failure(RPCError(code: MCPProtocol.ErrorCode.internalError, message: "\(error)"))
+            }
+            await self?.finishContent(token, id: id, method: method, result: result, era: era)
+        }
+        pending[token] = task
+    }
+
+    private static func answer(_ method: String, content: AgentContent, params: JSONValue) async throws -> JSONValue {
+        switch method {
+        case "prompts/list":
+            return ["prompts": .array(await content.prompts().map(\.listing))]
+        case "prompts/get":
+            guard let name = params["name"]?.stringValue else { throw RPCError.invalidParams("name is required") }
+            var arguments: [String: String] = [:]
+            switch params["arguments"] {
+            case nil, .null?: break
+            case .object(let members)?:
+                for (key, value) in members {
+                    guard let text = value.stringValue else {
+                        throw RPCError.invalidParams("the prompt's arguments are strings")
+                    }
+                    arguments[key] = text
+                }
+            default: throw RPCError.invalidParams("arguments must be an object")
+            }
+            return try await content.prompt(named: name, arguments: arguments).json
+        case "resources/list":
+            return ["resources": .array(await content.resources().map(\.listing))]
+        case "resources/templates/list":
+            return ["resourceTemplates": .array([])]
+        default:
+            guard let uri = params["uri"]?.stringValue else { throw RPCError.invalidParams("uri is required") }
+            return try await content.resource(uri: uri).json
+        }
+    }
+
+    private func finishContent(_ token: UUID, id: JSONValue, method: String, result: Result<JSONValue, RPCError>,
+                               era: MCPEra) {
+        pending[token] = nil
+        switch result {
+        case .success(let value):
+            write(RPCMessage.result(id: id, wrap(value, era: era, cacheable: method.hasSuffix("/list"))))
+        case .failure(let error):
+            write(RPCMessage.error(id: id, error))
+        }
     }
 
     // MARK: - Tool calls

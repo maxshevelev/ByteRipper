@@ -71,11 +71,11 @@ final class AgentConnectionTests: XCTestCase {
     }
 
     private func connection(
-        tools: [AgentTool]? = nil, limits: AgentServer.Limits = .init()
+        tools: [AgentTool]? = nil, content: AgentContent? = nil, limits: AgentServer.Limits = .init()
     ) -> (AgentConnection, Wire) {
         let wire = Wire()
         let server = AgentServer(
-            info: info, instructions: "Ask about the dump.", tools: tools ?? [echo], limits: limits)
+            info: info, instructions: "Ask about the dump.", tools: tools ?? [echo], content: content, limits: limits)
         let connection = AgentConnection(
             server: server, connection: AgentConnectionTag(number: 7, about: "claude, PID 42531"), send: { wire.send($0) }, observer: { wire.record($0) },
             onCallStarted: { wire.callStarted($0) })
@@ -356,5 +356,80 @@ final class AgentConnectionTests: XCTestCase {
             #"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"echo","arguments":{"text":"a"}}}"#,
             #"{"jsonrpc":"2.0","id":"1","method":"tools/call","params":{"name":"echo","arguments":{"text":"b"}}}"#)
         XCTAssertEqual(Set(wire.messages.compactMap { $0["id"]?.jsonText }), ["1", #""1""#])
+    }
+
+    // MARK: - Prompts and resources
+
+    func testALegacyClientIsToldOfPromptsAndResourcesAndReadsThem() async throws {
+        let (connection, wire) = connection(content: Kit())
+        await send(connection,
+            #"{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"claude-code","version":"2"}}}"#,
+            #"{"jsonrpc":"2.0","id":1,"method":"prompts/list","params":{}}"#,
+            #"{"jsonrpc":"2.0","id":2,"method":"prompts/get","params":{"name":"reviewer","arguments":{"mac":"Bench"}}}"#,
+            #"{"jsonrpc":"2.0","id":3,"method":"resources/list","params":{}}"#,
+            #"{"jsonrpc":"2.0","id":4,"method":"resources/read","params":{"uri":"byteripper://kit/SKILL.md"}}"#,
+            #"{"jsonrpc":"2.0","id":5,"method":"prompts/get","params":{"name":"coder"}}"#,
+            #"{"jsonrpc":"2.0","id":6,"method":"resources/read","params":{}}"#)
+        let byID = Dictionary(uniqueKeysWithValues: wire.messages.compactMap { m in m["id"]?.int64Value.map { ($0, m) } })
+        XCTAssertEqual(byID[0]?["result"]?["capabilities"], [
+            "tools": ["listChanged": false], "prompts": ["listChanged": false],
+            "resources": ["subscribe": false, "listChanged": false]])
+        XCTAssertEqual(byID[1]?["result"]?["prompts"], [[
+            "name": "reviewer", "description": "Review a module.",
+            "arguments": [["name": "mac", "description": "This Mac's name.", "required": false]]]])
+        XCTAssertEqual(byID[2]?["result"]?["messages"], [[
+            "role": "user", "content": ["type": "text", "text": "You review on Bench."]]])
+        XCTAssertEqual(byID[3]?["result"]?["resources"], [[
+            "uri": "byteripper://kit/SKILL.md", "name": "SKILL.md", "mimeType": "text/markdown", "size": 7]])
+        XCTAssertEqual(byID[4]?["result"]?["contents"], [[
+            "uri": "byteripper://kit/SKILL.md", "mimeType": "text/markdown", "text": "# Rules"]])
+        XCTAssertNil(byID[1]?["result"]?["ttlMs"], "a legacy list carries no cache hint")
+        XCTAssertEqual(byID[5]?["error"]?["code"], .int(MCPProtocol.ErrorCode.invalidParams))
+        XCTAssertEqual(byID[5]?["error"]?["message"], "No prompt named coder.")
+        XCTAssertEqual(byID[6]?["error"]?["code"], .int(MCPProtocol.ErrorCode.invalidParams))
+    }
+
+    func testAModernClientDiscoversPromptsAndResourcesAndMayKeepTheLists() async throws {
+        let (connection, wire) = connection(content: Kit())
+        await send(connection,
+            #"{"jsonrpc":"2.0","id":"d","method":"server/discover","params":{\#(modernMeta)}}"#,
+            #"{"jsonrpc":"2.0","id":"p","method":"prompts/list","params":{\#(modernMeta)}}"#,
+            #"{"jsonrpc":"2.0","id":"g","method":"prompts/get","params":{"name":"reviewer",\#(modernMeta)}}"#)
+        let byID = Dictionary(uniqueKeysWithValues: wire.messages.compactMap { m in m["id"]?.stringValue.map { ($0, m) } })
+        XCTAssertEqual(byID["d"]?["result"]?["capabilities"], ["tools": .object([:]), "prompts": .object([:]), "resources": .object([:])])
+        XCTAssertEqual(byID["p"]?["result"]?["ttlMs"], 300_000)
+        XCTAssertEqual(byID["p"]?["result"]?["resultType"], "complete")
+        XCTAssertNil(byID["g"]?["result"]?["ttlMs"], "a prompt's text is not a list")
+        XCTAssertEqual(byID["g"]?["result"]?["messages"]?.arrayValue?.first?["content"]?["text"], "You review on this Mac.")
+    }
+
+    func testAServerWithoutContentHasNoPromptsAndNoResources() async {
+        let (connection, wire) = connection()
+        await send(connection, #"{"jsonrpc":"2.0","id":1,"method":"prompts/list","params":{}}"#,
+                   #"{"jsonrpc":"2.0","id":2,"method":"resources/read","params":{"uri":"x"}}"#)
+        XCTAssertEqual(wire.messages.map { $0["error"]?["code"] },
+                       [.int(MCPProtocol.ErrorCode.methodNotFound), .int(MCPProtocol.ErrorCode.methodNotFound)])
+    }
+}
+
+/// One prompt with an argument and one resource.
+private struct Kit: AgentContent {
+    func prompts() async -> [AgentPrompt] {
+        [AgentPrompt(name: "reviewer", description: "Review a module.",
+                     arguments: [.init(name: "mac", description: "This Mac's name.")])]
+    }
+
+    func prompt(named name: String, arguments: [String: String]) async throws -> AgentPromptText {
+        guard name == "reviewer" else { throw AgentToolError("No prompt named \(name).") }
+        return AgentPromptText(text: "You review on \(arguments["mac"] ?? "this Mac").")
+    }
+
+    func resources() async -> [AgentResource] {
+        [AgentResource(uri: "byteripper://kit/SKILL.md", name: "SKILL.md", size: 7)]
+    }
+
+    func resource(uri: String) async throws -> AgentResourceText {
+        guard uri == "byteripper://kit/SKILL.md" else { throw AgentToolError("No resource \(uri).") }
+        return AgentResourceText(uri: uri, text: "# Rules")
     }
 }

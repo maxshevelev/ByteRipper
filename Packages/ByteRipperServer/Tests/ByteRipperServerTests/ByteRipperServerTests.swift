@@ -391,6 +391,51 @@ final class ServerTests: XCTestCase {
     /// references and publishes through Ghidra, only `admin` writes the store
     /// past a publish (stage 2.5), `ghidra.use` reaches Ghidra, and a refusal
     /// names the right it lacks.
+    /// The review kit goes to a client that may use Ghidra, as the app's cache
+    /// fetches it: the manifest, each file matching its sum, nothing else.
+    func testTheReviewKitIsServedToAClientThatMayUseGhidra() async throws {
+        let tokens = try TokenStore.open(at: directory.appendingPathComponent("tokens.json"))
+        _ = try tokens.add(name: "admin", rights: TokenPreset.admin.rights)
+        let (_, reader) = try tokens.add(name: "reader", rights: TokenPreset.reader.rights)
+        let (_, app) = try tokens.add(name: "app", rights: TokenPreset.app.rights)
+        var configuration = ServerConfiguration()
+        configuration.roles = [.cas, .ghidra]
+        configuration.port = 0
+        configuration.store = directory.appendingPathComponent("store")
+        configuration.projects = directory.appendingPathComponent("projects")
+        configuration.tokensFile = directory.appendingPathComponent("tokens.json")
+        configuration.uploads = directory.appendingPathComponent("Uploads")
+        configuration.documentsFile = directory.appendingPathComponent("documents.json")
+        configuration.mcpSocket = URL(fileURLWithPath: "/tmp/br-\(UUID().uuidString.prefix(8)).sock")
+        configuration.clientTokenFile = directory.appendingPathComponent("token")
+        let server = Server(configuration: configuration, log: { _ in })
+        let port = try await server.start()
+        defer { server.stop() }
+        let base = URL(string: "http://127.0.0.1:\(port)")!
+
+        let refused = GhidraRemote(base: base, token: reader)
+        do {
+            _ = try await refused.kitManifest()
+            XCTFail("a token without ghidra.use")
+        } catch let error as GhidraHostError {
+            XCTAssertEqual(error.status, 403)
+        }
+        let remote = GhidraRemote(base: base, token: app)
+        let manifest = try JSONDecoder().decode(ReviewKit.Manifest.self, from: try await remote.kitManifest())
+        let expected = try ReviewKit.read(skills: ReviewKit.resolvedSkills())
+        XCTAssertEqual(manifest, expected.manifest)
+        do {
+            _ = try await remote.kitFile("ghidra-uefi/scripts/cas.py")
+            XCTFail("not a file of the kit")
+        } catch let error as GhidraHostError {
+            XCTAssertEqual(error.status, 404)
+        }
+        let cache = ReviewKitCache(folder: directory.appendingPathComponent("kit"), source: { remote.kitSource })
+        let kit = await cache.current()
+        XCTAssertEqual(kit, expected)
+        XCTAssertTrue(kit?.prompt(named: "reviewer", mac: "Bench")?.text.contains("Reviewer · Bench") ?? false)
+    }
+
     func testEachRouteAsksForItsRight() async throws {
         let tokens = try TokenStore.open(at: directory.appendingPathComponent("tokens.json"))
         let (_, admin) = try tokens.add(name: "admin", rights: TokenPreset.admin.rights)

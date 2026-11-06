@@ -14,14 +14,19 @@ public struct AgentServer: Sendable {
     /// `initialize` and `server/discover`.
     public let instructions: String?
     public let tools: [AgentTool]
+    /// Prompts and resources, when the server offers any; nil declares
+    /// neither capability.
+    public let content: AgentContent?
     public let limits: Limits
 
     private let toolsByName: [String: AgentTool]
 
-    public init(info: AgentServerInfo, instructions: String? = nil, tools: [AgentTool], limits: Limits = Limits()) {
+    public init(info: AgentServerInfo, instructions: String? = nil, tools: [AgentTool],
+                content: AgentContent? = nil, limits: Limits = Limits()) {
         self.info = info
         self.instructions = instructions
         self.tools = tools
+        self.content = content
         self.limits = limits
         // Two tools with one name is a mistake in the code that built the
         // list; the first one wins and the second is never reachable, which a

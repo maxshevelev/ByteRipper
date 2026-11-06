@@ -289,6 +289,15 @@ public struct GhidraRemote: GhidraBackend {
                        timeout: 1800)
     }
 
+    /// The review kit's manifest (`ReviewKit.Manifest`), and one of its files.
+    public func kitManifest() async throws -> Data { try await call("GET", "kit", timeout: 20) }
+    public func kitFile(_ path: String) async throws -> Data { try await call("GET", "kit/\(path)", timeout: 20) }
+
+    /// The kit's source for the app's `ReviewKitCache`.
+    public var kitSource: ReviewKitCache.Source {
+        ReviewKitCache.Source(manifest: { try await kitManifest() }, file: { try await kitFile($0) })
+    }
+
     private func call(_ method: String, _ path: String, query: [String: String] = [:], body: Data? = nil,
                       timeout: TimeInterval = 600) async throws -> Data {
         var components = URLComponents(url: base, resolvingAgainstBaseURL: false)!

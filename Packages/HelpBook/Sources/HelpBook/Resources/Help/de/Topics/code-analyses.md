@@ -1,4 +1,4 @@
-@source-sha 306ef79a495201ac629aa73256d68e826c5e3846fb3d483e6ded98aa264a9c2b
+@source-sha b11b01bba34899d78bb08742621f64941735ef0e055d07ec030c856d205f724f
 # Codeanalysen und der Analyseserver
 
 > Eine Codeanalyse ist das, was Ghidra in einem PEI- oder DXE-Modul gefunden hat: seine Funktionen, Befehle und den dekompilierten C-Code sowie die Namen, die eine Durchsicht ihnen gegeben hat. ByteRipper liest Analysen aus einem Speicher — einem Ordner auf diesem Mac oder einem Analyseserver, den alle Macs eines Netzwerks gemeinsam nutzen.
@@ -40,7 +40,9 @@ Die Zeile unter den Feldern zeigt, ob der Server erreichbar ist. Weist der Serve
 
 ## Durchsicht durch einen Agenten
 
-Betreibt der Analyseserver auch Ghidra, kann ein mit ByteRipper verbundener Agent (siehe [[topic:agent|Mit einem Agenten arbeiten]]) dort ein Modul durchsehen: Er öffnet das Modul über einen PE32- oder TE-Image-Knoten des UEFI-Baums, benennt Funktionen, Variablen und Typen, schreibt Kommentare und veröffentlicht das Ergebnis. Jede Veröffentlichung ist eine neue Revision der Analyse des Moduls, und jeder Mac, der den Server liest, zeigt sie. Das Ghidra-Projekt bleibt auf dem Server; eine Durchsicht lässt sich daher später fortsetzen, durch den Agenten oder durch eine Person. Ein Agent, der auf dem Server selbst läuft, verbindet sich direkt mit `byteripper-server` unter der Adresse `/mcp`.
+Betreibt der Analyseserver auch Ghidra, kann ein mit ByteRipper verbundener Agent (siehe [[topic:agent|Mit einem Agenten arbeiten]]) dort ein Modul durchsehen: Er öffnet das Modul über einen PE32- oder TE-Image-Knoten des UEFI-Baums, benennt Funktionen, Variablen und Typen, schreibt Kommentare und veröffentlicht das Ergebnis. Jede Veröffentlichung ist eine neue Revision der Analyse des Moduls, und jeder Mac, der den Server liest, zeigt sie. Das Ghidra-Projekt bleibt auf dem Server; eine Durchsicht lässt sich daher später fortsetzen, durch den Agenten oder durch eine Person. Ein Agent, der auf dem Rechner des Servers läuft, verbindet sich direkt mit `byteripper-server`, über dessen lokale Verbindung und nicht über ByteRipper.
+
+Der Server gibt einem Agenten auch seine Rolle und die Regeln der Durchsicht. Ein mit einem solchen Server verbundenes ByteRipper bietet seinen Agenten zwei Vorlagen an — in Claude Code die Befehle `/mcp__byteripper__reviewer` und `/mcp__byteripper__verifier` — sowie die Regeln der Durchsicht als MCP-Ressourcen. Eine mit der ersten Vorlage begonnene Sitzung sieht Module durch und veröffentlicht sie; eine mit der zweiten begonnene prüft deren Ergebnisse und ändert nichts. Die Rolle setzt den Namen dieses Macs in den Namen der Sitzung, sodass die Konsole des Servers die Sitzungen verschiedener Macs unterscheidet. Rollen und Regeln gehören dem Server und haben stets dieselbe Version wie seine Werkzeuge; auf diesem Mac muss dafür nichts installiert werden. ByteRipper bewahrt die zuletzt erhaltene Fassung auf und bietet sie an, solange der Server nicht erreichbar ist. Liegen die Analysen auf diesem Mac, werden weder Vorlagen noch Regeln angeboten. Ein Baum der EDK2-Quellen, auf den eine Durchsicht verweist, gehört nicht dazu: Die durchsehende Sitzung bittet einmal darum, ihn zu klonen.
 
 ## Was der Server nicht tut
 

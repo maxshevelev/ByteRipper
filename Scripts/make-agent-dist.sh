@@ -49,6 +49,9 @@ cp -R "$repo/Skills/ghidra-uefi/reference" "$stage/skills/ghidra-uefi/"
 cp "$repo/Skills/ghidra-uefi/scripts/cas.py" "$repo/Skills/ghidra-uefi/scripts/cas_cli.py" \
     "$stage/skills/ghidra-uefi/scripts/"
 cp -R "$repo/Skills/ghidra-uefi/tests" "$stage/skills/ghidra-uefi/"
+# The review kit the server serves to other Macs' agents (`ReviewKit`): the
+# roles beside the rules above.
+cp -R "$repo/Skills/review-roles" "$stage/skills/"
 
 cp "$repo/Scripts/agent-dist/"*.sh "$stage/scripts/"
 cp "$repo/Scripts/agent-dist/README.md" "$repo/Scripts/agent-dist/CLAUDE.md" "$stage/"

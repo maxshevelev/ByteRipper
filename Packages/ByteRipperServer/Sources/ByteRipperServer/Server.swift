@@ -110,7 +110,16 @@ public final class Server {
             }
             let feed = cas.feed
             GhidraRoutes.projectsRoot = configuration.projects
-            router.merge(GhidraRoutes.routes(host: host, published: { await feed.rescan() }))
+            let skills = ReviewKit.resolvedSkills()
+            let kit: ReviewKit?
+            do {
+                kit = try ReviewKit.read(skills: skills)
+            } catch {
+                kit = nil
+                log("no review kit in \(skills.path): \(error.localizedDescription)")
+            }
+            router.merge(GhidraRoutes.routes(host: host, kit: kit, published: { await feed.rescan() }))
+            if let kit { log("review kit \(kit.manifest.version): \(kit.manifest.files.count) files from \(skills.path)") }
             ghidra = host
             let ghidraNote = (try? await host.ghidra()).map { "Ghidra \($0.version) at \($0.home.path)" }
                 ?? "no Ghidra found yet"
