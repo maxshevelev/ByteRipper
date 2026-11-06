@@ -130,6 +130,10 @@ actor LocalGhidraHost {
             writer: store)
         self.host = host
         self.storeRoot = root
+        // A publish the app stopped in the middle is finished from its journal:
+        // the store's steps now, the owner's at the module's next open. It and
+        // a publish hold the store in turn.
+        Task { try? await host.recoverPublishes() }
         return host
     }
 }

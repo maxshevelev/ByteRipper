@@ -481,8 +481,17 @@ final class GhidraHostCandidateTests: XCTestCase {
         XCTAssertEqual(afterReview, true)
     }
 
-    /// Function ID's plate on a fresh project: `__aullshr` in both Fp6 modules.
+    /// Function ID's plate on a fresh project: `__aullshr` in both Fp6 modules,
+    /// moved to the registry from the first.
     private func aullshrInBoth() async throws -> (GhidraHost, ContentStore, SHA256Digest, SHA256Digest, String, String, String, URL) {
+        let (host, store, reviewed, other, source, target, directory) = try await aullshrReviewed()
+        let moved = try await move(host, reviewed, source)
+        let id = try XCTUnwrap(moved.added.first { $0.name == "__aullshr" }?.id, "\(moved)")
+        return (host, store, reviewed, other, source, target, id, directory)
+    }
+
+    /// The same, `__aullshr` reviewed to the bar in the first and not yet proposed.
+    private func aullshrReviewed() async throws -> (GhidraHost, ContentStore, SHA256Digest, SHA256Digest, String, String, URL) {
         guard let paths = ProcessInfo.processInfo.environment["GHIDRA_LIBRARY_MODULES"]?.split(separator: ":"),
               paths.count == 2 else {
             throw XCTSkip("GHIDRA_LIBRARY_MODULES is not set")
@@ -519,9 +528,99 @@ final class GhidraHostCandidateTests: XCTestCase {
             "address": source, "kind": "plate", "text": "MSVC runtime: a 64-bit logical shift right."]))
         _ = try await host.write(reviewed, "/v1/set/comment", body: body([
             "address": source, "kind": "pre", "text": "The shift count is in CL."]))
-        let moved = try await move(host, reviewed, source)
-        let id = try XCTUnwrap(moved.added.first { $0.name == "__aullshr" }?.id, "\(moved)")
-        return (host, store, reviewed, other, source, target, id, directory)
+        return (host, store, reviewed, other, source, target, directory)
+    }
+
+    /// What a publish leaves in the store, without what differs between two
+    /// runs of the same: the project's id, the times.
+    private func publishedState(_ store: ContentStore, _ module: SHA256Digest, _ host: GhidraHost) async throws -> [String: String] {
+        func canonical(_ data: Data) -> String {
+            func clean(_ value: Any) -> Any {
+                if let object = value as? [String: Any] {
+                    return object.filter { !["project", "recorded_at", "at", "analyzed_at", "created_at"].contains($0.key) }
+                        .mapValues(clean)
+                }
+                if let list = value as? [Any] { return list.map(clean) }
+                return value
+            }
+            guard let value = try? JSONSerialization.jsonObject(with: data) else { return SHA256Digest(data: data).hex }
+            let text = (try? JSONSerialization.data(withJSONObject: clean(value), options: [.sortedKeys])) ?? data
+            return SHA256Digest(data: text).hex
+        }
+        var state: [String: String] = [:]
+        let index = try store.libraryIndex()
+        for (id, entry) in index.entries {
+            state["entry \(id)"] = "v\(entry.version) r\(entry.source.rev ?? -1) \(canonical(try store.object(entry.entry)))"
+                + " " + entry.variants.map { "\($0.body.key):\($0.code.map { canonical((try? store.object($0)) ?? Data()) } ?? "-")" }
+                    .sorted().joined(separator: ",")
+            state["history \(id)"] = (try store.libraryHistory(id: id)?.versions ?? [])
+                .map { "v\($0.version) r\($0.source.rev ?? -1) \($0.reason ?? "")" }.joined(separator: "; ")
+        }
+        let revisions = try store.reviewHistory(module: module)?.revisions ?? []
+        state["revisions"] = revisions.map { revision in
+            "r\(revision.rev) \(canonical(try! store.object(revision.review))) \(revision.artifact.map { canonical(try! store.object($0)) } ?? "-")"
+        }.joined(separator: "; ")
+        let manifest = try XCTUnwrap(try store.analysis(module: module))
+        state["analysis"] = "\(canonical(try store.object(manifest.artifact.sha256))) r\(manifest.reading?.rev ?? -1)"
+        let kept = try store.project(module: module)
+        state["project"] = kept.map { "r\($0.rev) \(canonical(try! store.object($0.artifact)))" } ?? "-"
+        let published = try await host.project(module).state().published
+        state["state"] = "r\(published?.rev ?? -1) \(published?.artifact == manifest.artifact.sha256.hex)"
+        state["journals"] = "\(try store.journals().count)"
+        state["verify"] = store.verify().joined(separator: "; ")
+        return state
+    }
+
+    /// A publish stopped after any of its steps — the journal marking it done,
+    /// or, as a crash between the write and the mark leaves it, not — is
+    /// finished by the next server from its journal: the store steps when it
+    /// starts, the owner's when the module is opened. What it leaves is what
+    /// the same publish leaves when nothing stops it.
+    func testAPublishStoppedAtAnyStepIsFinishedAsIfItHadNotStopped() async throws {
+        func run(_ stop: PublishStop?) async throws -> [String: String] {
+            let (host, store, reviewed, other, source, _, directory) = try await aullshrReviewed()
+            defer { try? FileManager.default.removeItem(at: directory) }
+            try await propose(host, reviewed, source)
+            guard let stop else {
+                _ = try await host.publish(reviewed, by: "agent")
+                let state = try await publishedState(store, reviewed, host)
+                _ = await host.stop(reviewed)
+                _ = await host.stop(other)
+                return state
+            }
+            await host.setPublishStop(stop)
+            do {
+                _ = try await host.publish(reviewed, by: "agent")
+                XCTFail("\(stop) did not stop the publish")
+            } catch is PublishStopped {
+            }
+            XCTAssertEqual(try store.journals().count, 1, "\(stop): the journal stays")
+            // As a server that stopped: its owners gone, a new host on the same folders.
+            _ = await host.stop(reviewed)
+            _ = await host.stop(other)
+            let again = GhidraHost(configuration: await host.configuration, writer: store)
+            let found = try await again.recoverPublishes()
+            XCTAssertEqual(found, 1, "\(stop)")
+            _ = try await functions(again, reviewed)
+            let state = try await publishedState(store, reviewed, again)
+            _ = await again.stop(reviewed)
+            return state
+        }
+        let whole = try await run(nil)
+        XCTAssertEqual(whole["journals"], "0")
+        XCTAssertEqual(whole["verify"], "")
+        var stops = PublishJournal.Step.allCases.map { PublishStop(step: $0, marked: true) }
+        stops += [.library, .code, .revision, .equates, .analysis, .marks, .types, .project]
+            .map { PublishStop(step: $0, marked: false) }
+        if let only = ProcessInfo.processInfo.environment["PUBLISH_STOP_ONLY"] {
+            stops = stops.filter { "\($0.step.rawValue)\($0.marked ? "" : "-unmarked")" == only }
+        }
+        for stop in stops {
+            let state = try await run(stop)
+            for key in Set(whole.keys).union(state.keys).sorted() where whole[key] != state[key] {
+                XCTFail("\(stop.step.rawValue)\(stop.marked ? "" : " unmarked"): \(key): \(state[key] ?? "nil") instead of \(whole[key] ?? "nil")")
+            }
+        }
     }
 
     func testAPlateFunctionIDWroteDoesNotKeepAWholeMatchFromLinking() async throws {

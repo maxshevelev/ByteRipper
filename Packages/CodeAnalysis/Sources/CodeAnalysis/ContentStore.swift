@@ -658,6 +658,7 @@ public struct ContentStore: Sendable {
             .union(reviewHistories().flatMap { $0.revisions.flatMap(\.objects) })
             // The library registry's entries, every version its histories keep.
             .union(libraryObjects())
+            .union(journalObjects())
         // A kept artifact's functions and sections are kept with it.
         let keptParts = Set(keepObjects.flatMap { parts(of: $0) })
         let orphanObjects = contents(of: objectsURL).filter {

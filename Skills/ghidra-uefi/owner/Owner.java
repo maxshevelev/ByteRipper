@@ -314,6 +314,7 @@ public class Owner {
                 if (path.equals("/v1/library/compare")) { json(exchange, 200, libraryCompare(body(exchange))); return; }
                 if (path.equals("/v1/library/apply")) { json(exchange, 200, libraryApply(exchange)); return; }
                 if (path.equals("/v1/library/mark")) { json(exchange, 200, libraryMarkRequest(exchange)); return; }
+                if (path.equals("/v1/types/merge")) { json(exchange, 200, typesMerge(exchange)); return; }
                 if (path.equals("/v1/export")) { exportAgain(exchange); return; }
                 JsonObject write = switch (path) {
                     case "/v1/rename/function" -> write(exchange, this::renameFunction);
@@ -1674,6 +1675,11 @@ public class Owner {
         // an overwrite would break the module that added the other. With
         // `dry_run` it answers what would be taken, and nothing is written.
         boolean take = "1".equals(parameters.get("take_type_conflicts"));
+        // `merge_types=0`: the export only, its conflicts worked out on a copy as
+        // a preview's are. The host merges with `/v1/types/merge` once the
+        // registry has said yes, so a refused publish leaves the shared
+        // archive as it was.
+        boolean mergeTypes = !"0".equals(parameters.get("merge_types"));
         if (!dryRun) writeLibraryStates();
         // Before the export: the artifact's types and the C read the named
         // members, and the merge below finds them in the same publish. A
@@ -1691,8 +1697,9 @@ public class Owner {
         try {
             byte[] artifact = exportArtifact();
             published = Harvest.of(program, options.get("module"), options.get("project-id"));
-            Merge merge = mergeReviewTypes(!dryRun, take);
+            Merge merge = mergeReviewTypes(!dryRun && mergeTypes, take);
             exchange.getResponseHeaders().set("X-Owner-Dry-Run", Boolean.toString(dryRun));
+            exchange.getResponseHeaders().set("X-Owner-Types-Merged", Boolean.toString(!dryRun && mergeTypes));
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.getResponseHeaders().set("X-Owner-Modification", Long.toString(modification()));
             exchange.getResponseHeaders().set("X-Owner-Reviewed", Boolean.toString(published.reviewed));
@@ -1719,6 +1726,31 @@ public class Owner {
         } finally {
             if (dryRun) endTransaction(transaction, false, before);
         }
+    }
+
+    /**
+     * `POST /v1/types/merge`: the review's types into the shared archive, as a
+     * publish without `merge_types=0` merges them — the step of a publish the
+     * host takes once the registry has decided. `take_type_conflicts=1` as
+     * there. Merging again what is merged changes nothing.
+     */
+    private JsonObject typesMerge(HttpExchange exchange) throws Exception {
+        requireLease(exchange);
+        boolean take = "1".equals(query(exchange.getRequestURI().getRawQuery()).get("take_type_conflicts"));
+        Merge merge = mergeReviewTypes(true, take);
+        JsonObject answer = new JsonObject();
+        JsonArray conflicts = new JsonArray();
+        for (String name : merge.conflicts) conflicts.add(name);
+        JsonArray taken = new JsonArray();
+        for (String name : merge.taken) taken.add(name);
+        JsonObject origins = new JsonObject();
+        for (java.util.Map.Entry<String, String> origin : merge.origins.entrySet()) {
+            if (origin.getValue() != null && !origin.getValue().isEmpty()) origins.addProperty(origin.getKey(), origin.getValue());
+        }
+        answer.add("conflicts", conflicts);
+        answer.add("taken", taken);
+        answer.add("origins", origins);
+        return answer;
     }
 
     /** ExportCode run on the program in this process: the artifact's bytes. */

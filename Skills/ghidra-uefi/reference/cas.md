@@ -46,9 +46,17 @@ refused, never dropped.
   reviews/<module-sha>/manifest.json          # every revision of the module's readings
   library/index.json                          # the library registry: entries, and every body's entry
   library/history/<id>.json                   # every version of one registry entry
+  private/projects/<module-sha>/project.zip   # the module's Ghidra project, at its current revision
+  private/projects/<module-sha>/record.json   # which revision it is, and what made it
+  private/journal/<id>.json                   # a publish that has not finished
+  private/publish.lock                        # flock one publish holds from its decision to its end
   tmp/                                        # staging; cleaned by gc
   .lock                                       # flock for writers
 ```
+
+`private/` is the server's own: no route serves it, a mirror copies nothing
+of it, and `gc` walks `objects/` only — keeping the objects an unfinished
+journal names.
 
 The default root is `~/Library/Application Support/ByteRipper/Analysis`;
 `--store` puts it elsewhere. The directory is `0700`, objects and manifests
@@ -156,17 +164,30 @@ the module description — the review's Markdown, an object of its own
 ### The review history
 
 `reviews/<module-sha>/manifest.json` lists every revision a publish recorded,
-oldest first: project, revision, review document, description (when there is
-one), the artifact — the code as it stood — when and by whom. It is an index
-for diffs and pruning; the analysis manifest's `reading` alone says which
-reading is current. A publish stores, in this order, the code and the document
-and the description (`put-object`), the revision (`record-revision`, which
-refuses an object the store does not hold), and the analysis naming it
-(`put-analysis`). A revision recorded before revisions kept their code names
-none, and `gc` keeps only what a revision names: such a revision cannot be compared
-with, and the panel's picker leaves it out. A publish that stops after the revision leaves an
-entry ahead of its analysis, which `verify` reports and the next publish of the
-same revision overwrites.
+oldest first: revision, review document, description (when there is one), the
+artifact — the code as it stood — when and by whom. A module has one history:
+the store numbers its revisions, one more than the last, and records none when
+the code, the document and the description are the last revision's. A `project`
+in an older file is read and means nothing. It is an index for diffs and
+pruning; the analysis manifest's `reading` alone says which reading is current.
+A revision recorded before revisions kept their code names none, and `gc` keeps
+only what a revision names: such a revision cannot be compared with, and the
+panel's picker leaves it out.
+
+A publish is one transaction. What the owner exports and the registry's
+decision come first, and nothing is written while the registry can still say
+no. Then the journal (`private/journal/`) goes down with everything the publish
+will write, and the steps follow, each marked there when it is done and each
+safe to do again: the registry's entries, their code, the revision, the
+sources' revision number, the entries' equates, the analysis — the store's
+steps — then the marks in the project, the bytes the registry learns from it,
+the review's types into the shared archive, `state.json` and the kept project —
+the owner's. A server that stopped part way finishes the store's steps before
+it opens a route, and the owner's the next time the module is opened; the last
+step removes the journal. One publish at a time holds a store, from its
+decision to its end. A registry source names the revision the store recorded;
+`verify` reports one that names a revision the module's history does not
+hold.
 
 ### The library registry
 
@@ -249,6 +270,14 @@ python3 scripts/cas_cli.py history <module-sha>
 The server writes through this store — a publish is a write — and its
 `code_query` tool reads it. `cas_cli.py` takes the same `--store` and is how a
 person reads, verifies or moves what the store holds.
+
+`byteripper-cas drop-earlier-projects [--apply]` removes what a module's earlier Ghidra projects
+left from before a module had one history — their analyses, revisions and readings kept aside —
+and refuses while a registry entry's source is one of them. `byteripper-cas library-source-rev
+--module <sha> --from <rev> --to <rev> [--apply]` puts registry sources naming a revision that
+never came on one the module has. `byteripper-server pack-projects [--apply]` keeps each project
+folder whose last publish is the store's last revision in `private/projects/`; the folders are
+read, never changed. Each answers what it would do until `--apply` is given.
 
 An administrator changes what the registry says with `library-rename`, `library-take-out`,
 `library-restore` and `library-split`: each takes `--reason`, answers what it would do until

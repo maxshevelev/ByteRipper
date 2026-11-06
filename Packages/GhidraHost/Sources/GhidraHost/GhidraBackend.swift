@@ -91,6 +91,8 @@ public struct PublishAnswer: Codable, Sendable {
     public var project: ProjectRecord?
     /// Why the project could not be kept: the revision is stored either way.
     public var projectError: String?
+    /// Why the review's types could not be merged into the shared archive.
+    public var typesError: String?
 
     public init(_ publication: GhidraHost.Publication?) {
         manifest = publication?.manifest
@@ -102,6 +104,7 @@ public struct PublishAnswer: Codable, Sendable {
         staleLinks = publication.map(\.staleLinks).flatMap { $0.isEmpty ? nil : $0 }
         project = publication?.project
         projectError = publication?.projectError
+        typesError = publication?.typesError
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -114,6 +117,7 @@ public struct PublishAnswer: Codable, Sendable {
         case staleLinks = "stale_links"
         case project
         case projectError = "project_error"
+        case typesError = "types_error"
     }
 }
 

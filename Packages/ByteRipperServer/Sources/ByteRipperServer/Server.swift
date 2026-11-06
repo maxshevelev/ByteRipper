@@ -93,6 +93,15 @@ public final class Server {
                                                        sources: sources,
                                                        idle: configuration.idle),
                                   writer: writer)
+            // A publish this server stopped in the middle is finished before
+            // any route opens: its store steps now, its owner's at the
+            // module's next open.
+            do {
+                let left = try await host.recoverPublishes()
+                if left > 0 { log("publishes finished from their journals: \(left)") }
+            } catch {
+                log("a publish's journal could not be finished: \(error)")
+            }
             let feed = cas.feed
             GhidraRoutes.projectsRoot = configuration.projects
             router.merge(GhidraRoutes.routes(host: host, published: { await feed.rescan() }))

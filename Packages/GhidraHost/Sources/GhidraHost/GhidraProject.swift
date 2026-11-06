@@ -175,6 +175,19 @@ public protocol AnalysisWriter: Sendable {
     func readProject(module: SHA256Digest) async throws -> (record: ProjectRecord, file: URL)?
     /// The registry's sources of `module` naming revision `from` made to name `to`.
     func renumberLibrarySources(module: SHA256Digest, from: Int, to: Int) async throws
+    /// A publish's journal, put down before its first write and after each step.
+    func writeJournal(id: String, data: Data) async throws
+    /// The journals of publishes that have not finished.
+    func readJournals() async throws -> [Data]
+    func removeJournal(id: String) async throws
+    /// Held from a publish's decision to its last step; the answer gives it back.
+    func lockPublishes() async throws -> PublishHold
+}
+
+/// A publish's hold on its store: given back once, by `release`.
+public struct PublishHold: Sendable {
+    let key: String
+    let release: @Sendable () -> Void
 }
 
 extension ContentStore: AnalysisWriter {
@@ -194,6 +207,34 @@ extension ContentStore: AnalysisWriter {
 
     public func renumberLibrarySources(module: SHA256Digest, from: Int, to: Int) async throws {
         try renumberLibrarySources(module: module, from: from, to: to, dryRun: false)
+    }
+
+    public func writeJournal(id: String, data: Data) async throws { try putJournal(id: id, data: data) }
+
+    public func readJournals() async throws -> [Data] { try journals().map(\.data) }
+
+    public func removeJournal(id: String) async throws { try deleteJournal(id: id) }
+
+    /// One publish at a time in this process, by the gate, and across
+    /// processes writing this store, by the file lock, taken off the
+    /// cooperative pool: `flock` blocks.
+    public func lockPublishes() async throws -> PublishHold {
+        let key = publishLockURL.path
+        await PublishGate.shared.enter(key)
+        do {
+            let descriptor: Int32 = try await withCheckedThrowingContinuation { continuation in
+                DispatchQueue.global(qos: .userInitiated).async {
+                    do { continuation.resume(returning: try self.lockPublishFile()) } catch { continuation.resume(throwing: error) }
+                }
+            }
+            return PublishHold(key: key) {
+                self.unlockPublishFile(descriptor)
+                Task { await PublishGate.shared.leave(key) }
+            }
+        } catch {
+            await PublishGate.shared.leave(key)
+            throw error
+        }
     }
 
     public func writeRevision(module: SHA256Digest, reading: AnalysisReading, artifact: SHA256Digest,
@@ -283,6 +324,17 @@ extension RemoteStore: AnalysisWriter {
         throw CodeAnalysisError.analysisMismatch("a served store numbers its revisions and its sources itself")
     }
 
+    /// A served store's publishes are its server's: a client keeps no journal
+    /// of them, and holds only this process's gate.
+    public func writeJournal(id: String, data: Data) async throws {}
+    public func readJournals() async throws -> [Data] { [] }
+    public func removeJournal(id: String) async throws {}
+    public func lockPublishes() async throws -> PublishHold {
+        let key = "remote:\(base.absoluteString)"
+        await PublishGate.shared.enter(key)
+        return PublishHold(key: key) { Task { await PublishGate.shared.leave(key) } }
+    }
+
     public func writeRevision(module: SHA256Digest, reading: AnalysisReading, artifact: SHA256Digest,
                               by: String?) async throws -> Int {
         let history = try await recordRevision(module: module, reading: reading, artifact: artifact, by: by)
@@ -333,5 +385,31 @@ extension RemoteStore: AnalysisWriter {
     public func functionAsRead(module: SHA256Digest, entry: CodeAddress) async throws -> CodeArtifact.Function? { nil }
     public func newestAnalyses() async throws -> [AnalysisManifest] {
         try await modules().compactMap(\.manifests.first)
+    }
+}
+
+/// One publish at a time per store in this process: the next waits its turn,
+/// and the turn passes straight to it.
+actor PublishGate {
+    static let shared = PublishGate()
+    private var busy: Set<String> = []
+    private var waiting: [String: [CheckedContinuation<Void, Never>]] = [:]
+
+    func enter(_ key: String) async {
+        guard busy.contains(key) else {
+            busy.insert(key)
+            return
+        }
+        await withCheckedContinuation { waiting[key, default: []].append($0) }
+    }
+
+    func leave(_ key: String) {
+        if var queue = waiting[key], !queue.isEmpty {
+            let next = queue.removeFirst()
+            waiting[key] = queue
+            next.resume()
+        } else {
+            busy.remove(key)
+        }
     }
 }

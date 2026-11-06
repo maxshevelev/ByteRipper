@@ -67,6 +67,9 @@ public actor GhidraHost {
         public var libraryError: String?
         /// Links whose text is a default name while the target has a real one.
         public var staleLinks: [StaleLink]
+        /// Why the review's types could not be merged into the shared archive:
+        /// the revision is stored either way, and the next publish merges them.
+        public var typesError: String?
         /// The kept project the store holds for this revision now.
         public var project: ProjectRecord?
         /// Why the project could not be kept: the revision is stored either way,
@@ -156,6 +159,16 @@ public actor GhidraHost {
     enum ReleaseStep { case compared, givenBack }
     func setReleaseStep(_ step: (@Sendable (ReleaseStep) async -> Void)?) { releaseStep = step }
     private var starting: [SHA256Digest: Task<OwnerRecord, Error>] = [:]
+    /// Modules a stopped publish left a journal for: its owner's steps are
+    /// finished at the module's next open.
+    var unfinished: Set<SHA256Digest> = []
+    var finishing: Set<SHA256Digest> = []
+    /// Publishes holding the store now: an owner opened inside one finishes
+    /// nothing, since finishing waits for the same hold.
+    var publishing = 0
+    /// The step a test stops a publish after.
+    var publishStop: PublishStop?
+    func setPublishStop(_ stop: PublishStop?) { publishStop = stop }
 
     public init(configuration: Configuration = Configuration(), writer: AnalysisWriter) {
         self.configuration = configuration
@@ -382,13 +395,14 @@ public actor GhidraHost {
                         options: PublishOptions = PublishOptions()) async throws -> Publication {
         let project = self.project(module)
         let record = try await owner(of: module)
-        var state = try project.state()
-        let path = options.takeTypeConflicts ? "/v1/publish?take_type_conflicts=1" : "/v1/publish"
+        let state = try project.state()
+        // The export only: the review's types are merged once the registry has
+        // said yes, so a refused publish leaves the shared archive as it was.
+        let path = "/v1/publish?merge_types=0" + (options.takeTypeConflicts ? "&take_type_conflicts=1" : "")
         let (exported, headers) = try await Self.call(record.port, "POST", path, timeout: 3600)
-        var raw = exported
         let document = try await Self.call(record.port, "GET", "/v1/review").data
         let description = try await Self.call(record.port, "GET", "/v1/review/description").data
-        guard let artifact = try JSONSerialization.jsonObject(with: raw) as? [String: Any] else {
+        guard let artifact = try JSONSerialization.jsonObject(with: exported) as? [String: Any] else {
             throw GhidraHostError(.owner, "the owner's artifact is not a JSON object")
         }
         let reviewed = headers["x-owner-reviewed"] == "true"
@@ -396,21 +410,29 @@ public actor GhidraHost {
         let taken = (headers["x-owner-type-taken"] ?? "").split(separator: ",").map(String.init)
         let origins = Self.typeOrigins(headers["x-owner-type-origins"])
         let last = state.published
-        // The revision this publish would be, as the store numbers them.
-        let next = ((try await writer.latestRevision(module: module))?.rev ?? 0) + 1
-        if let refusal = Self.languagePatchRefusal(
-            publishing: Self.recipe(for: artifact, types: state.madeWith.types, passes: state.madeWith.passes).id,
-            over: last?.recipe) {
+        let recipe = Self.recipe(for: artifact, types: state.madeWith.types, passes: state.madeWith.passes)
+        if let refusal = Self.languagePatchRefusal(publishing: recipe.id, over: last?.recipe) {
             throw GhidraHostError(.refused, refusal, status: 409)
         }
+        let offer = try Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data, artifact: exported)
+
+        // From the registry's decision to the last write, this publish is the
+        // only one on the store.
+        let hold = try await writer.lockPublishes()
+        publishing += 1
+        defer {
+            publishing -= 1
+            hold.release()
+        }
+        // The revision this publish would be, as the store numbers them.
+        let next = ((try await writer.latestRevision(module: module))?.rev ?? 0) + 1
         // The registry decides first, on everything this publish offers: the
         // review's candidates, and the changes to entries its functions link to.
         // A refusal leaves all of it as it was, and stores nothing.
-        let offer = try Self.libraryOffer(try await Self.call(record.port, "GET", "/v1/library").data, artifact: raw)
         var offered = try await Self.withoutLinked(offer.proposals, writer: writer)
         // A link reads its entry's text: an entry with none learns it from here.
-        let completion = try await Self.completions(raw, offer: offer.proposals, offered: offered, reviewed: reviewed,
-                                                    take: options.takeLibrary, writer: writer)
+        let completion = try await Self.completions(exported, offer: offer.proposals, offered: offered,
+                                                    reviewed: reviewed, take: options.takeLibrary, writer: writer)
         if let refusal = LibraryRefusal.refusal(completion.refused) {
             throw GhidraHostError(.refused, refusal, status: 409)
         }
@@ -420,88 +442,7 @@ public actor GhidraHost {
         if let refusal = would?.publishRefusal ?? Self.offerRefusal(offer.shortfalls, would: would) {
             throw GhidraHostError(.refused, refusal, status: 409)
         }
-        // The registry said yes. The one export is what the revision holds: the
-        // project is the review's own, and nothing here changes it before the
-        // revision is stored.
-        var library: LibraryWriteResult?
-        var libraryError: String?
-        var marks: [[String: Any]] = []
-        if reviewed {
-            if !offered.isEmpty {
-                let written = try await writer.writeLibraryEntries(
-                    module: module, rev: next, by: by, proposals: offered,
-                    take: options.takeLibrary)
-                library = written
-                // A store older than take_ids ignores them and answers with
-                // the conflict: say which entries were not taken, rather
-                // than let the publish read as if it had taken them.
-                let missed = options.takeLibrary.ids.intersection(Set(written.conflicts.map(\.id)))
-                if !missed.isEmpty {
-                    libraryError = "the store did not take "
-                        + missed.sorted().joined(separator: ", ")
-                        + ": its server predates take_ids"
-                }
-                marks = Self.libraryMarks(offered, result: written, index: try await writer.readLibraryIndex())
-                var entries: [String: String] = [:]
-                for mark in marks {
-                    if let address = mark["address"] as? String, let id = mark["id"] as? String { entries[address] = id }
-                }
-                raw = ModuleFormat.decided(raw, entries: entries)
-            }
-            // The registry takes each body's ASM from here, and every module
-            // holding the body links to it at once.
-            if let taught = try await teachEntryCode(module, artifact: raw, rev: next, by: by) {
-                if let relinked = taught.relinked {
-                    var answer = library ?? LibraryWriteResult()
-                    answer.relinked = (answer.relinked ?? []) + relinked
-                    library = answer
-                }
-                if let error = taught.relinkError { libraryError = error }
-            }
-        }
-        // What a module stores is its own facts: the text of a registry function
-        // is the entry's.
-        let first = await Self.stored(raw, writer: writer)
-        raw = first.artifact
-        var reading: AnalysisReading?
-        var review: SHA256Digest?
-        var described: SHA256Digest?
-        if reviewed {
-            let stored = try await writer.writeObject(ModuleFormat.review(document, of: first))
-            review = stored
-            if !description.isEmpty { described = try await writer.writeObject(description) }
-            // The code goes into the store before the revision that names it:
-            // a revision without its artifact is one nobody can diff. The store
-            // numbers it: the last one again when nothing changed.
-            let code = try await writer.writeObject(raw)
-            let rev = try await writer.writeRevision(
-                module: module, reading: AnalysisReading(rev: next, review: stored, description: described),
-                artifact: code, by: by)
-            let current = AnalysisReading(rev: rev, review: stored, description: described)
-            reading = current
-            // What the registry was given — entries, their code — names the
-            // revision this publish would have been; the store kept the last
-            // one, unchanged, so it names that.
-            if rev != next {
-                try await writer.renumberLibrarySources(module: module, from: next, to: rev)
-            }
-            // The revision is stored: the transaction closes on the project. The
-            // functions the registry took are no candidates and no longer dirty,
-            // and their text stays. What the entries learn is from the export the
-            // offer was made of. A failure here is reported: the revision is
-            // stored, and the next publish offers the same again and changes nothing.
-            do {
-                if !marks.isEmpty {
-                    _ = try await write(module, "/v1/library/mark",
-                                        body: try JSONSerialization.data(withJSONObject: ["items": marks]))
-                }
-                try await teachEntryBytes(module, rev: rev, by: by)
-                try await teachEntryEquates(module, artifact: exported, rev: rev, by: by)
-            } catch {
-                libraryError = "\(error)"
-            }
-        }
-        let recipe = Self.recipe(for: artifact, types: state.madeWith.types, passes: state.madeWith.passes)
+        // The registry said yes: the journal goes down before the first write.
         let program = artifact["program"] as? [String: Any] ?? [:]
         let identity = ModuleIdentity(sha256: module, size: state.module.size, name: state.module.name,
                                       kind: state.module.kind,
@@ -513,51 +454,41 @@ public actor GhidraHost {
         let stored = try await writer.storedAnalysis(module: module, recipe: recipe.id)
         let ours = stored != nil && last != nil
             && (stored?.artifact.sha256.hex == last?.artifact || stored?.relinkedFrom?.hex == last?.artifact)
-        let source = SourceIdentity(path: state.source?.path, document: state.source?.document,
-                                    node: state.source?.node)
-        let manifest = try await writer.writeAnalysis(module: identity, recipe: recipe, artifact: raw,
-                                                      source: source, reading: reading, replace: ours)
-        // The number the program stood at when this publish stored it: a later
-        // one is a write the store has not got. Read after the marks, which
-        // save the program themselves.
-        let modification = try? await Self.call(record.port, "GET", "/v1/hello", timeout: 10).data
-        let hello = modification
-            .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
-        let number = hello.flatMap { $0["modification"] as? Int }
-        let writes = hello.flatMap { $0["writes"] as? Int }
-        // A publish that stored nothing new keeps its time: `at` says when this
-        // revision was published, and a release with no writes publishes none.
-        let before = state.published
-        let same = before?.artifact == manifest.artifact.sha256.hex && before?.recipe == recipe.id
-            && before?.review == review?.hex && before?.description == described?.hex && before?.rev == reading?.rev
-        state.published = .init(artifact: manifest.artifact.sha256.hex, recipe: recipe.id, review: review?.hex,
-                                description: described?.hex, rev: reading?.rev,
-                                at: same ? (before?.at ?? Self.now()) : Self.now(),
-                                modification: number, writes: writes)
-        // What the module's own reading says: entries it only links are the
-        // registry's review, not one of this module.
-        state.reviewed = reviewed && Self.holdsOwnReview(
-            document: review == nil ? document : ModuleFormat.review(document, of: first), description: description)
-        try project.write(state)
-        var publication = Publication(manifest: manifest, typeConflicts: conflicts, typeConflictsTaken: taken,
-                                      typeConflictOrigins: origins, library: library,
-                                      libraryError: libraryError, staleLinks: await staleLinks(port: record.port))
-        // The project is kept with the revision it published, last: everything
-        // the owner writes for this publish is saved by now, `state.json` too.
-        if let reading {
-            do {
-                publication.project = try await keepProject(module, state: state, rev: reading.rev,
-                                                            artifact: SHA256Digest(data: raw), review: reading.review,
-                                                            recipe: recipe.id)
-            } catch {
-                publication.projectError = "\(error)"
-            }
-        }
+        var journal = PublishJournal(
+            id: "\(Self.journalStamp())-\(module.hex.prefix(16))", module: module, by: by, startedAt: Self.now(),
+            planned: next, reviewed: reviewed, takeTypeConflicts: options.takeTypeConflicts,
+            take: options.takeLibrary, offered: offered,
+            exported: try await writer.writeObject(exported), document: try await writer.writeObject(document),
+            description: try await writer.writeObject(description), identity: identity, recipe: recipe,
+            source: SourceIdentity(path: state.source?.path, document: state.source?.document, node: state.source?.node),
+            replace: ours, typeConflicts: conflicts, typeConflictsTaken: taken, typeConflictOrigins: origins)
+        journal.objects = [journal.exported, journal.document, journal.description]
+        try await writeDown(journal)
+        try await applyStoreSteps(&journal)
+        try await applyOwnerSteps(&journal, record: record)
+        try await writer.removeJournal(id: journal.id)
+        guard let manifest = journal.manifest else { throw GhidraHostError(.owner, "the publish stored no analysis") }
+        var publication = Publication(manifest: manifest, typeConflicts: journal.typeConflicts,
+                                      typeConflictsTaken: journal.typeConflictsTaken,
+                                      typeConflictOrigins: journal.typeConflictOrigins, library: journal.library,
+                                      libraryError: journal.libraryError, staleLinks: await staleLinks(port: record.port))
+        publication.typesError = journal.typesError
+        publication.project = journal.project
+        publication.projectError = journal.projectError
         return publication
     }
 
+    /// A journal's name sorts by when it began.
+    static func journalStamp() -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "yyyyMMdd'T'HHmmssSSS"
+        return formatter.string(from: Date())
+    }
+
     /// A report beside a stored publish: failing to read it never fails that.
-    private func staleLinks(port: Int) async -> [StaleLink] {
+    func staleLinks(port: Int) async -> [StaleLink] {
         struct Answer: Decodable {
             var stale_links: [StaleLink]
         }
@@ -936,7 +867,10 @@ public actor GhidraHost {
         guard project.exists else {
             throw GhidraHostError(.project, "no project for \(module.hex): open the module first", status: 404)
         }
-        if let running = await runningOwner(project, replacingStale: true) { return running }
+        if let running = await runningOwner(project, replacingStale: true) {
+            await finishPublishes(module, record: running)
+            return running
+        }
         if let pending = starting[module] { return try await pending.value }
         // A live owner that does not answer is busy — a publish exporting a
         // large module — not gone: a second one would only fail on Ghidra's
@@ -949,7 +883,9 @@ public actor GhidraHost {
         let task = Task { try await self.start(project) }
         starting[module] = task
         defer { starting[module] = nil }
-        return try await task.value
+        let record = try await task.value
+        await finishPublishes(module, record: record)
+        return record
     }
 
     /// A recorded owner whose process lives and answers; nil otherwise.

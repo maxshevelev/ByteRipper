@@ -161,6 +161,24 @@ final class ContentStoreTests: XCTestCase {
         XCTAssertFalse(store.hasObject(digest))
     }
 
+    /// An unfinished publish's journal keeps the objects it names from a
+    /// collection: the publish finishes with them.
+    func testAJournalKeepsItsObjectsFromACollection() throws {
+        let named = try store.putObject(Data("exported".utf8))
+        let orphan = try store.putObject(Data("orphan".utf8))
+        let journal = try JSONSerialization.data(withJSONObject: ["id": "j1", "objects": [named.hex]])
+        try store.putJournal(id: "j1", data: journal)
+        XCTAssertEqual(try store.journals().map(\.id), ["j1"])
+        let report = try store.collectGarbage(dryRun: false)
+        XCTAssertEqual(report.objects, 1)
+        XCTAssertTrue(store.hasObject(named))
+        XCTAssertFalse(store.hasObject(orphan))
+        try store.deleteJournal(id: "j1")
+        XCTAssertEqual(try store.journals().count, 0)
+        XCTAssertEqual(try store.collectGarbage(dryRun: false).objects, 1, "with the journal gone, it goes")
+        XCTAssertThrowsError(try store.putJournal(id: "../x", data: journal), "a journal's name stays in its folder")
+    }
+
     /// A mirror holds what was asked of it: a manifest naming an object it has
     /// not fetched yet is not a damaged store, and the same store with no source
     /// to fetch it from is.

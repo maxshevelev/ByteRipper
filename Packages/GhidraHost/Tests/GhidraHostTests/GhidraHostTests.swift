@@ -6,6 +6,28 @@ import XCTest
 
 final class GhidraHostUnitTests: XCTestCase {
     /// A patched language prints other C, so it is in the recipe's key; a stock artifact's id is what it was.
+    /// Two publishes on one store take turns: the second holds it only once
+    /// the first has given it back.
+    func testPublishesOnOneStoreTakeTurns() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("Turns-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = try ContentStore(root: root)
+        let first = try await store.lockPublishes()
+        let second = Task { () -> Date in
+            let hold = try await store.lockPublishes()
+            defer { hold.release() }
+            return Date()
+        }
+        try await Task.sleep(nanoseconds: 300_000_000)
+        let released = Date()
+        first.release()
+        let entered = try await second.value
+        XCTAssertGreaterThanOrEqual(entered, released, "the second waited for the first")
+        // And the store is free again.
+        let third = try await store.lockPublishes()
+        third.release()
+    }
+
     func testARecipeNamesTheLanguagePatch() {
         let stock = GhidraHost.recipe(for: ["script_version": 10, "ghidra": "12.2"], types: "edk2-stable202608-r2", passes: [])
         XCTAssertEqual(stock.id, "code-v10-types2-ghidra-12.2")

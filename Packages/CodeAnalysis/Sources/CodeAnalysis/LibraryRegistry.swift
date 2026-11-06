@@ -241,7 +241,7 @@ public struct LibraryHistory: Codable, Equatable, Sendable {
 /// Which conflicts a publish takes — none, every one, or those it names, each
 /// with the reason the history keeps. A review made on the entry's current
 /// version needs no decision; this decides the others.
-public struct LibraryTake: Equatable, Sendable {
+public struct LibraryTake: Codable, Equatable, Sendable {
     /// Take every conflicting entry, with one reason.
     public var all: Bool
     /// The entries to take by id, each with a reason of its own.
