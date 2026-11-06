@@ -23,7 +23,7 @@ The catalogue name makes two properties of the image legible:
 
 ## Adding a microcode
 
-**Add Microcode…** in the panel's header opens a list of Intel microcodes fetched from the `platomav/CPUMicrocodes` collection on github.com, with the columns CPUID, platform, revision, date, release and size. **Only CPUIDs in this image** restricts the list to the signatures the open image already carries. **Choose File…** takes a microcode from a local file instead, and requires no network access.
+**Add Microcode…**, the button in the table under its last microcode, opens a list of Intel microcodes fetched from the `platomav/CPUMicrocodes` collection on github.com, with the columns CPUID, platform, revision, date, release and size. **Only CPUIDs in this image** restricts the list to the signatures the open image already carries. **Choose File…** takes a microcode from a local file instead, and requires no network access.
 
 A file offered from either source is validated before anything is written: it must begin with an Intel microcode header, and its checksum must agree.
 

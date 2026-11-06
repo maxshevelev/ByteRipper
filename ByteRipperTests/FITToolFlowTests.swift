@@ -154,16 +154,16 @@ final class FITToolFlowTests: XCTestCase {
         let target = try XCTUnwrap(pane.zones.zones.first { $0.id == "fit.target.1" })
         XCTAssertEqual(target.name, "CPUID 806EA")
         XCTAssertEqual(target.range, 0x2000..<0x2100)
-        // The header, the microcode, and the microcode's CPUID, open a level.
-        XCTAssertEqual(try entriesTable().numberOfRows, 3)
+        // The header, the microcode, its CPUID open a level, and Add under it.
+        XCTAssertEqual(try entriesTable().numberOfRows, 4)
     }
 
     /// Another file opened into the pane is another table to read, and until
     /// it is read the panel shows none — not the last file's rows.
     func testAnotherFileShowsNoTableUntilItsOwnIsRead() throws {
         let controller = try open(FITTestImage.make())
-        // The header, the microcode, and the microcode's CPUID, open a level.
-        XCTAssertEqual(try entriesTable().numberOfRows, 3, "the premise: the first file's table is up")
+        // The header, the microcode, its CPUID open a level, and Add under it.
+        XCTAssertEqual(try entriesTable().numberOfRows, 4, "the premise: the first file's table is up")
 
         let other = try tempFile(FITTestImage.make())
         files.append(other)
@@ -176,7 +176,7 @@ final class FITToolFlowTests: XCTestCase {
         wait(for: [parsed], timeout: 5)
         try session().onDisplay = nil
         window?.layoutIfNeeded()
-        XCTAssertEqual(try entriesTable().numberOfRows, 3, "the new file's table takes its place")
+        XCTAssertEqual(try entriesTable().numberOfRows, 4, "the new file's table takes its place")
     }
 
     /// What the panel says about an image it understands.
@@ -623,8 +623,11 @@ final class FITToolFlowTests: XCTestCase {
         // The scan runs off the main actor and this thread has not yielded, so
         // it cannot have finished yet: the parse is busy and the button stands
         // down for it.
-        XCTAssertFalse(try button("Add Microcode…").isEnabled,
-                       "Add must stand down while a parse runs")
+        // Before the first reading there is no table, and so no row for Add
+        // to sit in; where there is one, it stands down.
+        let panel = try XCTUnwrap(controller.tools.panel)
+        let early = descendants(of: panel, NSButton.self).first { $0.title == "Add Microcode…" }
+        XCTAssertFalse(early?.isEnabled ?? false, "Add must stand down while a parse runs")
 
         // The reading lands, the bar leaves, and the button comes back as it
         // says: enabled because the table has rows.
@@ -1293,7 +1296,10 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertFalse(lines.isEmpty, "806EA is in the shipped table")
         XCTAssertFalse(outline.isExpandable(try XCTUnwrap(outline.item(atRow: 0))), "the header opens into nothing")
         XCTAssertTrue(outline.isItemExpanded(outline.item(atRow: 1)), "the microcode is open to begin with")
-        XCTAssertEqual(outline.numberOfRows, display.rows.count + 1, "the rows and the one CPUID")
+        XCTAssertEqual(outline.numberOfRows, display.rows.count + 2, "the rows, the one CPUID, and Add")
+        // Add sits under the last microcode, after what the microcode opened.
+        let add = try button("Add Microcode…")
+        XCTAssertEqual(outline.row(for: add), 3)
         let cpuidRow = try text(of: outline, row: 2)
         XCTAssertTrue(cpuidRow.hasPrefix("CPUID 806EA"), cpuidRow)
         // The stepping and the segments are under the pointer, not on a row.
@@ -1305,7 +1311,8 @@ final class FITToolFlowTests: XCTestCase {
         let cpuid = try XCTUnwrap(outline.item(atRow: 2))
         XCTAssertFalse(outline.isItemExpanded(cpuid), "the CPUID is closed to begin with")
         outline.expandItem(cpuid)
-        XCTAssertEqual(outline.numberOfRows, display.rows.count + 1 + lines.count)
+        XCTAssertEqual(outline.numberOfRows, display.rows.count + 2 + lines.count)
+        XCTAssertEqual(outline.row(for: add), 3 + lines.count, "still under the last microcode's rows")
         let firstLine = try text(of: outline, row: 3)
         XCTAssertTrue(firstLine.hasPrefix(lines[0].text), firstLine)
 
@@ -1315,7 +1322,7 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertEqual(outline.selectedRow, 4)
         XCTAssertEqual(try session().display.detail.title, "#2 Microcode")
         XCTAssertTrue(outline.isItemExpanded(outline.item(atRow: 2)), "still open")
-        XCTAssertEqual(outline.numberOfRows, display.rows.count + 1 + lines.count)
+        XCTAssertEqual(outline.numberOfRows, display.rows.count + 2 + lines.count)
 
         // Closed by the reader, it stays closed when the panel is shown again.
         outline.collapseItem(outline.item(atRow: 1))
@@ -1359,10 +1366,11 @@ final class FITToolFlowTests: XCTestCase {
         _ = try open(FITTestImage.make() + FITTestImage.make())
         let table = try entriesTable()
         let display = try session().display
-        let start = try XCTUnwrap(display.backupStart, "the backup is read")
-        // Closed, so a row of the table is a row of the outline.
+        // Closed, so a row of the table is a row of the outline — and the
+        // table's Add row before the backup's, which has none: it is read-only.
         (table as? NSOutlineView)?.collapseItem(nil, collapseChildren: true)
-        XCTAssertEqual(table.numberOfRows, display.rows.count + 1, "the rows and the heading")
+        let start = try XCTUnwrap(display.backupStart, "the backup is read") + 1
+        XCTAssertEqual(table.numberOfRows, display.rows.count + 2, "the rows, Add, and the heading")
 
         let delegate = try XCTUnwrap(table.delegate)
         XCTAssertEqual(delegate.tableView?(table, isGroupRow: start), true)

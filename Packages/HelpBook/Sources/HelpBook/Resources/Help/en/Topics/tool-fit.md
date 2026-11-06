@@ -30,7 +30,7 @@ Every entry carries an address, a size and a type: a [[term:microcode|microcode 
 
 The tool writes to the image as well as reading it. Each operation is one undo step and none of them changes the length of the file.
 
-- **Add Microcode…** in the panel's header places a microcode component in the image and enters it in the table. The list it offers is fetched from an online catalogue, and **Choose File…** takes a microcode from a local file instead.
+- **Add Microcode…**, the button in the table under its last microcode, places a microcode component in the image and enters it in the table. The list it offers is fetched from an online catalogue, and **Choose File…** takes a microcode from a local file instead.
 - **Replace Microcode** exchanges the component a row names for another.
 - **Remove Microcode** takes an entry out of the table and moves the components behind it up.
 - **Fix Checksum**, on the header row, writes the checksum the table should carry.

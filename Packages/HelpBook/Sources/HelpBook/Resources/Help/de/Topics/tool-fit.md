@@ -1,4 +1,4 @@
-@source-sha 99f17ad8199fa7a7b190b2732e4602ccf14b647d7b8e11fe0da68fee49e84d2f
+@source-sha 2f72232d72b2fd4e9de9f199080e9bab5e4c9657ef386b95b3363af74adcfa7d
 # FIT-Tabelle
 
 > Die Firmware Interface Table: was der Prozessor laden soll, bevor er Firmware-Code ausführt, und ob diese Bauteile vorhanden sind.
@@ -28,7 +28,7 @@ Jeder Eintrag trägt eine Adresse, eine Größe und einen Typ: ein [[term:microc
 
 Das Werkzeug liest das Image nicht nur, es schreibt auch hinein. Jeder Vorgang bildet einen Widerrufsschritt, und keiner von ihnen ändert die Länge der Datei.
 
-- **Microcode hinzufügen…** in der Kopfzeile des Bereichs legt ein Microcode-Bauteil in das Image und trägt es in die Tabelle ein. Die angebotene Liste wird aus einem Online-Katalog geladen; **Datei wählen…** nimmt einen Microcode stattdessen aus einer lokalen Datei.
+- **Microcode hinzufügen…**, die Schaltfläche in der Tabelle unter dem letzten Microcode-Eintrag, legt ein Microcode-Bauteil in das Image und trägt es in die Tabelle ein. Die angebotene Liste wird aus einem Online-Katalog geladen; **Datei wählen…** nimmt einen Microcode stattdessen aus einer lokalen Datei.
 - **Microcode ersetzen** tauscht das von einer Zeile benannte Bauteil gegen ein anderes.
 - **Microcode entfernen** nimmt einen Eintrag aus der Tabelle und rückt die Bauteile dahinter nach.
 - **Prüfsumme korrigieren** in der Header-Zeile schreibt die Prüfsumme, die die Tabelle tragen müsste.

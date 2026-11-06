@@ -81,7 +81,7 @@ import ToolModuleKit
     private let splitter = ALSplitView()
     private let summaryLabel = NSTextField(labelWithString: "")
     private let noticeLabel = NSTextField(labelWithString: "")
-    /// The row under the buttons: the notice, and the parse's progress bar on
+    /// The row at the foot of the panel: the notice, and the parse's progress bar on
     /// the same line while one runs — the module's own status line carries its
     /// progress rather than a second strip appearing below it.
     private let bottomRow = NSStackView()
@@ -236,13 +236,10 @@ import ToolModuleKit
         }
         // Remove and Fix Checksum are not buttons: they are offered where they
         // apply, in the row's menu, rather than on a bar that is always there.
+        // Add is a row of the table, under the last microcode — where what it
+        // adds will go (`addMicrocodeCell`).
         button(addButton, L("Add Microcode…"), #selector(addMicrocodeClicked),
                L("Put a microcode in the image and name it in the table"))
-
-        let buttons = NSStackView(views: [addButton])
-        buttons.orientation = .horizontal
-        buttons.spacing = 6
-        buttons.translatesAutoresizingMaskIntoConstraints = false
 
         noticeLabel.font = ToolPanelFont.body()
         noticeLabel.textColor = .secondaryLabelColor
@@ -272,7 +269,6 @@ import ToolModuleKit
         view.addSubview(summaryLabel)
         view.addSubview(splitter)
         view.addSubview(problemsScroll)
-        view.addSubview(buttons)
         view.addSubview(bottomRow)
 
         // As tall as its rows — capped at eight of them by
@@ -316,12 +312,9 @@ import ToolModuleKit
             // there is nothing for an inset to hold away from anything.
             problemsScroll.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             problemsScroll.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            problemsScroll.bottomAnchor.constraint(equalTo: buttons.topAnchor, constant: -6),
+            problemsScroll.bottomAnchor.constraint(equalTo: bottomRow.topAnchor, constant: -6),
             ratio, content,
 
-            buttons.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
-            buttons.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -8),
-            buttons.bottomAnchor.constraint(equalTo: bottomRow.topAnchor, constant: -6),
 
             bottomRow.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
             bottomRow.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
@@ -361,7 +354,7 @@ import ToolModuleKit
 
     // MARK: - A parse's progress
 
-    /// A parse is running: the bar joins the row under the buttons, and the
+    /// A parse is running: the bar joins the row at the foot of the panel, and the
     /// one button — Add — stands down for the whole of it, with the menu items
     /// that modify the table (Remove Microcode, Fix Checksum) standing down
     /// beside it. A parse reads a snapshot of the file as it is *now*, so an
@@ -379,7 +372,7 @@ import ToolModuleKit
         progressBar.startAnimation(nil)
     }
 
-    /// The reading is done: the bar leaves the row and the buttons come back as
+    /// The reading is done: the bar leaves the row and the button comes back as
     /// the last reading said they should.
     func endBusy() {
         busy = false
@@ -578,7 +571,7 @@ import ToolModuleKit
         return CGFloat(rows) * row
     }
 
-    /// A line under the buttons — what happened, or what to do next. The panel
+    /// A line at the foot of the panel — what happened, or what to do next. The panel
     /// has no room for an alert sheet and nothing here is worth one.
     ///
     /// A refusal is red, because it is the one kind of line the user has to
@@ -685,11 +678,13 @@ final class FITOutlineItem: NSObject {
         case cpuid(Int, Int)
         /// The row's key, the group's place, and the line's place in it.
         case line(Int, Int, Int)
+        /// Add Microcode…, under the table's last microcode.
+        case addMicrocode
 
         /// The entry this item belongs to.
         var key: Int? {
             switch self {
-            case .heading: return nil
+            case .heading, .addMicrocode: return nil
             case .entry(let key), .cpuid(let key, _), .line(let key, _, _): return key
             }
         }
@@ -740,6 +735,14 @@ extension FITToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
             if seenEntries.insert(entry).inserted { expandedKinds.insert(entry) }
         }
         if display.backupStart == display.rows.count { topItems.append(FITOutlineItem(.heading)) }
+        // Add sits under the last microcode of the table — not of the Top Swap
+        // backup's copy, which is changed only with the table — or under the
+        // header where there is none.
+        let table = display.rows.filter { !$0.isBackup }
+        if let anchor = table.last(where: { $0.model.entry.type == FIT.microcodeType }) ?? table.first,
+           let at = topItems.firstIndex(where: { $0.kind == .entry(anchor.key) }) {
+            topItems.insert(made(.addMicrocode), at: at + 1)
+        }
         expandedKinds.formIntersection(itemsByKind.keys)
     }
 
@@ -823,6 +826,8 @@ extension FITToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
         switch item.kind {
         case .heading:
             return headingView(in: outlineView)
+        case .addMicrocode:
+            return tableColumn?.identifier == Column.type ? addMicrocodeCell : nil
         case .entry(let key):
             guard let column = tableColumn, let entry = entry(ofKey: key) else { return nil }
             return entryCell(entry, column: column)
@@ -858,7 +863,15 @@ extension FITToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
     /// processors as they walk the entries — except the heading, which is a
     /// heading. A CPUID or a line chosen puts its microcode in focus.
     func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
-        (item as? FITOutlineItem)?.kind != .heading
+        guard let kind = (item as? FITOutlineItem)?.kind else { return false }
+        return kind != .heading && kind != .addMicrocode
+    }
+
+    /// The button's row is as tall as the button; every other row is the
+    /// table's.
+    func outlineView(_ outlineView: NSOutlineView, heightOfRowByItem item: Any) -> CGFloat {
+        guard (item as? FITOutlineItem)?.kind == .addMicrocode else { return outlineView.rowHeight }
+        return max(outlineView.rowHeight, addButton.fittingSize.height + 6)
     }
 
     /// The entries' rows carry the Boot Guard background; the lines under a
@@ -964,6 +977,22 @@ extension FITToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
             rowView.showsMarkings = legend.showsMarkings
             rowView.marks = marks(of: entry)
         }
+    }
+
+    /// The one cell Add Microcode… sits in. One button, so one cell: the row
+    /// is rebuilt with every show, and the button — enabled or not as
+    /// `updateButtons` decided — moves with it rather than being made again.
+    private var addMicrocodeCell: NSView {
+        if let cell = addButton.superview { return cell }
+        let cell = NSTableCellView()
+        cell.identifier = NSUserInterfaceItemIdentifier("addMicrocode")
+        cell.addSubview(addButton)
+        NSLayoutConstraint.activate([
+            addButton.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2),
+            addButton.trailingAnchor.constraint(lessThanOrEqualTo: cell.trailingAnchor),
+            addButton.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
+        ])
+        return cell
     }
 
     private func headingView(in tableView: NSTableView) -> NSView {
