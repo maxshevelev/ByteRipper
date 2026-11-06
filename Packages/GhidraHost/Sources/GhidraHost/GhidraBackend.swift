@@ -46,6 +46,8 @@ public protocol GhidraBackend: Sendable {
     func typeUses(name: String, limit: Int) async throws -> Data
     /// A report about a tool, kept where the tools' maintainers read it.
     func reportIssue(_ report: IssueBook.Report) async throws -> Data
+    /// This reporter's reports, with the answers of the resolved ones.
+    func myIssues(limit: Int) async throws -> Data
 }
 
 public extension GhidraBackend {
@@ -62,6 +64,9 @@ public extension GhidraBackend {
     func reportIssue(_ report: IssueBook.Report) async throws -> Data {
         throw GhidraHostError(.install, "this backend keeps no reports: there is no analysis server to send it to. "
             + "Tell the person instead, with the call, its arguments and what came back.")
+    }
+    func myIssues(limit: Int) async throws -> Data {
+        throw GhidraHostError(.install, "this backend keeps no reports: there is no analysis server to read them from.")
     }
 }
 
@@ -213,6 +218,17 @@ extension GhidraHost: GhidraBackend {
         }
         return try IssueBook.encoder.encode(try await issues.report(report, by: reporter))
     }
+
+    public func myIssues(limit: Int) async throws -> Data {
+        try await myIssues(by: configuration.holder, limit: limit)
+    }
+
+    public nonisolated func myIssues(by reporter: String, limit: Int) async throws -> Data {
+        guard let issues else {
+            throw GhidraHostError(.install, "this host keeps no reports: there is no analysis server to read them from.")
+        }
+        return try IssueBook.encoder.encode(await issues.mine(reporter, limit: limit))
+    }
 }
 
 /// A `byteripper-server`'s Ghidra role, over `/ghidra/v1`: what the app's
@@ -310,6 +326,10 @@ public struct GhidraRemote: GhidraBackend {
 
     public func reportIssue(_ report: IssueBook.Report) async throws -> Data {
         try await call("POST", "issues", body: try JSONEncoder().encode(report), timeout: 30)
+    }
+
+    public func myIssues(limit: Int) async throws -> Data {
+        try await call("GET", "issues/mine", query: ["limit": String(limit)], timeout: 20)
     }
 
     /// The server's answer: nil when no owner has the module open. A server

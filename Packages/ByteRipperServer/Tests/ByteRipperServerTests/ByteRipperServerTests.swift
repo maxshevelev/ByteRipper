@@ -448,6 +448,14 @@ final class ServerTests: XCTestCase {
         let (resolved, _) = try await call("POST", "admin/api/issues/\(id)/resolve", admin,
                                            body: Data(#"{"note":"fixed in 476"}"#.utf8))
         XCTAssertEqual(resolved, 200)
+        // The reporter reads its own reports, with the answer.
+        let own = try await GhidraRemote(base: base, token: app).myIssues(limit: 10)
+        let ownList = try JSONSerialization.jsonObject(with: own) as? [[String: Any]]
+        XCTAssertEqual(ownList?.first?["id"] as? String, id)
+        XCTAssertEqual((ownList?.first?["resolved"] as? [String: Any])?["note"] as? String, "fixed in 476")
+        let (_, adminsOwn) = try await call("GET", "ghidra/v1/issues/mine", admin)
+        XCTAssertEqual((try JSONSerialization.jsonObject(with: adminsOwn) as? [Any])?.count, 0, "only the reporter's")
+
         let (_, open) = try await call("GET", "admin/api/issues", admin)
         XCTAssertEqual((try JSONSerialization.jsonObject(with: open) as? [Any])?.count, 0)
         let (_, all) = try await call("GET", "admin/api/issues?all=1", admin)

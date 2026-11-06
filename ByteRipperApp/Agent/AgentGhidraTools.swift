@@ -121,6 +121,10 @@ struct CurrentGhidraBackend: GhidraBackend {
     func reportIssue(_ report: IssueBook.Report) async throws -> Data {
         try await resolve().reportIssue(report)
     }
+
+    func myIssues(limit: Int) async throws -> Data {
+        try await resolve().myIssues(limit: limit)
+    }
 }
 
 /// The Ghidra host running inside the app when the analyses are on this Mac:

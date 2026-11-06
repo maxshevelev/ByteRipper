@@ -20,6 +20,7 @@ public enum GhidraTools {
         tools += libraryTools(backend)
         tools += [publishTool(backend), takeTool(backend), doneTool(backend), forgetTool(backend)]
         tools.append(reportIssueTool(backend))
+        tools.append(issuesTool(backend))
         return tools
     }
 
@@ -37,7 +38,8 @@ public enum GhidraTools {
                 came back (cut to what shows the problem), and what you `expected` instead; `module` when the \
                 call was about one, and a `note` for what you tried around it. Report once per problem, \
                 not per call, and go on with the review: a report does not wait for a fix. Leave out serial \
-                numbers, keys and personal paths. Answers the kept report, with its `id`.
+                numbers, keys and personal paths. Answers the kept report, with its `id`; \
+                `ghidra_issues` reads the answer once it is resolved.
                 """,
             inputSchema: AgentSchema.object([
                 "tool": AgentSchema.string("The tool that showed the problem, e.g. \"ghidra_rename_variable\"."),
@@ -57,6 +59,30 @@ public enum GhidraTools {
                                           module: try arguments.optionalString("module"),
                                           note: try arguments.optionalString("note"))
             return try await answer { try await backend.reportIssue(report) }
+        }
+    }
+
+    /// The reporter's own reports and their answers.
+    static func issuesTool(_ backend: GhidraBackend) -> AgentTool {
+        AgentTool(
+            name: "ghidra_issues",
+            title: "Read your reports and their answers",
+            description: """
+                The reports this connection's token sent with `ghidra_report_issue` — on the app, every \
+                session of this Mac shares one — newest first, open and resolved. A resolved one carries \
+                `resolved`: who resolved it, when, and in `note` the maintainers' answer: what was fixed and \
+                in which build, or why nothing changes and what to do instead. Read it before reporting a \
+                problem again: a problem already reported, or already answered, is not reported twice. Do \
+                what the answer says — call again on the fixed build, read the field the answer names, \
+                start the session again when the role changed — and tell the person.
+                """,
+            inputSchema: AgentSchema.object([
+                "limit": AgentSchema.integer("How many reports, newest first. Default 50, at most 200.")
+            ], required: []),
+            annotations: .init(readOnly: true, destructive: false, idempotent: true)
+        ) { call in
+            let limit = call.arguments["limit"] == nil ? 50 : Int(clamping: try call.arguments.integer("limit"))
+            return try await answer { try await backend.myIssues(limit: min(max(limit, 1), 200)) }
         }
     }
 
@@ -85,7 +111,8 @@ public enum GhidraTools {
         project go — its owner stopped and its folder moved to the Trash — for a program that cannot \
         be put right, and touches nothing of the store. A tool that answers wrong, refuses what it \
         should take, or fails is reported with `ghidra_report_issue`, once per problem: the server keeps \
-        it for the people who maintain the tools.
+        it for the people who maintain the tools, and `ghidra_issues` reads their answer once it is \
+        resolved.
 
         A review aims at decompiled C that reads like the module's source:
         1. Names, not constants: a value of a set becomes an enum member and the parameter, field or return \

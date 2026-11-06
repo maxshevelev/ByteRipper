@@ -2565,7 +2565,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "Reports a problem with one of these tools to the people who maintain them: a call that answered wrong, refused what it should take, or failed. The analysis server keeps the report with who sent it, and its console lists it; nothing is changed in any module, and nobody answers here. Give the `tool`, the `arguments` as you sent them (JSON text), the `answer` that came back (cut to what shows the problem), and what you `expected` instead; `module` when the call was about one, and a `note` for what you tried around it. Report once per problem, not per call, and go on with the review: a report does not wait for a fix. Leave out serial numbers, keys and personal paths. Answers the kept report, with its `id`.",
+    "description" : "Reports a problem with one of these tools to the people who maintain them: a call that answered wrong, refused what it should take, or failed. The analysis server keeps the report with who sent it, and its console lists it; nothing is changed in any module, and nobody answers here. Give the `tool`, the `arguments` as you sent them (JSON text), the `answer` that came back (cut to what shows the problem), and what you `expected` instead; `module` when the call was about one, and a `note` for what you tried around it. Report once per problem, not per call, and go on with the review: a report does not wait for a fix. Leave out serial numbers, keys and personal paths. Answers the kept report, with its `id`; `ghidra_issues` reads the answer once it is resolved.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -2602,6 +2602,27 @@
     },
     "name" : "ghidra_report_issue",
     "title" : "Report a problem with a tool"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : true,
+      "openWorldHint" : false,
+      "readOnlyHint" : true
+    },
+    "description" : "The reports this connection's token sent with `ghidra_report_issue` — on the app, every session of this Mac shares one — newest first, open and resolved. A resolved one carries `resolved`: who resolved it, when, and in `note` the maintainers' answer: what was fixed and in which build, or why nothing changes and what to do instead. Read it before reporting a problem again: a problem already reported, or already answered, is not reported twice. Do what the answer says — call again on the fixed build, read the field the answer names, start the session again when the role changed — and tell the person.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "limit" : {
+          "description" : "How many reports, newest first. Default 50, at most 200.",
+          "type" : "integer"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "ghidra_issues",
+    "title" : "Read your reports and their answers"
   },
   {
     "annotations" : {

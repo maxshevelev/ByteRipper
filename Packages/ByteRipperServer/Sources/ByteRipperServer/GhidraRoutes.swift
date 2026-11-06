@@ -62,6 +62,12 @@ enum GhidraRoutes {
             let data = try await answer { try await host.reportIssue(report, by: holder(request)) }
             return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
         }
+        // The token's own reports, open and resolved, with the answers.
+        router.add("GET", "\(prefix)/issues/mine", access: .rights([.ghidraUse])) { request in
+            let limit = Int(request.query["limit"] ?? "") ?? 50
+            let data = try await answer { try await host.myIssues(by: holder(request), limit: min(max(limit, 1), 200)) }
+            return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
+        }
         router.add("GET", "\(prefix)/issues", access: .rights([.admin])) { request in
             guard let book = host.issues else { throw HTTPError(.notFound, "this server keeps no reports") }
             return HTTPResponse(.ok, headers: ["content-type": "application/json"],

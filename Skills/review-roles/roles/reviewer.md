@@ -45,8 +45,11 @@ to the Verifier and in anything written into a review.
   server. A tool problem — a call that answered wrong, refused what it should
   take, or failed — is sent with `ghidra_report_issue`, once per problem: the
   tool, the arguments as sent, what came back, what was expected. The server
-  keeps it for the people who maintain the tools. Say it in your report to the
-  Verifier too, and go on with the review; a report does not wait for a fix.
+  keeps it for the people who maintain the tools. Read `ghidra_issues` first:
+  a problem this Mac already reported, or one already answered, is not sent
+  again, and a resolved report's `resolved.note` says what to do instead. Say
+  it in your report to the Verifier too, and go on with the review; a report
+  does not wait for a fix.
 - Reach dumps and analyses only through the `byteripper` tools, for reading as
   well. A dump is one the person opened in ByteRipper (`documents`). Never open
   the app's folders on disk.

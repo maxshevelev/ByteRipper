@@ -1246,10 +1246,10 @@
   }
 
   async function resolveIssue(issue) {
-    const note = h("input", { class: "field", placeholder: "What was done, e.g. the build that fixed it", autocomplete: "off" });
+    const note = h("input", { class: "field", placeholder: "The answer the reporter reads: what was fixed and in which build, or why nothing changes", autocomplete: "off" });
     const done = await dialog({
       icon: "check", tone: "ok", title: `Resolve the report on ${issue.tool}?`,
-      text: "It leaves the open list; the report and the note stay.",
+      text: "It leaves the open list; the reporter reads the answer with ghidra_issues. An answer is required.",
       body: note,
       actions: [{ label: "Cancel", kind: "ghost", value: false }, { label: "Resolve", kind: "primary", value: true, focus: true }],
     });

@@ -100,9 +100,21 @@ public actor IssueBook {
         issues.filter { all || $0.resolved == nil }.reversed()
     }
 
+    /// One reporter's reports, open and resolved, newest first: what an
+    /// agent reads to learn which of its reports were answered, and how.
+    public func mine(_ reporter: String, limit: Int = 50) -> [Issue] {
+        Array(issues.filter { $0.reporter == reporter }.reversed().prefix(max(1, limit)))
+    }
+
+    /// Resolved with an answer the reporter reads: what was done, or why
+    /// nothing changes. A resolution with no answer is refused.
     public func resolve(_ id: String, by: String, note: String?, now: Date = Date()) throws -> Issue {
         guard let index = issues.firstIndex(where: { $0.id == id }) else {
             throw GhidraHostError(.refused, "no issue \(id)", status: 404)
+        }
+        guard let note = note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty else {
+            throw GhidraHostError(.refused, "say what was done, or why nothing changes: the reporter reads it",
+                                  status: 400)
         }
         issues[index].resolved = Resolution(by: by, at: Self.second(now), note: Self.cut(note))
         try save()

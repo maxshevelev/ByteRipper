@@ -64,11 +64,30 @@ final class IssueBookTests: XCTestCase {
         XCTAssertEqual(open.map(\.id), [second.id])
         XCTAssertEqual(all.map(\.id), [second.id, first.id], "newest first")
         do {
-            _ = try await book.resolve("nothing", by: "admin", note: nil)
+            _ = try await book.resolve("nothing", by: "admin", note: "x")
             XCTFail("an unknown id")
         } catch let error as GhidraHostError {
             XCTAssertEqual(error.status, 404)
         }
+        do {
+            _ = try await book.resolve(second.id, by: "admin", note: "  ")
+            XCTFail("a resolution with no answer")
+        } catch let error as GhidraHostError {
+            XCTAssertEqual(error.status, 400)
+        }
+    }
+
+    func testAReporterReadsItsOwnReportsWithTheirAnswers() async throws {
+        let book = IssueBook(file: file)
+        let mine = try await book.report(.init(tool: "a", expected: "b"), by: "token bench")
+        _ = try await book.report(.init(tool: "c", expected: "d"), by: "token other")
+        let later = try await book.report(.init(tool: "e", expected: "f"), by: "token bench")
+        _ = try await book.resolve(mine.id, by: "console", note: "fixed in 478")
+        let read = await book.mine("token bench")
+        XCTAssertEqual(read.map(\.id), [later.id, mine.id], "its own, newest first, open and resolved")
+        XCTAssertEqual(read.last?.resolved?.note, "fixed in 478")
+        let one = await book.mine("token bench", limit: 1)
+        XCTAssertEqual(one.map(\.id), [later.id])
     }
 
     func testTheToolReportsThroughItsBackendAndSaysWhenThereIsNoServer() async throws {
