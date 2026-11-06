@@ -1049,6 +1049,21 @@ public actor GhidraHost {
     }
 
     private func start(_ project: GhidraProject) async throws -> OwnerRecord {
+        do {
+            return try await startOnce(project)
+        } catch let error as GhidraHostError where error.message.contains("LockException") {
+            // An owner left by a host stopped while it started holds the
+            // project: stop it and start once more. Anything else holding the
+            // lock is named.
+            if !(await stopOrphanOwners(module: project.module.hex)).isEmpty {
+                return try await startOnce(project)
+            }
+            throw GhidraHostError(.owner, "the project of \(project.module.hex) is locked by another process, so "
+                                  + "no owner can open it: " + lockHolders(project), status: 409)
+        }
+    }
+
+    private func startOnce(_ project: GhidraProject) async throws -> OwnerRecord {
         let install = try ghidra()
         let jar = try OwnerBuild.jar(for: install, sources: configuration.sources)
         let state = try project.state()

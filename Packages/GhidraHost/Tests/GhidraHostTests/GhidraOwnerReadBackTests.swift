@@ -972,6 +972,26 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         } catch {}
     }
 
+    /// An owner left with no record — its host stopped before it wrote
+    /// `owner.json` — keeps the project's lock; the next open stops it and
+    /// opens (issues f9bb8693, d3b03c04).
+    func testAnOwnerNoRecordNamesIsStoppedAndTheProjectOpens() async throws {
+        try await open(try image())
+        _ = try await read("/v1/hello")
+        let project = await host.project(module)
+        let record = try JSONDecoder().decode(OwnerRecord.self, from: Data(contentsOf: project.ownerURL))
+        try FileManager.default.removeItem(at: project.ownerURL)
+        XCTAssertTrue(Subprocess.isAlive(record.pid), "the owner runs on with no record")
+        let orphans = OwnerOrphans.find(projectsRoot: project.folder.deletingLastPathComponent(), module: module.hex)
+        XCTAssertEqual(orphans.map(\.pid), [record.pid])
+
+        let hello = try await read("/v1/hello")
+        XCTAssertNotNil(hello["functions"], "\(hello)")
+        XCTAssertFalse(Subprocess.isAlive(record.pid), "the orphan was stopped")
+        let now = try JSONDecoder().decode(OwnerRecord.self, from: Data(contentsOf: project.ownerURL))
+        XCTAssertNotEqual(now.pid, record.pid, "a new owner, with its record")
+    }
+
     /// A gap's range is half-open like every other: `end` is `start` + `size`.
     func testAGapEndsAtTheByteAfterIt() async throws {
         try await open(try image())

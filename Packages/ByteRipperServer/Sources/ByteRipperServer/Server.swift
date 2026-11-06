@@ -101,6 +101,10 @@ public final class Server {
                                                        issuesFile: cas.store.root
                                                            .appendingPathComponent("private/issues.json")),
                                   writer: writer)
+            // An owner a server stopped while it started outlives it with no
+            // record, and holds its project's lock: stopped before any route
+            // opens.
+            for line in await host.stopOrphanOwners() { log(line) }
             // A publish this server stopped in the middle is finished before
             // any route opens: its store steps now, its owner's at the
             // module's next open.

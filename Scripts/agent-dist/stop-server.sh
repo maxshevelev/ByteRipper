@@ -1,7 +1,10 @@
 #!/bin/bash
 # Stops this copy's analysis server, found by its process rather than by the
-# pid file it may not have written. The owners it started save and exit with
-# it; nothing in var/ is removed.
+# pid file it may not have written. The Ghidra owners it started run on in
+# their own session, each named by its project's owner.json, and the next
+# server takes them over; one started in the seconds before the stop may have
+# no owner.json yet, and the next server stops it at its start. Nothing in
+# var/ is removed.
 set -euo pipefail
 
 dir="$(cd "$(dirname "$0")/.." && pwd)"
