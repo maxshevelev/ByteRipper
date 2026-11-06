@@ -312,6 +312,14 @@ public struct GhidraRemote: GhidraBackend {
         try await call("POST", "issues", body: try JSONEncoder().encode(report), timeout: 30)
     }
 
+    /// The server's answer: nil when no owner has the module open. A server
+    /// older than the route answers 404, which is thrown: unknown, not "not
+    /// open".
+    public func ownerHasUnpublishedWrites(_ module: SHA256Digest) async throws -> Bool? {
+        let live = try JSONDecoder().decode(GhidraLive.self, from: try await call("GET", "live/\(module.hex)", timeout: 20))
+        return live.live ? (live.unpublishedWrites ?? false) : nil
+    }
+
     /// The review kit's manifest (`ReviewKit.Manifest`), and one of its files.
     public func kitManifest() async throws -> Data { try await call("GET", "kit", timeout: 20) }
     public func kitFile(_ path: String) async throws -> Data { try await call("GET", "kit/\(path)", timeout: 20) }
@@ -347,5 +355,22 @@ public struct GhidraRemote: GhidraBackend {
             throw GhidraHostError(.refused, message, status: status, rights: failure?["rights"] as? [String] ?? [])
         }
         return data
+    }
+}
+
+/// `GET /ghidra/v1/live/:module`: whether an owner has the module open, and
+/// whether its program holds writes the store has not got.
+public struct GhidraLive: Codable, Equatable, Sendable {
+    public let live: Bool
+    public let unpublishedWrites: Bool?
+
+    public init(live: Bool, unpublishedWrites: Bool?) {
+        self.live = live
+        self.unpublishedWrites = unpublishedWrites
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case live
+        case unpublishedWrites = "unpublished_writes"
     }
 }

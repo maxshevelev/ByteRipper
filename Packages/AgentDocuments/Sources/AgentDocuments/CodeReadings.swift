@@ -716,8 +716,18 @@ public final class CodeReadings {
         }
         // The stored analysis is not the live program: say when an owner has
         // one open, and whether it holds writes this answer has not got.
+        // A host that cannot be asked — an analysis server out of reach, or
+        // one older than the question — leaves both out: unknown is not
+        // "not open".
+        // (`try?` would flatten the thrown and the nil into one nil.)
+        let state: Bool??
         if let liveState {
-            if let unpublished = await liveState(source.manifest.module.sha256) {
+            do { state = .some(try await liveState(source.manifest.module.sha256)) } catch { state = nil }
+        } else {
+            state = nil
+        }
+        if let state {
+            if let unpublished = state {
                 body["live"] = .bool(true)
                 body["unpublished_writes"] = .bool(unpublished)
                 if unpublished {
@@ -773,9 +783,10 @@ public final class CodeReadings {
 
     /// Whether the module has an owner open, and whether that program holds
     /// writes the store has not got — what `code_query` answers as `live` and
-    /// `unpublished_writes`. Nil leaves both out; a host with no Ghidra of
-    /// its own has nothing to ask.
-    public var liveState: (@Sendable (SHA256Digest) async -> Bool?)?
+    /// `unpublished_writes`: nil when no owner has it open, which answers
+    /// `live: false`. No closure, or one that throws, leaves both out; a
+    /// host with no Ghidra of its own has nothing to ask.
+    public var liveState: (@Sendable (SHA256Digest) async throws -> Bool?)?
 
     // MARK: - code_modules
 

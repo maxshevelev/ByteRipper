@@ -68,6 +68,15 @@ enum GhidraRoutes {
                                 body: try IssueBook.encoder.encode(await book.list(all: request.query["all"] == "1")))
         }
 
+        // Whether an owner has the module open, and whether that program
+        // holds writes the store has not got: what `code_query` answers as
+        // `live` and `unpublished_writes`. Asking starts no owner.
+        router.add("GET", "\(prefix)/live/:module", access: .rights([.ghidraUse])) { request in
+            let module = try digest(request.parameters["module"])
+            let unpublished = try await answer { try await host.ownerHasUnpublishedWrites(module) }
+            return .json(GhidraLive(live: unpublished != nil, unpublishedWrites: unpublished))
+        }
+
         // The review kit (`ReviewKit`): the manifest, then each file by its
         // path. A server whose folder has no kit says so, and a client then
         // offers its agents nothing.

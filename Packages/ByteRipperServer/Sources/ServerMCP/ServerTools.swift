@@ -29,7 +29,7 @@ public enum ServerTools {
             // The one fact the store cannot hold: a program modified after
             // the last publish. Nil when the module has no owner open.
             readings.liveState = { module in
-                try? await ghidra.ownerHasUnpublishedWrites(module)
+                try await ghidra.ownerHasUnpublishedWrites(module)
             }
         }
         tools += readings.tools()

@@ -369,6 +369,15 @@ final class CodeReadingsTests: XCTestCase {
         guard case .json(.object(let closedBody)) = noOwner else { return XCTFail("not an object: \(noOwner)") }
         XCTAssertEqual(closedBody["live"], .bool(false))
         XCTAssertNil(closedBody["unpublished_writes"], "nothing is open, nothing is behind")
+
+        // A server that cannot be asked: unknown, so neither field, never `live: false`.
+        let unreachable = readings()
+        unreachable.liveState = { _ in throw URLError(.cannotConnectToHost) }
+        let unknown = try await query(unreachable).run(AgentCall(tool: "code_query", arguments: AgentArguments([
+            "module": .string(module.sha256.hex)])))
+        guard case .json(.object(let unknownBody)) = unknown else { return XCTFail("not an object: \(unknown)") }
+        XCTAssertNil(unknownBody["live"])
+        XCTAssertNil(unknownBody["unpublished_writes"])
     }
 
     func testAModuleTheStoreHasNothingForIsRefusedByName() async throws {

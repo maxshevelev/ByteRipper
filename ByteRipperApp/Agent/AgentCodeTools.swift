@@ -34,6 +34,11 @@ final class AgentCodeTools {
                 return CodeReadings.Source(manifest: screen.manifest, artifact: screen.artifact, bytes: screen.bytes,
                                            document: place.id, node: nil)
             })
+        // `live` and `unpublished_writes`, from the Ghidra the setting names:
+        // the analysis server's, or this Mac's.
+        readings.liveState = { module in
+            try await CurrentGhidraBackend().ownerHasUnpublishedWrites(module)
+        }
     }
 
     nonisolated func tools() -> [AgentTool] { readings.tools() + [openTool] }

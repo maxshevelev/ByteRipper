@@ -69,10 +69,21 @@ is missing, ask for it. Never accept numbers you have not read yourself.
 code_query module:<sha> what:functions search:"0x" limit:1
 ```
 
-Read `review_levels` and `total`, `live`, `unpublished_writes`, and the
-`library` block: `conflict`, `differs`, `edited`, `below_bar`. Closed means
-`partial` and `decompiled` are 0, library conflicts are 0, and
-`unpublished_writes` is false.
+Read `review_levels`, `total`, `live` and, while `live` is true,
+`unpublished_writes`. The `library` block counts the module's `links` (by
+`edk2`, `amd`, `intel`), the entries that hold its bodies (`installed`) and
+the links that still print a placeholder name (`with_temporaries`). With no
+`live` in the answer, the app could not ask the server: say it is unknown,
+never read it as false.
+
+The registry's side is read elsewhere: `ghidra_library` for the module
+(`edited` lists linked functions written on since and still to be offered),
+and the Reviewer's last `ghidra_publish` with `dry_run: true`, quoted in its
+report (`library.conflicts`: entries the review would replace).
+
+Closed means `partial` and `decompiled` are 0, `unpublished_writes` is false
+or `live` is false, `with_temporaries` is 0, `edited` is empty, and the last
+dry run named no `library.conflicts`.
 
 - `ghidra_modules` gives, per module, `leased`, `holder`, `running` and the
   published revision. `holder` is the name of the token the app uses, the same

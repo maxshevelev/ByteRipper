@@ -423,6 +423,16 @@ final class ServerTests: XCTestCase {
             return ((response as! HTTPURLResponse).statusCode, data)
         }
 
+        // `live`: a module no owner has open is not live, and asking opens none.
+        let closed = SHA256Digest(data: Data("no project".utf8))
+        let (liveStatus, liveBody) = try await call("GET", "ghidra/v1/live/\(closed.hex)", app)
+        XCTAssertEqual(liveStatus, 200)
+        XCTAssertEqual(try JSONDecoder().decode(GhidraLive.self, from: liveBody), GhidraLive(live: false, unpublishedWrites: nil))
+        let remoteLive = try await GhidraRemote(base: base, token: app).ownerHasUnpublishedWrites(closed)
+        XCTAssertNil(remoteLive)
+        let (badStatus, _) = try await call("GET", "ghidra/v1/live/not-a-digest", app)
+        XCTAssertEqual(badStatus, 400)
+
         let sent = try await GhidraRemote(base: base, token: app).reportIssue(
             .init(tool: "ghidra_equate", answer: "not_in_c", expected: "the name in the C", module: "a4cc4a55"))
         let kept = try JSONSerialization.jsonObject(with: sent) as? [String: Any]

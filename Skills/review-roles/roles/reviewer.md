@@ -157,7 +157,9 @@ sweep. It carries:
 - done / next / blocked;
 - the revision and the owner `build`;
 - counts from `code_query` after the final publish: `review_levels`, `total`,
-  `unpublished_writes` and the `library` block;
+  `live`, `unpublished_writes` and the `library` block;
+- the last `ghidra_publish` `dry_run: true` answer's `library.conflicts`, or
+  that it named none;
 - the `ghidra_gaps` count, with a reason for any `body` or `referenced`
   verdict left standing;
 - how each body was read: whole instructions, part, C only, read back;
