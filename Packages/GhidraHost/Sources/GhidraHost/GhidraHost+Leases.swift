@@ -69,13 +69,25 @@ extension GhidraHost {
         var closed: [String: LeaseEnd] = [:]
     }
 
-    /// One module's row of the list an administrator reads.
+    /// One module's row of the list an administrator reads: the lease and
+    /// what its holder has done under it, or the close not yet taken back.
     public struct LeaseRow: Codable, Equatable, Sendable {
         public var module: String
         public var name: String?
         public var holder: String?
         public var since: String?
+        public var lastCall: String?
+        public var lastAt: String?
+        public var writes: Int?
+        public var publishes: Int?
+        public var revision: Int?
         public var closed: LeaseEnd?
+
+        enum CodingKeys: String, CodingKey {
+            case module, name, holder, since, writes, publishes, revision, closed
+            case lastCall = "last_call"
+            case lastAt = "last_at"
+        }
     }
 
     static func loadLeaseBook(_ file: URL?) -> LeaseBook {
@@ -209,7 +221,8 @@ extension GhidraHost {
             let name = SHA256Digest(hex: hex).flatMap { try? project($0).state().module.name }
             let held = leaseBook.leases[hex]
             return LeaseRow(module: hex, name: name, holder: held?.holder, since: held?.since,
-                            closed: leaseBook.closed[hex])
+                            lastCall: held?.lastCall, lastAt: held?.lastAt, writes: held?.writes,
+                            publishes: held?.publishes, revision: held?.revision, closed: leaseBook.closed[hex])
         }
     }
 

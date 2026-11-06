@@ -119,6 +119,14 @@ final class GhidraHostLeaseTests: XCTestCase {
         XCTAssertTrue(row.leased)
         XCTAssertEqual(row.holder, "first")
         XCTAssertEqual(row.since, lease.since)
+        // The administrator's list carries the same activity.
+        let rowsNow = await host.leaseRows()
+        let listed = try XCTUnwrap(rowsNow.first)
+        XCTAssertEqual(listed.holder, "first")
+        XCTAssertEqual(listed.writes, 2)
+        XCTAssertEqual(listed.publishes, 2)
+        XCTAssertEqual(listed.revision, activity.revision)
+        XCTAssertEqual(listed.lastCall, "publish")
 
         // Given back, another holder takes it.
         _ = try await host.release(module, by: "agent")
