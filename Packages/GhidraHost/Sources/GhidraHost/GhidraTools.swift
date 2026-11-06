@@ -548,7 +548,8 @@ public enum GhidraTools {
                 The spans of executable memory between neighbouring function bodies that hold \
                 anything but padding — the code the analysis never made a function of, because it \
                 cuts a function where a reference points and a body registered in a table, or \
-                reached by nothing at all, has none. Each gap says `start`, `end`, `size` and \
+                reached by nothing at all, has none. Each gap says `start`, `end` (half-open: the \
+                byte after the gap, `start` + `size`), `size` and \
                 `first_bytes` (16); whether its first byte is already an `instruction` or \
                 `defined_data`; the `references` into it from outside — `all`, `data`, `code` — with \
                 up to eight `reference_targets` and, when something points in with data, `body_at`; \

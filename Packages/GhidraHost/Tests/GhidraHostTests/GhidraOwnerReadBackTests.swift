@@ -935,6 +935,20 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         XCTAssertEqual(now["calling_convention"] as? String, "__cdecl")
     }
 
+    /// A gap's range is half-open like every other: `end` is `start` + `size`.
+    func testAGapEndsAtTheByteAfterIt() async throws {
+        try await open(try image())
+        let gaps = try await read("/v1/gaps?limit=500")
+        let rows = try XCTUnwrap(gaps["gaps"] as? [[String: Any]])
+        guard !rows.isEmpty else { throw XCTSkip("no gap in the image") }
+        for gap in rows {
+            let start = try XCTUnwrap(UInt64((gap["start"] as? String ?? "").dropFirst(2), radix: 16))
+            let end = try XCTUnwrap(UInt64((gap["end"] as? String ?? "").dropFirst(2), radix: 16))
+            let size = try XCTUnwrap(gap["size"] as? Int)
+            XCTAssertEqual(end, start + UInt64(size), "\(gap)")
+        }
+    }
+
     /// Undecoded bytes of a gap are read as code, and the program does not change.
     func testAnUndecodedGapIsReadWithoutChangingTheProgram() async throws {
         try await open(try image())

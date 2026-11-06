@@ -891,7 +891,8 @@ public class Owner {
         }
         JsonObject gap = new JsonObject();
         gap.addProperty("start", hex(span.getMinAddress()));
-        gap.addProperty("end", hex(span.getMaxAddress()));
+        // Half-open, as every range the server gives: the byte after the span.
+        gap.addProperty("end", "0x" + Long.toHexString(span.getMinAddress().getOffset() + span.getLength()).toUpperCase());
         gap.addProperty("size", (int) Math.min(span.getLength(), Integer.MAX_VALUE));
         gap.addProperty("first_non_padding", hex(first));
         gap.addProperty("first_bytes", text.toString());
