@@ -78,13 +78,21 @@ the links that still print a placeholder name (`with_temporaries`). With no
 `live` in the answer, the app could not ask the server: say it is unknown,
 never read it as false.
 
+`with_temporaries` says what the linked C reads like; it is not a gap of this
+module's review. A link prints its entry's C, which only the entry's source
+module can change, and some placeholders cannot be named at all — a HASH
+temporary, or one half of a value split over registers (`EDX:4`), whose name
+the decompiler does not keep. Quote the count and the entries in the report;
+an entry whose source module could still name them is work for that module's
+review, not this one's. Do not hold the closure on it.
+
 The registry's side is read elsewhere: `ghidra_library` for the module
 (`edited` lists linked functions written on since and still to be offered),
 and the Reviewer's last `ghidra_publish` with `dry_run: true`, quoted in its
 report (`library.conflicts`: entries the review would replace).
 
 Closed means `partial` and `decompiled` are 0, `unpublished_writes` is false
-or `live` is false, `with_temporaries` is 0, `edited` is empty, and the last
+or `live` is false, `edited` is empty, and the last
 dry run named no `library.conflicts`.
 
 - `ghidra_modules` gives, per module, `leased`, `holder`, `running` and the
