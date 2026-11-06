@@ -48,7 +48,10 @@ final class ServerCommandTests: XCTestCase {
         XCTAssertEqual(configuration.roles, [.cas, .ghidra])
         XCTAssertEqual(configuration.host, "127.0.0.1")
         XCTAssertEqual(configuration.port, 8765)
-        XCTAssertEqual(configuration.store, CodeAnalysisPaths.defaultRoot)
+        XCTAssertEqual(configuration.store, ServerPaths.store, "the server's own store, not the app's")
+        XCTAssertNotEqual(configuration.store, CodeAnalysisPaths.defaultRoot)
+        XCTAssertEqual(configuration.projects, ServerPaths.projects)
+        XCTAssertNotEqual(configuration.projects, GhidraHost.defaultProjectsRoot)
         XCTAssertEqual(configuration.tokensFile, ServerPaths.defaultTokensFile)
     }
 
@@ -57,7 +60,7 @@ final class ServerCommandTests: XCTestCase {
     func testPackingProjectsTakesTheServersFoldersAndAppliesOnlyWhenTold() throws {
         guard case .packProjects(let listed, let listOnly) = try parse(["pack-projects"]) else { return XCTFail() }
         XCTAssertFalse(listOnly)
-        XCTAssertEqual(listed.store, CodeAnalysisPaths.defaultRoot)
+        XCTAssertEqual(listed.store, ServerPaths.store)
         guard case .packProjects(let named, let apply) = try parse(["pack-projects", "--apply", "--store", "/tmp/s",
                                                                     "--projects", "/tmp/p"]) else { return XCTFail() }
         XCTAssertTrue(apply)
@@ -384,8 +387,10 @@ final class ServerTests: XCTestCase {
     }
 
     /// The rights matrix over the wire (`Design/SERVER_HEADLESS_PLAN.md`
-    /// decision 4): every token reads the store, `cas.write` writes it,
-    /// `ghidra.use` reaches Ghidra, and a refusal names the right it lacks.
+    /// decision 4): every token reads the store, `cas.write` sets its
+    /// references and publishes through Ghidra, only `admin` writes the store
+    /// past a publish (stage 2.5), `ghidra.use` reaches Ghidra, and a refusal
+    /// names the right it lacks.
     func testEachRouteAsksForItsRight() async throws {
         let tokens = try TokenStore.open(at: directory.appendingPathComponent("tokens.json"))
         let (_, admin) = try tokens.add(name: "admin", rights: TokenPreset.admin.rights)
@@ -422,7 +427,7 @@ final class ServerTests: XCTestCase {
         XCTAssertEqual(status1, 200)
         let (written, refusal) = try await call("PUT", objectPath, reader, body: object)
         XCTAssertEqual(written, 403)
-        XCTAssertTrue(refusal.contains("cas.write"), refusal)
+        XCTAssertTrue(refusal.contains("admin"), refusal)
         let (ghidra, why) = try await call("GET", "ghidra/v1/modules", reader)
         XCTAssertEqual(ghidra, 403)
         XCTAssertTrue(why.contains("ghidra.use"), why)
@@ -454,12 +459,29 @@ final class ServerTests: XCTestCase {
             let reached = try await call("POST", path, admin, body: body).0
             XCTAssertNotEqual(reached, 403, path)
         }
-        // A citation only adds, and stays with whoever may write the store.
+        // Every write past a publish is an administrator's, a citation in the
+        // registry and a bundle among them: the app's token, which may write,
+        // publishes through Ghidra and sets references, and no more.
         let citation = try JSONEncoder().encode(ServedStoreProtocol.PutLibrary(
             module: SHA256Digest(data: object), rev: nil, by: "test", proposals: [],
             change: LibraryChange(action: .cite, id: "a", file: "MdePkg/x.c", line: 1)))
-        let cited = try await call("POST", "cas/v1/library", app, body: citation).0
-        XCTAssertNotEqual(cited, 403)
+        let artifact = SHA256Digest(data: object)
+        let past: [(String, String, Data)] = [
+            ("PUT", objectPath, object),
+            ("POST", "cas/v1/analyses", Data(#"{"module":"\#(someModule)","recipe":"r","artifact":"\#(artifact.hex)"}"#.utf8)),
+            ("POST", "cas/v1/reviews/\(someModule)", Data(#"{"reading":{"rev":1},"artifact":"\#(artifact.hex)","by":"test"}"#.utf8)),
+            ("POST", "cas/v1/library", citation),
+            ("POST", "cas/v1/import", Data("not a zip".utf8))
+        ]
+        for (method, path, body) in past {
+            let (refused, words) = try await call(method, path, app, body: body)
+            XCTAssertEqual(refused, 403, "\(method) \(path): \(words)")
+            XCTAssertTrue(words.contains("admin"), words)
+            let reached = try await call(method, path, admin, body: body).0
+            XCTAssertNotEqual(reached, 403, "\(method) \(path)")
+        }
+        let reference = try await call("PUT", "cas/v1/refs/project-test", app, body: Data(#"{"analyses":[]}"#.utf8))
+        XCTAssertNotEqual(reference.0, 403, "a reference is still the app's: \(reference.1)")
         // A publish lacks two rights, and one refusal names both — through
         // the client the app relays Ghidra calls with, as values.
         do {
@@ -470,7 +492,7 @@ final class ServerTests: XCTestCase {
             XCTAssertEqual(error.rights, ["cas.write", "ghidra.use"])
         }
 
-        let status3 = try await call("PUT", objectPath, app, body: object).0
+        let status3 = try await call("PUT", objectPath, admin, body: object).0
         XCTAssertEqual(status3, 204)
         let status4 = try await call("GET", "ghidra/v1/modules", app).0
         XCTAssertEqual(status4, 200)

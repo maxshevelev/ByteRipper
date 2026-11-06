@@ -126,12 +126,11 @@ extension AppDelegate {
             return
         }
         // A project carries its Code analyses beside `Project.json`: bring
-        // them into the store before the screens that read them open. With
-        // the analyses on a server they go into the mirror at once, so the
-        // screens open, and to the server after: the server's answer is the
-        // report, and the mirror is brought to what the server decided.
+        // them into the store the screens read before they open — this Mac's,
+        // or a server's mirror. Nothing goes to the server: what reaches its
+        // store is what is published through it (`Design/SERVER_PLAN.md`
+        // stage 2.5).
         let imported = CodeAnalysisStore.importProjectBundle(at: url)
-        let location = CodeAnalysisLocation.shared
         leaveCurrentSession { [weak self] in
             guard let self else { return }
             recorder.switchTo(project: folder)
@@ -140,27 +139,9 @@ extension AppDelegate {
             }
             self.projectOpened(url)
             // help: code.project-analyses
-            let notice: (BundleImport?) -> Void = { [weak self] report in
-                if let report, let lines = CodeAnalysisStore.noticeLines(for: report) {
-                    self?.windowControllers.last?.mainViewController
-                        .showNotice(symbol: "exclamationmark.triangle", lines: lines)
-                }
-            }
-            guard location.remote != nil, imported != nil else { return notice(imported) }
-            Task { @MainActor in
-                do {
-                    notice(try await location.sendBundle(at: CodeAnalysisStore.bundleURL(in: url)))
-                } catch {
-                    // A server out of reach is the cloud's to show. Anything
-                    // else is one line, read at a glance: the plate is square
-                    // and as wide as its widest line, and the system's sentence
-                    // with the address made it the size of the window. Why is
-                    // in Settings ▸ Code Analysis.
-                    if case .unreachable? = error as? RemoteStore.Failure { return }
-                    self.windowControllers.last?.mainViewController.showNotice(
-                        symbol: "exclamationmark.triangle",
-                        lines: [L("The project's code analyses did not reach the analysis server")])
-                }
+            if let imported, let lines = CodeAnalysisStore.noticeLines(for: imported) {
+                self.windowControllers.last?.mainViewController
+                    .showNotice(symbol: "exclamationmark.triangle", lines: lines)
             }
         }
     }

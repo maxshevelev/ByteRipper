@@ -7,8 +7,9 @@ import Localization
 
 /// The Code Analysis tab of the Settings window: where the code analyses are
 /// kept — on this Mac, or on an analysis server in the person's network — the
-/// server's address and token, whether it is reached, and sending this Mac's
-/// analyses to it (`Design/SERVER_PLAN.md` §5).
+/// server's address and token, and whether it is reached
+/// (`Design/SERVER_PLAN.md` §5). What reaches a server's store is what is
+/// published through it: nothing from this Mac's store is sent (stage 2.5).
 final class CodeAnalysisSettingsViewController: NSViewController {
     /// The location the tab sets. The app's own unless a test hands it
     /// another.
@@ -22,8 +23,6 @@ final class CodeAnalysisSettingsViewController: NSViewController {
     private let tokenField = NSSecureTextField()
     private let connectButton = NSButton(title: "", target: nil, action: nil)
     private let statusLabel = NSTextField(wrappingLabelWithString: "")
-    private let sendButton = NSButton(title: "", target: nil, action: nil)
-    private let sendStatus = NSTextField(wrappingLabelWithString: "")
     private var observer: NSObjectProtocol?
 
     override func loadView() {
@@ -60,20 +59,10 @@ final class CodeAnalysisSettingsViewController: NSViewController {
 
         statusLabel.font = .systemFont(ofSize: 11)
 
-        // help: settings.code-analysis.send
-        sendButton.title = L("Send This Mac's Analyses to the Server")
-        sendButton.bezelStyle = .rounded
-        sendButton.target = self
-        sendButton.action = #selector(sendLocal)
-        ControlHelp.describe(sendButton, L("Copy the analyses kept on this Mac to the analysis server"))
-        let sendCaption = small(L("The server takes each analysis by the same rules as a project's: a later reading replaces an earlier one, and another project's reading of a module is kept aside rather than replacing the one there."))
-        sendStatus.font = .systemFont(ofSize: 11)
-        sendStatus.textColor = .secondaryLabelColor
-
         let help = HelpButton.standard(for: .topic(.codeAnalyses))
 
         for subview in [keptLabel, thisMacButton, serverButton, caption, grid, connectButton, serverCaption,
-                        statusLabel, sendButton, sendCaption, sendStatus, help] {
+                        statusLabel, help] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             root.addSubview(subview)
         }
@@ -105,16 +94,7 @@ final class CodeAnalysisSettingsViewController: NSViewController {
             statusLabel.topAnchor.constraint(equalTo: serverCaption.bottomAnchor, constant: 8),
             statusLabel.leadingAnchor.constraint(equalTo: thisMacButton.leadingAnchor),
             statusLabel.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
-
-            sendButton.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 16),
-            sendButton.leadingAnchor.constraint(equalTo: thisMacButton.leadingAnchor),
-            sendCaption.topAnchor.constraint(equalTo: sendButton.bottomAnchor, constant: 8),
-            sendCaption.leadingAnchor.constraint(equalTo: thisMacButton.leadingAnchor),
-            sendCaption.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
-            sendStatus.topAnchor.constraint(equalTo: sendCaption.bottomAnchor, constant: 8),
-            sendStatus.leadingAnchor.constraint(equalTo: thisMacButton.leadingAnchor),
-            sendStatus.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
-            sendStatus.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -20),
+            statusLabel.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -20),
 
             SettingsMetrics.pinnedWidth(of: root),
         ])
@@ -162,9 +142,6 @@ final class CodeAnalysisSettingsViewController: NSViewController {
         default:
             statusLabel.textColor = .secondaryLabelColor
         }
-        let connected: Bool
-        if case .connected = location.state { connected = true } else { connected = false }
-        sendButton.isEnabled = connected
     }
 
     /// The radio buttons show the choice being made; until Connect is clicked
@@ -213,41 +190,5 @@ final class CodeAnalysisSettingsViewController: NSViewController {
             return
         }
         refresh()
-    }
-
-    /// Every analysis kept on this Mac, as one bundle, to the server.
-    @objc private func sendLocal() {
-        guard let remote = location.remote else { return }
-        let localRoot = location.localRoot
-        sendButton.isEnabled = false
-        sendStatus.stringValue = L("Sending…")
-        Task { @MainActor [weak self] in
-            let result = await Task.detached(priority: .userInitiated) { () -> Result<BundleImport?, Error> in
-                do {
-                    let store = try ContentStore(root: localRoot, create: false)
-                    let keys = store.analyses().compactMap(\.key)
-                    guard !keys.isEmpty else { return .success(nil) }
-                    let url = store.tmpURL.appendingPathComponent("send-\(UUID().uuidString).zip")
-                    defer { try? FileManager.default.removeItem(at: url) }
-                    try store.exportBundle(keys, to: url)
-                    let data = try Data(contentsOf: url)
-                    return .success(try await remote.importBundle(data))
-                } catch {
-                    return .failure(error)
-                }
-            }.value
-            guard let self else { return }
-            switch result {
-            case .success(nil):
-                self.sendStatus.stringValue = L("This Mac keeps no analyses to send.")
-            case .success(let report?):
-                self.sendStatus.stringValue = L("Sent: %1$@ new, %2$@ already there, %3$@ not taken, %4$@ kept aside.",
-                                                String(report.imported.count), String(report.unchanged.count),
-                                                String(report.skipped.count), String(report.conflicts.count))
-            case .failure(let error):
-                self.sendStatus.stringValue = CodeAnalysisLocation.describe(error)
-            }
-            self.refresh()
-        }
     }
 }

@@ -105,19 +105,25 @@ final class CodeAnalysisLocationTests: XCTestCase {
         XCTAssertEqual(UEFIToolModule.codeAnalysisRoot, directory.appendingPathComponent("local"))
     }
 
-    func testAProjectsBundleGoesToTheServerAndTheReportIsTheServers() async throws {
+    /// A project's bundle reaches the store its screens read — with a server,
+    /// the mirror — and never the server's store: what reaches that is what
+    /// is published through it (`Design/SERVER_PLAN.md` stage 2.5).
+    func testAProjectsBundleStaysOnThisMacWithAServer() async throws {
         let local = try ContentStore(root: directory.appendingPathComponent("bundle-source"))
         try local.putAnalysis(module: module("carried"), recipe: recipe, artifact: artifact(3))
-        let bundle = directory.appendingPathComponent("Analyses.bundle")
-        try local.exportBundle([AnalysisKey(module: module("carried").sha256, recipe: recipe.id)!], to: bundle)
+        let project = directory.appendingPathComponent("Project", isDirectory: true)
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        try local.exportBundle([AnalysisKey(module: module("carried").sha256, recipe: recipe.id)!],
+                               to: CodeAnalysisStore.bundleURL(in: project))
 
         try location.choose(.server, server: address, token: "secret")
         await wait("the connection") { location.remote != nil && location.state != .connecting }
-        let report = try await location.sendBundle(at: bundle)
+        let mirrorRoot = try XCTUnwrap(UEFIToolModule.codeAnalysisRoot)
+        let report = CodeAnalysisStore.importProjectBundle(at: project, root: mirrorRoot)
         XCTAssertEqual(report?.imported.count, 1)
-        XCTAssertNotNil(try served.analysis(module: module("carried").sha256))
-        let mirror = try ContentStore(root: XCTUnwrap(UEFIToolModule.codeAnalysisRoot), create: false)
-        XCTAssertNotNil(try mirror.analysis(module: module("carried").sha256))
+        let mirror = try ContentStore(root: mirrorRoot, create: false)
+        XCTAssertNotNil(try mirror.analysis(module: module("carried").sha256), "the screens read it")
+        XCTAssertNil(try served.analysis(module: module("carried").sha256), "the server's store is not written")
     }
 
     /// A token the server refuses is not a server out of reach: the line says

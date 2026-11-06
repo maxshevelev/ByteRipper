@@ -36,7 +36,8 @@ public struct CASService: Sendable {
 
     /// Every route names its right (`Design/SERVER_HEADLESS_PLAN.md` §5):
     /// `cas.read` for what only reads — `export` among them, a POST only
-    /// because it carries a list — and `cas.write` for what changes the store.
+    /// because it carries a list — `cas.write` for the references, and
+    /// `admin` for what writes the store past a publish.
     public func routes() -> HTTPRouter {
         var router = HTTPRouter()
         let prefix = ServedStoreProtocol.prefix
@@ -87,7 +88,12 @@ public struct CASService: Sendable {
             }
             return .bytes(answer)
         }
-        router.add("PUT", "\(prefix)/objects/:sha", access: .rights([.casWrite])) { request in
+        // The writes past a publish — an object, an analysis, a revision, the
+        // registry, a bundle — are an administrator's (`Design/SERVER_PLAN.md`
+        // stage 2.5): a client makes a revision by publishing through the
+        // Ghidra role, which writes the store in this process and takes none
+        // of these routes. `cas.write` is left the references and that publish.
+        router.add("PUT", "\(prefix)/objects/:sha", access: .rights([.admin])) { request in
             let digest = try Self.digest(request.parameters["sha"])
             guard SHA256Digest(data: request.body) == digest else {
                 throw HTTPError(.unprocessable, "the body does not hash to \(digest.hex)")
@@ -102,7 +108,7 @@ public struct CASService: Sendable {
         router.add("GET", "\(prefix)/analyses/:module", access: .rights([.casRead])) { request in
             .json(store.served(try Self.digest(request.parameters["module"])))
         }
-        router.add("POST", "\(prefix)/analyses", access: .rights([.casWrite])) { request in
+        router.add("POST", "\(prefix)/analyses", access: .rights([.admin])) { request in
             let put = try request.json(ServedStoreProtocol.PutAnalysis.self)
             let manifest = try Self.answer { () -> AnalysisManifest in
                 let artifact = try store.object(put.artifact)
@@ -122,7 +128,7 @@ public struct CASService: Sendable {
             }
             return .json(history)
         }
-        router.add("POST", "\(prefix)/reviews/:module", access: .rights([.casWrite])) { request in
+        router.add("POST", "\(prefix)/reviews/:module", access: .rights([.admin])) { request in
             let module = try Self.digest(request.parameters["module"])
             let record = try request.json(ServedStoreProtocol.RecordRevision.self)
             let history = try Self.answer {
@@ -145,15 +151,9 @@ public struct CASService: Sendable {
             }
             return .json(history)
         }
-        router.add("POST", "\(prefix)/library", access: .rights([.casWrite])) { request in
+        router.add("POST", "\(prefix)/library", access: .rights([.admin])) { request in
             let put = try request.json(ServedStoreProtocol.PutLibrary.self)
             let dryRun = put.dryRun == true
-            // Replacing what the registry says is an administrator's decision, but
-            // for a citation, which only adds.
-            if put.renameID != nil || (put.change != nil && put.change?.action != .cite)
-                || put.decision.all || !put.decision.ids.isEmpty {
-                try request.principal?.require(.admin)
-            }
             if let change = put.change {
                 let result = try Self.answer { try store.changeLibrary(change, by: put.by, changedFrom: put.module, dryRun: dryRun) }
                 if !dryRun { await feed.rescan() }
@@ -192,7 +192,7 @@ public struct CASService: Sendable {
             return HTTPResponse(.noContent)
         }
 
-        router.add("POST", "\(prefix)/import", access: .rights([.casWrite])) { request in
+        router.add("POST", "\(prefix)/import", access: .rights([.admin])) { request in
             let report = try Self.withTemporaryFile(in: store, request.body) { url in
                 try Self.answer { try store.importBundle(from: url) }
             }

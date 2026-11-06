@@ -86,7 +86,10 @@ final class CASServiceTests: XCTestCase {
         try await remote.recordRevision(module: module().sha256, reading: first, by: "agent")
         try await remote.putAnalysis(module: module(), recipe: recipe, artifact: artifact(1), reading: first)
 
-        let second = AnalysisReading(project: "p", rev: 2, review: review)
+        // A revision that changes nothing is not recorded: the second one
+        // carries a review of its own.
+        let secondReview = try await remote.putObject(Data(#"{"schema":1,"pass":2}"#.utf8))
+        let second = AnalysisReading(project: "p", rev: 2, review: secondReview)
         try await remote.recordRevision(module: module().sha256, reading: second, by: "agent")
         let manifest = try await remote.putAnalysis(module: module(), recipe: recipe, artifact: artifact(2),
                                                     reading: second)

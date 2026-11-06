@@ -270,7 +270,7 @@ enum GhidraRoutes {
         var published: ProjectState.Published?
     }
 
-    nonisolated(unsafe) static var projectsRoot = GhidraHost.defaultProjectsRoot
+    nonisolated(unsafe) static var projectsRoot = ServerPaths.projects
 
     static func hidingPaths(_ text: String) -> String {
         text.replacingOccurrences(of: projectsRoot.path, with: "<projects>")

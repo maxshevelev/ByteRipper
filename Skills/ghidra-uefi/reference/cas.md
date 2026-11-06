@@ -340,9 +340,11 @@ python3 scripts/cas_cli.py --store http://100.64.0.7:8765 list
   as `--server <url>`. The client's token is `--token-file`, or the file
   `BYTERIPPER_SERVER_TOKEN_FILE` names, or `…/ByteRipper/Server/token`.
 - The server's own tokens live in `tokens.json` (0600, hashes only), and each
-  carries rights: `cas.read` on every one, `cas.write` for writing. The `app`
-  preset has both; a `reader` may read and nothing else. A 403 names the
-  right the token lacks.
+  carries rights: `cas.read` on every one, `cas.write` for the references
+  and for publishing through the server's Ghidra, `admin` for writing the
+  store past a publish — an object, an analysis, a revision, the registry, a
+  bundle. The `app` preset has the first two and `ghidra.use`; a `reader` may
+  read and nothing else. A 403 names the right the token lacks.
 - Every address the server listens on requires a token, loopback included,
   and without an admin token in `tokens.json` it refuses to start. There is
   no token file on the server any more, and there is no `/mcp`: an agent on

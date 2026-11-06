@@ -1,4 +1,4 @@
-@source-sha de41dc740e90804285626806465a2ccf04217c78fbd0dca421eaaea7215ee4ac
+@source-sha 306ef79a495201ac629aa73256d68e826c5e3846fb3d483e6ded98aa264a9c2b
 # Codeanalysen und der Analyseserver
 
 > Eine Codeanalyse ist das, was Ghidra in einem PEI- oder DXE-Modul gefunden hat: seine Funktionen, Befehle und den dekompilierten C-Code sowie die Namen, die eine Durchsicht ihnen gegeben hat. ByteRipper liest Analysen aus einem Speicher — einem Ordner auf diesem Mac oder einem Analyseserver, den alle Macs eines Netzwerks gemeinsam nutzen.
@@ -36,18 +36,15 @@ Die Zeile unter den Feldern zeigt, ob der Server erreichbar ist. Weist der Serve
 
 - **Neue Analysen erscheinen von selbst.** Der Server meldet jede Änderung sofort; eine von einem beliebigen Rechner gespeicherte Analyse oder veröffentlichte Durchsicht erscheint daher binnen ein bis zwei Sekunden auf allen Macs, und eine offene Codepalette wird an derselben Stelle neu aus ihr aufgebaut.
 - **Bereits Gelesenes bleibt lesbar.** Dieser Mac behält eine Kopie dessen, was er vom Server gelesen hat. Der Code einer Funktion wird gelesen, wenn sie angezeigt wird; von einer früheren Revision, mit der eine Funktion verglichen wird, wird nur diese Funktion gelesen. Die Suche, die Liste der Aufrufer einer Funktion und die Liste der Verwendungen eines Namens durchlaufen den gesamten Code des Moduls und lesen deshalb zuerst die übrigen Funktionen. Ist der Server nicht erreichbar, meldet die Zeile in den Einstellungen dies. Bereits Gelesenes wird weiter gezeigt; eine noch nicht gelesene Funktion steht mit ihrem Namen in der Liste, und die Palette meldet, dass ihr Code nicht verfügbar ist. Die Suche und die Listen der Verwendungen erfassen dann nur die bereits gelesenen Funktionen. Die Verbindung wird selbsttätig erneut aufgebaut.
-- **Projekte nutzen den Server.** Beim Öffnen eines Projekts werden die Analysen, die es enthält, an den Server gesendet, der sie nach den üblichen Regeln übernimmt (siehe [[topic:projects|Projekte]]); die Meldung nach dem Öffnen gibt die Antwort des Servers wieder.
+- **Projekte bleiben auf diesem Mac.** Beim Öffnen eines Projekts werden seine Analysen in die Kopie übernommen, die dieser Mac von den gelesenen Serverdaten führt; die Code-Panels zeigen sie so, wie das Projekt sie gesichert hat (siehe [[topic:projects|Projekte]]). An den Server wird nichts gesendet: In seinen Speicher gelangt nur, was über ihn veröffentlicht wird.
 
 ## Durchsicht durch einen Agenten
 
 Betreibt der Analyseserver auch Ghidra, kann ein mit ByteRipper verbundener Agent (siehe [[topic:agent|Mit einem Agenten arbeiten]]) dort ein Modul durchsehen: Er öffnet das Modul über einen PE32- oder TE-Image-Knoten des UEFI-Baums, benennt Funktionen, Variablen und Typen, schreibt Kommentare und veröffentlicht das Ergebnis. Jede Veröffentlichung ist eine neue Revision der Analyse des Moduls, und jeder Mac, der den Server liest, zeigt sie. Das Ghidra-Projekt bleibt auf dem Server; eine Durchsicht lässt sich daher später fortsetzen, durch den Agenten oder durch eine Person. Ein Agent, der auf dem Server selbst läuft, verbindet sich direkt mit `byteripper-server` unter der Adresse `/mcp`.
 
-## Die Analysen dieses Macs senden
-
-**Analysen dieses Macs an den Server senden** kopiert jede Analyse aus dem Ordner dieses Macs auf den Server. Das ist für die erste Verbindung gedacht, wenn dieser Mac Analysen hat, die dem Server fehlen. Der Server übernimmt jede Analyse nach denselben Regeln wie die eines Projekts: Eine spätere Revision einer Durchsicht ersetzt eine frühere, die Durchsicht eines Moduls aus einem anderen Projekt wird beiseitegelegt, statt die vorhandene zu ersetzen, und eine bereits vorhandene Analyse bleibt unverändert. Die Zeile unter der Schaltfläche nennt die Anzahlen. Zum Senden ist das Recht `cas.write` nötig; ein Token ohne dieses Recht weist der Server zurück, und die Zeile nennt das fehlende Recht.
-
 ## Was der Server nicht tut
 
-- Er ist für das Netzwerk einer einzelnen Person gedacht: Jeder Client hat ein eigenes Token, und dessen Rechte bestimmen, was der Client darf — ein `reader`-Token liest, ein `app`-Token schreibt und veröffentlicht zusätzlich. Ein eigenes Benutzermodell hat er nicht.
+- Er ist für das Netzwerk einer einzelnen Person gedacht: Jeder Client hat ein eigenes Token, und dessen Rechte bestimmen, was der Client darf — ein `reader`-Token liest, ein `app`-Token veröffentlicht zusätzlich Durchsichten über den Server. Jeder andere Schreibzugriff auf den Speicher erfordert ein `admin`-Token. Ein eigenes Benutzermodell hat er nicht.
+- Er übernimmt keine Analysen von einem Mac. Sein Speicher enthält nur, was über ihn veröffentlicht wurde.
 - Er löscht nichts über das Netzwerk. Nicht mehr benötigte Analysen werden auf dem Server selbst mit `byteripper-cas gc` entfernt.
 - Er speichert keine Dumps. Eine Analyse vermerkt, welches Modul sie beschreibt, nie die Firmware, aus der es stammt.

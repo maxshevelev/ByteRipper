@@ -1,4 +1,4 @@
-@source-sha 1833ff3d9a9611d6a7962ee2c0e9562a245a39c69e690ada7a0d0fcabb839bc8
+@source-sha b4e108f34495ce5367a20732c2c16b7ef058098ebb151fedf8688e91ce9604d2
 # Projekte
 
 > Ein Projekt ist ein Arbeitsbereich in einer eigenen Datei: alles, was für einen Auftrag geöffnet ist, wird als Ganzes wieder geöffnet, und zwischen Projekten lässt sich wechseln.
@@ -38,9 +38,9 @@ Ein Projekt enthält auch die Codeanalysen, die seine Codebereiche zeigen — im
 
 Liegen die Analysen auf einem Analyseserver, enthält das Projekt das, was dieser Mac bis zum Sichern vom Server gelesen hat; beim Sichern wird nichts nachgeladen. Eine bis dahin nicht gelesene Funktion lässt sich nur öffnen, wenn der Server erreichbar ist.
 
-Beim Öffnen wird jede Analyse zu den auf diesem Mac gespeicherten hinzugefügt — oder, wenn die Analysen auf einem Analyseserver liegen, zu denen des Servers ([[topic:code-analyses|Codeanalysen und der Analyseserver]]). Eine hier gespeicherte Analyse wird nur durch eine spätere Revision derselben Durchsicht ersetzt; liegt die spätere Revision auf diesem Mac, wird sie gezeigt. Wird eine Analyse anders gezeigt, als das Projekt sie gesichert hat, nennt eine Meldung nach dem Öffnen dies mit der Anzahl:
+Beim Öffnen wird jede Analyse zu den auf diesem Mac gespeicherten hinzugefügt — oder, wenn die Analysen auf einem Analyseserver liegen, zu der Kopie, die dieser Mac von den gelesenen Serverdaten führt; an den Server wird nichts gesendet ([[topic:code-analyses|Codeanalysen und der Analyseserver]]). Eine hier gespeicherte Analyse wird nur durch eine spätere Revision derselben Durchsicht ersetzt; liegt die spätere Revision auf diesem Mac, wird sie gezeigt. Wird eine Analyse anders gezeigt, als das Projekt sie gesichert hat, nennt eine Meldung nach dem Öffnen dies mit der Anzahl:
 
 - **Stattdessen wird die Analyse eines anderen Projekts gezeigt** — dieser Mac hat eine Durchsicht des Moduls aus einem anderen Ghidra-Projekt. Die Kopie des Projekts wird beiseitegelegt, nicht verworfen.
 - **Stattdessen wird eine andere gespeicherte Analyse gezeigt** — dieser Mac hat eine andere, auf dieselbe Weise erstellte Analyse des Moduls.
 - **Im Projekt beschädigt und nicht gelesen** — die Kopie des Projekts lässt sich nicht lesen.
-- **Teilweise gesichert, und dem Server fehlt der Rest** — das Projekt enthält nur einen Teil der Analyse, und dem Server fehlt der Rest; er hat sie deshalb nicht übernommen.
+- **Teilweise gesichert, und dem Server fehlt der Rest** — das Projekt enthält nur einen Teil der Analyse, und dem Server fehlt der Rest; sie wird deshalb nicht gezeigt.

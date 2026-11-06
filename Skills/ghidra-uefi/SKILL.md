@@ -670,8 +670,13 @@ and the one that last named it, and a connection's card names the Claude Code
 session behind it. A client waiting on `GET
 /ghidra/v1/leases/<module>/wait` hears of it at once. Every `ghidra_` call,
 the publish included, goes to the server.
-The store it publishes into is its own: `--store` names
-the directory, and `cas_cli.py --store` reads the same one from the terminal.
+The store it publishes into is its own — `<Server>/Analysis` by default, with
+its projects in `<Server>/GhidraProjects`, apart from the app's — and `--store`
+names another directory; `cas_cli.py --store` reads the same one from the
+terminal. A publish through the server is the only way a client's work reaches
+that store: the store's write routes (`PUT objects`, `POST analyses`, `POST
+reviews/<module>`, `POST library`, `POST import`) take an `admin` token, and
+`cas.write` is left the references and the publish.
 
 ## The code store
 
@@ -693,8 +698,9 @@ Before the export, `ApplyUefi.java` types and names the module from EDK2
 minute. A module with a kept project needs no new analysis: a publish exports
 the program as it stands, the review with it.
 
-The store is `~/Library/Application Support/ByteRipper/Analysis`, or wherever
-`--store` says:
+The app's store, and the scripts' on this Mac, is
+`~/Library/Application Support/ByteRipper/Analysis`, or wherever `--store`
+says; a server keeps its own (above):
 
 ```
 objects/<sha256 of the artifact>

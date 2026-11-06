@@ -282,18 +282,6 @@ final class CodeAnalysisLocation {
         return String(host) + "." + name
     }
 
-    /// Send a project's bundle to the server, then copy what it now holds of
-    /// the bundle's modules; the answer is the server's report.
-    func sendBundle(at url: URL) async throws -> BundleImport? {
-        guard let remote, let mirror else { return nil }
-        let data = try Data(contentsOf: url)
-        let report = try await remote.importBundle(data)
-        let modules = (report.imported + report.unchanged).map(\.module.sha256)
-            + (report.skipped + report.conflicts).compactMap { AnalysisKey($0.key)?.module }
-        try await mirror.refresh(modules)
-        return report
-    }
-
     /// What the tab says about a failed connection: a token the server
     /// refuses is not a server out of reach, and a 403 names the right the
     /// token lacks (`Design/SERVER_HEADLESS_PLAN.md` decision 4).

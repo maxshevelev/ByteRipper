@@ -40,7 +40,9 @@ public enum ServerCommand: Equatable {
                           app, the tailnet address for the others). A `listen`
                           list in the configuration file is kept, and a flag
                           adds to it rather than replacing it
-          --store         the store's directory, the app's own by default
+          --store         the store's directory, Analysis in the server's folder
+                          by default — not the app's: the app on this Mac keeps
+                          its own, and reaches this one only through the server
           --tokens        the tokens' file, tokens.json in the server's folder
                           by default; every address needs a token
           --support       the server's own folder — tokens.json, sessions,
@@ -52,7 +54,8 @@ public enum ServerCommand: Equatable {
                           the folder of the Ghidra scripts, `owner/` and
                           `scripts/`; the `ghidra` folder beside the binary by
                           default, else the checkout this build came from
-          --projects      the modules' kept projects, the app's folder by default
+          --projects      the modules' kept projects, GhidraProjects in the
+                          server's folder by default
           --idle          seconds an owner waits for a call before it saves and
                           exits, 1800 by default
           --server-name   a name the console answers under besides the listen
@@ -339,9 +342,12 @@ public struct ServerConfiguration: Equatable, Sendable {
     /// The folder of the Ghidra scripts — `owner/` and `scripts/`, the
     /// skill's layout and the distribution's. Nil: `OwnerSources.resolved`.
     public var ghidraScripts: URL?
-    public var projects = GhidraHost.defaultProjectsRoot
+    /// The server's own, apart from the app's (`Design/SERVER_PLAN.md`
+    /// stage 2.5): the app in its "on this Mac" mode keeps its store and its
+    /// projects, and reaches the server's only through the server.
+    public var projects = ServerPaths.projects
     public var idle = 1800
-    public var store = CodeAnalysisPaths.defaultRoot
+    public var store = ServerPaths.store
     /// The folder the server keeps its own files in (`--support`): the
     /// tokens, the console's sessions, the local MCP's socket, the documents
     /// and their uploads. Nil: `ServerPaths`, the app's shared folder.
@@ -571,6 +577,16 @@ public enum ServerPaths {
     public static var support: URL {
         CodeAnalysisPaths.defaultRoot.deletingLastPathComponent()
             .appendingPathComponent("Server", isDirectory: true)
+    }
+
+    /// The store the server keeps by default, in its own folder.
+    public static var store: URL {
+        support.appendingPathComponent("Analysis", isDirectory: true)
+    }
+
+    /// The modules' kept Ghidra projects, in the server's own folder.
+    public static var projects: URL {
+        support.appendingPathComponent("GhidraProjects", isDirectory: true)
     }
 
     public static var defaultTokensFile: URL {

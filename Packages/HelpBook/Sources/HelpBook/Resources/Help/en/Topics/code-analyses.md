@@ -4,7 +4,6 @@
 
 @covers settings.code-analysis
 @covers settings.code-analysis.server
-@covers settings.code-analysis.send
 
 An analysis is made by the Ghidra skill, outside ByteRipper. ByteRipper reads what the skill stored: a module of a UEFI tree with a stored analysis carries a code badge, and **Open with Code** shows its code beside its bytes; the panel is described on [[topic:code-panel|Code Panel]]. While the module's file is collapsed, the badge stands after the file's name, so a list of collapsed files shows which modules have an analysis; expanding the file moves it to the section that holds the module. An analysis is keyed by the module's bytes, not by the dump, so the same module in another dump opens the same analysis.
 
@@ -39,18 +38,15 @@ The line below the fields says whether the server is reached. A token the server
 
 - **New analyses appear by themselves.** The server reports every change as it happens, so an analysis stored or a review published from any machine appears on every Mac within a second or two, and an open Code panel is drawn again from it at the same place.
 - **What has been read stays readable.** This Mac keeps a copy of what it has read from the server. A function's code is read when the function is shown; of an earlier revision compared with a function, only that function is read. The search, the list of a function's callers and the list of a name's uses go through all the code of the module, so they read the remaining functions first. When the server cannot be reached, the line in the settings says so. What has been read is still shown; a function not yet read is listed by name, and the panel states that its code cannot be obtained. The search and the lists of uses then cover only the functions already read. The connection is retried by itself.
-- **Projects use the server.** When a project is opened, the analyses it carries are sent to the server, which takes them by the usual rules (see [[topic:projects|Projects]]); the notice after opening reports the server's answer.
+- **Projects stay on this Mac.** When a project is opened, the analyses it carries are added to the copy this Mac keeps of what it has read from the server, so its Code panels show them as the project saved them (see [[topic:projects|Projects]]). Nothing is sent to the server: its store holds what is published through it.
 
 ## A review by an agent
 
 When the analysis server also hosts Ghidra, an agent connected to ByteRipper (see [[topic:agent|Working with an Agent]]) can review a module there: it opens the module from a PE32 or TE image node of the UEFI tree, names functions, variables and types, writes comments, and publishes the result. Each publication is a new revision of the module's analysis, and every Mac that reads the server shows it. The project in Ghidra stays on the server, so a review can be continued later, by the agent or by a person. An agent running on the server itself connects to `byteripper-server` directly, at the address `/mcp`.
 
-## Sending this Mac's analyses
-
-**Send This Mac's Analyses to the Server** copies every analysis kept in this Mac's folder to the server. It is meant for the first connection, when this Mac holds analyses the server does not. The server takes each analysis by the same rules as a project's: a later revision of a review replaces an earlier one, another project's review of a module is kept aside rather than replacing the one there, and an analysis already on the server is left as it is. The line below the button gives the counts. Sending needs the `cas.write` right; a token without it is refused, and the line names the right it lacks.
-
 ## What the server does not do
 
-- It is meant for one person's network: each client has its own token, and the rights in it decide what that client may do — a `reader` token reads, an `app` token also writes and publishes. There is no user model of its own.
+- It is meant for one person's network: each client has its own token, and the rights in it decide what that client may do — a `reader` token reads, an `app` token also publishes reviews through the server. Writing into the store in any other way needs an `admin` token. There is no user model of its own.
+- It does not take analyses from a Mac. Its store holds only what is published through it.
 - It does not delete anything over the network. Analyses no longer needed are removed on the server itself, with `byteripper-cas gc`.
 - It does not hold the dumps. An analysis records which module it describes, never the firmware it came from.
