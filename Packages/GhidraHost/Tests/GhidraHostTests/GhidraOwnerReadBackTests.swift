@@ -441,6 +441,12 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         try await open(try image())
         let answer = try await post("/v1/set/data", ["address": "0xFED81730", "name": "ProbeRegister"])
         XCTAssertEqual(answer["outside_memory"] as? Bool, true, "\(answer)")
+        do {
+            _ = try await post("/v1/set/data", ["address": "0xFED81734", "name": "TypedRegister", "type": "UINT8"])
+            XCTFail("a type outside the image was taken")
+        } catch let error as GhidraHostError {
+            XCTAssertTrue("\(error)".contains("without `type`"), "\(error)")
+        }
         let inside = try await entries().first
         let named = try await post("/v1/set/data", ["address": try XCTUnwrap(inside), "name": "ProbeInside"])
         XCTAssertNil(named["outside_memory"], "\(named)")

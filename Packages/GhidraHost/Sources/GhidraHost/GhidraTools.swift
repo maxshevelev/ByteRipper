@@ -1161,7 +1161,8 @@ public enum GhidraTools {
                   + "the label there, a leftover under a type that now names the place. A type laid over decoded "
                   + "instructions is refused, naming them, unless `clear_code: true`: they go, the function "
                   + "holding them gives those bytes up, and `code_cleared` says so. An address outside the image, such as "
-                  + "an MMIO register, takes a name and `outside_memory` says so: the C prints it where the code uses "
+                  + "an MMIO register, takes a name without `type` (there are no bytes to type, and a type is refused) "
+                  + "and `outside_memory` says so: the C prints it where the code uses "
                   + "that address, and `ghidra_data` and the artifact's symbols do not list it.",
                   ["address": AgentSchema.string("The address."),
                    "clear_code": AgentSchema.boolean("Remove instructions the type covers and shorten the body."),

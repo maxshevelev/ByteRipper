@@ -5981,6 +5981,13 @@ public class Owner {
         JsonObject answerCleared = null;
         Address address = address(required(body, "address"));
         if (body.has("type") && !body.get("type").isJsonNull()) {
+            // A datum needs bytes: outside the image there are none, so an
+            // MMIO register takes a name only (issue 71557325), and its type
+            // is said in a comment where the code reads it.
+            if (!program.getMemory().contains(address)) {
+                throw new Failure(400, hex(address) + " is outside the image: it takes a name without `type`; "
+                    + "say the register's width and meaning in an end-of-line comment where the code reads it");
+            }
             DataType type = type(body.get("type").getAsString());
             answerCleared = clearCodeForDatum(address, type, body.has("clear_code") && body.get("clear_code").getAsBoolean());
             DataUtilities.createData(program, address, type, -1,
