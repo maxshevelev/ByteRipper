@@ -855,7 +855,9 @@
   function mountActivity() {
     const agents = card("Agents", "connections to the local MCP socket, and the calls each is making");
     const clients = card("REST clients", "requests per token since the server started; the console's own are not counted");
-    const root = h("div", { class: "stack" }, agents.root, clients.root);
+    const modules = card("Modules in work", "one holder at a time writes and publishes a module in Ghidra");
+    const closedLeases = h("div", {});
+    const root = h("div", { class: "stack" }, agents.root, modules.root, closedLeases, clients.root);
 
     function update(data) {
       if (!data.mcp.length) {
@@ -867,6 +869,7 @@
         fill(agents.body, h("div", { class: "agents" }, data.mcp.map(agentCard)));
       }
       updateLog(data.mcp);
+      updateLeases(modules, closedLeases, data.leases);
       if (!data.rest.length) {
         fill(clients.body, empty("globe", "No REST requests yet", "The app and the scripts show up here, one row per token, when they reach the store or Ghidra."));
       } else {
@@ -1315,6 +1318,77 @@
       ],
     });
     setTimeout(() => name.focus(), 30);
+  }
+
+  // ---------- Activity: the modules in work ----------
+
+  function updateLeases(modules, closed, rows) {
+    if (rows === null || rows === undefined) {
+      modules.root.hidden = true;
+      fill(closed);
+      return;
+    }
+    modules.root.hidden = false;
+    const held = rows.filter((row) => row.holder);
+    const ended = rows.filter((row) => row.closed);
+    fill(modules.body, held.length ? leaseTable(held)
+      : empty("layers", "No module in work", "A holder takes a module into work before its first write; it shows here until it gives it back."));
+    if (ended.length) {
+      fill(closed, h("section", { class: "card" },
+        h("details", { class: "revoked" }, h("summary", { text: `Leases closed, not taken again (${ended.length})` }), closedLeaseTable(ended))));
+    } else {
+      fill(closed);
+    }
+  }
+
+  function moduleCell(row) {
+    return h("td", {}, h("div", { class: "row" },
+      h("div", { class: "doc-icon" }, icon("layers", 16)),
+      h("div", {},
+        h("div", { class: "doc-title", text: row.name || "module" }),
+        h("div", { class: "doc-path", text: row.module }))));
+  }
+
+  function leaseTable(rows) {
+    return h("div", { class: "table-wrap" }, h("table", {},
+      h("thead", {}, h("tr", {},
+        h("th", { text: "Module" }), h("th", { text: "Holder" }), h("th", { text: "In work since" }),
+        h("th", { text: "Last call" }), h("th", { class: "num", text: "Writes" }), h("th", { class: "num", text: "Publishes" }),
+        h("th", { text: "Last revision" }), h("th", {}))),
+      h("tbody", {}, rows.map((row) => h("tr", {},
+        moduleCell(row),
+        h("td", { text: row.holder }),
+        h("td", { class: "muted", text: when(row.since) }),
+        h("td", {}, row.last_call
+          ? h("div", {}, h("div", { class: "mono", text: row.last_call }), h("div", { class: "muted", text: ago(row.last_at) }))
+          : h("span", { class: "muted", text: "—" })),
+        h("td", { class: "num", text: String(row.writes || 0) }),
+        h("td", { class: "num", text: String(row.publishes || 0) }),
+        h("td", { class: "muted", text: row.revision ? `rev ${row.revision}` : "—" }),
+        h("td", { class: "actions" },
+          iconButton("ban", "Close the lease — the holder's unpublished changes are dropped", () => closeLease(row), "danger")))))));
+  }
+
+  function closedLeaseTable(rows) {
+    return h("div", { class: "table-wrap" }, h("table", {},
+      h("thead", {}, h("tr", {},
+        h("th", { text: "Module" }), h("th", { text: "Holder" }), h("th", { text: "Closed by" }), h("th", { text: "Closed" }))),
+      h("tbody", {}, rows.map((row) => h("tr", { class: "dim" },
+        moduleCell(row),
+        h("td", { text: row.closed.holder }),
+        h("td", { text: row.closed.closed_by }),
+        h("td", { class: "muted", text: when(row.closed.at) }))))));
+  }
+
+  async function closeLease(row) {
+    const name = row.name || row.module;
+    const sure = await confirmAction({
+      title: `Close the lease of “${name}”?`, label: "Close", iconName: "ban",
+      text: `${row.holder} has it in work since ${when(row.since)}. Its unpublished changes are dropped: the working project goes to the Trash, `
+        + "and the module opens again at its last published revision. The holder is told at its next call on the module.",
+    });
+    if (!sure) return;
+    await act(() => call("POST", `/admin/api/leases/${row.module}/close`), `${name}: lease closed`);
   }
 
   // ---------- Configuration ----------

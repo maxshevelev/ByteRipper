@@ -382,6 +382,7 @@ final class ServerConsoleTests: XCTestCase {
         XCTAssertEqual(log.first?["status"], .count(200))
         XCTAssertEqual(log.first?["running"], .bool(false))
         XCTAssertEqual(activity.body?["mcp"], .array([]))
+        XCTAssertEqual(activity.body?["leases"], .null, "no Ghidra role, no modules in work to show")
         XCTAssertNil(activity.body?["agent"], "how to connect is the Configuration page's")
 
         // The Configuration page: each client of the app's Settings, in its form.

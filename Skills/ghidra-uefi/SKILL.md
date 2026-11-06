@@ -114,6 +114,16 @@ whole document, or one `## ` section); `ghidra_publish` at a coherent
 checkpoint, `ghidra_done` at the end. The rules a review keeps are in "What a
 review makes of the code".
 
+A review takes the module into work first: `ghidra_take`, before the first
+write. From then on only its holder writes and publishes the module — through
+any number of `ghidra_publish`, which keep it in work — until `ghidra_done`
+gives it back (publishing what is left, or with `discard: true` dropping it).
+There is no term; reading needs no lease. A module another holder has in work
+refuses a write with the holder and since when. An administrator can close a
+lease from the server's console: the holder's unpublished changes are dropped,
+the project is the last published revision again, and the holder's next call
+on the module says so — take it again to go on.
+
 Never review in a Ghidra window of your own: what it holds is not in the store,
 no other Mac sees it, and Ghidra's project lock keeps the owner off a project a
 window has open.
@@ -649,8 +659,15 @@ Unix socket; the agent's client reaches it through the relay:
 activity, tokens, status — behind an admin token. There is no `/mcp` over the
 network: an agent is on the machine, or it goes through the app.
 
-The server holds the module's lease; every `ghidra_` call, the publish
-included, goes to it. The store it publishes into is its own: `--store` names
+The server keeps the leases (`<store>/private/leases.json`, across restarts):
+a call on its MCP socket holds a module as `local MCP`, an HTTP client as
+`token <name>`. `GET /ghidra/v1/leases` lists the modules in work; an
+administrator closes one with `DELETE /ghidra/v1/leases/<module>` or from the
+console's Activity page, which shows each module in work with what its holder
+has done under the lease, and a client waiting on `GET
+/ghidra/v1/leases/<module>/wait` hears of it at once. Every `ghidra_` call,
+the publish included, goes to the server.
+The store it publishes into is its own: `--store` names
 the directory, and `cas_cli.py --store` reads the same one from the terminal.
 
 ## The code store

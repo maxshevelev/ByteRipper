@@ -25,11 +25,13 @@ public struct Console: Sendable {
     /// to show: nil where there is no socket to reach (a test's console).
     public let agent: ConsoleAgent?
     public let status: @Sendable () async -> ConsoleStatus
+    /// The modules in work in Ghidra: nil where the server has no Ghidra role.
+    public let leases: ConsoleLeases?
     let assets: ConsoleAssets
 
     public init(registry: DocumentRegistry, tokens: TokenStore, authorizer: ServerAuthorizer,
                 gate: SignInGate = SignInGate(), rest: RESTActivity, mcp: ServerActivity?,
-                agent: ConsoleAgent? = nil,
+                agent: ConsoleAgent? = nil, leases: ConsoleLeases? = nil,
                 status: @escaping @Sendable () async -> ConsoleStatus) throws {
         self.registry = registry
         self.tokens = tokens
@@ -39,6 +41,7 @@ public struct Console: Sendable {
         self.mcp = mcp
         self.agent = agent
         self.status = status
+        self.leases = leases
         assets = try ConsoleAssets.load()
     }
 
@@ -79,6 +82,15 @@ public struct Console: Sendable {
         add("POST", "/admin/logout") { request in signOut(request) }
         add("GET", "/admin/api/session") { request in
             Self.json(["name": .string(request.principal?.name ?? ""), "token": .string(request.principal?.id ?? "")])
+        }
+
+        // An administrator's close of a lease the Activity page shows.
+        let leases = self.leases
+        add("POST", "/admin/api/leases/:module/close") { request in
+            guard let leases else { throw HTTPError(.notFound, "this server has no Ghidra role") }
+            let by = request.principal?.name ?? "an administrator"
+            let closed = try await leases.close(request.parameters["module"] ?? "", by)
+            return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: closed)
         }
 
         // Documents.
@@ -139,9 +151,14 @@ public struct Console: Sendable {
         let mcp = self.mcp
         add("GET", "/admin/api/activity") { _ in
             let agents = await MainActor.run { mcp?.listed ?? [] }
+            // The modules in work in Ghidra, with what each holder has done
+            // under its lease; nil where the server has no Ghidra role.
+            var modules = JSONValue.null
+            if let leases { modules = (try? JSONValue.parse(await leases.list())) ?? .array([]) }
             return Self.json([
                 "mcp": .array(agents.map(Self.agent)),
-                "rest": .array(rest.listed.map(Self.client))
+                "rest": .array(rest.listed.map(Self.client)),
+                "leases": modules
             ])
         }
 

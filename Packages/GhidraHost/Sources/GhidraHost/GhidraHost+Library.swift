@@ -345,7 +345,14 @@ extension GhidraHost {
 
     /// The registry against the module: an answer for `ghidra_library` and
     /// `ghidra_library_apply`, and what `ghidra_create` applies.
-    public func library(_ module: SHA256Digest, _ request: LibraryRequest) async throws -> Data {
+    public func library(_ module: SHA256Digest, _ request: LibraryRequest, holder: String? = nil) async throws -> Data {
+        // What writes the module's program needs it in work; the registry's
+        // own entries and a read do not.
+        switch request.action {
+        case .apply, .decline, .candidate: try requireLease(module, holder: holder)
+        case .status, .entry: try tellClosed(module, holder: holder)
+        case .rename, .change: break
+        }
         switch request.action {
         case .rename:
             guard let id = request.id, let name = request.name, let reason = request.reason else {
@@ -397,7 +404,7 @@ extension GhidraHost {
                 }
             }
             return try await write(module, "/v1/library/candidate", body: try JSONSerialization.data(
-                withJSONObject: ["items": try Self.plain(candidates), "remove": remove]))
+                withJSONObject: ["items": try Self.plain(candidates), "remove": remove]), byHost: true)
         case .status:
             let (plan, _) = try await libraryPlan(module)
             return try JSONSerialization.data(withJSONObject: try Self.plain(plan), options: [.sortedKeys])
@@ -412,7 +419,7 @@ extension GhidraHost {
             }
             let body = try JSONSerialization.data(withJSONObject: ["address": address, "id": id,
                                                                    "reason": request.reason ?? "", "by": "agent"])
-            return try await write(module, "/v1/library/decline", body: body)
+            return try await write(module, "/v1/library/decline", body: body, byHost: true)
         case .apply:
             // Linking entries, as an open does, is no review of this module.
             let before = request.address == nil ? (try? project(module).state())?.reviewed : nil
@@ -458,7 +465,7 @@ extension GhidraHost {
             }
             let body = try JSONSerialization.data(withJSONObject: ["items": items])
             let path = request.dryRun == true ? "/v1/library/apply?dry_run=1" : "/v1/library/apply"
-            let applied = try JSONSerialization.jsonObject(with: try await write(module, path, body: body))
+            let applied = try JSONSerialization.jsonObject(with: try await write(module, path, body: body, byHost: true))
             answer["results"] = (applied as? [String: Any])?["items"] ?? []
             return try JSONSerialization.data(withJSONObject: answer, options: [.sortedKeys])
         }
@@ -735,6 +742,6 @@ extension GhidraHost {
         }
         let body = try JSONSerialization.data(withJSONObject: ["items": items])
         return (try JSONSerialization.jsonObject(
-            with: try await write(module, "/v1/library/release", body: body)) as? [String: Any])?["items"] ?? []
+            with: try await write(module, "/v1/library/release", body: body, byHost: true)) as? [String: Any])?["items"] ?? []
     }
 }

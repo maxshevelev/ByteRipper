@@ -474,6 +474,23 @@ final class ServerTests: XCTestCase {
         XCTAssertEqual(status3, 204)
         let status4 = try await call("GET", "ghidra/v1/modules", app).0
         XCTAssertEqual(status4, 200)
+
+        // The modules in work are anyone's to read who may use Ghidra; closing
+        // a lease is an administrator's, who hears there is none to close.
+        let leases = try await call("GET", "ghidra/v1/leases", app)
+        XCTAssertEqual(leases.0, 200, leases.1)
+        XCTAssertEqual(leases.1, "[]")
+        let (close, closeWords) = try await call("DELETE", "ghidra/v1/leases/\(someModule)", app)
+        XCTAssertEqual(close, 403, closeWords)
+        XCTAssertTrue(closeWords.contains("admin"), closeWords)
+        let (none, noneWords) = try await call("DELETE", "ghidra/v1/leases/\(someModule)", admin)
+        XCTAssertEqual(none, 404, noneWords)
+        XCTAssertTrue(noneWords.contains("not in work"), noneWords)
+        let taken = try await call("POST", "ghidra/v1/modules/\(someModule)/lease", reader).0
+        XCTAssertEqual(taken, 403, "taking a module into work needs ghidra.use")
+        let wait = try await call("GET", "ghidra/v1/leases/\(someModule)/wait", app)
+        XCTAssertEqual(wait.0, 200, wait.1)
+        XCTAssertTrue(wait.1.contains("not_held"), wait.1)
     }
 
     /// This Mac's client token is said nothing about when it is one of the

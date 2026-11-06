@@ -94,8 +94,11 @@ struct CurrentGhidraBackend: GhidraBackend {
     func publishPreview(_ module: SHA256Digest, takeTypeConflicts: Bool) async throws -> Data {
         try await resolve().publishPreview(module, takeTypeConflicts: takeTypeConflicts)
     }
-    func releaseModule(_ module: SHA256Digest, by: String) async throws -> Data {
-        try await resolve().releaseModule(module, by: by)
+    func takeModule(_ module: SHA256Digest) async throws -> Data {
+        try await resolve().takeModule(module)
+    }
+    func releaseModule(_ module: SHA256Digest, by: String, discard: Bool) async throws -> Data {
+        try await resolve().releaseModule(module, by: by, discard: discard)
     }
     func library(_ module: SHA256Digest, _ request: GhidraHost.LibraryRequest) async throws -> Data {
         try await resolve().library(module, request)
@@ -126,7 +129,8 @@ actor LocalGhidraHost {
         }
         let host = GhidraHost(
             configuration: .init(projectsRoot: GhidraHost.defaultProjectsRoot,
-                                 holder: "\(NSUserName()) via ByteRipper"),
+                                 holder: "\(NSUserName()) via ByteRipper",
+                                 leasesFile: root.appendingPathComponent("private/leases.json")),
             writer: store)
         self.host = host
         self.storeRoot = root

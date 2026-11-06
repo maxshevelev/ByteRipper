@@ -6,9 +6,9 @@ import Foundation
 /// called over loopback, written to under one lease per module, published
 /// into a store (`Design/SERVER_PLAN.md` §6).
 ///
-/// The host holds the lease, not its client: it takes it on the first write
-/// to a module, keeps it while writes come, and gives it back — publishing —
-/// when the client is done. A client never sees a token (§7.3).
+/// A client writes a module it has taken into work (`GhidraHost+Leases.swift`):
+/// one holder at a time, from the take to the give-back. The owner's own
+/// lease token stays inside the host; a client never sees one (§7.3).
 public actor GhidraHost {
     public struct Configuration: Sendable {
         public var projectsRoot: URL
@@ -20,17 +20,21 @@ public actor GhidraHost {
         /// Who holds the leases the host takes, as the owner logs them.
         public var holder: String
         public var startTimeout: TimeInterval
+        /// Where the modules in work are kept across restarts; nil keeps them
+        /// in memory only.
+        public var leasesFile: URL?
 
         public init(projectsRoot: URL = GhidraHost.defaultProjectsRoot, ghidraHome: URL? = nil,
                     sources: OwnerSources = .checkout, idle: Int = 1800,
                     holder: String = "\(NSUserName()) via byteripper-server",
-                    startTimeout: TimeInterval = 300) {
+                    startTimeout: TimeInterval = 300, leasesFile: URL? = nil) {
             self.projectsRoot = projectsRoot
             self.ghidraHome = ghidraHome
             self.sources = sources
             self.idle = idle
             self.holder = holder
             self.startTimeout = startTimeout
+            self.leasesFile = leasesFile
         }
     }
 
@@ -123,13 +127,18 @@ public actor GhidraHost {
         public var running: Bool
         public var reviewed: Bool
         public var published: ProjectState.Published?
+        /// Whether the module is in work, by whom and since when.
         public var leased: Bool
+        public var holder: String?
+        public var since: String?
+        /// A lease an administrator closed, until its holder takes the module again.
+        public var closed: LeaseEnd?
         /// What an earlier owner of this project ended without saving, as the
         /// next open wrote it down. Absent when nothing was.
         public var writesLost: String?
 
         enum CodingKeys: String, CodingKey {
-            case module, name, running, reviewed, published, leased
+            case module, name, running, reviewed, published, leased, holder, since, closed
             case writesLost = "writes_lost"
         }
     }
@@ -137,17 +146,22 @@ public actor GhidraHost {
     public let configuration: Configuration
     let writer: AnalysisWriter
     private var install: GhidraInstall?
+    /// The owners' own lease tokens: the host writes to an owner under one.
+    /// Who may write at all is the work lease (`leaseBook`).
     private var leases: [SHA256Digest: String] = [:]
+    /// The modules in work and the leases closed (`GhidraHost+Leases.swift`).
+    var leaseBook: LeaseBook
+    var leaseWaiters: [SHA256Digest: [UUID: CheckedContinuation<Void, Never>]] = [:]
     /// What a publish would store when a module's lease was taken, for a done to
     /// compare: a write can count and change nothing, as a signature written
     /// again does, and a new exporter's artifact is no reason for a revision.
     /// It holds while the owner's count of changes stands where it was, so a run
     /// of refused writes, each giving its lease back, pays for one export.
-    private var leaseBaselines: [SHA256Digest: (writes: Int?, content: LeaseBaseline)] = [:]
+    var leaseBaselines: [SHA256Digest: (writes: Int?, content: LeaseBaseline)] = [:]
     /// How many exports a baseline has cost, for the tests.
     private(set) var leaseBaselinesTaken = 0
 
-    private struct LeaseBaseline: Equatable {
+    struct LeaseBaseline: Equatable {
         var artifact: SHA256Digest
         var review: SHA256Digest
         var description: SHA256Digest
@@ -175,6 +189,7 @@ public actor GhidraHost {
     public init(configuration: Configuration = Configuration(), writer: AnalysisWriter) {
         self.configuration = configuration
         self.writer = writer
+        self.leaseBook = Self.loadLeaseBook(configuration.leasesFile)
     }
 
     public func ghidra() throws -> GhidraInstall {
@@ -194,9 +209,12 @@ public actor GhidraHost {
         var rows: [Summary] = []
         for project in GhidraProject.all(in: configuration.projectsRoot) {
             guard let state = try? project.state() else { continue }
+            let lease = leaseBook.leases[project.module.hex]
             rows.append(Summary(module: project.module.hex, name: state.module.name,
                                 running: await runningOwner(project) != nil, reviewed: state.reviewed,
-                                published: state.published, leased: leases[project.module] != nil,
+                                published: state.published, leased: lease != nil,
+                                holder: lease?.holder, since: lease?.since,
+                                closed: leaseBook.closed[project.module.hex],
                                 writesLost: try? String(contentsOf: project.folder.appendingPathComponent("writes-lost"),
                                                         encoding: .utf8)))
         }
@@ -257,14 +275,26 @@ public actor GhidraHost {
 
     /// A read call of the bridge (`/v1/hello`, `/v1/function/0x…`), starting
     /// the module's owner when none runs.
-    public func read(_ module: SHA256Digest, _ path: String) async throws -> Data {
+    public func read(_ module: SHA256Digest, _ path: String, holder: String? = nil) async throws -> Data {
+        try tellClosed(module, holder: holder)
         let record = try await owner(of: module)
-        return try await Self.call(record.port, "GET", path).data
+        let data = try await Self.call(record.port, "GET", path).data
+        noteActivity(module, holder: holder, call: Self.callName(path), kind: .read)
+        return data
+    }
+
+    /// A bridge path as the Activity page names the call: `function`, `set/comment`.
+    static func callName(_ path: String) -> String {
+        var name = path.hasPrefix("/v1/") ? String(path.dropFirst(4)) : path
+        if let query = name.firstIndex(of: "?") { name = String(name[..<query]) }
+        if let address = name.range(of: "/0x") { name = String(name[..<address.lowerBound]) }
+        return name
     }
 
     /// A call that asks what a write would do: the owner must be up, and no
     /// lease is taken.
-    public func preview(_ module: SHA256Digest, _ path: String, body: Data) async throws -> Data {
+    public func preview(_ module: SHA256Digest, _ path: String, body: Data, holder: String? = nil) async throws -> Data {
+        try tellClosed(module, holder: holder)
         let record = try await owner(of: module)
         return try await Self.call(record.port, "POST", path, body: body).data
     }
@@ -292,8 +322,12 @@ public actor GhidraHost {
         }
     }
 
-    /// A write call of the bridge, under the host's lease of the module.
-    public func write(_ module: SHA256Digest, _ path: String, body: Data) async throws -> Data {
+    /// A write call of the bridge: refused unless `holder` has the module in
+    /// work. `byHost` is the host's own write — a publish's step, a
+    /// registry's mark — made inside a call that has been allowed already.
+    public func write(_ module: SHA256Digest, _ path: String, body: Data, holder: String? = nil,
+                      byHost: Bool = false) async throws -> Data {
+        if !byHost { try requireLease(module, holder: holder) }
         if path == "/v1/type", writer.keepsTypeArchives, Self.withdrawsShared(body) {
             return try await withdrawSharedType(module, body: body)
         }
@@ -331,6 +365,7 @@ public actor GhidraHost {
             state.reviewed = true
             try project.write(state)
         }
+        if !byHost { noteActivity(module, holder: holder, call: Self.callName(path), kind: .write) }
         return answer
     }
 
@@ -420,7 +455,9 @@ public actor GhidraHost {
     /// first, then recorded in the module's history with `by`. The recipe takes the exporter and the Ghidra from the
     /// artifact, the types and passes from what made the project (§5.2).
     public func publish(_ module: SHA256Digest, by: String?,
-                        options: PublishOptions = PublishOptions()) async throws -> Publication {
+                        options: PublishOptions = PublishOptions(), holder: String? = nil,
+                        byHost: Bool = false) async throws -> Publication {
+        if !byHost { try requireLease(module, holder: holder) }
         let project = self.project(module)
         let record = try await owner(of: module)
         let state = try project.state()
@@ -518,6 +555,7 @@ public actor GhidraHost {
         publication.typesVersion = journal.typesVersion?.version
         publication.project = journal.project
         publication.projectError = journal.projectError
+        if !byHost { noteActivity(module, holder: holder, call: "publish", kind: .publish, revision: journal.rev) }
         return publication
     }
 
@@ -734,8 +772,9 @@ public actor GhidraHost {
     /// merging into the shared archive, and the counts, the revision it would
     /// become and those conflicts come back. The export is the cost a publish
     /// already pays; this one pays it to look first.
-    func preview(_ module: SHA256Digest, takeTypeConflicts: Bool = false,
-                 takeLibrary: LibraryTake = .none) async throws -> Data {
+    public func preview(_ module: SHA256Digest, takeTypeConflicts: Bool = false,
+                 takeLibrary: LibraryTake = .none, holder: String? = nil) async throws -> Data {
+        try tellClosed(module, holder: holder)
         let project = self.project(module)
         let record = try await owner(of: module)
         let state = try project.state()
@@ -836,18 +875,36 @@ public actor GhidraHost {
         return try JSONSerialization.data(withJSONObject: preview, options: [.sortedKeys])
     }
 
-    /// Publish what the lease changed and give the lease back; nil when the
-    /// host holds no lease of the module, or the lease changed nothing: nothing
-    /// counted since the last publish, or what would be stored is what would
-    /// have been when the lease was taken. A new exporter's different artifact is
-    /// no reason for a revision nobody wrote.
-    public func release(_ module: SHA256Digest, by: String?) async throws -> Publication? {
+    /// The module given back by its holder: what the lease changed published
+    /// first (`release(_:by:)`), and with `discard` nothing published — the
+    /// working project goes to the Trash with its unpublished changes, and the
+    /// next open is the last published revision. A publish that is refused
+    /// keeps the lease.
+    public func release(_ module: SHA256Digest, by: String?, holder: String? = nil,
+                        discard: Bool = false) async throws -> Publication? {
+        try requireLease(module, holder: holder)
+        if discard {
+            try await discardWorkingProject(module)
+            try dropLease(module)
+            return nil
+        }
+        let publication = try await publishChanges(module, by: by)
+        try dropLease(module)
+        return publication
+    }
+
+    /// Publish what the lease changed; nil when the host holds no owner lease
+    /// of the module, or the lease changed nothing: nothing counted since the
+    /// last publish, or what would be stored is what would have been when the
+    /// lease was taken. A new exporter's different artifact is no reason for a
+    /// revision nobody wrote.
+    private func publishChanges(_ module: SHA256Digest, by: String?) async throws -> Publication? {
         guard let token = leases[module], let record = await runningOwner(project(module)) else {
             leases[module] = nil
             // No lease here, as after a restart of this server: a done still means
             // the store gets what the project holds and it has not got.
             guard await holdsUnpublishedWrites(module) else { return nil }
-            let publication = try await publish(module, by: by)
+            let publication = try await publish(module, by: by, byHost: true)
             leaseBaselines[module] = nil
             return publication
         }
@@ -871,7 +928,7 @@ public actor GhidraHost {
             if quiet() { recordNoChange(project(module), record: writes) }
             return nil
         }
-        let publication = try await publish(module, by: by)
+        let publication = try await publish(module, by: by, byHost: true)
         leases[module] = nil
         leaseBaselines[module] = nil
         _ = try? await Self.call(record.port, "DELETE", "/v1/lease", lease: token)
@@ -900,13 +957,19 @@ public actor GhidraHost {
     /// shared review types stay; the module opens again from its bytes and is
     /// analysed afresh. Answers where the folder went.
     @discardableResult
-    public func forget(_ module: SHA256Digest) async throws -> URL {
+    public func forget(_ module: SHA256Digest, holder: String? = nil) async throws -> URL {
+        // Another holder's module is not let go under it; the holder's own
+        // lease goes with the project.
+        if let held = leaseBook.leases[module.hex], held.holder != holderName(holder) {
+            throw Self.heldByAnother(held)
+        }
         let project = self.project(module)
         guard project.exists else {
             throw GhidraHostError(.project, "no project for \(module.hex): nothing to forget", status: 404)
         }
         _ = await stop(module)
         leases[module] = nil
+        try dropLease(module)
         var trashed: NSURL?
         try FileManager.default.trashItem(at: project.folder, resultingItemURL: &trashed)
         // The store's copy goes with it, or the next open would bring the same

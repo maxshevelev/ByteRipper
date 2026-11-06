@@ -998,7 +998,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : true
     },
-    "description" : "The modules that have a kept Ghidra project: `module` (SHA-256), `name`, whether an owner is `running`, whether the project holds a review of its own (`reviewed`; entries it only links are none), and its last publish (`published`: artifact, recipe, revision, and `at`, when what is stored last changed). `modification` and `writes` under `published` count this project's writes up to that publish, for telling what is still unpublished: they move at a publish that stores nothing new, and are no figure of the publish itself.",
+    "description" : "The modules that have a kept Ghidra project: `module` (SHA-256), `name`, whether an owner is `running`, whether the project holds a review of its own (`reviewed`; entries it only links are none), and its last publish (`published`: artifact, recipe, revision, and `at`, when what is stored last changed). `modification` and `writes` under `published` count this project's writes up to that publish, for telling what is still unpublished: they move at a publish that stores nothing new, and are no figure of the publish itself. `leased` says whether the module is in work, `holder` by whom and `since` since when; `closed` is a lease an administrator closed, until its holder takes the module again.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -2489,7 +2489,7 @@
       "openWorldHint" : false,
       "readOnlyHint" : false
     },
-    "description" : "Publishes what the project holds and the store has not got, this session's changes or an earlier session's, and gives the module's write lease back, so another session or a person can write. With nothing changed it publishes nothing. The module's owner stays up until it has been idle for a while, so a read or the next open costs no start; a later write takes a new lease. A publish the registry refuses stores nothing and the lease stays: `ghidra_publish` says what to do about it.",
+    "description" : "Takes the module into work: from now on only you write and publish it, through any number of `ghidra_publish`, until you give it back with `ghidra_done` or an administrator closes the lease. There is no term. Take it before the first write — a write without it is refused — and reading needs nothing. A module another holder has in work is refused, with the holder and since when. A lease an administrator closed is said at your next call on the module: its unpublished changes are gone, the project is the last published revision again, and taking the module again goes on from there. Answers `holder` and `since`.",
     "inputSchema" : {
       "additionalProperties" : false,
       "properties" : {
@@ -2503,8 +2503,36 @@
       ],
       "type" : "object"
     },
+    "name" : "ghidra_take",
+    "title" : "Take a module into work"
+  },
+  {
+    "annotations" : {
+      "destructiveHint" : false,
+      "idempotentHint" : false,
+      "openWorldHint" : false,
+      "readOnlyHint" : false
+    },
+    "description" : "Publishes what the project holds and the store has not got, this session's changes or an earlier session's, and gives the module back: it is no longer in work, and another holder can take it. With nothing changed it publishes nothing. A publish the registry refuses stores nothing and the module stays in work: `ghidra_publish` says what to do about it. With `discard`, nothing is published: the unpublished changes go, and the project is the last published revision again. The module's owner stays up until it has been idle for a while, so a read costs no start.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "discard" : {
+          "description" : "Give the module back without publishing: its unpublished changes are dropped.",
+          "type" : "boolean"
+        },
+        "module" : {
+          "description" : "The module: the SHA-256 of its bytes, as `ghidra_modules` lists it.",
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "module"
+      ],
+      "type" : "object"
+    },
     "name" : "ghidra_done",
-    "title" : "End the review session"
+    "title" : "Give the module back"
   },
   {
     "annotations" : {

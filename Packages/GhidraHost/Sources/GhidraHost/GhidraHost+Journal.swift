@@ -244,7 +244,7 @@ extension GhidraHost {
         if !journal.did(.marks) {
             if let marks = journal.marks {
                 do {
-                    _ = try await write(module, "/v1/library/mark", body: marks)
+                    _ = try await write(module, "/v1/library/mark", body: marks, byHost: true)
                 } catch {
                     journal.libraryError = "\(error)"
                 }
@@ -267,7 +267,7 @@ extension GhidraHost {
             // has had them decided and kept already.
             let path = journal.takeTypeConflicts ? "/v1/types/merge?take_type_conflicts=1" : "/v1/types/merge"
             do {
-                let answer = try JSONSerialization.jsonObject(with: try await write(module, path, body: Data("{}".utf8)))
+                let answer = try JSONSerialization.jsonObject(with: try await write(module, path, body: Data("{}".utf8), byHost: true))
                     as? [String: Any] ?? [:]
                 journal.typeConflicts = answer["conflicts"] as? [String] ?? []
                 journal.typeConflictsTaken = answer["taken"] as? [String] ?? []

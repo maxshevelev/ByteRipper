@@ -2,6 +2,7 @@ import CodeAnalysis
 import Foundation
 import GhidraHost
 import HTTPService
+import ServerConsole
 
 /// The Ghidra role's routes, under `/ghidra/v1` (`Design/SERVER_PLAN.md` §6):
 /// a module opened by its bytes, the owner's reads and writes by a closed
@@ -23,6 +24,22 @@ enum GhidraRoutes {
     /// `ghidra.use` for every route; publish and release write into the store
     /// too, and need `cas.write` beside it (`Design/SERVER_HEADLESS_PLAN.md`
     /// decision 4).
+    /// The console's Leases page: the same rows and the same close as the routes.
+    static func consoleLeases(_ host: GhidraHost) -> ConsoleLeases {
+        ConsoleLeases(list: {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            return (try? encoder.encode(await host.leaseRows())) ?? Data("[]".utf8)
+        }, close: { module, by in
+            let digest = try digest(module)
+            let closed = try await answer { try await host.closeLease(digest, by: by) }
+            return try JSONEncoder().encode(closed)
+        })
+    }
+
+    /// Who holds a module taken on the server's own MCP socket.
+    static let localHolder = "local MCP"
+
     static func routes(host: GhidraHost, published: @escaping @Sendable () async -> Void) -> HTTPRouter {
         var router = HTTPRouter()
 
@@ -62,7 +79,8 @@ enum GhidraRoutes {
                 throw HTTPError(.notFound, "\(call) is not a read of the bridge")
             }
             let data = try await answer {
-                await host.throughRegistry(try await host.read(module, "/v1/\(call)" + query(request)),
+                await host.throughRegistry(try await host.read(module, "/v1/\(call)" + query(request),
+                                                               holder: holder(request)),
                                            module: module, call: call)
             }
             return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
@@ -72,7 +90,9 @@ enum GhidraRoutes {
             let module = try digest(request.parameters["module"])
             let call = request.parameters["call"] ?? ""
             guard writes.contains(call) else { throw HTTPError(.notFound, "\(call) is not a write of the bridge") }
-            let data = try await answer { try await host.write(module, "/v1/\(call)", body: request.body) }
+            let data = try await answer {
+                try await host.write(module, "/v1/\(call)", body: request.body, holder: holder(request))
+            }
             return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
         }
 
@@ -80,7 +100,9 @@ enum GhidraRoutes {
             let module = try digest(request.parameters["module"])
             let call = request.parameters["call"] ?? ""
             guard call == "preview/equate" else { throw HTTPError(.notFound, "\(call) is not a preview of the bridge") }
-            let data = try await answer { try await host.preview(module, "/v1/\(call)", body: request.body) }
+            let data = try await answer {
+                try await host.preview(module, "/v1/\(call)", body: request.body, holder: holder(request))
+            }
             return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
         }
 
@@ -95,8 +117,8 @@ enum GhidraRoutes {
                 // which conflicts would remain.
                 let take = request.query["take_type_conflicts"] == "1"
                 let data = try await answer {
-                    try await host.publishPreview(module, takeTypeConflicts: take,
-                                                  takeLibrary: Self.libraryTake(request))
+                    try await host.preview(module, takeTypeConflicts: take,
+                                           takeLibrary: Self.libraryTake(request), holder: holder(request))
                 }
                 return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
             }
@@ -115,7 +137,7 @@ enum GhidraRoutes {
                 try request.principal?.require(.admin)
             }
             let publication = try await answer {
-                try await host.publish(module, by: by(request), options: options)
+                try await host.publish(module, by: by(request), options: options, holder: holder(request))
             }
             await published()
             return .json(PublishAnswer(publication))
@@ -123,7 +145,10 @@ enum GhidraRoutes {
 
         router.add("POST", "\(prefix)/modules/:module/release", access: .rights([.ghidraUse, .casWrite])) { request in
             let module = try digest(request.parameters["module"])
-            guard let publication = try await answer({ try await host.release(module, by: by(request)) }) else {
+            let discard = request.query["discard"] == "1"
+            guard let publication = try await answer({
+                try await host.release(module, by: by(request), holder: holder(request), discard: discard)
+            }) else {
                 return .json(PublishAnswer(nil))
             }
             await published()
@@ -145,7 +170,7 @@ enum GhidraRoutes {
             if asked.action == .rename || (asked.action == .change && asked.change?.action != .cite) {
                 try request.principal?.require(.admin)
             }
-            let data = try await answer { try await host.library(module, asked) }
+            let data = try await answer { try await host.library(module, asked, holder: holder(request)) }
             return HTTPResponse(.ok, headers: ["content-type": "application/json"], body: data)
         }
 
@@ -170,8 +195,38 @@ enum GhidraRoutes {
         // artifacts and the shared review types stay.
         router.add("DELETE", "\(prefix)/modules/:module", access: .rights([.ghidraUse])) { request in
             let module = try digest(request.parameters["module"])
-            let trashed = try await answer { try await host.forget(module) }
+            let trashed = try await answer { try await host.forget(module, holder: holder(request)) }
             return .json(["trashed": trashed.path])
+        }
+
+        // The module taken into work by the token's holder (stage 2.4): only
+        // it writes and publishes until it gives the module back — `release`
+        // — or an administrator closes the lease.
+        router.add("POST", "\(prefix)/modules/:module/lease", access: .rights([.ghidraUse])) { request in
+            let module = try digest(request.parameters["module"])
+            return .json(try await answer { try await host.take(module, holder: holder(request)) })
+        }
+
+        // Every module in work, and the leases closed and not yet taken again.
+        router.add("GET", "\(prefix)/leases", access: .rights([.ghidraUse])) { _ in
+            .json(await host.leaseRows())
+        }
+
+        // An administrator's close: the holder's unpublished changes go with
+        // the working project, and the holder is told at its next call.
+        router.add("DELETE", "\(prefix)/leases/:module", access: .rights([.admin])) { request in
+            let module = try digest(request.parameters["module"])
+            let by = request.principal?.name ?? "an administrator"
+            return .json(try await answer { try await host.closeLease(module, by: by) })
+        }
+
+        // Answers when the token's lease of the module ends, or after
+        // `seconds` (at most 300): a client holding a module keeps one open
+        // and hears at once that an administrator closed it.
+        router.add("GET", "\(prefix)/leases/:module/wait", access: .rights([.ghidraUse])) { request in
+            let module = try digest(request.parameters["module"])
+            let seconds = min(300, max(1, request.query["seconds"].flatMap(Int.init) ?? 60))
+            return .json(await host.waitForLeaseEnd(module, holder: holder(request), seconds: seconds))
         }
         return router
     }
@@ -220,6 +275,11 @@ enum GhidraRoutes {
     static func hidingPaths(_ text: String) -> String {
         text.replacingOccurrences(of: projectsRoot.path, with: "<projects>")
             .replacingOccurrences(of: NSHomeDirectory(), with: "~")
+    }
+
+    /// Who a request holds a module as: its token's name.
+    static func holder(_ request: HTTPRequest) -> String {
+        request.principal.map { "token \($0.name)" } ?? "an HTTP client"
     }
 
     static func by(_ request: HTTPRequest) throws -> String {

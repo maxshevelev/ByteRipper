@@ -88,10 +88,16 @@ public final class Server {
             }
             let writer: AnalysisWriter = cas.store
             let sources = OwnerSources.resolved(explicit: configuration.ghidraScripts)
+            // A call on the server's own MCP socket holds a module as "local MCP":
+            // the socket does not say who is on it. An HTTP client holds it by
+            // its token's name (`GhidraRoutes`).
             let host = GhidraHost(configuration: .init(projectsRoot: configuration.projects,
                                                        ghidraHome: configuration.ghidraHome,
                                                        sources: sources,
-                                                       idle: configuration.idle),
+                                                       idle: configuration.idle,
+                                                       holder: GhidraRoutes.localHolder,
+                                                       leasesFile: cas.store.root
+                                                           .appendingPathComponent("private/leases.json")),
                                   writer: writer)
             // A publish this server stopped in the middle is finished before
             // any route opens: its store steps now, its owner's at the
@@ -161,6 +167,7 @@ public final class Server {
                                   mcp: socket.activity,
                                   agent: ConsoleAgent(socket: configuration.mcpSocket.path,
                                                       binary: Self.executablePath()),
+                                  leases: ghidra.map(GhidraRoutes.consoleLeases),
                                   status: { [weak self] in await self?.status() ?? Self.noStatus })
         } catch {
             stop()

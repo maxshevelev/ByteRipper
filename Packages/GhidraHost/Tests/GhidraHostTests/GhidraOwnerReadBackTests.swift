@@ -20,6 +20,7 @@ final class GhidraOwnerReadBackTests: XCTestCase {
                           writer: store)
         module = SHA256Digest(data: image)
         _ = try await host.create(module: image, name: "Module")
+        try await host.take(SHA256Digest(data: image))
     }
 
     private func image() throws -> Data {
@@ -42,8 +43,17 @@ final class GhidraOwnerReadBackTests: XCTestCase {
     @discardableResult
     private func post(_ path: String, _ object: [String: Any]) async throws -> [String: Any] {
         let body = try JSONSerialization.data(withJSONObject: object)
+        // These tests are about what a write leaves for a done, not about who
+        // may write: the module is in work for each write, as a holder keeps it.
+        try await host.take(module)
         let data = try await host.write(module, path, body: body)
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+
+    /// A done by the holder, who has the module in work.
+    private func release() async throws -> GhidraHost.Publication? {
+        try await host.take(module)
+        return try await host.release(module, by: "agent")
     }
 
     private func entries() async throws -> [String] {
@@ -406,7 +416,7 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         try GhidraProject.all(in: directory.appendingPathComponent("projects")).first?.state().published
     }
 
-    /// A refused write wrote nothing, so it leaves no lease to stop a deploy or to publish at a done.
+    /// A refused write wrote nothing: the module stays in work, and a done after it has nothing to publish.
     func testEachRefusedWriteGivesBackTheLeaseItTook() async throws {
         try await openCopy(of: "FirmwareRevisionSyncPei")
         let writes = try await read("/v1/hello")["writes"] as? Int
@@ -418,10 +428,12 @@ final class GhidraOwnerReadBackTests: XCTestCase {
                 XCTAssertEqual(error.kind, .refused, "\(path): \(error)")
             }
             let held = await leased()
-            XCTAssertFalse(held, path)
+            XCTAssertTrue(held, "\(path): the module stays in work")
             let now = try await read("/v1/hello")["writes"] as? Int
             XCTAssertEqual(now, writes, path)
         }
+        let done = try await release()
+        XCTAssertNil(done, "the refused writes left nothing to publish")
     }
 
     /// A name outside the image is a review's way to name an MMIO register, and the answer says where it landed.
@@ -441,10 +453,10 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         try await openCopy(of: "FirmwareRevisionSyncPei")
         let before = try published()
         _ = try await read("/v1/functions?limit=5")
-        let afterReading = try await host.release(module, by: "agent")
+        let afterReading = try await release()
         XCTAssertNil(afterReading)
         do { try await post("/v1/set/description", ["section": "### Probe", "text": "x"]) } catch {}
-        let afterRefusal = try await host.release(module, by: "agent")
+        let afterRefusal = try await release()
         XCTAssertNil(afterRefusal)
         XCTAssertEqual(try published()?.rev, before?.rev)
         XCTAssertEqual(try published()?.artifact, before?.artifact)
@@ -459,7 +471,7 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         do { try await post("/v1/rename/function", ["address": "0x1", "name": "ProbeName"]) } catch {}
         let held = await leased()
         XCTAssertTrue(held)
-        let done = try await host.release(module, by: "agent")
+        let done = try await release()
         XCTAssertNotNil(done)
         XCTAssertEqual(try published()?.rev, (before?.rev ?? 0) + 1)
         let after = await leased()
@@ -484,7 +496,7 @@ final class GhidraOwnerReadBackTests: XCTestCase {
             try await post(path, body)
             let held = await leased()
             XCTAssertTrue(held, path)
-            let done = try await host.release(module, by: "agent")
+            let done = try await release()
             XCTAssertNil(done, path)
             XCTAssertEqual(try published()?.rev, before?.rev, path)
             XCTAssertEqual(try published()?.at, before?.at, path)
@@ -518,7 +530,7 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         let after = try published()
         let held = await leased()
         XCTAssertTrue(held)
-        let done = try await host.release(module, by: "agent")
+        let done = try await release()
         XCTAssertNil(done)
         XCTAssertEqual(try published()?.rev, after?.rev)
         let released = await leased()
@@ -530,7 +542,7 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         try await openCopy(of: "FirmwareRevisionSyncPei")
         let before = try published()
         try await post("/v1/set/comment", ["address": "0x9A11A49", "kind": "eol", "text": "probe"])
-        let done = try await host.release(module, by: "agent")
+        let done = try await release()
         XCTAssertNotNil(done)
         XCTAssertEqual(try published()?.rev, (before?.rev ?? 0) + 1)
     }
@@ -550,7 +562,7 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         try await post("/v1/set/comment", ["address": "0x9A11A49", "kind": "eol", "text": "probe"])
         let afterWrite = await host.leaseBaselinesTaken
         XCTAssertEqual(afterWrite, taken + 1)
-        let done = try await host.release(module, by: "agent")
+        let done = try await release()
         XCTAssertNotNil(done)
         XCTAssertEqual(try published()?.rev, (before?.rev ?? 0) + 1)
 
@@ -558,7 +570,7 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         let afterPublish = await host.leaseBaselinesTaken
         XCTAssertEqual(afterPublish, taken + 2)
         try await post("/v1/set/comment", ["address": "0x9A11A49", "kind": "eol", "text": "probe"])
-        let noOp = try await host.release(module, by: "agent")
+        let noOp = try await release()
         XCTAssertNil(noOp)
         XCTAssertEqual(try published()?.rev, (before?.rev ?? 0) + 1)
     }
@@ -572,14 +584,14 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         await host.stop(module)
 
         do { try await post("/v1/rename/function", ["address": "0x1", "name": "ProbeName"]) } catch {}
-        let refused = try await host.release(module, by: "agent")
+        let refused = try await release()
         XCTAssertNotNil(refused)
         XCTAssertEqual(try published()?.rev, (before?.rev ?? 0) + 1)
 
         try await post("/v1/set/comment", ["address": "0x9A11A49", "kind": "eol", "text": "probe two"])
         await host.stop(module)
         try await post("/v1/set/comment", ["address": "0x9A11A49", "kind": "eol", "text": "probe two"])
-        let noOp = try await host.release(module, by: "agent")
+        let noOp = try await release()
         XCTAssertNotNil(noOp)
         XCTAssertEqual(try published()?.rev, (before?.rev ?? 0) + 2)
     }
@@ -592,7 +604,7 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         _ = try await host.publish(module, by: "agent")
         await host.stop(module)
         try await post("/v1/set/comment", ["address": "0x9A11A49", "kind": "eol", "text": "probe"])
-        let noOp = try await host.release(module, by: "agent")
+        let noOp = try await release()
         XCTAssertNil(noOp)
         XCTAssertEqual(try published()?.rev, (before?.rev ?? 0) + 1)
     }
@@ -605,7 +617,7 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         let plate = try XCTUnwrap(function["plate"] as? String)
         try await post("/v1/set/comment", ["address": "0x9A11A49", "kind": "plate", "text": plate])
         await landWrite(at: .compared)
-        let done = try await host.release(module, by: "agent")
+        let done = try await release()
         XCTAssertNotNil(done)
         XCTAssertEqual(try published()?.rev, (before?.rev ?? 0) + 1)
     }
@@ -618,10 +630,10 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         let plate = try XCTUnwrap(function["plate"] as? String)
         try await post("/v1/set/comment", ["address": "0x9A11A49", "kind": "plate", "text": plate])
         await landWrite(at: .givenBack)
-        let first = try await host.release(module, by: "agent")
+        let first = try await release()
         XCTAssertNil(first)
         await host.setReleaseStep(nil)
-        let second = try await host.release(module, by: "agent")
+        let second = try await release()
         XCTAssertNotNil(second)
         XCTAssertEqual(try published()?.rev, (before?.rev ?? 0) + 1)
     }
@@ -647,10 +659,10 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         let before = try published()
         try await post("/v1/set/comment", ["address": "0x9A11A49", "kind": "eol", "text": "probe"])
         await restartHost()
-        let done = try await host.release(module, by: "agent")
+        let done = try await release()
         XCTAssertNotNil(done)
         XCTAssertEqual(try published()?.rev, (before?.rev ?? 0) + 1)
-        let again = try await host.release(module, by: "agent")
+        let again = try await release()
         XCTAssertNil(again)
     }
 
@@ -661,14 +673,14 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         try await post("/v1/set/comment", ["address": "0x9A11A49", "kind": "eol", "text": "probe"])
         await host.stop(module)
         await restartHost()
-        let done = try await host.release(module, by: "agent")
+        let done = try await release()
         XCTAssertNotNil(done)
         XCTAssertEqual(try published()?.rev, (before?.rev ?? 0) + 1)
 
         await host.stop(module)
         let owner = await host.project(module).ownerURL
         XCTAssertFalse(FileManager.default.fileExists(atPath: owner.path))
-        let nothing = try await host.release(module, by: "agent")
+        let nothing = try await release()
         XCTAssertNil(nothing)
         XCTAssertFalse(FileManager.default.fileExists(atPath: owner.path))
     }
@@ -689,6 +701,7 @@ final class GhidraOwnerReadBackTests: XCTestCase {
                                                idle: 300, holder: "GhidraOwnerReadBackTests"), writer: store)
         module = SHA256Digest(data: image)
         _ = try await host.create(module: image, name: "Module")
+        try await host.take(SHA256Digest(data: image))
         let hello = try await read("/v1/hello")
         XCTAssertEqual(hello["language_patch"] as? String, "descriptor-tables-1")
 
@@ -774,14 +787,14 @@ final class GhidraOwnerReadBackTests: XCTestCase {
     func testADoneAfterOnlyReadingPublishesNothing() async throws {
         try await open(try image())
         _ = try await entries()
-        let done = try await host.release(module, by: "agent")
+        let done = try await release()
         XCTAssertNil(done)
         let state = try GhidraProject.all(in: directory.appendingPathComponent("projects")).first?.state()
         XCTAssertNil(state?.published?.rev, "\(String(describing: state?.published))")
     }
 
     /// Asking what an equate would do takes no lease and writes nothing.
-    func testAnEquateDryRunTakesNoLease() async throws {
+    func testAnEquateDryRunWritesNothing() async throws {
         try await open(try image())
         let all = try await entries()
         let before = try await read("/v1/hello")
@@ -791,8 +804,10 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         XCTAssertNotNil(answer?["applied"], "\(answer ?? [:])")
         let after = try await read("/v1/hello")
         XCTAssertEqual(before["modification"] as? Int, after["modification"] as? Int)
-        let leased = await host.summaries().first?.leased
-        XCTAssertEqual(leased, false)
+        // The module is in work from the take; a dry run counts as no write under it.
+        let lease = await host.workLease(module)
+        XCTAssertNotNil(lease)
+        XCTAssertNil(lease?.writes, "a dry run is not a write")
     }
 
     /// An owner left alone exits, and what its last lease wrote is there when it opens again.
@@ -804,6 +819,7 @@ final class GhidraOwnerReadBackTests: XCTestCase {
                                                holder: "GhidraOwnerReadBackTests"), writer: store)
         module = SHA256Digest(data: image)
         _ = try await host.create(module: image, name: "Module")
+        try await host.take(SHA256Digest(data: image))
         let all = try await entries()
         let entry = try XCTUnwrap(all.first)
         try await post("/v1/rename/function", ["address": entry, "name": "SavedWhenIdle", "by": "agent", "reason": "test"])
@@ -984,7 +1000,7 @@ final class GhidraOwnerReadBackTests: XCTestCase {
         try await Task.sleep(nanoseconds: 1_100_000_000)
         try await post("/v1/set/comment", ["address": entry, "kind": "plate", "text": "Two."])
         try await post("/v1/set/comment", ["address": entry, "kind": "plate", "text": "One."])
-        _ = try await host.release(module, by: "agent")
+        _ = try await release()
         let second = try published()
         XCTAssertEqual(second.at, first.at, "a publish that stored nothing new keeps its time")
         XCTAssertEqual(second.rev, first.rev)

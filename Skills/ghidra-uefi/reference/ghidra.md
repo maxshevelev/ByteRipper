@@ -42,7 +42,8 @@ CAS, and its project lock keeps the owner off the project.
 | signature, comment, datum | `ghidra_signature`, `ghidra_comment`, `ghidra_set_data` |
 | read a type: program, shared archive, EDK2 | `ghidra_type_definition` |
 | define a type | `ghidra_type` |
-| make the review visible, end it | `ghidra_publish`, `ghidra_done` |
+| take the module into work, before the first write | `ghidra_take` |
+| make the review visible, give the module back | `ghidra_publish`, `ghidra_done` |
 
 ### I/O ports and other constants
 

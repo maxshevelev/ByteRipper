@@ -4,8 +4,9 @@ import Foundation
 
 /// The agent's tools for a review in Ghidra (`Design/SERVER_PLAN.md` §6.4):
 /// the same list on the server's `/mcp` and on the app's own MCP server, over
-/// whichever `GhidraBackend` the host has. The host holds the write lease; an
-/// agent never sees one, and `ghidra_done` publishes and gives it back.
+/// whichever `GhidraBackend` the host has. An agent takes a module into work
+/// with `ghidra_take` and gives it back with `ghidra_done`; the owner's own
+/// lease token stays inside the host.
 ///
 /// Names, descriptions and schemas are read by a model and stay in English.
 public enum GhidraTools {
@@ -17,7 +18,7 @@ public enum GhidraTools {
         tools += readTools(backend)
         tools += writeTools(backend)
         tools += libraryTools(backend)
-        tools += [publishTool(backend), doneTool(backend), forgetTool(backend)]
+        tools += [publishTool(backend), takeTool(backend), doneTool(backend), forgetTool(backend)]
         return tools
     }
 
@@ -28,7 +29,8 @@ public enum GhidraTools {
         These tools review one UEFI module (a PEIM or a DXE driver) in Ghidra: the names, signatures, \
         types and comments a review writes are Ghidra's own and are kept in the module's project between \
         sessions. A module is named by the SHA-256 of its bytes (`module`). Start with `ghidra_modules` \
-        or `ghidra_create`; read with `ghidra_functions`, `ghidra_gaps` (the code between bodies the \
+        or `ghidra_create`; before the first write take the module into work with `ghidra_take` — one \
+        holder at a time writes and publishes a module, and reading needs nothing; read with `ghidra_functions`, `ghidra_gaps` (the code between bodies the \
         analysis never cut), `ghidra_function` (decompiled C, parameters and \
         locals with their storage), `ghidra_disassembly`, `ghidra_xrefs`, `ghidra_data`, `ghidra_strings`, `ghidra_equates_on_memory`, `ghidra_type_definition`, \
         `ghidra_type_uses` (where every module names a type), `ghidra_description`; write with `ghidra_rename`, `ghidra_function_create`, `ghidra_function_delete`, `ghidra_function_merge`, \
@@ -40,7 +42,8 @@ public enum GhidraTools {
         holds links as a module is created — `library` in `ghidra_create`'s answer; `ghidra_library` lists the \
         matches and `ghidra_library_apply` links or declines one. `ghidra_publish` makes the review visible to the app — every \
         ByteRipper that reads this store — as a new revision; publish at coherent checkpoints, not after \
-        every rename. `ghidra_done` publishes and ends the session; `ghidra_forget` lets a kept \
+        every rename; a publish keeps the module in work. `ghidra_done` publishes and gives the module \
+        back; `ghidra_forget` lets a kept \
         project go — its owner stopped and its folder moved to the Trash — for a program that cannot \
         be put right, and touches nothing of the store.
 
@@ -104,7 +107,9 @@ public enum GhidraTools {
                 (`published`: artifact, recipe, revision, and `at`, when what is stored last changed). \
                 `modification` and `writes` under `published` count this project's writes up to that \
                 publish, for telling what is still unpublished: they move at a publish that stores \
-                nothing new, and are no figure of the publish itself.
+                nothing new, and are no figure of the publish itself. `leased` says whether the module \
+                is in work, `holder` by whom and `since` since when; `closed` is a lease an \
+                administrator closed, until its holder takes the module again.
                 """
         ) { _ in
             try await answer { try await backend.listModules() }
@@ -1251,21 +1256,48 @@ public enum GhidraTools {
         }
     }
 
-    static func doneTool(_ backend: GhidraBackend) -> AgentTool {
+    static func takeTool(_ backend: GhidraBackend) -> AgentTool {
         AgentTool(
-            name: "ghidra_done",
-            title: "End the review session",
-            description: "Publishes what the project holds and the store has not got, this session's changes or "
-                + "an earlier session's, and gives the module's write lease back, so "
-                + "another session or a person can write. With nothing changed it publishes nothing. The "
-                + "module's owner stays up until it has been idle for a while, so a read or the next open "
-                + "costs no start; a later write takes a new lease. A publish the registry refuses "
-                + "stores nothing and the lease stays: `ghidra_publish` says what to do about it.",
+            name: "ghidra_take",
+            title: "Take a module into work",
+            description: """
+                Takes the module into work: from now on only you write and publish it, through any number \
+                of `ghidra_publish`, until you give it back with `ghidra_done` or an administrator closes \
+                the lease. There is no term. Take it before the first write — a write without it is \
+                refused — and reading needs nothing. A module another holder has in work is refused, \
+                with the holder and since when. A lease an administrator closed is said at your next \
+                call on the module: its unpublished changes are gone, the project is the last published \
+                revision again, and taking the module again goes on from there. Answers `holder` and \
+                `since`.
+                """,
             inputSchema: AgentSchema.object(["module": moduleProperty], required: ["module"]),
             annotations: .edit
         ) { call in
             let module = try module(call.arguments)
-            return try await answer { try await backend.releaseModule(module, by: "agent") }
+            return try await answer { try await backend.takeModule(module) }
+        }
+    }
+
+    static func doneTool(_ backend: GhidraBackend) -> AgentTool {
+        AgentTool(
+            name: "ghidra_done",
+            title: "Give the module back",
+            description: "Publishes what the project holds and the store has not got, this session's changes or "
+                + "an earlier session's, and gives the module back: it is no longer in work, and another "
+                + "holder can take it. With nothing changed it publishes nothing. A publish the registry "
+                + "refuses stores nothing and the module stays in work: `ghidra_publish` says what to do "
+                + "about it. With `discard`, nothing is published: the unpublished changes go, and the "
+                + "project is the last published revision again. The module's owner stays up until it has "
+                + "been idle for a while, so a read costs no start.",
+            inputSchema: AgentSchema.object([
+                "module": moduleProperty,
+                "discard": AgentSchema.boolean("Give the module back without publishing: its unpublished changes are dropped.")
+            ], required: ["module"]),
+            annotations: .edit
+        ) { call in
+            let module = try module(call.arguments)
+            let discard = try call.arguments.bool("discard", default: false)
+            return try await answer { try await backend.releaseModule(module, by: "agent", discard: discard) }
         }
     }
 

@@ -24,7 +24,12 @@ public protocol GhidraBackend: Sendable {
     /// conflicts it would leave; nothing is written either way.
     func publishPreview(_ module: SHA256Digest, takeTypeConflicts: Bool,
                         takeLibrary: LibraryTake) async throws -> Data
-    func releaseModule(_ module: SHA256Digest, by: String) async throws -> Data
+    /// The module taken into work: only its holder writes and publishes it,
+    /// until it gives it back or an administrator closes the lease.
+    func takeModule(_ module: SHA256Digest) async throws -> Data
+    /// The module given back: what the lease changed published first, or with
+    /// `discard` nothing published and the unpublished changes dropped.
+    func releaseModule(_ module: SHA256Digest, by: String, discard: Bool) async throws -> Data
     /// The module against the library registry: its matches, the entries
     /// applied, a candidate taken or declined, one entry read.
     func library(_ module: SHA256Digest, _ request: GhidraHost.LibraryRequest) async throws -> Data
@@ -55,6 +60,10 @@ public extension GhidraBackend {
 }
 
 public extension GhidraBackend {
+    func releaseModule(_ module: SHA256Digest, by: String) async throws -> Data {
+        try await releaseModule(module, by: by, discard: false)
+    }
+
     /// The conflicts left in this module.
     func publishModule(_ module: SHA256Digest, by: String) async throws -> Data {
         try await publishModule(module, by: by, options: GhidraHost.PublishOptions())
@@ -170,8 +179,16 @@ extension GhidraHost: GhidraBackend {
         try await preview(module, takeTypeConflicts: takeTypeConflicts, takeLibrary: takeLibrary)
     }
 
-    public func releaseModule(_ module: SHA256Digest, by: String) async throws -> Data {
-        try Self.encode(PublishAnswer(try await release(module, by: by)))
+    public func takeModule(_ module: SHA256Digest) async throws -> Data {
+        try Self.encode(try await take(module))
+    }
+
+    public func library(_ module: SHA256Digest, _ request: GhidraHost.LibraryRequest) async throws -> Data {
+        try await library(module, request, holder: nil)
+    }
+
+    public func releaseModule(_ module: SHA256Digest, by: String, discard: Bool) async throws -> Data {
+        try Self.encode(PublishAnswer(try await release(module, by: by, discard: discard)))
     }
 
     public func forgetModule(_ module: SHA256Digest) async throws -> Data {
@@ -257,8 +274,14 @@ public struct GhidraRemote: GhidraBackend {
                               timeout: 3600)
     }
 
-    public func releaseModule(_ module: SHA256Digest, by: String) async throws -> Data {
-        try await call("POST", "modules/\(module.hex)/release", query: ["by": by], timeout: 3600)
+    public func takeModule(_ module: SHA256Digest) async throws -> Data {
+        try await call("POST", "modules/\(module.hex)/lease")
+    }
+
+    public func releaseModule(_ module: SHA256Digest, by: String, discard: Bool) async throws -> Data {
+        var query = ["by": by]
+        if discard { query["discard"] = "1" }
+        return try await call("POST", "modules/\(module.hex)/release", query: query, timeout: 3600)
     }
 
     public func library(_ module: SHA256Digest, _ request: GhidraHost.LibraryRequest) async throws -> Data {
