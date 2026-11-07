@@ -114,16 +114,17 @@ which is drawn in the dump and not in a panel.
 | `lock.open` | badge | encoded where it is stored and in the clear here — a LENV block opened decoded | `secondaryLabelColor` |
 
 | `checkmark.seal.fill` | verdict | the newest revision the catalogue lists for this board | `SemanticColors.good` |
-| `arrow.up.circle` | verdict | a newer revision serves this board | `SemanticColors.caution` |
+| `arrow.down.circle` | verdict | a newer revision serves this board — one to bring down into the image | `SemanticColors.caution` |
 | `questionmark.circle` | verdict | a newer revision may or may not serve this board | `SemanticColors.caution` |
 
 The verdicts are the FIT table's, but they are marks of the same catalogue
 (`ToolRowMark.newest`, `.newerListed`, `.newerMaybe`), so the cells and the
 legend draw them from one place. No verdict carries an exclamation mark — that is
 the problems' — so the two never meet in one shape: "a newer revision is out
-there" is an up arrow, not a warning. A row can wear both slots: a microcode
-behind the catalogue whose image checksum is also wrong wears the up arrow and,
-after it, the red octagon.
+there" is a down arrow, not a warning. A row can wear both slots: a microcode
+behind the catalogue whose image checksum is also wrong wears the red octagon
+ahead of its name, and the down arrow after it — in the FIT table the verdict
+follows the word "Microcode", since it is about the microcode.
 
 ---
 

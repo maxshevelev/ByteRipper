@@ -161,7 +161,7 @@ final class ToolRowMarksTests: XCTestCase {
         XCTAssertEqual(legend.listedMeanings, [
             ToolRowMark.newerListed.meaning, ToolRowMark.newest.meaning, ToolRowMark.error.meaning
         ])
-        XCTAssertEqual(ToolRowMark.newerListed.symbol, "arrow.up.circle")
+        XCTAssertEqual(ToolRowMark.newerListed.symbol, "arrow.down.circle")
         let problemSymbols = [ToolRowMark.error, .caution].compactMap(\.symbol)
         for verdict in ToolRowMark.allCases where verdict.channel == .verdict {
             XCTAssertFalse(problemSymbols.contains(verdict.symbol ?? ""),

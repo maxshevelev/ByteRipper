@@ -1388,6 +1388,26 @@ final class FITToolFlowTests: XCTestCase {
         }, "the copy is read-only")
     }
 
+    /// The backup's copy reads quieter all the way down: a CPUID row under its
+    /// microcode is grey like the row, where the table's own is not.
+    func testTheBackupsCPUIDRowsAreGreyLikeItsRows() throws {
+        _ = try open(FITTestImage.make() + FITTestImage.make())
+        let outline = try XCTUnwrap(try entriesTable() as? NSOutlineView)
+        func colour(_ row: Int) throws -> NSColor? {
+            let cell = try XCTUnwrap(outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView)
+            let text = try XCTUnwrap(cell.textField?.attributedStringValue)
+            return text.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
+        }
+        // The heading in front of the copy is a label, not a cell: skipped.
+        let cpuidRows = (0..<outline.numberOfRows).filter {
+            (outline.view(atColumn: 0, row: $0, makeIfNecessary: true) as? NSTableCellView)?
+                .textField?.stringValue.hasPrefix("CPUID 806EA") == true
+        }
+        XCTAssertEqual(cpuidRows.count, 2, "the table's microcode and the backup's, each open a level")
+        XCTAssertEqual(try colour(cpuidRows[0]), .labelColor)
+        XCTAssertEqual(try colour(cpuidRows[1]), .secondaryLabelColor)
+    }
+
     /// The one column takes the panel's width, wider or narrower, down to its
     /// floor; below that the table scrolls sideways.
     func testTheColumnTakesThePanelsWidth() throws {
@@ -1415,7 +1435,8 @@ final class FITToolFlowTests: XCTestCase {
 
     /// A microcode whose own image checksum does not add up wears the red
     /// octagon the UEFI tree gives a wrong checksum — and a microcode that is
-    /// also behind the catalogue wears the verdict's up arrow beside it.
+    /// also behind the catalogue wears the verdict's down arrow too: the
+    /// octagon ahead of the name, the arrow right after "Microcode".
     func testABrokenMicrocodeWearsTheErrorBesideItsVerdict() throws {
         _ = try open(FITTestImage.make(microcodeRevision: 0xE0, microcodePlatform: 0x02,
                                        brokenMicrocodeChecksum: true))
@@ -1433,6 +1454,17 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertFalse(verdict.isHidden, "and still wears its verdict")
         XCTAssertEqual(verdict.contentTintColor, SemanticColors.caution)
         XCTAssertEqual(verdict.toolTip, "Catalogue lists a newer revision (r.F0)")
+
+        // In the line: the octagon, the type, the arrow, then the target.
+        let stack = try XCTUnwrap(verdict.superview as? NSStackView)
+        let order = stack.arrangedSubviews
+        let type = try XCTUnwrap(cell.textField)
+        XCTAssertEqual(type.stringValue, "Microcode")
+        XCTAssertLessThan(try XCTUnwrap(order.firstIndex(of: problem)), try XCTUnwrap(order.firstIndex(of: type)))
+        XCTAssertEqual(order.firstIndex(of: verdict), try XCTUnwrap(order.firstIndex(of: type)) + 1,
+                       "the verdict follows the type")
+        let target = try XCTUnwrap(order.last as? NSTextField)
+        XCTAssertTrue(target.stringValue.hasPrefix("r.E0"), target.stringValue)
     }
 
     /// The panel explains its marks: a legend under the table, listing the

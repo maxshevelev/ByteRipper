@@ -832,26 +832,25 @@ extension FITToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
             guard let column = tableColumn, let entry = entry(ofKey: key) else { return nil }
             return entryCell(entry, column: column)
         case .cpuid(let key, let group):
-            guard tableColumn?.identifier == Column.type,
-                  let groups = entry(ofKey: key)?.processorGroups, group < groups.count
+            guard tableColumn?.identifier == Column.type, let entry = entry(ofKey: key),
+                  group < entry.processorGroups.count
             else { return nil }
             // The cores, the stepping and the segments are under the pointer:
             // the row says the CPUID and its code names, and nothing more.
-            let cpuid = groups[group]
+            let cpuid = entry.processorGroups[group]
             let cell = lineCell(text: L("CPUID %1$@", cpuid.cpuid), detail: cpuid.codeNames.joined(separator: ", "),
-                                weight: .medium, quiet: false)
+                                weight: .medium, quiet: false, isBackup: entry.isBackup)
             if !cpuid.notes.isEmpty {
                 (cell as? NSTableCellView)?.textField?.toolTip = cpuid.notes.joined(separator: "\n")
             }
             return cell
         case .line(let key, let group, let index):
-            guard tableColumn?.identifier == Column.type,
-                  let groups = entry(ofKey: key)?.processorGroups, group < groups.count,
-                  index < groups[group].lines.count
+            guard tableColumn?.identifier == Column.type, let entry = entry(ofKey: key),
+                  group < entry.processorGroups.count, index < entry.processorGroups[group].lines.count
             else { return nil }
-            let line = groups[group].lines[index]
+            let line = entry.processorGroups[group].lines[index]
             return lineCell(text: line.text, detail: line.detail,
-                            weight: .regular, quiet: line.kind == .unknown)
+                            weight: .regular, quiet: line.kind == .unknown, isBackup: entry.isBackup)
         }
     }
 
@@ -905,28 +904,63 @@ extension FITToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
 
     private func entryCell(_ entry: FITDisplayRow, column: NSTableColumn) -> NSView {
         let cell = entries.makeView(withIdentifier: column.identifier, owner: self)
-            as? NSTableCellView
-            ?? ToolPanelTable.makeCell(identifier: column.identifier, warning: true, marker: true, badges: true)
-        // The row wears its problem — the red octagon for an error, the orange
-        // circle for a caution, as in the UEFI tree, rather than the whole row
-        // in red — and, ahead of it, the microcode row's verdict against the
-        // catalogue. Both are row-wide states worn ahead of the row's name, in
-        // the icons of the shared catalogue.
+            as? NSTableCellView ?? makeEntryCell(identifier: column.identifier)
+        // The row wears its problem ahead of its name — the red octagon for an
+        // error, the orange circle for a caution, as in the UEFI tree, rather
+        // than the whole row in red — and a microcode's verdict against the
+        // catalogue after the word "Microcode", the thing the verdict is about.
         ToolPanelTable.dress(cell, with: marks(of: entry))
         let verdict = FITRowMarks.verdict(of: entry.latestState, in: Localization.appLanguage)
         ToolPanelTable.setVerdict(verdict?.mark, toolTip: verdict?.toolTip, on: cell)
         // The type names the row; what it points at follows in the body's
         // weight. The backup's rows read quieter: they are there to be
         // compared, and nothing on them is changed on its own.
-        cell.textField?.font = ToolPanelFont.body()
-        cell.textField?.attributedStringValue = Self.twoPart(
-            entry.typeText, weight: .medium, color: entry.isBackup ? .secondaryLabelColor : .labelColor,
-            detail: entry.targetText, detailColor: entry.isBackup ? .tertiaryLabelColor : .labelColor)
+        cell.textField?.stringValue = entry.typeText
+        cell.textField?.font = ToolPanelFont.body(weight: .medium)
+        cell.textField?.textColor = entry.isBackup ? .secondaryLabelColor : .labelColor
+        let target = cell.viewWithTag(Self.targetFieldTag) as? NSTextField
+        target?.stringValue = entry.targetText
+        target?.font = ToolPanelFont.body()
+        target?.textColor = entry.isBackup ? .tertiaryLabelColor : .labelColor
         // The version is a real field and it decides how a policy row's address
         // is read (§7.3), but it is the same 1.00 on almost every row — so it
         // lives where a curious pointer finds it rather than on the line.
         let line = entry.targetText.isEmpty ? entry.typeText : "\(entry.typeText)   \(entry.targetText)"
-        cell.textField?.toolTip = "\(line)\n" + L("Version %1$@", entry.versionText)
+        let tip = "\(line)\n" + L("Version %1$@", entry.versionText)
+        cell.textField?.toolTip = tip
+        target?.toolTip = tip
+        return cell
+    }
+
+    /// The tag of the field after the verdict: what the entry points at.
+    private static let targetFieldTag = 6_101
+
+    /// The shared cell — problem slot, badges, text, verdict slot — laid out
+    /// for an entry: the type, the verdict right after it, then what the entry
+    /// points at taking the rest of the line and cut short first.
+    private func makeEntryCell(identifier: NSUserInterfaceItemIdentifier) -> NSTableCellView {
+        let cell = ToolPanelTable.makeCell(identifier: identifier, warning: true, marker: true, badges: true)
+        guard let field = cell.textField,
+              let row = field.superview as? NSStackView,
+              let marker = cell.viewWithTag(ToolPanelTable.markerTag)
+        else { return cell }
+        let target = NSTextField(labelWithString: "")
+        target.tag = Self.targetFieldTag
+        target.lineBreakMode = .byTruncatingTail
+        target.maximumNumberOfLines = 1
+        target.setContentCompressionResistancePriority(.init(1), for: .horizontal)
+        target.setContentHuggingPriority(.init(1), for: .horizontal)
+        // The type is short and is never the part cut: it hugs its text, so
+        // the verdict sits against it.
+        field.setContentHuggingPriority(.required, for: .horizontal)
+        field.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
+        row.removeArrangedSubview(marker)
+        let after = (row.arrangedSubviews.firstIndex(of: field) ?? row.arrangedSubviews.count - 1) + 1
+        row.insertArrangedSubview(marker, at: after)
+        row.insertArrangedSubview(target, at: after + 1)
+        // A hidden verdict leaves the type and the target their own gap.
+        row.setCustomSpacing(8, after: field)
+        row.setCustomSpacing(8, after: marker)
         return cell
     }
 
@@ -948,15 +982,18 @@ extension FITToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
 
     /// A row under a microcode: a CPUID in the weight of a heading, a model in
     /// the body's, and what follows each — the code names, the S-SPECs —
-    /// quieter after it.
-    private func lineCell(text: String, detail: String, weight: NSFont.Weight, quiet: Bool) -> NSView {
+    /// quieter after it. Under a row of the Top Swap backup's copy everything
+    /// reads as quietly as that row does: it is there to be compared.
+    private func lineCell(
+        text: String, detail: String, weight: NSFont.Weight, quiet: Bool, isBackup: Bool
+    ) -> NSView {
         let identifier = NSUserInterfaceItemIdentifier("processorLine")
         let cell = entries.makeView(withIdentifier: identifier, owner: self) as? NSTableCellView
             ?? ToolPanelTable.makeCell(identifier: identifier)
         cell.textField?.font = ToolPanelFont.body()
         cell.textField?.attributedStringValue = Self.twoPart(
-            text, weight: weight, color: quiet ? .secondaryLabelColor : .labelColor,
-            detail: detail, detailColor: .secondaryLabelColor)
+            text, weight: weight, color: quiet || isBackup ? .secondaryLabelColor : .labelColor,
+            detail: detail, detailColor: isBackup ? .tertiaryLabelColor : .secondaryLabelColor)
         cell.textField?.toolTip = detail.isEmpty ? text : "\(text)   \(detail)"
         return cell
     }
