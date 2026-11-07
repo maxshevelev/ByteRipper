@@ -899,6 +899,39 @@ final class FITToolFlowTests: XCTestCase {
                       "no vendor picker: there is nothing to pick")
     }
 
+    /// The CPUID column has the FIT panel's `ⓘ` after a CPUID the table of
+    /// brand names knows, opening the same popover — and none after one it
+    /// does not, or after another vendor's.
+    func testTheFormsCPUIDsHaveTheProcessorsInfo() throws {
+        _ = try open(FITTestImage.make())
+        let loaded = expectation(description: "the catalogue arrives")
+        try session().withCatalogueSeam { loaded.fulfill() }
+        try button("Add Microcode…").performClick(nil)
+        wait(for: [loaded], timeout: 5)
+
+        let sheet = try XCTUnwrap(try session().viewController.presentedViewControllers?.first
+            as? FITAddMicrocodeViewController)
+        let table = sheet.table
+        let cell = try XCTUnwrap(table.view(atColumn: 0, row: 0, makeIfNecessary: true) as? FITCatalogueCPUIDCell)
+        XCTAssertEqual(cell.textField?.stringValue, "806EA")
+        XCTAssertFalse(cell.infoButton.isHidden)
+        XCTAssertEqual(cell.infoButton.accessibilityLabel(), "Processors")
+        cell.layoutSubtreeIfNeeded()
+        let words = try XCTUnwrap(cell.textField).frame
+        XCTAssertTrue((0...8).contains(cell.infoButton.frame.minX - words.maxX), "right after the CPUID")
+
+        cell.infoButton.performClick(nil)
+        let popover = try XCTUnwrap(sheet.processorsPopover, "the popover is open")
+        defer { popover.close() }
+        XCTAssertEqual(popover.group.cpuid, "806EA")
+        XCTAssertTrue(popover.shownText.contains("Core i5-8250U"), popover.shownText)
+
+        XCTAssertNil(FITProcessorsPopover.group(for: 0x000B_06A8, vendor: .intel), "not in the table")
+        XCTAssertNil(FITProcessorsPopover.group(for: 0x0080_0F11, vendor: .amd), "not about AMD")
+        cell.show("B06A8", group: nil)
+        XCTAssertTrue(cell.infoButton.isHidden, "no ⓘ where nothing is known")
+    }
+
     /// A status line longer than the room beside the buttons — the file being
     /// fetched, a download that failed — wraps there. It used to be one line
     /// that insisted on its whole width, and the sheet widened for as long as

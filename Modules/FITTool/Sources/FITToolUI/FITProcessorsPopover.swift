@@ -79,6 +79,26 @@ import Localization
         return text
     }
 
+    /// The `ⓘ` that opens the popover, wherever a CPUID has one: the panel's
+    /// info glyph in a CPUID's weight and the colour of a link — which it is.
+    static func infoImage(size: CGFloat) -> NSImage? {
+        let config = NSImage.SymbolConfiguration(pointSize: size.rounded(), weight: .semibold)
+            .applying(NSImage.SymbolConfiguration(paletteColors: [.linkColor]))
+        return NSImage(systemSymbolName: "info.circle", accessibilityDescription: L("Processors"))?
+            .withSymbolConfiguration(config)
+    }
+
+    /// The processors behind a catalogue entry's CPUID, where the table of
+    /// brand names knows any: nil for a CPUID it does not, and for a vendor
+    /// it is not about.
+    static func group(for cpuid: UInt32?, vendor: MicrocodeVendor) -> FITProcessorGroup? {
+        guard vendor == .intel, let cpuid,
+              let group = FITProcessorGroup.groups(for: [cpuid], language: Localization.appLanguage).first,
+              !group.codeNames.isEmpty
+        else { return nil }
+        return group
+    }
+
     /// What the popover is showing, for the tests.
     var shownText: String {
         (view.subviews.first?.subviews.compactMap { $0 as? HelpBodyView }.first?.shownText) ?? ""

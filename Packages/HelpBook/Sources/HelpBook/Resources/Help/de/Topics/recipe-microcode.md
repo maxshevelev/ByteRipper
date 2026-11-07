@@ -1,4 +1,4 @@
-@source-sha e23353da55847ff08922549da85c538f1dfa7f6036dee32c2d2a0cf2d5bb07ea
+@source-sha 9131b969a646b06005c3b21cb22350dadb8c65c0bb78cec22f2eb0d79e2cbb41
 # Microcode und die FIT-Tabelle
 
 > Was das Werkzeug „FIT-Tabelle“ über den Microcode eines Images meldet und was seine Befehle an der Tabelle ändern.
@@ -24,7 +24,7 @@ Der Name aus dem Katalog macht zwei Eigenschaften des Images lesbar:
 
 ## Microcode hinzufügen
 
-**Microcode hinzufügen…**, die Schaltfläche in der Tabelle unter dem letzten Microcode-Eintrag, öffnet eine Liste von Intel-Microcodes, die aus der Sammlung `platomav/CPUMicrocodes` auf github.com geladen wird, mit den Spalten CPUID, Plattform, Revision, Datum, Freigabestand und Größe. **Nur CPUIDs aus diesem Image** beschränkt die Liste auf die Signaturen, die das geöffnete Image bereits enthält. Das Suchfeld findet einen Microcode nach seiner CPUID, nach einem Teil des Modellnamens eines Prozessors (`12800H`) oder nach einem vollständigen S-SPEC-Code (`SRLD1`). Modell und S-SPEC werden über dieselbe Tabelle der Prozessormodelle, die der FIT-Bereich zeigt, in die CPUID übersetzt; das Plattformfeld wird dabei nicht berücksichtigt. **Datei wählen…** nimmt einen Microcode aus einer lokalen Datei und braucht keinen Netzzugang.
+**Microcode hinzufügen…**, die Schaltfläche in der Tabelle unter dem letzten Microcode-Eintrag, öffnet eine Liste von Intel-Microcodes, die aus der Sammlung `platomav/CPUMicrocodes` auf github.com geladen wird, mit den Spalten CPUID, Plattform, Revision, Datum, Freigabestand und Größe. Das Symbol ⓘ hinter einer CPUID öffnet dieselbe Aufstellung der Prozessoren wie im FIT-Bereich; eine CPUID, die in der Tabelle der Prozessormodelle fehlt, hat keines. **Nur CPUIDs aus diesem Image** beschränkt die Liste auf die Signaturen, die das geöffnete Image bereits enthält. Das Suchfeld findet einen Microcode nach seiner CPUID, nach einem Teil des Modellnamens eines Prozessors (`12800H`) oder nach einem vollständigen S-SPEC-Code (`SRLD1`). Modell und S-SPEC werden über dieselbe Tabelle der Prozessormodelle, die der FIT-Bereich zeigt, in die CPUID übersetzt; das Plattformfeld wird dabei nicht berücksichtigt. **Datei wählen…** nimmt einen Microcode aus einer lokalen Datei und braucht keinen Netzzugang.
 
 Eine Datei aus beiden Quellen wird geprüft, bevor irgendetwas geschrieben wird: Sie muss mit einem Intel-Microcode-Header beginnen, und ihre Prüfsumme muss aufgehen.
 

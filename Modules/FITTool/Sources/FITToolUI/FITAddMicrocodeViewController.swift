@@ -41,6 +41,9 @@ import ToolModuleKit
     private(set) var shown: [MicrocodeCatalogueEntry] = []
 
     let table = NSTableView()
+    /// The popover a CPUID's `ⓘ` opened, kept so the next one closes it.
+    /// Weak: a closed popover lets go of itself (`HelpPopoverController`).
+    weak var processorsPopover: FITProcessorsPopover?
     private let scrollView = NSScrollView()
     private let searchField = NSSearchField()
     private let onlyInImage = NSButton(checkboxWithTitle: L("Only CPUIDs in this image"),
@@ -110,7 +113,8 @@ import ToolModuleKit
         table.delegate = self
         table.target = self
         table.doubleAction = #selector(addClicked)
-        column(Column.cpuid, L("CPUID"), 70)
+        // Room for the CPUID and the `ⓘ` after it.
+        column(Column.cpuid, L("CPUID"), 92)
         // The narrowest column in the form; the word has to be an abbreviation
         // in every language, so it is one the translator chooses.
         column(Column.platform, L("Plat", context: "column"), 46)
@@ -255,12 +259,17 @@ extension FITAddMicrocodeViewController: NSTableViewDataSource, NSTableViewDeleg
     -> NSView? {
         guard row < shown.count, let column = tableColumn else { return nil }
         let entry = shown[row]
+        if column.identifier == Column.cpuid {
+            let cell = tableView.makeView(withIdentifier: Column.cpuid, owner: self) as? FITCatalogueCPUIDCell
+                ?? FITCatalogueCPUIDCell(target: self, action: #selector(showProcessors(_:)))
+            cell.show(entry.cpuidText, group: FITProcessorsPopover.group(for: entry.cpuid, vendor: entry.vendor))
+            return cell
+        }
         let cell = tableView.makeView(withIdentifier: column.identifier, owner: self)
             as? NSTableCellView ?? makeCell(identifier: column.identifier)
         cell.textField?.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
         cell.textField?.textColor = .labelColor
         switch column.identifier {
-        case Column.cpuid: cell.textField?.stringValue = entry.cpuidText
         case Column.platform: cell.textField?.stringValue = entry.platformText
         case Column.revision: cell.textField?.stringValue = entry.revisionText
         case Column.date: cell.textField?.stringValue = entry.date
@@ -290,6 +299,15 @@ extension FITAddMicrocodeViewController: NSTableViewDataSource, NSTableViewDeleg
         }
     }
 
+    /// A CPUID's `ⓘ`: the processors behind it, in a popover off the button —
+    /// the one the FIT panel opens off a CPUID under a microcode.
+    // help: fit.processors
+    @objc private func showProcessors(_ sender: NSButton) {
+        guard let group = (sender.superview as? FITCatalogueCPUIDCell)?.group else { return }
+        processorsPopover?.close()
+        processorsPopover = FITProcessorsPopover.show(group, from: sender)
+    }
+
     private func makeCell(identifier: NSUserInterfaceItemIdentifier) -> NSTableCellView {
         let cell = NSTableCellView()
         cell.identifier = identifier
@@ -306,5 +324,54 @@ extension FITAddMicrocodeViewController: NSTableViewDataSource, NSTableViewDeleg
             field.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
         ])
         return cell
+    }
+}
+
+/// The CPUID column's cell: the CPUID, and right after it the `ⓘ` that opens
+/// the processors behind it — only where the table of brand names knows any.
+@MainActor final class FITCatalogueCPUIDCell: NSTableCellView {
+    /// What the `ⓘ` opens; nil when the cell has no `ⓘ`.
+    private(set) var group: FITProcessorGroup?
+    let infoButton = NSButton()
+
+    init(target: AnyObject, action: Selector) {
+        super.init(frame: .zero)
+        identifier = NSUserInterfaceItemIdentifier("cpuid")
+        let field = NSTextField(labelWithString: "")
+        field.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        field.textColor = .labelColor
+        field.lineBreakMode = .byTruncatingTail
+        field.translatesAutoresizingMaskIntoConstraints = false
+        field.setContentHuggingPriority(.required, for: .horizontal)
+        field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        textField = field
+        infoButton.image = FITProcessorsPopover.infoImage(size: 11)
+        infoButton.isBordered = false
+        infoButton.imagePosition = .imageOnly
+        infoButton.target = target
+        infoButton.action = action
+        infoButton.translatesAutoresizingMaskIntoConstraints = false
+        infoButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+        ControlHelp.describe(infoButton, name: L("Processors"), tooltip: L("Show the processors with this CPUID"))
+        addSubview(field)
+        addSubview(infoButton)
+        NSLayoutConstraint.activate([
+            field.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
+            field.centerYAnchor.constraint(equalTo: centerYAnchor),
+            infoButton.leadingAnchor.constraint(equalTo: field.trailingAnchor, constant: 5),
+            infoButton.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -2),
+            infoButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            infoButton.widthAnchor.constraint(equalToConstant: 14),
+            infoButton.heightAnchor.constraint(equalToConstant: 14),
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    func show(_ cpuid: String, group: FITProcessorGroup?) {
+        textField?.stringValue = cpuid
+        self.group = group
+        infoButton.isHidden = group == nil
     }
 }

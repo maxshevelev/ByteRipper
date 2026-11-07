@@ -1201,10 +1201,7 @@ extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
     /// same words a field's `ⓘ` has.
     static func infoMark(index: Int, size: CGFloat) -> NSAttributedString {
         let attachment = NSTextAttachment()
-        let config = NSImage.SymbolConfiguration(pointSize: size.rounded(), weight: .semibold)
-            .applying(NSImage.SymbolConfiguration(paletteColors: [.linkColor]))
-        let image = NSImage(systemSymbolName: "info.circle", accessibilityDescription: L("Processors"))?
-            .withSymbolConfiguration(config)
+        let image = FITProcessorsPopover.infoImage(size: size)
         attachment.image = image
         let side = image?.size ?? NSSize(width: size, height: size)
         let font = ToolPanelFont.body(weight: .medium)
