@@ -1562,6 +1562,18 @@
       "note": "Only the discontinuance PCN 117617-02 found; no other code. Stepping from ARK."
     },
     {
+      "model": "Intel Core i5-8420",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "SR3X4 still only from sysrqmts (re-fetched: 'Part' field SR3X4, no stepping, no CPUID, no source). No Intel document or PCN found; 337346 spec update does not list it. Motherboard CPU-support lists (Biostar, ASRock) are bot-blocked; WikiChip refused connections; TechPowerUp 403. photos.py with --query '\"i5-8420\" SR3X4' brought only i5-8400 (SR3QT) photos and zol news images."
+    },
+    {
+      "model": "Intel Core i5-8420T",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "SR3X7 still only from databases without stepping; no Intel document or PCN found; WikiChip unreachable, TechPowerUp 403. photos.py with --query '\"i5-8420T\" SR3X7' brought only i5-8400T (SR3X6) / i5-8500T photos."
+    },
+    {
       "model": "Intel Core i5-8500",
       "searched": "2026-11-07",
       "specs": [
@@ -1673,6 +1685,12 @@
       "searched": "2026-11-07",
       "specs": [],
       "note": "ARK: no page. No PCN/spec update names it. Databases: techpowerup 403; others give no S-Spec. Photos (photos.py, 16 images): renders, laptop i7-8650U slides, i5-8600 and 6th-gen chips; no chip marked i5-8650."
+    },
+    {
+      "model": "Intel Core i5-8650K",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Search finds only a TechPowerUp database entry (no S-Spec); no Intel page, no spec-update row. photos.py found only i5-8600K photos. Likely never a released SKU."
     },
     {
       "model": "Intel Core i5-L16G7",
@@ -2189,6 +2207,18 @@
       "searched": "2026-11-07",
       "specs": [],
       "note": "Not searched again under 806E9: ARK was asked, and its codes are placed under the model's other CPUID; the article also lists it under 806E9."
+    },
+    {
+      "model": "Intel Core i7-8670",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Known only from a 2018 GFXBench sighting reported as 'unreleased' (PC Gamer and others); no Intel page or S-Spec anywhere searched. photos.py and --query '\"i7-8670\" SR' brought only news images and i7-8700 photos."
+    },
+    {
+      "model": "Intel Core i7-8670T",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "SR3XH is still only from databases giving no stepping (fpsbench, sysrqmts); WebSearch for SR3XH with the model and site:intel.com finds no Intel document or PCN. photos.py with --query '\"i7-8670T\" SR3XH' brought only i7-8700T (SR3WX) photos."
     },
     {
       "model": "Intel Core i7-8700",
@@ -5404,6 +5434,12 @@
       "note": "Intel calls the steppings U1 and U2 (PCN 119280-02: ESD fix on XTAL25, JTAG IDCODE 5E7C5013 -> 6E7C5013), not the B0 the input lists; neither source gives a CPUID. Architecture from the ARK specifications page: 'Products formerly Ice Lake'. PCN table read from a rendered image of page 3 (PDFKit's text extraction scrambles its rows)."
     },
     {
+      "model": "Intel Xeon E-2184G",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK page not found; 337346 spec update (8th/9th gen Core) does not list it; WebSearch \"E-2184G\" Xeon S-Spec finds nothing for this model. photos.py (default searches plus own --query) brought only sibling models (E-2186G, E-2174G, E-2144G, E-2286G...), no photo of this model. Possibly an OEM/off-roadmap SKU."
+    },
+    {
       "model": "Intel Xeon E-2278G",
       "searched": "2026-11-07",
       "specs": [
@@ -5426,6 +5462,12 @@
         }
       ],
       "note": "PCN 118146-00 (EOL) confirms ARK's SRFB2 with stepping R0 - i.e. the 906ED die, not 906EA U0. No U0 code found; an 8-core part on the 6-core U0 die is not expected, so the listing under 906EA looks wrong. Architecture from general knowledge of the family, the PCN does not name a code name. WebSearch budget for the session ran out after the ARK lookups; no further searches and no photo search (photos.py queries Bing) were run."
+    },
+    {
+      "model": "Intel Xeon E-2284G",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK page not found; WebSearch \"E-2284G\" Xeon gives only E-2200 siblings. photos.py (default searches plus own --query) brought only sibling models (E-2186G, E-2174G, E-2144G, E-2286G...), no photo of this model. Possibly an OEM/off-roadmap SKU."
     },
     {
       "model": "Intel Xeon E-2288G",

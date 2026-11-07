@@ -1264,6 +1264,18 @@
       ]
     },
     {
+      "model": "Intel Core i5-8420",
+      "url": null,
+      "specs": [],
+      "note": "No Intel product page found (site:intel.com search returns only third-party spec sites)."
+    },
+    {
+      "model": "Intel Core i5-8420T",
+      "url": null,
+      "specs": [],
+      "note": "No Intel product page found."
+    },
+    {
       "model": "Intel Core i5-8500",
       "url": "https://www.intel.com/content/www/us/en/products/sku/129939/intel-core-i58500-processor-9m-cache-up-to-4-10-ghz/ordering.html",
       "specs": [
@@ -1324,6 +1336,12 @@
       "url": null,
       "specs": [],
       "note": "No intel.com product page found for a desktop i5-8650 (site:intel.com search returned no Intel page). Listed only in the Nov 2017 leaked 8th/9th-gen list and AIDA64 beta as an unannounced SKU; it seems never to have been sold under this name."
+    },
+    {
+      "model": "Intel Core i5-8650K",
+      "url": null,
+      "specs": [],
+      "note": "No Intel product page found."
     },
     {
       "model": "Intel Core i5-9400",
@@ -1902,6 +1920,18 @@
           "stepping": "V0"
         }
       ]
+    },
+    {
+      "model": "Intel Core i7-8670",
+      "url": null,
+      "specs": [],
+      "note": "No Intel product page found."
+    },
+    {
+      "model": "Intel Core i7-8670T",
+      "url": null,
+      "specs": [],
+      "note": "No Intel product page found."
     },
     {
       "model": "Intel Core i7-8700",
@@ -3307,6 +3337,12 @@
       "note": "SRLCT (U1) is under 'Retired and discontinued', SRM2C (U2) under 'Ordering and Spec Information'; both the same ordering code."
     },
     {
+      "model": "Intel Xeon E-2184G",
+      "url": null,
+      "specs": [],
+      "note": "No Intel product page found (WebSearch '\"<model>\" Xeon S-Spec' and '\"<model>\" Xeon' return only sibling SKUs); no ordering tab to read."
+    },
+    {
       "model": "Intel Xeon E-2278G",
       "url": "https://www.intel.com/content/www/us/en/products/sku/193745/intel-xeon-e2278g-processor-16m-cache-3-40-ghz/ordering.html",
       "specs": [
@@ -3315,6 +3351,12 @@
           "stepping": "R0"
         }
       ]
+    },
+    {
+      "model": "Intel Xeon E-2284G",
+      "url": null,
+      "specs": [],
+      "note": "No Intel product page found (WebSearch '\"<model>\" Xeon S-Spec' and '\"<model>\" Xeon' return only sibling SKUs); no ordering tab to read."
     },
     {
       "model": "Intel Xeon E-2288G",
