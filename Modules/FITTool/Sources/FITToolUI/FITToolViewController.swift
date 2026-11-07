@@ -23,7 +23,6 @@ import ToolModuleKit
     }
     var onGoToTarget: ((Int) -> Void)?
     var onSelectTable: (() -> Void)?
-    var onCopyCPUID: ((Int) -> Void)?
     var onReplaceMicrocode: ((Int) -> Void)?
     var onRemoveMicrocode: ((Int) -> Void)?
     var onAddMicrocode: (() -> Void)?
@@ -54,7 +53,7 @@ import ToolModuleKit
     /// The entries, as an outline: a microcode row opens into a plate of the
     /// CPUIDs it is for, and a CPUID's `ⓘ` lists the processors behind it
     /// (`FITProcessorsPopover`).
-    let entries = ToolPanelOutlineView()
+    let entries = FITEntriesOutlineView()
     /// The outline's rows, rebuilt with every `show`. NSOutlineView knows a
     /// row by the identity of its item, so the items live here between calls.
     private var topItems: [FITOutlineItem] = []
@@ -626,11 +625,6 @@ import ToolModuleKit
         return menu
     }
 
-    @objc private func copyCPUIDClicked() {
-        guard let row = clickedEntry() else { return }
-        onCopyCPUID?(row.key)
-    }
-
     @objc private func goToOffsetClicked() {
         guard let row = clickedEntry() else { return }
         onGoToTarget?(row.key)
@@ -659,7 +653,6 @@ extension FITToolViewController: NSMenuDelegate {
         for command in row.commands {
             let action: Selector
             switch command {
-            case .copyCPUID: action = #selector(copyCPUIDClicked)
             case .goToOffset: action = #selector(goToOffsetClicked)
             case .replaceMicrocode: action = #selector(replaceMicrocodeFromMenuClicked)
             case .removeMicrocode: action = #selector(removeMicrocodeFromMenuClicked)
@@ -981,30 +974,33 @@ extension FITToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
         return cell
     }
 
-    /// The plate under a microcode: its CPUIDs one under another, each in the
-    /// weight of a heading, the `ⓘ` that lists the processors behind it right
-    /// after it, and its code names quieter after that. Under a row of the Top Swap
-    /// backup's copy everything reads as quietly as that row does: it is
-    /// there to be compared.
+    /// The lines under a microcode: its CPUIDs one under another, each in
+    /// the weight of a heading, the `ⓘ` that lists the processors behind it
+    /// right after it, and its code names quieter after that. Under a row of
+    /// the Top Swap backup's copy everything reads as quietly as that row
+    /// does: it is there to be compared.
     private func cpuidPlate(_ entry: FITDisplayRow) -> NSView {
         let plate = entries.makeView(withIdentifier: FITCPUIDPlate.identifier, owner: self) as? FITCPUIDPlate
             ?? FITCPUIDPlate()
         plate.key = entry.key
-        plate.show(entry.processorGroups.map { (L("CPUID %1$@", $0.cpuid), $0.codeNames.joined(separator: ", ")) },
-                   quiet: entry.isBackup, target: self, action: #selector(showProcessors(_:)))
+        // A CPUID the table knows nothing about has no `ⓘ`: there is nothing
+        // behind it to open.
+        plate.show(entry.processorGroups.map {
+            (L("CPUID %1$@", $0.cpuid), $0.codeNames.joined(separator: ", "), !$0.codeNames.isEmpty)
+        }, quiet: entry.isBackup)
+        plate.onInfo = { [weak self, weak plate] index, rect in
+            guard let self, let plate else { return }
+            self.showProcessors(key: entry.key, group: index, from: plate.textView, rect: rect)
+        }
         return plate
     }
 
-    /// A CPUID's `ⓘ`: the processors behind it, in a popover off the button.
+    /// A CPUID's `ⓘ`: the processors behind it, in a popover off the `ⓘ`.
     // help: fit.processors
-    @objc private func showProcessors(_ sender: NSButton) {
-        var view: NSView? = sender
-        while let current = view, !(current is FITCPUIDPlate) { view = current.superview }
-        guard let plate = view as? FITCPUIDPlate, let key = plate.key,
-              let entry = entry(ofKey: key), sender.tag < entry.processorGroups.count
-        else { return }
+    private func showProcessors(key: Int, group: Int, from anchor: NSView, rect: NSRect) {
+        guard let entry = entry(ofKey: key), group < entry.processorGroups.count else { return }
         processorsPopover?.close()
-        processorsPopover = FITProcessorsPopover.show(entry.processorGroups[sender.tag], from: sender)
+        processorsPopover = FITProcessorsPopover.show(entry.processorGroups[group], from: anchor, rect: rect)
     }
 
     /// What an entry row wears besides its text, decided in the pure target.
@@ -1089,143 +1085,199 @@ extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
     }
 }
 
-/// The CPUIDs a microcode serves, as one plate under its row: a rounded
-/// badge across the column to its right edge, with a line a CPUID — the CPUID, the
-/// `ⓘ` right after it, which belongs to that CPUID, and its code names, cut
-/// short first where the column is narrow. The plate is not a row of the table: it cannot be chosen, and a
-/// click on it changes nothing but what its buttons do.
+/// The CPUIDs a microcode serves, under its row on the table's own
+/// background: a line a CPUID — the CPUID, the `ⓘ` right after it, which
+/// belongs to that CPUID, and its code names, cut short where the column is
+/// narrow. The lines are not rows of the table: they cannot be chosen, and
+/// they are one text, so a reader selects and copies from them as from any
+/// text, across lines too.
 @MainActor final class FITCPUIDPlate: NSTableCellView {
     static let identifier = NSUserInterfaceItemIdentifier("cpuidPlate")
+    /// Above and below the lines, inside the row.
+    static let margin: CGFloat = 2
 
-    /// The microcode row the plate is under.
+    /// The microcode row the lines are under.
     var key: Int?
-    /// The lines' `ⓘ`, in the order of the CPUIDs; a button's tag is its
-    /// CPUID's place.
-    private(set) var infoButtons: [NSButton] = []
-    /// The lines' CPUIDs, in the same order.
-    private(set) var lineFields: [NSTextField] = []
-    /// The lines' code names, in the same order.
-    private(set) var nameFields: [NSTextField] = []
-    private let badge = FITPlateBackground()
-    private let stack = NSStackView()
-
-    /// Around the plate, inside the row.
-    static let outerMargin: CGFloat = 2
-    /// Inside the plate, around its lines.
-    static let innerPadding = NSEdgeInsets(top: 3, left: 8, bottom: 3, right: 6)
-    static let lineSpacing: CGFloat = 1
+    let textView = FITCPUIDTextView()
+    /// What a click on a line's `ⓘ` asks for: the line's place, and where the
+    /// `ⓘ` is in `textView`.
+    var onInfo: ((Int, NSRect) -> Void)?
 
     init() {
         super.init(frame: .zero)
         identifier = Self.identifier
-        badge.translatesAutoresizingMaskIntoConstraints = false
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = Self.lineSpacing
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(badge)
-        badge.addSubview(stack)
-        let pad = Self.innerPadding
-        NSLayoutConstraint.activate([
-            badge.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.outerMargin),
-            badge.topAnchor.constraint(equalTo: topAnchor, constant: Self.outerMargin),
-            badge.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -Self.outerMargin),
-            badge.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.outerMargin),
-            stack.leadingAnchor.constraint(equalTo: badge.leadingAnchor, constant: pad.left),
-            stack.trailingAnchor.constraint(lessThanOrEqualTo: badge.trailingAnchor, constant: -pad.right),
-            stack.topAnchor.constraint(equalTo: badge.topAnchor, constant: pad.top),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: badge.bottomAnchor, constant: -pad.bottom),
-        ])
+        textView.frame = bounds.insetBy(dx: 0, dy: Self.margin)
+        textView.autoresizingMask = [.width, .height]
+        textView.onInfo = { [weak self] in self?.onInfo?($0, $1) }
+        addSubview(textView)
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// The height of one line at `textSize`: the text's, or the button's
-    /// where that is taller.
+    override func layout() {
+        super.layout()
+        textView.frame = NSRect(x: 2, y: Self.margin, width: max(0, bounds.width - 4),
+                                height: max(0, bounds.height - 2 * Self.margin))
+    }
+
+    /// The height of one line at `textSize`.
     static func lineHeight(textSize: CGFloat) -> CGFloat {
-        let font = NSFont.systemFont(ofSize: textSize, weight: .medium)
-        return max(ceil(NSLayoutManager().defaultLineHeight(for: font)), textSize.rounded() + 2)
+        ceil(NSLayoutManager().defaultLineHeight(for: NSFont.systemFont(ofSize: textSize, weight: .medium))) + 1
     }
 
-    /// The row's height for a plate of `lines` lines.
+    /// The row's height for `lines` lines.
     static func height(lines: Int, textSize: CGFloat) -> CGFloat {
-        let count = CGFloat(max(lines, 1))
-        return count * lineHeight(textSize: textSize) + (count - 1) * lineSpacing
-            + innerPadding.top + innerPadding.bottom + 2 * outerMargin
+        CGFloat(max(lines, 1)) * lineHeight(textSize: textSize) + 2 * margin
     }
 
-    /// Shows a line for each CPUID — the CPUID, its `ⓘ` sending `action`,
-    /// and its code names. `quiet` greys the whole plate, as under a row of
-    /// the Top Swap backup's copy.
-    func show(_ lines: [(cpuid: String, names: String)], quiet: Bool, target: AnyObject, action: Selector) {
-        stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        infoButtons = []
-        lineFields = []
-        nameFields = []
-        let textSize = ToolPanelFont.body().pointSize
-        let point = textSize.rounded()
-        let height = Self.lineHeight(textSize: textSize)
+    /// The lines as a reader copies them: the words without the `ⓘ`.
+    var lineTexts: [String] { FITCPUIDTextView.plain(textView.string).components(separatedBy: "\n") }
+
+    /// Shows a line for each CPUID — the CPUID, its `ⓘ` where there is
+    /// something behind it, its code names. `quiet` greys them all, as under
+    /// a row of the Top Swap backup's copy.
+    func show(_ lines: [(cpuid: String, names: String, hasInfo: Bool)], quiet: Bool) {
+        let size = ToolPanelFont.body().pointSize
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byTruncatingTail
+        paragraph.minimumLineHeight = Self.lineHeight(textSize: size)
+        paragraph.maximumLineHeight = paragraph.minimumLineHeight
+        let text = NSMutableAttributedString()
         for (index, line) in lines.enumerated() {
-            let cpuid = NSTextField(labelWithString: line.cpuid)
-            cpuid.font = ToolPanelFont.body(weight: .medium)
-            cpuid.textColor = quiet ? .secondaryLabelColor : .labelColor
-            cpuid.setContentCompressionResistancePriority(.required, for: .horizontal)
-            cpuid.setContentHuggingPriority(.required, for: .horizontal)
-            let names = NSTextField(labelWithString: line.names)
-            names.font = ToolPanelFont.body()
-            names.textColor = quiet ? .tertiaryLabelColor : .secondaryLabelColor
-            names.lineBreakMode = .byTruncatingTail
-            names.maximumNumberOfLines = 1
-            names.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-            names.setContentHuggingPriority(.required, for: .horizontal)
-            names.toolTip = line.names.isEmpty ? nil : line.names
-            names.isHidden = line.names.isEmpty
-            let button = ToolFieldRow.makeInfoButton(
-                name: L("Processors"), tooltip: L("Show the processors with this CPUID"))
-            // In the weight of the CPUID it belongs to.
-            button.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: point, weight: .semibold)
-            button.tag = index
-            button.target = target
-            button.action = action
-            button.translatesAutoresizingMaskIntoConstraints = false
-            button.setContentCompressionResistancePriority(.required, for: .horizontal)
-            // All three in the leading gravity area: a line shorter than the
-            // plate leaves the rest of its width empty after it.
-            let row = NSStackView()
-            row.orientation = .horizontal
-            row.alignment = .centerY
-            row.spacing = 4
-            row.distribution = .gravityAreas
-            row.addView(cpuid, in: .leading)
-            row.addView(button, in: .leading)
-            row.addView(names, in: .leading)
-            row.setCustomSpacing(6, after: button)
-            NSLayoutConstraint.activate([
-                button.widthAnchor.constraint(equalToConstant: point + 2),
-                button.heightAnchor.constraint(equalTo: button.widthAnchor),
-                row.heightAnchor.constraint(equalToConstant: height),
-            ])
-            stack.addArrangedSubview(row)
-            infoButtons.append(button)
-            lineFields.append(cpuid)
-            nameFields.append(names)
+            if index > 0 { text.append(NSAttributedString(string: "\n")) }
+            let strong: NSColor = quiet ? .secondaryLabelColor : .labelColor
+            text.append(NSAttributedString(string: line.cpuid, attributes: [
+                .font: ToolPanelFont.body(weight: .medium), .foregroundColor: strong,
+            ]))
+            if line.hasInfo {
+                text.append(NSAttributedString(string: "  "))
+                text.append(FITCPUIDTextView.infoMark(index: index, size: size))
+            }
+            if !line.names.isEmpty {
+                text.append(NSAttributedString(string: "  " + line.names, attributes: [
+                    .font: ToolPanelFont.body(),
+                    .foregroundColor: quiet ? NSColor.tertiaryLabelColor : NSColor.secondaryLabelColor,
+                ]))
+            }
         }
+        text.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: text.length))
+        textView.textStorage?.setAttributedString(text)
+        textView.setSelectedRange(NSRange(location: 0, length: 0))
     }
 }
 
-/// The plate's rounded badge, drawn rather than layered so its colours follow
-/// the appearance as the system's own fills do.
-@MainActor final class FITPlateBackground: NSView {
-    static let radius: CGFloat = 5
+/// The text the CPUIDs are: selectable, never edited, on no background of
+/// its own. Its `ⓘ` are links; a copy leaves them out.
+@MainActor final class FITCPUIDTextView: NSTextView, NSTextViewDelegate {
+    /// The scheme of an `ⓘ`'s link; the line's place is its host.
+    static let scheme = "fit-cpuid-info"
 
-    override func draw(_ dirtyRect: NSRect) {
-        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5),
-                                xRadius: Self.radius, yRadius: Self.radius)
-        NSColor.quaternarySystemFill.setFill()
-        path.fill()
-        NSColor.separatorColor.setStroke()
-        path.lineWidth = 1
-        path.stroke()
+    var onInfo: ((Int, NSRect) -> Void)?
+
+    convenience init() {
+        let storage = NSTextStorage()
+        let layout = NSLayoutManager()
+        storage.addLayoutManager(layout)
+        let container = NSTextContainer(size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
+        container.widthTracksTextView = true
+        container.lineFragmentPadding = 0
+        layout.addTextContainer(container)
+        self.init(frame: .zero, textContainer: container)
+        isEditable = false
+        isSelectable = true
+        isRichText = false
+        drawsBackground = false
+        textContainerInset = .zero
+        isVerticallyResizable = false
+        isHorizontallyResizable = false
+        // The `ⓘ` keeps its own colour: no link blue, no underline.
+        linkTextAttributes = [.cursor: NSCursor.pointingHand]
+        delegate = self
+    }
+
+    /// One line's `ⓘ`: the panel's info glyph in the CPUID's weight and the
+    /// colour of a link — which it is, to the line's processors — with the
+    /// same words a field's `ⓘ` has.
+    static func infoMark(index: Int, size: CGFloat) -> NSAttributedString {
+        let attachment = NSTextAttachment()
+        let config = NSImage.SymbolConfiguration(pointSize: size.rounded(), weight: .semibold)
+            .applying(NSImage.SymbolConfiguration(paletteColors: [.linkColor]))
+        let image = NSImage(systemSymbolName: "info.circle", accessibilityDescription: L("Processors"))?
+            .withSymbolConfiguration(config)
+        attachment.image = image
+        let side = image?.size ?? NSSize(width: size, height: size)
+        let font = ToolPanelFont.body(weight: .medium)
+        attachment.bounds = NSRect(x: 0, y: (font.capHeight - side.height) / 2, width: side.width, height: side.height)
+        let mark = NSMutableAttributedString(attachment: attachment)
+        mark.addAttributes([
+            .link: URL(string: "\(scheme)://\(index)") as Any,
+            .toolTip: L("Show the processors with this CPUID"),
+            .font: font,
+        ], range: NSRange(location: 0, length: mark.length))
+        return mark
+    }
+
+    /// `text` as a reader copies it: without the character an `ⓘ` stands on,
+    /// and the spaces that set it off from the CPUID.
+    static func plain(_ text: String) -> String {
+        text.replacingOccurrences(of: "  \u{FFFC}", with: "").replacingOccurrences(of: "\u{FFFC}", with: "")
+    }
+
+    /// The line an `ⓘ` link names.
+    static func line(of link: Any) -> Int? {
+        let url = (link as? URL) ?? (link as? String).flatMap(URL.init(string:))
+        guard url?.scheme == scheme else { return nil }
+        return url?.host.flatMap { Int($0) }
+    }
+
+    /// Where line `index`'s `ⓘ` is drawn, in this view.
+    func rectOfInfo(_ index: Int) -> NSRect? {
+        guard let storage = textStorage, let layoutManager, let textContainer else { return nil }
+        var found: NSRect?
+        storage.enumerateAttribute(.link, in: NSRange(location: 0, length: storage.length)) { value, range, stop in
+            guard let value, Self.line(of: value) == index else { return }
+            let glyphs = layoutManager.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+            found = layoutManager.boundingRect(forGlyphRange: glyphs, in: textContainer)
+                .offsetBy(dx: textContainerOrigin.x, dy: textContainerOrigin.y)
+            stop.pointee = true
+        }
+        return found
+    }
+
+    /// Opens line `index`'s processors, as a click on its `ⓘ` does — where
+    /// the line has one.
+    func openInfo(_ index: Int) {
+        guard let rect = rectOfInfo(index) else { return }
+        onInfo?(index, rect)
+    }
+
+    func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
+        guard let index = Self.line(of: link) else { return false }
+        openInfo(index)
+        return true
+    }
+
+    // MARK: - Copying
+
+    override var writablePasteboardTypes: [NSPasteboard.PasteboardType] { [.string] }
+
+    override func writeSelection(to pboard: NSPasteboard, type: NSPasteboard.PasteboardType) -> Bool {
+        guard type == .string else { return false }
+        let text = string as NSString
+        let parts = selectedRanges.map { text.substring(with: $0.rangeValue) }
+        pboard.setString(Self.plain(parts.joined(separator: "\n")), forType: .string)
+        return true
+    }
+
+    // A click in the text is the text's: it does not choose the row under it.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
+/// The entries' outline, which lets a click into the CPUIDs' text reach the
+/// text — a table hands a click to a view in a row only when it is asked.
+@MainActor final class FITEntriesOutlineView: ToolPanelOutlineView {
+    override func validateProposedFirstResponder(_ responder: NSResponder, for event: NSEvent?) -> Bool {
+        responder is FITCPUIDTextView || super.validateProposedFirstResponder(responder, for: event)
     }
 }

@@ -150,7 +150,6 @@ struct FITParkedState: PersistableToolSessionState {
         controller.onWillChoose = { [weak self] in self?.host.noteNavigationStep() }
         controller.onGoToTarget = { [weak self] index in self?.goToOffset(of: index) }
         controller.onSelectTable = { [weak self] in self?.showTable() }
-        controller.onCopyCPUID = { [weak self] index in self?.copyCPUID(of: index) }
         controller.onReplaceMicrocode = { [weak self] index in self?.replaceMicrocode(at: index) }
         controller.onRemoveMicrocode = { [weak self] index in self?.removeMicrocode(at: index) }
         controller.onAddMicrocode = { [weak self] in self?.addMicrocode() }
@@ -596,20 +595,6 @@ struct FITParkedState: PersistableToolSessionState {
     /// Swappable, because a test suite that beeps is a test suite people run
     /// with the volume down.
     public static var alert: @MainActor () -> Void = { NSSound.beep() }
-
-    /// Where a copy goes. Swappable so the app's tests do not walk off with
-    /// whatever the person running them had on their clipboard.
-    public static var pasteboard: NSPasteboard = .general
-
-    /// The number a bench writes down and looks up.
-    public func copyCPUID(of index: Int) {
-        guard let cpuid = display.rows.first(where: { $0.key == index })?.cpuidText else {
-            return
-        }
-        FITToolSession.pasteboard.clearContents()
-        FITToolSession.pasteboard.setString(cpuid, forType: .string)
-        controller.say(L("CPUID %1$@ copied.", cpuid))
-    }
 
     private func goToProblem(_ index: Int) {
         guard index < display.problems.count, let offset = display.problems[index].offset else {

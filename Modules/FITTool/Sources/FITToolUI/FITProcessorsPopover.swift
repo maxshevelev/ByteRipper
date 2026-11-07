@@ -4,7 +4,7 @@ import HelpUI
 import Localization
 
 /// The processors behind one CPUID of a microcode, where a reader of the FIT
-/// panel asks for them: a popover off the `ⓘ` on the CPUID's row.
+/// panel asks for them: a popover off the `ⓘ` after the CPUID.
 ///
 /// They are not rows of the tree, because they are not part of the update —
 /// only what a published table of brand names says about who runs it. The
@@ -22,11 +22,11 @@ import Localization
         super.init()
     }
 
-    /// Shows `group` off `anchor` — the button the reader pressed.
+    /// Shows `group` off `rect` in `anchor` — the `ⓘ` the reader clicked.
     @discardableResult
-    static func show(_ group: FITProcessorGroup, from anchor: NSView) -> FITProcessorsPopover {
+    static func show(_ group: FITProcessorGroup, from anchor: NSView, rect: NSRect? = nil) -> FITProcessorsPopover {
         let controller = FITProcessorsPopover(group: group)
-        controller.present(from: anchor)
+        controller.present(from: anchor, rect: rect)
         return controller
     }
 

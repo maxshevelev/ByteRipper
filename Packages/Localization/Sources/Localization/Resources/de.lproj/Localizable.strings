@@ -261,7 +261,6 @@
 "CPUID" = "CPUID";
 "CPUID, model or S-SPEC" = "CPUID, Modell oder S-SPEC";
 "CPUID %1$@" = "CPUID %1$@";
-"CPUID %1$@ copied." = "CPUID %1$@ kopiert.";
 "credits|by" = "von";
 "CSE Layout Table" = "CSE Layout Table";
 "Cancel" = "Abbrechen";
@@ -301,7 +300,6 @@
 "Copy hex size" = "Größe als Hex kopieren";
 "Copy size" = "Größe kopieren";
 "Copy" = "Kopieren";
-"Copy CPUID" = "CPUID kopieren";
 "Copy File Name" = "Dateinamen kopieren";
 "Copy Full Path" = "Vollständigen Pfad kopieren";
 "Copy Screenshot" = "Bildschirmfoto kopieren";

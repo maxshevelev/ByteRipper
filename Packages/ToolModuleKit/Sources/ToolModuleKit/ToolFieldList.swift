@@ -253,12 +253,6 @@ public struct FieldHelp: Sendable, Equatable {
     /// own help buttons carry, named through `ControlHelp` with the words the
     /// panel put on the help — it knows whose words the button opens.
     public static func makeInfoButton(for help: FieldHelp) -> NSButton {
-        makeInfoButton(name: help.buttonName, tooltip: help.buttonTooltip)
-    }
-
-    /// The same `ⓘ` for a row that is not a field — a table's row with more
-    /// to say than its line has room for — named through `ControlHelp`.
-    public static func makeInfoButton(name: String, tooltip: String?) -> NSButton {
         let button = ToolInfoButton()
         button.image = NSImage(systemSymbolName: "info.circle", accessibilityDescription: nil)
         button.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 11, weight: .regular)
@@ -266,7 +260,7 @@ public struct FieldHelp: Sendable, Equatable {
         button.imagePosition = .imageOnly
         button.contentTintColor = .secondaryLabelColor
         button.translatesAutoresizingMaskIntoConstraints = true
-        ControlHelp.describe(button, name: name, tooltip: tooltip)
+        ControlHelp.describe(button, name: help.buttonName, tooltip: help.buttonTooltip)
         return button
     }
 

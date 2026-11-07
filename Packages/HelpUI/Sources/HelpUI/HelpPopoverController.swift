@@ -49,15 +49,17 @@ import AppKit
         ])
     }
 
-    /// Shows the popover off `anchor`, the button the reader pressed.
-    public func present(from anchor: NSView, edge: NSRectEdge = .maxY) {
+    /// Shows the popover off `anchor`, the button the reader pressed — or
+    /// off `rect` in it, where what was pressed is a part of a view rather
+    /// than a view: a link in a text.
+    public func present(from anchor: NSView, rect: NSRect? = nil, edge: NSRectEdge = .maxY) {
         popover.contentViewController = self
         popover.behavior = .transient
         popover.delegate = self
         zoomObserver = HelpPopoverLayout.observeTextSize { [weak self] in
             self?.followZoom()
         }
-        popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: edge)
+        popover.show(relativeTo: rect ?? anchor.bounds, of: anchor, preferredEdge: edge)
     }
 
     /// The Zoom moved: the words again at the new size, and the popover as big

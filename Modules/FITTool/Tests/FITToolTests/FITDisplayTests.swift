@@ -108,7 +108,7 @@ final class FITDisplayTests: XCTestCase {
 
     /// A microcode row says its revision, date and platforms; its CPUID —
     /// five hex digits, no leading zero, the way a bench writes it — is the
-    /// row it opens into, and what Copy CPUID copies.
+    /// row it opens into.
     func testAMicrocodeRowSaysItsRevisionAndOpensIntoItsCpuid() {
         let row = display([microcodeRow]).rows[1]
 
@@ -140,7 +140,7 @@ final class FITDisplayTests: XCTestCase {
         ])
         let row = shown.rows[1]
 
-        XCTAssertEqual(row.cpuidText, "B06A2", "Copy CPUID copies the header's own")
+        XCTAssertEqual(row.cpuidText, "B06A2", "the header's own")
         XCTAssertEqual(row.cpuids, [0x000B_06A2, 0x000B_06A3, 0x000B_06A8])
         XCTAssertEqual(row.targetText, "r.F0 · 2019-07-15 · platform 01")
         XCTAssertEqual(shown.allZones.first { $0.id == "fit.target.1" }?.name,
@@ -300,9 +300,9 @@ final class FITDisplayTests: XCTestCase {
         let rows = display([microcodeRow]).rows
 
         XCTAssertEqual(rows[1].commands,
-                       [.goToOffset(microcode), .copyCPUID("806EA"), .replaceMicrocode(1)])
+                       [.goToOffset(microcode), .replaceMicrocode(1)])
         XCTAssertEqual(rows[1].commands.map { $0.title.text(in: .english) },
-                       ["Show Target", "Copy CPUID", "Replace Microcode"])
+                       ["Show Target", "Replace Microcode"])
     }
 
     /// Every microcode row may be replaced — the slot stays, so even the last

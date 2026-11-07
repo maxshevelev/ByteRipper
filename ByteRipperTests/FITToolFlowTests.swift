@@ -1065,22 +1065,6 @@ final class FITToolFlowTests: XCTestCase {
         wait(for: [settled], timeout: 2)
     }
 
-    /// What the right-button menu's first item does.
-    func testCopyingTheCpuidPutsItOnThePasteboard() throws {
-        let board = NSPasteboard(name: NSPasteboard.Name("dev.maxik.tests.fit"))
-        FITToolSession.pasteboard = board
-        defer { FITToolSession.pasteboard = .general }
-        _ = try open(FITTestImage.make())
-
-        try session().copyCPUID(of: 1)
-
-        XCTAssertEqual(board.string(forType: .string), "806EA")
-
-        // The header has no CPUID, and asking for one leaves the board alone.
-        try session().copyCPUID(of: 0)
-        XCTAssertEqual(board.string(forType: .string), "806EA")
-    }
-
     /// The second defect of §11: a checksum left over from an edit that changed
     /// the table and did not recompute it. One byte, one named undo step, and
     /// the panel re-reads afterwards and stops offering the repair.
@@ -1301,8 +1285,7 @@ final class FITToolFlowTests: XCTestCase {
         let add = try button("Add Microcode…")
         XCTAssertEqual(outline.row(for: add), 3)
         let plate = try plate(in: outline, row: 2)
-        XCTAssertEqual(plate.lineFields.count, 1)
-        XCTAssertTrue(plate.lineFields[0].stringValue.hasPrefix("CPUID 806EA"), plate.lineFields[0].stringValue)
+        XCTAssertEqual(plate.lineTexts, ["CPUID 806EA  Coffee Lake U43e, Kaby Lake Refresh U"])
         let microcodeRow = try text(of: outline, row: 1)
         XCTAssertFalse(microcodeRow.contains("806EA"), "the row itself does not repeat it: \(microcodeRow)")
         let plateItem = try XCTUnwrap(outline.item(atRow: 2))
@@ -1322,30 +1305,21 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertFalse(outline.isItemExpanded(outline.item(atRow: 1)))
     }
 
-    /// The `ⓘ` after a CPUID and its code names opens a popover: the CPUID as
-    /// its title, what the table says of the group — its names, its product
-    /// family, the stepping, the segments — under it, and the models with
-    /// their S-SPECs.
-    func testACPUIDsInfoButtonListsItsProcessorsInAPopover() throws {
+    /// The `ⓘ` right after a CPUID opens a popover: the CPUID as its title,
+    /// what the table says of the group — its names, its product family, the
+    /// stepping, the segments — under it, and the models with their S-SPECs.
+    func testACPUIDsInfoMarkListsItsProcessorsInAPopover() throws {
         _ = try open(FITTestImage.make())
         let outline = try XCTUnwrap(try entriesTable() as? NSOutlineView)
         let panel = try XCTUnwrap(outline.delegate as? FITToolViewController)
         let plate = try plate(in: outline, row: 2)
-        let info = try XCTUnwrap(plate.infoButtons.first)
-        XCTAssertEqual(info.accessibilityLabel(), "Processors")
-        plate.layoutSubtreeIfNeeded()
-        let cpuid = plate.lineFields[0].convert(plate.lineFields[0].bounds, to: plate)
-        let names = plate.nameFields[0].convert(plate.nameFields[0].bounds, to: plate)
-        let button = info.convert(info.bounds, to: plate)
-        XCTAssertTrue((0...8).contains(button.minX - cpuid.maxX), "right after the CPUID: \(button) \(cpuid)")
-        XCTAssertGreaterThanOrEqual(names.minX, button.maxX, "the code names after the ⓘ")
-        XCTAssertEqual(plate.nameFields[0].stringValue, "Coffee Lake U43e, Kaby Lake Refresh U")
-        XCTAssertLessThanOrEqual(button.maxX, plate.bounds.maxX + 0.5, "inside the column")
-        let badge = try XCTUnwrap(plate.subviews.first { $0 is FITPlateBackground })
-        XCTAssertEqual(badge.frame.maxX, plate.bounds.maxX - FITCPUIDPlate.outerMargin, accuracy: 0.5,
-                       "the badge reaches the column's right edge, not the end of its words")
+        XCTAssertEqual(plate.textView.string, "CPUID 806EA  \u{FFFC}  Coffee Lake U43e, Kaby Lake Refresh U",
+                       "the ⓘ right after the CPUID, the code names after it")
+        let mark = try XCTUnwrap(plate.textView.textStorage?.attribute(.toolTip, at: 13, effectiveRange: nil) as? String)
+        XCTAssertEqual(mark, "Show the processors with this CPUID")
+        XCTAssertNotNil(plate.textView.rectOfInfo(0))
 
-        info.performClick(nil)
+        plate.textView.openInfo(0)
 
         let popover = try XCTUnwrap(panel.processorsPopover, "the popover is open")
         defer { popover.close() }
@@ -1356,9 +1330,43 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertTrue(popover.shownText.contains("Core i5-8250U"), popover.shownText)
     }
 
-    /// An update for several processors puts a line a CPUID on its plate, in
-    /// the update's order, the plate as tall as its lines — and one the
-    /// shipped table does not know says so in its popover.
+    /// The CPUIDs are text on the table's background: the table lets a click
+    /// into them, the reader selects them as text, and a copy is the words
+    /// without the `ⓘ` — which is why the row's menu has no Copy CPUID.
+    func testTheCPUIDsAreTextToSelectAndCopy() throws {
+        _ = try open(FITTestImage.make(microcodeSignature: 0x000B_06A2, microcodeExtended: [
+            (0x000B_06A2, 1), (0x000B_06A8, 1)
+        ]))
+        let outline = try XCTUnwrap(try entriesTable() as? NSOutlineView)
+        let plate = try plate(in: outline, row: 2)
+        let text = plate.textView
+        XCTAssertTrue(text.isSelectable)
+        XCTAssertFalse(text.isEditable)
+        XCTAssertFalse(text.drawsBackground, "on the table's own background")
+        XCTAssertFalse(plate.subviews.contains { !($0 is NSTextView) }, "nothing but the text: no badge")
+        XCTAssertTrue(outline.validateProposedFirstResponder(text, for: nil), "a click reaches the text")
+
+        let board = NSPasteboard(name: NSPasteboard.Name("dev.maxik.tests.fit.cpuids"))
+        board.clearContents()
+        text.selectAll(nil)
+        XCTAssertTrue(text.writeSelection(to: board, type: .string))
+        let copied = try XCTUnwrap(board.string(forType: .string))
+        XCTAssertTrue(copied.hasPrefix("CPUID B06A2  Raptor Lake"), copied)
+        XCTAssertTrue(copied.hasSuffix("\nCPUID B06A8"), copied)
+        XCTAssertFalse(copied.contains("\u{FFFC}"), "no ⓘ in a copy")
+
+        board.clearContents()
+        text.setSelectedRange(NSRange(location: 6, length: 5))
+        XCTAssertTrue(text.writeSelection(to: board, type: .string))
+        XCTAssertEqual(board.string(forType: .string), "B06A2", "a part of a line, as selected")
+
+        let row = try XCTUnwrap(try session().display.rows.first { $0.cpuids.count == 2 })
+        XCTAssertFalse(row.commands.map(\.title.text).contains("Copy CPUID"))
+    }
+
+    /// An update for several processors puts a line a CPUID under it, in the
+    /// update's order, as tall as its lines — and one the shipped table does
+    /// not know has no `ⓘ`.
     func testEachCPUIDOfAnUpdateIsALineOfThePlate() throws {
         _ = try open(FITTestImage.make(microcodeSignature: 0x000B_06A2, microcodeExtended: [
             (0x000B_06A2, 1), (0x000B_06A3, 1), (0x000B_06A8, 1)
@@ -1369,25 +1377,18 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertEqual(outline.numberOfRows, try session().display.rows.count + 2, "one plate, not a row a CPUID")
 
         let plate = try plate(in: outline, row: 2)
-        let lines = plate.lineFields.map(\.stringValue)
+        let lines = plate.lineTexts
         XCTAssertEqual(lines.count, 3)
         XCTAssertTrue(lines[0].hasPrefix("CPUID B06A2"), lines[0])
         XCTAssertTrue(lines[1].hasPrefix("CPUID B06A3"), lines[1])
         XCTAssertTrue(lines[2].hasPrefix("CPUID B06A8"), lines[2])
         XCTAssertEqual(outline.level(forRow: 2), 1)
         XCTAssertGreaterThan(outline.rect(ofRow: 2).height, 2 * outline.rowHeight, "as tall as its lines")
-        plate.layoutSubtreeIfNeeded()
-        for (field, info) in zip(plate.lineFields, plate.infoButtons) {
-            let gap = info.convert(info.bounds, to: plate).minX - field.convert(field.bounds, to: plate).maxX
-            XCTAssertTrue((0...8).contains(gap), "the ⓘ right after \(field.stringValue): \(gap)")
-        }
         XCTAssertEqual(lines[2], "CPUID B06A8", "the CPUID alone: the table knows no names for it")
 
-        let panel = try XCTUnwrap(outline.delegate as? FITToolViewController)
-        plate.infoButtons[2].performClick(nil)
-        let popover = try XCTUnwrap(panel.processorsPopover)
-        defer { popover.close() }
-        XCTAssertEqual(popover.shownText, "No processor names known for CPUID B06A8")
+        XCTAssertNotNil(plate.textView.rectOfInfo(0))
+        XCTAssertNil(plate.textView.rectOfInfo(2), "no ⓘ where the table knows nothing of the CPUID")
+        XCTAssertTrue(plate.textView.string.hasSuffix("\nCPUID B06A8"), plate.textView.string)
     }
 
     private func plate(in outline: NSOutlineView, row: Int) throws -> FITCPUIDPlate {
@@ -1467,12 +1468,12 @@ final class FITToolFlowTests: XCTestCase {
         }
         XCTAssertEqual(plates.count, 2, "the table's microcode and the backup's, each open a level")
         func colour(_ plate: FITCPUIDPlate) throws -> NSColor? {
-            let text = try XCTUnwrap(plate.lineFields.first).attributedStringValue
+            let text = try XCTUnwrap(plate.textView.textStorage)
             return text.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
         }
         XCTAssertEqual(try colour(plates[0]), .labelColor)
         XCTAssertEqual(try colour(plates[1]), .secondaryLabelColor)
-        XCTAssertTrue(plates[0].lineFields[0].stringValue.hasPrefix("CPUID 806EA"))
+        XCTAssertTrue(plates[0].lineTexts[0].hasPrefix("CPUID 806EA"))
     }
 
     /// The one column takes the panel's width, wider or narrower, down to its

@@ -493,7 +493,7 @@ final class FITTopSwapTests: XCTestCase {
         XCTAssertEqual(copy.key, FITPresenter.backupKey(1))
         XCTAssertEqual(copy.zoneID, "fit.backup.row.1")
         XCTAssertEqual(copy.targetRange?.lowerBound, 0x4060)
-        XCTAssertEqual(copy.commands, [.goToOffset(0x4060), .copyCPUID("806EA")],
+        XCTAssertEqual(copy.commands, [.goToOffset(0x4060)],
                        "nothing that changes the table")
         XCTAssertFalse(display.rows[1].commands.filter { if case .replaceMicrocode = $0 { return true }; return false }.isEmpty)
         XCTAssertEqual(FITPresenter.rowIndex(ofZone: "fit.backup.target.1"), FITPresenter.backupKey(1))

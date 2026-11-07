@@ -41,7 +41,7 @@ What the command then does:
 
 ## Replacing and removing
 
-The context menu of a microcode row holds **Replace Microcode**, **Remove Microcode**, **Copy CPUID** and **Show Target**; the header row holds **Fix Checksum**.
+The context menu of a microcode row holds **Replace Microcode**, **Remove Microcode** and **Show Target**; the header row holds **Fix Checksum**.
 
 - **Replace Microcode** exchanges the component the row names for another of any signature. The row remains; components behind it move if the new component is of a different size, and the entries naming them are corrected. A replacement that serves a processor another row already serves on the same platforms is refused: the row to update is that one.
 - **Remove Microcode** takes the entry out of the table, moves the components behind it up into the freed space and erases the bytes at the end of the run. A table must retain at least one microcode entry.

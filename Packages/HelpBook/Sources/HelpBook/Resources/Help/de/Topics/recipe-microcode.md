@@ -1,4 +1,4 @@
-@source-sha ebba86b2a59715d6190a9b922fde578439d9201c81f1addcefa912311447b33f
+@source-sha e23353da55847ff08922549da85c538f1dfa7f6036dee32c2d2a0cf2d5bb07ea
 # Microcode und die FIT-Tabelle
 
 > Was das Werkzeug „FIT-Tabelle“ über den Microcode eines Images meldet und was seine Befehle an der Tabelle ändern.
@@ -42,7 +42,7 @@ Der Befehl leistet dann Folgendes:
 
 ## Ersetzen und Entfernen
 
-Das Kontextmenü einer Microcode-Zeile enthält **Microcode ersetzen**, **Microcode entfernen**, **CPUID kopieren** und **Ziel anzeigen**; die Header-Zeile enthält **Prüfsumme korrigieren**.
+Das Kontextmenü einer Microcode-Zeile enthält **Microcode ersetzen**, **Microcode entfernen** und **Ziel anzeigen**; die Header-Zeile enthält **Prüfsumme korrigieren**.
 
 - **Microcode ersetzen** tauscht das von der Zeile benannte Bauteil gegen ein anderes beliebiger Signatur. Die Zeile bleibt; ist das neue Bauteil anders groß, rücken die Bauteile dahinter nach, und die Einträge, die sie benennen, werden berichtigt. Ein Ersatz, der einen Prozessor bedient, den eine andere Zeile auf denselben Plattformen bereits bedient, wird abgelehnt: Zu aktualisieren ist dann diese Zeile.
 - **Microcode entfernen** nimmt den Eintrag aus der Tabelle, rückt die Bauteile dahinter in den frei gewordenen Platz nach und löscht die Bytes am Ende der Reihe. Mindestens ein Microcode-Eintrag muss in der Tabelle verbleiben.
