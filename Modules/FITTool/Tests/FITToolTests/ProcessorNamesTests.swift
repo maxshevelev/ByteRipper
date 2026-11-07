@@ -51,6 +51,16 @@ final class ProcessorNamesTests: XCTestCase {
         XCTAssertTrue(family.processors.isEmpty)
     }
 
+    /// Raptor Lake's H0, B06F5, which the article has no row for: the
+    /// 13th/14th gen four-core i3 and Intel Processor 300, with ARK's codes.
+    func testRaptorLakesH0HasItsModels() throws {
+        let family = try XCTUnwrap(ProcessorNames.families(for: [0xB06F5]).first)
+        XCTAssertEqual(family.codeNames, ["Raptor Lake"])
+        XCTAssertEqual(family.steppings, ["H0"])
+        let model = try XCTUnwrap(family.processors.first { $0.name == "Intel Core i3-13100" })
+        XCTAssertEqual(model.sSpec, ["SRMBU"])
+    }
+
     func testAnXInTheTableMatchesAnyDigit() {
         XCTAssertEqual(ProcessorNames.families(for: [0x606A6], in: catalogue).map(\.codeNames),
                        [["Ice Lake Xeon-SP"]])

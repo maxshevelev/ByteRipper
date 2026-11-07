@@ -361,6 +361,86 @@
       "note": "Ordering tab lists a single TRAY row; no boxed SKU and no C0 code."
     },
     {
+      "model": "Intel Core i3-13100",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/230575/intel-core-i313100-processor-12m-cache-up-to-4-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMBU",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-13100E",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232163/intel-core-i313100e-processor-12m-cache-up-to-4-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMFR",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-13100F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/230576/intel-core-i313100f-processor-12m-cache-up-to-4-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMBV",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-13100T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/230579/intel-core-i313100t-processor-12m-cache-up-to-4-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMBT",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-13100TE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232105/intel-core-i313100te-processor-12m-cache-up-to-4-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMFT",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-14100",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236774/intel-core-i3-processor-14100-12m-cache-up-to-4-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMX1",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-14100F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236786/intel-core-i3-processor-14100f-12m-cache-up-to-4-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMX2",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-14100T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236775/intel-core-i3-processor-14100t-12m-cache-up-to-4-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMX0",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
       "model": "Intel Core i3-6100",
       "url": "https://www.intel.com/content/www/us/en/products/sku/90729/intel-core-i36100-processor-3m-cache-3-70-ghz/ordering.html",
       "specs": [
@@ -978,6 +1058,54 @@
       "note": "ARK gives only H0 codes; the input's C0 stepping has no code on this page"
     },
     {
+      "model": "Intel Core i5-13400",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/230495/intel-core-i513400-processor-20m-cache-up-to-4-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMBF",
+          "stepping": "B0"
+        },
+        {
+          "sSpec": "SRMBP",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-13400E",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/232148/intel-core-i513400e-processor-20m-cache-up-to-4-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMG5",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-13400F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/230501/intel-core-i513400f-processor-20m-cache-up-to-4-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMBG",
+          "stepping": "B0"
+        },
+        {
+          "sSpec": "SRMBN",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-13400T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/230577/intel-core-i513400t-processor-20m-cache-up-to-4-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMBR",
+          "stepping": "C0"
+        }
+      ]
+    },
+    {
       "model": "Intel Core i5-13600K",
       "url": "https://www.intel.com/content/www/us/en/products/sku/230493/intel-core-i513600k-processor-24m-cache-up-to-5-10-ghz/ordering.html",
       "specs": [
@@ -994,6 +1122,44 @@
         {
           "sSpec": "SRMBE",
           "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-14400",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236788/intel-core-i5-processor-14400-20m-cache-up-to-4-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN3Q",
+          "stepping": "C0"
+        },
+        {
+          "sSpec": "SRN46",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-14400F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236777/intel-core-i5-processor-14400f-20m-cache-up-to-4-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN3R",
+          "stepping": "C0"
+        },
+        {
+          "sSpec": "SRN47",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-14400T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236790/intel-core-i5-processor-14400t-20m-cache-up-to-4-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN3N",
+          "stepping": "C0"
         }
       ]
     },
@@ -2439,6 +2605,26 @@
       "note": "No Intel ARK product page found: WebSearch '\"Pentium G4540\" site:intel.com specifications' returned only sibling SKUs (G4500, G4520, G4560, G4620); the ARK 'Products formerly Skylake' listing fetched shows no such model. Likely an OEM-only SKU without an ARK page."
     },
     {
+      "model": "Intel Processor 300",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236846/intel-processor-300-6m-cache-up-to-3-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN3J",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Processor 300T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236852/intel-processor-300t-6m-cache-up-to-3-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRN3K",
+          "stepping": "H0"
+        }
+      ]
+    },
+    {
       "model": "Intel Xeon D-1513N",
       "url": "https://www.intel.com/content/www/us/en/products/sku/122999/intel-xeon-processor-d1513n-6m-cache-1-60-ghz/ordering.html",
       "specs": [
@@ -3365,6 +3551,48 @@
         {
           "sSpec": "SRFB3",
           "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon E-2414",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236193/intel-xeon-e2414-processor-12m-cache-2-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMXD",
+          "stepping": "B0"
+        }
+      ],
+      "note": "ARK gives stepping B0 only; whether this B0 is the RPL-S B0 die (B0671) was not checked"
+    },
+    {
+      "model": "Intel Xeon E-2434",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236192/intel-xeon-e2434-processor-12m-cache-3-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMXC",
+          "stepping": "B0"
+        }
+      ],
+      "note": "ARK gives stepping B0 only; whether this B0 is the RPL-S B0 die (B0671) was not checked"
+    },
+    {
+      "model": "Intel Xeon E-2436",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236190/intel-xeon-e2436-processor-18m-cache-2-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMXB",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon E-2456",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/236188/intel-xeon-e2456-processor-18m-cache-3-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRMXA",
+          "stepping": "B0"
         }
       ]
     },

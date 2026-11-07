@@ -11108,6 +11108,116 @@
       "segments": [],
       "processors": [],
       "source": "extra"
+    },
+    {
+      "cpuids": [
+        "B06F5"
+      ],
+      "codeNames": [
+        "Raptor Lake"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [
+        "H0"
+      ],
+      "segments": [
+        "Desktop",
+        "Embedded"
+      ],
+      "processors": [
+        {
+          "name": "Intel Core i3-13100",
+          "sSpec": [
+            "SRMBU"
+          ],
+          "sSpecSource": {
+            "SRMBU": "ark"
+          }
+        },
+        {
+          "name": "Intel Core i3-13100F",
+          "sSpec": [
+            "SRMBV"
+          ],
+          "sSpecSource": {
+            "SRMBV": "ark"
+          }
+        },
+        {
+          "name": "Intel Core i3-13100T",
+          "sSpec": [
+            "SRMBT"
+          ],
+          "sSpecSource": {
+            "SRMBT": "ark"
+          }
+        },
+        {
+          "name": "Intel Core i3-13100E",
+          "sSpec": [
+            "SRMFR"
+          ],
+          "sSpecSource": {
+            "SRMFR": "ark"
+          }
+        },
+        {
+          "name": "Intel Core i3-13100TE",
+          "sSpec": [
+            "SRMFT"
+          ],
+          "sSpecSource": {
+            "SRMFT": "ark"
+          }
+        },
+        {
+          "name": "Intel Core i3-14100",
+          "sSpec": [
+            "SRMX1"
+          ],
+          "sSpecSource": {
+            "SRMX1": "ark"
+          }
+        },
+        {
+          "name": "Intel Core i3-14100F",
+          "sSpec": [
+            "SRMX2"
+          ],
+          "sSpecSource": {
+            "SRMX2": "ark"
+          }
+        },
+        {
+          "name": "Intel Core i3-14100T",
+          "sSpec": [
+            "SRMX0"
+          ],
+          "sSpecSource": {
+            "SRMX0": "ark"
+          }
+        },
+        {
+          "name": "Intel Processor 300",
+          "sSpec": [
+            "SRN3J"
+          ],
+          "sSpecSource": {
+            "SRN3J": "ark"
+          }
+        },
+        {
+          "name": "Intel Processor 300T",
+          "sSpec": [
+            "SRN3K"
+          ],
+          "sSpecSource": {
+            "SRN3K": "ark"
+          }
+        }
+      ],
+      "source": "extra"
     }
   ]
 }

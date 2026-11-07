@@ -162,6 +162,90 @@
         }
       ],
       "note": "coreboot names B0670 Raptor Lake A0; the kernel names model 0xB7 Raptor Lake. No source names a model sold as B0670: Intel's list of processors by CPUID has only B0671 for 06_B7H, and the one public microcode for B0670 (revision 0x0E) is dated 2022-02-20, months before Raptor Lake's launch. So the entry has no models."
+    },
+    {
+      "cpuids": [
+        "B06F5"
+      ],
+      "codeNames": [
+        "Raptor Lake"
+      ],
+      "cores": [],
+      "productFamilies": [],
+      "steppings": [
+        "H0"
+      ],
+      "segments": [
+        "Desktop",
+        "Embedded"
+      ],
+      "processors": [
+        {
+          "name": "Intel Core i3-13100"
+        },
+        {
+          "name": "Intel Core i3-13100F"
+        },
+        {
+          "name": "Intel Core i3-13100T"
+        },
+        {
+          "name": "Intel Core i3-13100E"
+        },
+        {
+          "name": "Intel Core i3-13100TE"
+        },
+        {
+          "name": "Intel Core i3-14100"
+        },
+        {
+          "name": "Intel Core i3-14100F"
+        },
+        {
+          "name": "Intel Core i3-14100T"
+        },
+        {
+          "name": "Intel Processor 300"
+        },
+        {
+          "name": "Intel Processor 300T"
+        }
+      ],
+      "evidence": [
+        {
+          "gives": [
+            "cpuids",
+            "codeNames",
+            "steppings"
+          ],
+          "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+          "quote": "| RPL-S          | H0       | 06-bf-05/07 | 0000003d | 0000003e | Core Gen13/Gen14"
+        },
+        {
+          "gives": [
+            "cpuids",
+            "steppings"
+          ],
+          "url": "https://raw.githubusercontent.com/coreboot/coreboot/main/src/include/cpu/intel/cpu_ids.h",
+          "quote": "#define CPUID_RAPTORLAKE_H0\t\t0xb06f5"
+        },
+        {
+          "gives": [
+            "codeNames"
+          ],
+          "url": "https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/intel-family.h",
+          "quote": "#define INTEL_RAPTORLAKE_S\t\tIFM(6, 0xBF)"
+        },
+        {
+          "gives": [
+            "processors",
+            "segments"
+          ],
+          "url": "https://www.intel.com/content/www/us/en/products/sku/230575/intel-core-i313100-processor-12m-cache-up-to-4-50-ghz/ordering.html",
+          "quote": "Each model's ARK ordering tab lists its codes at stepping H0 (ark-sspec.json); Code Name \"Products formerly Raptor Lake\", Vertical Segment \"Desktop\" (i3-13100, i3-14100, Processor 300), \"Embedded\" (i3-13100E)"
+        }
+      ],
+      "note": "The article has no row for B06F5. Intel's microcode notes call 06-bf-05 RPL-S H0 since 2024 (earlier releases called it ADL C0); coreboot names 0xb06f5 Raptor Lake H0. The models are those whose ARK ordering tab gives an H0 code among the 13th/14th gen 4-core and 2-core desktop and embedded parts; the i5-13400/14400 (B0, C0) and Xeon E-2400 (B0) have none. Alder Lake's H0 is another CPUID, 90675."
     }
   ]
 }
