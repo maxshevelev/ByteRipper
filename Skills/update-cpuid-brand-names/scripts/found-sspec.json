@@ -4041,6 +4041,487 @@
       "note": "PCN 118146-00 confirms ARK's SRFB3 with stepping R0 (906ED), not U0; no U0 code found, the 906EA listing looks wrong. WebSearch budget for the session ran out after the ARK lookups; no further searches and no photo search (photos.py queries Bing) were run."
     },
     {
+      "model": "Intel Xeon Gold 5318H",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRJY3",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Cooper Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/810941/PCN118913-00.pdf",
+              "quote": "Intel® Xeon® Gold 5318H Processor 99A34K CD8070604481600 S RJY3",
+              "gives": [
+                "sSpec"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/840123/PCN840123-00.pdf",
+              "quote": "Intel® Xeon® Gold 5318H Processor CD8070604481600 S RJY3 99A34K",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRJGD",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Cooper Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/810941/PCN118913-00.pdf",
+              "quote": "Intel® Xeon® Gold 5318H Processor 99A0H3 CD8070604481600 S RJGD",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives each code with stepping A1 (stepping in specs is from ARK). Confirmed in PCN 118913-00 (Costa Rica second site, 2022) and PCN 840123-00 (EOL, 2025); PDFKit renders the codes as 'S RJxx'. Code Name on ARK specifications page: 'Products formerly Cooper Lake' (checked on 8353H). No PCN with pre/post-conversion codes found; photos not needed. 5318H: SRJGD (MM 99A0H3) is the older code, in ARK's retired section and in PCN 118913-00, absent from the 2025 EOL PCN 840123-00; SRJY3 (MM 99A34K) is the current one. Both A1 per ARK."
+    },
+    {
+      "model": "Intel Xeon Gold 5320H",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRJY1",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Cooper Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/810941/PCN118913-00.pdf",
+              "quote": "Intel® Xeon® Gold 5320H Processor 99A34G CD8070604481501 S RJY1",
+              "gives": [
+                "sSpec"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/840123/PCN840123-00.pdf",
+              "quote": "Intel® Xeon® Gold 5320H Processor CD8070604481501 S RJY1 99A34G",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives each code with stepping A1 (stepping in specs is from ARK). Confirmed in PCN 118913-00 (Costa Rica second site, 2022) and PCN 840123-00 (EOL, 2025); PDFKit renders the codes as 'S RJxx'. Code Name on ARK specifications page: 'Products formerly Cooper Lake' (checked on 8353H). No PCN with pre/post-conversion codes found; photos not needed."
+    },
+    {
+      "model": "Intel Xeon Gold 6328H",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRJXY",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Cooper Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/810941/PCN118913-00.pdf",
+              "quote": "Intel® Xeon® Gold 6328H Processor 99A34C CD8070604481201 S RJXY",
+              "gives": [
+                "sSpec"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/840123/PCN840123-00.pdf",
+              "quote": "Intel® Xeon® Gold 6328H Processor CD8070604481201 S RJXY 99A34C",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives each code with stepping A1 (stepping in specs is from ARK). Confirmed in PCN 118913-00 (Costa Rica second site, 2022) and PCN 840123-00 (EOL, 2025); PDFKit renders the codes as 'S RJxx'. Code Name on ARK specifications page: 'Products formerly Cooper Lake' (checked on 8353H). No PCN with pre/post-conversion codes found; photos not needed."
+    },
+    {
+      "model": "Intel Xeon Gold 6328HL",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRJXZ",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Cooper Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/810941/PCN118913-00.pdf",
+              "quote": "Intel® Xeon® Gold 6328HL Processor 99A34D CD8070604481301 S RJXZ",
+              "gives": [
+                "sSpec"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/840123/PCN840123-00.pdf",
+              "quote": "Intel® Xeon® Gold 6328HL Processor CD8070604481301 S RJXZ 99A34D",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives each code with stepping A1 (stepping in specs is from ARK). Confirmed in PCN 118913-00 (Costa Rica second site, 2022) and PCN 840123-00 (EOL, 2025); PDFKit renders the codes as 'S RJxx'. Code Name on ARK specifications page: 'Products formerly Cooper Lake' (checked on 8353H). No PCN with pre/post-conversion codes found; photos not needed."
+    },
+    {
+      "model": "Intel Xeon Gold 6330H",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRK5A",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Cooper Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/810941/PCN118913-00.pdf",
+              "quote": "Intel® Xeon® Gold 6330H Processor 99A64C CD8070604560002 S RK5A",
+              "gives": [
+                "sSpec"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/840123/PCN840123-00.pdf",
+              "quote": "Intel® Xeon® Gold 6330H Processor CD8070604560002 S RK5A 99A64C",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives each code with stepping A1 (stepping in specs is from ARK). Confirmed in PCN 118913-00 (Costa Rica second site, 2022) and PCN 840123-00 (EOL, 2025); PDFKit renders the codes as 'S RJxx'. Code Name on ARK specifications page: 'Products formerly Cooper Lake' (checked on 8353H). No PCN with pre/post-conversion codes found; photos not needed."
+    },
+    {
+      "model": "Intel Xeon Gold 6348H",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRJXX",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Cooper Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/810941/PCN118913-00.pdf",
+              "quote": "Intel® Xeon® Gold 6348H Processor 99A34A CD8070604481101 S RJXX",
+              "gives": [
+                "sSpec"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/840123/PCN840123-00.pdf",
+              "quote": "Intel® Xeon® Gold 6348H Processor CD8070604481101 S RJXX 99A34A",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives each code with stepping A1 (stepping in specs is from ARK). Confirmed in PCN 118913-00 (Costa Rica second site, 2022) and PCN 840123-00 (EOL, 2025); PDFKit renders the codes as 'S RJxx'. Code Name on ARK specifications page: 'Products formerly Cooper Lake' (checked on 8353H). No PCN with pre/post-conversion codes found; photos not needed."
+    },
+    {
+      "model": "Intel Xeon Platinum 8353H",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRJY2",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Cooper Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/810941/PCN118913-00.pdf",
+              "quote": "Intel® Xeon® Platinum 8353H Processor 99A34H CD8070604481601 S RJY2",
+              "gives": [
+                "sSpec"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/840123/PCN840123-00.pdf",
+              "quote": "Intel® Xeon® Platinum 8353H Processor CD8070604481601 S RJY2 99A34H",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives each code with stepping A1 (stepping in specs is from ARK). Confirmed in PCN 118913-00 (Costa Rica second site, 2022) and PCN 840123-00 (EOL, 2025); PDFKit renders the codes as 'S RJxx'. Code Name on ARK specifications page: 'Products formerly Cooper Lake' (checked on 8353H). No PCN with pre/post-conversion codes found; photos not needed."
+    },
+    {
+      "model": "Intel Xeon Platinum 8354H",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRK5Y",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Cooper Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/810941/PCN118913-00.pdf",
+              "quote": "Intel® Xeon® Platinum 8354H Processor 99A677 CD8070604481002 SRK5Y",
+              "gives": [
+                "sSpec"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/840123/PCN840123-00.pdf",
+              "quote": "Intel® Xeon® Platinum 8354H Processor CD8070604481002 SRK5Y 99A677",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives one code with stepping A1. PCN 118913 (second assembly/test site, Costa Rica) and PCN 840123 (EOL, Jan 2025) list the same single code: no code change, no other code found. Stepping A1 is from ARK. Spec Update 634897 not read."
+    },
+    {
+      "model": "Intel Xeon Platinum 8356H",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRK57",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Cooper Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/810941/PCN118913-00.pdf",
+              "quote": "Intel® Xeon® Platinum 8356H Processor 99A643 CD8070604559701 SRK57",
+              "gives": [
+                "sSpec"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/840123/PCN840123-00.pdf",
+              "quote": "Intel® Xeon® Platinum 8356H Processor CD8070604559701 SRK57 99A643",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives one code with stepping A1. PCN 118913 (second assembly/test site, Costa Rica) and PCN 840123 (EOL, Jan 2025) list the same single code: no code change, no other code found. Stepping A1 is from ARK. Spec Update 634897 not read."
+    },
+    {
+      "model": "Intel Xeon Platinum 8360H",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRK59",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Cooper Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/810941/PCN118913-00.pdf",
+              "quote": "Intel® Xeon® Platinum 8360H Processor 99A64A CD8070604559900 SRK59",
+              "gives": [
+                "sSpec"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/840123/PCN840123-00.pdf",
+              "quote": "Intel® Xeon® Platinum 8360H Processor CD8070604559900 SRK59 99A64A",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives one code with stepping A1. PCN 118913 (second assembly/test site, Costa Rica) and PCN 840123 (EOL, Jan 2025) list the same single code: no code change, no other code found. Stepping A1 is from ARK. Spec Update 634897 not read."
+    },
+    {
+      "model": "Intel Xeon Platinum 8360HL",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRK58",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Cooper Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/810941/PCN118913-00.pdf",
+              "quote": "Intel® Xeon® Platinum 8360HL Processor 99A646 CD8070604559801 SRK58",
+              "gives": [
+                "sSpec"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/840123/PCN840123-00.pdf",
+              "quote": "Intel® Xeon® Platinum 8360HL Processor CD8070604559801 SRK58 99A646",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives one code with stepping A1. PCN 118913 (second assembly/test site, Costa Rica) and PCN 840123 (EOL, Jan 2025) list the same single code: no code change, no other code found. Stepping A1 is from ARK. Spec Update 634897 not read."
+    },
+    {
+      "model": "Intel Xeon Platinum 8376H",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRJXS",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Cooper Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/810941/PCN118913-00.pdf",
+              "quote": "Intel® Xeon® Platinum 8376H Processor 99A33P CD8070604480501 SRJXS",
+              "gives": [
+                "sSpec"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/840123/PCN840123-00.pdf",
+              "quote": "Intel® Xeon® Platinum 8376H Processor CD8070604480501 SRJXS 99A33P",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives one code with stepping A1. PCN 118913 (second assembly/test site, Costa Rica) and PCN 840123 (EOL, Jan 2025) list the same single code: no code change, no other code found. Stepping A1 is from ARK. Spec Update 634897 not read."
+    },
+    {
+      "model": "Intel Xeon Platinum 8376HL",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRJXT",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Cooper Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/810941/PCN118913-00.pdf",
+              "quote": "Intel® Xeon® Platinum 8376HL Processor 99A33R CD8070604480601 SRJXT",
+              "gives": [
+                "sSpec"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/840123/PCN840123-00.pdf",
+              "quote": "Intel® Xeon® Platinum 8376HL Processor CD8070604480601 SRJXT 99A33R",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives one code with stepping A1. PCN 118913 (second assembly/test site, Costa Rica) and PCN 840123 (EOL, Jan 2025) list the same single code: no code change, no other code found. Stepping A1 is from ARK. Spec Update 634897 not read."
+    },
+    {
+      "model": "Intel Xeon Platinum 8380H",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRJXQ",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Cooper Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/810941/PCN118913-00.pdf",
+              "quote": "Intel® Xeon® Platinum 8380H Processor 99A33D CD8070604480301 SRJXQ",
+              "gives": [
+                "sSpec"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/840123/PCN840123-00.pdf",
+              "quote": "Intel® Xeon® Platinum 8380H Processor CD8070604480301 SRJXQ 99A33D",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives one code with stepping A1. PCN 118913 (second assembly/test site, Costa Rica) and PCN 840123 (EOL, Jan 2025) list the same single code: no code change, no other code found. Stepping A1 is from ARK. Spec Update 634897 not read."
+    },
+    {
+      "model": "Intel Xeon Platinum 8380HL",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRJXR",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Cooper Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/810941/PCN118913-00.pdf",
+              "quote": "Intel® Xeon® Platinum 8380HL Processor 99A33N CD8070604480401 SRJXR",
+              "gives": [
+                "sSpec"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/840123/PCN840123-00.pdf",
+              "quote": "Intel® Xeon® Platinum 8380HL Processor CD8070604480401 SRJXR 99A33N",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives one code with stepping A1. PCN 118913 (second assembly/test site, Costa Rica) and PCN 840123 (EOL, Jan 2025) list the same single code: no code change, no other code found. Stepping A1 is from ARK. Spec Update 634897 not read."
+    },
+    {
       "model": "Intel Xeon Platinum 9220",
       "searched": "2026-11-07",
       "specs": [],

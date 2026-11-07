@@ -2679,6 +2679,161 @@
       ]
     },
     {
+      "model": "Intel Xeon Gold 5318H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/204086/intel-xeon-gold-5318h-processor-24-75m-cache-2-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRJY3",
+          "stepping": "A1"
+        },
+        {
+          "sSpec": "SRJGD",
+          "stepping": "A1"
+        }
+      ],
+      "note": "SRJGD is listed under 'Retired and discontinued' with the same ordering code CD8070604481600 and stepping A1; SRJY3 under 'Ordering and Spec Information'."
+    },
+    {
+      "model": "Intel Xeon Gold 5320H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/204090/intel-xeon-gold-5320h-processor-27-5m-cache-2-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRJY1",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6328H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/204088/intel-xeon-gold-6328h-processor-22m-cache-2-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRJXY",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6328HL",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/205687/intel-xeon-gold-6328hl-processor-22m-cache-2-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRJXZ",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6330H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/204091/intel-xeon-gold-6330h-processor-33m-cache-2-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRK5A",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Gold 6348H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/204095/intel-xeon-gold-6348h-processor-33m-cache-2-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRJXX",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8353H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/204092/intel-xeon-platinum-8353h-processor-24-75m-cache-2-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRJY2",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8354H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/204094/intel-xeon-platinum-8354h-processor-24-75m-cache-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRK5Y",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8356H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/204097/intel-xeon-platinum-8356h-processor-35-75m-cache-3-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRK57",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8360H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/204089/intel-xeon-platinum-8360h-processor-33m-cache-3-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRK59",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8360HL",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/205688/intel-xeon-platinum-8360hl-processor-33m-cache-3-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRK58",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8376H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/204096/intel-xeon-platinum-8376h-processor-38-5m-cache-2-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRJXS",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8376HL",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/205683/intel-xeon-platinum-8376hl-processor-38-5m-cache-2-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRJXT",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8380H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/204087/intel-xeon-platinum-8380h-processor-38-5m-cache-2-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRJXQ",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8380HL",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/205684/intel-xeon-platinum-8380hl-processor-38-5m-cache-2-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRJXR",
+          "stepping": "A1"
+        }
+      ]
+    },
+    {
       "model": "Intel Xeon Platinum 9220",
       "url": null,
       "specs": [],

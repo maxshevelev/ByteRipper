@@ -2977,63 +2977,140 @@
       "processors": [
         {
           "name": "Intel Xeon Platinum 8380HL",
-          "sSpec": []
+          "sSpec": [
+            "SRJXR"
+          ],
+          "sSpecSource": {
+            "SRJXR": "ark"
+          }
         },
         {
           "name": "Intel Xeon Platinum 8380H",
-          "sSpec": []
+          "sSpec": [
+            "SRJXQ"
+          ],
+          "sSpecSource": {
+            "SRJXQ": "ark"
+          }
         },
         {
           "name": "Intel Xeon Platinum 8376HL",
-          "sSpec": []
+          "sSpec": [
+            "SRJXT"
+          ],
+          "sSpecSource": {
+            "SRJXT": "ark"
+          }
         },
         {
           "name": "Intel Xeon Platinum 8376H",
-          "sSpec": []
+          "sSpec": [
+            "SRJXS"
+          ],
+          "sSpecSource": {
+            "SRJXS": "ark"
+          }
         },
         {
           "name": "Intel Xeon Platinum 8360HL",
-          "sSpec": []
+          "sSpec": [
+            "SRK58"
+          ],
+          "sSpecSource": {
+            "SRK58": "ark"
+          }
         },
         {
           "name": "Intel Xeon Platinum 8360H",
-          "sSpec": []
+          "sSpec": [
+            "SRK59"
+          ],
+          "sSpecSource": {
+            "SRK59": "ark"
+          }
         },
         {
           "name": "Intel Xeon Platinum 8356H",
-          "sSpec": []
+          "sSpec": [
+            "SRK57"
+          ],
+          "sSpecSource": {
+            "SRK57": "ark"
+          }
         },
         {
           "name": "Intel Xeon Platinum 8354H",
-          "sSpec": []
+          "sSpec": [
+            "SRK5Y"
+          ],
+          "sSpecSource": {
+            "SRK5Y": "ark"
+          }
         },
         {
           "name": "Intel Xeon Platinum 8353H",
-          "sSpec": []
+          "sSpec": [
+            "SRJY2"
+          ],
+          "sSpecSource": {
+            "SRJY2": "ark"
+          }
         },
         {
           "name": "Intel Xeon Gold 6348H",
-          "sSpec": []
+          "sSpec": [
+            "SRJXX"
+          ],
+          "sSpecSource": {
+            "SRJXX": "ark"
+          }
         },
         {
           "name": "Intel Xeon Gold 6330H",
-          "sSpec": []
+          "sSpec": [
+            "SRK5A"
+          ],
+          "sSpecSource": {
+            "SRK5A": "ark"
+          }
         },
         {
           "name": "Intel Xeon Gold 6328HL",
-          "sSpec": []
+          "sSpec": [
+            "SRJXZ"
+          ],
+          "sSpecSource": {
+            "SRJXZ": "ark"
+          }
         },
         {
           "name": "Intel Xeon Gold 6328H",
-          "sSpec": []
+          "sSpec": [
+            "SRJXY"
+          ],
+          "sSpecSource": {
+            "SRJXY": "ark"
+          }
         },
         {
           "name": "Intel Xeon Gold 5320H",
-          "sSpec": []
+          "sSpec": [
+            "SRJY1"
+          ],
+          "sSpecSource": {
+            "SRJY1": "ark"
+          }
         },
         {
           "name": "Intel Xeon Gold 5318H",
-          "sSpec": []
+          "sSpec": [
+            "SRJY3",
+            "SRJGD"
+          ],
+          "sSpecSource": {
+            "SRJY3": "ark",
+            "SRJGD": "ark"
+          }
         }
       ]
     },
