@@ -170,6 +170,2598 @@
       "searched": "2026-11-07",
       "specs": [],
       "note": "ARK ordering tab gives one code, stepping B0, for every ordering code. Intel Specification Update 740518 Rev. 016 (edc.intel.com id=7232) was read: its Table 2-1 lists only CPUID (RPL-S 8P+16E = 0xB0671), no S-Spec table, so it adds no code. No second code searched for via databases or photographs, since ARK lists a single code with its stepping."
+    },
+    {
+      "model": "Intel Xeon D-1513N",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1518",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1520",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1521",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1523N",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1524N",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1527",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1528",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1529",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1531",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1533N",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1537",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1539",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1540",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1541",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1543N",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1548",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1553N",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1557",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1559",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1563N",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1564N",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1567",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1571",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1573N",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1577",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1581",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1587",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1602",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1612",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1622",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1623N",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1627",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1632",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1633N",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1637",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1649N",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1653N",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1702",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLC5",
+          "stepping": "Z1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1702 | FH8068604437205 | pre-conversion SRLC5 | post-conversion SRM1N (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM1N",
+          "stepping": "Z2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1702 | FH8068604437205 | pre-conversion SRLC5 | post-conversion SRM1N (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives the code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Xeon D-1712TR",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLBZ",
+          "stepping": "Z1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1712TR | FH8068604436820 | pre-conversion SRLBZ | post-conversion SRM1G (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM1G",
+          "stepping": "Z2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1712TR | FH8068604436820 | pre-conversion SRLBZ | post-conversion SRM1G (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives the code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Xeon D-1713NT",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLBS",
+          "stepping": "Z1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1713NT | FH8068604435007 | pre-conversion SRLBS | post-conversion SRM19 (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM19",
+          "stepping": "Z2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1713NT | FH8068604435007 | pre-conversion SRLBS | post-conversion SRM19 (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives the code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Xeon D-1713NTE",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLBT",
+          "stepping": "Z1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1713NTE | FH8068604436204 | pre-conversion SRLBT | post-conversion SRM1A (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM1A",
+          "stepping": "Z2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1713NTE | FH8068604436204 | pre-conversion SRLBT | post-conversion SRM1A (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives the code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Xeon D-1714",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLC0",
+          "stepping": "Z1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1714 | FH8068604436906 | pre-conversion SRLC0 | post-conversion SRM1H (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM1H",
+          "stepping": "Z2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1714 | FH8068604436906 | pre-conversion SRLC0 | post-conversion SRM1H (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives the code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Xeon D-1715TER",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLBX",
+          "stepping": "Z1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1715TER | FH8068604436605 | pre-conversion SRLBX | post-conversion SRM1E (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM1E",
+          "stepping": "Z2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1715TER | FH8068604436605 | pre-conversion SRLBX | post-conversion SRM1E (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives the code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Xeon D-1718T",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLBY",
+          "stepping": "Z1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1718T | FH8068604436705 | pre-conversion SRLBY | post-conversion SRM1F (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM1F",
+          "stepping": "Z2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1718T | FH8068604436705 | pre-conversion SRLBY | post-conversion SRM1F (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives the code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Xeon D-1722NE",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLC4",
+          "stepping": "Z1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1722NE | FH8068604437106 | pre-conversion SRLC4 | post-conversion SRM1M (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM1M",
+          "stepping": "Z2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1722NE | FH8068604437106 | pre-conversion SRLC4 | post-conversion SRM1M (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives the code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Xeon D-1726",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLC3",
+          "stepping": "Z1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1726 | FH8068604437107 | pre-conversion SRLC3 | post-conversion SRM1L (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM1L",
+          "stepping": "Z2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1726 | FH8068604437107 | pre-conversion SRLC3 | post-conversion SRM1L (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Z1 code from Intel PCN 119280-02 (Dec 2022, Z1 to Z2 conversion, same ordering code). Table row read from the PDF rendered as an image (text extraction scrambles the columns). Intel gives steppings Z1/Z2, not B0 as the input table says; JTAG IDCODE Z1 2E7C5013, Z2 3E7C5013 per the PCN."
+    },
+    {
+      "model": "Intel Xeon D-1732TE",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLBW",
+          "stepping": "Z1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1732TE | FH8068604436505 | pre-conversion SRLBW | post-conversion SRM1D (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM1D",
+          "stepping": "Z2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1732TE | FH8068604436505 | pre-conversion SRLBW | post-conversion SRM1D (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Z1 code from Intel PCN 119280-02 (Dec 2022, Z1 to Z2 conversion, same ordering code). Table row read from the PDF rendered as an image (text extraction scrambles the columns). Intel gives steppings Z1/Z2, not B0 as the input table says; JTAG IDCODE Z1 2E7C5013, Z2 3E7C5013 per the PCN."
+    },
+    {
+      "model": "Intel Xeon D-1733NT",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLBR",
+          "stepping": "Z1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1733NT | FH8068604434909 | pre-conversion SRLBR | post-conversion SRM17 (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM17",
+          "stepping": "Z2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1733NT | FH8068604434909 | pre-conversion SRLBR | post-conversion SRM17 (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Z1 code from Intel PCN 119280-02 (Dec 2022, Z1 to Z2 conversion, same ordering code). Table row read from the PDF rendered as an image (text extraction scrambles the columns). Intel gives steppings Z1/Z2, not B0 as the input table says; JTAG IDCODE Z1 2E7C5013, Z2 3E7C5013 per the PCN."
+    },
+    {
+      "model": "Intel Xeon D-1734NT",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLC7",
+          "stepping": "Z1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1734NT | FH8068604437405 | pre-conversion SRLC7 | post-conversion SRM1Q (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM1Q",
+          "stepping": "Z2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1734NT | FH8068604437405 | pre-conversion SRLC7 | post-conversion SRM1Q (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Z1 code from Intel PCN 119280-02 (Dec 2022, Z1 to Z2 conversion, same ordering code). Table row read from the PDF rendered as an image (text extraction scrambles the columns). Intel gives steppings Z1/Z2, not B0 as the input table says; JTAG IDCODE Z1 2E7C5013, Z2 3E7C5013 per the PCN."
+    },
+    {
+      "model": "Intel Xeon D-1735TR",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLBV",
+          "stepping": "Z1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1735TR | FH8068604436405 | pre-conversion SRLBV | post-conversion SRM1C (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM1C",
+          "stepping": "Z2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1735TR | FH8068604436405 | pre-conversion SRLBV | post-conversion SRM1C (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Z1 code from Intel PCN 119280-02 (Dec 2022, Z1 to Z2 conversion, same ordering code). Table row read from the PDF rendered as an image (text extraction scrambles the columns). Intel gives steppings Z1/Z2, not B0 as the input table says; JTAG IDCODE Z1 2E7C5013, Z2 3E7C5013 per the PCN."
+    },
+    {
+      "model": "Intel Xeon D-1736",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLC2",
+          "stepping": "Z1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1736 | FH8068604437007 | pre-conversion SRLC2 | post-conversion SRM1K (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM1K",
+          "stepping": "Z2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1736 | FH8068604437007 | pre-conversion SRLC2 | post-conversion SRM1K (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Z1 code from Intel PCN 119280-02 (Dec 2022, Z1 to Z2 conversion, same ordering code). Table row read from the PDF rendered as an image (text extraction scrambles the columns). Intel gives steppings Z1/Z2, not B0 as the input table says; JTAG IDCODE Z1 2E7C5013, Z2 3E7C5013 per the PCN."
+    },
+    {
+      "model": "Intel Xeon D-1736NT",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLBQ",
+          "stepping": "Z1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1736NT | FH8068604434811 | pre-conversion SRLBQ | post-conversion SRM16 (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM16",
+          "stepping": "Z2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1736NT | FH8068604434811 | pre-conversion SRLBQ | post-conversion SRM16 (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Z1 code from Intel PCN 119280-02 (Dec 2022, Z1 to Z2 conversion, same ordering code). Table row read from the PDF rendered as an image (text extraction scrambles the columns). Intel gives steppings Z1/Z2, not B0 as the input table says; JTAG IDCODE Z1 2E7C5013, Z2 3E7C5013 per the PCN."
+    },
+    {
+      "model": "Intel Xeon D-1739",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLC1",
+          "stepping": "Z1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1739 | FH8068604437006 | pre-conversion SRLC1 | post-conversion SRM1J (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM1J",
+          "stepping": "Z2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1739 | FH8068604437006 | pre-conversion SRLC1 | post-conversion SRM1J (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Z1 code from Intel PCN 119280-02 (Dec 2022, Z1 to Z2 conversion, same ordering code). Table row read from the PDF rendered as an image (text extraction scrambles the columns). Intel gives steppings Z1/Z2, not B0 as the input table says; JTAG IDCODE Z1 2E7C5013, Z2 3E7C5013 per the PCN."
+    },
+    {
+      "model": "Intel Xeon D-1746TER",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLBU",
+          "stepping": "Z1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1746TER | FH8068604436317 | pre-conversion SRLBU | post-conversion SRM1B (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM1B",
+          "stepping": "Z2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1746TER | FH8068604436317 | pre-conversion SRLBU | post-conversion SRM1B (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK code name 'Products formerly Ice Lake' (checked on the D-1749NT and D-2738 specification pages). PCN 119280-02 (Dec 2022): stepping change Z1->Z2 for ESD improvement on XTAL25; same ordering code FH8068604436317 under both S-Specs. PCN table read from the rendered page image (PDFKit text extraction scrambled the table columns). Input steppings 'B0' do not match Intel's Z1/Z2 or U1/U2 naming. No photographs needed (BGA)."
+    },
+    {
+      "model": "Intel Xeon D-1747NTE",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLC6",
+          "stepping": "Z1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1747NTE | FH8068604437308 | pre-conversion SRLC6 | post-conversion SRM1P (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM1P",
+          "stepping": "Z2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1747NTE | FH8068604437308 | pre-conversion SRLC6 | post-conversion SRM1P (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK code name 'Products formerly Ice Lake' (checked on the D-1749NT and D-2738 specification pages). PCN 119280-02 (Dec 2022): stepping change Z1->Z2 for ESD improvement on XTAL25; same ordering code FH8068604437308 under both S-Specs. PCN table read from the rendered page image (PDFKit text extraction scrambled the table columns). Input steppings 'B0' do not match Intel's Z1/Z2 or U1/U2 naming. No photographs needed (BGA)."
+    },
+    {
+      "model": "Intel Xeon D-1748TE",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLC8",
+          "stepping": "Z1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1748TE | FH8068604564305 | pre-conversion SRLC8 | post-conversion SRM1R (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM1R",
+          "stepping": "Z2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1748TE | FH8068604564305 | pre-conversion SRLC8 | post-conversion SRM1R (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK code name 'Products formerly Ice Lake' (checked on the D-1749NT and D-2738 specification pages). PCN 119280-02 (Dec 2022): stepping change Z1->Z2 for ESD improvement on XTAL25; same ordering code FH8068604564305 under both S-Specs. PCN table read from the rendered page image (PDFKit text extraction scrambled the table columns). Input steppings 'B0' do not match Intel's Z1/Z2 or U1/U2 naming. No photographs needed (BGA)."
+    },
+    {
+      "model": "Intel Xeon D-1749NT",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLBP",
+          "stepping": "Z1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1749NT | FH8068604427819 | pre-conversion SRLBP | post-conversion SRM15 (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM15",
+          "stepping": "Z2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 4: D-1749NT | FH8068604427819 | pre-conversion SRLBP | post-conversion SRM15 (Z1 to Z2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK code name 'Products formerly Ice Lake' (checked on the D-1749NT and D-2738 specification pages). PCN 119280-02 (Dec 2022): stepping change Z1->Z2 for ESD improvement on XTAL25; same ordering code FH8068604427819 under both S-Specs. PCN table read from the rendered page image (PDFKit text extraction scrambled the table columns). Input steppings 'B0' do not match Intel's Z1/Z2 or U1/U2 naming. No photographs needed (BGA)."
+    },
+    {
+      "model": "Intel Xeon D-2123IT",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-2141I",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-2142IT",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-2143IT",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-2145NT",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-2146NT",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-2161I",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-2163IT",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-2166NT",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-2173IT",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-2177NT",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-2183IT",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-2187NT",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-2191",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-2712T",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLCK",
+          "stepping": "U1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2712T | FH8068604676144 | pre-conversion SRLCK | post-conversion SRM22 (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM22",
+          "stepping": "U2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2712T | FH8068604676144 | pre-conversion SRLCK | post-conversion SRM22 (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK code name 'Products formerly Ice Lake' (checked on the D-1749NT and D-2738 specification pages). PCN 119280-02 (Dec 2022): stepping change U1->U2 for ESD improvement on XTAL25; same ordering code FH8068604676144 under both S-Specs. PCN table read from the rendered page image (PDFKit text extraction scrambled the table columns). Input steppings 'B0' do not match Intel's Z1/Z2 or U1/U2 naming. No photographs needed (BGA)."
+    },
+    {
+      "model": "Intel Xeon D-2733NT",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLCJ",
+          "stepping": "U1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2733NT | FH8068604676143 | pre-conversion SRLCJ | post-conversion SRM21 (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM21",
+          "stepping": "U2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2733NT | FH8068604676143 | pre-conversion SRLCJ | post-conversion SRM21 (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK code name 'Products formerly Ice Lake' (checked on the D-1749NT and D-2738 specification pages). PCN 119280-02 (Dec 2022): stepping change U1->U2 for ESD improvement on XTAL25; same ordering code FH8068604676143 under both S-Specs. PCN table read from the rendered page image (PDFKit text extraction scrambled the table columns). Input steppings 'B0' do not match Intel's Z1/Z2 or U1/U2 naming. No photographs needed (BGA)."
+    },
+    {
+      "model": "Intel Xeon D-2738",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLCQ",
+          "stepping": "U1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2738 | FH8068604676166 | pre-conversion SRLCQ | post-conversion SRM29 (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM29",
+          "stepping": "U2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2738 | FH8068604676166 | pre-conversion SRLCQ | post-conversion SRM29 (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK code name 'Products formerly Ice Lake' (checked on the D-1749NT and D-2738 specification pages). PCN 119280-02 (Dec 2022): stepping change U1->U2 for ESD improvement on XTAL25; same ordering code FH8068604676166 under both S-Specs. PCN table read from the rendered page image (PDFKit text extraction scrambled the table columns). Input steppings 'B0' do not match Intel's Z1/Z2 or U1/U2 naming. No photographs needed (BGA)."
+    },
+    {
+      "model": "Intel Xeon D-2745NX",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLCC",
+          "stepping": "U1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2745NX | FH8068604676157 | pre-conversion SRLCC | post-conversion SRM1V (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM1V",
+          "stepping": "U2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2745NX | FH8068604676157 | pre-conversion SRLCC | post-conversion SRM1V (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK code name 'Products formerly Ice Lake' (checked on the D-1749NT and D-2738 specification pages). PCN 119280-02 (Dec 2022): stepping change U1->U2 for ESD improvement on XTAL25; same ordering code FH8068604676157 under both S-Specs. PCN table read from the rendered page image (PDFKit text extraction scrambled the table columns). Input steppings 'B0' do not match Intel's Z1/Z2 or U1/U2 naming. No photographs needed (BGA)."
+    },
+    {
+      "model": "Intel Xeon D-2752NTE",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLCG",
+          "stepping": "U1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2752NTE | FH8068604676161 | pre-conversion SRLCG | post-conversion SRM1Z (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM1Z",
+          "stepping": "U2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2752NTE | FH8068604676161 | pre-conversion SRLCG | post-conversion SRM1Z (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives every code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Xeon D-2752TER",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLCN",
+          "stepping": "U1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2752TER | FH8068604676164 | pre-conversion SRLCN | post-conversion SRM27 (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM27",
+          "stepping": "U2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2752TER | FH8068604676164 | pre-conversion SRLCN | post-conversion SRM27 (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives every code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Xeon D-2753NT",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLCH",
+          "stepping": "U1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2753NT | FH8068604676162 | pre-conversion SRLCH | post-conversion SRM20 (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM20",
+          "stepping": "U2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2753NT | FH8068604676162 | pre-conversion SRLCH | post-conversion SRM20 (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives every code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Xeon D-2757NX",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLCB",
+          "stepping": "U1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2757NX | FH8068604676156 | pre-conversion SRLCB | post-conversion SRM1U (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM1U",
+          "stepping": "U2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2757NX | FH8068604676156 | pre-conversion SRLCB | post-conversion SRM1U (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives every code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Xeon D-2766NT",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLCS",
+          "stepping": "U1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2766NT | FH8068604676168 | pre-conversion SRLCS | post-conversion SRM2B (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM2B",
+          "stepping": "U2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2766NT | FH8068604676168 | pre-conversion SRLCS | post-conversion SRM2B (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives every code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Xeon D-2775TE",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLCM",
+          "stepping": "U1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2775TE | FH8068604676146 | pre-conversion SRLCM | post-conversion SRM26 (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM26",
+          "stepping": "U2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2775TE | FH8068604676146 | pre-conversion SRLCM | post-conversion SRM26 (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives every code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Xeon D-2776NT",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLCF",
+          "stepping": "U1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2776NT | FH8068604676160 | pre-conversion SRLCF | post-conversion SRM1Y (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM1Y",
+          "stepping": "U2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2776NT | FH8068604676160 | pre-conversion SRLCF | post-conversion SRM1Y (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives every code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Xeon D-2777NX",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLCA",
+          "stepping": "U1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2777NX | FH8068604676155 | pre-conversion SRLCA | post-conversion SRM1T (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM1T",
+          "stepping": "U2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2777NX | FH8068604676155 | pre-conversion SRLCA | post-conversion SRM1T (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives every code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Xeon D-2779",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLCP",
+          "stepping": "U1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2779 | FH8068604676165 | pre-conversion SRLCP | post-conversion SRM28 (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM28",
+          "stepping": "U2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2779 | FH8068604676165 | pre-conversion SRLCP | post-conversion SRM28 (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Intel calls the steppings U1 and U2 (PCN 119280-02: ESD fix on XTAL25, JTAG IDCODE 5E7C5013 -> 6E7C5013), not the B0 the input lists; neither source gives a CPUID. Architecture from the ARK specifications page: 'Products formerly Ice Lake'. PCN table read from a rendered image of page 3 (PDFKit's text extraction scrambles its rows)."
+    },
+    {
+      "model": "Intel Xeon D-2786NTE",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLCE",
+          "stepping": "U1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2786NTE | FH8068604676159 | pre-conversion SRLCE | post-conversion SRM1X (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM1X",
+          "stepping": "U2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2786NTE | FH8068604676159 | pre-conversion SRLCE | post-conversion SRM1X (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Intel calls the steppings U1 and U2 (PCN 119280-02: ESD fix on XTAL25, JTAG IDCODE 5E7C5013 -> 6E7C5013), not the B0 the input lists; neither source gives a CPUID. Architecture from the ARK specifications page: 'Products formerly Ice Lake'. PCN table read from a rendered image of page 3 (PDFKit's text extraction scrambles its rows)."
+    },
+    {
+      "model": "Intel Xeon D-2795NT",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLCU",
+          "stepping": "U1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2795NT | FH8068604676153 | pre-conversion SRLCU | post-conversion SRM2D (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM2D",
+          "stepping": "U2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2795NT | FH8068604676153 | pre-conversion SRLCU | post-conversion SRM2D (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Intel calls the steppings U1 and U2 (PCN 119280-02: ESD fix on XTAL25, JTAG IDCODE 5E7C5013 -> 6E7C5013), not the B0 the input lists; neither source gives a CPUID. Architecture from the ARK specifications page: 'Products formerly Ice Lake'. PCN table read from a rendered image of page 3 (PDFKit's text extraction scrambles its rows)."
+    },
+    {
+      "model": "Intel Xeon D-2796NT",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLCR",
+          "stepping": "U1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2796NT | FH8068604676167 | pre-conversion SRLCR | post-conversion SRM2A (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM2A",
+          "stepping": "U2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2796NT | FH8068604676167 | pre-conversion SRLCR | post-conversion SRM2A (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Intel calls the steppings U1 and U2 (PCN 119280-02: ESD fix on XTAL25, JTAG IDCODE 5E7C5013 -> 6E7C5013), not the B0 the input lists; neither source gives a CPUID. Architecture from the ARK specifications page: 'Products formerly Ice Lake'. PCN table read from a rendered image of page 3 (PDFKit's text extraction scrambles its rows)."
+    },
+    {
+      "model": "Intel Xeon D-2796TE",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLCL",
+          "stepping": "U1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2796TE | FH8068604676163 | pre-conversion SRLCL | post-conversion SRM23 (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM23",
+          "stepping": "U2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2796TE | FH8068604676163 | pre-conversion SRLCL | post-conversion SRM23 (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Intel calls the steppings U1 and U2 (PCN 119280-02: ESD fix on XTAL25, JTAG IDCODE 5E7C5013 -> 6E7C5013), not the B0 the input lists; neither source gives a CPUID. Architecture from the ARK specifications page: 'Products formerly Ice Lake'. PCN table read from a rendered image of page 3 (PDFKit's text extraction scrambles its rows)."
+    },
+    {
+      "model": "Intel Xeon D-2798NT",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLCD",
+          "stepping": "U1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2798NT | FH8068604676158 | pre-conversion SRLCD | post-conversion SRM1W (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM1W",
+          "stepping": "U2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2798NT | FH8068604676158 | pre-conversion SRLCD | post-conversion SRM1W (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Intel calls the steppings U1 and U2 (PCN 119280-02: ESD fix on XTAL25, JTAG IDCODE 5E7C5013 -> 6E7C5013), not the B0 the input lists; neither source gives a CPUID. Architecture from the ARK specifications page: 'Products formerly Ice Lake'. PCN table read from a rendered image of page 3 (PDFKit's text extraction scrambles its rows)."
+    },
+    {
+      "model": "Intel Xeon D-2798NX",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLC9",
+          "stepping": "U1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2798NX | FH8068604676154 | pre-conversion SRLC9 | post-conversion SRM1S (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM1S",
+          "stepping": "U2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2798NX | FH8068604676154 | pre-conversion SRLC9 | post-conversion SRM1S (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Intel calls the steppings U1 and U2 (PCN 119280-02: ESD fix on XTAL25, JTAG IDCODE 5E7C5013 -> 6E7C5013), not the B0 the input lists; neither source gives a CPUID. Architecture from the ARK specifications page: 'Products formerly Ice Lake'. PCN table read from a rendered image of page 3 (PDFKit's text extraction scrambles its rows)."
+    },
+    {
+      "model": "Intel Xeon D-2799",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRLCT",
+          "stepping": "U1",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2799 | FH8068604676169 | pre-conversion SRLCT | post-conversion SRM2C (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SRM2C",
+          "stepping": "U2",
+          "cpuid": "606C1",
+          "architecture": "Ice Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804045/PCN119280-02.pdf",
+              "quote": "page 3: D-2799 | FH8068604676169 | pre-conversion SRLCT | post-conversion SRM2C (U1 to U2 Stepping)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/blob/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md",
+              "quote": "| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Intel calls the steppings U1 and U2 (PCN 119280-02: ESD fix on XTAL25, JTAG IDCODE 5E7C5013 -> 6E7C5013), not the B0 the input lists; neither source gives a CPUID. Architecture from the ARK specifications page: 'Products formerly Ice Lake'. PCN table read from a rendered image of page 3 (PDFKit's text extraction scrambles its rows)."
     }
   ]
 }

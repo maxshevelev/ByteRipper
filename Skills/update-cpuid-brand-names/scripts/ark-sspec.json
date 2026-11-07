@@ -1151,6 +1151,226 @@
       ]
     },
     {
+      "model": "Intel Xeon D-1702",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226115/intel-xeon-d1702-processor-5m-cache-up-to-1-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1N",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "ARK lists the stepping as Z2 (Intel's ordering stepping for this FC-BGA16B part), not B0 as the table has it; one spec code only. A web-search summary mentioned stepping Z1; a direct fetch of the page shows only Z2."
+    },
+    {
+      "model": "Intel Xeon D-1712TR",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226108/intel-xeon-d1712tr-processor-10m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1G",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "ARK lists the stepping as Z2 (Intel's ordering stepping for this FC-BGA16B part), not B0 as the table has it; one spec code only."
+    },
+    {
+      "model": "Intel Xeon D-1713NT",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226102/intel-xeon-d1713nt-processor-10m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM19",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "ARK lists the stepping as Z2 (Intel's ordering stepping for this FC-BGA16B part), not B0 as the table has it; one spec code only."
+    },
+    {
+      "model": "Intel Xeon D-1713NTE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226104/intel-xeon-d1713nte-processor-10m-cache-up-to-3-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1A",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "ARK lists the stepping as Z2 (Intel's ordering stepping for this FC-BGA16B part), not B0 as the table has it; one spec code only."
+    },
+    {
+      "model": "Intel Xeon D-1714",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226109/intel-xeon-d1714-processor-10m-cache-up-to-3-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1H",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "ARK lists the stepping as Z2 (Intel's ordering stepping for this FC-BGA16B part), not B0 as the table has it; one spec code only."
+    },
+    {
+      "model": "Intel Xeon D-1715TER",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226105/intel-xeon-d1715ter-processor-10m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1E",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "ARK lists the stepping as Z2 (Intel's ordering stepping for this FC-BGA16B part), not B0 as the table has it; one spec code only."
+    },
+    {
+      "model": "Intel Xeon D-1718T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226107/intel-xeon-d1718t-processor-10m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1F",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "ARK lists the stepping as Z2 (Intel's ordering stepping for this FC-BGA16B part), not B0 as the table has it; one spec code only."
+    },
+    {
+      "model": "Intel Xeon D-1722NE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226113/intel-xeon-d1722ne-processor-10m-cache-up-to-2-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1M",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "ARK lists the stepping as Z2 (Intel's ordering stepping for this FC-BGA16B part), not B0 as the table has it; one spec code only. A web-search summary mentioned 'SRLC4, stepping Z1' for this page; a direct fetch of the page shows no SRLC4 and no Z1, so it is not recorded."
+    },
+    {
+      "model": "Intel Xeon D-1726",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226112/intel-xeon-d1726-processor-10m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1L",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "The ordering tab lists only the Z2 code; the Z1 code was dropped from it (PCN 119280). Code Name on ARK: \"Products formerly Ice Lake\" (checked on the D-1726 page)."
+    },
+    {
+      "model": "Intel Xeon D-1732TE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226106/intel-xeon-d1732te-processor-15m-cache-up-to-3-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1D",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "The ordering tab lists only the Z2 code; the Z1 code was dropped from it (PCN 119280). Code Name on ARK: \"Products formerly Ice Lake\" (checked on the D-1726 page)."
+    },
+    {
+      "model": "Intel Xeon D-1733NT",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226099/intel-xeon-d1733nt-processor-15m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM17",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "The ordering tab lists only the Z2 code; the Z1 code was dropped from it (PCN 119280). Code Name on ARK: \"Products formerly Ice Lake\" (checked on the D-1726 page)."
+    },
+    {
+      "model": "Intel Xeon D-1734NT",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226114/intel-xeon-d1734nt-processor-15m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1Q",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "The ordering tab lists only the Z2 code; the Z1 code was dropped from it (PCN 119280). Code Name on ARK: \"Products formerly Ice Lake\" (checked on the D-1726 page)."
+    },
+    {
+      "model": "Intel Xeon D-1735TR",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226103/intel-xeon-d1735tr-processor-15m-cache-up-to-3-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1C",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "The ordering tab lists only the Z2 code; the Z1 code was dropped from it (PCN 119280). Code Name on ARK: \"Products formerly Ice Lake\" (checked on the D-1726 page)."
+    },
+    {
+      "model": "Intel Xeon D-1736",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226111/intel-xeon-d1736-processor-15m-cache-up-to-3-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1K",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "The ordering tab lists only the Z2 code; the Z1 code was dropped from it (PCN 119280). Code Name on ARK: \"Products formerly Ice Lake\" (checked on the D-1726 page)."
+    },
+    {
+      "model": "Intel Xeon D-1736NT",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226098/intel-xeon-d1736nt-processor-15m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM16",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "The ordering tab lists only the Z2 code; the Z1 code was dropped from it (PCN 119280). Code Name on ARK: \"Products formerly Ice Lake\" (checked on the D-1726 page)."
+    },
+    {
+      "model": "Intel Xeon D-1739",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226110/intel-xeon-d1739-processor-15m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1J",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "The ordering tab lists only the Z2 code; the Z1 code was dropped from it (PCN 119280). Code Name on ARK: \"Products formerly Ice Lake\" (checked on the D-1726 page)."
+    },
+    {
+      "model": "Intel Xeon D-1746TER",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226100/intel-xeon-d1746ter-processor-15m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1B",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "Ordering tab lists only the Z2 code; the earlier Z1 code SRLBU is not on the current page (a search-engine snippet of an older version of the page showed it); it comes from Intel PCN 119280-02."
+    },
+    {
+      "model": "Intel Xeon D-1747NTE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226116/intel-xeon-d1747nte-processor-15m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1P",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "Ordering tab lists only the Z2 code; the earlier Z1 code SRLC6 is not on the current page (a search-engine snippet of an older version of the page showed it); it comes from Intel PCN 119280-02."
+    },
+    {
+      "model": "Intel Xeon D-1748TE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226119/intel-xeon-d1748te-processor-15m-cache-up-to-3-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1R",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "Ordering tab lists only the Z2 code; the earlier Z1 code SRLC8 is not on the current page (a search-engine snippet of an older version of the page showed it); it comes from Intel PCN 119280-02."
+    },
+    {
+      "model": "Intel Xeon D-1749NT",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226101/intel-xeon-d1749nt-processor-15m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM15",
+          "stepping": "Z2"
+        }
+      ],
+      "note": "Ordering tab lists only the Z2 code; the earlier Z1 code SRLBP is not on the current page (a search-engine snippet of an older version of the page showed it); it comes from Intel PCN 119280-02."
+    },
+    {
       "model": "Intel Xeon D-2123IT",
       "url": "https://www.intel.com/content/www/us/en/products/sku/136429/intel-xeon-d2123it-processor-8-25m-cache-2-20-ghz/ordering.html",
       "specs": [
@@ -1279,6 +1499,242 @@
           "stepping": "M1"
         }
       ]
+    },
+    {
+      "model": "Intel Xeon D-2712T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226233/intel-xeon-d2712t-processor-15m-cache-up-to-3-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM22",
+          "stepping": "U2"
+        },
+        {
+          "sSpec": "SRLCK",
+          "stepping": "U1"
+        }
+      ],
+      "note": "Ordering tab lists the U2 code as current and the U1 code SRLCK under 'Retired and discontinued'."
+    },
+    {
+      "model": "Intel Xeon D-2733NT",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226234/intel-xeon-d2733nt-processor-15m-cache-up-to-3-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM21",
+          "stepping": "U2"
+        }
+      ],
+      "note": "Ordering tab lists only the U2 code; the earlier U1 code SRLCJ is not on the current page (a search-engine snippet of an older version of the page showed it); it comes from Intel PCN 119280-02."
+    },
+    {
+      "model": "Intel Xeon D-2738",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226235/intel-xeon-d2738-processor-15m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM29",
+          "stepping": "U2"
+        }
+      ],
+      "note": "Ordering tab lists only the U2 code; the earlier U1 code SRLCQ is not on the current page (a search-engine snippet of an older version of the page showed it); it comes from Intel PCN 119280-02."
+    },
+    {
+      "model": "Intel Xeon D-2745NX",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226236/intel-xeon-d2745nx-processor-17-5m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1V",
+          "stepping": "U2"
+        }
+      ],
+      "note": "Ordering tab lists only the U2 code; the earlier U1 code SRLCC is not on the current page (a search-engine snippet of an older version of the page showed it); it comes from Intel PCN 119280-02."
+    },
+    {
+      "model": "Intel Xeon D-2752NTE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226247/intel-xeon-d2752nte-processor-20m-cache-up-to-3-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRLCG",
+          "stepping": "U1"
+        }
+      ],
+      "note": "SRLCG listed under 'Retired and discontinued'. ARK gives stepping U1, not the B0 the table lists for 606C1 (Intel's ordering steppings U1/U2 for Ice Lake D; the mapping to B0 is not stated on the page)."
+    },
+    {
+      "model": "Intel Xeon D-2752TER",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226248/intel-xeon-d2752ter-processor-20m-cache-up-to-2-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM27",
+          "stepping": "U2"
+        },
+        {
+          "sSpec": "SRLCN",
+          "stepping": "U1"
+        }
+      ],
+      "note": "Two codes, one ordering code: SRM27 (U2) current, SRLCN (U1) under 'Retired and discontinued'. ARK gives stepping U1/U2, not the B0 the table lists for 606C1 (Intel's ordering steppings U1/U2 for Ice Lake D; the mapping to B0 is not stated on the page)."
+    },
+    {
+      "model": "Intel Xeon D-2753NT",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226237/intel-xeon-d2753nt-processor-20m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM20",
+          "stepping": "U2"
+        }
+      ],
+      "note": "Only SRM20 listed (US and FR pages); no retired U1 code shown. ARK gives stepping U2, not the B0 the table lists for 606C1 (Intel's ordering steppings U1/U2 for Ice Lake D; the mapping to B0 is not stated on the page)."
+    },
+    {
+      "model": "Intel Xeon D-2757NX",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226238/intel-xeon-d2757nx-processor-20m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRLCB",
+          "stepping": "U1"
+        }
+      ],
+      "note": "SRLCB listed under 'Retired and discontinued'; no U2 code shown. ARK gives stepping U1, not the B0 the table lists for 606C1 (Intel's ordering steppings U1/U2 for Ice Lake D; the mapping to B0 is not stated on the page)."
+    },
+    {
+      "model": "Intel Xeon D-2766NT",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226241/intel-xeon-d2766nt-processor-20m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRLCS",
+          "stepping": "U1"
+        }
+      ],
+      "note": "SRLCS listed under 'Retired and discontinued'; no U2 code shown. ARK gives stepping U1, not the B0 the table lists for 606C1 (Intel's ordering steppings U1/U2 for Ice Lake D; the mapping to B0 is not stated on the page)."
+    },
+    {
+      "model": "Intel Xeon D-2775TE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226250/intel-xeon-d2775te-processor-25m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM26",
+          "stepping": "U2"
+        }
+      ],
+      "note": "Only SRM26 listed; no U1 code shown. ARK gives stepping U2, not the B0 the table lists for 606C1 (Intel's ordering steppings U1/U2 for Ice Lake D; the mapping to B0 is not stated on the page)."
+    },
+    {
+      "model": "Intel Xeon D-2776NT",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226239/intel-xeon-d2776nt-processor-25m-cache-up-to-3-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1Y",
+          "stepping": "U2"
+        }
+      ],
+      "note": "Only SRM1Y listed; no U1 code shown. ARK gives stepping U2, not the B0 the table lists for 606C1 (Intel's ordering steppings U1/U2 for Ice Lake D; the mapping to B0 is not stated on the page)."
+    },
+    {
+      "model": "Intel Xeon D-2777NX",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226240/intel-xeon-d2777nx-processor-25m-cache-up-to-3-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1T",
+          "stepping": "U2"
+        }
+      ],
+      "note": "Only SRM1T listed; no U1 code shown. ARK gives stepping U2, not the B0 the table lists for 606C1 (Intel's ordering steppings U1/U2 for Ice Lake D; the mapping to B0 is not stated on the page)."
+    },
+    {
+      "model": "Intel Xeon D-2779",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226242/intel-xeon-d2779-processor-25m-cache-up-to-3-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM28",
+          "stepping": "U2"
+        }
+      ],
+      "note": "Ordering tab lists only the current U2 code; the U1 code SRLCP it replaced (PCN 119280-02) is not on it, and the page has no 'Retired and discontinued' section."
+    },
+    {
+      "model": "Intel Xeon D-2786NTE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226252/intel-xeon-d2786nte-processor-27-5m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1X",
+          "stepping": "U2"
+        },
+        {
+          "sSpec": "SRLCE",
+          "stepping": "U1"
+        }
+      ],
+      "note": "SRLCE (U1) is under 'Retired and discontinued', SRM1X (U2) under 'Ordering and Spec Information'; both the same ordering code."
+    },
+    {
+      "model": "Intel Xeon D-2795NT",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226243/intel-xeon-d2795nt-processor-30m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM2D",
+          "stepping": "U2"
+        }
+      ],
+      "note": "Ordering tab lists only the current U2 code; the U1 code SRLCU it replaced (PCN 119280-02) is not on it, and the page has no 'Retired and discontinued' section."
+    },
+    {
+      "model": "Intel Xeon D-2796NT",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226249/intel-xeon-d2796nt-processor-30m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM2A",
+          "stepping": "U2"
+        }
+      ],
+      "note": "Ordering tab lists only the current U2 code; the U1 code SRLCR it replaced (PCN 119280-02) is not on it, and the page has no 'Retired and discontinued' section."
+    },
+    {
+      "model": "Intel Xeon D-2796TE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226251/intel-xeon-d2796te-processor-30m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM23",
+          "stepping": "U2"
+        }
+      ],
+      "note": "Ordering tab lists only the current U2 code; the U1 code SRLCL it replaced (PCN 119280-02) is not on it, and the page has no 'Retired and discontinued' section."
+    },
+    {
+      "model": "Intel Xeon D-2798NT",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226246/intel-xeon-d2798nt-processor-30m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1W",
+          "stepping": "U2"
+        }
+      ],
+      "note": "Ordering tab lists only the current U2 code; the U1 code SRLCD it replaced (PCN 119280-02) is not on it, and the page has no 'Retired and discontinued' section."
+    },
+    {
+      "model": "Intel Xeon D-2798NX",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226245/intel-xeon-d2798nx-processor-30m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM1S",
+          "stepping": "U2"
+        }
+      ],
+      "note": "Ordering tab lists only the current U2 code; the U1 code SRLC9 it replaced (PCN 119280-02) is not on it, and the page has no 'Retired and discontinued' section."
+    },
+    {
+      "model": "Intel Xeon D-2799",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/226244/intel-xeon-d2799-processor-30m-cache-up-to-3-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRM2C",
+          "stepping": "U2"
+        },
+        {
+          "sSpec": "SRLCT",
+          "stepping": "U1"
+        }
+      ],
+      "note": "SRLCT (U1) is under 'Retired and discontinued', SRM2C (U2) under 'Ordering and Spec Information'; both the same ordering code."
     },
     {
       "model": "Intel Xeon E-2278G",

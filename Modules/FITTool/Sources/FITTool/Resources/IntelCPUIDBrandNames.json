@@ -79,6 +79,9 @@
         }
       ]
     },
+    "intel": {
+      "about": "an Intel document other than ARK's ordering tab (a specification update, a datasheet, a product change notification) that gives the code for the model; the page per code is in Skills/update-cpuid-brand-names/scripts/found-sspec.json"
+    },
     "steppings": {
       "about": "stepping per CPUID, from Intel's microcode release notes",
       "url": "https://raw.githubusercontent.com/intel/Intel-Linux-Processor-Microcode-Data-Files/bdc92abe5c499c3fd7988b76a128d05c9120a520/releasenote.md"
@@ -4540,83 +4543,223 @@
         },
         {
           "name": "Intel Xeon D-1702",
-          "sSpec": []
+          "sSpec": [
+            "SRLC5",
+            "SRM1N"
+          ],
+          "sSpecSource": {
+            "SRLC5": "intel",
+            "SRM1N": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-1712TR",
-          "sSpec": []
+          "sSpec": [
+            "SRLBZ",
+            "SRM1G"
+          ],
+          "sSpecSource": {
+            "SRLBZ": "intel",
+            "SRM1G": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-1713NT",
-          "sSpec": []
+          "sSpec": [
+            "SRLBS",
+            "SRM19"
+          ],
+          "sSpecSource": {
+            "SRLBS": "intel",
+            "SRM19": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-1713NTE",
-          "sSpec": []
+          "sSpec": [
+            "SRLBT",
+            "SRM1A"
+          ],
+          "sSpecSource": {
+            "SRLBT": "intel",
+            "SRM1A": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-1714",
-          "sSpec": []
+          "sSpec": [
+            "SRLC0",
+            "SRM1H"
+          ],
+          "sSpecSource": {
+            "SRLC0": "intel",
+            "SRM1H": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-1715TER",
-          "sSpec": []
+          "sSpec": [
+            "SRLBX",
+            "SRM1E"
+          ],
+          "sSpecSource": {
+            "SRLBX": "intel",
+            "SRM1E": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-1718T",
-          "sSpec": []
+          "sSpec": [
+            "SRLBY",
+            "SRM1F"
+          ],
+          "sSpecSource": {
+            "SRLBY": "intel",
+            "SRM1F": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-1722NE",
-          "sSpec": []
+          "sSpec": [
+            "SRLC4",
+            "SRM1M"
+          ],
+          "sSpecSource": {
+            "SRLC4": "intel",
+            "SRM1M": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-1726",
-          "sSpec": []
+          "sSpec": [
+            "SRLC3",
+            "SRM1L"
+          ],
+          "sSpecSource": {
+            "SRLC3": "intel",
+            "SRM1L": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-1732TE",
-          "sSpec": []
+          "sSpec": [
+            "SRLBW",
+            "SRM1D"
+          ],
+          "sSpecSource": {
+            "SRLBW": "intel",
+            "SRM1D": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-1733NT",
-          "sSpec": []
+          "sSpec": [
+            "SRLBR",
+            "SRM17"
+          ],
+          "sSpecSource": {
+            "SRLBR": "intel",
+            "SRM17": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-1734NT",
-          "sSpec": []
+          "sSpec": [
+            "SRLC7",
+            "SRM1Q"
+          ],
+          "sSpecSource": {
+            "SRLC7": "intel",
+            "SRM1Q": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-1735TR",
-          "sSpec": []
+          "sSpec": [
+            "SRLBV",
+            "SRM1C"
+          ],
+          "sSpecSource": {
+            "SRLBV": "intel",
+            "SRM1C": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-1736",
-          "sSpec": []
+          "sSpec": [
+            "SRLC2",
+            "SRM1K"
+          ],
+          "sSpecSource": {
+            "SRLC2": "intel",
+            "SRM1K": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-1736NT",
-          "sSpec": []
+          "sSpec": [
+            "SRLBQ",
+            "SRM16"
+          ],
+          "sSpecSource": {
+            "SRLBQ": "intel",
+            "SRM16": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-1739",
-          "sSpec": []
+          "sSpec": [
+            "SRLC1",
+            "SRM1J"
+          ],
+          "sSpecSource": {
+            "SRLC1": "intel",
+            "SRM1J": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-1746TER",
-          "sSpec": []
+          "sSpec": [
+            "SRLBU",
+            "SRM1B"
+          ],
+          "sSpecSource": {
+            "SRLBU": "intel",
+            "SRM1B": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-1747NTE",
-          "sSpec": []
+          "sSpec": [
+            "SRLC6",
+            "SRM1P"
+          ],
+          "sSpecSource": {
+            "SRLC6": "intel",
+            "SRM1P": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-1748TE",
-          "sSpec": []
+          "sSpec": [
+            "SRLC8",
+            "SRM1R"
+          ],
+          "sSpecSource": {
+            "SRLC8": "intel",
+            "SRM1R": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-1749NT",
-          "sSpec": []
+          "sSpec": [
+            "SRLBP",
+            "SRM15"
+          ],
+          "sSpecSource": {
+            "SRLBP": "intel",
+            "SRM15": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-2123IT",
@@ -4676,83 +4819,223 @@
         },
         {
           "name": "Intel Xeon D-2712T",
-          "sSpec": []
+          "sSpec": [
+            "SRLCK",
+            "SRM22"
+          ],
+          "sSpecSource": {
+            "SRLCK": "intel",
+            "SRM22": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-2733NT",
-          "sSpec": []
+          "sSpec": [
+            "SRLCJ",
+            "SRM21"
+          ],
+          "sSpecSource": {
+            "SRLCJ": "intel",
+            "SRM21": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-2738",
-          "sSpec": []
+          "sSpec": [
+            "SRLCQ",
+            "SRM29"
+          ],
+          "sSpecSource": {
+            "SRLCQ": "intel",
+            "SRM29": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-2745NX",
-          "sSpec": []
+          "sSpec": [
+            "SRLCC",
+            "SRM1V"
+          ],
+          "sSpecSource": {
+            "SRLCC": "intel",
+            "SRM1V": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-2752NTE",
-          "sSpec": []
+          "sSpec": [
+            "SRLCG",
+            "SRM1Z"
+          ],
+          "sSpecSource": {
+            "SRLCG": "intel",
+            "SRM1Z": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-2752TER",
-          "sSpec": []
+          "sSpec": [
+            "SRLCN",
+            "SRM27"
+          ],
+          "sSpecSource": {
+            "SRLCN": "intel",
+            "SRM27": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-2753NT",
-          "sSpec": []
+          "sSpec": [
+            "SRLCH",
+            "SRM20"
+          ],
+          "sSpecSource": {
+            "SRLCH": "intel",
+            "SRM20": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-2757NX",
-          "sSpec": []
+          "sSpec": [
+            "SRLCB",
+            "SRM1U"
+          ],
+          "sSpecSource": {
+            "SRLCB": "intel",
+            "SRM1U": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-2766NT",
-          "sSpec": []
+          "sSpec": [
+            "SRLCS",
+            "SRM2B"
+          ],
+          "sSpecSource": {
+            "SRLCS": "intel",
+            "SRM2B": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-2775TE",
-          "sSpec": []
+          "sSpec": [
+            "SRLCM",
+            "SRM26"
+          ],
+          "sSpecSource": {
+            "SRLCM": "intel",
+            "SRM26": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-2776NT",
-          "sSpec": []
+          "sSpec": [
+            "SRLCF",
+            "SRM1Y"
+          ],
+          "sSpecSource": {
+            "SRLCF": "intel",
+            "SRM1Y": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-2777NX",
-          "sSpec": []
+          "sSpec": [
+            "SRLCA",
+            "SRM1T"
+          ],
+          "sSpecSource": {
+            "SRLCA": "intel",
+            "SRM1T": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-2779",
-          "sSpec": []
+          "sSpec": [
+            "SRLCP",
+            "SRM28"
+          ],
+          "sSpecSource": {
+            "SRLCP": "intel",
+            "SRM28": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-2786NTE",
-          "sSpec": []
+          "sSpec": [
+            "SRLCE",
+            "SRM1X"
+          ],
+          "sSpecSource": {
+            "SRLCE": "intel",
+            "SRM1X": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-2795NT",
-          "sSpec": []
+          "sSpec": [
+            "SRLCU",
+            "SRM2D"
+          ],
+          "sSpecSource": {
+            "SRLCU": "intel",
+            "SRM2D": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-2796NT",
-          "sSpec": []
+          "sSpec": [
+            "SRLCR",
+            "SRM2A"
+          ],
+          "sSpecSource": {
+            "SRLCR": "intel",
+            "SRM2A": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-2796TE",
-          "sSpec": []
+          "sSpec": [
+            "SRLCL",
+            "SRM23"
+          ],
+          "sSpecSource": {
+            "SRLCL": "intel",
+            "SRM23": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-2798NT",
-          "sSpec": []
+          "sSpec": [
+            "SRLCD",
+            "SRM1W"
+          ],
+          "sSpecSource": {
+            "SRLCD": "intel",
+            "SRM1W": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-2798NX",
-          "sSpec": []
+          "sSpec": [
+            "SRLC9",
+            "SRM1S"
+          ],
+          "sSpecSource": {
+            "SRLC9": "intel",
+            "SRM1S": "intel"
+          }
         },
         {
           "name": "Intel Xeon D-2799",
-          "sSpec": []
+          "sSpec": [
+            "SRLCT",
+            "SRM2C"
+          ],
+          "sSpecSource": {
+            "SRLCT": "intel",
+            "SRM2C": "intel"
+          }
         }
       ]
     },

@@ -39,15 +39,23 @@ WebFetch works for Intel and not for cpu-world or eBay.
    (`ordering.html` redirects to `specifications.html`): say so in the note.
    This goes in the result's `ark`, not in `specs`.
 
-   **ARK's ordering tab lists every code the SKU was sold under, on every
-   stepping.** When it gives codes with their steppings, the model is done:
-   go to the next one. Steps 2–4 are for a model ARK gives nothing for — no
-   page, no ordering tab, no codes, or codes without a stepping — and for a
-   model whose `ark` was asked before with no specs.
+   **ARK's ordering tab does not list every code a SKU was sold under.**
+   When Intel changes a part mid-life — a new stepping, a manufacturing
+   change — it gives it a new code and announces it in a *Product Change
+   Notification* (PCN), and ARK often keeps only the new code: the Xeon
+   D-1700/2700 lost their Z1/U1 codes (PCN 119280), the i5-6400/6500 their
+   pre-SGX-change codes (PCN 114074). So after ARK, always search once for a
+   PCN that names the model (`"<model number>" PCN site:intel.com`,
+   `"<ordering code>" PCN`); a PCN's table of pre- and post-conversion codes
+   goes in `specs`, each code with its own stepping. Steps 3–4 are for a
+   model neither ARK nor an Intel document gives a code for.
+
 2. **Intel documents** — the processor's *Specification Update* or
    *Datasheet* (an "Identification Information" / "Processor Identification"
    table lists S-Spec, stepping, CPUID and model), or a *Product Change
-   Notification*. Find them with WebSearch (`"<model>" "specification update"
+   Notification*. A PCN's table often scrambles in PDFKit's text: render the
+   page to an image (PDFKit's `PDFPage.thumbnail(of:for:)`, saved as PNG) and
+   read the rows from it. Find them with WebSearch (`"<model>" "specification update"
    site:intel.com`, `"<model>" S-Spec stepping site:intel.com`); `cdrdv2.intel.com`
    PDFs are found the same way. When WebFetch returns the PDF's raw bytes
    rather than text, save them (curl, if the host allows it) under
@@ -125,8 +133,10 @@ A JSON array, one object per input model, in input order:
   confirmed elsewhere; an ARK code with its stepping needs nothing more.
 - `kind`: `intel` (an Intel page or PDF other than the ordering tab),
   `database` (a third-party S-SPEC list), `photo`.
-- `gives` says what that page states: always `sSpec`, plus `stepping` or
-  `cpuid` if it states them. `stepping` and `cpuid` in the spec may be set only
+- `gives` says what that page states: `sSpec`, `stepping`, `cpuid`. A page
+  may give the CPUID alone — Intel's microcode release notes name the models
+  of a CPUID (`| ICL-D | B0 | 06-6c-01/10 | Xeon D-17xx, D-27xx |`) — when
+  another page gives the code. `stepping` and `cpuid` in the spec may be set only
   from such a page; leave them `null` otherwise.
 - `reads` is the whole marking as you read it, lines separated by ` / `;
   `lot` the lot line, or `null` if the photo shows none.

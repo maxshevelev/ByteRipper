@@ -36,7 +36,8 @@ The rules, in order:
    entry whose code names are of it: the article repeats Broadwell-DE Xeon D
    parts under Ice Lake D, and their codes do not belong there.
 4. A found code (`found-sspec.json`) with a stepping follows rule 2; with a
-   CPUID, it goes under the one entry of that model with that CPUID; with
+   CPUID — or a stepping that fits no entry, and a CPUID — it goes under the
+   one entry of that model with that CPUID; with
    neither — a marking gives neither — it follows rule 3, and the architecture
    its source names must begin one of the entry's code names ("Comet Lake"
    for "Comet Lake S"; "Broadwell" never for "Ice Lake D").
@@ -354,7 +355,12 @@ def enrich(entries, cache=None, log=print):
             if s.get("stepping"):
                 if by_stepping(name, code, s["stepping"], source):
                     counts[source] += 1
-                continue
+                    continue
+                # A stepping Intel's notes do not name (Ice Lake D's package
+                # steppings Z1/Z2, U1/U2, where the notes say B0): the CPUID
+                # its source gives decides, where it gives one.
+                if not s.get("cpuid"):
+                    continue
             if code in known(name):
                 continue
             if owner(code):

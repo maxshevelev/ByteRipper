@@ -108,9 +108,12 @@ def check_spec(model, spec, problems):
             photos.append(ev)
         else:
             gives = set(ev.get("gives") or [])
-            if not gives <= GIVES or "sSpec" not in gives or not ev.get("quote"):
+            # A page may give only the CPUID — Intel's microcode notes name the
+            # models of a CPUID ("Xeon D-17xx, D-27xx"), not their codes — so
+            # long as another page gives the code.
+            if not gives or not gives <= GIVES or not ev.get("quote"):
                 problems.append(f"{where}: {kind} evidence {ev['url']} needs a quote and "
-                                f"gives ⊆ {sorted(GIVES)} including sSpec")
+                                f"gives ⊆ {sorted(GIVES)}")
                 continue
             others.append(ev)
     stepping, cpuid = spec.get("stepping"), spec.get("cpuid")
@@ -120,7 +123,9 @@ def check_spec(model, spec, problems):
     if cpuid is not None:
         if not CPUID.match(cpuid) or not any("cpuid" in e["gives"] for e in others):
             problems.append(f"{where}: CPUID {cpuid!r} with no Intel or database page giving it")
-    if not others:
+    if not any("sSpec" in e["gives"] for e in others):
+        # No page gives the code: it rests on photographs, whatever else a
+        # page says (a CPUID).
         if len({p["sha256"] for p in photos}) < 2:
             problems.append(f"{where}: rests on photographs, and fewer than two different ones")
         elif len({re.sub(r"^www\.", "", (p["url"].split("/") + ["", "", ""])[2]) for p in photos}) < 2:
