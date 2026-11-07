@@ -8,6 +8,81 @@
       "note": "Intel Atom C3000 Specification Update 336345-022US (March 2024, cdrdv2-public.intel.com/336345/336345_C3000_SU_Rev022.pdf), Table 27 'Component Marking Information', lists C3558 SR388 and C3558R SRH4G but no C3558RC. PCN search found nothing. Photographs not tried: the package is BGA and the top marking (Table 28) prints only S-Spec and speed, no processor number, so a photo cannot tie a code to the model."
     },
     {
+      "model": "Intel Atom P5921B",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRJAW",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Snow Ridge",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/800015/PCN119200-00.pdf",
+              "quote": "Intel Atom® Processor P5921B 99A037 NN8069204098100 S RJAW",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCN 119200-00 (Aug 2022, Korean recycle mark on shipping tray) lists one production code per SKU; it gives no stepping, and no public Intel document found ties the code to B0 (80664) or B1 (80665), so stepping/cpuid are null. Architecture from the ARK specifications page (Code Name 'Products formerly Snow Ridge'). Tried: WebSearch for a P5900 specification update/datasheet (none public; likely CDI-only), searches for the codes with a stepping (nothing), and the full captn3m0/intel-pcn index: every later Atom/EOL/stepping PCN (17 PDFs plus 119268, 119739, 919977, 925418) downloaded and grepped for P59xx/SRJA*/SRJB* - no other hit, so no B0->B1 conversion PCN with a second code was found. Photographs not tried: BGA package, where a marking cannot tie code to model under the brief's rules."
+    },
+    {
+      "model": "Intel Atom P5931B",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not listed in PCN 119200-00 (which lists P5921B, P5942B, P5962B but not P5931B) nor in any other public Intel PCN in the captn3m0/intel-pcn index (all later Atom/EOL/stepping PCNs grepped for P59xx). WebSearch for '\"P5931B\" spec code/S-Spec/PCN' found nothing. No public specification update/datasheet. Photographs not tried (BGA). Its code is probably in the SRJAW..SRJB2 run (SRJAX/SRJAY/SRJB0/SRJB1 are unaccounted for) but nothing seen shows which - not recorded."
+    },
+    {
+      "model": "Intel Atom P5942B",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRJAZ",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Snow Ridge",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/800015/PCN119200-00.pdf",
+              "quote": "Intel Atom® Processor P5942B 99A03V NN8069204098600 S RJAZ",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCN 119200-00 (Aug 2022, Korean recycle mark on shipping tray) lists one production code per SKU; it gives no stepping, and no public Intel document found ties the code to B0 (80664) or B1 (80665), so stepping/cpuid are null. Architecture from the ARK specifications page (Code Name 'Products formerly Snow Ridge'). Tried: WebSearch for a P5900 specification update/datasheet (none public; likely CDI-only), searches for the codes with a stepping (nothing), and the full captn3m0/intel-pcn index: every later Atom/EOL/stepping PCN (17 PDFs plus 119268, 119739, 919977, 925418) downloaded and grepped for P59xx/SRJA*/SRJB* - no other hit, so no B0->B1 conversion PCN with a second code was found. Photographs not tried: BGA package, where a marking cannot tie code to model under the brief's rules."
+    },
+    {
+      "model": "Intel Atom P5962B",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRJB2",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Snow Ridge",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/800015/PCN119200-00.pdf",
+              "quote": "Intel Atom® Processor P5962B 99A040 NN8069204098900 S RJB2",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCN 119200-00 (Aug 2022, Korean recycle mark on shipping tray) lists one production code per SKU; it gives no stepping, and no public Intel document found ties the code to B0 (80664) or B1 (80665), so stepping/cpuid are null. Architecture from the ARK specifications page (Code Name 'Products formerly Snow Ridge'). Tried: WebSearch for a P5900 specification update/datasheet (none public; likely CDI-only), searches for the codes with a stepping (nothing), and the full captn3m0/intel-pcn index: every later Atom/EOL/stepping PCN (17 PDFs plus 119268, 119739, 919977, 925418) downloaded and grepped for P59xx/SRJA*/SRJB* - no other hit, so no B0->B1 conversion PCN with a second code was found. Photographs not tried: BGA package, where a marking cannot tie code to model under the brief's rules."
+    },
+    {
       "model": "Intel Celeron G3920T",
       "searched": "2026-11-07",
       "specs": [],
