@@ -66,6 +66,9 @@ import ToolModuleKit
     /// level, so its CPUIDs are on screen without a click; one the reader has
     /// closed stays closed.
     private var seenEntries: Set<FITOutlineItem.Kind> = []
+    /// Whether the show on hand is the same table again — kept items, kept
+    /// scroll — rather than a new one (`rebuildItems`).
+    private var keepsScroll = false
     let problems = NSTableView()
     private let entriesScroll = NSScrollView()
     private let problemsScroll = NSScrollView()
@@ -492,6 +495,14 @@ import ToolModuleKit
 
     /// Everything the panel shows, in one call.
     func show(_ display: FITDisplay, focus: Int?, canWrite: Bool) {
+        // A choice moves the focus, the zones and the detail, and nothing in
+        // the table: the same rows, the same backup, the same problems. Then
+        // the tree is left as it is — rebuilding it for a click was work for
+        // nothing, and moved the table under the reader.
+        let sameTable = display.rows == self.display.rows
+            && display.backupStart == self.display.backupStart
+            && display.backupHeading == self.display.backupHeading
+            && display.problems == self.display.problems
         self.display = display
         self.canWrite = canWrite
         isShowingState = true
@@ -501,10 +512,12 @@ import ToolModuleKit
         // A line under a microcode stands for the microcode: choosing it puts
         // the microcode in focus, and the line stays chosen when it comes back.
         let chosen = item(atRow: entries.selectedRow)?.kind
-        rebuildItems()
-        reloadEntries()
-        updateRowMarks()
-        problems.reloadData()
+        if !sameTable {
+            rebuildItems()
+            reloadEntries()
+            updateRowMarks()
+            problems.reloadData()
+        }
         renderDetail(display.detail, subject: focus.map(String.init) ?? "")
         if let focus, let row = tableRow(of: chosen?.key == focus ? chosen! : .entry(focus))
             ?? tableRow(of: .entry(focus)) {
@@ -710,11 +723,18 @@ extension FITToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
             seenEntries = []
             expandedKinds = []
         }
+        // The items a row had before are the items it keeps. NSOutlineView
+        // knows a row by its item, so a show with new items is a tree closed
+        // and opened again — and in between the document is short, AppKit
+        // pulls the scroll up to fit it, and the row just clicked lands at the
+        // bottom of the view. With the same items a reload is only a reload.
+        let previous = display.rows.isEmpty ? [:] : itemsByKind
+        keepsScroll = !previous.isEmpty
         topItems = []
         itemsByKind = [:]
         childItems = [:]
         func made(_ kind: FITOutlineItem.Kind) -> FITOutlineItem {
-            let item = FITOutlineItem(kind)
+            let item = previous[kind] ?? FITOutlineItem(kind)
             itemsByKind[kind] = item
             return item
         }
@@ -722,7 +742,7 @@ extension FITToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
             (0..<count).map { made(.line(key, group, $0)) }
         }
         for (index, row) in display.rows.enumerated() {
-            if display.backupStart == index { topItems.append(FITOutlineItem(.heading)) }
+            if display.backupStart == index { topItems.append(made(.heading)) }
             let entry = FITOutlineItem.Kind.entry(row.key)
             topItems.append(made(entry))
             let groups = row.processorGroups
@@ -734,7 +754,7 @@ extension FITToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
             }
             if seenEntries.insert(entry).inserted { expandedKinds.insert(entry) }
         }
-        if display.backupStart == display.rows.count { topItems.append(FITOutlineItem(.heading)) }
+        if display.backupStart == display.rows.count { topItems.append(made(.heading)) }
         // Add sits under the last microcode of the table — not of the Top Swap
         // backup's copy, which is changed only with the table — or under the
         // header where there is none.
@@ -747,12 +767,22 @@ extension FITToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
     }
 
     /// Reloads the entries and opens again the rows the reader had open — a
-    /// reload is a new set of items, and NSOutlineView opens none of them. A
-    /// parent opens before its children, so the order is the tree's.
+    /// new table's items are new, and NSOutlineView opens none of them. A
+    /// parent opens before its children, so the order is the tree's. The same
+    /// table keeps its items and its scroll.
     fileprivate func reloadEntries() {
         let wasShowing = isShowingState
         isShowingState = true
         defer { isShowingState = wasShowing }
+        // The same table shown again stays where the reader scrolled it.
+        let clip = entriesScroll.contentView
+        let origin = clip.bounds.origin
+        defer {
+            if keepsScroll {
+                clip.scroll(to: clip.constrainBoundsRect(NSRect(origin: origin, size: clip.bounds.size)).origin)
+                entriesScroll.reflectScrolledClipView(clip)
+            }
+        }
         entries.reloadData()
         func reopen(_ items: [FITOutlineItem]) {
             for item in items where expandedKinds.contains(item.kind) && entries.isExpandable(item) {

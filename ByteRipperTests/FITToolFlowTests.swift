@@ -1388,6 +1388,38 @@ final class FITToolFlowTests: XCTestCase {
         }, "the copy is read-only")
     }
 
+    /// Choosing a row with processors open does not move the table: the rows
+    /// keep their items across the show the choice brings, so the tree is not
+    /// closed and opened again under the reader — which pulled the scroll up
+    /// and left the row just clicked at the bottom of the view.
+    func testChoosingARowDoesNotScrollTheTable() throws {
+        _ = try open(FITTestImage.make() + FITTestImage.make())
+        let outline = try XCTUnwrap(try entriesTable() as? NSOutlineView)
+        // Every CPUID open: the table and its backup's processors, taller than
+        // the view.
+        for row in (0..<outline.numberOfRows).reversed() {
+            if let item = outline.item(atRow: row), outline.level(forItem: item) == 1 {
+                outline.expandItem(item)
+            }
+        }
+        window?.layoutIfNeeded()
+        let clip = try XCTUnwrap(outline.enclosingScrollView?.contentView)
+        try XCTSkipUnless(outline.frame.height > clip.bounds.height + 100, "the table fits the view")
+        clip.scroll(to: NSPoint(x: 0, y: outline.frame.height - clip.bounds.height))
+        let before = clip.bounds.origin
+        let row = try XCTUnwrap((0..<outline.numberOfRows).last { outline.level(forRow: $0) == 0
+            && NSIntersectsRect(outline.rect(ofRow: $0), clip.bounds) && outline.delegate?.outlineView?(
+                outline, shouldSelectItem: outline.item(atRow: $0) as Any) == true })
+        let item = outline.item(atRow: row) as AnyObject
+
+        outline.selectRowIndexes([row], byExtendingSelection: false)
+        window?.layoutIfNeeded()
+
+        XCTAssertEqual(clip.bounds.origin, before, "the table stays where it was scrolled")
+        XCTAssertTrue(outline.item(atRow: row) as AnyObject === item, "the row keeps its item")
+        XCTAssertEqual(outline.selectedRow, row)
+    }
+
     /// The backup's copy reads quieter all the way down: a CPUID row under its
     /// microcode is grey like the row, where the table's own is not.
     func testTheBackupsCPUIDRowsAreGreyLikeItsRows() throws {
