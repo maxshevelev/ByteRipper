@@ -333,6 +333,15 @@ extension FITAddMicrocodeViewController: NSTableViewDataSource, NSTableViewDeleg
     /// What the `ⓘ` opens; nil when the cell has no `ⓘ`.
     private(set) var group: FITProcessorGroup?
     let infoButton = NSButton()
+    /// The `ⓘ`'s colour: a link's, and the selection's text colour while the
+    /// row is selected — blue on the accent is not seen.
+    private(set) var infoColor: NSColor = .linkColor {
+        didSet { infoButton.image = FITProcessorsPopover.infoImage(size: 11, color: infoColor) }
+    }
+
+    override var backgroundStyle: NSView.BackgroundStyle {
+        didSet { infoColor = backgroundStyle == .emphasized ? .alternateSelectedControlTextColor : .linkColor }
+    }
 
     init(target: AnyObject, action: Selector) {
         super.init(frame: .zero)
@@ -345,7 +354,7 @@ extension FITAddMicrocodeViewController: NSTableViewDataSource, NSTableViewDeleg
         field.setContentHuggingPriority(.required, for: .horizontal)
         field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         textField = field
-        infoButton.image = FITProcessorsPopover.infoImage(size: 11)
+        infoButton.image = FITProcessorsPopover.infoImage(size: 11, color: infoColor)
         infoButton.isBordered = false
         infoButton.imagePosition = .imageOnly
         infoButton.target = target

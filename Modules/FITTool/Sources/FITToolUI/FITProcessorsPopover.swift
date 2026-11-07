@@ -81,9 +81,11 @@ import Localization
 
     /// The `ⓘ` that opens the popover, wherever a CPUID has one: the panel's
     /// info glyph in a CPUID's weight and the colour of a link — which it is.
-    static func infoImage(size: CGFloat) -> NSImage? {
+    /// On a selected row's accent the link's blue is lost: a table cell passes
+    /// the selection's text colour as `color` there.
+    static func infoImage(size: CGFloat, color: NSColor = .linkColor) -> NSImage? {
         let config = NSImage.SymbolConfiguration(pointSize: size.rounded(), weight: .semibold)
-            .applying(NSImage.SymbolConfiguration(paletteColors: [.linkColor]))
+            .applying(NSImage.SymbolConfiguration(paletteColors: [color]))
         return NSImage(systemSymbolName: "info.circle", accessibilityDescription: L("Processors"))?
             .withSymbolConfiguration(config)
     }

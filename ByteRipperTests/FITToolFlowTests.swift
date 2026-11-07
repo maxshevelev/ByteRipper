@@ -919,6 +919,11 @@ final class FITToolFlowTests: XCTestCase {
         cell.layoutSubtreeIfNeeded()
         let words = try XCTUnwrap(cell.textField).frame
         XCTAssertTrue((0...8).contains(cell.infoButton.frame.minX - words.maxX), "right after the CPUID")
+        XCTAssertEqual(cell.infoColor, .linkColor)
+        cell.backgroundStyle = .emphasized
+        XCTAssertEqual(cell.infoColor, .alternateSelectedControlTextColor, "inverse on a selected row")
+        cell.backgroundStyle = .normal
+        XCTAssertEqual(cell.infoColor, .linkColor)
 
         cell.infoButton.performClick(nil)
         let popover = try XCTUnwrap(sheet.processorsPopover, "the popover is open")
