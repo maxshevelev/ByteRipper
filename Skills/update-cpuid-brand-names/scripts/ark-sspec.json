@@ -115,6 +115,18 @@
       ]
     },
     {
+      "model": "Intel Celeron G3920T",
+      "url": null,
+      "specs": [],
+      "note": "No Intel ARK product page found: WebSearch '\"Celeron G3920T\" site:intel.com specifications' returned only sibling SKUs (G3920 SKU 90737); the ARK 'Products formerly Skylake' listing fetched shows no such model. Likely an OEM-only SKU without an ARK page."
+    },
+    {
+      "model": "Intel Celeron G3940",
+      "url": null,
+      "specs": [],
+      "note": "No Intel ARK product page found: WebSearch '\"Celeron G3940\" site:intel.com specifications' returned only sibling SKUs (G3920, G3930, G3930E, G3930T, G3950); the ARK 'Products formerly Skylake' listing fetched shows no such model. Likely an OEM-only SKU without an ARK page."
+    },
+    {
       "model": "Intel Core i3-12100",
       "url": "https://www.intel.com/content/www/us/en/products/sku/134584/intel-core-i312100-processor-12m-cache-up-to-4-30-ghz/ordering.html",
       "specs": [
@@ -168,6 +180,117 @@
         }
       ],
       "note": "Ordering tab lists a single TRAY row; no boxed SKU and no C0 code."
+    },
+    {
+      "model": "Intel Core i3-6100",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/90729/intel-core-i36100-processor-3m-cache-3-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2HG",
+          "stepping": "S0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-6100E",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/90611/intel-core-i36100e-processor-3m-cache-2-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2DV",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-6100H",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/89063/intel-core-i36100h-processor-3m-cache-2-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2FR",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-6100T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/90734/intel-core-i36100t-processor-3m-cache-3-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2HE",
+          "stepping": "S0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-6100TE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88181/intel-core-i36100te-processor-4m-cache-2-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2LS",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-6102E",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/90612/intel-core-i36102e-processor-3m-cache-1-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2DX",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-6120",
+      "url": null,
+      "specs": [],
+      "note": "WebSearch '\"<model>\" site:intel.com specifications' and variants found no Intel product page for this model (only neighbouring SKUs)."
+    },
+    {
+      "model": "Intel Core i3-6120T",
+      "url": null,
+      "specs": [],
+      "note": "WebSearch '\"<model>\" site:intel.com specifications' and variants found no Intel product page for this model (only neighbouring SKUs)."
+    },
+    {
+      "model": "Intel Core i3-6300",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/90731/intel-core-i36300-processor-4m-cache-3-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2HA",
+          "stepping": "S0"
+        }
+      ],
+      "note": "Code Name not shown on the ordering tab. PCN 116799-00 (https://cdrdv2-public.intel.com/811782/PCN116799-00.pdf, saved as pdf/pcn116799.pdf) lists the same code and stepping: 'Intel® Core™ i3-6300 Processor I3-6300 CM8066201926905 S R2HA 945193 S0'."
+    },
+    {
+      "model": "Intel Core i3-6300T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/90728/intel-core-i36300t-processor-4m-cache-3-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2HD",
+          "stepping": "S0"
+        }
+      ],
+      "note": "Code Name not shown on the ordering tab. PCN 116799-00 (https://cdrdv2-public.intel.com/811782/PCN116799-00.pdf, saved as pdf/pcn116799.pdf) lists the same code and stepping: 'Intel® Core™ i3-6300T Processor I3-6300T CM8066201927004 S R2HD 945205 S0'."
+    },
+    {
+      "model": "Intel Core i3-6320",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/90733/intel-core-i36320-processor-4m-cache-3-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2H9",
+          "stepping": "S0"
+        }
+      ],
+      "note": "Code Name not shown on the ordering tab. PCN 116799-00 (https://cdrdv2-public.intel.com/811782/PCN116799-00.pdf, saved as pdf/pcn116799.pdf) lists the same code and stepping: 'Intel® Core™ i3-6320 Processor I3-6320 CM8066201926904 S R2H9 945192 S0'."
+    },
+    {
+      "model": "Intel Core i3-6320T",
+      "url": null,
+      "specs": [],
+      "note": "WebSearch '\"<model>\" site:intel.com specifications' and variants found no Intel product page for this model (only neighbouring SKUs)."
     },
     {
       "model": "Intel Core i5-10400",
@@ -327,6 +450,140 @@
         {
           "sSpec": "SRMBE",
           "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-6300HQ",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88959/intel-core-i56300hq-processor-6m-cache-up-to-3-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2FP",
+          "stepping": "R0"
+        },
+        {
+          "sSpec": "SR2SK",
+          "stepping": "N0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-6350HQ",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/93335/intel-core-i56350hq-processor-6m-cache-up-to-3-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2QZ",
+          "stepping": "N0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-6400",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88185/intel-core-i56400-processor-6m-cache-up-to-3-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2L7",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-6400T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88187/intel-core-i56400t-processor-6m-cache-up-to-2-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2L1",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-6440EQ",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/90425/intel-core-i56440eq-processor-6m-cache-up-to-3-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2DU",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-6440HQ",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88962/intel-core-i56440hq-processor-6m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2FS",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-6442EQ",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/90617/intel-core-i56442eq-processor-6m-cache-up-to-2-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2DY",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-6500",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88184/intel-core-i56500-processor-6m-cache-up-to-3-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2L6",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-6500T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88183/intel-core-i56500t-processor-6m-cache-up-to-3-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2L8",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-6500TE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88186/intel-core-i56500te-processor-6m-cache-up-to-3-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2LR",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-6600",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88188/intel-core-i56600-processor-6m-cache-up-to-3-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2L5",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-6600K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88191/intel-core-i56600k-processor-6m-cache-up-to-3-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2L4",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-6600T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88189/intel-core-i56600t-processor-6m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2L9",
+          "stepping": "R0"
         }
       ]
     },
@@ -496,6 +753,145 @@
         {
           "sSpec": "SRMB9",
           "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-6700",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88196/intel-core-i76700-processor-8m-cache-up-to-4-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2L2",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-6700HQ",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88967/intel-core-i76700hq-processor-6m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2FQ",
+          "stepping": "R0"
+        },
+        {
+          "sSpec": "SR2SL",
+          "stepping": "N0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-6700K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88195/intel-core-i76700k-processor-8m-cache-up-to-4-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2L0",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-6700T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88200/intel-core-i76700t-processor-8m-cache-up-to-3-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2L3",
+          "stepping": "R0"
+        },
+        {
+          "sSpec": "SR2BU",
+          "stepping": "R0"
+        }
+      ],
+      "note": "Two codes on the ordering tab: SR2L3 (tray) and SR2BU (boxed, for China), both R0; re-fetched to confirm."
+    },
+    {
+      "model": "Intel Core i7-6700TE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88201/intel-core-i76700te-processor-8m-cache-up-to-3-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2LP",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-6770HQ",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/93341/intel-core-i76770hq-processor-6m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2QY",
+          "stepping": "N0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-6820EQ",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/90426/intel-core-i76820eq-processor-8m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2DT",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-6820HK",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88969/intel-core-i76820hk-processor-8m-cache-up-to-3-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2FL",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-6820HQ",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88970/intel-core-i76820hq-processor-8m-cache-up-to-3-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2FU",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-6822EQ",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/90615/intel-core-i76822eq-processor-8m-cache-up-to-2-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2DW",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-6870HQ",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/93340/intel-core-i76870hq-processor-8m-cache-up-to-3-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2QX",
+          "stepping": "N0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-6920HQ",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/88972/intel-core-i76920hq-processor-8m-cache-up-to-3-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2FT",
+          "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-6970HQ",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/93336/intel-core-i76970hq-processor-8m-cache-up-to-3-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR2QW",
+          "stepping": "N0"
         }
       ]
     },
@@ -849,6 +1245,30 @@
           "stepping": "H0"
         }
       ]
+    },
+    {
+      "model": "Intel Pentium G4420",
+      "url": null,
+      "specs": [],
+      "note": "WebSearch '\"<model>\" site:intel.com specifications' and variants found no Intel product page for this model (only neighbouring SKUs)."
+    },
+    {
+      "model": "Intel Pentium G4420T",
+      "url": null,
+      "specs": [],
+      "note": "WebSearch '\"<model>\" site:intel.com specifications' and variants found no Intel product page for this model (only neighbouring SKUs)."
+    },
+    {
+      "model": "Intel Pentium G4520T",
+      "url": null,
+      "specs": [],
+      "note": "No Intel ARK product page found: WebSearch '\"Pentium G4520T\" site:intel.com specifications' returned only sibling SKUs (G4520 SKU 90732); the ARK 'Products formerly Skylake' listing fetched shows no such model. Likely an OEM-only SKU without an ARK page."
+    },
+    {
+      "model": "Intel Pentium G4540",
+      "url": null,
+      "specs": [],
+      "note": "No Intel ARK product page found: WebSearch '\"Pentium G4540\" site:intel.com specifications' returned only sibling SKUs (G4500, G4520, G4560, G4620); the ARK 'Products formerly Skylake' listing fetched shows no such model. Likely an OEM-only SKU without an ARK page."
     },
     {
       "model": "Intel Xeon D-1513N",

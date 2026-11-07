@@ -3854,131 +3854,305 @@
         },
         {
           "name": "Intel Core i7-6700HQ",
-          "sSpec": []
+          "sSpec": [
+            "SR2FQ",
+            "SR2SL"
+          ],
+          "sSpecSource": {
+            "SR2FQ": "ark",
+            "SR2SL": "ark"
+          }
         },
         {
           "name": "Intel Core i7-6770HQ",
-          "sSpec": []
+          "sSpec": [
+            "SR2QY"
+          ],
+          "sSpecSource": {
+            "SR2QY": "ark"
+          }
         },
         {
           "name": "Intel Core i7-6820HK",
-          "sSpec": []
+          "sSpec": [
+            "SR2FL"
+          ],
+          "sSpecSource": {
+            "SR2FL": "ark"
+          }
         },
         {
           "name": "Intel Core i7-6820HQ",
-          "sSpec": []
+          "sSpec": [
+            "SR2FU"
+          ],
+          "sSpecSource": {
+            "SR2FU": "ark"
+          }
         },
         {
           "name": "Intel Core i7-6870HQ",
-          "sSpec": []
+          "sSpec": [
+            "SR2QX"
+          ],
+          "sSpecSource": {
+            "SR2QX": "ark"
+          }
         },
         {
           "name": "Intel Core i7-6920HQ",
-          "sSpec": []
+          "sSpec": [
+            "SR2FT"
+          ],
+          "sSpecSource": {
+            "SR2FT": "ark"
+          }
         },
         {
           "name": "Intel Core i7-6970HQ",
-          "sSpec": []
+          "sSpec": [
+            "SR2QW"
+          ],
+          "sSpecSource": {
+            "SR2QW": "ark"
+          }
         },
         {
           "name": "Intel Core i5-6300HQ",
-          "sSpec": []
+          "sSpec": [
+            "SR2FP",
+            "SR2SK"
+          ],
+          "sSpecSource": {
+            "SR2FP": "ark",
+            "SR2SK": "ark"
+          }
         },
         {
           "name": "Intel Core i5-6350HQ",
-          "sSpec": []
+          "sSpec": [
+            "SR2QZ"
+          ],
+          "sSpecSource": {
+            "SR2QZ": "ark"
+          }
         },
         {
           "name": "Intel Core i5-6440HQ",
-          "sSpec": []
+          "sSpec": [
+            "SR2FS"
+          ],
+          "sSpecSource": {
+            "SR2FS": "ark"
+          }
         },
         {
           "name": "Intel Core i3-6100H",
-          "sSpec": []
+          "sSpec": [
+            "SR2FR"
+          ],
+          "sSpecSource": {
+            "SR2FR": "ark"
+          }
         },
         {
           "name": "Intel Core i7-6700",
-          "sSpec": []
+          "sSpec": [
+            "SR2L2"
+          ],
+          "sSpecSource": {
+            "SR2L2": "ark"
+          }
         },
         {
           "name": "Intel Core i7-6700K",
-          "sSpec": []
+          "sSpec": [
+            "SR2L0"
+          ],
+          "sSpecSource": {
+            "SR2L0": "ark"
+          }
         },
         {
           "name": "Intel Core i7-6700T",
-          "sSpec": []
+          "sSpec": [
+            "SR2L3",
+            "SR2BU"
+          ],
+          "sSpecSource": {
+            "SR2L3": "ark",
+            "SR2BU": "ark"
+          }
         },
         {
           "name": "Intel Core i7-6700TE",
-          "sSpec": []
+          "sSpec": [
+            "SR2LP"
+          ],
+          "sSpecSource": {
+            "SR2LP": "ark"
+          }
         },
         {
           "name": "Intel Core i7-6820EQ",
-          "sSpec": []
+          "sSpec": [
+            "SR2DT"
+          ],
+          "sSpecSource": {
+            "SR2DT": "ark"
+          }
         },
         {
           "name": "Intel Core i7-6822EQ",
-          "sSpec": []
+          "sSpec": [
+            "SR2DW"
+          ],
+          "sSpecSource": {
+            "SR2DW": "ark"
+          }
         },
         {
           "name": "Intel Core i5-6400",
-          "sSpec": []
+          "sSpec": [
+            "SR2L7",
+            "SR2BY"
+          ],
+          "sSpecSource": {
+            "SR2L7": "ark",
+            "SR2BY": "intel"
+          }
         },
         {
           "name": "Intel Core i5-6400T",
-          "sSpec": []
+          "sSpec": [
+            "SR2L1",
+            "SR2BS"
+          ],
+          "sSpecSource": {
+            "SR2L1": "ark",
+            "SR2BS": "intel"
+          }
         },
         {
           "name": "Intel Core i5-6440EQ",
-          "sSpec": []
+          "sSpec": [
+            "SR2DU"
+          ],
+          "sSpecSource": {
+            "SR2DU": "ark"
+          }
         },
         {
           "name": "Intel Core i5-6442EQ",
-          "sSpec": []
+          "sSpec": [
+            "SR2DY"
+          ],
+          "sSpecSource": {
+            "SR2DY": "ark"
+          }
         },
         {
           "name": "Intel Core i5-6500",
-          "sSpec": []
+          "sSpec": [
+            "SR2L6",
+            "SR2BX"
+          ],
+          "sSpecSource": {
+            "SR2L6": "ark",
+            "SR2BX": "intel"
+          }
         },
         {
           "name": "Intel Core i5-6500T",
-          "sSpec": []
+          "sSpec": [
+            "SR2L8",
+            "SR2BZ"
+          ],
+          "sSpecSource": {
+            "SR2L8": "ark",
+            "SR2BZ": "intel"
+          }
         },
         {
           "name": "Intel Core i5-6500TE",
-          "sSpec": []
+          "sSpec": [
+            "SR2LR"
+          ],
+          "sSpecSource": {
+            "SR2LR": "ark"
+          }
         },
         {
           "name": "Intel Core i5-6600",
-          "sSpec": []
+          "sSpec": [
+            "SR2L5"
+          ],
+          "sSpecSource": {
+            "SR2L5": "ark"
+          }
         },
         {
           "name": "Intel Core i5-6600K",
-          "sSpec": []
+          "sSpec": [
+            "SR2L4"
+          ],
+          "sSpecSource": {
+            "SR2L4": "ark"
+          }
         },
         {
           "name": "Intel Core i5-6600T",
-          "sSpec": []
+          "sSpec": [
+            "SR2L9"
+          ],
+          "sSpecSource": {
+            "SR2L9": "ark"
+          }
         },
         {
           "name": "Intel Core i3-6100",
-          "sSpec": []
+          "sSpec": [
+            "SR2HG"
+          ],
+          "sSpecSource": {
+            "SR2HG": "ark"
+          }
         },
         {
           "name": "Intel Core i3-6100E",
-          "sSpec": []
+          "sSpec": [
+            "SR2DV"
+          ],
+          "sSpecSource": {
+            "SR2DV": "ark"
+          }
         },
         {
           "name": "Intel Core i3-6100T",
-          "sSpec": []
+          "sSpec": [
+            "SR2HE"
+          ],
+          "sSpecSource": {
+            "SR2HE": "ark"
+          }
         },
         {
           "name": "Intel Core i3-6100TE",
-          "sSpec": []
+          "sSpec": [
+            "SR2LS"
+          ],
+          "sSpecSource": {
+            "SR2LS": "ark"
+          }
         },
         {
           "name": "Intel Core i3-6102E",
-          "sSpec": []
+          "sSpec": [
+            "SR2DX"
+          ],
+          "sSpecSource": {
+            "SR2DX": "ark"
+          }
         },
         {
           "name": "Intel Core i3-6120",
@@ -3990,15 +4164,30 @@
         },
         {
           "name": "Intel Core i3-6300",
-          "sSpec": []
+          "sSpec": [
+            "SR2HA"
+          ],
+          "sSpecSource": {
+            "SR2HA": "ark"
+          }
         },
         {
           "name": "Intel Core i3-6300T",
-          "sSpec": []
+          "sSpec": [
+            "SR2HD"
+          ],
+          "sSpecSource": {
+            "SR2HD": "ark"
+          }
         },
         {
           "name": "Intel Core i3-6320",
-          "sSpec": []
+          "sSpec": [
+            "SR2H9"
+          ],
+          "sSpecSource": {
+            "SR2H9": "ark"
+          }
         },
         {
           "name": "Intel Core i3-6320T",

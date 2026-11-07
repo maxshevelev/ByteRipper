@@ -2,6 +2,18 @@
   "about": "S-SPECs found by Skills/find-sspec beyond ARK and Wikipedia, each with its evidence: an Intel document, an S-SPEC database page, or the marking on the package read from photographs of different chips. A model searched with nothing found is kept with no specs.",
   "models": [
     {
+      "model": "Intel Celeron G3920T",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Intel 6th Generation Processor Family Specification Update 332689-010EN (copy at helptechco.com/files/pdf_files/BX80662I36100_PDF_0.pdf) Identification table lists only retail S-0/R-0 Pentium/Celeron SKUs (G4520 SR2HM, G4500 SR2HJ, G4500T SR2HS, G4400 SR2HK, G4400T SR2HQ, G3900 SR2HV, G3900T SR2HT, G3920 SR2HX); this model is absent. Intel EDS addendum 334408-001 (cdrdv2-public.intel.com/334408) also lacks it. Only a CPE vulnerability-database entry (cpe.gcve.eu/cpes/528839) names the model, with no code. Photos: 48 images incl. '\"G3920T\" SR2H', 'G3920T 赛扬' - none shows a G3920T package (G3920, G3900T only)."
+    },
+    {
+      "model": "Intel Celeron G3940",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Intel 6th Generation Processor Family Specification Update 332689-010EN (copy at helptechco.com/files/pdf_files/BX80662I36100_PDF_0.pdf) Identification table lists only retail S-0/R-0 Pentium/Celeron SKUs (G4520 SR2HM, G4500 SR2HJ, G4500T SR2HS, G4400 SR2HK, G4400T SR2HQ, G3900 SR2HV, G3900T SR2HT, G3920 SR2HX); this model is absent. Intel EDS addendum 334408-001 (cdrdv2-public.intel.com/334408) also lacks it. A search summary mentioned an anonymous user comment on cpu-world (G3940 = SR2HW, 3.00GHz) but cpu-world refuses WebFetch (403), so it is not a source; '\"SR2HW\" Intel' finds nothing; vstl.info/cpus/sr2hw is 404. Photos: one chip only - zhihu.com/p/133316161 (2 images of the same chip, pic1.zhimg.com/v2-5cfc0b7390e3d4abb660deb45636fb10_1440w.jpg sha256 5dd0495b76dd680f0c84e281ed9f500bb3d08cdd9a01ba0d6b71c07c6f7e0325 and pic3.zhimg.com/v2-d4ab8c63d0a3530116715e696d13eedc_1440w.jpg sha256 3c9a82688b116866b339649cb9d325ce54adb8daf63256ae861c943093b9cf0e) reads 'INTEL CELERON / G3940 / SR2HW 3.00GHZ / L533B429 (e4)', all characters legible. Candidate SR2HW, NOT recorded: no second chip with a different lot found in 64 images (queries 'SR2HW', 'SR2HW G3940', 'G3940 赛扬', 'G3940 CPU 1151'), and no Intel/database page confirms it. SR2HW sits in the gap of the retail SR2H* series of the same spec update, consistent but not proof."
+    },
+    {
       "model": "Intel Core i3-12100",
       "searched": "2026-11-07",
       "specs": [],
@@ -30,6 +42,70 @@
       "searched": "2026-11-07",
       "specs": [],
       "note": "ARK ordering tab gives the code with its stepping; steps 2-4 not needed per the brief."
+    },
+    {
+      "model": "Intel Core i3-6100",
+      "searched": "2026-11-07",
+      "specs": []
+    },
+    {
+      "model": "Intel Core i3-6100E",
+      "searched": "2026-11-07",
+      "specs": []
+    },
+    {
+      "model": "Intel Core i3-6100H",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives every code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Core i3-6100T",
+      "searched": "2026-11-07",
+      "specs": []
+    },
+    {
+      "model": "Intel Core i3-6100TE",
+      "searched": "2026-11-07",
+      "specs": []
+    },
+    {
+      "model": "Intel Core i3-6102E",
+      "searched": "2026-11-07",
+      "specs": []
+    },
+    {
+      "model": "Intel Core i3-6120",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "No Intel ARK page, not in Intel's PCN 116799 / 114074 or the 6th-gen EDS addendum identification table; WebSearch for '\"i3-6120\" S-Spec' found nothing; WikiChip has no archived page; photos.py brought only generic 'Core i3 6th gen' pictures, none of an i3-6120 package. Possibly an OEM-only or unreleased SKU."
+    },
+    {
+      "model": "Intel Core i3-6120T",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "No Intel ARK page; not in PCN 116799 / 114074 or the EDS addendum table; technical.city (loaded) gives Skylake and 9 May 2016 but no S-Spec; WikiChip has no archived page; photos.py returned only i3-6100T (SR2HE) chips. Searches for the gaps in Intel's SR2Hx sequence (SR2HB, SR2HF, SR2HL/N/P/R) found no page naming them."
+    },
+    {
+      "model": "Intel Core i3-6300",
+      "searched": "2026-11-07",
+      "specs": []
+    },
+    {
+      "model": "Intel Core i3-6300T",
+      "searched": "2026-11-07",
+      "specs": []
+    },
+    {
+      "model": "Intel Core i3-6320",
+      "searched": "2026-11-07",
+      "specs": []
+    },
+    {
+      "model": "Intel Core i3-6320T",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Only source is WikiChip (live site refused connection; read via the Wayback Machine snapshot of 2025-05-17), which itself marks the page 'Preliminary Data' and says it is unknown whether the processor was ever released. Not in Intel's PCN 116799 (which lists SR2H9 i3-6320, SR2HA i3-6300, SR2HD i3-6300T, SR2HE i3-6100T) nor in the EDS addendum table; SR2HC does fit the gap in that sequence. photos.py returned only i3-6320 (SR2H9) chips, no i3-6320T package. Treat as doubtful. SR2HC (S0) only from an archived WikiChip page marked \"Preliminary Data\", which says it is unknown whether the processor was released: not recorded."
     },
     {
       "model": "Intel Core i5-10500",
@@ -92,6 +168,255 @@
       "note": "ARK ordering tab gives one code, stepping B0, for every ordering code. Intel Specification Update 740518 Rev. 016 (edc.intel.com id=7232) was read: its Table 2-1 lists only CPUID (RPL-S 8P+16E = 0xB0671), no S-Spec table, so it adds no code. No second code searched for via databases or photographs, since ARK lists a single code with its stepping."
     },
     {
+      "model": "Intel Core i5-6300HQ",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives every code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Core i5-6350HQ",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives every code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Core i5-6400",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR2BY",
+          "stepping": "R0",
+          "cpuid": "506E3",
+          "architecture": "Skylake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/802337/PCN114074-00.pdf",
+              "quote": "Intel® Core™ Processor i5-6400 2.7 GHz CM8066201920506 SR2BY 943470 CM8066201920506 SR2L7 947207 — PCN 114074-00 (Oct 2015): \"The stepping will not change for these processors; it remains R-0. The CPUID Processor Signature will not change for these processors; it remains 0x506E3.\"",
+              "gives": [
+                "sSpec",
+                "stepping",
+                "cpuid"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/811782/PCN116799-00.pdf",
+              "quote": "Intel® Core™ i5-6400 Processor I5-6400 CM8066201920506 S R2BY 943470 R0",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK lists only the post-conversion SR2L7. SR2BY is the pre-conversion code (launch, before the SGX-enabling change of PCN 114074, Oct 2015), same R0 stepping and CPUID 506E3; still listed in the 2019 EOL PCN 116799."
+    },
+    {
+      "model": "Intel Core i5-6400T",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR2BS",
+          "stepping": "R0",
+          "cpuid": "506E3",
+          "architecture": "Skylake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/802337/PCN114074-00.pdf",
+              "quote": "Intel® Core™ Processor i5-6400T 2.2 GHz CM8066201920000 SR2BS 943464 CM8066201920000 SR2L1 947201 — PCN 114074-00 (Oct 2015): \"The stepping will not change for these processors; it remains R-0. The CPUID Processor Signature will not change for these processors; it remains 0x506E3.\"",
+              "gives": [
+                "sSpec",
+                "stepping",
+                "cpuid"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/811782/PCN116799-00.pdf",
+              "quote": "Intel® Core™ i5-6400T Processor I5-6400T CM8066201920000 S R2BS 943464 R0",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK lists only SR2L1. SR2BS is the pre-conversion code per PCN 114074 (R0, 506E3)."
+    },
+    {
+      "model": "Intel Core i5-6440EQ",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR2DU",
+          "stepping": "R0",
+          "cpuid": null,
+          "architecture": "Skylake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/334408/6th-gen-core-pentium-celeron-xeon-e3-v5-processor-h-s-u-series-eds-addendum.pdf",
+              "quote": "SR2DU i5-6440EQ R-0 6 4 2 1 Core : 3.4 ... 45 W No BGA1440",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK and EDS Addendum 334408-001US agree on one code."
+    },
+    {
+      "model": "Intel Core i5-6440HQ",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives every code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Core i5-6442EQ",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR2DY",
+          "stepping": "R0",
+          "cpuid": null,
+          "architecture": "Skylake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/334408/6th-gen-core-pentium-celeron-xeon-e3-v5-processor-h-s-u-series-eds-addendum.pdf",
+              "quote": "SR2DY i5-6442EQ R-0 6 4 2 1 Core : 2.7 ... 25 W No BGA1440",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK and EDS Addendum 334408-001US agree on one code."
+    },
+    {
+      "model": "Intel Core i5-6500",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR2BX",
+          "stepping": "R0",
+          "cpuid": "506E3",
+          "architecture": "Skylake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/802337/PCN114074-00.pdf",
+              "quote": "Intel® Core™ Processor i5-6500 3.2 GHz CM8066201920404 SR2BX 943469 CM8066201920404 SR2L6 947206 — PCN 114074-00 (Oct 2015): \"The stepping will not change for these processors; it remains R-0. The CPUID Processor Signature will not change for these processors; it remains 0x506E3.\"",
+              "gives": [
+                "sSpec",
+                "stepping",
+                "cpuid"
+              ]
+            }
+          ]
+        },
+        {
+          "sSpec": "SR2L6",
+          "stepping": "R0",
+          "cpuid": null,
+          "architecture": "Skylake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/334408/6th-gen-core-pentium-celeron-xeon-e3-v5-processor-h-s-u-series-eds-addendum.pdf",
+              "quote": "SR2L6 i5-6500 R-0 6 4 2 1 Core: 3.6 ... 65 W No LGA1151",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK lists only SR2L6. SR2BX is the pre-conversion code per PCN 114074 (R0, 506E3)."
+    },
+    {
+      "model": "Intel Core i5-6500T",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR2BZ",
+          "stepping": "R0",
+          "cpuid": "506E3",
+          "architecture": "Skylake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/802337/PCN114074-00.pdf",
+              "quote": "Intel® Core™ Processor i5-6500T 2.5 GHz CM8066201920600 SR2BZ 943471 CM8066201920600 SR2L8 947208 — PCN 114074-00 (Oct 2015): \"The stepping will not change for these processors; it remains R-0. The CPUID Processor Signature will not change for these processors; it remains 0x506E3.\"",
+              "gives": [
+                "sSpec",
+                "stepping",
+                "cpuid"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/811782/PCN116799-00.pdf",
+              "quote": "Intel® Core™ i5-6500T Processor I5-6500T CM8066201920600 S R2BZ 943471 R0",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK lists only SR2L8. SR2BZ is the pre-conversion code per PCN 114074 (R0, 506E3)."
+    },
+    {
+      "model": "Intel Core i5-6500TE",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR2LR",
+          "stepping": "R0",
+          "cpuid": null,
+          "architecture": "Skylake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/334408/6th-gen-core-pentium-celeron-xeon-e3-v5-processor-h-s-u-series-eds-addendum.pdf",
+              "quote": "SR2LR i5-6500TE R-0 6 4 2 1 Core: 3.3 ... 35 W No LGA1151",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK and EDS Addendum agree on one code; the 6500TE is not in PCN 114074 (no pre-conversion code found)."
+    },
+    {
+      "model": "Intel Core i5-6600",
+      "searched": "2026-11-07",
+      "specs": []
+    },
+    {
+      "model": "Intel Core i5-6600K",
+      "searched": "2026-11-07",
+      "specs": []
+    },
+    {
+      "model": "Intel Core i5-6600T",
+      "searched": "2026-11-07",
+      "specs": []
+    },
+    {
       "model": "Intel Core i7-12700",
       "searched": "2026-11-07",
       "specs": []
@@ -129,6 +454,102 @@
       "searched": "2026-11-07",
       "specs": [],
       "note": "ARK ordering tab gives one code, stepping B0, for every ordering code. Intel Specification Update 740518 Rev. 016 (edc.intel.com id=7232) was read: its Table 2-1 lists only CPUID (RPL-S 8P+16E = 0xB0671), no S-Spec table, so it adds no code. No second code searched for via databases or photographs, since ARK lists a single code with its stepping."
+    },
+    {
+      "model": "Intel Core i7-6700",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives every code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Core i7-6700HQ",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives every code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Core i7-6700K",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives every code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Core i7-6700T",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives every code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Core i7-6700TE",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives every code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Core i7-6770HQ",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives every code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Core i7-6820EQ",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives every code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Core i7-6820HK",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives every code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Core i7-6820HQ",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives every code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Core i7-6822EQ",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR2DW",
+          "stepping": "R0",
+          "cpuid": null,
+          "architecture": "Skylake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/334408/6th-gen-core-pentium-celeron-xeon-e3-v5-processor-h-s-u-series-eds-addendum.pdf",
+              "quote": "SR2DW i7-6822EQ R-0 8 4 2 1 Core : 2.8 ... 25 W No BGA1440",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK lists one code; EDS Addendum 334408-001US (Table: H-Processor, BGA1440) agrees."
+    },
+    {
+      "model": "Intel Core i7-6870HQ",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives every code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Core i7-6920HQ",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives every code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Core i7-6970HQ",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives every code with its stepping; steps 2-4 not needed."
     },
     {
       "model": "Intel Core i9-12900",
@@ -170,6 +591,30 @@
       "searched": "2026-11-07",
       "specs": [],
       "note": "ARK ordering tab gives one code, stepping B0, for every ordering code. Intel Specification Update 740518 Rev. 016 (edc.intel.com id=7232) was read: its Table 2-1 lists only CPUID (RPL-S 8P+16E = 0xB0671), no S-Spec table, so it adds no code. No second code searched for via databases or photographs, since ARK lists a single code with its stepping."
+    },
+    {
+      "model": "Intel Pentium G4420",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "No Intel ARK page; not in PCN 116799 / 114074 or the EDS addendum; every web search returned G4400/G4520/G4620 instead; WikiChip has no archived page; photos.py returned only G4400/G4620/G5420 chips. Possibly an OEM-only or unreleased SKU."
+    },
+    {
+      "model": "Intel Pentium G4420T",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "No Intel ARK page; not in PCN 116799 (which lists G4400T SR2HQ, G4500T SR2HS) or the EDS addendum; searches returned only G4400T; WikiChip has no archived page; photos.py returned only G4400T (SR2HQ) chips. Possibly an OEM-only or unreleased SKU."
+    },
+    {
+      "model": "Intel Pentium G4520T",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Intel 6th Generation Processor Family Specification Update 332689-010EN (copy at helptechco.com/files/pdf_files/BX80662I36100_PDF_0.pdf) Identification table lists only retail S-0/R-0 Pentium/Celeron SKUs (G4520 SR2HM, G4500 SR2HJ, G4500T SR2HS, G4400 SR2HK, G4400T SR2HQ, G3900 SR2HV, G3900T SR2HT, G3920 SR2HX); this model is absent. Intel EDS addendum 334408-001 (cdrdv2-public.intel.com/334408) also lacks it. No S-SPEC database page found that lists the model (searches returned only G4520). Photos: 48 images via photos.py incl. queries '\"G4520T\" SR2H', 'Pentium G4520T cpu', 'G4520T 奔腾' - none shows a G4520T package (all G4520, G4500T, G4400T, G5420T, G4560)."
+    },
+    {
+      "model": "Intel Pentium G4540",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Intel 6th Generation Processor Family Specification Update 332689-010EN (copy at helptechco.com/files/pdf_files/BX80662I36100_PDF_0.pdf) Identification table lists only retail S-0/R-0 Pentium/Celeron SKUs (G4520 SR2HM, G4500 SR2HJ, G4500T SR2HS, G4400 SR2HK, G4400T SR2HQ, G3900 SR2HV, G3900T SR2HT, G3920 SR2HX); this model is absent. Intel EDS addendum 334408-001 (cdrdv2-public.intel.com/334408) also lacks it. No S-SPEC database page found. Photos: 48 images incl. queries '\"G4540\" SR2H', 'G4540 奔腾', '\"G4540\" CPU 1151 3.0GHz' - none shows a G4540 package (G4560, G4400T, G4520, unrelated Nissan/Vitec parts)."
     },
     {
       "model": "Intel Xeon D-1513N",
