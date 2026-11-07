@@ -70,21 +70,26 @@ public enum ProcessorNames {
     }
 }
 
-/// The processors behind one CPUID of a microcode: what its node in the
-/// panel's tree says, and the lines it opens into.
+/// The processors behind one CPUID of a microcode: what its row in the
+/// panel's tree says, and what the popover off the row's `ⓘ` lists. The
+/// processors are not rows of the tree: they are not part of the update, only
+/// what is known about who runs it.
 public struct FITProcessorGroup: Equatable, Sendable {
     /// Five hex digits, as a bench writes it.
     public var cpuid: String
     /// The code names of the groups the table has for this CPUID, said beside
-    /// it when the microcode serves several — the one thing that tells two
-    /// CPUIDs of one update apart at a glance. Empty when nothing is known.
+    /// it on its row — the one thing that tells two CPUIDs of one update apart
+    /// at a glance. Empty when nothing is known.
     public var codeNames: [String]
-    /// What the table says of the groups besides their names — the cores'
-    /// architectures, the stepping, the segments — one line a group. The
-    /// panel puts it under the pointer on the CPUID's row rather than on a
-    /// row of its own. A line leads with its group's code names only where
-    /// the CPUID has more than one group, since the row already says them.
+    /// What the table says of each group, one note a group: its code names,
+    /// its product families, then the cores' architectures, the stepping and
+    /// the segments — a line each. The popover says a CPUID's one group at its
+    /// head; where there are several, each is said over its own models, by
+    /// the line that names it. Empty when nothing is known.
     public var notes: [String] = []
+    /// The popover's list: the models, each with its S-SPECs — under a line
+    /// naming its group, and saying the rest of its note, where the CPUID has
+    /// more than one.
     public var lines: [FITProcessorLine]
 
     /// One group per signature, in the order the update names them — the
@@ -107,13 +112,10 @@ public struct FITProcessorGroup: Equatable, Sendable {
             var lines: [FITProcessorLine] = []
             var notes: [String] = []
             for family in families {
-                // A hybrid's two kinds of core read as one part: P + E.
-                let cores = family.cores.isEmpty ? [] : [family.cores.joined(separator: " + ")]
-                let note = (cores + family.steppings + family.segments).joined(separator: " · ")
+                notes.append(note(on: family, language: language))
                 if families.count > 1 {
-                    notes.append(family.codeNames.joined(separator: ", ") + (note.isEmpty ? "" : ": " + note))
-                } else if !note.isEmpty {
-                    notes.append(note)
+                    lines.append(.init(kind: .family, text: family.codeNames.joined(separator: ", "),
+                                       detail: facts(of: family, language: language)))
                 }
                 for model in family.processors {
                     lines.append(.init(
@@ -129,11 +131,35 @@ public struct FITProcessorGroup: Equatable, Sendable {
                                      notes: notes, lines: lines)
         }
     }
+
+    /// A group's note: its code names; its product families; and its cores —
+    /// a hybrid's two kinds as one part, P + E — stepping and segments on one
+    /// line. A line with nothing to say is left out.
+    static func note(on family: ProcessorFamily, language: AppLanguage) -> String {
+        [family.codeNames.joined(separator: ", "), facts(of: family, language: language)]
+            .filter { !$0.isEmpty }.joined(separator: "\n")
+    }
+
+    /// A group's note without its names: what the line naming it says under
+    /// them.
+    static func facts(of family: ProcessorFamily, language: AppLanguage) -> String {
+        let cores = family.cores.isEmpty ? [] : [family.cores.joined(separator: " + ")]
+        let stepping = family.steppings.isEmpty
+            ? [] : [L("Stepping %1$@", in: language, family.steppings.joined(separator: ", "))]
+        return [family.productFamilies.joined(separator: ", "),
+                (cores + stepping + family.segments).joined(separator: " · ")]
+            .filter { !$0.isEmpty }.joined(separator: "\n")
+    }
 }
 
-/// A line under a CPUID: a model the table of brand names lists for it.
+/// A line of the popover's list: a model the table of brand names lists for
+/// the CPUID, or the name of its group.
 public struct FITProcessorLine: Equatable, Sendable {
     public enum Kind: Equatable, Sendable {
+        /// The code names of the group the models after it belong to, and the
+        /// rest of its note as the detail — only where the CPUID has more
+        /// than one group.
+        case family
         /// One model, with its S-SPECs as the detail.
         case model
         /// Nothing is known for this CPUID.

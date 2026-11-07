@@ -1024,6 +1024,9 @@
 "No processor names known for CPUID %1$@" = "Модели процессоров для CPUID %1$@ неизвестны";
 "platform %1$@" = "платформа %1$@";
 "series, models not listed" = "серия, модели не перечислены";
+"Processors" = "Процессоры";
+"Show the processors with this CPUID" = "Показать процессоры с этим CPUID";
+"Stepping %1$@" = "Степпинг %1$@";
 "settings|View" = "Вид";
 "the rest of the file" = "остаток файла";
 "theme|Dark" = "Тёмная";

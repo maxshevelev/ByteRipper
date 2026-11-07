@@ -252,6 +252,10 @@ final class MultiWindowTests: XCTestCase {
         var controllers: [MainWindowController] = []
         defer { controllers.forEach { $0.close() } }
         for _ in 0..<12 {
+            // The window shown last is the one in front, as it is in the app;
+            // a test host in the background does not bring it there itself,
+            // and a window another test left open would be in front instead.
+            controllers.last?.window?.orderFrontRegardless()
             let controller = MainWindowController(frameAutosaveName: nil)
             controller.showWindow(nil)
             controllers.append(controller)

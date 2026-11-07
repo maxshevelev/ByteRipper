@@ -51,8 +51,9 @@ import ToolModuleKit
     /// re-shows and selects again until the stack runs out.
     private var isShowingState = false
 
-    /// The entries, as an outline: a microcode row opens into the processors
-    /// it is for (`FITProcessorLine`).
+    /// The entries, as an outline: a microcode row opens into a plate of the
+    /// CPUIDs it is for, and a CPUID's `ⓘ` lists the processors behind it
+    /// (`FITProcessorsPopover`).
     let entries = ToolPanelOutlineView()
     /// The outline's rows, rebuilt with every `show`. NSOutlineView knows a
     /// row by the identity of its item, so the items live here between calls.
@@ -69,8 +70,10 @@ import ToolModuleKit
     /// Whether the show on hand is the same table again — kept items, kept
     /// scroll — rather than a new one (`rebuildItems`).
     private var keepsScroll = false
-    /// The row the session has in focus — what a line under it stands for.
-    private var focusKey: Int?
+    /// The popover a CPUID's `ⓘ` opened, kept so the next one closes it.
+    /// Weak: a closed popover lets go of itself (`HelpPopoverController`).
+    weak var processorsPopover: FITProcessorsPopover?
+
     let problems = NSTableView()
     private let entriesScroll = NSScrollView()
     private let problemsScroll = NSScrollView()
@@ -507,14 +510,10 @@ import ToolModuleKit
             && display.problems == self.display.problems
         self.display = display
         self.canWrite = canWrite
-        focusKey = focus
         isShowingState = true
         defer { isShowingState = false }
 
         summaryLabel.stringValue = display.summary
-        // A line under a microcode stands for the microcode: choosing it puts
-        // the microcode in focus, and the line stays chosen when it comes back.
-        let chosen = item(atRow: entries.selectedRow)?.kind
         if !sameTable {
             rebuildItems()
             reloadEntries()
@@ -522,8 +521,7 @@ import ToolModuleKit
             problems.reloadData()
         }
         renderDetail(display.detail, subject: focus.map(String.init) ?? "")
-        if let focus, let row = tableRow(of: chosen?.key == focus ? chosen! : .entry(focus))
-            ?? tableRow(of: .entry(focus)) {
+        if let focus, let row = tableRow(of: .entry(focus)) {
             entries.selectRowIndexes([row], byExtendingSelection: false)
         } else {
             entries.deselectAll(nil)
@@ -689,11 +687,9 @@ final class FITOutlineItem: NSObject {
         case heading
         /// The row's key (`FITDisplayRow.key`).
         case entry(Int)
-        /// The row's key and the group's place among its `processorGroups`: a
-        /// CPUID of an update that serves several, a level of its own.
-        case cpuid(Int, Int)
-        /// The row's key, the group's place, and the line's place in it.
-        case line(Int, Int, Int)
+        /// The row's key: the plate of the CPUIDs a microcode serves, under
+        /// it — one row, not one a CPUID, and not one that can be chosen.
+        case cpuids(Int)
         /// Add Microcode…, under the table's last microcode.
         case addMicrocode
 
@@ -706,7 +702,7 @@ final class FITOutlineItem: NSObject {
         var key: Int? {
             switch self {
             case .heading, .addMicrocode: return nil
-            case .entry(let key), .cpuid(let key, _), .line(let key, _, _): return key
+            case .entry(let key), .cpuids(let key): return key
             }
         }
     }
@@ -722,8 +718,9 @@ extension FITToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
     // MARK: - The items
 
     /// The outline's items for the display on hand: every row, the heading
-    /// where the backup's copy starts, and under a microcode a row for each
-    /// CPUID it serves, which opens into the processors behind it.
+    /// where the backup's copy starts, and under a microcode the plate of the
+    /// CPUIDs it serves. The processors behind a CPUID are not rows: they are
+    /// not part of the update, and its `ⓘ` lists them.
     fileprivate func rebuildItems() {
         // No table — another file, or one still being read — and nothing of
         // the last one's opening is kept: its rows open afresh.
@@ -746,20 +743,13 @@ extension FITToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
             itemsByKind[kind] = item
             return item
         }
-        func lines(_ key: Int, _ group: Int, _ count: Int) -> [FITOutlineItem] {
-            (0..<count).map { made(.line(key, group, $0)) }
-        }
         for (index, row) in display.rows.enumerated() {
             if display.backupStart == index { topItems.append(made(.heading)) }
             let entry = FITOutlineItem.Kind.entry(row.key)
             topItems.append(made(entry))
             let groups = row.processorGroups
             guard !groups.isEmpty else { continue }
-            childItems[entry] = groups.indices.map { g in
-                let cpuid = made(.cpuid(row.key, g))
-                childItems[cpuid.kind] = lines(row.key, g, groups[g].lines.count)
-                return cpuid
-            }
+            childItems[entry] = [made(.cpuids(row.key))]
             if seenEntries.insert(entry).inserted { expandedKinds.insert(entry) }
         }
         if display.backupStart == display.rows.count { topItems.append(made(.heading)) }
@@ -809,14 +799,14 @@ extension FITToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
         display.rows.first { $0.key == key }
     }
 
-    /// The entry a row stands for: its own, or — for a CPUID or a line under a
-    /// microcode — the microcode's, so its menu, its double-click and the
-    /// detail act on the microcode.
+    /// The entry a row stands for: its own, or — for the CPUIDs' plate under
+    /// a microcode — the microcode's, so its menu and its double-click act on
+    /// the microcode.
     private func displayRow(atTableRow row: Int) -> FITDisplayRow? {
         item(atRow: row)?.kind.key.flatMap(entry(ofKey:))
     }
 
-    /// The row an item is on, when it is on screen — a line under a closed
+    /// The row an item is on, when it is on screen — the plate under a closed
     /// microcode is on none.
     private func tableRow(of kind: FITOutlineItem.Kind) -> Int? {
         guard let item = itemsByKind[kind] else { return nil }
@@ -838,7 +828,6 @@ extension FITToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
         return childItems[item.kind]?[index] ?? FITOutlineItem(.heading)
     }
 
-    // help: fit.processors
     func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool {
         guard let item = item as? FITOutlineItem else { return false }
         return !(childItems[item.kind]?.isEmpty ?? true)
@@ -869,26 +858,9 @@ extension FITToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
         case .entry(let key):
             guard let column = tableColumn, let entry = entry(ofKey: key) else { return nil }
             return entryCell(entry, column: column)
-        case .cpuid(let key, let group):
-            guard tableColumn?.identifier == Column.type, let entry = entry(ofKey: key),
-                  group < entry.processorGroups.count
-            else { return nil }
-            // The cores, the stepping and the segments are under the pointer:
-            // the row says the CPUID and its code names, and nothing more.
-            let cpuid = entry.processorGroups[group]
-            let cell = lineCell(text: L("CPUID %1$@", cpuid.cpuid), detail: cpuid.codeNames.joined(separator: ", "),
-                                weight: .medium, quiet: false, isBackup: entry.isBackup)
-            if !cpuid.notes.isEmpty {
-                (cell as? NSTableCellView)?.textField?.toolTip = cpuid.notes.joined(separator: "\n")
-            }
-            return cell
-        case .line(let key, let group, let index):
-            guard tableColumn?.identifier == Column.type, let entry = entry(ofKey: key),
-                  group < entry.processorGroups.count, index < entry.processorGroups[group].lines.count
-            else { return nil }
-            let line = entry.processorGroups[group].lines[index]
-            return lineCell(text: line.text, detail: line.detail,
-                            weight: .regular, quiet: line.kind == .unknown, isBackup: entry.isBackup)
+        case .cpuids(let key):
+            guard tableColumn?.identifier == Column.type, let entry = entry(ofKey: key) else { return nil }
+            return cpuidPlate(entry)
         }
     }
 
@@ -896,23 +868,30 @@ extension FITToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
         (item as? FITOutlineItem)?.kind == .heading
     }
 
-    /// Every row is chosen as in the UEFI tree — the arrow keys walk the
-    /// processors as they walk the entries — except the heading, which is a
-    /// heading. A CPUID or a line chosen puts its microcode in focus.
+    /// Every entry is chosen as in the UEFI tree; the heading is a heading,
+    /// and the CPUIDs' plate says something about its microcode rather than
+    /// being a thing of its own — the arrow keys pass over both.
     func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
         guard let kind = (item as? FITOutlineItem)?.kind else { return false }
-        return kind != .heading && kind != .addMicrocode
+        return kind.isEntry
     }
 
-    /// The button's row is as tall as the button; every other row is the
-    /// table's.
+    /// The button's row is as tall as the button, the plate's as its lines;
+    /// every other row is the table's.
     func outlineView(_ outlineView: NSOutlineView, heightOfRowByItem item: Any) -> CGFloat {
-        guard (item as? FITOutlineItem)?.kind == .addMicrocode else { return outlineView.rowHeight }
-        return max(outlineView.rowHeight, addButton.fittingSize.height + 6)
+        switch (item as? FITOutlineItem)?.kind {
+        case .addMicrocode?:
+            return max(outlineView.rowHeight, addButton.fittingSize.height + 6)
+        case .cpuids(let key)?:
+            return FITCPUIDPlate.height(lines: entry(ofKey: key)?.processorGroups.count ?? 0,
+                                        textSize: ToolPanelFont.body().pointSize)
+        default:
+            return outlineView.rowHeight
+        }
     }
 
-    /// The entries' rows carry the Boot Guard background; the lines under a
-    /// microcode are about the processor, not about bytes of the image, and
+    /// The entries' rows carry the Boot Guard background; the CPUIDs' plate
+    /// under a microcode is about the processor, not about bytes of the image, and
     /// keep the plain row.
     func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
         guard let item = item as? FITOutlineItem, case .entry(let key) = item.kind,
@@ -936,14 +915,6 @@ extension FITToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
     private func selectionDidChange() {
         guard !isShowingState else { return }
         let row = entries.selectedRow
-        // A CPUID or a model stands for its microcode. With that microcode in
-        // focus already, choosing another of its lines changes nothing the
-        // session would show — no zone, no detail — so it is not told. The
-        // microcode's own row still is: it brings the focus back to the row
-        // from what the row points at.
-        if let kind = item(atRow: row)?.kind, kind.key != nil, kind.key == focusKey, !kind.isEntry {
-            return
-        }
         if entries.isHandlingClick { onWillChoose?() }
         onSelect?(displayRow(atTableRow: row)?.key)
     }
@@ -1010,38 +981,30 @@ extension FITToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
         return cell
     }
 
-    /// A name and, after it, what is said about it: the line every row of the
-    /// outline is drawn as.
-    private static func twoPart(
-        _ text: String, weight: NSFont.Weight, color: NSColor, detail: String, detailColor: NSColor
-    ) -> NSAttributedString {
-        let line = NSMutableAttributedString(string: text, attributes: [
-            .font: ToolPanelFont.body(weight: weight), .foregroundColor: color
-        ])
-        if !detail.isEmpty {
-            line.append(NSAttributedString(string: "   " + detail, attributes: [
-                .font: ToolPanelFont.body(), .foregroundColor: detailColor
-            ]))
-        }
-        return line
+    /// The plate under a microcode: its CPUIDs one under another, each in the
+    /// weight of a heading, the `ⓘ` that lists the processors behind it right
+    /// after it, and its code names quieter after that. Under a row of the Top Swap
+    /// backup's copy everything reads as quietly as that row does: it is
+    /// there to be compared.
+    private func cpuidPlate(_ entry: FITDisplayRow) -> NSView {
+        let plate = entries.makeView(withIdentifier: FITCPUIDPlate.identifier, owner: self) as? FITCPUIDPlate
+            ?? FITCPUIDPlate()
+        plate.key = entry.key
+        plate.show(entry.processorGroups.map { (L("CPUID %1$@", $0.cpuid), $0.codeNames.joined(separator: ", ")) },
+                   quiet: entry.isBackup, target: self, action: #selector(showProcessors(_:)))
+        return plate
     }
 
-    /// A row under a microcode: a CPUID in the weight of a heading, a model in
-    /// the body's, and what follows each — the code names, the S-SPECs —
-    /// quieter after it. Under a row of the Top Swap backup's copy everything
-    /// reads as quietly as that row does: it is there to be compared.
-    private func lineCell(
-        text: String, detail: String, weight: NSFont.Weight, quiet: Bool, isBackup: Bool
-    ) -> NSView {
-        let identifier = NSUserInterfaceItemIdentifier("processorLine")
-        let cell = entries.makeView(withIdentifier: identifier, owner: self) as? NSTableCellView
-            ?? ToolPanelTable.makeCell(identifier: identifier)
-        cell.textField?.font = ToolPanelFont.body()
-        cell.textField?.attributedStringValue = Self.twoPart(
-            text, weight: weight, color: quiet || isBackup ? .secondaryLabelColor : .labelColor,
-            detail: detail, detailColor: isBackup ? .tertiaryLabelColor : .secondaryLabelColor)
-        cell.textField?.toolTip = detail.isEmpty ? text : "\(text)   \(detail)"
-        return cell
+    /// A CPUID's `ⓘ`: the processors behind it, in a popover off the button.
+    // help: fit.processors
+    @objc private func showProcessors(_ sender: NSButton) {
+        var view: NSView? = sender
+        while let current = view, !(current is FITCPUIDPlate) { view = current.superview }
+        guard let plate = view as? FITCPUIDPlate, let key = plate.key,
+              let entry = entry(ofKey: key), sender.tag < entry.processorGroups.count
+        else { return }
+        processorsPopover?.close()
+        processorsPopover = FITProcessorsPopover.show(entry.processorGroups[sender.tag], from: sender)
     }
 
     /// What an entry row wears besides its text, decided in the pure target.
@@ -1123,5 +1086,146 @@ extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
     func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
         guard tableView === entries else { return true }
         return item(atRow: row).map { outlineView(entries, shouldSelectItem: $0) } ?? false
+    }
+}
+
+/// The CPUIDs a microcode serves, as one plate under its row: a rounded
+/// badge across the column to its right edge, with a line a CPUID — the CPUID, the
+/// `ⓘ` right after it, which belongs to that CPUID, and its code names, cut
+/// short first where the column is narrow. The plate is not a row of the table: it cannot be chosen, and a
+/// click on it changes nothing but what its buttons do.
+@MainActor final class FITCPUIDPlate: NSTableCellView {
+    static let identifier = NSUserInterfaceItemIdentifier("cpuidPlate")
+
+    /// The microcode row the plate is under.
+    var key: Int?
+    /// The lines' `ⓘ`, in the order of the CPUIDs; a button's tag is its
+    /// CPUID's place.
+    private(set) var infoButtons: [NSButton] = []
+    /// The lines' CPUIDs, in the same order.
+    private(set) var lineFields: [NSTextField] = []
+    /// The lines' code names, in the same order.
+    private(set) var nameFields: [NSTextField] = []
+    private let badge = FITPlateBackground()
+    private let stack = NSStackView()
+
+    /// Around the plate, inside the row.
+    static let outerMargin: CGFloat = 2
+    /// Inside the plate, around its lines.
+    static let innerPadding = NSEdgeInsets(top: 3, left: 8, bottom: 3, right: 6)
+    static let lineSpacing: CGFloat = 1
+
+    init() {
+        super.init(frame: .zero)
+        identifier = Self.identifier
+        badge.translatesAutoresizingMaskIntoConstraints = false
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = Self.lineSpacing
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(badge)
+        badge.addSubview(stack)
+        let pad = Self.innerPadding
+        NSLayoutConstraint.activate([
+            badge.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.outerMargin),
+            badge.topAnchor.constraint(equalTo: topAnchor, constant: Self.outerMargin),
+            badge.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -Self.outerMargin),
+            badge.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.outerMargin),
+            stack.leadingAnchor.constraint(equalTo: badge.leadingAnchor, constant: pad.left),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: badge.trailingAnchor, constant: -pad.right),
+            stack.topAnchor.constraint(equalTo: badge.topAnchor, constant: pad.top),
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: badge.bottomAnchor, constant: -pad.bottom),
+        ])
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    /// The height of one line at `textSize`: the text's, or the button's
+    /// where that is taller.
+    static func lineHeight(textSize: CGFloat) -> CGFloat {
+        let font = NSFont.systemFont(ofSize: textSize, weight: .medium)
+        return max(ceil(NSLayoutManager().defaultLineHeight(for: font)), textSize.rounded() + 2)
+    }
+
+    /// The row's height for a plate of `lines` lines.
+    static func height(lines: Int, textSize: CGFloat) -> CGFloat {
+        let count = CGFloat(max(lines, 1))
+        return count * lineHeight(textSize: textSize) + (count - 1) * lineSpacing
+            + innerPadding.top + innerPadding.bottom + 2 * outerMargin
+    }
+
+    /// Shows a line for each CPUID — the CPUID, its `ⓘ` sending `action`,
+    /// and its code names. `quiet` greys the whole plate, as under a row of
+    /// the Top Swap backup's copy.
+    func show(_ lines: [(cpuid: String, names: String)], quiet: Bool, target: AnyObject, action: Selector) {
+        stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        infoButtons = []
+        lineFields = []
+        nameFields = []
+        let textSize = ToolPanelFont.body().pointSize
+        let point = textSize.rounded()
+        let height = Self.lineHeight(textSize: textSize)
+        for (index, line) in lines.enumerated() {
+            let cpuid = NSTextField(labelWithString: line.cpuid)
+            cpuid.font = ToolPanelFont.body(weight: .medium)
+            cpuid.textColor = quiet ? .secondaryLabelColor : .labelColor
+            cpuid.setContentCompressionResistancePriority(.required, for: .horizontal)
+            cpuid.setContentHuggingPriority(.required, for: .horizontal)
+            let names = NSTextField(labelWithString: line.names)
+            names.font = ToolPanelFont.body()
+            names.textColor = quiet ? .tertiaryLabelColor : .secondaryLabelColor
+            names.lineBreakMode = .byTruncatingTail
+            names.maximumNumberOfLines = 1
+            names.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            names.setContentHuggingPriority(.required, for: .horizontal)
+            names.toolTip = line.names.isEmpty ? nil : line.names
+            names.isHidden = line.names.isEmpty
+            let button = ToolFieldRow.makeInfoButton(
+                name: L("Processors"), tooltip: L("Show the processors with this CPUID"))
+            // In the weight of the CPUID it belongs to.
+            button.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: point, weight: .semibold)
+            button.tag = index
+            button.target = target
+            button.action = action
+            button.translatesAutoresizingMaskIntoConstraints = false
+            button.setContentCompressionResistancePriority(.required, for: .horizontal)
+            // All three in the leading gravity area: a line shorter than the
+            // plate leaves the rest of its width empty after it.
+            let row = NSStackView()
+            row.orientation = .horizontal
+            row.alignment = .centerY
+            row.spacing = 4
+            row.distribution = .gravityAreas
+            row.addView(cpuid, in: .leading)
+            row.addView(button, in: .leading)
+            row.addView(names, in: .leading)
+            row.setCustomSpacing(6, after: button)
+            NSLayoutConstraint.activate([
+                button.widthAnchor.constraint(equalToConstant: point + 2),
+                button.heightAnchor.constraint(equalTo: button.widthAnchor),
+                row.heightAnchor.constraint(equalToConstant: height),
+            ])
+            stack.addArrangedSubview(row)
+            infoButtons.append(button)
+            lineFields.append(cpuid)
+            nameFields.append(names)
+        }
+    }
+}
+
+/// The plate's rounded badge, drawn rather than layered so its colours follow
+/// the appearance as the system's own fills do.
+@MainActor final class FITPlateBackground: NSView {
+    static let radius: CGFloat = 5
+
+    override func draw(_ dirtyRect: NSRect) {
+        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5),
+                                xRadius: Self.radius, yRadius: Self.radius)
+        NSColor.quaternarySystemFill.setFill()
+        path.fill()
+        NSColor.separatorColor.setStroke()
+        path.lineWidth = 1
+        path.stroke()
     }
 }
