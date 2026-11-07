@@ -73,10 +73,11 @@ The list counts, per CPUID, the models with no code that were not searched yet.
    markings, open at least one of its images and read the code. Then the
    module's tests, and `git diff` of the table — see "After a run" in
    `update-cpuid-brand-names`. Commit the two record files with the table.
-6. **The help says where the codes come from.** `tool-fit` (en, ru, de) says
-   the list is "completed with S-SPEC codes from Intel ARK and Wikipedia". The
-   first time the table's `sSpecSources` gains `intel`, `database` or
-   `marking`, that sentence names them too, in all three languages; then
+6. **The help says where the codes come from.** `tool-fit` (en, ru, de) names
+   them: ARK, Intel's specification updates and PCNs, Wikipedia, and an
+   S-SPEC database. The first time the table's `sSpecSources` gains a kind
+   the sentence does not name — `marking` has not been needed yet — add it
+   in all three languages; then
    `python3 Skills/help-coverage/scripts/help_coverage.py`, and `--bless` the
    pages brought in line.
 
