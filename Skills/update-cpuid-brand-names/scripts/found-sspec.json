@@ -14,6 +14,198 @@
       "note": "Intel 6th Generation Processor Family Specification Update 332689-010EN (copy at helptechco.com/files/pdf_files/BX80662I36100_PDF_0.pdf) Identification table lists only retail S-0/R-0 Pentium/Celeron SKUs (G4520 SR2HM, G4500 SR2HJ, G4500T SR2HS, G4400 SR2HK, G4400T SR2HQ, G3900 SR2HV, G3900T SR2HT, G3920 SR2HX); this model is absent. Intel EDS addendum 334408-001 (cdrdv2-public.intel.com/334408) also lacks it. A search summary mentioned an anonymous user comment on cpu-world (G3940 = SR2HW, 3.00GHz) but cpu-world refuses WebFetch (403), so it is not a source; '\"SR2HW\" Intel' finds nothing; vstl.info/cpus/sr2hw is 404. Photos: one chip only - zhihu.com/p/133316161 (2 images of the same chip, pic1.zhimg.com/v2-5cfc0b7390e3d4abb660deb45636fb10_1440w.jpg sha256 5dd0495b76dd680f0c84e281ed9f500bb3d08cdd9a01ba0d6b71c07c6f7e0325 and pic3.zhimg.com/v2-d4ab8c63d0a3530116715e696d13eedc_1440w.jpg sha256 3c9a82688b116866b339649cb9d325ce54adb8daf63256ae861c943093b9cf0e) reads 'INTEL CELERON / G3940 / SR2HW 3.00GHZ / L533B429 (e4)', all characters legible. Candidate SR2HW, NOT recorded: no second chip with a different lot found in 64 images (queries 'SR2HW', 'SR2HW G3940', 'G3940 赛扬', 'G3940 CPU 1151'), and no Intel/database page confirms it. SR2HW sits in the gap of the retail SR2H* series of the same spec update, consistent but not proof."
     },
     {
+      "model": "Intel Core i3-10100",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRH3N",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Comet Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/798170/PCN117936-00.pdf",
+              "quote": "Intel® Core™ i3-10100 Processor CM8070104291317 SRH3N 999TKG",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK lists SRH3N (G1) only; PCN 117936-00 (manufacturing site, no code change) lists the same tray code. Stepping G1 from ARK. PCN search found no conversion PCN with new codes."
+    },
+    {
+      "model": "Intel Core i3-10100F",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRH8U",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Comet Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/798170/PCN117936-00.pdf",
+              "quote": "Intel® Core™ i3-10100F Processor CM8070104291318 SRH8U 999WPA",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK lists SRH8U (G1) only; PCN 117936-00 (manufacturing site, no code change) lists the same tray code. Stepping G1 from ARK. PCN search found no conversion PCN with new codes."
+    },
+    {
+      "model": "Intel Core i3-10100T",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRH3Q",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Comet Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/798170/PCN117936-00.pdf",
+              "quote": "Intel® Core™ i3-10100T Processor CM8070104291412 SRH3Q 999TKK",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK lists SRH3Q (G1) only; PCN 117936-00 (manufacturing site, no code change) lists the same tray code. Stepping G1 from ARK. PCN search found no conversion PCN with new codes."
+    },
+    {
+      "model": "Intel Core i3-10105",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK lists SRH3P (G1) only. PCN search (PCN 117936-00, 826013-02, 800306) found no conversion PCN with new codes for this model."
+    },
+    {
+      "model": "Intel Core i3-10105F",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK lists SRH8V (G1) only. PCN search (PCN 117936-00, 826013-02, 800306) found no conversion PCN with new codes for this model."
+    },
+    {
+      "model": "Intel Core i3-10105T",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRH3R",
+          "stepping": "G1",
+          "cpuid": null,
+          "architecture": "Comet Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/826013/PCN826013-02.pdf",
+              "quote": "Intel® Core™ i3-10105T Processor CM8070104291414 S RH3R 999TKL G1",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK lists one code, SRH3R G1 (Code Name 'Products formerly Comet Lake' on the specifications tab). PCN search found only PCN 826013-02 (a discontinuance/NCNR notice), which lists the same SRH3R G1 and no other code. No PCN with a second (e.g. Q0) code was found; photos not needed."
+    },
+    {
+      "model": "Intel Core i3-10300",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRH3J",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Comet Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/798170/PCN117936-00.pdf",
+              "quote": "Intel® Core™ i3-10300 Processor CM8070104291109 SRH3J 999TKA",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives one code, stepping G1. PCN 117936 (finish assembly site, Malaysia; 'Minor Change') and PCN 826013 (end of life) list the same code; no PCN with pre/post-conversion codes found."
+    },
+    {
+      "model": "Intel Core i3-10300T",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRH3L",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Comet Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/798170/PCN117936-00.pdf",
+              "quote": "Intel® Core™ i3-10300T Processor CM8070104291212 SRH3L 999TKD",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives one code, stepping G1. PCN 117936 (finish assembly site, Malaysia; 'Minor Change') and PCN 826013 (end of life) list the same code; no PCN with pre/post-conversion codes found."
+    },
+    {
+      "model": "Intel Core i3-10305",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK lists SRH3K (G1) only. PCN search (PCN 117936-00, 826013-02, 800306) found no conversion PCN with new codes for this model."
+    },
+    {
+      "model": "Intel Core i3-10305T",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK lists SRH3M (G1) only. PCN search (PCN 117936-00, 826013-02, 800306) found no conversion PCN with new codes for this model."
+    },
+    {
+      "model": "Intel Core i3-10320",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRH3G",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Comet Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/798170/PCN117936-00.pdf",
+              "quote": "Intel® Core™ i3-10320 Processor CM8070104291009 SRH3G 999TK4",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives one code, stepping G1. PCN 117936 (finish assembly site, Malaysia; 'Minor Change') and PCN 826013 (end of life) list the same code; no PCN with pre/post-conversion codes found."
+    },
+    {
+      "model": "Intel Core i3-10325",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK lists SRH3H (G1) only. PCN search (PCN 117936-00, 826013-02, 800306) found no conversion PCN with new codes for this model."
+    },
+    {
       "model": "Intel Core i3-12100",
       "searched": "2026-11-07",
       "specs": [],
@@ -144,10 +336,108 @@
       "note": "fpsbench.com/cpu/intel-core-i3-7120t gives 'Part Number: SR35Q', which is contradicted: a photograph (shopee.ph, photos/Intel_Core_i3-7120T/33.jpg) shows a package marked 'INTEL PENTIUM / G4600T / SR35Q 3.00GHZ / L639G039', so SR35Q belongs to the Pentium G4600T. Not recorded. Photo searches (48 images) found no package marked i3-7120T. WikiChip, TechPowerUp and AnandTech could not be loaded. The search budget ran out before an Intel document could be looked for."
     },
     {
+      "model": "Intel Core i5-10400T",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRH3F",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Comet Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/798170/PCN117936-00.pdf",
+              "quote": "Intel® Core™ i5-10400T Processor CM8070104290806 SRH3F 999TK3",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives one code, stepping G1. PCN 117936 (finish assembly site, Malaysia; 'Minor Change') and PCN 826013 (end of life) list the same code; no PCN with pre/post-conversion codes found."
+    },
+    {
       "model": "Intel Core i5-10500",
       "searched": "2026-11-07",
       "specs": [],
       "note": "ARK lists SRH3A (G1) only. Two package photographs read the same code (i.ebayimg.com F3MAAeSwfQho0tOu, lot X122J379; microdream.co.uk, lot erased)."
+    },
+    {
+      "model": "Intel Core i5-10500T",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRH3B",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Comet Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/798170/PCN117936-00.pdf",
+              "quote": "Intel® Core™ i5-10500T Processor CM8070104290606 SRH3B 999TJ9",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives one code, stepping G1. PCN 117936 (finish assembly site, Malaysia; 'Minor Change') and PCN 826013 (end of life) list the same code; no PCN with pre/post-conversion codes found."
+    },
+    {
+      "model": "Intel Core i5-10505",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives one code, stepping G1. ARK lists only PCN 826013 (end of life); no PCN with pre/post-conversion codes found."
+    },
+    {
+      "model": "Intel Core i5-10600",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRH37",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Comet Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/798170/PCN117936-00.pdf",
+              "quote": "Intel® Core™ i5-10600 Processor CM8070104290312 SRH37 999TJ5",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives one code, stepping G1. PCN 117936 (finish assembly site, Malaysia; 'Minor Change') and PCN 826013 (end of life) list the same code; no PCN with pre/post-conversion codes found."
+    },
+    {
+      "model": "Intel Core i5-10600T",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRH39",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Comet Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/798170/PCN117936-00.pdf",
+              "quote": "Intel® Core™ i5-10600T Processor CM8070104290410 SRH39 999TJ7",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab gives one code, stepping G1. PCN 117936 (finish assembly site, Malaysia; 'Minor Change') and PCN 826013 (end of life) list the same code; no PCN with pre/post-conversion codes found."
     },
     {
       "model": "Intel Core i5-11400",

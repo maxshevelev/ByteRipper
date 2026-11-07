@@ -127,6 +127,126 @@
       "note": "No Intel ARK product page found: WebSearch '\"Celeron G3940\" site:intel.com specifications' returned only sibling SKUs (G3920, G3930, G3930E, G3930T, G3950); the ARK 'Products formerly Skylake' listing fetched shows no such model. Likely an OEM-only SKU without an ARK page."
     },
     {
+      "model": "Intel Core i3-10100",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199283/intel-core-i310100-processor-6m-cache-up-to-4-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH3N",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-10100F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/203473/intel-core-i310100f-processor-6m-cache-up-to-4-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH8U",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-10100T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199284/intel-core-i310100t-processor-6m-cache-up-to-3-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH3Q",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-10105",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/201894/intel-core-i310105-processor-6m-cache-up-to-4-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH3P",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-10105F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/203474/intel-core-i310105f-processor-6m-cache-up-to-4-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH8V",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-10105T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/201890/intel-core-i310105t-processor-6m-cache-up-to-3-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH3R",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-10300",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199281/intel-core-i310300-processor-8m-cache-up-to-4-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH3J",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-10300T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199282/intel-core-i310300t-processor-8m-cache-up-to-3-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH3L",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-10305",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/201893/intel-core-i310305-processor-8m-cache-up-to-4-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH3K",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-10305T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/201898/intel-core-i310305t-processor-8m-cache-up-to-4-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH3M",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-10320",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199280/intel-core-i310320-processor-8m-cache-up-to-4-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH3G",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-10325",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/201889/intel-core-i310325-processor-8m-cache-up-to-4-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH3H",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
       "model": "Intel Core i3-12100",
       "url": "https://www.intel.com/content/www/us/en/products/sku/134584/intel-core-i312100-processor-12m-cache-up-to-4-30-ghz/ordering.html",
       "specs": [
@@ -378,11 +498,62 @@
       ]
     },
     {
+      "model": "Intel Core i5-10400T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199276/intel-core-i510400t-processor-12m-cache-up-to-3-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH3F",
+          "stepping": "G1"
+        }
+      ],
+      "note": "ARK lists PCN content id 813820 besides 798170/826013; a search for the ordering code with PCN found no document for it."
+    },
+    {
       "model": "Intel Core i5-10500",
       "url": "https://www.intel.com/content/www/us/en/products/sku/199277/intel-core-i510500-processor-12m-cache-up-to-4-50-ghz/ordering.html",
       "specs": [
         {
           "sSpec": "SRH3A",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-10500T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199275/intel-core-i510500t-processor-12m-cache-up-to-3-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH3B",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-10505",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/201891/intel-core-i510505-processor-12m-cache-up-to-4-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH38",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-10600",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199273/intel-core-i510600-processor-12m-cache-up-to-4-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH37",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-10600T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199279/intel-core-i510600t-processor-12m-cache-up-to-4-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH39",
           "stepping": "G1"
         }
       ]

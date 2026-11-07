@@ -9021,15 +9021,30 @@
       "processors": [
         {
           "name": "Intel Core i5-10600",
-          "sSpec": []
+          "sSpec": [
+            "SRH37"
+          ],
+          "sSpecSource": {
+            "SRH37": "ark"
+          }
         },
         {
           "name": "Intel Core i5-10600T",
-          "sSpec": []
+          "sSpec": [
+            "SRH39"
+          ],
+          "sSpecSource": {
+            "SRH39": "ark"
+          }
         },
         {
           "name": "Intel Core i5-10505",
-          "sSpec": []
+          "sSpec": [
+            "SRH38"
+          ],
+          "sSpecSource": {
+            "SRH38": "ark"
+          }
         },
         {
           "name": "Intel Core i5-10500",
@@ -9042,7 +9057,12 @@
         },
         {
           "name": "Intel Core i5-10500T",
-          "sSpec": []
+          "sSpec": [
+            "SRH3B"
+          ],
+          "sSpecSource": {
+            "SRH3B": "ark"
+          }
         },
         {
           "name": "Intel Core i5-10400",
@@ -9064,55 +9084,120 @@
         },
         {
           "name": "Intel Core i5-10400T",
-          "sSpec": []
+          "sSpec": [
+            "SRH3F"
+          ],
+          "sSpecSource": {
+            "SRH3F": "ark"
+          }
         },
         {
           "name": "Intel Core i3-10320",
-          "sSpec": []
+          "sSpec": [
+            "SRH3G"
+          ],
+          "sSpecSource": {
+            "SRH3G": "ark"
+          }
         },
         {
           "name": "Intel Core i3-10300",
-          "sSpec": []
+          "sSpec": [
+            "SRH3J"
+          ],
+          "sSpecSource": {
+            "SRH3J": "ark"
+          }
         },
         {
           "name": "Intel Core i3-10300T",
-          "sSpec": []
+          "sSpec": [
+            "SRH3L"
+          ],
+          "sSpecSource": {
+            "SRH3L": "ark"
+          }
         },
         {
           "name": "Intel Core i3-10100",
-          "sSpec": []
+          "sSpec": [
+            "SRH3N"
+          ],
+          "sSpecSource": {
+            "SRH3N": "ark"
+          }
         },
         {
           "name": "Intel Core i3-10100T",
-          "sSpec": []
+          "sSpec": [
+            "SRH3Q"
+          ],
+          "sSpecSource": {
+            "SRH3Q": "ark"
+          }
         },
         {
           "name": "Intel Core i3-10100F",
-          "sSpec": []
+          "sSpec": [
+            "SRH8U"
+          ],
+          "sSpecSource": {
+            "SRH8U": "ark"
+          }
         },
         {
           "name": "Intel Core i3-10325",
-          "sSpec": []
+          "sSpec": [
+            "SRH3H"
+          ],
+          "sSpecSource": {
+            "SRH3H": "ark"
+          }
         },
         {
           "name": "Intel Core i3-10305",
-          "sSpec": []
+          "sSpec": [
+            "SRH3K"
+          ],
+          "sSpecSource": {
+            "SRH3K": "ark"
+          }
         },
         {
           "name": "Intel Core i3-10305T",
-          "sSpec": []
+          "sSpec": [
+            "SRH3M"
+          ],
+          "sSpecSource": {
+            "SRH3M": "ark"
+          }
         },
         {
           "name": "Intel Core i3-10105",
-          "sSpec": []
+          "sSpec": [
+            "SRH3P"
+          ],
+          "sSpecSource": {
+            "SRH3P": "ark"
+          }
         },
         {
           "name": "Intel Core i3-10105F",
-          "sSpec": []
+          "sSpec": [
+            "SRH8V"
+          ],
+          "sSpecSource": {
+            "SRH8V": "ark"
+          }
         },
         {
           "name": "Intel Core i3-10105T",
-          "sSpec": []
+          "sSpec": [
+            "SRH3R"
+          ],
+          "sSpecSource": {
+            "SRH3R": "ark"
+          }
         },
         {
           "name": "Intel Pentium Gold G6600",
