@@ -523,6 +523,21 @@
       "note": "No intel.com page for i3-7120T found by WebSearch. It appears to be an OEM-only part and not on ARK."
     },
     {
+      "model": "Intel Core i3-L13G4",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/202778/intel-core-i3l13g4-processor-4m-cache-up-to-2-8ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH4X",
+          "stepping": "B3"
+        },
+        {
+          "sSpec": "SRJGC",
+          "stepping": "B3"
+        }
+      ],
+      "note": "SRH4X is the 8GB (FC-CSP2H, T&R) variant, SRJGC the 4GB variant; both 'Retired and discontinued'. ARK Code Name: Products formerly Lakefield."
+    },
+    {
       "model": "Intel Core i5-10110Y",
       "url": null,
       "specs": [],
@@ -1280,6 +1295,21 @@
           "stepping": "R0"
         }
       ]
+    },
+    {
+      "model": "Intel Core i5-L16G7",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/202777/intel-core-i5l16g7-processor-4m-cache-up-to-3-0ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH4U",
+          "stepping": "B3"
+        },
+        {
+          "sSpec": "SRJGA",
+          "stepping": "B3"
+        }
+      ],
+      "note": "SRH4U is the 8GB (FC-CSP2H, T&R) variant, SRJGA the 4GB variant; both 'Retired and discontinued'. ARK lists PCN 999V1T against SRH4U (per search snippet; appears to be the EOL notice, not loaded)."
     },
     {
       "model": "Intel Core i7-10510Y",

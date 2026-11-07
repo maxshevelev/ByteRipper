@@ -390,6 +390,12 @@
       "note": "fpsbench.com/cpu/intel-core-i3-7120t gives 'Part Number: SR35Q', which is contradicted: a photograph (shopee.ph, photos/Intel_Core_i3-7120T/33.jpg) shows a package marked 'INTEL PENTIUM / G4600T / SR35Q 3.00GHZ / L639G039', so SR35Q belongs to the Pentium G4600T. Not recorded. Photo searches (48 images) found no package marked i3-7120T. WikiChip, TechPowerUp and AnandTech could not be loaded. The search budget ran out before an Intel document could be looked for."
     },
     {
+      "model": "Intel Core i3-L13G4",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Both codes with stepping from ARK. PCN search found only an end-of-life notice (not loaded) and no table of pre/post-conversion codes; no Lakefield specification update/datasheet with an identification table found. No B2-stepping production code found on any source. Photos not searched (BGA/PoP package, ARK already gives codes)."
+    },
+    {
       "model": "Intel Core i5-10110Y",
       "searched": "2026-11-07",
       "specs": [],
@@ -1256,6 +1262,12 @@
       "searched": "2026-11-07",
       "specs": [],
       "note": "ARK: no page. No PCN/spec update names it. Databases: techpowerup 403; others give no S-Spec. Photos (photos.py, 16 images): renders, laptop i7-8650U slides, i5-8600 and 6th-gen chips; no chip marked i5-8650."
+    },
+    {
+      "model": "Intel Core i5-L16G7",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Both codes with stepping from ARK. PCN search turned up only the end-of-life PCN 999V1T referenced on ARK (not loaded, no conversion table seen); no specification update/datasheet identification table found. No B2-stepping production code found. Photos not searched (BGA/PoP)."
     },
     {
       "model": "Intel Core i7-10510Y",

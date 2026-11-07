@@ -5798,11 +5798,25 @@
       "processors": [
         {
           "name": "Intel Core i3-L13G4",
-          "sSpec": []
+          "sSpec": [
+            "SRH4X",
+            "SRJGC"
+          ],
+          "sSpecSource": {
+            "SRH4X": "ark",
+            "SRJGC": "ark"
+          }
         },
         {
           "name": "Intel Core i5-L16G7",
-          "sSpec": []
+          "sSpec": [
+            "SRH4U",
+            "SRJGA"
+          ],
+          "sSpecSource": {
+            "SRH4U": "ark",
+            "SRJGA": "ark"
+          }
         }
       ]
     },
