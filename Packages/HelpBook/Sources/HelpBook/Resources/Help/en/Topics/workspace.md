@@ -54,4 +54,4 @@ A workspace written by a newer version is left untouched — the older version c
 
 ## Opening a file from the Finder
 
-When ByteRipper is started by opening a file from the Finder, the workspace is restored first and the file opens in a new tab. A file that is already open in the workspace is not opened a second time: its tab is brought to the front.
+When ByteRipper is started by opening a file from the Finder, the workspace is restored first and the file opens in a new window. A file that is already open in the workspace is not opened a second time: its window is brought to the front.

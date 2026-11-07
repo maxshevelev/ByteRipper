@@ -1,4 +1,4 @@
-@source-sha 378ec0b55d535671302f9da9179c7521ee46e2ac912810e6783d4ca0498ac5d2
+@source-sha 8847a0ab5446f03f85ec68ce5bcc9516a4ef9570ead36e1b0e7f857aab738a07
 # Dateien öffnen: ein Bereich oder zwei
 
 > Ein Tab hält zwei Dateibereiche. Eine Datei ist schlicht ein Editor; eine zweite Datei fügt den Vergleich hinzu. Bearbeiten geht in beiden Bereichen, so oder so.
@@ -16,7 +16,7 @@ Der zweite Bereich ist optional. Außer dem Vergleich selbst braucht nichts eine
 - **Ablage ▸ Vergleichen mit…** (⌥⌘O) öffnet die Datei im anderen Bereich: im freien, sonst im nicht aktiven. So kommt die zweite Datei für den Vergleich hinzu. Bei **Ablage ▸ Benutzte Dokumente** wird die Zeile mit gedrückter ⌥-Taste zum selben Befehl.
 - **Ziehen und Ablegen.** Ziehen Sie eine Datei aufs Fenster; die Ablagebänder zeigen, wo sie abgelegt werden kann — diesen Bereich ersetzen, am Anfang oder am Ende anfügen, zum Vergleich öffnen oder in einem neuen Tab öffnen. Solange sich die Datei über dem Fenster befindet, sind alle Bänder halbtransparent sichtbar; das Band unter dem Zeiger ist hervorgehoben, und dort wird die Datei beim Loslassen abgelegt. Zwei Dateien auf einmal: die zweite öffnet im anderen Bereich, sofern dieser frei ist.
 - **Ablage ▸ Benutzte Dokumente** — die Dumps, die Sie zuletzt offen hatten.
-- **Aus dem Finder**, wenn ByteRipper als Programm für die Endung eingetragen ist (siehe [[topic:settings|Einstellungen]]).
+- **Aus dem Finder oder dem Dock** — ein Doppelklick oder **Öffnen mit** im Finder, wenn ByteRipper als Programm für die Endung eingetragen ist (siehe [[topic:settings|Einstellungen]]), oder Dateien, die auf das Programmsymbol im Dock gezogen werden. Eine Datei öffnet sich in einem neuen Fenster; ist sie bereits geöffnet, wird stattdessen ihr Fenster nach vorn geholt. Zwei Dateien öffnen sich in einem neuen Fenster nebeneinander, zum Vergleich. Von drei oder mehr Dateien werden die ersten zwei verglichen, die übrigen werden nicht geöffnet.
 - **Ablage ▸ Neue Datei** (⌘N) legt eine leere unbenannte Datei an — ein Ort, in den sich Bytes einsetzen lassen.
 
 ## Bereiche, Tabs und Fenster

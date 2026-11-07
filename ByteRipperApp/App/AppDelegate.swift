@@ -215,11 +215,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         if !pendingOpenURLs.isEmpty {
             let urls = pendingOpenURLs
             pendingOpenURLs.removeAll()
-            if restored {
-                openFilesBesideWorkspace(urls)
-            } else {
-                openFiles(urls)
-            }
+            // A launch that restored nothing has made one empty window, and
+            // the files take it; one that restored a workspace leaves its
+            // windows as they were.
+            openHandedFiles(urls, windowAtHand: restored ? nil : windowControllers.last)
         }
         if !pendingNodeLinks.isEmpty {
             let links = pendingNodeLinks
@@ -329,20 +328,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// What the last restore could not bring back as it was.
     private(set) var lastRestoreIssues: [RestoreIssue] = []
 
-    /// Files handed to a launch that restored a workspace: one already open in
-    /// it is brought forward, the rest open in a tab of their own — never into
-    /// a restored tab, where they would replace a file the person left there.
-    private func openFilesBesideWorkspace(_ urls: [URL]) {
-        var fresh: [URL] = []
-        for url in urls {
-            if let (holder, pane) = openDocuments.location(of: url, excluding: nil) {
-                holder.revealOpenFile(inPane: pane)
-            } else {
-                fresh.append(url)
-            }
+    /// Files the Dock, the Finder or "Open With" handed to the app
+    /// (`HandedFilesPlacement`): one already open comes forward; otherwise a
+    /// window of their own — `windowAtHand` when the launch has just made an
+    /// empty one — one file to look at, two to compare.
+    private func openHandedFiles(_ urls: [URL], windowAtHand: MainWindowController? = nil) {
+        let open = urls.count == 1 ? openDocuments.location(of: urls[0], excluding: nil) : nil
+        let atHand = windowAtHand.flatMap { controller -> MainWindowController? in
+            let model = controller.mainViewController.windowModel
+            return model.pane1.isOpen || model.pane2.isOpen ? nil : controller
         }
-        guard !fresh.isEmpty else { return }
-        makeWindow(tabbedWith: frontmostWindowController()?.window).mainViewController.openFiles(fresh)
+        switch HandedFilesPlacement.plan(fileCount: urls.count, alreadyOpen: open != nil,
+                                         emptyWindowAtHand: atHand != nil) {
+        case .bringForward:
+            if let (holder, pane) = open { holder.revealOpenFile(inPane: pane) }
+        case .windowAtHand:
+            atHand?.mainViewController.openFiles(urls)
+        case .newWindow:
+            makeWindow().mainViewController.openFiles(urls)
+        }
     }
 
     /// One warning for everything the restore could not bring back as it was,
@@ -459,14 +463,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         makeWindow(tabbedWith: anchor).mainViewController.openFiles([url])
     }
 
-    /// The window a file handed to the app should open into: the one in front,
-    /// or a fresh one when every window has been closed (the app stays running
-    /// with no window only while something else keeps it alive).
-    private func openFiles(_ urls: [URL]) {
-        let controller = frontmostWindowController() ?? makeWindow()
-        controller.mainViewController.openFiles(urls)
-    }
-
     /// The key window's controller, else the most recently made one.
     private func frontmostWindowController() -> MainWindowController? {
         if let key = NSApp.keyWindow,
@@ -476,9 +472,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         return windowControllers.last
     }
 
-    /// Finder double-click / "Open with" hands the file here. The files flow
-    /// into the same open pipeline as the Open panel (§4.1), in the window in
-    /// front — a file launched with the app opens directly into a pane.
+    /// The Dock, a Finder double-click and "Open With" hand files here, and the
+    /// three cannot be told apart. They open in a window of their own
+    /// (`openHandedFiles`) — a file launched with the app in the window the
+    /// launch made.
     func application(_ application: NSApplication, open urls: [URL]) {
         // A node link an agent wrote: the file, then the node in its tree.
         let links = urls.compactMap(AgentNodeURLs.parse)
@@ -495,7 +492,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
         guard !files.isEmpty else { return }
         if isReady {
-            openFiles(files)
+            openHandedFiles(files)
         } else {
             pendingOpenURLs.append(contentsOf: files)
         }

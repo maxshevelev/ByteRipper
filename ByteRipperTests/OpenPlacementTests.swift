@@ -103,4 +103,43 @@ final class OpenIntoActivePaneTests: XCTestCase {
         XCTAssertEqual(pane(0, true, true), 1, "the one that is not active")
         XCTAssertEqual(pane(1, true, true), 0, "the one that is not active")
     }
+
+}
+
+/// Files the Dock and the Finder hand over (`HandedFilesPlacement`).
+final class HandedFilesPlacementTests: XCTestCase {
+
+    /// One file, or two to compare, is a task of its own: a new window, and
+    /// the window in front keeps its panes.
+    func testHandedFilesOpenInANewWindow() {
+        XCTAssertEqual(HandedFilesPlacement.plan(fileCount: 1, alreadyOpen: false, emptyWindowAtHand: false),
+                       .newWindow)
+        XCTAssertEqual(HandedFilesPlacement.plan(fileCount: 2, alreadyOpen: false, emptyWindowAtHand: false),
+                       .newWindow)
+        XCTAssertEqual(HandedFilesPlacement.plan(fileCount: 3, alreadyOpen: false, emptyWindowAtHand: false),
+                       .newWindow, "the first two compared there, the rest not opened")
+    }
+
+    /// A file open already comes forward rather than opening twice — but a
+    /// pair is a comparison, and opens as one whatever is open elsewhere.
+    func testAFileOpenAlreadyComesForward() {
+        XCTAssertEqual(HandedFilesPlacement.plan(fileCount: 1, alreadyOpen: true, emptyWindowAtHand: false),
+                       .bringForward)
+        XCTAssertEqual(HandedFilesPlacement.plan(fileCount: 1, alreadyOpen: true, emptyWindowAtHand: true),
+                       .bringForward)
+    }
+
+    /// The launch the files started has made one empty window: they take it,
+    /// rather than leaving it empty beside a new one.
+    func testALaunchsEmptyWindowTakesTheFiles() {
+        XCTAssertEqual(HandedFilesPlacement.plan(fileCount: 2, alreadyOpen: false, emptyWindowAtHand: true),
+                       .windowAtHand)
+    }
+
+    /// In the new window the files are placed as in any empty one: two to
+    /// compare, and a third not opened.
+    func testANewWindowComparesTheFirstTwo() {
+        XCTAssertEqual(OpenPlacement.plan(activePaneIndex: 0, pane1Open: false, pane2Open: false, fileCount: 3),
+                       .init(firstFilePane: 0, openSecond: true, ignoredCount: 1))
+    }
 }

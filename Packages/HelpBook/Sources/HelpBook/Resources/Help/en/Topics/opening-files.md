@@ -23,7 +23,7 @@ The second pane is optional. Nothing needs a second file except the comparison i
 - **File ▸ Compare with…** (⌥⌘O) opens the file in the other pane: the free one, or otherwise the one that is not active. This is how a second file is added for comparison. In **File ▸ Open Recent**, hold ⌥ and the row becomes the same command.
 - **Drag and drop.** Drag a file onto the window and the drop bands show where it can land — replace this pane, join it at either end, open it for comparison, or open it in a new tab. While the file is over the window every band is shown, semi-transparent; the one under the pointer is highlighted, and that is where the file goes when it is released. Drop two files at once and the second opens in the other pane, if that pane is free.
 - **File ▸ Open Recent** — the dumps you had open lately.
-- **From Finder**, if ByteRipper is set as the handler for the extension (see [[topic:settings|Settings]]).
+- **From the Finder or the Dock** — a double-click or **Open With** in the Finder, if ByteRipper is set as the handler for the extension (see [[topic:settings|Settings]]), or files dropped on the program's icon in the Dock. One file opens in a new window; if it is already open, its window comes to the front instead. Two files open in a new window side by side, for comparison. Of three or more, the first two are compared and the rest are not opened.
 - **File ▸ New File** (⌘N) makes an empty untitled file — somewhere to paste bytes into.
 
 ## Panes, tabs and windows
