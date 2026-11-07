@@ -56,7 +56,8 @@ extension GhidraTools {
                 `severity`: `wrong` (the review says what the code does not do), `misleading` (true, but a \
                 reader gets a wrong idea), `cosmetic` (wording, a name's style). The remark is raised \
                 against the module's published revision unless `revision` names another. It stays open \
-                across revisions until a verifier marks it `verified`. Answers the ticket.
+                across revisions until a verifier marks it `verified`. Answers with the new remark and the \
+                ticket's state and counts; `ghidra_tickets` with `module` reads the whole ticket.
                 """,
             inputSchema: AgentSchema.object([
                 "agent": agentProperty,
@@ -79,7 +80,7 @@ extension GhidraTools {
                 revision: arguments["revision"] == nil ? nil : Int(clamping: try arguments.integer("revision")))
             let request = TicketBook.Request(action: .add, agent: try arguments.string("agent"),
                                              module: try arguments.string("module"), remark: remark)
-            return try await answer { try await backend.tickets(request) }
+            return try await answer { ticketWrite(try await backend.tickets(request), remark: .last) }
         }
     }
 
@@ -93,7 +94,8 @@ extension GhidraTools {
                 published in) or `wont_fix` (say why). Another agent — not the one that took the module \
                 into work — sets `verified` after reading the fix or accepting the answer, or `open` when \
                 it is not right yet; the reviewer setting either is refused. A reply with no `status` is \
-                part of the conversation. Answers the ticket.
+                part of the conversation. Answers with that remark (its last reply) and the ticket's state \
+                and counts.
                 """,
             inputSchema: AgentSchema.object([
                 "agent": agentProperty,
@@ -118,7 +120,8 @@ extension GhidraTools {
                 action: .reply, agent: try arguments.string("agent"), module: try arguments.string("module"),
                 id: try arguments.string("id"), text: try arguments.optionalString("text"), status: status,
                 revision: arguments["revision"] == nil ? nil : Int(clamping: try arguments.integer("revision")))
-            return try await answer { try await backend.tickets(request) }
+            let id = try arguments.string("id")
+            return try await answer { ticketWrite(try await backend.tickets(request), remark: .id(id)) }
         }
     }
 
@@ -130,7 +133,8 @@ extension GhidraTools {
                 Closes the module's ticket: its review is checked and stands. Refused while a remark is \
                 `open`, `answered` or `fixed` and not yet `verified`, naming them, and refused to the agent \
                 that took the module into work — another verifier closes it. A module with no remarks is \
-                closed with none: checked and found right. A later remark opens it again. Answers the ticket.
+                closed with none: checked and found right. A later remark opens it again. Answers with the \
+                ticket's state, counts and closing.
                 """,
             inputSchema: AgentSchema.object([
                 "agent": agentProperty,
@@ -143,8 +147,38 @@ extension GhidraTools {
             let request = TicketBook.Request(action: .close, agent: try arguments.string("agent"),
                                              module: try arguments.string("module"),
                                              note: try arguments.optionalString("note"))
-            return try await answer { try await backend.tickets(request) }
+            return try await answer { ticketWrite(try await backend.tickets(request), remark: nil) }
         }
+    }
+
+    enum WrittenRemark { case last, id(String) }
+
+    /// What a write on the board answers: the ticket's state and counts and
+    /// the remark the call wrote or moved — not every remark's text, which a
+    /// run of remarks would send again and again. The ticket itself is
+    /// `ghidra_tickets` with `module`.
+    static func ticketWrite(_ data: Data, remark which: WrittenRemark?) -> Data {
+        guard let ticket = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return data }
+        let remarks = ticket["remarks"] as? [[String: Any]] ?? []
+        var answer: [String: Any] = ["remarks": remarks.count]
+        for key in ["module", "name", "reviewer", "state", "open_remarks", "closed"] where ticket[key] != nil {
+            answer[key] = ticket[key]
+        }
+        let remark: [String: Any]?
+        switch which {
+        case .last?: remark = remarks.last
+        case .id(let id)?: remark = remarks.first { ($0["id"] as? String) == id }
+        case nil: remark = nil
+        }
+        if var remark {
+            let thread = remark.removeValue(forKey: "thread") as? [[String: Any]] ?? []
+            if let text = remark["text"] as? String, text.count > 240 { remark["text"] = String(text.prefix(239)) + "…" }
+            remark["replies"] = thread.count
+            if let last = thread.last { remark["last_reply"] = last }
+            answer["remark"] = remark
+        }
+        answer["read"] = "ghidra_tickets with this module reads the whole ticket"
+        return (try? JSONSerialization.data(withJSONObject: answer, options: [.sortedKeys])) ?? data
     }
 
     /// What `ghidra_create` and `ghidra_take` add of the module's ticket: its

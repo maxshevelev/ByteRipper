@@ -299,6 +299,17 @@ final class CodeReadingsTests: XCTestCase {
         XCTAssertEqual(totals["links"], .int(1))
         XCTAssertEqual(totals["own_bodies_in_registry"], .int(0))
         XCTAssertEqual(totals["out_of_format"], .int(0))
+        XCTAssertEqual(answer["modules"]?.arrayValue?.count, 1)
+
+        // `search` narrows the rows, never the totals.
+        guard case .json(.object(let narrowed)) = try await tool.run(AgentCall(tool: "library_registry", arguments: AgentArguments([
+            "show": .string("modules"), "search": .string("no such module"), "limit": .int(1)]))) else { return XCTFail() }
+        XCTAssertEqual(narrowed["modules"]?.arrayValue?.count, 0)
+        XCTAssertEqual(narrowed["totals"]?.objectValue?["analyses"], .int(1))
+        XCTAssertEqual(narrowed["total"], .int(0))
+        guard case .json(.object(let bySha)) = try await tool.run(AgentCall(tool: "library_registry", arguments: AgentArguments([
+            "show": .string("modules"), "search": .string(String(module.sha256.hex.prefix(8)))]))) else { return XCTFail() }
+        XCTAssertEqual(bySha["modules"]?.arrayValue?.count, 1)
     }
 
     /// The registry's code is what `part: instructions` answers: each at its

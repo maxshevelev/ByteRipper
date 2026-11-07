@@ -158,7 +158,9 @@ public final class CodeReadings {
                 store would make links — an entry holds the body, its code is the entry's, its callees are \
                 links (the same bytes calling a function of the module are the module's, and not counted); \
                 `out_of_format`, a link with a field no link has or a function with a \
-                word of an older form. `totals` adds them up; the last two are zero in a clean store. \
+                word of an older form. `total` counts the rows that match; `totals` adds them up over the whole store, whatever `search` (a part \
+                of the module's name, or the start of its SHA-256) and the page narrow — `limit: 1` reads \
+                them cheaply; the last two are zero in a clean store. \
                 `libraries` says which library depends on which; a function calls only functions of its own library or of one it depends on. \
                 A publish takes a review's `ghidra_library_candidate` functions here, and a module then holds a link.
                 """,
@@ -195,20 +197,29 @@ public final class CodeReadings {
             }
             if show == "modules" {
                 let rows = try store.libraryHoldings()
-                return .object([
-                    "modules": .array(rows.map { row in
+                // The totals are the whole store's; `search` and the page narrow
+                // only the rows, so a check of the totals reads one row.
+                let matching = rows
+                    .filter { search == nil || $0.name.lowercased().contains(search!) || $0.module.hex.hasPrefix(search!) }
+                    .sorted { ($0.name, $0.module.hex, $0.recipe) < ($1.name, $1.module.hex, $1.recipe) }
+                    .map { row -> JSONValue in
                         .object(["module": .string(row.module.hex), "name": .string(row.name),
                                  "recipe": .string(row.recipe), "links": .count(row.links),
                                  "own_bodies_in_registry": .count(row.ownBodiesInRegistry),
                                  "out_of_format": .count(row.outOfFormat)])
-                    }),
+                    }
+                let page = try AgentPage(arguments, fingerprint: AgentPage.fingerprint([show, search, matching.count]),
+                                         changed: "The store changed since that page, or the question did; ask again without `after`.")
+                return try page.answer([
+                    "total": .count(matching.count),
                     "totals": .object([
                         "analyses": .count(rows.count),
                         "links": .count(rows.reduce(0) { $0 + $1.links }),
                         "own_bodies_in_registry": .count(rows.reduce(0) { $0 + $1.ownBodiesInRegistry }),
                         "out_of_format": .count(rows.reduce(0) { $0 + $1.outOfFormat })
                     ])
-                ])
+                ], key: "modules", items: Array(matching.dropFirst(page.first).prefix(limit)),
+                   total: matching.count, bound: arguments.answerBound)
             }
             let index = try store.libraryIndex()
             func source(_ source: LibrarySource) -> JSONValue {

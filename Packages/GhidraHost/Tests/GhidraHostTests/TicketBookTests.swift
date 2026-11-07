@@ -133,6 +133,36 @@ final class TicketBookTests: XCTestCase {
         XCTAssertEqual(none, [])
     }
 
+    /// A write on the board answers with the remark it wrote or moved and
+    /// the ticket's counts, not every remark again.
+    func testABoardWriteAnswersWithItsRemarkNotTheWholeTicket() async throws {
+        let book = TicketBook(file: file)
+        _ = try await book.add(.init(severity: .wrong, text: String(repeating: "first ", count: 100)), module: module,
+                               name: "TcgPei", reviewer: reviewer.author, by: verifier)
+        let ticket = try await book.add(.init(severity: .cosmetic, text: "second"), module: module, name: nil,
+                                        reviewer: nil, by: verifier)
+        let data = try TicketBook.encoder.encode(TicketBook.Listed(ticket))
+        func object(_ data: Data) throws -> [String: Any] {
+            try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        }
+        let added = try object(GhidraTools.ticketWrite(data, remark: .last))
+        XCTAssertEqual(added["remarks"] as? Int, 2)
+        XCTAssertEqual(added["open_remarks"] as? Int, 2)
+        XCTAssertEqual(added["state"] as? String, "open")
+        XCTAssertEqual((added["remark"] as? [String: Any])?["text"] as? String, "second")
+        XCTAssertFalse(String(decoding: GhidraTools.ticketWrite(data, remark: .last), as: UTF8.self).contains("first first"))
+
+        let first = ticket.remarks[0].id
+        let replied = try await book.reply(module: module, remark: first, text: "retyped", status: .fixed, revision: 4, by: reviewer)
+        let answer = try object(GhidraTools.ticketWrite(try TicketBook.encoder.encode(TicketBook.Listed(replied)), remark: .id(first)))
+        let remark = try XCTUnwrap(answer["remark"] as? [String: Any])
+        XCTAssertEqual(remark["status"] as? String, "fixed")
+        XCTAssertEqual(remark["replies"] as? Int, 1)
+        XCTAssertEqual((remark["text"] as? String)?.count, 240)
+        XCTAssertNil(remark["thread"])
+        XCTAssertEqual((remark["last_reply"] as? [String: Any])?["text"] as? String, "retyped")
+    }
+
     private func assertRefused(_ status: Int, _ message: String = "", file: StaticString = #filePath, line: UInt = #line,
                                _ body: () async throws -> Void) async {
         do {
