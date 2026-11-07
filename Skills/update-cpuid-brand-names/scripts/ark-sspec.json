@@ -127,6 +127,18 @@
       "note": "No Intel ARK product page found: WebSearch '\"Celeron G3940\" site:intel.com specifications' returned only sibling SKUs (G3920, G3930, G3930E, G3930T, G3950); the ARK 'Products formerly Skylake' listing fetched shows no such model. Likely an OEM-only SKU without an ARK page."
     },
     {
+      "model": "Intel Core i3-1000G1",
+      "url": null,
+      "specs": [],
+      "note": "ordering.html redirects to specifications.html (https://www.intel.com/content/www/us/en/products/sku/197122/intel-core-i31000g1-processor-4m-cache-up-to-3-20-ghz/specifications.html): no ordering tab; no Spec Code on the page."
+    },
+    {
+      "model": "Intel Core i3-1000G4",
+      "url": null,
+      "specs": [],
+      "note": "ordering.html redirects to specifications.html (https://www.intel.com/content/www/us/en/products/sku/197123/intel-core-i31000g4-processor-4m-cache-up-to-3-20-ghz/specifications.html): no ordering tab; no Spec Code on the page."
+    },
+    {
       "model": "Intel Core i3-10100",
       "url": "https://www.intel.com/content/www/us/en/products/sku/199283/intel-core-i310100-processor-6m-cache-up-to-4-30-ghz/ordering.html",
       "specs": [
@@ -510,6 +522,18 @@
         }
       ],
       "note": "Code Name on the specifications page: 'Products formerly Amber Lake Y'. PCNs listed: 799822 (shipper box), 808956 (end of life), 809472 (label) — none a code conversion."
+    },
+    {
+      "model": "Intel Core i5-1030G4",
+      "url": null,
+      "specs": [],
+      "note": "ordering.html redirects to specifications.html (https://www.intel.com/content/www/us/en/products/sku/197121/intel-core-i51030g4-processor-6m-cache-up-to-3-50-ghz/specifications.html): no ordering tab; no Spec Code on the page."
+    },
+    {
+      "model": "Intel Core i5-1030G7",
+      "url": null,
+      "specs": [],
+      "note": "ordering.html redirects to specifications.html (https://www.intel.com/content/www/us/en/products/sku/197119/intel-core-i51030g7-processor-6m-cache-up-to-3-50-ghz/specifications.html): no ordering tab; no Spec Code on the page."
     },
     {
       "model": "Intel Core i5-10310Y",
@@ -1227,6 +1251,12 @@
         }
       ],
       "note": "PCNs listed: 798673 (PCN 118051, end of life), 799822 (PCN 116210, shipper box), 809472 (PCN 118095, label RoHS verbiage) — none a code conversion."
+    },
+    {
+      "model": "Intel Core i7-1060G7",
+      "url": null,
+      "specs": [],
+      "note": "ordering.html redirects to specifications.html (https://www.intel.com/content/www/us/en/products/sku/197120/intel-core-i71060g7-processor-8m-cache-up-to-3-80-ghz/specifications.html): no ordering tab; no Spec Code on the page."
     },
     {
       "model": "Intel Core i7-11700",
