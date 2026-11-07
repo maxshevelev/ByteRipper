@@ -690,6 +690,126 @@
       "note": "ARK ordering tab gives every code with its stepping; steps 2-4 not needed."
     },
     {
+      "model": "Intel Core i7-7640X",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 50657: the article lists this Skylake-X / Kaby Lake-X part under Cascade Lake; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Core i7-7740X",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 50657: the article lists this Skylake-X / Kaby Lake-X part under Cascade Lake; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Core i7-7800X",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 50657: the article lists this Skylake-X / Kaby Lake-X part under Cascade Lake; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Core i7-7820X",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 50657: the article lists this Skylake-X / Kaby Lake-X part under Cascade Lake; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Core i9-10900X",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRGV7",
+          "stepping": "L1",
+          "cpuid": "50657",
+          "architecture": "Cascade Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/801786/PCN119604-00.pdf",
+              "quote": "Intel® Core™ i9-10900X X-series Processor DESKTOP CD8069504382100 S RGV7 999N0A L1",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://www.intel.com/content/www/us/en/content-details/338848/2nd-gen-intel-xeon-scalable-processors-specification-update.html",
+              "quote": "Identification Information (Rev028, October 2023): HCC L-1 Server, 2S 0x50657; HCC L-1 Server, 4S 0x50657",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCN 119604-00 (discontinuance, July 2023) lists the same single code for tray, boxed and China boxed; no other code found."
+    },
+    {
+      "model": "Intel Core i9-10920X",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRGSJ",
+          "stepping": "L1",
+          "cpuid": "50657",
+          "architecture": "Cascade Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/801786/PCN119604-00.pdf",
+              "quote": "Intel® Core™ i9-10920X Processor DESKTOP CD8069504382000 S RGSJ 999LZG L1",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://www.intel.com/content/www/us/en/content-details/338848/2nd-gen-intel-xeon-scalable-processors-specification-update.html",
+              "quote": "Identification Information (Rev028, October 2023): HCC L-1 Server, 2S 0x50657; HCC L-1 Server, 4S 0x50657",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCN 119604-00 (discontinuance, July 2023) lists the same single code for tray, boxed and China boxed; no other code found."
+    },
+    {
+      "model": "Intel Core i9-10940X",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRGSH",
+          "stepping": "L1",
+          "cpuid": "50657",
+          "architecture": "Cascade Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/801786/PCN119604-00.pdf",
+              "quote": "Intel® Core™ i9-10940X Processor DESKTOP CD8069504381900 S RGSH 999LZF L1",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://www.intel.com/content/www/us/en/content-details/338848/2nd-gen-intel-xeon-scalable-processors-specification-update.html",
+              "quote": "Identification Information (Rev028, October 2023): HCC L-1 Server, 2S 0x50657; HCC L-1 Server, 4S 0x50657",
+              "gives": [
+                "cpuid"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCN 119604-00 (discontinuance, July 2023) lists the same single code for tray, boxed and China boxed; no other code found."
+    },
+    {
       "model": "Intel Core i9-11900",
       "searched": "2026-11-07",
       "specs": [],
@@ -759,6 +879,66 @@
       "searched": "2026-11-07",
       "specs": [],
       "note": "ARK ordering tab gives one code, stepping B0, for every ordering code. Intel Specification Update 740518 Rev. 016 (edc.intel.com id=7232) was read: its Table 2-1 lists only CPUID (RPL-S 8P+16E = 0xB0671), no S-Spec table, so it adds no code. No second code searched for via databases or photographs, since ARK lists a single code with its stepping."
+    },
+    {
+      "model": "Intel Core i9-7900X",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 50657: the article lists this Skylake-X / Kaby Lake-X part under Cascade Lake; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Core i9-7920X",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 50657: the article lists this Skylake-X / Kaby Lake-X part under Cascade Lake; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Core i9-7940X",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 50657: the article lists this Skylake-X / Kaby Lake-X part under Cascade Lake; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Core i9-7960X",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 50657: the article lists this Skylake-X / Kaby Lake-X part under Cascade Lake; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Core i9-9800X",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 50657: the article lists this Skylake-X / Kaby Lake-X part under Cascade Lake; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Core i9-9820X",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 50657: the article lists this Skylake-X / Kaby Lake-X part under Cascade Lake; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Core i9-9900X",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 50657: the article lists this Skylake-X / Kaby Lake-X part under Cascade Lake; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Core i9-9920X",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 50657: the article lists this Skylake-X / Kaby Lake-X part under Cascade Lake; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Core i9-9940X",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 50657: the article lists this Skylake-X / Kaby Lake-X part under Cascade Lake; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Core i9-9960X",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not searched under 50657: the article lists this Skylake-X / Kaby Lake-X part under Cascade Lake; its codes belong to its own CPUID."
     },
     {
       "model": "Intel Pentium G4420",
@@ -3375,6 +3555,114 @@
         }
       ],
       "note": "Intel calls the steppings U1 and U2 (PCN 119280-02: ESD fix on XTAL25, JTAG IDCODE 5E7C5013 -> 6E7C5013), not the B0 the input lists; neither source gives a CPUID. Architecture from the ARK specifications page: 'Products formerly Ice Lake'. PCN table read from a rendered image of page 3 (PDFKit's text extraction scrambles its rows)."
+    },
+    {
+      "model": "Intel Xeon Platinum 9220",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not in ARK, not in PCN 119355-00 (which lists 9242/9282/9222/9221), not in the 2nd Gen Xeon Scalable Specification Update 338848 Rev028 identification table (no model names there), no third-party listing found; photos.py returned only i7-920 and unrelated images. The SKU may not exist as a sold part. Web search budget ran out before a further try."
+    },
+    {
+      "model": "Intel Xeon Platinum 9221",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRGLK",
+          "stepping": "B1",
+          "cpuid": null,
+          "architecture": "Cascade Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/797867/PCN119355-00.pdf",
+              "quote": "Intel® Xeon® Platinum 9221 Processor FH8069504320000 S RGLK 999KDW B1",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Code from Intel PCN 119355-00 (Product Discontinuance, Dec 2022), table read from the rendered page image; the PDF prints the code as 'S RFxx'/'S RGxx' with a space, written here without it. BGA-5903 part sold only in S9200WK compute modules; no photographs sought."
+    },
+    {
+      "model": "Intel Xeon Platinum 9222",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRGLJ",
+          "stepping": "B1",
+          "cpuid": null,
+          "architecture": "Cascade Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/797867/PCN119355-00.pdf",
+              "quote": "Intel® Xeon® Platinum 9222 Processor FH8069504319800 S RGLJ 999KDV B1",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Code from Intel PCN 119355-00 (Product Discontinuance, Dec 2022), table read from the rendered page image; the PDF prints the code as 'S RFxx'/'S RGxx' with a space, written here without it. BGA-5903 part sold only in S9200WK compute modules; no photographs sought."
+    },
+    {
+      "model": "Intel Xeon Platinum 9242",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRF3L",
+          "stepping": "B1",
+          "cpuid": null,
+          "architecture": "Cascade Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/797867/PCN119355-00.pdf",
+              "quote": "Intel® Xeon® Platinum 9242 Processor FH8069503957709 S RF3L 9999LN B1",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Code from Intel PCN 119355-00 (Product Discontinuance, Dec 2022), table read from the rendered page image; the PDF prints the code as 'S RFxx'/'S RGxx' with a space, written here without it. BGA-5903 part sold only in S9200WK compute modules; no photographs sought."
+    },
+    {
+      "model": "Intel Xeon Platinum 9282",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRF3N",
+          "stepping": "B1",
+          "cpuid": null,
+          "architecture": "Cascade Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/797867/PCN119355-00.pdf",
+              "quote": "Intel® Xeon® Platinum 9282 Processor FH8069504210200 S RF3N 9999LR B1",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Code from Intel PCN 119355-00 (Product Discontinuance, Dec 2022), table read from the rendered page image; the PDF prints the code as 'S RFxx'/'S RGxx' with a space, written here without it. BGA-5903 part sold only in S9200WK compute modules; no photographs sought."
+    },
+    {
+      "model": "Intel Xeon Silver 4214C",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Not in ARK, not in Specification Update 338848 Rev028 (identification table has no model names), no S-SPEC database or listing names a 4214C; photos.py returned only Silver 4214 (SRFB9) chips, which are not this model. Probably an off-roadmap/cloud SKU with no public code. Web search budget ran out before a further try."
     }
   ]
 }

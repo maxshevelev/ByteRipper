@@ -2122,19 +2122,39 @@
         },
         {
           "name": "Intel Xeon Platinum 9221",
-          "sSpec": []
+          "sSpec": [
+            "SRGLK"
+          ],
+          "sSpecSource": {
+            "SRGLK": "intel"
+          }
         },
         {
           "name": "Intel Xeon Platinum 9222",
-          "sSpec": []
+          "sSpec": [
+            "SRGLJ"
+          ],
+          "sSpecSource": {
+            "SRGLJ": "intel"
+          }
         },
         {
           "name": "Intel Xeon Platinum 9242",
-          "sSpec": []
+          "sSpec": [
+            "SRF3L"
+          ],
+          "sSpecSource": {
+            "SRF3L": "intel"
+          }
         },
         {
           "name": "Intel Xeon Platinum 9282",
-          "sSpec": []
+          "sSpec": [
+            "SRF3N"
+          ],
+          "sSpecSource": {
+            "SRF3N": "intel"
+          }
         },
         {
           "name": "Intel Xeon Gold 5215",
@@ -2855,15 +2875,30 @@
         },
         {
           "name": "Intel Core i9-10940X",
-          "sSpec": []
+          "sSpec": [
+            "SRGSH"
+          ],
+          "sSpecSource": {
+            "SRGSH": "intel"
+          }
         },
         {
           "name": "Intel Core i9-10920X",
-          "sSpec": []
+          "sSpec": [
+            "SRGSJ"
+          ],
+          "sSpecSource": {
+            "SRGSJ": "intel"
+          }
         },
         {
           "name": "Intel Core i9-10900X",
-          "sSpec": []
+          "sSpec": [
+            "SRGV7"
+          ],
+          "sSpecSource": {
+            "SRGV7": "intel"
+          }
         },
         {
           "name": "Intel Core i9-9960X",

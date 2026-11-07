@@ -1238,6 +1238,36 @@
       ]
     },
     {
+      "model": "Intel Core i9-10900X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/198019/intel-core-i910900x-xseries-processor-19-25m-cache-3-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRGV7",
+          "stepping": "L1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-10920X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/198012/intel-core-i910920x-xseries-processor-19-25m-cache-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRGSJ",
+          "stepping": "L1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-10940X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/198014/intel-core-i910940x-xseries-processor-19-25m-cache-3-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRGSH",
+          "stepping": "L1"
+        }
+      ]
+    },
+    {
       "model": "Intel Core i9-11900",
       "url": "https://www.intel.com/content/www/us/en/products/sku/212252/intel-core-i911900-processor-16m-cache-up-to-5-20-ghz/ordering.html",
       "specs": [
@@ -2367,6 +2397,42 @@
           "stepping": "R0"
         }
       ]
+    },
+    {
+      "model": "Intel Xeon Platinum 9220",
+      "url": null,
+      "specs": [],
+      "note": "No Intel product page found for a Platinum 9220; WebSearch on intel.com returns only 9221/9222/9242/9282."
+    },
+    {
+      "model": "Intel Xeon Platinum 9221",
+      "url": null,
+      "specs": [],
+      "note": "ordering.html redirects (301) to specifications.html: the page has no ordering tab (https://www.intel.com/content/www/us/en/products/sku/195434/intel-xeon-platinum-9221-processor-71-5m-cache-2-30-ghz/specifications.html)."
+    },
+    {
+      "model": "Intel Xeon Platinum 9222",
+      "url": null,
+      "specs": [],
+      "note": "ordering.html redirects (301) to specifications.html: the page has no ordering tab (https://www.intel.com/content/www/us/en/products/sku/195437/intel-xeon-platinum-9222-processor-71-5m-cache-2-30-ghz/specifications.html)."
+    },
+    {
+      "model": "Intel Xeon Platinum 9242",
+      "url": null,
+      "specs": [],
+      "note": "ordering.html redirects (301) to specifications.html: the page has no ordering tab (https://www.intel.com/content/www/us/en/products/sku/194145/intel-xeon-platinum-9242-processor-71-5m-cache-2-30-ghz/specifications.html)."
+    },
+    {
+      "model": "Intel Xeon Platinum 9282",
+      "url": null,
+      "specs": [],
+      "note": "ordering.html redirects (301) to specifications.html: the page has no ordering tab (https://www.intel.com/content/www/us/en/products/sku/194146/intel-xeon-platinum-9282-processor-77m-cache-2-60-ghz/specifications.html)."
+    },
+    {
+      "model": "Intel Xeon Silver 4214C",
+      "url": null,
+      "specs": [],
+      "note": "No Intel product page found for a Silver 4214C; searches return only 4214, 4214Y, 4214R."
     }
   ]
 }
