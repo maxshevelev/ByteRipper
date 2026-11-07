@@ -69,7 +69,7 @@ WIKIPEDIA_PAGES = {
 }
 
 CODE = re.compile(r"\b(?:SR[0-9A-Z]{3}|Q[0-9A-Z]{3})\b")
-USER_AGENT = "ByteRipper cpuid-brand-names (https://github.com/)"
+USER_AGENT = "ByteRipper update-cpuid-brand-names (https://github.com/maxshevelev/ByteRipper)"
 
 
 def fetch(url, cache):
@@ -326,7 +326,7 @@ def enrich(entries, cache=None, log=print):
         "counts": dict(counts),
         "sources": {
             "ark": {"about": "Intel ARK, the Ordering & Compliance tab of each model's page; "
-                             "the URL per model is in Scripts/cpuid-brand-names/ark-sspec.json",
+                             "the URL per model is in Skills/update-cpuid-brand-names/scripts/ark-sspec.json",
                     "retrieved": ark["retrieved"]},
             "wikipedia": {"pages": [{"title": t, "revid": r,
                                      "url": "https://en.wikipedia.org/w/index.php?oldid=" + str(r)}

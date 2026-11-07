@@ -4,7 +4,7 @@ import UEFIImage
 
 /// One group of processors that share a CPUID, as the table of brand names
 /// lists it (`Resources/IntelCPUIDBrandNames.json`,
-/// `Scripts/cpuid-brand-names/import.py`).
+/// `Skills/update-cpuid-brand-names/scripts/import.py`).
 public struct ProcessorFamily: Equatable, Sendable, Decodable {
     /// As written: five hex digits, or a pattern with an `X` for any one digit
     /// (`606AX`).

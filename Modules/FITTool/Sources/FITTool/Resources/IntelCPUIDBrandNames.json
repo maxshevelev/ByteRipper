@@ -7,7 +7,7 @@
   "about": "CPUID (family-model-stepping, as a microcode update's header and its file name write it) to the processors sold with it. An X in a CPUID stands for any one hexadecimal digit. The list is the source's and is not complete; a CPUID can appear in more than one entry. sSpec lists the article's codes and those added from sSpecSources; sSpecSource says, for each added code, which.",
   "sSpecSources": {
     "ark": {
-      "about": "Intel ARK, the Ordering & Compliance tab of each model's page; the URL per model is in Scripts/cpuid-brand-names/ark-sspec.json",
+      "about": "Intel ARK, the Ordering & Compliance tab of each model's page; the URL per model is in Skills/update-cpuid-brand-names/scripts/ark-sspec.json",
       "retrieved": "2026-11-06"
     },
     "wikipedia": {

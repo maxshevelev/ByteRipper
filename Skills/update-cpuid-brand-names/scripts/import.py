@@ -26,7 +26,7 @@ adds what Intel ARK and Wikipedia give for the rest, where the code can be
 put under the right CPUID, and says so for each code it adds.
 
 Usage:
-    Scripts/cpuid-brand-names/import.py [page.html] [--retrieved YYYY-MM-DD]
+    Skills/update-cpuid-brand-names/scripts/import.py [page.html] [--retrieved YYYY-MM-DD]
                                         [--cache DIR]
 
 Without a file it downloads the page. `--cache` keeps what it downloads
@@ -47,7 +47,7 @@ import enrich as enrichment  # noqa: E402 — the file beside this one
 
 URL = ("https://comsystem-tlt.ru/obzori/"
        "primenenie-cpuid-na-praktike-dlja-zameni-soc--kombajnov-")
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..",
                    "Modules", "FITTool", "Sources", "FITTool", "Resources",
                    "IntelCPUIDBrandNames.json")
 
