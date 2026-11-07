@@ -344,8 +344,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// Files the Dock, the Finder or "Open With" handed to the app
     /// (`HandedFilesPlacement`): one already open comes forward; otherwise a
     /// window of their own — `windowAtHand` when the launch has just made an
-    /// empty one — one file to look at, two to compare, fitted to them and
-    /// centred on the screen clear of the Dock (`fitAndCentre`).
+    /// empty one — one file to look at, two to compare, fitted to them within
+    /// the screen's area clear of the Dock (`fitToFiles`).
     private func openHandedFiles(_ urls: [URL], windowAtHand: MainWindowController? = nil) {
         let open = urls.count == 1 ? openDocuments.location(of: urls[0], excluding: nil) : nil
         let atHand = windowAtHand.flatMap { controller -> MainWindowController? in
@@ -358,11 +358,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             if let (holder, pane) = open { holder.revealOpenFile(inPane: pane) }
         case .windowAtHand:
             atHand?.mainViewController.openFiles(urls)
-            atHand?.fitAndCentre()
+            atHand?.fitToFiles()
         case .newWindow:
             let controller = makeWindow()
             controller.mainViewController.openFiles(urls)
-            controller.fitAndCentre()
+            controller.fitToFiles()
         }
     }
 
@@ -427,8 +427,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// shows it.
     ///
     /// Only the first window saves its frame: one autosave name can serve one
-    /// window, so every later one is cascaded off the window in front of it
-    /// instead — which is also where a new window belongs on screen.
+    /// window, so every later one steps down and right off the window in front
+    /// of it instead (`MainWindowController.showWindow`) — which is also where
+    /// a new window belongs on screen.
     @discardableResult
     func makeWindow(tabbedWith anchor: NSWindow? = nil) -> MainWindowController {
         // Only the launch window saves a frame: one autosave name can serve one
@@ -462,10 +463,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
         windowControllers.append(controller)
         // A tab takes its place from the window it joins, so it is added before
-        // being shown; a window on its own is placed by `NSWindowController`,
-        // which cascades a window it shows unless that window autosaves its
-        // frame — so the launch window lands where it was left and every later
-        // one steps down and right of the one in front.
+        // being shown; a window on its own is placed by its controller's
+        // `showWindow` — the launch window lands where it was left and every
+        // later one steps down and right of the one in front.
         if let anchor, let window = controller.window, anchor !== window {
             anchor.addTabbedWindow(window, ordered: .above)
         }
