@@ -14,6 +14,18 @@
       "note": "Intel 6th Generation Processor Family Specification Update 332689-010EN (copy at helptechco.com/files/pdf_files/BX80662I36100_PDF_0.pdf) Identification table lists only retail S-0/R-0 Pentium/Celeron SKUs (G4520 SR2HM, G4500 SR2HJ, G4500T SR2HS, G4400 SR2HK, G4400T SR2HQ, G3900 SR2HV, G3900T SR2HT, G3920 SR2HX); this model is absent. Intel EDS addendum 334408-001 (cdrdv2-public.intel.com/334408) also lacks it. A search summary mentioned an anonymous user comment on cpu-world (G3940 = SR2HW, 3.00GHz) but cpu-world refuses WebFetch (403), so it is not a source; '\"SR2HW\" Intel' finds nothing; vstl.info/cpus/sr2hw is 404. Photos: one chip only - zhihu.com/p/133316161 (2 images of the same chip, pic1.zhimg.com/v2-5cfc0b7390e3d4abb660deb45636fb10_1440w.jpg sha256 5dd0495b76dd680f0c84e281ed9f500bb3d08cdd9a01ba0d6b71c07c6f7e0325 and pic3.zhimg.com/v2-d4ab8c63d0a3530116715e696d13eedc_1440w.jpg sha256 3c9a82688b116866b339649cb9d325ce54adb8daf63256ae861c943093b9cf0e) reads 'INTEL CELERON / G3940 / SR2HW 3.00GHZ / L533B429 (e4)', all characters legible. Candidate SR2HW, NOT recorded: no second chip with a different lot found in 64 images (queries 'SR2HW', 'SR2HW G3940', 'G3940 赛扬', 'G3940 CPU 1151'), and no Intel/database page confirms it. SR2HW sits in the gap of the retail SR2H* series of the same spec update, consistent but not proof."
     },
     {
+      "model": "Intel Celeron J6413",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab lists one code (FC-BGA16F, tray). PCN searches (model numbers with PCN site:intel.com; ordering codes and spec codes with PCN) found no Intel PCN naming the model. No further sources needed for a BGA part with an ARK code and stepping."
+    },
+    {
+      "model": "Intel Celeron N6211",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab lists one code (FC-BGA16F, tray). PCN searches (model numbers with PCN site:intel.com; ordering codes and spec codes with PCN) found no Intel PCN naming the model."
+    },
+    {
       "model": "Intel Core i3-1000G1",
       "searched": "2026-11-07",
       "specs": [],

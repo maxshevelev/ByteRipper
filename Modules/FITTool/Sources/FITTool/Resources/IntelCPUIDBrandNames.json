@@ -6931,7 +6931,12 @@
         },
         {
           "name": "Intel Celeron J6413",
-          "sSpec": []
+          "sSpec": [
+            "SRKL7"
+          ],
+          "sSpecSource": {
+            "SRKL7": "ark"
+          }
         },
         {
           "name": "Intel Celeron J6412",
@@ -6944,7 +6949,12 @@
         },
         {
           "name": "Intel Celeron N6211",
-          "sSpec": []
+          "sSpec": [
+            "SRKL9"
+          ],
+          "sSpecSource": {
+            "SRKL9": "ark"
+          }
         },
         {
           "name": "Intel Atom x6211E",

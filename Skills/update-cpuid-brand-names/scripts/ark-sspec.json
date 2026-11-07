@@ -127,6 +127,26 @@
       "note": "No Intel ARK product page found: WebSearch '\"Celeron G3940\" site:intel.com specifications' returned only sibling SKUs (G3920, G3930, G3930E, G3930T, G3950); the ARK 'Products formerly Skylake' listing fetched shows no such model. Likely an OEM-only SKU without an ARK page."
     },
     {
+      "model": "Intel Celeron J6413",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/207909/intel-celeron-processor-j6413-1-5m-cache-up-to-3-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKL7",
+          "stepping": "B1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Celeron N6211",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/207898/intel-celeron-processor-n6211-1-5m-cache-up-to-3-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKL9",
+          "stepping": "B1"
+        }
+      ]
+    },
+    {
       "model": "Intel Core i3-1000G1",
       "url": null,
       "specs": [],
