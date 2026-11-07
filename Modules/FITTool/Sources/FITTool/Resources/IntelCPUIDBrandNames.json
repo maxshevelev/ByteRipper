@@ -1238,11 +1238,21 @@
         },
         {
           "name": "Intel Xeon Platinum 8160F",
-          "sSpec": []
+          "sSpec": [
+            "SR3KG"
+          ],
+          "sSpecSource": {
+            "SR3KG": "ark"
+          }
         },
         {
           "name": "Intel Xeon Platinum 8160M",
-          "sSpec": []
+          "sSpec": [
+            "SR3B8"
+          ],
+          "sSpecSource": {
+            "SR3B8": "ark"
+          }
         },
         {
           "name": "Intel Xeon Platinum 8160T",
@@ -1905,7 +1915,12 @@
         },
         {
           "name": "Intel Core i9-7980XE",
-          "sSpec": []
+          "sSpec": [
+            "SR3RS"
+          ],
+          "sSpecSource": {
+            "SR3RS": "ark"
+          }
         },
         {
           "name": "Intel Core i9-7900X",

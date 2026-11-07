@@ -2189,6 +2189,12 @@
       "note": "Not searched under 50657: the article lists this Skylake-X / Kaby Lake-X part under Cascade Lake; its codes belong to its own CPUID."
     },
     {
+      "model": "Intel Core i9-7980XE",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK code name: \"Products formerly Skylake\". PCN 116966-00 (EOL, May 29, 2019) lists the three ordering codes without S-Specs; no conversion PCN found."
+    },
+    {
       "model": "Intel Core i9-9800X",
       "searched": "2026-11-07",
       "specs": [],
@@ -5223,6 +5229,53 @@
         }
       ],
       "note": "ARK ordering tab gives each code with stepping A1 (stepping in specs is from ARK). Confirmed in PCN 118913-00 (Costa Rica second site, 2022) and PCN 840123-00 (EOL, 2025); PDFKit renders the codes as 'S RJxx'. Code Name on ARK specifications page: 'Products formerly Cooper Lake' (checked on 8353H). No PCN with pre/post-conversion codes found; photos not needed."
+    },
+    {
+      "model": "Intel Xeon Platinum 8160F",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR3KG",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Skylake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/811239/PCN117185-00.pdf",
+              "quote": "Intel® Xeon® Platinum 8160F Processor CD8067303593600 S R3KG 958468",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK code name: \"Products formerly Skylake\". PCN 117185-00 is an end-of-life notice (Oct 7, 2019), not a conversion; no other code found."
+    },
+    {
+      "model": "Intel Xeon Platinum 8160M",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR3B8",
+          "stepping": "H0",
+          "cpuid": null,
+          "architecture": "Skylake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/796108/PCN117808-02.pdf",
+              "quote": "Intel® Xeon® Platinum 8160M Processor | CD8067303406600 | S R3B8 | 956014 | H0 (page 2 table, read from a rendered image)",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK code name: \"Products formerly Skylake\". PCN 117808-02 is an end-of-life notice, not a conversion; no other code found."
     },
     {
       "model": "Intel Xeon Platinum 8353H",

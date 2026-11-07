@@ -2203,6 +2203,16 @@
       ]
     },
     {
+      "model": "Intel Core i9-7980XE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/126699/intel-core-i97980xe-extreme-edition-processor-24-75m-cache-up-to-4-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3RS",
+          "stepping": "M0"
+        }
+      ]
+    },
+    {
       "model": "Intel Core i9-9900K",
       "url": "https://www.intel.com/content/www/us/en/products/sku/186605/intel-core-i99900k-processor-16m-cache-up-to-5-00-ghz/ordering.html",
       "specs": [
@@ -3273,6 +3283,27 @@
         {
           "sSpec": "SRJXX",
           "stepping": "A1"
+        }
+      ]
+    },
+    {
+      "model": "Intel Xeon Platinum 8160F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/123687/intel-xeon-platinum-8160f-processor-33m-cache-2-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3KG",
+          "stepping": "H0"
+        }
+      ],
+      "note": "Wikipedia's SR3B8 for the 8160F is wrong: Intel's ordering page and PCN 117185-00 give SR3KG; SR3B8 is the 8160M."
+    },
+    {
+      "model": "Intel Xeon Platinum 8160M",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/120502/intel-xeon-platinum-8160m-processor-33m-cache-2-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3B8",
+          "stepping": "H0"
         }
       ]
     },
