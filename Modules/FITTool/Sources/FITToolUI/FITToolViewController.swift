@@ -69,6 +69,8 @@ import ToolModuleKit
     /// Whether the show on hand is the same table again — kept items, kept
     /// scroll — rather than a new one (`rebuildItems`).
     private var keepsScroll = false
+    /// The row the session has in focus — what a line under it stands for.
+    private var focusKey: Int?
     let problems = NSTableView()
     private let entriesScroll = NSScrollView()
     private let problemsScroll = NSScrollView()
@@ -505,6 +507,7 @@ import ToolModuleKit
             && display.problems == self.display.problems
         self.display = display
         self.canWrite = canWrite
+        focusKey = focus
         isShowingState = true
         defer { isShowingState = false }
 
@@ -693,6 +696,11 @@ final class FITOutlineItem: NSObject {
         case line(Int, Int, Int)
         /// Add Microcode…, under the table's last microcode.
         case addMicrocode
+
+        var isEntry: Bool {
+            if case .entry = self { return true }
+            return false
+        }
 
         /// The entry this item belongs to.
         var key: Int? {
@@ -928,6 +936,14 @@ extension FITToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
     private func selectionDidChange() {
         guard !isShowingState else { return }
         let row = entries.selectedRow
+        // A CPUID or a model stands for its microcode. With that microcode in
+        // focus already, choosing another of its lines changes nothing the
+        // session would show — no zone, no detail — so it is not told. The
+        // microcode's own row still is: it brings the focus back to the row
+        // from what the row points at.
+        if let kind = item(atRow: row)?.kind, kind.key != nil, kind.key == focusKey, !kind.isEntry {
+            return
+        }
         if entries.isHandlingClick { onWillChoose?() }
         onSelect?(displayRow(atTableRow: row)?.key)
     }

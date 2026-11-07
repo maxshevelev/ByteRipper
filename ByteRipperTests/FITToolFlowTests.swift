@@ -1420,6 +1420,27 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertEqual(outline.selectedRow, row)
     }
 
+    /// Another line under the microcode already in focus is not news: the
+    /// session is not asked, and the panel is not shown again — the detail
+    /// list stays the very one on screen.
+    func testAnotherLineOfTheFocusedMicrocodeShowsNothingAgain() throws {
+        let controller = try open(FITTestImage.make())
+        let outline = try XCTUnwrap(try entriesTable() as? NSOutlineView)
+        outline.expandItem(outline.item(atRow: 2))           // 806EA's models
+        outline.selectRowIndexes([3], byExtendingSelection: false)
+        XCTAssertEqual(try session().display.detail.title, "#2 Microcode")
+        let panel = try XCTUnwrap(controller.tools.panel)
+        let shown = try XCTUnwrap(descendants(of: panel, ToolFieldList.self).first)
+
+        outline.selectRowIndexes([4], byExtendingSelection: false)
+        XCTAssertEqual(outline.selectedRow, 4)
+        XCTAssertTrue(descendants(of: panel, ToolFieldList.self).first === shown, "not shown again")
+
+        // The header is another row: that one is shown.
+        outline.selectRowIndexes([0], byExtendingSelection: false)
+        XCTAssertFalse(descendants(of: panel, ToolFieldList.self).first === shown)
+    }
+
     /// The backup's copy reads quieter all the way down: a CPUID row under its
     /// microcode is grey like the row, where the table's own is not.
     func testTheBackupsCPUIDRowsAreGreyLikeItsRows() throws {
