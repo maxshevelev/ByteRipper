@@ -9272,79 +9272,174 @@
       "processors": [
         {
           "name": "Intel Core i9-11900K",
-          "sSpec": []
+          "sSpec": [
+            "SRKND"
+          ],
+          "sSpecSource": {
+            "SRKND": "ark"
+          }
         },
         {
           "name": "Intel Core i9-11900KF",
-          "sSpec": []
+          "sSpec": [
+            "SRKNF"
+          ],
+          "sSpecSource": {
+            "SRKNF": "ark"
+          }
         },
         {
           "name": "Intel Core i9-11900",
-          "sSpec": []
+          "sSpec": [
+            "SRKNJ"
+          ],
+          "sSpecSource": {
+            "SRKNJ": "ark"
+          }
         },
         {
           "name": "Intel Core i9-11900T",
-          "sSpec": []
+          "sSpec": [
+            "SRKNQ"
+          ],
+          "sSpecSource": {
+            "SRKNQ": "ark"
+          }
         },
         {
           "name": "Intel Core i9-11900F",
-          "sSpec": []
+          "sSpec": [
+            "SRKNK"
+          ],
+          "sSpecSource": {
+            "SRKNK": "ark"
+          }
         },
         {
           "name": "Intel Core i7-11700K",
-          "sSpec": []
+          "sSpec": [
+            "SRKNL"
+          ],
+          "sSpecSource": {
+            "SRKNL": "ark"
+          }
         },
         {
           "name": "Intel Core i7-11700KF",
-          "sSpec": []
+          "sSpec": [
+            "SRKNN"
+          ],
+          "sSpecSource": {
+            "SRKNN": "ark"
+          }
         },
         {
           "name": "Intel Core i7-11700",
-          "sSpec": []
+          "sSpec": [
+            "SRKNS"
+          ],
+          "sSpecSource": {
+            "SRKNS": "ark"
+          }
         },
         {
           "name": "Intel Core i7-11700T",
-          "sSpec": []
+          "sSpec": [
+            "SRKNT"
+          ],
+          "sSpecSource": {
+            "SRKNT": "ark"
+          }
         },
         {
           "name": "Intel Core i7-11700F",
-          "sSpec": []
+          "sSpec": [
+            "SRKNR"
+          ],
+          "sSpecSource": {
+            "SRKNR": "ark"
+          }
         },
         {
           "name": "Intel Core i5-11600K",
-          "sSpec": []
+          "sSpec": [
+            "SRKNU"
+          ],
+          "sSpecSource": {
+            "SRKNU": "ark"
+          }
         },
         {
           "name": "Intel Core i5-11600KF",
-          "sSpec": []
+          "sSpec": [
+            "SRKNV"
+          ],
+          "sSpecSource": {
+            "SRKNV": "ark"
+          }
         },
         {
           "name": "Intel Core i5-11600",
-          "sSpec": []
+          "sSpec": [
+            "SRKNW"
+          ],
+          "sSpecSource": {
+            "SRKNW": "ark"
+          }
         },
         {
           "name": "Intel Core i5-11600T",
-          "sSpec": []
+          "sSpec": [
+            "SRKNX"
+          ],
+          "sSpecSource": {
+            "SRKNX": "ark"
+          }
         },
         {
           "name": "Intel Core i5-11500",
-          "sSpec": []
+          "sSpec": [
+            "SRKNY"
+          ],
+          "sSpecSource": {
+            "SRKNY": "ark"
+          }
         },
         {
           "name": "Intel Core i5-11500T",
-          "sSpec": []
+          "sSpec": [
+            "SRKNZ"
+          ],
+          "sSpecSource": {
+            "SRKNZ": "ark"
+          }
         },
         {
           "name": "Intel Core i5-11400",
-          "sSpec": []
+          "sSpec": [
+            "SRKP0"
+          ],
+          "sSpecSource": {
+            "SRKP0": "ark"
+          }
         },
         {
           "name": "Intel Core i5-11400F",
-          "sSpec": []
+          "sSpec": [
+            "SRKP1"
+          ],
+          "sSpecSource": {
+            "SRKP1": "ark"
+          }
         },
         {
           "name": "Intel Core i5-11400T",
-          "sSpec": []
+          "sSpec": [
+            "SRKP2"
+          ],
+          "sSpecSource": {
+            "SRKP2": "ark"
+          }
         },
         {
           "name": "Intel Xeon E-2388G",

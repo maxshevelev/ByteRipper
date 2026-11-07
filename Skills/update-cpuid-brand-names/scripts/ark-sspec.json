@@ -331,6 +331,97 @@
       ]
     },
     {
+      "model": "Intel Core i5-11400",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212270/intel-core-i511400-processor-12m-cache-up-to-4-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKP0",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-11400F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212271/intel-core-i511400f-processor-12m-cache-up-to-4-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKP1",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-11400T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212273/intel-core-i511400t-processor-12m-cache-up-to-3-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKP2",
+          "stepping": "B0"
+        }
+      ],
+      "note": "Tray only; no boxed ordering code listed."
+    },
+    {
+      "model": "Intel Core i5-11500",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212277/intel-core-i511500-processor-12m-cache-up-to-4-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNY",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-11500T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212272/intel-core-i511500t-processor-12m-cache-up-to-3-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNZ",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-11600",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212274/intel-core-i511600-processor-12m-cache-up-to-4-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNW",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-11600K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212275/intel-core-i511600k-processor-12m-cache-up-to-4-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNU",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-11600KF",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212276/intel-core-i511600kf-processor-12m-cache-up-to-4-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNV",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-11600T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212278/intel-core-i511600t-processor-12m-cache-up-to-4-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNX",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
       "model": "Intel Core i5-12400",
       "url": "https://www.intel.com/content/www/us/en/products/sku/134586/intel-core-i512400-processor-18m-cache-up-to-4-40-ghz/ordering.html",
       "specs": [
@@ -682,6 +773,56 @@
         {
           "sSpec": "SRG12",
           "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-11700",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212279/intel-core-i711700-processor-16m-cache-up-to-4-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNS",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-11700F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212280/intel-core-i711700f-processor-16m-cache-up-to-4-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNR",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-11700K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212047/intel-core-i711700k-processor-16m-cache-up-to-5-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNL",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-11700KF",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212048/intel-core-i711700kf-processor-16m-cache-up-to-5-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNN",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-11700T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212251/intel-core-i711700t-processor-16m-cache-up-to-4-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNT",
+          "stepping": "B0"
         }
       ]
     },
@@ -1095,6 +1236,57 @@
           "stepping": "R0"
         }
       ]
+    },
+    {
+      "model": "Intel Core i9-11900",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212252/intel-core-i911900-processor-16m-cache-up-to-5-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNJ",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-11900F",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212254/intel-core-i911900f-processor-16m-cache-up-to-5-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNK",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-11900K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212325/intel-core-i911900k-processor-16m-cache-up-to-5-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKND",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-11900KF",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212321/intel-core-i911900kf-processor-16m-cache-up-to-5-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNF",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i9-11900T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/212256/intel-core-i911900t-processor-16m-cache-up-to-4-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRKNQ",
+          "stepping": "B0"
+        }
+      ],
+      "note": "Ordering tab lists only the tray part; no boxed variant."
     },
     {
       "model": "Intel Core i9-12900",

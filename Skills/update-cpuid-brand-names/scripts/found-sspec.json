@@ -114,6 +114,114 @@
       "note": "ARK lists SRH3A (G1) only. Two package photographs read the same code (i.ebayimg.com F3MAAeSwfQho0tOu, lot X122J379; microdream.co.uk, lot erased)."
     },
     {
+      "model": "Intel Core i5-11400",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRKP0",
+          "stepping": "B0",
+          "cpuid": null,
+          "architecture": "Rocket Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/805416/PCN119441-00.pdf",
+              "quote": "Intel® Core™ i5-11400 Processor | DESKTOP | CM8070804497015 | S RKP0 | 99AD2K | B0",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCN search: the ordering page lists PCN Content IDs 798714 (PCN 119527, resistor colour), 805416 (PCN 119441, end of life), and for boxed parts 798811, 804577, 815134 (label/carton changes). None is a stepping or code conversion; PCN 119441's table (page 2, rendered to an image) confirms the ARK code with its stepping. No other production code found."
+    },
+    {
+      "model": "Intel Core i5-11400F",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRKP1",
+          "stepping": "B0",
+          "cpuid": null,
+          "architecture": "Rocket Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/805416/PCN119441-00.pdf",
+              "quote": "Intel® Core™ i5-11400F Processor | DESKTOP | CM8070804497016 | S RKP1 | 99AD2L | B0",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCN search: the ordering page lists PCN Content IDs 798714 (PCN 119527, resistor colour), 805416 (PCN 119441, end of life), and for boxed parts 798811, 804577, 815134 (label/carton changes). None is a stepping or code conversion; PCN 119441's table (page 2, rendered to an image) confirms the ARK code with its stepping. No other production code found."
+    },
+    {
+      "model": "Intel Core i5-11400T",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRKP2",
+          "stepping": "B0",
+          "cpuid": null,
+          "architecture": "Rocket Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/805416/PCN119441-00.pdf",
+              "quote": "Intel® Core™ i5-11400T Processor | DESKTOP | CM8070804497106 | S RKP2 | 99AD2M | B0",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCN search: ordering page lists PCN Content IDs 798714 (PCN 119527, resistor colour) and 805416 (PCN 119441, end of life); neither converts the code. PCN 119441's table confirms SRKP2 B0. No other production code found."
+    },
+    {
+      "model": "Intel Core i5-11500",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives one code, stepping B0, for every ordering code; specifications page Code Name: 'Products formerly Rocket Lake'. PCN check: the ordering tab's PCN Content IDs (798714, 805416, and for boxed parts 798811, 804577, 815134) resolve to PCN 119527 (resistor colour), 119441 (11th gen EOL), 119517 (Triman label), 118243 (UKCA mark), 119755 (COO label) - none introduces a new S-SPEC. WebSearch for PCNs found none naming a code change. Steps 3-4 not needed (ARK gives code with stepping). WebSearch budget ran out after the PCN searches."
+    },
+    {
+      "model": "Intel Core i5-11500T",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives one code, stepping B0, for every ordering code; specifications page Code Name: 'Products formerly Rocket Lake'. PCN check: the ordering tab's PCN Content IDs (798714, 805416, and for boxed parts 798811, 804577, 815134) resolve to PCN 119527 (resistor colour), 119441 (11th gen EOL), 119517 (Triman label), 118243 (UKCA mark), 119755 (COO label) - none introduces a new S-SPEC. WebSearch for PCNs found none naming a code change. Steps 3-4 not needed (ARK gives code with stepping). WebSearch budget ran out after the PCN searches."
+    },
+    {
+      "model": "Intel Core i5-11600",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives one code, stepping B0, for every ordering code; specifications page Code Name: 'Products formerly Rocket Lake'. PCN check: the ordering tab's PCN Content IDs (798714, 805416, and for boxed parts 798811, 804577, 815134) resolve to PCN 119527 (resistor colour), 119441 (11th gen EOL), 119517 (Triman label), 118243 (UKCA mark), 119755 (COO label) - none introduces a new S-SPEC. WebSearch for PCNs found none naming a code change. Steps 3-4 not needed (ARK gives code with stepping). WebSearch budget ran out after the PCN searches."
+    },
+    {
+      "model": "Intel Core i5-11600K",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives one code, stepping B0, for every ordering code; specifications page Code Name: 'Products formerly Rocket Lake'. PCN check: the ordering tab's PCN Content IDs (798714, 805416, and for boxed parts 798811, 804577, 815134) resolve to PCN 119527 (resistor colour), 119441 (11th gen EOL), 119517 (Triman label), 118243 (UKCA mark), 119755 (COO label) - none introduces a new S-SPEC. WebSearch for PCNs found none naming a code change. Steps 3-4 not needed (ARK gives code with stepping). WebSearch budget ran out after the PCN searches."
+    },
+    {
+      "model": "Intel Core i5-11600KF",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives one code, stepping B0, for every ordering code; specifications page Code Name: 'Products formerly Rocket Lake'. PCN check: the ordering tab's PCN Content IDs (798714, 805416, and for boxed parts 798811, 804577, 815134) resolve to PCN 119527 (resistor colour), 119441 (11th gen EOL), 119517 (Triman label), 118243 (UKCA mark), 119755 (COO label) - none introduces a new S-SPEC. WebSearch for PCNs found none naming a code change. Steps 3-4 not needed (ARK gives code with stepping). WebSearch budget ran out after the PCN searches."
+    },
+    {
+      "model": "Intel Core i5-11600T",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives one code, stepping B0, for every ordering code; specifications page Code Name: 'Products formerly Rocket Lake'. PCN check: the ordering tab's PCN Content IDs (798714, 805416, and for boxed parts 798811, 804577, 815134) resolve to PCN 119527 (resistor colour), 119441 (11th gen EOL), 119517 (Triman label), 118243 (UKCA mark), 119755 (COO label) - none introduces a new S-SPEC. WebSearch for PCNs found none naming a code change. Steps 3-4 not needed (ARK gives code with stepping). WebSearch budget ran out after the PCN searches."
+    },
+    {
       "model": "Intel Core i5-12400T",
       "searched": "2026-11-07",
       "specs": [],
@@ -417,6 +525,36 @@
       "specs": []
     },
     {
+      "model": "Intel Core i7-11700",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK gives the only code, stepping B0 (Code Name on ARK: 'Products formerly Rocket Lake', checked on the i9-11900K page). PCN search: PCN 119441-00 (EOL/discontinuance, Rocket Lake desktop; table as reproduced by thefpsreview.com lists the tray part, stepping B0, no S-Spec column, no new code) and, for the i9-11900K only, PCN 118661-00 (boxed packaging/transport media change, no code change stated on the mirror page). No PCN with a pre/post-conversion code found. Web search budget ran out after the PCN searches, so no further Intel-document/database/photo searches were run; none were needed since ARK gives code and stepping."
+    },
+    {
+      "model": "Intel Core i7-11700F",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives one code, stepping B0, for every ordering code; specifications page Code Name: 'Products formerly Rocket Lake'. PCN check: the ordering tab's PCN Content IDs (798714, 805416, and for boxed parts 798811, 804577, 815134) resolve to PCN 119527 (resistor colour), 119441 (11th gen EOL), 119517 (Triman label), 118243 (UKCA mark), 119755 (COO label) - none introduces a new S-SPEC. WebSearch for PCNs found none naming a code change. Steps 3-4 not needed (ARK gives code with stepping). WebSearch budget ran out after the PCN searches."
+    },
+    {
+      "model": "Intel Core i7-11700K",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK gives the only code, stepping B0 (Code Name on ARK: 'Products formerly Rocket Lake', checked on the i9-11900K page). PCN search: PCN 119441-00 (EOL/discontinuance, Rocket Lake desktop; table as reproduced by thefpsreview.com lists the tray part, stepping B0, no S-Spec column, no new code) and, for the i9-11900K only, PCN 118661-00 (boxed packaging/transport media change, no code change stated on the mirror page). No PCN with a pre/post-conversion code found. Web search budget ran out after the PCN searches, so no further Intel-document/database/photo searches were run; none were needed since ARK gives code and stepping."
+    },
+    {
+      "model": "Intel Core i7-11700KF",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK gives the only code, stepping B0 (Code Name on ARK: 'Products formerly Rocket Lake', checked on the i9-11900K page). PCN search: PCN 119441-00 (EOL/discontinuance, Rocket Lake desktop; table as reproduced by thefpsreview.com lists the tray part, stepping B0, no S-Spec column, no new code) and, for the i9-11900K only, PCN 118661-00 (boxed packaging/transport media change, no code change stated on the mirror page). No PCN with a pre/post-conversion code found. Web search budget ran out after the PCN searches, so no further Intel-document/database/photo searches were run; none were needed since ARK gives code and stepping."
+    },
+    {
+      "model": "Intel Core i7-11700T",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab gives one code, stepping B0, for every ordering code; specifications page Code Name: 'Products formerly Rocket Lake'. PCN check: the ordering tab's PCN Content IDs (798714, 805416, and for boxed parts 798811, 804577, 815134) resolve to PCN 119527 (resistor colour), 119441 (11th gen EOL), 119517 (Triman label), 118243 (UKCA mark), 119755 (COO label) - none introduces a new S-SPEC. WebSearch for PCNs found none naming a code change. Steps 3-4 not needed (ARK gives code with stepping). WebSearch budget ran out after the PCN searches."
+    },
+    {
       "model": "Intel Core i7-12700",
       "searched": "2026-11-07",
       "specs": []
@@ -550,6 +688,36 @@
       "searched": "2026-11-07",
       "specs": [],
       "note": "ARK ordering tab gives every code with its stepping; steps 2-4 not needed."
+    },
+    {
+      "model": "Intel Core i9-11900",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK gives the only code, stepping B0 (Code Name on ARK: 'Products formerly Rocket Lake', checked on the i9-11900K page). PCN search: PCN 119441-00 (EOL/discontinuance, Rocket Lake desktop; table as reproduced by thefpsreview.com lists the tray part, stepping B0, no S-Spec column, no new code) and, for the i9-11900K only, PCN 118661-00 (boxed packaging/transport media change, no code change stated on the mirror page). No PCN with a pre/post-conversion code found. Web search budget ran out after the PCN searches, so no further Intel-document/database/photo searches were run; none were needed since ARK gives code and stepping."
+    },
+    {
+      "model": "Intel Core i9-11900F",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK gives the only code, stepping B0 (Code Name on ARK: 'Products formerly Rocket Lake', checked on the i9-11900K page). PCN search: PCN 119441-00 (EOL/discontinuance, Rocket Lake desktop; table as reproduced by thefpsreview.com lists the tray part, stepping B0, no S-Spec column, no new code) and, for the i9-11900K only, PCN 118661-00 (boxed packaging/transport media change, no code change stated on the mirror page). No PCN with a pre/post-conversion code found. Web search budget ran out after the PCN searches, so no further Intel-document/database/photo searches were run; none were needed since ARK gives code and stepping."
+    },
+    {
+      "model": "Intel Core i9-11900K",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK gives the only code, stepping B0 (Code Name on ARK: 'Products formerly Rocket Lake', checked on the i9-11900K page). PCN search: PCN 119441-00 (EOL/discontinuance, Rocket Lake desktop; table as reproduced by thefpsreview.com lists the tray part, stepping B0, no S-Spec column, no new code) and, for the i9-11900K only, PCN 118661-00 (boxed packaging/transport media change, no code change stated on the mirror page). No PCN with a pre/post-conversion code found. Web search budget ran out after the PCN searches, so no further Intel-document/database/photo searches were run; none were needed since ARK gives code and stepping."
+    },
+    {
+      "model": "Intel Core i9-11900KF",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK gives the only code, stepping B0 (Code Name on ARK: 'Products formerly Rocket Lake', checked on the i9-11900K page). PCN search: PCN 119441-00 (EOL/discontinuance, Rocket Lake desktop; table as reproduced by thefpsreview.com lists the tray part, stepping B0, no S-Spec column, no new code) and, for the i9-11900K only, PCN 118661-00 (boxed packaging/transport media change, no code change stated on the mirror page). No PCN with a pre/post-conversion code found. Web search budget ran out after the PCN searches, so no further Intel-document/database/photo searches were run; none were needed since ARK gives code and stepping."
+    },
+    {
+      "model": "Intel Core i9-11900T",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK gives the only code, stepping B0 (Code Name on ARK: 'Products formerly Rocket Lake', checked on the i9-11900K page). PCN search: PCN 119441-00 (EOL/discontinuance, Rocket Lake desktop; table as reproduced by thefpsreview.com lists the tray part, stepping B0, no S-Spec column, no new code) and, for the i9-11900K only, PCN 118661-00 (boxed packaging/transport media change, no code change stated on the mirror page). No PCN with a pre/post-conversion code found. Web search budget ran out after the PCN searches, so no further Intel-document/database/photo searches were run; none were needed since ARK gives code and stepping."
     },
     {
       "model": "Intel Core i9-12900",
