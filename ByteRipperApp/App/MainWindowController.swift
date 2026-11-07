@@ -187,8 +187,15 @@ final class MainWindowController: NSWindowController {
             // it, and the height is measured from that layout.
             window.setFrame(NSRect(x: 0, y: 0, width: launchWidth, height: maxLaunchHeight), display: false)
             let height = launchHeight
-            window.setFrame(NSRect(x: 0, y: 0, width: launchWidth, height: height), display: true)
-            window.center()
+            centre(NSSize(width: launchWidth, height: height))
+            fittedHeight = window.frame.height
+            return
+        }
+        // Only the launch window restores a frame; any later one would be
+        // cascaded off the window in front, stepping down towards the Dock.
+        // It opens centred instead.
+        guard frameAutosaveName != nil else {
+            centre(NSSize(width: launchWidth, height: launchHeight))
             fittedHeight = window.frame.height
             return
         }
@@ -205,16 +212,29 @@ final class MainWindowController: NSWindowController {
     /// Before the files are laid out there is nothing to fit, and the window
     /// is only centred.
     func fitAndCentre() {
-        guard let window, let screen = window.screen ?? NSScreen.main else { return }
+        guard let window else { return }
         if let group = window.tabGroup, group.windows.count > 1 { return }
         window.contentView?.layoutSubtreeIfNeeded()
-        let visible = screen.visibleFrame
-        var frame = mainViewController.windowWillUseStandardFrame(window, defaultFrame: window.frame)
-        frame.size.width = min(frame.width, visible.width).rounded(.down)
-        frame.size.height = min(frame.height, visible.height).rounded(.down)
-        frame.origin.x = (visible.midX - frame.width / 2).rounded()
-        frame.origin.y = (visible.midY - frame.height / 2).rounded()
+        centre(mainViewController.windowWillUseStandardFrame(window, defaultFrame: window.frame).size)
+    }
+
+    /// The frame the window was last centred at. While the window still has
+    /// it, nobody has moved or resized it since, and a refit keeps it centred.
+    private var centredFrame: NSRect?
+
+    /// Gives the window `size`, capped at its screen's visible area — which
+    /// leaves out the menu bar and the Dock — and centres it there. Not
+    /// `NSWindow.center()`: that puts a window above the middle of the whole
+    /// screen, and a tall one ends up with its foot under the Dock.
+    private func centre(_ size: NSSize) {
+        guard let window, let visible = (window.screen ?? NSScreen.main)?.visibleFrame else { return }
+        let width = min(size.width, visible.width).rounded(.down)
+        let height = min(size.height, visible.height).rounded(.down)
+        let frame = NSRect(x: (visible.midX - width / 2).rounded(),
+                           y: (visible.midY - height / 2).rounded(),
+                           width: width, height: height)
         window.setFrame(frame, display: true)
+        centredFrame = window.frame
     }
 
     /// Fits the window to the landing screen again when what the screen shows
@@ -225,6 +245,11 @@ final class MainWindowController: NSWindowController {
         if let group = window.tabGroup, group.windows.count > 1 { return }
         let height = launchHeight
         guard abs(height - window.frame.height) >= 1 else { return }
+        if window.frame == centredFrame {
+            centre(NSSize(width: window.frame.width, height: height))
+            self.fittedHeight = window.frame.height
+            return
+        }
         setHeight(height, keepingTopOf: window.frame)
     }
 

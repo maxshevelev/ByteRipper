@@ -1,4 +1,4 @@
-@source-sha f96a736fe738ced48a48a84aa78f8c4b916f9767a7d564fc8d713fc5ba2406cd
+@source-sha 79db7a5b1d4fea9ca3db48d7e70c424240bd47bc2549d040eabe34c77201a1eb
 # Dateien öffnen: ein Bereich oder zwei
 
 > Ein Tab hält zwei Dateibereiche. Eine Datei ist schlicht ein Editor; eine zweite Datei fügt den Vergleich hinzu. Bearbeiten geht in beiden Bereichen, so oder so.
@@ -24,6 +24,8 @@ Der zweite Bereich ist optional. Außer dem Vergleich selbst braucht nichts eine
 Jeder Bereichskopf nennt seine Datei und ob es ungesicherte Änderungen gibt; die Größe steht in der Statuszeile darunter. Das ✕ im Kopf schließt diesen Bereich und lässt den anderen offen. Wird die letzte Datei eines Tabs geschlossen, schließt sich auch der Tab, sofern weitere Tabs geöffnet sind und er weder [[topic:bookmarks|Lesezeichen]] noch [[topic:fragments|Fragment-Bereiche]] enthält; der letzte Tab des Programms bleibt leer geöffnet.
 
 Ein Fenster kann mehrere Tabs halten (**Ablage ▸ Neuer Tab**, ⌘T), jeder mit einem eigenen Paar Dateibereiche zum Vergleichen. So werden in einem Fenster mehrere voneinander unabhängige Vergleiche geführt: BIOS-Dumps im einen Tab, Dumps des Embedded Controllers im nächsten.
+
+**Ablage ▸ Neues Fenster** (⇧⌘N) öffnet ein Fenster in der Mitte des Bildschirms, ohne Menüleiste und Dock zu überdecken. Das Fenster, das ByteRipper beim Start öffnet, erscheint an der Stelle, an der es beim letzten Beenden des Programms stand.
 
 ## Wenn die Datei schon offen ist
 

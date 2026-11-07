@@ -32,6 +32,8 @@ Each pane header names its file and whether it has unsaved changes; the status b
 
 A window can hold several tabs (**File ▸ New Tab**, ⌘T), each with its own pair of panes to compare in. Several unrelated comparisons are therefore held in one window: BIOS dumps in one tab, embedded-controller dumps in the next.
 
+**File ▸ New Window** (⇧⌘N) opens a window centred on the screen, clear of the menu bar and the Dock. The window ByteRipper opens at launch returns to where it was when the program was last quit.
+
 ## If the file is already open
 
 A file is open in one place at a time, and the program enforces this:

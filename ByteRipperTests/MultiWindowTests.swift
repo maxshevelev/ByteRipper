@@ -240,6 +240,25 @@ final class MultiWindowTests: XCTestCase {
                        "as wide as Zoom makes it")
     }
 
+    /// A window after the launch one is not cascaded off the window in front
+    /// — the steps walked it down to the corner, under the Dock — but opens
+    /// centred in its screen's visible area.
+    func testANewWindowOpensCentredClearOfTheDock() throws {
+        let first = MainWindowController(frameAutosaveName: nil)
+        defer { first.close() }
+        first.showWindow(nil)
+        let second = MainWindowController(frameAutosaveName: nil)
+        defer { second.close() }
+        second.showWindow(nil)
+        let window = try XCTUnwrap(second.window)
+        let visible = try XCTUnwrap((window.screen ?? NSScreen.main)?.visibleFrame)
+        let frame = window.frame
+        XCTAssertTrue(visible.insetBy(dx: -1, dy: -1).contains(frame),
+                      "inside the visible area, clear of the Dock: \(frame) in \(visible)")
+        XCTAssertEqual(frame.midX, visible.midX, accuracy: 1, "centred across")
+        XCTAssertEqual(frame.midY, visible.midY, accuracy: 1, "centred up and down")
+    }
+
     // MARK: - The window's name
 
     /// A window is named after the files it holds, because that name is what the
