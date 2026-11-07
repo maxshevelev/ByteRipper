@@ -2812,6 +2812,12 @@
       "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
     },
     {
+      "model": "Intel Xeon D-1519",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Xeon D-1500 Specification Update 332054-022US (May 2020) has no S-Spec table (it points to ARK). WikiChip refused connections. PCN search not done separately (no Xeon SKU to search for). Photos script: 16 images, none a chip marking reading 'D-1519' with an S-Spec (marketing art, Pentium D desktop chips, boards)."
+    },
+    {
       "model": "Intel Xeon D-1520",
       "searched": "2026-11-07",
       "specs": [],
@@ -2858,6 +2864,12 @@
       "searched": "2026-11-07",
       "specs": [],
       "note": "Not searched under 606C1: the article lists this Broadwell-DE / Skylake-D part under Ice Lake D; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Xeon D-1533",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "No S-Spec for a plain Xeon D-1533 found anywhere; it may be an OEM/custom SKU or a misreading of D-1533N. Xeon D-1500 Specification Update 332054-022US has no S-Spec table. WikiChip refused connections. Photos script: 16 images, none a chip marking reading 'D-1533' with an S-Spec."
     },
     {
       "model": "Intel Xeon D-1533N",

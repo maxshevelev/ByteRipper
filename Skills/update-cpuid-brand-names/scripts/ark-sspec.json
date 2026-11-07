@@ -2429,6 +2429,12 @@
       ]
     },
     {
+      "model": "Intel Xeon D-1519",
+      "url": null,
+      "specs": [],
+      "note": "No ARK page for a Xeon D-1519 exists: searches ('\"Xeon D-1519\" site:intel.com specifications') return only the Intel Pentium Processor D1519 (SKU 91559). Its ordering tab https://www.intel.com/content/www/us/en/products/sku/91559/intel-pentium-processor-d1519-6m-cache-1-50-ghz/ordering.html lists one row: Spec Code SR2DM, Ordering Code GG8067402569601, Stepping V2 (title 'Intel® Pentium® Processor D1519 (6M Cache, 1.50 GHz)'). Not recorded as the Xeon's code because the brand differs; the table's 'Xeon D-1519' is probably this Pentium D1519 (V2 = CPUID 50663 per Xeon D-1500 Specification Update 332054-022US, Table 1: 'V2=0011b'). Intel's Xeon D-1500 product brief also lists 'Intel® Pentium® Processors D1508/D1509/D1519' as members of the family."
+    },
+    {
       "model": "Intel Xeon D-1521",
       "url": "https://www.intel.com/content/www/us/en/products/sku/91202/intel-xeon-processor-d1521-6m-cache-2-40-ghz/ordering.html",
       "specs": [
@@ -2487,6 +2493,12 @@
           "stepping": "V2"
         }
       ]
+    },
+    {
+      "model": "Intel Xeon D-1533",
+      "url": null,
+      "specs": [],
+      "note": "No ARK page for a Xeon D-1533 without suffix: searches return only the Xeon D-1533N (SKU 122998). Its ordering tab https://www.intel.com/content/www/us/en/products/sku/122998/intel-xeon-processor-d1533n-9m-cache-2-10-ghz/ordering.html lists one row: Spec Code SR3KS, Ordering Code GG8068203255103, Stepping A1. Not recorded: D-1533N is a different SKU, and A1 is not CPUID 50663 (the Specification Update gives V2=0011b, Y0=0100b, A1=0101b; A1 is 50665, a D-1500N stepping)."
     },
     {
       "model": "Intel Xeon D-1533N",
