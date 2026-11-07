@@ -344,7 +344,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// Files the Dock, the Finder or "Open With" handed to the app
     /// (`HandedFilesPlacement`): one already open comes forward; otherwise a
     /// window of their own — `windowAtHand` when the launch has just made an
-    /// empty one — one file to look at, two to compare.
+    /// empty one — one file to look at, two to compare, fitted to them and
+    /// centred on the screen clear of the Dock (`fitAndCentre`).
     private func openHandedFiles(_ urls: [URL], windowAtHand: MainWindowController? = nil) {
         let open = urls.count == 1 ? openDocuments.location(of: urls[0], excluding: nil) : nil
         let atHand = windowAtHand.flatMap { controller -> MainWindowController? in
@@ -357,8 +358,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             if let (holder, pane) = open { holder.revealOpenFile(inPane: pane) }
         case .windowAtHand:
             atHand?.mainViewController.openFiles(urls)
+            atHand?.fitAndCentre()
         case .newWindow:
-            makeWindow().mainViewController.openFiles(urls)
+            let controller = makeWindow()
+            controller.mainViewController.openFiles(urls)
+            controller.fitAndCentre()
         }
     }
 

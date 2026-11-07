@@ -215,6 +215,31 @@ final class MultiWindowTests: XCTestCase {
         XCTAssertGreaterThan(frame.width, 200)
     }
 
+    /// A window opened for files handed over by the Dock or the Finder is
+    /// fitted to them as Zoom fits a window, within the screen's visible area
+    /// — clear of the Dock and the menu bar — and centred in it.
+    func testAWindowForHandedFilesIsFittedAndCentredClearOfTheDock() throws {
+        let controller = MainWindowController(frameAutosaveName: nil)
+        defer { controller.close() }
+        controller.showWindow(nil)
+        let window = try XCTUnwrap(controller.window)
+        let url = try tempFile([UInt8](repeating: 0xAB, count: 0x400))
+        controller.mainViewController.openFiles([url])
+
+        controller.fitAndCentre()
+
+        let screen = try XCTUnwrap(window.screen ?? NSScreen.main)
+        let visible = screen.visibleFrame
+        let frame = window.frame
+        XCTAssertTrue(visible.insetBy(dx: -1, dy: -1).contains(frame),
+                      "inside the visible area, clear of the Dock: \(frame) in \(visible)")
+        XCTAssertEqual(frame.midX, visible.midX, accuracy: 1, "centred across")
+        XCTAssertEqual(frame.midY, visible.midY, accuracy: 1, "centred up and down")
+        let zoomed = controller.mainViewController.windowWillUseStandardFrame(window, defaultFrame: .zero)
+        XCTAssertEqual(frame.width, min(zoomed.width, visible.width).rounded(.down), accuracy: 1,
+                       "as wide as Zoom makes it")
+    }
+
     // MARK: - The window's name
 
     /// A window is named after the files it holds, because that name is what the

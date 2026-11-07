@@ -198,6 +198,25 @@ final class MainWindowController: NSWindowController {
         setHeight(launchHeight, keepingTopOf: frame)
     }
 
+    /// A window opened for files the Dock or the Finder handed over: sized as
+    /// Window ▸ Zoom sizes it — the width to the hex grids and the panels
+    /// beside them, the height to the dump — within its screen's visible
+    /// area, which leaves out the menu bar and the Dock, and centred there.
+    /// Before the files are laid out there is nothing to fit, and the window
+    /// is only centred.
+    func fitAndCentre() {
+        guard let window, let screen = window.screen ?? NSScreen.main else { return }
+        if let group = window.tabGroup, group.windows.count > 1 { return }
+        window.contentView?.layoutSubtreeIfNeeded()
+        let visible = screen.visibleFrame
+        var frame = mainViewController.windowWillUseStandardFrame(window, defaultFrame: window.frame)
+        frame.size.width = min(frame.width, visible.width).rounded(.down)
+        frame.size.height = min(frame.height, visible.height).rounded(.down)
+        frame.origin.x = (visible.midX - frame.width / 2).rounded()
+        frame.origin.y = (visible.midY - frame.height / 2).rounded()
+        window.setFrame(frame, display: true)
+    }
+
     /// Fits the window to the landing screen again when what the screen shows
     /// has changed and the window is still at the height it was fitted to.
     /// A window someone has resized keeps their size.
