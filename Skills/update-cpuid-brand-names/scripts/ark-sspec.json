@@ -293,6 +293,63 @@
       "note": "WebSearch '\"<model>\" site:intel.com specifications' and variants found no Intel product page for this model (only neighbouring SKUs)."
     },
     {
+      "model": "Intel Core i3-7100E",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97131/intel-core-i37100e-processor-3m-cache-2-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR34V",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-7101E",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97130/intel-core-i37101e-processor-3m-cache-3-90-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR32Z",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-7101TE",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97125/intel-core-i37101te-processor-3m-cache-3-40-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR330",
+          "stepping": "B0"
+        },
+        {
+          "sSpec": "SR374",
+          "stepping": "B0"
+        }
+      ],
+      "note": "ARK lists two spec codes, SR330 and SR374, both stepping B0 and both under the same tray ordering code. The PCN that explains the second code was not searched for (search budget used up)."
+    },
+    {
+      "model": "Intel Core i3-7102E",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97124/intel-core-i37102e-processor-3m-cache-2-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR34W",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i3-7120",
+      "url": null,
+      "specs": [],
+      "note": "No intel.com page for i3-7120 found by WebSearch. It appears to be an OEM-only part launched in July 2017 and not on ARK."
+    },
+    {
+      "model": "Intel Core i3-7120T",
+      "url": null,
+      "specs": [],
+      "note": "No intel.com page for i3-7120T found by WebSearch. It appears to be an OEM-only part and not on ARK."
+    },
+    {
       "model": "Intel Core i5-10400",
       "url": "https://www.intel.com/content/www/us/en/products/sku/199271/intel-core-i510400-processor-12m-cache-up-to-4-30-ghz/ordering.html",
       "specs": [
@@ -675,6 +732,87 @@
         {
           "sSpec": "SR2L9",
           "stepping": "R0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-7400",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97147/intel-core-i57400-processor-6m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR32W",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-7400T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97184/intel-core-i57400t-processor-6m-cache-up-to-3-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR332",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-7500",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97123/intel-core-i57500-processor-6m-cache-up-to-3-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR335",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-7500T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97121/intel-core-i57500t-processor-6m-cache-up-to-3-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR337",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-7600",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97150/intel-core-i57600-processor-6m-cache-up-to-4-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR334",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-7600K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97144/intel-core-i57600k-processor-6m-cache-up-to-4-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR32V",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-7600T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97183/intel-core-i57600t-processor-6m-cache-up-to-3-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR336",
+          "stepping": "B0"
+        }
+      ],
+      "note": "WebSearch did not turn up the page. SKU 97183 was guessed, and the fetched page's title is exactly 'Intel Core i5-7600T Processor (6M Cache, up to 3.70 GHz)'."
+    },
+    {
+      "model": "Intel Core i5-7640X",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/121500/intel-core-i57640x-xseries-processor-6m-cache-up-to-4-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3FR",
+          "stepping": "B0"
         }
       ]
     },
@@ -1115,6 +1253,36 @@
         {
           "sSpec": "SR2QW",
           "stepping": "N0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-7700",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97128/intel-core-i77700-processor-8m-cache-up-to-4-20-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR338",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-7700K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97129/intel-core-i77700k-processor-8m-cache-up-to-4-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR33A",
+          "stepping": "B0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-7700T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/97122/intel-core-i77700t-processor-8m-cache-up-to-3-80-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR339",
+          "stepping": "B0"
         }
       ]
     },

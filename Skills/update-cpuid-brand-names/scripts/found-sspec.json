@@ -108,6 +108,42 @@
       "note": "Only source is WikiChip (live site refused connection; read via the Wayback Machine snapshot of 2025-05-17), which itself marks the page 'Preliminary Data' and says it is unknown whether the processor was ever released. Not in Intel's PCN 116799 (which lists SR2H9 i3-6320, SR2HA i3-6300, SR2HD i3-6300T, SR2HE i3-6100T) nor in the EDS addendum table; SR2HC does fit the gap in that sequence. photos.py returned only i3-6320 (SR2H9) chips, no i3-6320T package. Treat as doubtful. SR2HC (S0) only from an archived WikiChip page marked \"Preliminary Data\", which says it is unknown whether the processor was released: not recorded."
     },
     {
+      "model": "Intel Core i3-7100E",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "PCN search not done: the session's WebSearch budget ran out partway through this batch."
+    },
+    {
+      "model": "Intel Core i3-7101E",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "PCN search not done: the session's WebSearch budget ran out partway through this batch."
+    },
+    {
+      "model": "Intel Core i3-7101TE",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "PCN search not done: the session's WebSearch budget ran out partway through this batch."
+    },
+    {
+      "model": "Intel Core i3-7102E",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "PCN search not done: the session's WebSearch budget ran out partway through this batch."
+    },
+    {
+      "model": "Intel Core i3-7120",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "Two third-party pages give a bare 'Part#: SR35D' with no stepping or CPUID: cpu-wiki.pages.dev/cpu/core-i3-7120 and fpsbench.com/cpu/intel-core-i3-7120. It is not recorded because neither page states a stepping, and both may share one source. WikiChip (ECONNREFUSED), TechPowerUp (403) and AnandTech (redirects to the forums) could not be loaded. Photo searches (48 images, queries incl. '\"i3-7120\" SR35D') showed only i3-7100, i3-7100T, i3-7320 and unrelated parts; no package marked i3-7120 was found. The search budget ran out before an Intel spec update or PCN could be looked for."
+    },
+    {
+      "model": "Intel Core i3-7120T",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "fpsbench.com/cpu/intel-core-i3-7120t gives 'Part Number: SR35Q', which is contradicted: a photograph (shopee.ph, photos/Intel_Core_i3-7120T/33.jpg) shows a package marked 'INTEL PENTIUM / G4600T / SR35Q 3.00GHZ / L639G039', so SR35Q belongs to the Pentium G4600T. Not recorded. Photo searches (48 images) found no package marked i3-7120T. WikiChip, TechPowerUp and AnandTech could not be loaded. The search budget ran out before an Intel document could be looked for."
+    },
+    {
       "model": "Intel Core i5-10500",
       "searched": "2026-11-07",
       "specs": [],
@@ -525,6 +561,106 @@
       "specs": []
     },
     {
+      "model": "Intel Core i5-7400",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab lists one code, B0, for tray/box/China box. Architecture from ARK spec page Code Name 'Products formerly Kaby Lake' (checked on i7-7700). PCN search: no PCN naming this model with a different code found (PCN 117184-01 covers i5-7500/7500T/i7-7700/7700T only, same codes)."
+    },
+    {
+      "model": "Intel Core i5-7400T",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab lists one code, B0, for tray/box/China box. Architecture from ARK spec page Code Name 'Products formerly Kaby Lake' (checked on i7-7700). PCN search: no PCN naming this model with a different code found (PCN 117184-01 covers i5-7500/7500T/i7-7700/7700T only, same codes)."
+    },
+    {
+      "model": "Intel Core i5-7500",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR335",
+          "stepping": "B0",
+          "cpuid": null,
+          "architecture": "Kaby Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://www.intel.com/content/www/us/en/products/sku/97123/intel-core-i57500-processor-6m-cache-up-to-3-80-ghz/ordering.html",
+              "quote": "Spec Code SR335, Ordering Code CM8067702868012, Stepping B0",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/810027/PCN117184-01.pdf",
+              "quote": "Intel® Core™ i5-7500 Processor CM8067702868012 S R335 953001",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab lists one code, B0, for tray/box/China box. Architecture from ARK spec page Code Name 'Products formerly Kaby Lake' (checked on i7-7700). PCN search: PCN 117184-01 (IoT support transition) lists this model under the same code, no conversion codes."
+    },
+    {
+      "model": "Intel Core i5-7500T",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR337",
+          "stepping": "B0",
+          "cpuid": null,
+          "architecture": "Kaby Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://www.intel.com/content/www/us/en/products/sku/97121/intel-core-i57500t-processor-6m-cache-up-to-3-30-ghz/ordering.html",
+              "quote": "Spec Code SR337, Ordering Code CM8067702868115, Stepping B0",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/810027/PCN117184-01.pdf",
+              "quote": "Intel® Core™ i5-7500T Processor 947202 / CM8067702868115 S R337 (PDFKit text, columns interleaved with i5-6500 row)",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab lists one code, B0, for tray/box/China box. Architecture from ARK spec page Code Name 'Products formerly Kaby Lake' (checked on i7-7700). PCN search: PCN 117184-01 (IoT support transition) lists this model under the same code, no conversion codes."
+    },
+    {
+      "model": "Intel Core i5-7600",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab lists one code, B0, for tray/box/China box. Architecture from ARK spec page Code Name 'Products formerly Kaby Lake' (checked on i7-7700). PCN search: no PCN naming this model with a different code found (PCN 117184-01 covers i5-7500/7500T/i7-7700/7700T only, same codes)."
+    },
+    {
+      "model": "Intel Core i5-7600K",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "PCN search not done: the session's WebSearch budget ran out partway through this batch."
+    },
+    {
+      "model": "Intel Core i5-7600T",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "PCN search not done: the session's WebSearch budget ran out partway through this batch."
+    },
+    {
+      "model": "Intel Core i5-7640X",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK Code Name: 'Products formerly Kaby Lake'. The PCN search (step 1) could not be run because the session's WebSearch budget ran out, so a PCN code that ARK dropped is not ruled out. Spec update 334663-017 covers the 7640X but has no S-Spec table."
+    },
+    {
       "model": "Intel Core i5-8400",
       "searched": "2026-11-07",
       "specs": [
@@ -853,6 +989,76 @@
       "searched": "2026-11-07",
       "specs": [],
       "note": "Not searched under 50657: the article lists this Skylake-X / Kaby Lake-X part under Cascade Lake; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Core i7-7700",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR338",
+          "stepping": "B0",
+          "cpuid": null,
+          "architecture": "Kaby Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://www.intel.com/content/www/us/en/products/sku/97128/intel-core-i77700-processor-8m-cache-up-to-4-20-ghz/ordering.html",
+              "quote": "Spec Code SR338, Ordering Code CM8067702868314, Stepping B0",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/810027/PCN117184-01.pdf",
+              "quote": "Intel® Core™ i7-7700 Processor CM8067702868314 S R338 953004",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab lists one code, B0, for tray/box/China box. Architecture from ARK spec page Code Name 'Products formerly Kaby Lake' (checked on i7-7700). PCN search: PCN 117184-01 (IoT support transition) lists this model under the same code, no conversion codes."
+    },
+    {
+      "model": "Intel Core i7-7700K",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK ordering tab lists one code, B0, for tray/box/China box. Architecture from ARK spec page Code Name 'Products formerly Kaby Lake' (checked on i7-7700). PCN search: no PCN naming this model with a different code found (PCN 117184-01 covers i5-7500/7500T/i7-7700/7700T only, same codes)."
+    },
+    {
+      "model": "Intel Core i7-7700T",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR339",
+          "stepping": "B0",
+          "cpuid": null,
+          "architecture": "Kaby Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://www.intel.com/content/www/us/en/products/sku/97122/intel-core-i77700t-processor-8m-cache-up-to-3-80-ghz/ordering.html",
+              "quote": "Spec Code SR339, Ordering Code CM8067702868416, Stepping B0",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            },
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/810027/PCN117184-01.pdf",
+              "quote": "Intel® Core™ i7-7700T Processor CM8067702868416 S R339 953005",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "ARK ordering tab lists one code, B0, for tray/box/China box. Architecture from ARK spec page Code Name 'Products formerly Kaby Lake' (checked on i7-7700). PCN search: PCN 117184-01 (IoT support transition) lists this model under the same code, no conversion codes."
     },
     {
       "model": "Intel Core i7-7740X",

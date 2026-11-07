@@ -7538,59 +7538,131 @@
       "processors": [
         {
           "name": "Intel Core i7-7700",
-          "sSpec": []
+          "sSpec": [
+            "SR338"
+          ],
+          "sSpecSource": {
+            "SR338": "ark"
+          }
         },
         {
           "name": "Intel Core i7-7700K",
-          "sSpec": []
+          "sSpec": [
+            "SR33A"
+          ],
+          "sSpecSource": {
+            "SR33A": "ark"
+          }
         },
         {
           "name": "Intel Core i7-7700T",
-          "sSpec": []
+          "sSpec": [
+            "SR339"
+          ],
+          "sSpecSource": {
+            "SR339": "ark"
+          }
         },
         {
           "name": "Intel Core i5-7400",
-          "sSpec": []
+          "sSpec": [
+            "SR32W"
+          ],
+          "sSpecSource": {
+            "SR32W": "ark"
+          }
         },
         {
           "name": "Intel Core i5-7400T",
-          "sSpec": []
+          "sSpec": [
+            "SR332"
+          ],
+          "sSpecSource": {
+            "SR332": "ark"
+          }
         },
         {
           "name": "Intel Core i5-7500",
-          "sSpec": []
+          "sSpec": [
+            "SR335"
+          ],
+          "sSpecSource": {
+            "SR335": "ark"
+          }
         },
         {
           "name": "Intel Core i5-7500T",
-          "sSpec": []
+          "sSpec": [
+            "SR337"
+          ],
+          "sSpecSource": {
+            "SR337": "ark"
+          }
         },
         {
           "name": "Intel Core i5-7600",
-          "sSpec": []
+          "sSpec": [
+            "SR334"
+          ],
+          "sSpecSource": {
+            "SR334": "ark"
+          }
         },
         {
           "name": "Intel Core i5-7600K",
-          "sSpec": []
+          "sSpec": [
+            "SR32V"
+          ],
+          "sSpecSource": {
+            "SR32V": "ark"
+          }
         },
         {
           "name": "Intel Core i5-7600T",
-          "sSpec": []
+          "sSpec": [
+            "SR336"
+          ],
+          "sSpecSource": {
+            "SR336": "ark"
+          }
         },
         {
           "name": "Intel Core i3-7100E",
-          "sSpec": []
+          "sSpec": [
+            "SR34V"
+          ],
+          "sSpecSource": {
+            "SR34V": "ark"
+          }
         },
         {
           "name": "Intel Core i3-7101E",
-          "sSpec": []
+          "sSpec": [
+            "SR32Z"
+          ],
+          "sSpecSource": {
+            "SR32Z": "ark"
+          }
         },
         {
           "name": "Intel Core i3-7101TE",
-          "sSpec": []
+          "sSpec": [
+            "SR330",
+            "SR374"
+          ],
+          "sSpecSource": {
+            "SR330": "ark",
+            "SR374": "ark"
+          }
         },
         {
           "name": "Intel Core i3-7102E",
-          "sSpec": []
+          "sSpec": [
+            "SR34W"
+          ],
+          "sSpecSource": {
+            "SR34W": "ark"
+          }
         },
         {
           "name": "Intel Core i3-7120",
@@ -7720,7 +7792,12 @@
         },
         {
           "name": "Intel Core i5-7640X",
-          "sSpec": []
+          "sSpec": [
+            "SR3FR"
+          ],
+          "sSpecSource": {
+            "SR3FR": "ark"
+          }
         },
         {
           "name": "Intel Core i7-7740X",
