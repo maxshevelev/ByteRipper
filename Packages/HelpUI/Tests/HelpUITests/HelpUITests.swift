@@ -323,6 +323,8 @@ final class HelpTermPopoverTests: XCTestCase {
         XCTAssertEqual(note.textColor, NSColor.secondaryLabelColor)
         XCTAssertEqual(note.font?.pointSize, HelpPopoverLayout.bodySize)
         XCTAssertTrue(note.isSelectable, "the panel's line is copied like the rest")
+        let title = try XCTUnwrap(labels.first { $0.stringValue == "MELanPowerWell" })
+        XCTAssertTrue(title.isSelectable, "the title is copied like the rest")
         XCTAssertNotNil(built.view.subviews.compactMap { $0 as? HelpBodyView }.first,
                         "the words stay under it")
     }

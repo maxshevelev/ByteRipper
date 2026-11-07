@@ -1366,6 +1366,14 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertTrue(note.contains("8th Generation Intel Core Processor Family"), note)
         XCTAssertTrue(note.contains("Stepping"), note)
         XCTAssertTrue(popover.shownText.contains("Core i5-8250U"), popover.shownText)
+
+        // The head is text to select and copy too: the CPUID, and the code
+        // names and facts under it.
+        let head = (popover.view.subviews.first?.subviews ?? []).compactMap { $0 as? NSTextField }
+        let title = try XCTUnwrap(head.first { $0.stringValue == "CPUID 806EA" })
+        let names = try XCTUnwrap(head.first { $0.stringValue == note })
+        XCTAssertTrue(title.isSelectable, "the CPUID is copied like the rest")
+        XCTAssertTrue(names.isSelectable, "the code names are copied like the rest")
     }
 
     /// The CPUIDs are text on the table's background: the table lets a click
