@@ -8214,11 +8214,21 @@
         },
         {
           "name": "Intel Core i7-8700K",
-          "sSpec": []
+          "sSpec": [
+            "SR3QR"
+          ],
+          "sSpecSource": {
+            "SR3QR": "ark"
+          }
         },
         {
           "name": "Intel Core i5-8600K",
-          "sSpec": []
+          "sSpec": [
+            "SR3QU"
+          ],
+          "sSpecSource": {
+            "SR3QU": "ark"
+          }
         },
         {
           "name": "Intel Core i5-8650K",
@@ -8234,19 +8244,39 @@
         },
         {
           "name": "Intel Core i7-8700",
-          "sSpec": []
+          "sSpec": [
+            "SR3QS"
+          ],
+          "sSpecSource": {
+            "SR3QS": "ark"
+          }
         },
         {
           "name": "Intel Core i7-8700T",
-          "sSpec": []
+          "sSpec": [
+            "SR3WX"
+          ],
+          "sSpecSource": {
+            "SR3WX": "ark"
+          }
         },
         {
           "name": "Intel Core i5-8400",
-          "sSpec": []
+          "sSpec": [
+            "SR3QT"
+          ],
+          "sSpecSource": {
+            "SR3QT": "ark"
+          }
         },
         {
           "name": "Intel Core i5-8400T",
-          "sSpec": []
+          "sSpec": [
+            "SR3X6"
+          ],
+          "sSpecSource": {
+            "SR3X6": "ark"
+          }
         },
         {
           "name": "Intel Core i5-8420",
@@ -8258,11 +8288,21 @@
         },
         {
           "name": "Intel Core i5-8500",
-          "sSpec": []
+          "sSpec": [
+            "SR3XE"
+          ],
+          "sSpecSource": {
+            "SR3XE": "ark"
+          }
         },
         {
           "name": "Intel Core i5-8500T",
-          "sSpec": []
+          "sSpec": [
+            "SR3XD"
+          ],
+          "sSpecSource": {
+            "SR3XD": "ark"
+          }
         },
         {
           "name": "Intel Core i5-8550",
@@ -8270,11 +8310,21 @@
         },
         {
           "name": "Intel Core i5-8600",
-          "sSpec": []
+          "sSpec": [
+            "SR3X0"
+          ],
+          "sSpecSource": {
+            "SR3X0": "ark"
+          }
         },
         {
           "name": "Intel Core i5-8600T",
-          "sSpec": []
+          "sSpec": [
+            "SR3X3"
+          ],
+          "sSpecSource": {
+            "SR3X3": "ark"
+          }
         },
         {
           "name": "Intel Core i5-8650",

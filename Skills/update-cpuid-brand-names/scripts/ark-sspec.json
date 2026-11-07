@@ -713,6 +713,88 @@
       ]
     },
     {
+      "model": "Intel Core i5-8400",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/126687/intel-core-i58400-processor-9m-cache-up-to-4-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3QT",
+          "stepping": "U0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-8400T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/129940/intel-core-i58400t-processor-9m-cache-up-to-3-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3X6",
+          "stepping": "U0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-8500",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/129939/intel-core-i58500-processor-9m-cache-up-to-4-10-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3XE",
+          "stepping": "U0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-8500T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/129941/intel-core-i58500t-processor-9m-cache-up-to-3-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3XD",
+          "stepping": "U0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-8550",
+      "url": null,
+      "specs": [],
+      "note": "No intel.com product page found for a desktop i5-8550 (searches return only i5/i7-8550U). The name appears in the Nov 2017 leaked 8th/9th-gen list (AnandTech) and AIDA64 beta changelog as an unannounced SKU; it seems never to have been sold under this name."
+    },
+    {
+      "model": "Intel Core i5-8600",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/129937/intel-core-i58600-processor-9m-cache-up-to-4-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3X0",
+          "stepping": "U0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-8600K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/126685/intel-core-i58600k-processor-9m-cache-up-to-4-30-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3QU",
+          "stepping": "U0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-8600T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/129938/intel-core-i58600t-processor-9m-cache-up-to-3-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3X3",
+          "stepping": "U0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i5-8650",
+      "url": null,
+      "specs": [],
+      "note": "No intel.com product page found for a desktop i5-8650 (site:intel.com search returned no Intel page). Listed only in the Nov 2017 leaked 8th/9th-gen list and AIDA64 beta as an unannounced SKU; it seems never to have been sold under this name."
+    },
+    {
       "model": "Intel Core i5-9400",
       "url": "https://www.intel.com/content/www/us/en/products/sku/134898/intel-core-i59400-processor-9m-cache-up-to-4-10-ghz/ordering.html",
       "specs": [
@@ -1135,11 +1217,41 @@
       ]
     },
     {
+      "model": "Intel Core i7-8700",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/126686/intel-core-i78700-processor-12m-cache-up-to-4-60-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3QS",
+          "stepping": "U0"
+        }
+      ]
+    },
+    {
       "model": "Intel Core i7-8700B",
       "url": "https://www.intel.com/content/www/us/en/products/sku/134905/intel-core-i78700b-processor-12m-cache-up-to-4-60-ghz/ordering.html",
       "specs": [
         {
           "sSpec": "SRCX2",
+          "stepping": "U0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-8700K",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/126684/intel-core-i78700k-processor-12m-cache-up-to-4-70-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3QR",
+          "stepping": "U0"
+        }
+      ]
+    },
+    {
+      "model": "Intel Core i7-8700T",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/129948/intel-core-i78700t-processor-12m-cache-up-to-4-00-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SR3WX",
           "stepping": "U0"
         }
       ]

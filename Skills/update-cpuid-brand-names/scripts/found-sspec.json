@@ -525,6 +525,165 @@
       "specs": []
     },
     {
+      "model": "Intel Core i5-8400",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR3QT",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Coffee Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/805737/PCN117617-02.pdf",
+              "quote": "Intel® Core™ i5-8400 Processor DESKTOP CM8068403358811 S R3QT 960619",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Only discontinuance/assembly-site PCNs found; no other code. Stepping from ARK."
+    },
+    {
+      "model": "Intel Core i5-8400T",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR3X6",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Coffee Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/805737/PCN117617-02.pdf",
+              "quote": "Intel® Core™ i5-8400T Processor DESKTOP CM8068403358913 S R3X6 963540",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Only the discontinuance PCN 117617-02 found; no other code. Stepping from ARK."
+    },
+    {
+      "model": "Intel Core i5-8500",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR3XE",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Coffee Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/805737/PCN117617-02.pdf",
+              "quote": "Boxed Intel® Core™ i5-8500 Processor DESKTOP BX80684I58500 S R3XE 974957",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "Only discontinuance/support/assembly-site PCNs found; no other code. Stepping from ARK."
+    },
+    {
+      "model": "Intel Core i5-8500T",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR3XD",
+          "stepping": "U0",
+          "cpuid": null,
+          "architecture": "Coffee Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/802865/PCN117618-00.pdf",
+              "quote": "Intel® Core™ i5-8500T Processor I5-8500T 2.1 GHZ U0 CM8068403362509 S R3XD 963592",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCN 117618-00 (product support change) repeats the ARK code; no pre/post-conversion code. No other code found."
+    },
+    {
+      "model": "Intel Core i5-8550",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK: no page. Intel PCN/spec-update search: nothing names it. Databases: techpowerup and wikichip pages could not be loaded (403 / connection refused); others give no S-Spec. Photos (photos.py, 16 images): only renders and other models (i5-8500, i7-8550U); no chip marked i5-8550. Web search budget ran out before a further site:intel.com check."
+    },
+    {
+      "model": "Intel Core i5-8600",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR3X0",
+          "stepping": "U0",
+          "cpuid": null,
+          "architecture": "Coffee Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/811577/PCN116217-00.pdf",
+              "quote": "Boxed Intel® Core™ i5-8600 Processor U0 BX80684I58600 S R3X0 974956",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCN 116217-00 (added boxed manufacturing site in China) keeps SR3X0; no new code."
+    },
+    {
+      "model": "Intel Core i5-8600K",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR3QU",
+          "stepping": "U0",
+          "cpuid": null,
+          "architecture": "Coffee Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/798022/PCN115909-00.pdf",
+              "quote": "Intel® Core™ i5-8600K Processor U0 CM8068403358508 S R3QU 960620",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCN 115909-00 keeps the same code; no second code found."
+    },
+    {
+      "model": "Intel Core i5-8600T",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "No PCN naming the i5-8600T or its ordering code found."
+    },
+    {
+      "model": "Intel Core i5-8650",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK: no page. No PCN/spec update names it. Databases: techpowerup 403; others give no S-Spec. Photos (photos.py, 16 images): renders, laptop i7-8650U slides, i5-8600 and 6th-gen chips; no chip marked i5-8650."
+    },
+    {
       "model": "Intel Core i7-11700",
       "searched": "2026-11-07",
       "specs": [],
@@ -712,6 +871,77 @@
       "searched": "2026-11-07",
       "specs": [],
       "note": "Not searched under 50657: the article lists this Skylake-X / Kaby Lake-X part under Cascade Lake; its codes belong to its own CPUID."
+    },
+    {
+      "model": "Intel Core i7-8700",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR3QS",
+          "stepping": null,
+          "cpuid": null,
+          "architecture": "Coffee Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/805737/PCN117617-02.pdf",
+              "quote": "Boxed Intel® Core™ i7-8700 Processor DESKTOP BX80684I78700 S R3QS 961567",
+              "gives": [
+                "sSpec"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCN search found only discontinuance/support/assembly-site PCNs (115909, 116217, 117617-02, 117618-00); none introduces another code. Stepping from ARK."
+    },
+    {
+      "model": "Intel Core i7-8700K",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR3QR",
+          "stepping": "U0",
+          "cpuid": null,
+          "architecture": "Coffee Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/798022/PCN115909-00.pdf",
+              "quote": "Intel® Core™ i7-8700K Processor U0 CM8068403358220 S R3QR 960617",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCN 115909-00 (added Chengdu assembly/test site) keeps the same code; PCNs 116217-00 and 115862-00 concern boxed packaging only. No second code found."
+    },
+    {
+      "model": "Intel Core i7-8700T",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SR3WX",
+          "stepping": "U0",
+          "cpuid": null,
+          "architecture": "Coffee Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/802865/PCN117618-00.pdf",
+              "quote": "Intel® Core™ i7-8700T Processor I7-8700T 2.4 GHZ U0 CM8068403358413 S R3WX 963506",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCN 117618-00 (support transfer to IoT) lists the same code and stepping; no conversion PCN found."
     },
     {
       "model": "Intel Core i9-10900X",
@@ -3555,6 +3785,54 @@
         }
       ],
       "note": "Intel calls the steppings U1 and U2 (PCN 119280-02: ESD fix on XTAL25, JTAG IDCODE 5E7C5013 -> 6E7C5013), not the B0 the input lists; neither source gives a CPUID. Architecture from the ARK specifications page: 'Products formerly Ice Lake'. PCN table read from a rendered image of page 3 (PDFKit's text extraction scrambles its rows)."
+    },
+    {
+      "model": "Intel Xeon E-2278G",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRFB2",
+          "stepping": "R0",
+          "cpuid": null,
+          "architecture": "Coffee Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804678/PCN118146-00.pdf",
+              "quote": "Intel® Xeon® E-2278G Processor CM8068404225303 S RFB2 999CD4 R0",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCN 118146-00 (EOL) confirms ARK's SRFB2 with stepping R0 - i.e. the 906ED die, not 906EA U0. No U0 code found; an 8-core part on the 6-core U0 die is not expected, so the listing under 906EA looks wrong. Architecture from general knowledge of the family, the PCN does not name a code name. WebSearch budget for the session ran out after the ARK lookups; no further searches and no photo search (photos.py queries Bing) were run."
+    },
+    {
+      "model": "Intel Xeon E-2288G",
+      "searched": "2026-11-07",
+      "specs": [
+        {
+          "sSpec": "SRFB3",
+          "stepping": "R0",
+          "cpuid": null,
+          "architecture": "Coffee Lake",
+          "evidence": [
+            {
+              "kind": "intel",
+              "url": "https://cdrdv2-public.intel.com/804678/PCN118146-00.pdf",
+              "quote": "Intel® Xeon® E-2288G Processor CM8068404224102 S RFB3 999CD6 R0",
+              "gives": [
+                "sSpec",
+                "stepping"
+              ]
+            }
+          ]
+        }
+      ],
+      "note": "PCN 118146-00 confirms ARK's SRFB3 with stepping R0 (906ED), not U0; no U0 code found, the 906EA listing looks wrong. WebSearch budget for the session ran out after the ARK lookups; no further searches and no photo search (photos.py queries Bing) were run."
     },
     {
       "model": "Intel Xeon Platinum 9220",
