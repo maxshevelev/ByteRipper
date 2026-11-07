@@ -8202,7 +8202,12 @@
         },
         {
           "name": "Intel Core i5-10500",
-          "sSpec": []
+          "sSpec": [
+            "SRH3A"
+          ],
+          "sSpecSource": {
+            "SRH3A": "ark"
+          }
         },
         {
           "name": "Intel Core i5-10500T",

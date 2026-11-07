@@ -55,6 +55,16 @@
       ]
     },
     {
+      "model": "Intel Core i5-10500",
+      "url": "https://www.intel.com/content/www/us/en/products/sku/199277/intel-core-i510500-processor-12m-cache-up-to-4-50-ghz/ordering.html",
+      "specs": [
+        {
+          "sSpec": "SRH3A",
+          "stepping": "G1"
+        }
+      ]
+    },
+    {
       "model": "Intel Core i5-12400",
       "url": "https://www.intel.com/content/www/us/en/products/sku/134586/intel-core-i512400-processor-18m-cache-up-to-4-40-ghz/ordering.html",
       "specs": [

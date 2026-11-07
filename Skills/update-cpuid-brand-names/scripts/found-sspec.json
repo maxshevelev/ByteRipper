@@ -2,6 +2,12 @@
   "about": "S-SPECs found by Skills/find-sspec beyond ARK and Wikipedia, each with its evidence: an Intel document, an S-SPEC database page, or the marking on the package read from photographs of different chips. A model searched with nothing found is kept with no specs.",
   "models": [
     {
+      "model": "Intel Core i5-10500",
+      "searched": "2026-11-07",
+      "specs": [],
+      "note": "ARK lists SRH3A (G1) only. Two package photographs read the same code (i.ebayimg.com F3MAAeSwfQho0tOu, lot X122J379; microdream.co.uk, lot erased)."
+    },
+    {
       "model": "Intel Core i5-13600K",
       "searched": "2026-11-07",
       "specs": [],
